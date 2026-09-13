@@ -1,4 +1,4 @@
-error[L0301]: this does not have the something unknown shape required here
+error[L0301]: this does not have the required aggregate type and shape
   --> ../tests/fixtures/negative/control-result-field-name-mismatch/program.ldn:13:9
    |
 13 |         second()
@@ -7,4 +7,4 @@ error[L0301]: this does not have the something unknown shape required here
    |
 10 |     value := if choose then
    |              ^^^^^^^^^^^^^^ the first value-producing edge
-  = note: D124: every fallthrough answer of a control expression has one complete type and shape
+  = note: The value must match the complete type, shape and reference permissions required by this context

@@ -1,4 +1,4 @@
-error[L0301]: this does not have the a pointer shape required here
+error[L0301]: this does not have the required pointer type and shape
   --> ../tests/fixtures/negative/derived-address-readonly/main.ldn:2:14
   |
 2 |     result = addr source[0]
@@ -7,4 +7,4 @@ error[L0301]: this does not have the a pointer shape required here
   |
 2 |     result = addr source[0]
   |     ^^^^^^ the reference place written here
-  = note: D124: every fallthrough answer of a control expression has one complete type and shape
+  = note: The value must match the complete type, shape and reference permissions required by this context
