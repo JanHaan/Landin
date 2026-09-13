@@ -11846,8 +11846,136 @@ package body Landin.Tests.Checking_Suite is
          Accepted => True);
    end Conversions_Require_One_Value;
 
+   procedure Erased_Reference_Identity_Is_Reflexive
+     (Item : in out Landin.Testing.Context);
+
+   procedure Erased_Reference_Identity_Is_Reflexive
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      type Scenario_Kind is
+        (Self, Duplicate, Other_Concept, Missing_Concept, Both_Missing,
+         Mutable_Carrier, Carrier_And_Pointer, Pointer_To_Any,
+         Pointer_To_Other, Slice_Of_Any, Nested_Pointers);
+   begin
+      for Small in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation := Landin.Stages.Create
+              ((if Small then Landin.Targets.Synthetic_32
+                else Landin.Targets.Linux_X86_64));
+            Order : Landin.Stages.Pipeline;
+            Src : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Work, "any-reference.ldn",
+                 "alpha: type = concept (t: type) end alpha" & LF);
+            Types : constant not null access C.Table :=
+              Landin.Stages.Types (Work);
+            Alpha : C.Concept_Id := C.No_Concept;
+            Ran : Natural;
+         begin
+            pragma Unreferenced (Src);
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Names'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Ran := Landin.Stages.Run (Order, Work);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, "the concept is checked");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               "the reference identity fixture is valid");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                (C.Declaration_Limit (Types.all))
+            loop
+               if Landin.Resolution.Sort_Of
+                 (Landin.Stages.Meanings (Work).all, Id)
+                   = Landin.Resolution.Module_Concept
+                 and then Landin.Source.Names.Spelling
+                   (Landin.Stages.Identities (Work).all,
+                    Landin.Resolution.Name_Of
+                      (Landin.Stages.Meanings (Work).all, Id)) = "alpha"
+               then
+                  Alpha := C.Intern_Concept (Types.all, Id);
+               end if;
+            end loop;
+            Landin.Testing.Check
+              (Item, C.Holds (Types.all, Alpha), "the named concept exists");
+            for Scenario in Scenario_Kind loop
+               declare
+                  A : C.Reference_Descriptor :=
+                    (Kind => Ty.Any_Value, Concept => Alpha, others => <>);
+                  B : C.Reference_Descriptor := A;
+                  Left, Right : C.Reference_Id;
+                  Same : constant Boolean := Scenario in Self | Duplicate
+                    | Pointer_To_Any | Slice_Of_Any | Nested_Pointers;
+                  Comparable : constant Boolean :=
+                    Same or else Scenario = Mutable_Carrier;
+               begin
+                  case Scenario is
+                     when Self | Duplicate => null;
+                     when Other_Concept =>
+                        B.Concept := C.Compiler_Zeroable_Concept (Types.all);
+                     when Missing_Concept => B.Concept := C.No_Concept;
+                     when Both_Missing =>
+                        A.Concept := C.No_Concept;
+                        B := A;
+                     when Mutable_Carrier => B.Mutable := True;
+                     when Carrier_And_Pointer =>
+                        B.Kind := Ty.Pointer_Value;
+                        B.Referent := Ty.Any_Value;
+                     when Pointer_To_Any | Pointer_To_Other | Slice_Of_Any
+                        | Nested_Pointers =>
+                        A.Kind := (if Scenario = Slice_Of_Any
+                                   then Ty.Slice_Value else Ty.Pointer_Value);
+                        A.Referent := Ty.Any_Value;
+                        B := A;
+                        if Scenario = Pointer_To_Other then
+                           B.Concept :=
+                             C.Compiler_Zeroable_Concept (Types.all);
+                        elsif Scenario = Nested_Pointers then
+                           A.Reference := C.Add_Reference (Types.all, B);
+                           B.Reference := C.Add_Reference (Types.all, B);
+                           A.Referent := Ty.Pointer_Value;
+                           B.Referent := Ty.Pointer_Value;
+                        end if;
+                  end case;
+                  Left := C.Add_Reference (Types.all, A);
+                  Right := (if Scenario = Self then Left
+                            else C.Add_Reference (Types.all, B));
+                  Landin.Testing.Check
+                    (Item, C.References_Agree (Types.all, Left, Right) = Same,
+                     "reference identity: " & Scenario'Image);
+                  Landin.Testing.Check
+                    (Item, C.References_Agree (Types.all, Right, Left) = Same,
+                     "symmetric identity: " & Scenario'Image);
+                  Landin.Testing.Check
+                    (Item, C.References_Compare (Types.all, Left, Right)
+                       = Comparable,
+                     "comparison ignores permission: " & Scenario'Image);
+                  Landin.Testing.Check
+                    (Item, C.Reference_Satisfies (Types.all, Left, Right)
+                       = Same,
+                     "read-only cannot gain permission: " & Scenario'Image);
+                  Landin.Testing.Check
+                    (Item, C.Reference_Satisfies (Types.all, Right, Left)
+                       = Comparable,
+                     "mutable can satisfy read-only: " & Scenario'Image);
+               end;
+            end loop;
+         end;
+      end loop;
+   end Erased_Reference_Identity_Is_Reflexive;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "erased reference identity is reflexive",
+         Erased_Reference_Identity_Is_Reflexive'Access);
       Landin.Testing.Register
         (Into, "checking", "conversions require one value",
          Conversions_Require_One_Value'Access);
