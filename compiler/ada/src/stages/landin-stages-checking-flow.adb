@@ -2032,7 +2032,9 @@ package body Landin.Stages.Checking.Flow is
                   --  the join of the edges that actually leave: a while's
                   --  false test and a for's exhaustion, through `complete`
                   --  when there is one, and every `break`.  An unconditional
-                  --  loop without a break has no exit.
+                  --  loop without a break has no exit. D156/D157 limit new
+                  --  assignment facts after this join: only entry and
+                  --  condition facts may establish a post-loop assignment.
                   declare
                      Entry_State : constant Assigned_Set := State;
                      Head : Assigned_Set := State;
@@ -2225,6 +2227,32 @@ package body Landin.Stages.Checking.Flow is
                      end if;
 
                      if Exits then
+                        --  [1810]: body/completion writes cannot establish
+                        --  a new assignment after the loop. The fixed point
+                        --  still owns consumed places and actual exits.
+                        --  Tested contains only head/condition facts; union
+                        --  with entry retains assignments from before a
+                        --  loop, including its once-evaluated for bounds.
+                        for Which in Tracked loop
+                           for Part in Tracked_Field loop
+                              Tested.Fields (Which, Part) :=
+                                Tested.Fields (Which, Part)
+                                or Entry_State.Fields (Which, Part);
+                           end loop;
+                        end loop;
+                        Element_Sets.Union
+                          (Tested.Elements, Entry_State.Elements);
+                        Array_Sets.Union
+                          (Tested.Whole_Arrays, Entry_State.Whole_Arrays);
+                        Nested_Sets.Union
+                          (Tested.Nested, Entry_State.Nested);
+                        --  This is an assignment ceiling, not another CFG
+                        --  edge: do not reintroduce a consumed fact that an
+                        --  actual exit has restored, or erase a live one.
+                        Tested.Dead_Fields := [others => [others => False]];
+                        Tested.Dead_Elements.Clear;
+                        Tested.Dead_Nested.Clear;
+                        Merge (Exit_State, First => False, Branch => Tested);
                         State := Exit_State;
                      end if;
                      Edges := (Falls_Through => Exits, Returns => Returned);

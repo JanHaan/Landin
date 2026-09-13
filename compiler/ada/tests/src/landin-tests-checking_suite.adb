@@ -12342,8 +12342,125 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Owed_Checks_Belong_To_Routine_Views;
 
+   procedure Loops_Preserve_The_Assignment_Boundary
+     (Item : in out Landin.Testing.Context);
+
+   procedure Loops_Preserve_The_Assignment_Boundary
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Label, Text : String; Codes : String := "");
+
+      procedure Check (Label, Text : String; Codes : String := "") is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "loop-assignment.ldn", Text);
+         Ran : Natural;
+         Got : US.Unbounded_String;
+         pragma Unreferenced (Src);
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
+               if Position > 1 then
+                  US.Append (Got, " ");
+               end if;
+               US.Append
+                 (Got, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Reports, Position)));
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, Label & " reaches checking");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) = (Codes /= "")
+              and then US.To_String (Got) = Codes,
+            Label & " retains the exact assignment verdict: "
+            & US.To_String (Got));
+      end Check;
+   begin
+      Check
+        ("while completion",
+         "f: (flag: bool) -> (r: i32) = while flag do complete r = 1 "
+         & "end while end f" & LF, "L0302");
+      Check
+        ("unconditional break",
+         "f: () -> (r: i32) = loop do r = 1 break end loop end f" & LF,
+         "L0302");
+      Check
+        ("range completion",
+         "f: () -> (r: i32) = for i in 0..<1 do complete r = 1 end "
+         & "for end f" & LF, "L0302");
+      Check
+        ("array completion",
+         "f: (flag: bool) -> (r: [2]i32) = while flag do complete r = "
+         & "[1, 2] end while end f" & LF, "L0302");
+      Check
+        ("sparse element",
+         "f: (flag: bool) -> none = mut a: [2]i32 while flag do "
+         & "complete a[0] = 1 end while _ = a[0] end f" & LF, "L0302");
+      Check
+        ("whole array",
+         "f: (flag: bool) -> none = mut a: [2]i32 while flag do "
+         & "complete a = [1, 2] end while _ = a[0] end f" & LF, "L0302");
+      Check
+        ("nested field",
+         "child: type = struct x: i32 end child box: type = struct c: "
+         & "child end box f: (flag: bool) -> none = mut b: box while "
+         & "flag do complete b.c.x = 1 end while _ = b.c.x end f" & LF,
+         "L0302");
+      Check
+        ("array field",
+         "box: type = struct a: [2]i32 end box f: (flag: bool) -> "
+         & "none = mut b: box while flag do complete b.a = [1, 2] end "
+         & "while _ = b.a[0] end f" & LF, "L0302");
+      Check
+        ("incoming result",
+         "f: (flag: bool) -> (r: i32) = r = 0 while flag do complete "
+         & "r = 1 end while end f" & LF);
+      Check
+        ("condition effect",
+         "f: () -> (r: i32) = while begin r = 1 false end do end "
+         & "while end f" & LF);
+      Check
+        ("range header effect",
+         "f: () -> (r: i32) = for i in begin r = 1 0 end..<1 do end "
+         & "for end f" & LF);
+      Check
+        ("loop value",
+         "f: () -> (r: i32) = r = loop do break with 1 end loop end f" & LF);
+      Check
+        ("body return",
+         "f: () -> (r: i32) = loop do r = 1 return end loop end f" & LF);
+      Check
+        ("completion return",
+         "f: (flag: bool) -> (r: i32) = while flag do complete r = 1 "
+         & "return end while end f" & LF);
+      Check
+        ("consumed exit",
+         "g: (sink p: ptr i32) -> none = _ = p end g f: (flag: bool) "
+         & "-> none = v: i32 = 1 mut p: ptr i32 = addr v while flag do "
+         & "g(p) break end while _ = p end f" & LF, "L0302");
+      Check
+        ("restored exit",
+         "g: (sink p: ptr i32) -> none = _ = p end g f: (flag: bool) "
+         & "-> none = v: i32 = 1 mut p: ptr i32 = addr v g(p) while "
+         & "flag do complete p = addr v end while _ = p end f" & LF);
+   end Loops_Preserve_The_Assignment_Boundary;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "loops preserve the assignment boundary",
+         Loops_Preserve_The_Assignment_Boundary'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary iterable elements are copies",
          Ordinary_Iterable_Elements_Are_Copies'Access);
