@@ -5673,7 +5673,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
 | M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
-| M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
+| M8: stale decisions/citations | Implemented for the named findings: D203–D207 distinguish completed historical R4.40 evidence from current R4.91 acceptance; D14/D31 retain admitted slice length; D74/D75/D89/D102 cite the actual variant, selection and matching rules, and the current unassigned variant-return pin remains with D106. check.py rejects evidence paragraphs calling a non-active roadmap owner active. No semantic rule or historical acceptance input changes. | Fourth batch |
 | A5, M9: source-path bytes | Implemented: the offline decoder writes exact path bytes and an ASCII coordinate suffix through binary stdout. Build identity remains mandatory. The existing non-UTF-8/quoted/colon path control now runs under strict UTF-8 and strict ASCII output policies with bounded subprocess timeouts. | Third batch implementation |
 | M10: diagnostic rendering growth | Implemented with J13: terminator-free line spans support bounded local excerpts, and the report renderer shares one explicit text budget across messages, labels and notes. Structured reports and original byte locations remain intact. The old stress measurement was not rerun. | Third batch |
 | A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
@@ -7444,6 +7444,19 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+M8's named decision-register drift is reconciled against the current tour,
+enabled grammar, parser/checker and recorded R4.40 closure. The measurement
+production still admits a direct identifier and a parenthesized array literal;
+[0370] already assigns slice length its runtime meaning, so D14/D31 no longer
+call slices deferred. Variant layout cites [0680]/[0690], matching cites
+[1210], and the selected-index example is attributed to [1820] in the
+specification. D106 keeps the current `variant-return-unassigned` pin; it no
+longer masquerades as D74's historical value-deferral witness. D203–D207
+point to R4.40's recorded exact historical input and separately retain R4.91
+acceptance. `check.py` compares active-owner claims in evidence paragraphs
+with roadmap status. This is editorial reconciliation, with no compiler or
+semantic change and no rerun of historical generator or ABI acceptance.
 
 C5 error-inference storage is moved off the host stack. The finalizer owns
 all three dense Boolean matrices and four linear flag/signature arrays
