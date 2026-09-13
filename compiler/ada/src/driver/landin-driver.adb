@@ -337,15 +337,6 @@ package body Landin.Driver is
          Bad_Use := True;
       end if;
 
-      --  Help and identity answer immediately, but only once the whole
-      --  command line has been seen and found sound.
-      if not Bad_Use and then (Wants_Usage or else Wants_Identity) then
-         Result.Output :=
-           Unbounded.To_Unbounded_String
-             (if Wants_Usage then Usage else Identity);
-         return Result;
-      end if;
-
       --  The target is resolved before the compilation exists.  Creating
       --  the context first and reassigning the local afterwards was a real
       --  defect: every compilation silently carried the default target
@@ -1293,13 +1284,32 @@ package body Landin.Driver is
             end if;
          end loop;
 
-         if Natural (Roots.Length) > 0 then
-            if Natural (Inputs.Length) /= 1 then
-               Bad_Use := True;
-               Note_Failure
-                 (Code_Unknown_Option,
-                  "a rooted module request needs exactly one entry directory");
+         if Natural (Roots.Length) > 0
+           and then Natural (Inputs.Length) /= 1
+         then
+            Bad_Use := True;
+            Note_Failure
+              (Code_Unknown_Option,
+               "a rooted module request needs exactly one entry directory");
+         end if;
+
+         --  Informational actions wait for every command-line validation,
+         --  but do not discover or read sources, or run compiler stages.
+         if Wants_Usage or else Wants_Identity then
+            if Bad_Use or else Landin.Stages.Failed (Context) then
+               Result.Report := Unbounded.To_Unbounded_String
+                 (Landin.Stages.Rendered_Report (Context));
+               Result.Status :=
+                 (if Bad_Use then Status_Misuse else Status_Reported);
             else
+               Result.Output := Unbounded.To_Unbounded_String
+                 (if Wants_Usage then Usage else Identity);
+            end if;
+            return Result;
+         end if;
+
+         if Natural (Roots.Length) > 0 then
+            if Natural (Inputs.Length) = 1 then
                Load_Reachable_Program (Inputs.Element (1));
             end if;
          else

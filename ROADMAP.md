@@ -6064,7 +6064,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
 | K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
 | K33 | H1: build-report collision checks reserve inactive product/map paths | Confirmed for an inactive map: report preflight now shares the actual artifact list. Product_Path already equals the assembly destination for non-executable emission, so no independent inactive-product defect was established. Fake-host controls cover both emission modes, map production by full debug or caller coordinates, aliases and real source/artifact collisions. Four exact cases pass 194 checks on each host; no real overwrite or tool run is used. Exact acceptance remains open. |
-| K34 | H2: help/identify bypass invalid deferred options | Source still returns before target/mode/root/option validation. Reconcile the existing no-misuse informational-action contract using fake-host cases for all four reported combinations; preserve valid informational requests and J45's invalid-CLI stage boundary. |
+| K34 | H2: help/identify bypass invalid deferred options | Confirmed by four bounded direct CLI probes. Informational responses now wait for all command-line validation, including target, build mode, override shape/duplicates and root/emit arity. Valid help/identity requests still return before source discovery or reads; unknown targets retain status 1 and option misuse status 2. Fake-host controls cover both action positions and valid counterparts. Five exact cases pass 301 checks on each host; J45's invalid-configuration stage boundary remains and exact acceptance stays open. |
 | K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
 | K36 | H4: timeout kills only the direct tool PID | Repaired: POSIX spawn establishes a private process group before exec; a monotonic timeout kills that group and reaps the direct child. Adapter exceptions also stop an owned child. Five focused native cases pass in both modes, including a short-lived descendant's delayed write, literal argument bytes, capture modes, exit/signal distinctions and missing executables. This supervises ordinary group members, not descendants deliberately leaving the group; all assembly limits still apply. |
 
@@ -7444,6 +7444,24 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K34 moves informational responses after complete command-line validation.
+Four retained direct CLI probes originally returned zero for invalid target,
+build mode, override shape and empty root combined with help. Both help and
+identity now retain those diagnostics, including the established target status
+1 versus option-misuse status 2. Valid informational requests return before
+source discovery, reads or compiler stages; source-dependent option typing is
+still performed only for compilation, and J45's stage boundary is unchanged.
+
+Five exact fake-host cases pass 301 checks in each of macOS debug and Linux
+release. The new 48-request case covers both informational actions and argument
+orders, invalid and duplicate deferred options, root/emit arity and valid
+counterparts. Read and tool sentinels guard the early informational boundary;
+all requests make zero artifact writes and zero tool calls. Both single-worker
+builds and the full document check pass. The baseline and Linux logs are under
+`.scratch/r491-informational-options/`, with Mac logs in
+`.scratch/r491-final-values/`. No assembler or generated program is run for
+this repair, and the filtered checks are not exact-revision acceptance.
 
 K33 repairs a false build-report collision with an unused source-map path.
 The report and artifact/source guards now share the actual destination list.
