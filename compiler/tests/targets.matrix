@@ -800,6 +800,7 @@ negative/r491-operand-diagnostic-cascades | linux-x86-64, macos-arm64, synthetic
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-range-context-overflow | linux-x86-64, macos-arm64
 negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
@@ -1200,6 +1201,7 @@ positive/r491-local-type-scope | linux-x86-64, macos-arm64
 positive/r491-loop-assignment | linux-x86-64
 positive/r491-noreturn-name | linux-x86-64
 positive/r491-ordinary-iterable | linux-x86-64
+positive/r491-range-endpoint-context | linux-x86-64, macos-arm64
 positive/r491-symbolic-c-layout | linux-x86-64
 positive/r491-tour-allocator-examples | linux-x86-64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64

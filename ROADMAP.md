@@ -5914,7 +5914,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Implemented: an otherwise unresolved bare value use of a file-local imported namespace reports that it needs a member selection, with the existing L0201 code/use anchor and a [1860] note. Ordinary lexical lookup still wins, including same-named module values; aliases, parameter shadows, selected imports and sibling-file scope retain their rules. Exact acceptance remains open. |
 | J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Implemented maintenance: removed the unused formal-declaration field, query and order-dependent signature-scope lookup. Argument roles and role-local positions remain; checking remaps runtime positions from the complete signature. The existing classification case now calls a later declaration and asserts its static position. Exact acceptance remains open. |
 | J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Not established as a normative defect. [1950] explicitly limits its known-bound refusal to an element index; neither that text nor its index-only D148 evidence extends it to slice range endpoints. The implementation checks endpoint types and retains runtime range checks outside unchecked. D187 explicitly removes the slice-range edge inside unchecked. Extending static endpoint rejection requires a new semantic decision, not the J56 range-subtype repair. |
-| J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | D219 explicitly settles the former context omission: either typed integer endpoint supplies an untyped peer; two untyped bounds retain i32. Known typed mismatches and out-of-range literals remain refused. Small prototype-derived headers and diagnostic controls accompany the change. Four exact selectors pass 20 checks on each of macOS debug and Linux release; exact acceptance open. |
 | J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Implemented: the generic zeroed fallback reports L0301 with the permanent contextual requirement at [0540], instead of L0304 promising completed R2.20 enablement. Seven fixture code lists are corrected; unrelated deferred aggregate-initializer refusals remain L0304. Admitted scalar, array and struct zeroed paths remain accepted. Exact acceptance remains open. |
 | J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Implemented: nominal copy and assignment refusals describe identity independently of representation, contextual distinct results name the distinct type category, and zeroed diagnostics use general type/place labels. The reported distinct-u32 refusal no longer invents a struct or function address. Exact acceptance remains open. |
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
@@ -7444,6 +7444,24 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J117 now follows D219's explicit endpoint-context decision. The review had not
+established a contradiction in the former [1880] context list; that omission is
+settled in the specification and tour rather than attributed to old wording.
+A typed integer upper endpoint can now supply an untyped lower endpoint just
+as the lower already supplied an upper literal. Two untyped bounds still use
+i32, and two different typed bounds still disagree. The counted-prefix shape
+from all four prototypes and the tour's sort header now compile, including
+untyped arithmetic and conditional lower expressions. The original five-function
+witness produced three endpoint reports plus three consequent body reports;
+the final expanded positive fixture produces none. Separate overflow controls
+retain L0300 for 256 and -1 against a u8 upper endpoint. Existing typed and
+noninteger endpoint reports retain their exact transcripts. Four selectors
+pass 20 checks on each of macOS debug and Linux release, and both single-worker
+builds pass. D159's evaluation/loop lowering is unchanged. Positive evidence is
+assembly text only; no native Landin assembler, runtime, debugger or stress
+case ran. Evidence is in `.scratch/r491-range-context/` and
+`.scratch/r491-final-values/`; exact acceptance remains open.
 
 K16's API-seam ownership check now fulfills its documented identity promise.
 Resolution and checking retain one immutable tree address per source, separate

@@ -2216,8 +2216,11 @@ Conditional loop.
 ### [1150] Traversal
 
 Traversal. Bindings default to in; inout implies mut.
-An integer range is ascending. Its bounds are evaluated once, left to right;
-`..<` excludes the upper bound and `..` includes it. The optional index is a
+An integer range is ascending. Either typed integer bound supplies the type
+of an untyped integer bound on the other side; two untyped bounds take i32.
+Thus `0..<lenof items` traverses usize values without a conversion. The bounds
+are evaluated once, left to right; `..<` excludes the upper bound and `..`
+includes it. The optional index is a
 `usize` beginning at zero. Collection traversal supplies the same binding
 shape, with writability decided by [1160]. A collection element may itself be
 a fixed array, slice or `any C`; the loop binding keeps the complete element

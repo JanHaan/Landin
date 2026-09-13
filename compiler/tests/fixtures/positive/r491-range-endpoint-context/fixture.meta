@@ -1,0 +1,5 @@
+class: positive
+summary: D219 either typed range endpoint supplies an untyped integer peer, while two literal bounds default to i32
+constructs: 0190, 0200, 1150, 1880
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,7 @@
+too_high: (last: u8) -> none =
+    for item in 256..<last do _ = item end for
+end too_high
+
+too_low: (last: u8) -> none =
+    for item in -1..last do _ = item end for
+end too_low
