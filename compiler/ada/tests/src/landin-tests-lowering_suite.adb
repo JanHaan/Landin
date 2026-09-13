@@ -9565,8 +9565,183 @@ package body Landin.Tests.Lowering_Suite is
          1);
    end Terminated_Expressions_Stop_Emission;
 
+   procedure Control_Continuations_Stay_Reachable
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Continuations_Stay_Reachable
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Calls : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Position)) = IR.Call
+                  then
+                     Calls := Calls + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Calls = Expected_Calls,
+                  Label & " preserves only reachable calls");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " has no unfinished or orphan blocks");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("later condition returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = if flag then v := 1 elsif begin "
+         & "return end then dead := marker() else dead := marker() end "
+         & "if live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("all conditions and arms return",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = if flag then return elsif begin "
+         & "return end then dead := marker() end if dead := marker() "
+         & "end f" & LF);
+      Check_Source
+        ("first condition returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = if begin return end then dead := marker() "
+         & "else dead := marker() end if dead := marker() end f" & LF);
+      Check_Source
+        ("value arm keeps continuation",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = v: i32 = if flag then 1 elsif "
+         & "begin return end then 2 else 3 end if live := marker() end "
+         & "f" & LF,
+         1);
+      Check_Source
+        ("multiple arms keep continuation",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: bool, b: bool) -> none = if a then v := 1 elsif b "
+         & "then v := 2 elsif begin return end then dead := marker() "
+         & "end if live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("while completion returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = mut n: i32 = 0 while n < 2 do inc n "
+         & "complete return end while dead := marker() end f" & LF);
+      Check_Source
+        ("range completion returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in 0 ..< 2 do v: i32 = n complete "
+         & "return end for dead := marker() end f" & LF);
+      Check_Source
+        ("array completion returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = for n in a do v: i32 = n complete "
+         & "return end for dead := marker() end f" & LF);
+      Check_Source
+        ("completion falls through",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = mut n: i32 = 0 while n < 2 do inc n "
+         & "complete v := n end while live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("completion partly returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = mut n: i32 = 0 while n < 2 do inc "
+         & "n complete if flag then return end if end while live := "
+         & "marker() end f" & LF,
+         1);
+      Check_Source
+        ("break bypasses returning completion",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = mut n: i32 = 0 while n < 2 do inc "
+         & "n break when flag complete return end while live := "
+         & "marker() end f" & LF,
+         1);
+      Check_Source
+        ("nested break reaches outer exit",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = mut n: i32 = 0 outer: while n < 2 do inc n "
+         & "loop do break outer end loop complete return end outer live "
+         & ":= marker() end f" & LF,
+         1);
+      Check_Source
+        ("completion breaks to exit",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = while flag do return complete "
+         & "break end while live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("unreachable break creates no exit",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = loop do return break end loop dead := "
+         & "marker() end f" & LF);
+      Check_Source
+        ("break value returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = v: i32 = loop do break with if begin return "
+         & "end then 1 else 2 end if end loop dead := marker() end f" & LF);
+      Check_Source
+        ("loop value reaches exit",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = v: i32 = loop do break with 1 end loop live "
+         & ":= marker() end f" & LF,
+         1);
+      Check_Source
+        ("completion continues",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none = while flag do return complete "
+         & "continue end while dead := marker() end f" & LF);
+      Check_Source
+        ("break condition returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = loop do break when begin return end end "
+         & "loop dead := marker() end f" & LF);
+      Check_Source
+        ("completion fails",
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (flag: bool) -> none ! problem = while flag do return "
+         & "complete fail bad end while dead := marker() end f" & LF);
+      Check_Source
+        ("break runs cleanup",
+         "clean: () -> none = end clean" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = loop do defer clean() break end loop live "
+         & ":= marker() end f" & LF,
+         2);
+   end Control_Continuations_Stay_Reachable;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "control continuations stay reachable",
+         Control_Continuations_Stay_Reachable'Access);
       Landin.Testing.Register
         (Into, "lowering", "terminated expressions stop emission",
          Terminated_Expressions_Stop_Emission'Access);

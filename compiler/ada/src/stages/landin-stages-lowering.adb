@@ -728,6 +728,8 @@ package body Landin.Stages.Lowering is
            Landin.Source.Names.No_Name;
          Head         : IR.Block_Id := IR.No_Block;
          Exit_Block   : IR.Block_Id := IR.No_Block;
+         Exit_Scope   : Res.Scope_Id := Res.No_Scope;
+         Exit_Site    : Landin.Provenance.Origin;
          Cleanup_Base : Natural := 0;
          Value_Destination : IR.Slot_Id := IR.No_Slot;
          Value_Destination_Field : Natural := 0;
@@ -740,10 +742,10 @@ package body Landin.Stages.Lowering is
       Loop_Stack : Loop_Entries.Vector;
 
       function Transfer_Loop
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Entry;
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive;
 
       function Transfer_Loop
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Entry
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive
       is
          Target : constant Landin.Source.Names.Name_Id :=
            Syn.Name (Of_Tree, Node);
@@ -755,12 +757,28 @@ package body Landin.Stages.Lowering is
                if Target = Landin.Source.Names.No_Name
                  or else Candidate.Label = Target
                then
-                  return Candidate;
+                  return Index;
                end if;
             end;
          end loop;
          raise Landin.Compiler_Defect with "a loop transfer has no target";
       end Transfer_Loop;
+
+      function Loop_Exit (Index : Positive) return IR.Block_Id;
+
+      function Loop_Exit (Index : Positive) return IR.Block_Id is
+         Frame : Loop_Entry := Loop_Stack (Index);
+      begin
+         --  A break or completing body creates the continuation only once
+         --  it actually emits an edge. Syntax alone cannot prove that a
+         --  transfer's condition, value and cleanups let it reach the exit.
+         if Frame.Exit_Block = IR.No_Block then
+            Frame.Exit_Block := IR.Add_Block
+              (Unit.all, Filling, Frame.Exit_Scope, Frame.Exit_Site);
+            Loop_Stack.Replace_Element (Index, Frame);
+         end if;
+         return Frame.Exit_Block;
+      end Loop_Exit;
 
       function Site_Of (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Landin.Provenance.Origin
@@ -7682,6 +7700,11 @@ package body Landin.Stages.Lowering is
                    (Of_Tree, Syn.Condition_Of (Of_Tree, This), Scope);
             begin
                if Current = IR.No_Block then
+                  --  Earlier arms may already continue at this merge.
+                  --  Only the remaining tests and arms are unreachable.
+                  if Merge /= IR.No_Block then
+                     Open (Merge);
+                  end if;
                   return;
                end if;
                pragma Assert (Test /= IR.No_Value);
@@ -8303,69 +8326,6 @@ package body Landin.Stages.Lowering is
          end if;
       end Lower_Bare_Block;
 
-      function Block_Has_Break
-        (Of_Tree : Syn.Tree;
-         Block   : Syn.Node_Id;
-         Target  : Landin.Source.Names.Name_Id;
-         Nested  : Boolean := False) return Boolean;
-
-      function Block_Has_Break
-        (Of_Tree : Syn.Tree;
-         Block   : Syn.Node_Id;
-         Target  : Landin.Source.Names.Name_Id;
-         Nested  : Boolean := False) return Boolean
-      is
-         function Walk (Node : Syn.Node_Id; Inside_Loop : Boolean)
-           return Boolean;
-
-         function Walk (Node : Syn.Node_Id; Inside_Loop : Boolean)
-           return Boolean
-         is
-            Deeper : Boolean := Inside_Loop;
-         begin
-            if Node = Syn.No_Node then
-               return False;
-            end if;
-            case Syn.Kind (Of_Tree, Node) is
-               when Syn.Anonymous_Function | Syn.Function_Declaration =>
-                  return False;
-               when Syn.Break_Statement =>
-                  return
-                    (if Syn.Name (Of_Tree, Node)
-                          = Landin.Source.Names.No_Name
-                     then not Inside_Loop
-                     else Syn.Name (Of_Tree, Node) = Target);
-               when Syn.Loop_Statement | Syn.While_Statement
-                  | Syn.For_Statement =>
-                  if Target = Landin.Source.Names.No_Name
-                    or else Syn.Name (Of_Tree, Node) = Target
-                  then
-                     return False;
-                  end if;
-                  Deeper := True;
-               when others =>
-                  null;
-            end case;
-            --  A transfer can be inside a value-position begin, condition
-            --  or argument. Walk expression children as well as statements.
-            for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
-               if Walk (Syn.Slot (Of_Tree, Node, Index), Deeper) then
-                  return True;
-               end if;
-            end loop;
-            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
-              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
-            then
-               --  Recovery is beside the ordinary slots, and its transfers
-               --  need the same loop destination as successful expressions.
-               return Walk (Syn.Recovery_Of (Of_Tree, Node), Deeper);
-            end if;
-            return False;
-         end Walk;
-      begin
-         return Walk (Block, Nested);
-      end Block_Has_Break;
-
       procedure Lower_Loop
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -8420,12 +8380,9 @@ package body Landin.Stages.Lowering is
          Has_Complete : constant Boolean :=
            (Is_While or else Is_For)
            and then Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node;
-         Has_Exit : constant Boolean :=
-           Is_While or else Is_For
-           or else Block_Has_Break
-             (Of_Tree, Runs, Syn.Name (Of_Tree, Node));
-         Exit_Block : constant IR.Block_Id :=
-           (if Has_Exit then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
+         Exit_Block : IR.Block_Id :=
+           (if (Is_While or else Is_For) and then not Has_Complete
+            then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
          Complete_Block : constant IR.Block_Id :=
            (if Has_Complete
             then Fresh
@@ -9549,6 +9506,8 @@ package body Landin.Stages.Lowering is
               (Label        => Syn.Name (Of_Tree, Node),
                Head         => (if Is_For then Step_Block else Head),
                Exit_Block   => Exit_Block,
+               Exit_Scope   => Scope,
+               Exit_Site    => Site,
                Cleanup_Base => Natural (Cleanup_Stack.Length),
                Value_Destination => Destination,
                Value_Destination_Field => Destination_Field,
@@ -9755,14 +9714,16 @@ package body Landin.Stages.Lowering is
                Lower_Statements
                  (Of_Tree, Complete_Node, Complete_Scope, Result);
                if Current /= IR.No_Block then
-                  Close_With_Jump (Exit_Block, Site);
+                  Close_With_Jump
+                    (Loop_Exit (Positive (Loop_Stack.Length)), Site);
                end if;
             end;
          end if;
 
+         Exit_Block := Loop_Stack.Last_Element.Exit_Block;
          Loop_Stack.Delete_Last;
 
-         if Has_Exit then
+         if Exit_Block /= IR.No_Block then
             Open (Exit_Block);
          end if;
       end Lower_Loop;
@@ -9773,10 +9734,8 @@ package body Landin.Stages.Lowering is
          Scope   : Res.Scope_Id)
       is
          Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
-         Frame : constant Loop_Entry := Transfer_Loop (Of_Tree, Node);
-         Target : constant IR.Block_Id :=
-           (if Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
-            then Frame.Exit_Block else Frame.Head);
+         Index : constant Positive := Transfer_Loop (Of_Tree, Node);
+         Frame : constant Loop_Entry := Loop_Stack (Index);
 
          procedure Transfer;
 
@@ -9806,7 +9765,9 @@ package body Landin.Stages.Lowering is
               (Of_Tree, Frame.Cleanup_Base + 1,
                Cleanup.Structured_Transfer);
             if Current /= IR.No_Block then
-               Close_With_Jump (Target, Site);
+               Close_With_Jump
+                 ((if Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
+                   then Loop_Exit (Index) else Frame.Head), Site);
             end if;
          end Transfer;
       begin
