@@ -1964,6 +1964,27 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("t: type = i32 f: (x: t, t: i32) -> none = end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("t: type = i32 f: (t: i32, x: t) -> none = end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("t: type = i32 f: () -> (x: t, t: i32) = x = 1 t = 2 end f"
+            & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("t: type = i32 f: (x: t) -> (t: i32) = t = 1 end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("t: type = i32 f: () -> none = callback := (x: t, t: i32) "
+            & "-> none = end end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("t: type = i32 f: () -> none = callback := (t: i32, x: t) "
+            & "-> none = end end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
            ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: 1) "
             & "end f" & ASCII.LF,
             "L0301", 1, Executable);
