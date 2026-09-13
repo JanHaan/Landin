@@ -1,0 +1,9 @@
+class: negative
+summary: a name after UTF-8 comment bytes and a tab retains its byte location with aligned escaped-source carets
+program: main.ldn
+codes: L0201
+constructs: 1750, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-display-byte-columns/main.ldn
+status: 1

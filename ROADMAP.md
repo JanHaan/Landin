@@ -5866,7 +5866,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
 | J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Guard repaired as backend consistency: suffix offsets share the arithmetic-immediate predicate, using a full-width scratch register above signed imm32. The large-source reachability claim was not replayed; scalar encoding-boundary and three/four-element fill controls cover the repair without a giant image. |
-| J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Implemented: snippets display tabs as `\t` and bytes outside printable ASCII as `\xNN`; underlines count their displayed characters. Headers and structured spans retain original byte coordinates. This deterministic byte display covers valid UTF-8, invalid bytes and control bytes without a locale/font width assumption. |
 | J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Semantic agreement question: reconcile completion-block assignment with [1810]/D157 and the existing loop decisions. Sounder flow precision alone does not authorize changing the normative rule. |
 | J71 | tour [0220]'s `hex_value := 0xDEAD_BEEF` does not compile | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
@@ -7083,9 +7083,24 @@ assembler, linker, generated executable or debugger ran. Evidence is retained
 in `.scratch/r491-generic-reports/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J69's caret alignment is next: source byte coordinates must remain stable while
-the displayed snippet and underline agree for tabs and non-ASCII bytes, without
-depending on the terminal's Unicode width behavior.
+J69 development evidence: the 16 diagnostic cases and five selected negative
+fixtures pass 108 checks in each of macOS debug and Linux release. Eight small
+exact-text controls cover a tab, a two-byte UTF-8 character, a span inside that
+sequence, an end point, an invalid high byte, NUL/escape bytes and a related
+label. Snippets render tabs as `\t` and other non-printable/non-ASCII bytes as
+`\xNN`; both padding and underline length use those displayed cells. The new
+one-line compiler golden keeps byte column 30 after a UTF-8 comment and a tab,
+with its underline aligned to the escaped snippet. Existing ASCII goldens,
+L0012 refusals and report-budget/excerpt controls also pass. Both single-worker
+builds passed; selected cases have 30-second or shorter limits and the direct
+probes have 10-second limits. The inventories record the new fixture. No Landin
+assembler, linker, generated executable, debugger or large input ran. Evidence
+is retained in `.scratch/r491-display-columns/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J66's source-free hosted-entry refusal is next. Attach a useful entry-module
+location, preferring an existing invalid main declaration, and retain the
+pre-output/tool refusal boundary.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

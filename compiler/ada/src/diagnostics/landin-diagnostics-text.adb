@@ -75,6 +75,24 @@ package body Landin.Diagnostics.Text is
               else Raw);
    end Decimal;
 
+   --  Source snapshots are arbitrary bytes. An ASCII display makes every
+   --  snippet cell deterministic, including tabs, invalid UTF-8 and text
+   --  whose terminal width depends on the font or Unicode version.
+   function Display_Byte (Value : Character) return String;
+
+   function Display_Byte (Value : Character) return String is
+      Hex : constant String := "0123456789ABCDEF";
+      Code : constant Natural := Character'Pos (Value);
+   begin
+      if Value = ASCII.HT then
+         return "\t";
+      elsif Value in ' ' .. '~' then
+         return "" & Value;
+      else
+         return "\x" & Hex (Code / 16 + 1) & Hex (Code mod 16 + 1);
+      end if;
+   end Display_Byte;
+
    function Gutter_Width (Line : Landin.Source.Line_Number) return Natural is
      (Decimal (Integer (Line))'Length);
 
@@ -157,13 +175,29 @@ package body Landin.Diagnostics.Text is
               (if First > Line.First then "... " else "");
             Suffix : constant String :=
               (if Last < Line.Last then " ..." else "");
-            Column : constant Natural :=
-              Natural (Anchor - First) + Prefix'Length;
-            Room : constant Natural := Natural (Last - Anchor);
-            Carets : constant Natural := Natural'Min
-              (Natural'Max (Natural (Length (Where)), 1),
-               Natural'Max (Room, 1));
+            Before : constant Natural := Natural (Anchor - First);
+            Marked : constant Natural := Natural'Min
+              (Natural (Length (Where)), Natural (Last - Anchor));
+            Column : Natural := Prefix'Length;
+            Carets : Natural := 0;
+            Display : Unbounded.Unbounded_String;
          begin
+            --  The raw excerpt is bounded above. Its escaped display needs
+            --  at most four characters per byte; no omitted prefix is read.
+            for Index in Content'Range loop
+               declare
+                  Encoded : constant String := Display_Byte (Content (Index));
+                  Offset : constant Natural := Index - Content'First;
+               begin
+                  Unbounded.Append (Display, Encoded);
+                  if Offset < Before then
+                     Column := Column + Encoded'Length;
+                  elsif Offset - Before < Marked then
+                     Carets := Carets + Encoded'Length;
+                  end if;
+               end;
+            end loop;
+            Carets := Natural'Max (Carets, 1);
             Append (Into, "  --> ");
             Append (Into, Name (Snap));
             Append
@@ -172,7 +206,7 @@ package body Landin.Diagnostics.Text is
             Append (Into, Blank & " |" & LF);
             Append
               (Into, Decimal (Integer (Start.Line)) & " | " & Prefix
-               & Content & Suffix & LF);
+               & Unbounded.To_String (Display) & Suffix & LF);
             Append
               (Into, Blank & " | " & Fixed."*" (Column, ' ')
                & Fixed."*" (Carets, '^'));
