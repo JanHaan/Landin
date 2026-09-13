@@ -5,6 +5,7 @@
 --  linker without arranging one on the machine running the tests.
 
 with Ada.Containers.Vectors;
+with Ada.Exceptions;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform;
@@ -47,7 +48,9 @@ package Landin.Testing.Fakes is
    --  compilation that was not refused, so a defect there can never have
    --  a diagnostic before it; a read happens after the driver has already
    --  reported an unknown option, which is where the promise bites.
-   procedure Raise_On_Read (Host : in out Fake_Filesystem);
+   procedure Raise_On_Read
+     (Host : in out Fake_Filesystem;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity);
 
    --  Make every later write answer Not_Writable without retaining bytes.
    --  This pins the driver's output diagnostic without depending on native
@@ -153,10 +156,12 @@ private
    type Store is record
       Items : File_Vectors.Vector;
       --  Armed by Raise_On_Read and cleared by the read it fires on, so
-      --  one arming is one defect.  It lives here rather than in the
+      --  one arming is one exception.  It lives here rather than in the
       --  record because Read_File takes its host as a constant view, the
       --  same reason the writes do.
       Raises       : Boolean := False;
+      Read_Exception : Ada.Exceptions.Exception_Id :=
+        Compiler_Defect'Identity;
       Refuses_Write : Boolean := False;
       Write_Attempts : Natural := 0;
    end record;

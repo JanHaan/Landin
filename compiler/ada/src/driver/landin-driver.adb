@@ -1311,6 +1311,13 @@ package body Landin.Driver is
          end if;
 
       exception
+         --  These retain the executable's dedicated host/tool outcomes.
+         --  In particular, rendering a report after Storage_Error could
+         --  require the same resource that has just run out.
+         when Landin.Host_Exhausted | Storage_Error
+            | Landin.External_Tool_Failed =>
+            raise;
+
          --  A defect is the compiler finding itself wrong, and it arrives
          --  after the run has usually already decided several things about
          --  the source.  Letting it escape threw those away and left a
@@ -1319,7 +1326,7 @@ package body Landin.Driver is
          --  only thing a refused field produced.  So the report is
          --  rendered from what the context holds, the defect is written
          --  under it, and the status says which of the two happened.
-         when Landin.Compiler_Defect =>
+         when others =>
             Result.Report :=
               Unbounded.To_Unbounded_String
                 (Landin.Stages.Rendered_Report (Context)
