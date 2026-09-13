@@ -5722,7 +5722,7 @@ sweep, debugger or stress campaign was used for this reconciliation.
 | N3: statement recovery | Confirmed and repaired for contextual loops, transfers, match, cleanup and blocks, plus selected assignment/call heads. The focused seam compares the valid source with one stray token inserted before it, requiring one report and preserved node kinds, names, child slots and C convention. |
 | N5, N7, N8: fixture inventory and low floors | Duplicate M14, with concrete parser/execution floor sites. Implement independent discovery/selection accounting and explicit obligations; do not replace historical floors with the report's fixed 955/233 counts. Counts alone cannot prove an intentionally removed fixture's semantic coverage survived. No fixture-deletion experiment was run. |
 | N6: wide slice stride | Duplicate A7/M19. Keep bounded instruction/operand evidence ahead of backend parity; possible inheritance by a future backend is not an observed current miscompile. |
-| N9: negatives without `program` | Confirmed by source: ordinary full-suite paths compare recorded bytes/status but skip exact `codes` comparison for these fixtures. Extend recorded-negative validation under M14, keeping stage attribution and report order explicit. |
+| N9: negatives without `program` | Implemented with J79: recorded and source negative executions share termination, declared/default status and exact ordered-code checks. Recorded bytes remain independently checked, including CLI fixtures without a program. Exact acceptance remains open. |
 | N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
 | N11: `Expect` recovery after a refused lexeme | The forward search exists and intentionally avoids repeating a scanner diagnostic. Bound it at the current construct/list boundary and pin preservation of following valid syntax before changing suppression policy. An already refused compilation cannot advance merely because this helper returns success. |
 | N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
@@ -5876,7 +5876,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
 | J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
-| J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Duplicate M14/N9 harness contracts: honor declared status together with ordered codes and report bytes; pin a deliberately differing metadata value through the harness seam. |
+| J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Implemented with N9: honor explicit status and default negatives to 1 at metadata parsing; compare ordered codes on both execution paths. Fake outcomes pin status 2, default 1, code order/multiplicity and abnormal termination. Exact acceptance remains open. |
 | J80 | Slot_Element_Shape_Is_Valid returns False for every D84/D85 element operation whose base field is a variant part | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
 | J81 | Emit_Function_Address is the only Emit_* without Is_Emitting in its precondition | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J82 | Enter's "once per block, one at a time" rule is a precondition only; a re-Enter silently rebases the block's First_Value | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
@@ -6535,7 +6535,23 @@ shorter timeouts. No assembler, linker or generated Landin executable ran.
 Logs are retained in `.scratch/r491-control-ranges/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Negative fixture contracts J79/N9 are next. J116's slice-endpoint claim
+J79/N9 development evidence: four selected cases pass 87 checks in each of
+macOS debug and Linux release. The shared outcome checker compares termination,
+metadata status and ordered codes for source and recorded negatives. Metadata
+now makes the historical source-negative default of 1 explicit, while other
+classes retain default 0; explicit status 2 is honored. Fake metadata/outcomes
+pin wrong status, reordered and missing duplicate codes, timeout and signal
+refusals. The first test draft lacked required targets; corrected metadata and
+the existing discovery case pass. All existing recorded negatives already
+write an explicit status. A CLI fixture without a program retains exact report
+bytes and status 2 while gaining a code check; a source fixture retains default
+status 1. Builds use one worker and selected tests have 30-second or shorter
+timeouts. No assembler, linker or generated Landin executable ran. Logs are
+retained in `.scratch/r491-negative-contracts/` and
+`.scratch/r491-final-values/`. Runtime stream selection and independent
+inventory obligations under M14 remain open, as does exact acceptance.
+
+Shell pipeline failures J77/J78 are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

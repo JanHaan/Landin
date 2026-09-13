@@ -349,7 +349,7 @@ and checks all ten during explicit complete native acceptance.
 | `args` | no | the arguments `refine` is run with |
 | `run_args` | no | the arguments handed to a compiled runtime or ABI program |
 | `run_expect` | no | the file holding a runtime or ABI program's expected merged output |
-| `status` | no | the exit status `refine` or a compiled program must produce (default 0) |
+| `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
@@ -371,7 +371,10 @@ code — `L0010` began in lexical refusal and is now raised only by the parser.
 are two reports, and a regression that doubles a count is invisible to a set,
 so a fixture that contains two refused uses names its code twice in source
 order. Spaces around comma boundaries are insignificant; the harness
-canonicalizes them without sorting the codes or removing duplicates.
+canonicalizes them without sorting the codes or removing duplicates. Both
+source-only and recorded negative executions compare that ordered list and
+the declared or default exit status. Recorded negatives also compare their
+exact report bytes, including those with `args` but no `program`.
 `float-literal-not-enabled` names one `L0301`: its one literal is a
 float in an integer context, refused by the checker, so the grammar must
 derive it. `check.py` holds every name in `codes` to
