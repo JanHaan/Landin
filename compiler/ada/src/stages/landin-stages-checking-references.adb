@@ -114,12 +114,12 @@ package body Landin.Stages.Checking.References is
         (Res.Declaration_Id'(1)
          .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))) :=
            [others => No_Origin];
-      --  A pattern binding's value and its backing storage can have distinct
-      --  origins.  Computed value subjects are copied into a frame temporary;
-      --  referenced subjects retain their actual storage.  A reference value
-      --  carried in either payload still points where the subject said.
-      Pattern_Storage : array (Origins'Range) of Reference_Fact :=
+      --  Match and collection bindings keep their captured backing apart
+      --  from origins carried by the value. Runtime address aliases retain
+      --  that backing beneath computed selectors; copied subjects do not.
+      Alias_Storage : array (Origins'Range) of Reference_Fact :=
         [others => No_Reference];
+      Runtime_Alias : array (Origins'Range) of Boolean := [others => False];
       Pattern_Subject : array (Origins'Range) of Syn.Node_Id :=
         [others => Syn.No_Node];
       Pattern_Block : array (Origins'Range) of Syn.Node_Id :=
@@ -231,6 +231,9 @@ package body Landin.Stages.Checking.References is
       function Has_References (Id : Res.Declaration_Id) return Boolean;
       function Has_References
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Has_Reference_Storage
+        (Tree : Syn.Tree; Place : Syn.Node_Id) return Boolean;
 
       function Match_Subject_Is_Copied
         (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean;
@@ -508,11 +511,55 @@ package body Landin.Stages.Checking.References is
          return False;
       end Has_References;
 
+      function Has_Reference_Storage
+        (Tree : Syn.Tree; Place : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Place;
+      begin
+         --  Keep the storage choice aligned with lowering: an alias through
+         --  a runtime address remains one beneath a computed array index.
+         while Syn.Kind (Tree, Where)
+           in Syn.Member_Selection | Syn.Element_Index
+         loop
+            if Syn.Kind (Tree, Where) = Syn.Element_Index
+              and then Landin.Checking.Type_Of
+                (Types.all, Tree, Syn.Target_Of (Tree, Where)) = Ty.Slice_Value
+            then
+               return True;
+            elsif Syn.Kind (Tree, Where) = Syn.Member_Selection
+              and then Landin.Checking.Field_Index
+                (Types.all, Tree, Where) = 0
+              and then Landin.Checking.Type_Of
+                (Types.all, Tree, Syn.Target_Of (Tree, Where))
+                  = Ty.Pointer_Value
+            then
+               return True;
+            end if;
+            Where := Syn.Target_Of (Tree, Where);
+         end loop;
+         if Syn.Kind (Tree, Where) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Tree, Where) = Res.Bound
+         then
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Tree, Where);
+            begin
+               if Runtime_Alias (Id) then
+                  return True;
+               elsif Res.Sort_Of (Meanings.all, Id) = Res.Parameter then
+                  return Syn.Convention_Of
+                    (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                     Res.Node_Of (Meanings.all, Id)) = Syn.Inout_Convention;
+               end if;
+            end;
+         end if;
+         return False;
+      end Has_Reference_Storage;
+
       function Match_Subject_Is_Copied
         (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean
       is
          Where : Syn.Node_Id := Subject;
-         Computed : Boolean := False;
 
          function Is_Constant_Index (Node : Syn.Node_Id) return Boolean;
 
@@ -527,55 +574,24 @@ package body Landin.Stages.Checking.References is
                      = Syn.Integer_Literal);
          end Is_Constant_Index;
       begin
-         if Syn.Kind (Tree, Subject) /= Syn.Member_Selection then
+         if Syn.Kind (Tree, Subject) /= Syn.Member_Selection
+           or else Has_Reference_Storage
+             (Tree, Syn.Target_Of (Tree, Subject))
+         then
             return False;
          end if;
          Where := Syn.Target_Of (Tree, Subject);
-         --  Match Lower_Variant_Match's storage choice: pointer/slice-backed
-         --  places and inout parameters retain their captured storage, even
-         --  below a computed index.  Only a computed value subject gets
-         --  D134's independent frame copy.
          while Syn.Kind (Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
          loop
             if Syn.Kind (Tree, Where) = Syn.Element_Index
               and then not Is_Constant_Index (Where)
             then
-               Computed := True;
-            end if;
-            if Syn.Kind (Tree, Where) = Syn.Element_Index
-              and then Landin.Checking.Type_Of
-                (Types.all, Tree, Syn.Target_Of (Tree, Where)) = Ty.Slice_Value
-            then
-               return False;
-            elsif Syn.Kind (Tree, Where) = Syn.Member_Selection
-              and then Landin.Checking.Field_Index
-                (Types.all, Tree, Where) = 0
-              and then Landin.Checking.Type_Of
-                (Types.all, Tree, Syn.Target_Of (Tree, Where))
-                  = Ty.Pointer_Value
-            then
-               return False;
+               return True;
             end if;
             Where := Syn.Target_Of (Tree, Where);
          end loop;
-         if Syn.Kind (Tree, Where) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Tree, Where) = Res.Bound
-         then
-            declare
-               Id : constant Res.Declaration_Id :=
-                 Res.Bound_To (Meanings.all, Tree, Where);
-            begin
-               if Res.Sort_Of (Meanings.all, Id) = Res.Parameter
-                 and then Syn.Convention_Of
-                   (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
-                    Res.Node_Of (Meanings.all, Id)) = Syn.Inout_Convention
-               then
-                  return False;
-               end if;
-            end;
-         end if;
-         return Computed;
+         return False;
       end Match_Subject_Is_Copied;
 
       function Call_Signature
@@ -736,8 +752,10 @@ package body Landin.Stages.Checking.References is
                if Fact.Derives (Positive (Id))
                  and then
                    (case Res.Sort_Of (Meanings.all, Id) is
-                      when Res.Local_Binding | Res.Named_Return => True,
-                      when Res.Pattern_Binding => Pattern_Storage (Id).Frame,
+                      when Res.Local_Binding | Res.Named_Return =>
+                        not Runtime_Alias (Id)
+                          or else Alias_Storage (Id).Frame,
+                      when Res.Pattern_Binding => Alias_Storage (Id).Frame,
                       when Res.Parameter =>
                         Syn.Convention_Of
                           (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
@@ -1364,7 +1382,7 @@ package body Landin.Stages.Checking.References is
             end if;
             for Id in Storage.Derives'Range loop
                Same_Root := Same_Root or else
-                 (Storage.Derives (Id) and then Pattern_Storage (Pattern)
+                 (Storage.Derives (Id) and then Alias_Storage (Pattern)
                     .Derives (Id));
             end loop;
             if not Same_Root then
@@ -1435,7 +1453,7 @@ package body Landin.Stages.Checking.References is
             Right_Descriptor : constant Res.Declaration_Id :=
               Descriptor_Root (Pattern_Subject (Pattern));
          begin
-            if not Storage.Frame or else not Pattern_Storage (Pattern).Frame
+            if not Storage.Frame or else not Alias_Storage (Pattern).Frame
             then
                return False;
             end if;
@@ -1448,9 +1466,9 @@ package body Landin.Stages.Checking.References is
                then
                   Left_Known := Left_Known or Storage.Derives (Id);
                   Right_Known := Right_Known
-                    or Pattern_Storage (Pattern).Derives (Id);
+                    or Alias_Storage (Pattern).Derives (Id);
                   if Storage.Derives (Id)
-                    and then Pattern_Storage (Pattern).Derives (Id)
+                    and then Alias_Storage (Pattern).Derives (Id)
                   then
                      return False;
                   end if;
@@ -1577,7 +1595,12 @@ package body Landin.Stages.Checking.References is
             Result.Derives (Positive (Id)) := True;
             case Res.Sort_Of (Meanings.all, Id) is
                when Res.Local_Binding | Res.Named_Return =>
-                  Result.Frame := True;
+                  if Runtime_Alias (Id) then
+                     Result := Alias_Storage (Id);
+                     Result.Derives (Positive (Id)) := True;
+                  else
+                     Result.Frame := True;
+                  end if;
                when Res.Module_Binding =>
                   Result.External := True;
                when Res.Parameter =>
@@ -1601,7 +1624,7 @@ package body Landin.Stages.Checking.References is
                when Res.Pattern_Binding =>
                   --  D85/D121: this is the payload's actual backing place,
                   --  distinct from origins carried by its copied value.
-                  Result := Pattern_Storage (Id);
+                  Result := Alias_Storage (Id);
                   Result.Derives (Positive (Id)) := True;
                when others =>
                   null;
@@ -2488,6 +2511,10 @@ package body Landin.Stages.Checking.References is
                   Subject_Reference : constant Landin.Checking.Reference_Id :=
                     Landin.Checking.Reference_Of
                       (Types.all, Tree, Subject_Node);
+                  Referenced_Subject : constant Boolean :=
+                    Syn.Kind (Tree, Subject_Node) = Syn.Member_Selection
+                      and then Has_Reference_Storage
+                        (Tree, Syn.Target_Of (Tree, Subject_Node));
                   Subject_Storage : constant Reference_Fact :=
                     (if Match_Subject_Is_Copied (Tree, Subject_Node)
                      then (Frame => True, others => <>)
@@ -2549,7 +2576,8 @@ package body Landin.Stages.Checking.References is
                                     then Subject_Value
                                     else No_Origin);
                                  Origins (Id).Value.Presence := Unknown_Value;
-                                 Pattern_Storage (Id) := Subject_Storage;
+                                 Alias_Storage (Id) := Subject_Storage;
+                                 Runtime_Alias (Id) := Referenced_Subject;
                                  Pattern_Subject (Id) :=
                                    (if Match_Subject_Is_Copied
                                          (Tree, Subject_Node)
@@ -2685,8 +2713,13 @@ package body Landin.Stages.Checking.References is
                      --  Traversal sources and bounds are evaluated once,
                      --  before the loop head, not again on its back edges.
                      declare
+                        Source_Node : constant Syn.Node_Id :=
+                          Syn.Traversal_Lower (Tree, Node);
                         Source_Fact : constant Origin_Fact :=
-                          Fact_Of (Tree, Syn.Traversal_Lower (Tree, Node));
+                          Fact_Of (Tree, Source_Node);
+                        Source_Kind : constant Ty.Type_Kind :=
+                          Landin.Checking.Type_Of
+                            (Types.all, Tree, Source_Node);
                         Element : constant Res.Declaration_Id :=
                           Declaration_At
                             (Tree, Syn.Traversal_Element (Tree, Node));
@@ -2696,6 +2729,29 @@ package body Landin.Stages.Checking.References is
                         elsif Element /= Res.No_Declaration
                           and then Element in Origins'Range
                         then
+                           --  D160 aliases array/slice storage. Text scalars
+                           --  and D180's source-free Item results are copies.
+                           Runtime_Alias (Element) :=
+                             Landin.Checking.Traversal_Evidence_Of
+                               (Types.all, Tree, Node)
+                                 = Landin.Checking.No_Conformance
+                             and then
+                               (Source_Kind = Ty.Fixed_Array
+                                or else (Source_Kind = Ty.Slice_Value
+                                  and then Landin.Checking.Descriptor_Of
+                                    (Types.all, Landin.Checking.Reference_Of
+                                       (Types.all, Tree, Source_Node)).View
+                                         not in Ty.Text_View));
+                           if Runtime_Alias (Element) then
+                              Alias_Storage (Element) :=
+                                (if Source_Kind = Ty.Slice_Value
+                                 then Source_Fact.Value
+                                 elsif Syn.Kind (Tree, Source_Node)
+                                   in Syn.Name_Reference | Syn.Member_Selection
+                                      | Syn.Element_Index
+                                 then Source_Fact.Storage
+                                 else (Frame => True, others => <>));
+                           end if;
                            Origins (Element) :=
                              (if Landin.Checking.Traversal_Evidence_Of
                                 (Types.all, Tree, Node)

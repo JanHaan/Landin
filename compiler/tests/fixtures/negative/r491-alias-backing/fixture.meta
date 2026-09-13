@@ -1,0 +1,9 @@
+class: negative
+summary: frame and copied elements cannot escape and nested runtime payloads remain live
+program: main.ldn
+codes: L0314, L0314, L0315, L0314, L0314, L0314, L0314, L0314, L0314
+constructs: 0430, 0670, 0770, 0780, 0790, 0800, 1150, 1160, 1220
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-alias-backing/main.ldn
+status: 1

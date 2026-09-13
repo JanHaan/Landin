@@ -1,0 +1,5 @@
+class: positive
+summary: nested payload and collection element addresses retain captured source storage
+program: main.ldn
+constructs: 0430, 0670, 0770, 0780, 0790, 1150, 1160, 1220
+targets: linux-x86-64

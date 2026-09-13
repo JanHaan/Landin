@@ -292,6 +292,14 @@ the canonical nominal shape. Debug output uses a DWARF declaration without
 size or members for a type whose layout has not been materialized, and emits
 the full description when the layout exists.
 
+Reference checking retains the backing storage of match payloads and builtin
+collection elements separately from references carried in their values.
+Computed selectors preserve runtime-address aliases, and traversal captures
+its array storage or slice base once. Element addresses and stores follow
+that captured backing; returned-array temporaries, iterable results, text
+scalars and index bindings keep frame storage. Nested payload aliases remain
+subject to the same live-use checks as direct matches.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature
