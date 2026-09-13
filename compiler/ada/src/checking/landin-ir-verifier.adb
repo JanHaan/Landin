@@ -15,6 +15,9 @@ package body Landin.IR.Verifier is
             when Item_Runs_Overlap    =>
                "an item's slots, blocks or instructions are not where its"
                & " run says they are",
+            when Block_Membership_Disagrees =>
+               "block runs do not partition their item's instructions"
+               & " with matching membership",
             when Operand_Runs_Overlap =>
                "a call's operands are not where its run says they are",
             when Atom_Set_Runs_Overlap =>
@@ -2540,6 +2543,7 @@ package body Landin.IR.Verifier is
          declare
             Held : constant Item_Record := Of_Unit.Items (Which);
             Id : constant Item_Id := Item_Id (Which);
+            Accounted : Natural := 0;
          begin
             if not Run_Fits (Held.Image, Natural (Of_Unit.Images.Length))
               or else not Run_Fits
@@ -2618,8 +2622,34 @@ package body Landin.IR.Verifier is
                      return (Kind => Item_Runs_Overlap,
                              Item => Id, others => <>);
                   end if;
+                  --  Containment above makes every direct code read safe.
+                  --  Distinct block identities cannot claim one instruction
+                  --  twice and both agree with its single membership field.
+                  if Block.Values > Held.Values.Count - Accounted then
+                     return (Kind => Block_Membership_Disagrees,
+                             Item => Id, Block => Block_Id (Index),
+                             others => <>);
+                  end if;
+                  Accounted := Accounted + Block.Values;
+                  for Offset in 1 .. Block.Values loop
+                     if Of_Unit.Code
+                       (Block.First_Value + Offset).In_Block
+                         /= Block_Id (Index)
+                     then
+                        return
+                          (Kind => Block_Membership_Disagrees,
+                           Item => Id, Block => Block_Id (Index),
+                           Value => Value_Id
+                             (Block.First_Value - Held.Values.First
+                              + Offset));
+                     end if;
+                  end loop;
                end;
             end loop;
+            if Accounted /= Held.Values.Count then
+               return (Kind => Block_Membership_Disagrees,
+                       Item => Id, others => <>);
+            end if;
          end;
       end loop;
       for Slot of Of_Unit.Slots loop
@@ -3219,9 +3249,17 @@ package body Landin.IR.Verifier is
                Fields     := Fields + Held.Fields.Count;
             end;
          end loop;
+         if Slots /= Natural (Of_Unit.Slots.Length)
+           or else Parameters /= Natural (Of_Unit.Parameters.Length)
+           or else Blocks /= Natural (Of_Unit.Blocks.Length)
+           or else Values /= Natural (Of_Unit.Code.Length)
+           or else Fields /= Natural (Of_Unit.Fields.Length)
+         then
+            return (Kind => Item_Runs_Overlap, others => <>);
+         end if;
       end;
 
-      --  Images do not partition in item-order the way the four runs
+      --  Images do not partition in item-order the way the five runs
       --  above do: D21 chain resolution fills the source's image
       --  before its destination's, so item 1's Image.First can land
       --  beyond item 3's.  The partition still has to hold -- no run
@@ -3319,7 +3357,7 @@ package body Landin.IR.Verifier is
          end loop;
       end;
 
-      --  The operand vector, which is the fifth run and the one a call
+      --  The operand vector is owned by instruction runs, which a call
       --  extends after the fact.
       declare
          Seen : Natural := 0;
@@ -3335,6 +3373,9 @@ package body Landin.IR.Verifier is
                Seen := Seen + What.Args;
             end;
          end loop;
+         if Seen /= Natural (Of_Unit.Operands.Length) then
+            return (Kind => Operand_Runs_Overlap, others => <>);
+         end if;
       end;
 
       --  D46 shares one target-neutral field shape between aggregate

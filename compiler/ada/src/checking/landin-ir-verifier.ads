@@ -28,10 +28,10 @@
 --  refuses.  Whether a name is assigned before it is read is [1910]'s and
 --  the checker's.
 --
---  A child of `Landin.IR` because two rules need the private part: an
---  item's four runs, and a call's operand run, have to partition their
---  vectors, and no public function can see a run.  Those two are also the
---  ones that must run first -- a run whose base is wrong makes
+--  A child of `Landin.IR` because run checks need the private part: item
+--  runs and call operand runs partition their vectors, and each block run
+--  agrees with instruction membership and partitions its item's values.
+--  These checks run first -- a run whose base is wrong makes
 --  `Nth_Value` raise `Constraint_Error` before any later rule can speak.
 --
 --  D24's array datum image is one exception to the "width belongs to the
@@ -54,6 +54,7 @@ package Landin.IR.Verifier is
       --  The unit, and the runs that partition its vectors.
       Unprepared_Unit,
       Item_Runs_Overlap,
+      Block_Membership_Disagrees,
       Operand_Runs_Overlap,
       Atom_Set_Runs_Overlap,
       Atom_Set_Malformed,

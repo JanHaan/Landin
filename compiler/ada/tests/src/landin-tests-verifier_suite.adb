@@ -41,6 +41,7 @@ package body Landin.Tests.Verifier_Suite is
    use type IR.Nominal_Type_Id;
    use type IR.Parameter_Convention;
    use type IR.Value_Id;
+   use type IR.Item_Id;
    use type Landin.Types.Folded;
    use type V.Fault_Kind;
 
@@ -6586,8 +6587,199 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Slice_Field_Descriptors_Are_Checked;
 
+   procedure Block_Runs_Agree_With_Their_Values
+     (Item : in out Landin.Testing.Context);
+
+   procedure Block_Runs_Agree_With_Their_Values
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Sound, Reordered, Unclaimed, Overlap, Wrong_Member, Absent_Member,
+         Far_Member, Void_Member, Prefixed_Sound, Prefixed_Unclaimed);
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine : IR.Item_Id;
+               First, Middle, Last : IR.Block_Id;
+               Unused : IR.Value_Id := IR.No_Value;
+               Base : Natural := 0;
+               Bad : constant Boolean :=
+                 Scenario not in Sound | Reordered | Prefixed_Sound;
+
+               procedure Fill_Middle;
+               procedure Fill_Last;
+
+               procedure Fill_Middle is
+               begin
+                  IR.Enter (Unit, Routine, Middle);
+                  Unused := IR.Emit_Number
+                    (Unit, Routine, Landin.Types.U32, 0, False, Site);
+                  IR.Emit_Jump (Unit, Routine, Last, Site);
+                  IR.Leave_Block (Unit, Routine);
+               end Fill_Middle;
+
+               procedure Fill_Last is
+                  Answer : IR.Value_Id;
+               begin
+                  IR.Enter (Unit, Routine, Last);
+                  Answer := IR.Emit_Number
+                    (Unit, Routine, Landin.Types.U32, 42, False, Site);
+                  IR.Emit_Leave
+                    (Unit, Routine,
+                     (if Scenario = Void_Member then IR.No_Value
+                      else Answer), Site);
+                  IR.Leave_Block (Unit, Routine);
+               end Fill_Last;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               if Scenario in Prefixed_Sound | Prefixed_Unclaimed then
+                  declare
+                     Prefix : constant IR.Item_Id := IR.Add_Item
+                       (Unit, IR.Routine, 3, Landin.Types.U32, Site);
+                     Block : constant IR.Block_Id := IR.Add_Block
+                       (Unit, Prefix, Landin.Resolution.Program_Scope, Site);
+                     Value : IR.Value_Id;
+                  begin
+                     IR.Enter (Unit, Prefix, Block);
+                     Value := IR.Emit_Number
+                       (Unit, Prefix, Landin.Types.U32, 1, False, Site);
+                     IR.Emit_Leave (Unit, Prefix, Value, Site);
+                     IR.Leave_Block (Unit, Prefix);
+                     Base := IR.Value_Count (Unit, Prefix);
+                  end;
+               end if;
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1,
+                  (if Scenario = Void_Member then Landin.Types.No_Value
+                   else Landin.Types.U32), Site);
+               First := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               Middle := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               Last := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Routine, First);
+               IR.Emit_Jump (Unit, Routine, Middle, Site);
+               IR.Leave_Block (Unit, Routine);
+               if Scenario = Reordered then
+                  Fill_Last;
+                  Fill_Middle;
+               else
+                  Fill_Middle;
+                  Fill_Last;
+               end if;
+               Expect (Item, V.Check (Unit, Facts), V.Nothing_Wrong,
+                       "the small unit starts valid: " & Scenario'Image);
+               case Scenario is
+                  when Unclaimed | Prefixed_Unclaimed =>
+                     IR.Testing_Support.Overwrite_Block_Run
+                       (Unit, Routine, Middle, Base + 2, 1);
+                  when Overlap =>
+                     IR.Testing_Support.Overwrite_Block_Run
+                       (Unit, Routine, Middle, Base, 3);
+                  when Wrong_Member | Absent_Member | Far_Member =>
+                     IR.Testing_Support.Overwrite_Value_Block
+                       (Unit, Routine, Unused,
+                        (if Scenario = Wrong_Member then First
+                         elsif Scenario = Absent_Member then IR.No_Block
+                         else IR.Block_Id'Last));
+                  when Void_Member =>
+                     IR.Testing_Support.Overwrite_Value_Block
+                       (Unit, Routine,
+                        IR.Value_Id (IR.Value_Count (Unit, Routine)), First);
+                  when others => null;
+               end case;
+               declare
+                  Fault : constant V.Fault := V.Check (Unit, Facts);
+               begin
+                  Expect
+                    (Item, Fault,
+                     (if Bad then V.Block_Membership_Disagrees
+                      else V.Nothing_Wrong),
+                     "block partition and membership: " & Scenario'Image);
+                  if Bad then
+                     Landin.Testing.Check
+                       (Item, Fault.Item = Routine,
+                        "a membership fault identifies its own item");
+                  end if;
+               end;
+            end;
+         end loop;
+      end loop;
+   end Block_Runs_Agree_With_Their_Values;
+
+   procedure Final_Cursors_Consume_Their_Vectors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Final_Cursors_Consume_Their_Vectors
+     (Item : in out Landin.Testing.Context)
+   is
+      package Damage renames IR.Testing_Support;
+      use type Damage.Unclaimed_Vector;
+   begin
+      for Small in Boolean loop
+         for Which in Damage.Unclaimed_Vector loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine, Datum : IR.Item_Id;
+               Parameter : IR.Slot_Id;
+               Block : IR.Block_Id;
+               Value : IR.Value_Id;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Expect (Item, V.Check (Unit, Facts), V.Nothing_Wrong,
+                       "empty vectors have complete partitions");
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+               Parameter := IR.Add_Parameter
+                 (Unit, Routine, Landin.Types.U32, IR.No_Declaration, Site);
+               Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Routine, Block);
+               Value := IR.Emit_Load (Unit, Routine, Parameter, Site);
+               IR.Emit_Leave (Unit, Routine, Value, Site);
+               IR.Leave_Block (Unit, Routine);
+               Datum := IR.Add_Item
+                 (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+               IR.Add_Field (Unit, Datum, Landin.Types.U8);
+               Add_Empty_Body (Unit, Datum, Site);
+               Expect (Item, V.Check (Unit, Facts), V.Nothing_Wrong,
+                       "the three-instruction unit accounts for its storage");
+               Damage.Append_Unclaimed_Entry (Unit, Which);
+               Expect
+                 (Item, V.Check (Unit, Facts),
+                  (if Which = Damage.Operand_Vector
+                   then V.Operand_Runs_Overlap else V.Item_Runs_Overlap),
+                  "the final cursor refuses one unclaimed " & Which'Image);
+            end;
+         end loop;
+      end loop;
+   end Final_Cursors_Consume_Their_Vectors;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "final cursors consume their vectors",
+         Final_Cursors_Consume_Their_Vectors'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "block runs agree with their values",
+         Block_Runs_Agree_With_Their_Values'Access);
       Landin.Testing.Register
         (Into, "verifier", "slice field descriptors are checked",
          Slice_Field_Descriptors_Are_Checked'Access);

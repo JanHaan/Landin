@@ -108,6 +108,24 @@ package Landin.IR.Testing_Support is
       First, Count : Natural)
      with Pre => Holds (Into, Item);
 
+   type Unclaimed_Vector is
+     (Slot_Vector, Parameter_Vector, Block_Vector, Value_Vector,
+      Field_Vector, Operand_Vector);
+
+   --  Duplicate one existing entry at the end without changing any owner.
+   --  The selected vector must already contain an entry.
+   procedure Append_Unclaimed_Entry
+     (Into : in out Unit; Which : Unclaimed_Vector);
+
+   procedure Overwrite_Block_Run
+     (Into : in out Unit; Item : Item_Id; Block : Block_Id;
+      First, Count : Natural)
+     with Pre => Holds (Into, Item, Block);
+
+   procedure Overwrite_Value_Block
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id; Block : Block_Id)
+     with Pre => Holds (Into, Item, Value);
+
    procedure Overwrite_Parameter
      (Into : in out Unit; Item : Item_Id; Index : Positive; Slot : Slot_Id)
      with Pre => Holds (Into, Item)
