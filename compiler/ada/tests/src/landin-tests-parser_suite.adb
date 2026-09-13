@@ -3020,8 +3020,112 @@ package body Landin.Tests.Parser_Suite is
          "L0010", "variant,separate,beta");
    end Struct_Closers_Preserve_Declarations;
 
+   procedure Transfers_Preserve_Completion_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Transfers_Preserve_Completion_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Label, Text : String; Completions, Named_Transfers : Natural);
+
+      procedure Check
+        (Label, Text : String; Completions, Named_Transfers : Natural)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("complete.ldn", Text & ASCII.LF);
+         Completed, Targeted : Natural := 0;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 0,
+               Label & " preserves the intended contextual complete");
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Parsed)
+            loop
+               if Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.Loop_Statement
+                    | Landin.Syntax.While_Statement
+                    | Landin.Syntax.For_Statement
+                 and then Landin.Syntax.Complete_Body (Parsed, Node)
+                   /= Landin.Syntax.No_Node
+               then
+                  Completed := Completed + 1;
+               elsif Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.Break_Statement
+                    | Landin.Syntax.Continue_Statement
+                 and then Landin.Syntax.Name (Parsed, Node)
+                   /= Landin.Source.Names.No_Name
+               then
+                  Targeted := Targeted + 1;
+               end if;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Completed, Completions,
+               Label & " retains each loop's distinct completion block");
+            Landin.Testing.Check_Equal
+              (Item, Targeted, Named_Transfers,
+               Label & " names only actual enclosing loop targets");
+         end;
+      end Check;
+   begin
+      Check ("while break",
+         "f: (flag: bool) -> none = while flag do break complete "
+         & "mark: i32 = 1 end while end f",
+         1, 0);
+      Check ("while continue",
+         "f: (flag: bool) -> none = while flag do continue "
+         & "complete mark: i32 = 1 end while end f",
+         1, 0);
+      Check ("for break",
+         "f: () -> none = for value in 0 ..< 2 do break complete "
+         & "mark: i32 = 1 end for end f",
+         1, 0);
+      Check ("for continue",
+         "f: () -> none = for value in 0 ..< 2 do continue "
+         & "complete mark: i32 = 1 end for end f",
+         1, 0);
+      Check ("matching complete label",
+         "f: (flag: bool) -> none = complete: while flag do break "
+         & "complete end complete end f",
+         0, 1);
+      Check ("nested complete label",
+         "f: (flag: bool) -> none = while flag do complete: loop "
+         & "do break complete end complete break end while end f",
+         0, 1);
+      Check ("complete binding",
+         "f: (flag: bool) -> none = while flag do complete: i32 = "
+         & "1 break end while end f",
+         0, 0);
+      Check ("complete assignment",
+         "f: (flag: bool) -> none = mut complete: i32 = 0 while "
+         & "flag do complete += 1 break end while end f",
+         0, 0);
+      Check ("separate binding scopes",
+         "f: (flag: bool) -> none = while flag do mark: i32 = 1 "
+         & "continue complete mark: i32 = 2 end while end f",
+         1, 0);
+      Check ("anonymous completion",
+         "f: (flag: bool) -> none = complete: while flag do "
+         & "callback := (value: bool) -> none = while value do "
+         & "continue complete mark: i32 = 1 end while end break "
+         & "complete end complete end f",
+         1, 1);
+   end Transfers_Preserve_Completion_Boundaries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "transfers preserve completion boundaries",
+         Transfers_Preserve_Completion_Boundaries'Access);
       Landin.Testing.Register
         (Into, "parser", "struct closers preserve declarations",
          Struct_Closers_Preserve_Declarations'Access);

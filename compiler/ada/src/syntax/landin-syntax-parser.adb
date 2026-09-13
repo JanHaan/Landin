@@ -435,6 +435,8 @@ package body Landin.Syntax.Parser is
                Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
                Label   : Landin.Source.Names.Name_Id :=
                  Landin.Source.Names.No_Name) return Node_Id;
+            function Has_Loop_Label
+              (Named : Landin.Source.Names.Name_Id) return Boolean;
             function Parse_Loop_Transfer return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
@@ -4815,7 +4817,10 @@ package body Landin.Syntax.Parser is
                      or else
                        (Complete_Closes_Block
                         and then Peek = Tok.Identifier
-                        and then Named_Here = Complete_Id));
+                        and then Named_Here = Complete_Id
+                        and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
+                        and then After_Selectors not in
+                          Tok.Equal | Tok.Compound_Assign));
 
                --  A name beginning a declaration or assignment is not the
                --  final expression [1080].  Every other expression first
@@ -5696,6 +5701,18 @@ package body Landin.Syntax.Parser is
                   Fills    => Inclusive);
             end Parse_For;
 
+            function Has_Loop_Label
+              (Named : Landin.Source.Names.Name_Id) return Boolean
+            is
+            begin
+               for Index in reverse Loop_Floor + 1 .. Loop_Depth loop
+                  if Loop_Labels (Index) = Named then
+                     return True;
+                  end if;
+               end loop;
+               return False;
+            end Has_Loop_Label;
+
             --  transfer ::= "break" identifier? ("with" expression)?
             --               ("when" expression)?
             --             | "continue" identifier? ("when" expression)?
@@ -5707,10 +5724,16 @@ package body Landin.Syntax.Parser is
                Value : Node_Id := No_Node;
                Target : Landin.Source.Names.Name_Id :=
                  Landin.Source.Names.No_Name;
-               Targeted : Boolean := False;
+               Targeted : Boolean;
             begin
                Advance;
-               if Peek = Tok.Identifier and then Named_Here /= With_Id then
+               --  [1170]: a following completion belongs to this loop's
+               --  body boundary, unless it names an actual enclosing label.
+               if Peek = Tok.Identifier and then Named_Here /= With_Id
+                 and then (Named_Here /= Complete_Id
+                           or else not Complete_Closes_Block
+                           or else Has_Loop_Label (Complete_Id))
+               then
                   Target := Named_Here;
                   Advance;
                end if;
@@ -5730,16 +5753,9 @@ package body Landin.Syntax.Parser is
                   Guard := Parse_Expression;
                end if;
 
-               if Target = Landin.Source.Names.No_Name then
-                  Targeted := Loop_Depth > Loop_Floor;
-               else
-                  for Index in reverse Loop_Floor + 1 .. Loop_Depth loop
-                     if Loop_Labels (Index) = Target then
-                        Targeted := True;
-                        exit;
-                     end if;
-                  end loop;
-               end if;
+               Targeted :=
+                 (if Target = Landin.Source.Names.No_Name
+                  then Loop_Depth > Loop_Floor else Has_Loop_Label (Target));
 
                if not Targeted then
                   Complain

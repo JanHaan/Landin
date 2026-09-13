@@ -11456,8 +11456,88 @@ package body Landin.Tests.Lowering_Suite is
          & "f(values: values, n: 2) end g" & LF);
    end Signature_Binders_Precede_Their_Types;
 
+   procedure Completion_Blocks_Keep_Their_Scopes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Completion_Blocks_Keep_Their_Scopes
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " retains its transfer and completion scopes");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Landin.Stages.Code (Work).all, Facts).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " preserves valid loop and completion control flow");
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("while break",
+         "f: (flag: bool) -> none = while flag do break complete "
+         & "mark: i32 = 1 end while end f" & LF);
+      Check_Source
+        ("while continue",
+         "f: (flag: bool) -> none = while flag do continue "
+         & "complete mark: i32 = 1 end while end f" & LF);
+      Check_Source
+        ("for break",
+         "f: () -> none = for value in 0 ..< 2 do break complete "
+         & "mark: i32 = 1 end for end f" & LF);
+      Check_Source
+        ("for continue",
+         "f: () -> none = for value in 0 ..< 2 do continue "
+         & "complete mark: i32 = 1 end for end f" & LF);
+      Check_Source
+        ("matching complete label",
+         "f: (flag: bool) -> none = complete: while flag do break "
+         & "complete end complete end f" & LF);
+      Check_Source
+        ("nested complete label",
+         "f: (flag: bool) -> none = while flag do complete: loop "
+         & "do break complete end complete break end while end f" & LF);
+      Check_Source
+        ("complete binding",
+         "f: (flag: bool) -> none = while flag do complete: i32 = "
+         & "1 break end while end f" & LF);
+      Check_Source
+        ("complete assignment",
+         "f: (flag: bool) -> none = mut complete: i32 = 0 while "
+         & "flag do complete += 1 break end while end f" & LF);
+      Check_Source
+        ("separate binding scopes",
+         "f: (flag: bool) -> none = while flag do mark: i32 = 1 "
+         & "continue complete mark: i32 = 2 end while end f" & LF);
+      Check_Source
+        ("anonymous completion",
+         "f: (flag: bool) -> none = complete: while flag do "
+         & "callback := (value: bool) -> none = while value do "
+         & "continue complete mark: i32 = 1 end while end break "
+         & "complete end complete end f" & LF);
+   end Completion_Blocks_Keep_Their_Scopes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "completion blocks keep their scopes",
+         Completion_Blocks_Keep_Their_Scopes'Access);
       Landin.Testing.Register
         (Into, "lowering", "signature binders precede their types",
          Signature_Binders_Precede_Their_Types'Access);
