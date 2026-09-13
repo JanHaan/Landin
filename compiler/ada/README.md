@@ -171,6 +171,10 @@ source numbering, target layout, output or iteration order.
 Generic instance ownership follows the resolver's lexical scopes. A nested
 no-capture anonymous signature begins from file scope, so its declarations
 remain independent of the enclosing generic routine's instance overlays.
+A first-class imported C routine address is loaded through its ELF GOT entry,
+so Linux PIE linking does not require an invalid PC-relative relocation to an
+external definition. Defined routines retain direct relative addresses; symbol
+quoting and static function-pointer relocations keep their existing identities.
 The selected-machine layer owns the signed-immediate boundary for nonnegative
 target extents. Indexed access, slice scaling and array-fill suffix offsets
 use a full-width register when their arithmetic constant exceeds that bound.

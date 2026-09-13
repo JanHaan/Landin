@@ -6237,7 +6237,8 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item, Contains (Text, HT & "call ""$foreign""" & LF)
-            and then Contains (Text, HT & "leaq ""$foreign""(%rip), %rax")
+            and then Contains
+              (Text, HT & "movq ""$foreign""@GOTPCREL(%rip), %rax")
             and then Contains (Text, HT & ".quad ""$foreign""" & LF)
             and then not Contains (Text, HT & "call $foreign"),
             "direct calls, runtime addresses and static relocations quote");
@@ -6547,8 +6548,51 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Check_Equal (Item, Checked, 1, "one caller checked");
    end A_C_Stack_Area_Must_Be_Addressable;
 
+   procedure Imported_Function_Addresses_Use_The_GOT
+     (Item : in out Landin.Testing.Context);
+
+   procedure Imported_Function_Addresses_Use_The_GOT
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "extern(c) foreign: (x: i32) -> (r: i32)" & LF
+         & "public local_fn: (x: i32) -> (r: i32) = x end local_fn" & LF
+         & "public run: (x: i32) -> (r: i32) =" & LF
+         & "    outside := foreign" & LF
+         & "    inside := local_fn" & LF
+         & "    r = outside(x) + inside(x)" & LF
+         & "end run" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both calling conventions retain their function values");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movq foreign@GOTPCREL(%rip), %rax")
+            and then not Contains (Text, "leaq foreign(%rip)"),
+            "the imported address is suitable for a PIE relocation");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "leaq local_fn(%rip), %rax")
+            and then not Contains (Text, "local_fn@GOTPCREL"),
+            "the defined routine keeps its direct relative address");
+      end;
+   end Imported_Function_Addresses_Use_The_GOT;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "imported function addresses use the GOT",
+         Imported_Function_Addresses_Use_The_GOT'Access);
       Landin.Testing.Register
         (Into, "backend", "slice scaling uses element extents",
          Slice_Scaling_Uses_Element_Extents'Access);

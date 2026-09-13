@@ -6060,7 +6060,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K27 | F5: profitability recounts eligible instances for every instance | Source confirms the nested item scans. Count once per normalized template while preserving evidence proof, exposed roots and policy decisions; validate small mixed-template cases. |
 | K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
 | K29 | G1: wide slice stride uses an unencodable immediate multiply | Implemented with A7/M19/N6/J61. Bounded scalar and emitted-text evidence covers the shared encoding decision; no giant extent or image reproduction. |
-| K30 | G3: first-class external C function address uses a bare PC-relative address | Open target/toolchain question: compare emitted address relocation with the supported PIE/shared-symbol link contract. The review established emission/reachability, not a native link failure. Preserve external/local callback controls; no linker run was made for intake. |
+| K30 | G3: first-class external C function address uses a bare PC-relative address | Confirmed with one inspected 1,275-byte assembly file and a foreground 20-second-capped invocation of the pinned triplet-selected GNU driver: PIE linking refuses the PC32 puts relocation. Imported runtime function addresses now load through GOTPCREL; defined routines retain relative addresses and quoting is preserved. Two exact backend cases pass eight checks on each host. The inspected replacement links as a PIE and readelf confirms the puts GLOB_DAT relocation; no generated program was executed and exact acceptance remains open. |
 | K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
 | K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
 | K33 | H1: build-report collision checks reserve inactive product/map paths | Source still reserves all three paths before the actual-output list is formed. Extend the artifact/source identity repair with fake-host inactive-map/product controls and preserve refusal of real collisions; no filesystem overwrite experiment. |
@@ -7444,6 +7444,27 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K30 is now a confirmed and repaired GNU-toolchain finding. The retained minimal
+C-callback source emitted 1,275 bytes of assembly before the change, with no
+`.rept`, `.zero`, `.space`, `.fill` or `.comm`, one-byte alignment and five data
+bytes. One foreground, 20-second-capped call to the pinned triplet-selected
+GNU driver with `-pie` refused its PC32 `puts` address relocation. Imported
+runtime function addresses now use `movq symbol@GOTPCREL(%rip)`; defined
+routines retain `leaq`, and the existing quoted dollar-symbol and static
+relocation rules stay intact. Two exact text cases pass eight checks on each
+of macOS debug and Linux release, with both single-worker builds passing.
+
+The 1,284-byte replacement was independently inspected and hash-checked before
+its one foreground GNU assemble/link command, also capped at 20 seconds. It
+links successfully; readelf identifies a PIE and the `puts` GLOB_DAT relocation.
+Both exact files expand to less than 4 KiB. Existing compiler/assembler processes
+were checked before each native run; no competing assembler, clang invocation,
+fixture sweep, giant image, debugger or generated-program execution occurred.
+The source, exact files, hashes and transcripts are retained under
+`.scratch/r491-link-address/`, with text-test logs in
+`.scratch/r491-final-values/`. These two bounded link commands are targeted
+repair evidence, not all-profile or exact-revision acceptance.
 
 K18 extends the existing shaped-carrier verifier to every call. Hidden results
 and aggregate/array parameters of ordinary direct or function-value calls now
