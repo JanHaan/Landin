@@ -6048,7 +6048,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API contract repaired: both semantic tables retain immutable tree object identities and compare them in Covers, in addition to source membership and node count. Same-sized different text, independently parsed identical text and absent-source controls accompany acceptance of the owned tree. Three exact cases pass 29 checks on each of macOS debug and Linux release; no CLI failure is claimed and exact acceptance remains open. |
 | K17 | E1: array fill/element atom writes require exact sets | Implemented: Fill_Array and Store_Element allow source atom subsets under D216; reads and whole copies retain exact descriptors. A two-element source fill reproduced exit 70 and now exits 0. Named/parameter direct-store source controls already passed; their Store_Element contract is independently pinned with small IR cases. Exact acceptance remains open. |
-| K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
+| K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Verifier shape checks now cover ordinary direct and indirect calls as well as erased dispatch. Hidden result and shaped argument addresses must retain their declared extent, element and nominal identity; C and erased-self checks remain. Bounded malformed-IR and valid nested/indexed controls cover both target widths. Four exact selectors pass 107 checks on each host; no accepted-source overwrite is claimed and exact acceptance remains open. |
 | K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
 | K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
 | K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
@@ -7444,6 +7444,22 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K18 extends the existing shaped-carrier verifier to every call. Hidden results
+and aggregate/array parameters of ordinary direct or function-value calls now
+use the same storage-shape proof as erased dispatch. A plain usize, wrong array
+extent or element, or unrelated nominal record does not satisfy that proof.
+Nested fields and indexed aggregate elements remain valid address sources.
+The C nominal rules and erased-self signature/adjacency rules remain separate.
+The bounded hand-built IR controls exercise direct and indirect calls on both
+target widths; existing erased and C controls and the core allocator fixture
+also pass. Four exact selectors total 107 checks on each of macOS debug and
+Linux release, with both single-worker builds passing. The fixture emits
+assembly text only; the IR cases invoke no backend tool. No native Landin
+assembler, executable, debugger, giant image or stress case ran. Evidence is
+in `.scratch/r491-call-carriers/` and `.scratch/r491-final-values/`. This closes
+the malformed-IR gap without claiming a demonstrated accepted-source overwrite;
+exact-revision acceptance remains open.
 
 J40's live example drift is reconciled with the existing grammar rather than
 expanding it. The tour and prototype 1's critical-section sketch use unlabelled

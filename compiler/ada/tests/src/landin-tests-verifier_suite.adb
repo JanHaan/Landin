@@ -6387,11 +6387,17 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Erased_Hidden_Results_Keep_Descriptors;
 
-   procedure Erased_Single_Result_Carriers_Are_Checked
-     (Item : in out Landin.Testing.Context);
+   type Carrier_Call_Form is (Direct_Form, Indirect_Form, Erased_Form);
 
-   procedure Erased_Single_Result_Carriers_Are_Checked
-     (Item : in out Landin.Testing.Context)
+   procedure Check_Single_Result_Carriers
+     (Item : in out Landin.Testing.Context;
+      Form : Carrier_Call_Form;
+      Facts : Landin.Targets.Target_Facts);
+
+   procedure Check_Single_Result_Carriers
+     (Item : in out Landin.Testing.Context;
+      Form : Carrier_Call_Form;
+      Facts : Landin.Targets.Target_Facts)
    is
       type Scenario_Kind is
         (Sound, Sound_Nested, Sound_Indexed,
@@ -6399,7 +6405,7 @@ package body Landin.Tests.Verifier_Suite is
          Wrong_Hidden_Shape, Wrong_Argument_Shape,
          Wrong_Hidden_Element, Wrong_Argument_Element);
       Work : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+        Landin.Stages.Create (Facts);
       Site : Landin.Provenance.Origin;
    begin
       Ready (Work, Site);
@@ -6417,7 +6423,7 @@ package body Landin.Tests.Verifier_Suite is
                   Pointer : IR.Pointee_Id;
                   Evidence : IR.Evidence_Id;
                   Provider, Caller : IR.Item_Id;
-                  Result, Parameter, Descriptor, Destination,
+                  Result, Parameter, Descriptor, Destination, Receiver_Storage,
                     Argument : IR.Slot_Id;
                   Block : IR.Block_Id;
                   Integer, Hidden_Value, Argument_Value, Receiver,
@@ -6542,6 +6548,8 @@ package body Landin.Tests.Verifier_Suite is
                   Descriptor := IR.Add_Array_Slot
                     (Unit, Caller, Landin.Types.Usize, 2,
                      IR.No_Declaration, Site);
+                  Receiver_Storage := IR.Add_Slot
+                    (Unit, Caller, Landin.Types.U32, IR.No_Declaration, Site);
                   Destination := Add_Storage
                     (if Scenario in Wrong_Hidden_Shape | Wrong_Hidden_Element
                      then Bad else Good);
@@ -6569,16 +6577,37 @@ package body Landin.Tests.Verifier_Suite is
                                       then 1 else 0),
                      Index => (if Scenario = Sound_Indexed
                                then Integer else IR.No_Value));
-                  Receiver := IR.Emit_Storage_Address
-                    (Unit, Caller,
-                     (Kind => IR.Frame_Slot, Slot => Descriptor), Site);
-                  Function_Value := IR.Emit_Erased_Evidence_Function
-                    (Unit, Caller, Receiver, Evidence, 1, Site);
-                  Self := IR.Emit_Evidence_Self
-                    (Unit, Caller, Function_Value, Site);
-                  Called := IR.Emit_Indirect_Call
-                    (Unit, Caller, Dispatch, Landin.Types.No_Value, Site);
-                  IR.Add_Argument (Unit, Caller, Called, Function_Value);
+                  if Form = Erased_Form then
+                     Receiver := IR.Emit_Storage_Address
+                       (Unit, Caller,
+                        (Kind => IR.Frame_Slot, Slot => Descriptor), Site);
+                     Function_Value := IR.Emit_Erased_Evidence_Function
+                       (Unit, Caller, Receiver, Evidence, 1, Site);
+                     Self := IR.Emit_Evidence_Self
+                       (Unit, Caller, Function_Value, Site);
+                     Called := IR.Emit_Indirect_Call
+                       (Unit, Caller, Dispatch, Landin.Types.No_Value, Site);
+                     IR.Add_Argument (Unit, Caller, Called, Function_Value);
+                  else
+                     Self := IR.Emit_Place_Address
+                       (Unit, Caller,
+                        (Kind => IR.Frame_Slot, Slot => Receiver_Storage),
+                        Site);
+                     IR.Set_Pointee (Unit, Caller, Self, Pointer);
+                     if Form = Direct_Form then
+                        Called := IR.Emit_Call
+                          (Unit, Caller, Provider, Landin.Types.No_Value,
+                           Site);
+                     else
+                        Function_Value := IR.Emit_Function_Address
+                          (Unit, Caller, Provider, Site);
+                        Called := IR.Emit_Indirect_Call
+                          (Unit, Caller, Concrete, Landin.Types.No_Value,
+                           Site);
+                        IR.Add_Argument
+                          (Unit, Caller, Called, Function_Value);
+                     end if;
+                  end if;
                   IR.Add_Argument
                     (Unit, Caller, Called,
                      (if Scenario = Wrong_Hidden_Integer
@@ -6591,16 +6620,42 @@ package body Landin.Tests.Verifier_Suite is
                   IR.Emit_Leave (Unit, Caller, IR.No_Value, Site);
                   IR.Leave_Block (Unit, Caller);
                   Expect
-                    (Item, V.Check (Unit),
+                    (Item, V.Check (Unit, Facts),
                      (if Scenario in Sound | Sound_Nested | Sound_Indexed
                       then V.Nothing_Wrong else V.Operands_Disagree),
-                     "erased single-result carrier: " & Scenario'Image
+                     "single-result carrier: " & Form'Image & Scenario'Image
                        & " arrays " & Arrays'Image);
                end;
             end if;
          end loop;
       end loop;
+   end Check_Single_Result_Carriers;
+
+   procedure Erased_Single_Result_Carriers_Are_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Erased_Single_Result_Carriers_Are_Checked
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Check_Single_Result_Carriers
+        (Item, Erased_Form, Landin.Targets.Linux_X86_64);
    end Erased_Single_Result_Carriers_Are_Checked;
+
+   procedure Ordinary_Call_Carriers_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Ordinary_Call_Carriers_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Check_Single_Result_Carriers
+        (Item, Direct_Form, Landin.Targets.Linux_X86_64);
+      Check_Single_Result_Carriers
+        (Item, Indirect_Form, Landin.Targets.Linux_X86_64);
+      Check_Single_Result_Carriers
+        (Item, Direct_Form, Landin.Targets.Synthetic_32);
+      Check_Single_Result_Carriers
+        (Item, Indirect_Form, Landin.Targets.Synthetic_32);
+   end Ordinary_Call_Carriers_Keep_Their_Shape;
 
    procedure Slice_Field_Descriptors_Are_Checked
      (Item : in out Landin.Testing.Context);
@@ -7857,6 +7912,9 @@ package body Landin.Tests.Verifier_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "ordinary call carriers keep their shape",
+         Ordinary_Call_Carriers_Keep_Their_Shape'Access);
       Landin.Testing.Register
         (Into, "verifier", "variant slice images are checked",
          Variant_Slice_Images_Are_Checked'Access);
