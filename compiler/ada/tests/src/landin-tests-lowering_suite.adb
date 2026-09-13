@@ -5387,6 +5387,16 @@ package body Landin.Tests.Lowering_Suite is
                Id : constant IR.Value_Id := IR.Value_Id (Value);
                Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Id);
             begin
+               if Op in IR.Load_Element | IR.Store_Element
+                 and then IR.Reaches_A_Slot (Unit, 2, Id)
+               then
+                  Landin.Testing.Check
+                    (Item, IR.Slot_Element_Shape_Is_Valid (Unit, 2, Id)
+                     and then IR.Slot_Element_Length (Unit, 2, Id) = 2
+                     and then IR.Slot_Element_Type (Unit, 2, Id)
+                       = Landin.Types.U32,
+                     "slot queries follow the selected payload array");
+               end if;
                if Op = IR.Select_Variant then
                   Selects := Selects + 1;
                   declare

@@ -45,6 +45,7 @@ package body Landin.Tests.Verifier_Suite is
    use type IR.Block_Id;
    use type IR.Part_Position;
    use type Landin.Types.Folded;
+   use type Landin.Types.Type_Kind;
    use type V.Fault_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -7533,8 +7534,169 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Array_Atom_Writes_Accept_Subsets;
 
+   procedure Slot_Element_Queries_Follow_Selectors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Slot_Element_Queries_Follow_Selectors
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Direct_Variant, Path_Variant, Root_Array_Path, Element_Child,
+         Missing_Case, Missing_Payload, Case_Beyond, Payload_Beyond,
+         Mixed_Selectors, Nonscalar_Element, Bad_Base, Scalar_Slot);
+      type Query_List is array (Positive range <>) of IR.Value_Id;
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine : IR.Item_Id;
+               Cell : IR.Slot_Id;
+               Block : IR.Block_Id;
+               Index, Stored, Loaded, Written : IR.Value_Id;
+               Shape : IR.Field_Shape;
+               Base : Natural := 1;
+               Selected_Case : Natural := 2;
+               Payload : Natural := 1;
+               Path, Below_Element : IR.Path_Step_Array (1 .. 1) :=
+                 [1 => (Field => 1, Case_Index => 0)];
+               Path_Count, Below_Count : Natural := 0;
+               Good : constant Boolean := Scenario in Direct_Variant
+                 | Path_Variant | Root_Array_Path | Element_Child;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               if Scenario in Element_Child | Nonscalar_Element then
+                  declare
+                     Nominal : constant IR.Nominal_Type_Id :=
+                       Test_Nominal (Unit);
+                  begin
+                     IR.Set_Nominal_Shape
+                       (Unit, Nominal,
+                        [(Element => Landin.Types.U8, others => <>),
+                         (Element => Landin.Types.U16, others => <>)]);
+                     Cell := IR.Add_Array_Slot
+                       (Unit, Routine,
+                        (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => Nominal, others => <>),
+                        3, IR.No_Declaration, Site);
+                  end;
+                  Base := 0;
+                  Selected_Case := 0;
+                  Payload := 0;
+                  if Scenario = Element_Child then
+                     Below_Count := 1;
+                     Below_Element (1).Field := 2;
+                  end if;
+               elsif Scenario = Root_Array_Path then
+                  Shape := IR.Make_Array_Shape
+                    (Unit, 3, (Element => Landin.Types.U16, others => <>));
+                  Cell := IR.Add_Array_Slot
+                    (Unit, Routine, Shape, 2, IR.No_Declaration, Site);
+                  Base := 0;
+                  Selected_Case := 0;
+                  Payload := 0;
+                  Path_Count := 1;
+               elsif Scenario = Scalar_Slot then
+                  Cell := IR.Add_Slot
+                    (Unit, Routine, Landin.Types.U16, IR.No_Declaration, Site);
+                  Base := 0;
+                  Selected_Case := 0;
+                  Payload := 0;
+               else
+                  Cell := IR.Add_Aggregate_Slot
+                    (Unit, Routine, IR.No_Declaration, Site);
+                  Shape := IR.Make_Array_Shape
+                    (Unit, 3, (Element => Landin.Types.U16, others => <>));
+                  IR.Add_Slot_Field
+                    (Unit, Routine, Cell,
+                     (Kind => IR.Variant_Field_Shape,
+                      Element => Landin.Types.U8,
+                      Cases => 2, Payloads_First => 1, others => <>),
+                     [(First => 0, Count => 0), (First => 1, Count => 1)],
+                     [1 => Shape]);
+                  case Scenario is
+                     when Path_Variant | Mixed_Selectors =>
+                        Path_Count := 1;
+                        Path (1).Case_Index := 2;
+                        if Scenario = Path_Variant then
+                           Selected_Case := 0;
+                           Payload := 0;
+                        end if;
+                     when Missing_Case => Selected_Case := 0;
+                     when Missing_Payload => Payload := 0;
+                     when Case_Beyond => Selected_Case := 3;
+                     when Payload_Beyond => Payload := 2;
+                     when Bad_Base => Base := 2;
+                     when others => null;
+                  end case;
+               end if;
+               Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Routine, Block);
+               Index := IR.Emit_Number
+                 (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+               Stored := IR.Emit_Number
+                 (Unit, Routine, Landin.Types.U16, 7, False, Site);
+               Loaded := IR.Emit_Load_Slot_Element
+                 (Unit, Routine, Cell, Index, Landin.Types.U16, Site,
+                  Field => Base, Nested => Path (1 .. Path_Count),
+                  Variant_Case => Selected_Case,
+                  Variant_Payload_Field => Payload,
+                  Below => Below_Element (1 .. Below_Count));
+               IR.Emit_Store_Slot_Element
+                 (Unit, Routine, Cell, Index, Stored, Site,
+                  Field => Base, Nested => Path (1 .. Path_Count),
+                  Variant_Case => Selected_Case,
+                  Variant_Payload_Field => Payload,
+                  Below => Below_Element (1 .. Below_Count));
+               Written := IR.Nth_Value
+                 (Unit, Routine, Block, IR.Length (Unit, Routine, Block));
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Routine);
+               Landin.Testing.Check
+                 (Item, not IR.Slot_Element_Shape_Is_Valid
+                    (Unit, Routine, Index),
+                  "a number has no selected slot array");
+               if Good then
+                  Expect (Item, V.Check (Unit, Facts), V.Nothing_Wrong,
+                          "the selected array operations are valid IR");
+               end if;
+               for Value of Query_List'[Loaded, Written] loop
+                  Landin.Testing.Check
+                    (Item, IR.Slot_Element_Shape_Is_Valid
+                       (Unit, Routine, Value) = Good,
+                     "slot selection validity: " & Scenario'Image);
+                  if Good and then IR.Slot_Element_Shape_Is_Valid
+                    (Unit, Routine, Value)
+                  then
+                     Landin.Testing.Check
+                       (Item, IR.Slot_Element_Length
+                          (Unit, Routine, Value) = 3
+                        and then IR.Slot_Element_Type
+                          (Unit, Routine, Value) = Landin.Types.U16,
+                        "length and type follow the selected array: "
+                        & Scenario'Image);
+                  end if;
+               end loop;
+            end;
+         end loop;
+      end loop;
+   end Slot_Element_Queries_Follow_Selectors;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "slot element queries follow selectors",
+         Slot_Element_Queries_Follow_Selectors'Access);
       Landin.Testing.Register
         (Into, "verifier", "array atom writes accept subsets",
          Array_Atom_Writes_Accept_Subsets'Access);

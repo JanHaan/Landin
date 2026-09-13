@@ -2697,13 +2697,10 @@ package Landin.IR is
    function Same_Shape
      (Of_Unit : Unit; Left, Right : Field_Shape) return Boolean;
 
-   --  Which array a slot-reaching element operation names.  Only
-   --  meaningful when Reaches_A_Slot is true; a computed module-array
-   --  element carries no slot and asks Datum_Of instead.  The reached
-   --  slot must hold an Add_Array_Slot shape rather than a scalar or an
-   --  aggregate: Slot_Array_Length and Slot_Array_Element have that
-   --  requirement in their own preconditions, and putting it here lets
-   --  the caller be caught above the raise those two would emit.
+   --  Which array a slot-reaching scalar element operation names. Follow
+   --  its whole-array or aggregate-field root, its nested path or separate
+   --  variant payload selection, then the path below the selected element.
+   --  Length belongs to the selected array; Type belongs to the final leaf.
    function Slot_Element_Shape_Is_Valid
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean;
 
