@@ -5863,7 +5863,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
 | J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
 | J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
-| J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Implemented: L0502 points at an active entry-module `main` declaration when present, otherwise the first entry source at byte zero. Imported and local names cannot supply the anchor. The same early refusal still precedes output and tools. |
 | J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
 | J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Guard repaired as backend consistency: suffix offsets share the arithmetic-immediate predicate, using a full-width scratch register above signed imm32. The large-source reachability claim was not replayed; scalar encoding-boundary and three/four-element fill controls cover the repair without a giant image. |
 | J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Implemented: snippets display tabs as `\t` and bytes outside printable ASCII as `\xNN`; underlines count their displayed characters. Headers and structured spans retain original byte coordinates. This deterministic byte display covers valid UTF-8, invalid bytes and control bytes without a locale/font width assumption. |
@@ -7098,9 +7098,21 @@ assembler, linker, generated executable, debugger or large input ran. Evidence
 is retained in `.scratch/r491-display-columns/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J66's source-free hosted-entry refusal is next. Attach a useful entry-module
-location, preferring an existing invalid main declaration, and retain the
-pre-output/tool refusal boundary.
+J66 development evidence: five selected cases pass 48 checks in each of macOS
+debug and Linux release. Five small fake-driver programs cover an empty entry
+source, private and wrong-shaped main declarations, an inactive main and a
+local binding named main. Existing imported-entry and hosted-linkage controls
+confirm that imported names are excluded and renamed main retains L0502. The
+renamed-entry golden now points at the declaration's four-byte name. Its
+unchanged missing-entry predicate refuses before any output or tool call;
+the other driver controls use fake host tools. Both single-worker builds
+passed, with individual test limits of 30 seconds or less. No Landin assembler,
+linker, generated executable, debugger or large input ran. Evidence is retained
+in `.scratch/r491-entry-source/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J136/J137's checking-table contracts are next for source inspection and small
+seam evidence where needed.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

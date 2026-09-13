@@ -1,2 +1,5 @@
 error[L0502]: a hosted program needs public main: () -> (code: i32)
-  --> <unknown source>
+  --> ../tests/fixtures/negative/r440-native-renamed-entry/main.ldn:1:38
+  |
+1 | public link(symbol: "renamed_entry") main: () -> (code: i32) =
+  |                                      ^^^^
