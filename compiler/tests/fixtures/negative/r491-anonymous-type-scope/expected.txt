@@ -1,0 +1,12 @@
+error[L0201]: `t` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/r491-anonymous-type-scope/main.ldn:2:33
+  |
+2 |     idf: (x: t) -> (y: t) = (x: t) -> (y: t) =
+  |                                 ^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `t` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/r491-anonymous-type-scope/main.ldn:2:43
+  |
+2 |     idf: (x: t) -> (y: t) = (x: t) -> (y: t) =
+  |                                           ^
+  = note: [1860]: a name that names nothing is refused
