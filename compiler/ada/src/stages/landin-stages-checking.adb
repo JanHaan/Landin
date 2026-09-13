@@ -6928,10 +6928,9 @@ package body Landin.Stages.Checking is
               and then not Is_Array_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
-                  = Ty.Undecided
+                  /= Ty.Ill_Typed
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
@@ -6971,10 +6970,9 @@ package body Landin.Stages.Checking is
               and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
-                  = Ty.Undecided
+                  /= Ty.Ill_Typed
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
@@ -7000,10 +6998,9 @@ package body Landin.Stages.Checking is
               and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
-                  = Ty.Undecided
+                  /= Ty.Ill_Typed
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
@@ -7028,10 +7025,9 @@ package body Landin.Stages.Checking is
               and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
-                  = Ty.Undecided
+                  /= Ty.Ill_Typed
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
@@ -17286,6 +17282,19 @@ package body Landin.Stages.Checking is
                      Item.Concept := Source.Concept;
                      Item.Atoms := Source.Atoms;
                   else
+                     if Held /= Ty.Ill_Typed then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, From),
+                           Message => "a range slice requires an array"
+                                      & " or slice value",
+                           Note    => "[0570]: slicing retains a view of"
+                                      & " storage with a known length",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this range slice",
+                           Into    => Found);
+                     end if;
                      return Kept (Ty.Ill_Typed);
                   end if;
 
