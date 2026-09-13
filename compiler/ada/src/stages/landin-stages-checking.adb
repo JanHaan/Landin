@@ -4565,6 +4565,54 @@ package body Landin.Stages.Checking is
               (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
                 [others => False];
 
+         --  Measurements can introduce type syntax that was not published
+         --  with a parameter or local declaration. Normalize and fold that
+         --  syntax with the active instance's complete type/fixed actuals.
+         function Current_Actuals return Formal_Actual_Array;
+
+         function Current_Actuals return Formal_Actual_Array is
+            Current : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Current_Routine_View (Types.all);
+         begin
+            if Current = Landin.Checking.No_Routine_Instance then
+               return [1 .. 0 => (others => <>)];
+            end if;
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Landin.Checking.Routine_Template_Of (Types.all, Current);
+               Template_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+               Function_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Template);
+               Count : constant Natural :=
+                 Landin.Checking.Routine_Actual_Count (Types.all, Current);
+            begin
+               return Bound : Formal_Actual_Array (1 .. Count) do
+                  for Index in Bound'Range loop
+                     declare
+                        Actual : constant Landin.Checking.Actual_Key :=
+                          Landin.Checking.Nth_Routine_Actual
+                            (Types.all, Current, Index);
+                     begin
+                        Bound (Index).Formal := Declaration_At
+                          (Syn.Source_Of (Template_Tree.all),
+                           Syn.Nth_Generic_Formal
+                             (Template_Tree.all, Function_Node, Index));
+                        if Landin.Checking.Actual_Kind_Of (Actual)
+                          = Landin.Checking.Type_Actual_Kind
+                        then
+                           Bound (Index).Value := Descriptor_For (Actual);
+                        else
+                           Bound (Index).Fixed :=
+                             Landin.Checking.Fixed_Magnitude_Of (Actual);
+                           Bound (Index).Fixed_Known := True;
+                        end if;
+                     end;
+                  end loop;
+               end return;
+            end;
+         end Current_Actuals;
+
          --  An ordinary struct's empty-actual identity is allocated before
          --  settlement.  Signature parts may follow only ordinary aliases to
          --  that identity without asking Settled_Type for a by-value layout.
@@ -4639,7 +4687,7 @@ package body Landin.Stages.Checking is
             declare
                Result : constant Type_Descriptor := Normalized_Type
                  (Of_Tree, Written,
-                  Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                  Current_Actuals,
                   Requirement => Requirement);
             begin
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
@@ -4915,11 +4963,11 @@ package body Landin.Stages.Checking is
                   Upper_Valid, Upper_Known : Boolean;
                   Lower : constant Ty.Folded := Fixed_Bound
                     (Of_Tree, Lower_Node,
-                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Current_Actuals,
                      Landin.Provenance.No_Origin, Lower_Valid, Lower_Known);
                   Upper : constant Ty.Folded := Fixed_Bound
                     (Of_Tree, Upper_Node,
-                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Current_Actuals,
                      Landin.Provenance.No_Origin, Upper_Valid, Upper_Known);
                begin
                   if not Lower_Valid or else not Lower_Known
@@ -5610,7 +5658,7 @@ package body Landin.Stages.Checking is
                   Valid, Known : Boolean;
                   Folded_Value : constant Ty.Folded := Fixed_Bound
                     (Of_Tree, Bound,
-                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Current_Actuals,
                      Landin.Provenance.No_Origin, Valid, Known);
                begin
                   if not Valid or else not Known then

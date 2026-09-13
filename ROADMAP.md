@@ -5922,7 +5922,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Repaired with J46/J60: placement measures each result's complete descriptor, including nested arrays, nominal elements and reference carriers, instead of its scalar placeholder. Tiny nested/reference/empty array signature controls pass; no oversized source or generated image was executed. |
-| J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Implemented: type normalization and fixed-bound folding retain the active routine instance's type/fixed actuals in newly encountered type positions. Direct, arithmetic, type-formal and parameterized-alias measurements keep separate two/four-element instances. Negative, impossible and runtime bounds retain their specific refusals. Exact acceptance remains open. |
 | J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J127 | Out-of-range constant index diagnostic is missing its noun: "this index is outside the 2 this array has" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
@@ -6725,7 +6725,22 @@ assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-payload-copy/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J125's fixed-formal array measurements are next. J116's slice-endpoint claim
+J125 development evidence: five selected cases pass 242 checks in each of
+macOS debug and Linux release. Eight small accepted sources pin two concrete
+instances each, including their element measurement types and count scales.
+Six negative sources retain L0300 for a negative count, L0306 for a zero
+divisor and L0305 for runtime storage used as a bound. Their initial generic
+call used an untyped integer against u32; explicitly typing that argument
+made the controls reach the intended bound checks. Existing target-carrier,
+runtime-bound and scalar-range refusals pass. The original direct sizeof and
+alignof sources now exit 0 instead of L0305; a local array declaration with
+lenof remains a passing control. Both single-worker builds passed; selected
+tests have 30-second or shorter timeouts, and compile-only reproductions have
+a ten-second limit. No Landin assembler, linker or generated executable ran.
+Logs are retained in `.scratch/r491-fixed-measurements/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J106/J127's link-note and constant-index wording corrections are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

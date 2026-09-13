@@ -11985,8 +11985,170 @@ package body Landin.Tests.Lowering_Suite is
       end loop;
    end Struct_Payload_Aliases_Initialize_Copies;
 
+   procedure Fixed_Measurements_Use_Instance_Actuals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Measurements_Use_Instance_Actuals
+     (Item : in out Landin.Testing.Context)
+   is
+      type Form_Kind is (Direct, Arithmetic, Type_Formal, Applied_Alias);
+   begin
+      for Small in Boolean loop
+         for Form in Form_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Measured : constant String :=
+                 (case Form is
+                    when Direct => "[n]u16",
+                    when Arithmetic => "[n + 1]u16",
+                    when Type_Formal => "[n]t",
+                    when Applied_Alias => "row(n)");
+               Text : constant String :=
+                 "row: type (fixed count: u32) = [count]u16" & LF
+                 & "f: (" & (if Form = Type_Formal then "t: type, " else "")
+                 & "fixed n: u32, data: [n]"
+                 & (if Form = Type_Formal then "t" else "u16")
+                 & ") -> (r: usize) = r = sizeof " & Measured
+                 & " + alignof " & Measured & " end f" & LF
+                 & "run: () -> (r: usize) = two: [2]u16 = zeroed "
+                 & "four: [4]u16 = zeroed r = f(two) + f(four) end run" & LF;
+               Ran : Natural;
+            begin
+               Lower (Work, Text, Ran);
+               Landin.Testing.Check_Equal
+                 (Item, Ran, 5, "fixed measurements reach IR: " & Form'Image);
+               Landin.Testing.Check
+                 (Item, not Landin.Stages.Failed (Work),
+                  "concrete fixed formals fold in a measurement: "
+                  & Landin.Stages.Rendered_Report (Work));
+               if not Landin.Stages.Failed (Work) then
+                  declare
+                     Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+                  begin
+                     for Index in 1 .. 2 loop
+                        declare
+                           Routine : constant IR.Item_Id :=
+                             IR.Item_For_Instance (Unit, Index);
+                           Length : constant Landin.Types.Magnitude :=
+                             Landin.Types.Magnitude (Index * 2
+                               + (if Form = Arithmetic then 1 else 0));
+                           Sizes, Alignments, Counts : Natural := 0;
+                        begin
+                           Landin.Testing.Check
+                             (Item, Routine /= IR.No_Item,
+                              "both concrete array counts have an instance");
+                           if Routine /= IR.No_Item then
+                              for Position in
+                                1 .. IR.Value_Count (Unit, Routine)
+                              loop
+                                 declare
+                                    Value : constant IR.Value_Id :=
+                                      IR.Value_Id (Position);
+                                    Op : constant IR.Opcode :=
+                                      IR.Op_Of (Unit, Routine, Value);
+                                 begin
+                                    if Op in IR.Measure_Size | IR.Measure_Align
+                                    then
+                                       Landin.Testing.Check
+                                         (Item,
+                                          not IR.Is_Aggregate_Measurement
+                                            (Unit, Routine, Value)
+                                            and then IR.Measured_Of
+                                              (Unit, Routine, Value)
+                                                = Landin.Types.U16,
+                                          "the element keeps its exact type");
+                                       if Op = IR.Measure_Size then
+                                          Sizes := Sizes + 1;
+                                       else
+                                          Alignments := Alignments + 1;
+                                       end if;
+                                    elsif Op = IR.Number then
+                                       Counts := Counts + 1;
+                                       Landin.Testing.Check
+                                         (Item, IR.Number_Of
+                                            (Unit, Routine, Value) = Length,
+                                          "the scale uses this instance's n");
+                                    end if;
+                                 end;
+                              end loop;
+                              Landin.Testing.Check
+                                (Item, Sizes = 1 and then Alignments = 1
+                                   and then Counts = 1,
+                                 "one size, alignment and concrete count");
+                           end if;
+                        end;
+                     end loop;
+                     Landin.Testing.Check
+                       (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                        "both instance measurements verify");
+                  end;
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Fixed_Measurements_Use_Instance_Actuals;
+
+   procedure Fixed_Measurement_Bounds_Keep_Refusals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Measurement_Bounds_Keep_Refusals
+     (Item : in out Landin.Testing.Context)
+   is
+      type Form_Kind is (Negative, Zero_Divisor, Runtime_Bound);
+   begin
+      for Small in Boolean loop
+         for Form in Form_Kind loop
+            declare
+               Work : Landin.Stages.Compilation := Landin.Stages.Create
+                 ((if Small then Landin.Targets.Synthetic_32
+                   else Landin.Targets.Linux_X86_64));
+               Bound : constant String :=
+                 (case Form is
+                    when Negative => "n - n - 1",
+                    when Zero_Divisor => "n / (n - n)",
+                    when Runtime_Bound => "count");
+               Code : constant String :=
+                 (case Form is
+                    when Negative => "L0300",
+                    when Zero_Divisor => "L0306",
+                    when Runtime_Bound => "L0305");
+               Ran : Natural;
+            begin
+               Lower
+                 (Work,
+                  "f: (fixed n: u32, data: [n]u8, count: u32) -> "
+                  & "(r: usize) = r = sizeof [" & Bound & "]u8 end f" & LF
+                  & "run: () -> (r: usize) = data: [2]u8 = zeroed "
+                  & "r = f(data, u32(2)) end run" & LF, Ran);
+               Landin.Testing.Check_Equal
+                 (Item, Ran, 4, "an invalid measurement stops in checking");
+               Landin.Testing.Check
+                 (Item, Landin.Stages.Failed (Work)
+                    and then Ada.Strings.Fixed.Count
+                      (Landin.Stages.Rendered_Report (Work), "error[") = 1
+                    and then Ada.Strings.Fixed.Index
+                      (Landin.Stages.Rendered_Report (Work),
+                       "error[" & Code & "]") > 0,
+                  "the bound keeps its specific refusal: "
+                  & Landin.Stages.Rendered_Report (Work));
+            end;
+         end loop;
+      end loop;
+   end Fixed_Measurement_Bounds_Keep_Refusals;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "fixed measurement bounds keep refusals",
+         Fixed_Measurement_Bounds_Keep_Refusals'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "fixed measurements use instance actuals",
+         Fixed_Measurements_Use_Instance_Actuals'Access);
       Landin.Testing.Register
         (Into, "lowering", "struct payload aliases initialize copies",
          Struct_Payload_Aliases_Initialize_Copies'Access);
