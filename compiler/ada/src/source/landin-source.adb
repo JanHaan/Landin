@@ -139,7 +139,7 @@ package body Landin.Source is
       end if;
    end Line_Span;
 
-   function Line_Text (Item : Snapshot; Line : Line_Number) return String is
+   function Line_Text_Span (Item : Snapshot; Line : Line_Number) return Span is
       Where : Span := Line_Span (Item, Line);
    begin
       if Where.Last > Where.First
@@ -154,7 +154,10 @@ package body Landin.Source is
          Where.Last := Where.Last - 1;
       end if;
 
-      return Slice (Item, Where);
-   end Line_Text;
+      return Where;
+   end Line_Text_Span;
+
+   function Line_Text (Item : Snapshot; Line : Line_Number) return String
+     is (Slice (Item, Line_Text_Span (Item, Line)));
 
 end Landin.Source;

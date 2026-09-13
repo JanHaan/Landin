@@ -1,3 +1,5 @@
+with Ada.Strings.Fixed;
+
 with Landin.Diagnostics.Text;
 with Landin.Source.Sets;
 
@@ -576,8 +578,205 @@ package body Landin.Tests.Diagnostics_Suite is
          "the primary label knows it is primary");
    end Every_Severity_Is_Spelled;
 
+   procedure Long_Lines_Use_Local_Excerpts
+     (Item : in out Landin.Testing.Context);
+
+   procedure Long_Lines_Use_Local_Excerpts
+     (Item : in out Landin.Testing.Context)
+   is
+      package Fixed renames Ada.Strings.Fixed;
+      Sources : Landin.Source.Sets.Source_Set;
+      Id : constant Landin.Source.Source_Id := Sources.Add
+        ("long.ldn", Fixed."*" (80, 'a') & "target"
+         & Fixed."*" (160, 'b') & ASCII.CR & LF);
+      Report : constant Diagnostic :=
+        Make ("L0130", Error, Id, (80, 86), "middle");
+      Expected : constant String :=
+        "error[L0130]: middle" & LF
+        & "  --> long.ldn:1:81" & LF
+        & "  |" & LF
+        & "1 | ... " & Fixed."*" (48, 'a') & "target"
+        & Fixed."*" (106, 'b') & " ..." & LF
+        & "  | " & Fixed."*" (52, ' ') & "^^^^^^" & LF;
+      At_End : constant Diagnostic :=
+        Make ("L0131", Error, Id, (246, 246), "line end");
+      Expected_End : constant String :=
+        "error[L0131]: line end" & LF
+        & "  --> long.ldn:1:247" & LF
+        & "  |" & LF
+        & "1 | ... " & Fixed."*" (48, 'b') & LF
+        & "  | " & Fixed."*" (52, ' ') & "^" & LF;
+      Across : constant Diagnostic :=
+        Make ("L0130", Error, Id, (0, 248), "whole line");
+      Wide : constant String := Landin.Diagnostics.Text.Render
+        (Across, Sources);
+      Accent : constant String := Character'Val (195) & Character'Val (169);
+      Utf8_Id : constant Landin.Source.Source_Id := Sources.Add
+        ("utf8.ldn", Fixed."*" (31, 'a') & Accent & Fixed."*" (47, 'b')
+         & "target" & Fixed."*" (105, 'c') & Accent
+         & Fixed."*" (53, 'd'));
+      Utf8_Report : constant Diagnostic :=
+        Make ("L0130", Error, Utf8_Id, (80, 86), "middle");
+      Utf8_Text : constant String := Landin.Diagnostics.Text.Render
+        (Utf8_Report, Sources);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,
+         "the excerpt retains location, context and exact underline");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (At_End, Sources), Expected_End,
+         "a point at a clipped CRLF line end keeps one caret");
+      Landin.Testing.Check
+        (Item, Fixed.Count (Wide, "^") = 160 and then Wide'Length < 500,
+         "a long span clips its underline to the visible excerpt");
+      Landin.Testing.Check
+        (Item, Fixed.Index (Utf8_Text, "1 | ... " & Accent) > 0
+         and then Fixed.Count (Utf8_Text, Accent) = 1
+         and then Fixed.Index
+           (Utf8_Text, Fixed."*" (105, 'c') & " ..." & LF) > 0,
+         "both excerpt edges preserve complete UTF-8 sequences");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Source.Line_Text (Sources.Get (Id), 1),
+         Fixed."*" (80, 'a') & "target" & Fixed."*" (160, 'b'),
+         "the complete source line remains available without its CRLF");
+   end Long_Lines_Use_Local_Excerpts;
+
+   procedure Rendering_Budgets_Preserve_Reports
+     (Item : in out Landin.Testing.Context);
+
+   procedure Rendering_Budgets_Preserve_Reports
+     (Item : in out Landin.Testing.Context)
+   is
+      package Fixed renames Ada.Strings.Fixed;
+      Sources : Landin.Source.Sets.Source_Set;
+      Id : constant Landin.Source.Source_Id := Sources.Add ("small.ldn", "x");
+      Large_Message : constant String := Fixed."*" (200, 'm');
+      Large : Diagnostic := Make
+        ("L0130", Error, Id, (0, 1), Large_Message);
+      Early : constant Diagnostic := Make
+        ("L0130", Error, Id, (0, 1), "first");
+      Late : constant Diagnostic := Make
+        ("L0131", Error, Id, (1, 1), "later");
+      Forward, Backward : Diagnostic_List;
+      Notice : constant String := "diagnostic text truncated";
+      Base : constant String := Landin.Diagnostics.Text.Render
+        (Make ("L0130", Error, Id, (0, 1), ""), Sources);
+      Fitting : constant Diagnostic := Make
+        ("L0130", Error, Id, (0, 1), Fixed."*" (128 - Base'Length, 'm'));
+      Exact : constant String := Landin.Diagnostics.Text.Render
+        (Fitting, Sources, Byte_Limit => 128);
+      Overflow : constant String := Landin.Diagnostics.Text.Render
+        (Make ("L0130", Error, Id, (0, 1),
+               Fixed."*" (129 - Base'Length, 'm')),
+         Sources, Byte_Limit => 128);
+   begin
+      Add_Label (Large, Make_Label (Id, (0, 1), "kept related label"));
+      Add_Note (Large, "kept note");
+      declare
+         Text : constant String := Landin.Diagnostics.Text.Render
+           (Large, Sources, Byte_Limit => 128);
+      begin
+         Landin.Testing.Check
+           (Item, Text'Length = 128 and then Text (Text'Last) = LF
+            and then Fixed.Count (Text, Notice) = 1,
+            "a large message stops at the small test budget with a notice");
+      end;
+      Landin.Testing.Check
+        (Item, Message (Primary (Large)) = Large_Message
+         and then Label_Count (Large) = 1 and then Note_Count (Large) = 1,
+         "truncation preserves the complete structured diagnostic");
+      Landin.Testing.Check
+        (Item, Exact'Length = 128 and then Fixed.Count (Exact, Notice) = 0
+         and then Exact = Landin.Diagnostics.Text.Render (Fitting, Sources),
+         "an exactly fitting report is not truncated");
+      Landin.Testing.Check
+        (Item, Overflow'Length = 128
+         and then Fixed.Count (Overflow, Notice) = 1,
+         "one byte over budget is visibly truncated");
+      Forward.Append (Early);
+      Forward.Append (Late);
+      Forward.Append (Large);
+      Backward.Append (Large);
+      Backward.Append (Late);
+      Backward.Append (Early);
+      declare
+         Text : constant String := Landin.Diagnostics.Text.Render
+           (Forward, Sources, Byte_Limit => 128);
+      begin
+         Landin.Testing.Check
+           (Item, Text'Length <= 128 and then Fixed.Count (Text, Notice) = 1
+            and then Text = Landin.Diagnostics.Text.Render
+              (Backward, Sources, Byte_Limit => 128),
+            "the entire report shares one budget in deterministic order");
+      end;
+      Landin.Testing.Check
+        (Item, Count (Forward) = 3 and then Count (Backward) = 3,
+         "rendering never removes diagnostics from either arrival order");
+      declare
+         Noted : Diagnostic := Early;
+      begin
+         Add_Note (Noted, Large_Message);
+         declare
+            Text : constant String := Landin.Diagnostics.Text.Render
+              (Noted, Sources, Byte_Limit => 128);
+         begin
+            Landin.Testing.Check
+              (Item, Text'Length <= 128
+               and then Fixed.Count (Text, Notice) = 1
+               and then Nth_Note (Noted, 1) = Large_Message,
+               "notes obey the same budget and remain retained");
+         end;
+      end;
+      declare
+         Related : Diagnostic := Early;
+      begin
+         Add_Label (Related, Make_Label (Id, (1, 1), Large_Message));
+         declare
+            Text : constant String := Landin.Diagnostics.Text.Render
+              (Related, Sources, Byte_Limit => 128);
+         begin
+            Landin.Testing.Check
+              (Item, Text'Length <= 128
+               and then Fixed.Count (Text, Notice) = 1
+               and then Message (Nth_Label (Related, 1)) = Large_Message,
+               "related messages obey the budget and remain retained");
+         end;
+      end;
+      declare
+         Accent : constant String :=
+           Character'Val (195) & Character'Val (169);
+
+         procedure Check_Unicode (Prefix : String);
+
+         procedure Check_Unicode (Prefix : String) is
+            Text : constant String := Landin.Diagnostics.Text.Render
+              (Make ("L0130", Error, Id, (0, 1),
+                     Prefix & Fixed."*" (100, Accent)),
+               Sources, Byte_Limit => 128);
+         begin
+            Landin.Testing.Check
+              (Item, Text'Length <= 128
+               and then Fixed.Count (Text, Notice) = 1
+               and then Fixed.Count (Text, Accent)
+                 = Fixed.Count (Text, "" & Character'Val (195))
+               and then Fixed.Count (Text, Accent)
+                 = Fixed.Count (Text, "" & Character'Val (169)),
+               "the report budget preserves complete UTF-8 characters");
+         end Check_Unicode;
+      begin
+         Check_Unicode ("");
+         Check_Unicode ("x");
+      end;
+   end Rendering_Budgets_Preserve_Reports;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "long lines use local excerpts",
+         Long_Lines_Use_Local_Excerpts'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics", "rendering budgets preserve reports",
+         Rendering_Budgets_Preserve_Reports'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "codes are validated",
          Codes_Are_Validated'Access);

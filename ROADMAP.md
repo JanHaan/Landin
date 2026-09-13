@@ -5675,7 +5675,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
 | M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
 | A5, M9: source-path bytes | Decoder still uses decoded text through ordinary stdout. The default check's result depends on stdout error policy; pin strict UTF-8 output and preserve original path bytes explicitly. | Third batch |
-| M10: diagnostic rendering growth | The whole-line-per-label implementation remains; the old stress measurement was not rerun. Bound excerpts while retaining useful primary/secondary spans. | Third batch |
+| M10: diagnostic rendering growth | Implemented with J13: terminator-free line spans support bounded local excerpts, and the report renderer shares one explicit text budget across messages, labels and notes. Structured reports and original byte locations remain intact. The old stress measurement was not rerun. | Third batch |
 | A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
@@ -5810,7 +5810,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Implemented: nonzero aggregate payloads use the ordinary shaped-value writer, preserving the selected case path while materializing call results, distinct conversions, control values and computed elements. Selecting the case still supplies the zero image for zeroed payloads. |
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
-| J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
+| J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Rendering growth repaired with M10: line excerpts use bounded slices and the complete text defaults to a 1 MiB budget with an explicit truncation notice. Full structured reports remain intact. The old exhaustion/exit-70 magnitude claim remains unmeasured; no stress case was replayed. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Already repaired with J5: block structs consume their immediate `end`, optionally consume a repeated name, and preserve following declarations. The retained J5 bare-closer/parser and source-to-IR controls cover this duplicate finding; no separate feature or stress run is needed. |
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
@@ -7048,9 +7048,27 @@ or debugger ran. The reader documentation describes the shared writer, and
 evidence is retained in `.scratch/r491-variant-values/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-The remaining diagnostic-rendering and report-boundary findings need bounded
-source inspection and small presentation controls, without replaying the old
-report-size stress cases.
+M10/J13 development evidence: the 15 diagnostic cases plus three source
+line-ending cases and two small refusal fixtures pass 97 checks in each of
+macOS debug and Linux release. A 248-byte source pins a clipped middle span,
+a clipped CRLF endpoint, a wide underline and complete UTF-8 excerpt edges.
+The 128-byte test budget pins exact fit, one-byte overflow, complete-report
+ordering, large primary/related/note messages and UTF-8 truncation boundaries.
+All structured diagnostics, labels and notes remain present. The 1 MiB default
+uses the same tested path; it is not tested by generating a large report.
+The line-span query reuses the source layer's existing CR/LF trimming, and
+existing fixture goldens contain no over-window source lines. Both single-worker
+builds passed, with selected tests limited to 30 seconds or less. The full
+document check passes and the diagnostic inventory is unchanged. No old stress
+measurement, Landin assembler, linker, generated executable or debugger ran.
+Logs are retained in `.scratch/r491-rendering/` and
+`.scratch/r491-final-values/`. J69's tab/Unicode display-column question remains
+separate; excerpt boundaries preserve bytes without claiming display-width
+alignment. Exact-revision acceptance remains open.
+
+J133's repeated generic-body diagnostics are next. A bounded two-instance
+range-type mismatch still prints the same complete diagnostic twice; keep any
+coalescing within checking and preserve diagnostic transport's duplicate policy.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

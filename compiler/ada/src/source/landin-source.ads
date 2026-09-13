@@ -95,6 +95,9 @@ package Landin.Source is
 
    --  The line's bytes without its terminator, so a caret line can be drawn
    --  under it without re-scanning for CR or LF.
+   function Line_Text_Span (Item : Snapshot; Line : Line_Number) return Span
+     with Pre => Line <= Line_Count (Item);
+
    function Line_Text (Item : Snapshot; Line : Line_Number) return String
      with Pre => Line <= Line_Count (Item);
 
