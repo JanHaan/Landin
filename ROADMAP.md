@@ -6055,7 +6055,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
 | K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
 | K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
-| K25 | F3: devirtualization leaves a typed function-address projection live | Optimization candidate: the rewrite retains signature metadata and the simplifier's Plain predicate excludes it. Prove deadness and preserve any remaining users and verifier contracts before changing removal eligibility; do not clear a live function value's signature merely to satisfy that predicate. |
+| K25 | F3: devirtualization leaves a typed function-address projection live | Repaired: backward demand may remove a verified pure Function_Address despite its signature metadata. Live users still retain the instruction and its signature; numeric folding remains restricted to plain values. Small dead/live/no-optimization controls cover both target widths. Three exact cases pass 39 checks on each of macOS debug and Linux release; exact acceptance open. |
 | K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Source confirms the per-routine query precedes the off decision. Compute shared exposure facts at the appropriate pass boundary or avoid unneeded work, preserving callback identity and observability; use small operation-count controls, not timing sweeps. |
 | K27 | F5: profitability recounts eligible instances for every instance | Source confirms the nested item scans. Count once per normalized template while preserving evidence proof, exposed roots and policy decisions; validate small mixed-template cases. |
 | K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
@@ -7444,6 +7444,19 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K25's unused specialization projection is now eligible for ordinary backward
+removal. `Function_Address` is already classified as having no read, write,
+call, trap, control or adjacency effect; its signature is type metadata, not
+an observable operation. Only dead instructions are dropped. Live function
+values keep their signatures, and the numeric folder's plain-value restriction
+is unchanged. A bounded IR case checks the direct-call projection, none-mode
+retention and a callback still passed to an indirect caller on both target
+widths. Together with existing effect and mixed-dispatch controls, three exact
+cases pass 39 checks on each of macOS debug and Linux release. Both builds use
+one worker. No assembly emission, native Landin tool, executable, debugger or
+stress case ran. Evidence is in `.scratch/r491-dead-function-address/` and
+`.scratch/r491-final-values/`; exact-revision acceptance remains open.
 
 J113 is repaired under the explicit new D218 scope decision. Ordinary local
 written types now resolve before declaration, matching the incoming scope

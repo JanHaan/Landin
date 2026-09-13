@@ -276,7 +276,9 @@ package body Landin.IR.Simplification is
             return not Effect.Reads and then not Effect.Writes
               and then not Effect.Calls and then not Effect.Traps
               and then not Effect.Control and then not Effect.Adjacency
-              and then Plain (Code);
+              --  A verified function address is a pure value even though
+              --  it carries a signature. Demand still keeps every live use.
+              and then (Plain (Code) or else Code.Op = Function_Address);
          end Removable;
       begin
          for S in Eligible'Range loop
