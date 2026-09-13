@@ -138,6 +138,7 @@ package body Landin.Syntax.Parser is
             --  count here lets a stray `break` or `continue` remain a source
             --  diagnostic instead of reaching lowering without a target.
             Loop_Depth : Natural := 0;
+            Loop_Floor : Natural := 0;
             Loop_Labels : array (1 .. Nesting_Limit)
               of Landin.Source.Names.Name_Id :=
                 [others => Landin.Source.Names.No_Name];
@@ -4597,6 +4598,8 @@ package body Landin.Syntax.Parser is
                Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
+               Saved_Loop_Floor : constant Natural := Loop_Floor;
+               Saved_Complete : constant Boolean := Complete_Closes_Block;
             begin
                if Too_Deep (Start) then
                   Advance;
@@ -4606,6 +4609,10 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               --  [1010]: this code address has its own control scope.
+               --  Keep outer loop labels intact for parsing after its end.
+               Loop_Floor := Loop_Depth;
+               Complete_Closes_Block := False;
                Advance;
                if Peek /= Tok.Right_Paren then
                   loop
@@ -4679,6 +4686,8 @@ package body Landin.Syntax.Parser is
                      Gate    => False);
                end if;
 
+               Loop_Floor := Saved_Loop_Floor;
+               Complete_Closes_Block := Saved_Complete;
                Depth := Depth - 1;
                declare
                   Head : constant Slot_List (1 .. 3) :=
@@ -5625,9 +5634,9 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Target = Landin.Source.Names.No_Name then
-                  Targeted := Loop_Depth > 0;
+                  Targeted := Loop_Depth > Loop_Floor;
                else
-                  for Index in reverse 1 .. Loop_Depth loop
+                  for Index in reverse Loop_Floor + 1 .. Loop_Depth loop
                      if Loop_Labels (Index) = Target then
                         Targeted := True;
                         exit;
