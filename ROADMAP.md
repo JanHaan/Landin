@@ -2883,7 +2883,7 @@ that has no implementation owner.
 | `[1060]` | hosted-now | R2.30 | matrix evidence |
 | `[1070]` | hosted-now | R4.10 | D185 and matrix evidence |
 | `[1080]` | hosted-now | R2.30 | matrix evidence |
-| `[1090]` | hosted-now | R2.30 | matrix evidence |
+| `[1090]` | hosted-now | R2.30 | unlabelled begin/end blocks; labelled blocks are outside [1810] |
 | `[1100]` | hosted-now | R2.30 | matrix evidence |
 | `[1110]` | hosted-now | R2.30 | matrix evidence |
 | `[1120]` | hosted-now | R4.10 | D187 and matrix evidence; the division, shift, bool, float and text edges it never removes are named there rather than refused |
@@ -5837,7 +5837,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Implemented with C6: guard nested calls and recovery clauses; read refused public prefixes iteratively. Bounded parser controls pass in both modes; exact acceptance remains open. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Implemented: retain completion boundaries unless `complete` names a visible loop; preserve declarations, assignments and nested labels with that spelling. Selected parser, verified-IR and refusal controls pass in both modes; exact acceptance remains open. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
-| J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: labelled bare blocks are absent from the enabled grammar. Preserve ordinary bindings whose declared type is named `begin`; do not enable labelled blocks solely from the tour example. This is separate from J15. |
+| J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Documentation reconciled with [1810]: the tour and prototype 1 now spell their scoping blocks as begin/end without a label. Labelled bare blocks remain outside the enabled grammar; no parser keyword or speculative interception is added. A tiny compiled example also preserves an ordinary binding whose type is named begin. The exact positive selector passes three checks on each host; exact acceptance open. |
 | J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
 | J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Repaired: only a Name_Reference supplies a lexical callee name. Indexed, sliced and selected callees resolve their complete expression before arguments. Stored callbacks reach verified indirect calls; indexed/sliced non-functions retain L0301 instead of an accessor failure. |
 | J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Repaired: absent direct callee names and available runtime argument projections use ordinary resolution, even when the application cannot be classified. Missing names report L0201; type-only arguments await known formals. A shared conversion-name predicate preserves builtin checker ownership and declared-name shadowing. |
@@ -7444,6 +7444,18 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J40's live example drift is reconciled with the existing grammar rather than
+expanding it. The tour and prototype 1's critical-section sketch use unlabelled
+`begin ... end`, retaining the same scope and defer boundary. The [1090] parity
+row now names that exact supported form; labelled bare blocks remain outside
+[1810]. A small positive fixture compiles the tour body and an ordinary binding
+whose declared type is named `begin`, so this repair does not reserve that word
+or add ambiguous parser interception. It passes three checks on each of macOS
+debug and Linux release with text-only emission. No compiler source changed,
+so no rebuild or native Landin tool was needed. Both affected historical tails
+remain byte-identical. Evidence is in `.scratch/r491-bare-block-examples/` and
+`.scratch/r491-final-values/`; exact acceptance remains open.
 
 J117 now follows D219's explicit endpoint-context decision. The review had not
 established a contradiction in the former [1880] context list; that omission is
