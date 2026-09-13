@@ -5916,7 +5916,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
 | J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Implemented: nominal copy and assignment refusals describe identity independently of representation, contextual distinct results name the distinct type category, and zeroed diagnostics use general type/place labels. The reported distinct-u32 refusal no longer invents a struct or function address. Exact acceptance remains open. |
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
 | J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
 | J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Implemented: contextual mismatches name the required pointer, slice, function, aggregate or erased type without doubled articles or the unknown-type fallback. Their explanation applies to the complete required context rather than asserting every site is a D124 control expression. Exact acceptance remains open. |
@@ -5936,7 +5936,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
 | J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
 | J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Implemented: aggregate and omitted module initializers explain that the complete type must permit a zero image, including atom, pointer, slice and distinct restrictions. Existing function-field refusals retain their code and source spans. Exact acceptance remains open. |
 
 The flow-dispatch repair closes J1/J3/J16/J19 and the related duplicate-index
 report J74. `checking/nested calls retain flow effects` contains 32 small
@@ -6824,7 +6824,20 @@ or generated executable ran. Logs are retained in
 `.scratch/r491-ir-builder-contracts/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J119/J139's nominal identity and zero-image explanations are next.
+J119/J139 development evidence: six selected negative fixtures pass 36 checks
+in each of macOS debug and Linux release, preserving diagnostic codes and
+source spans while updating wording and related labels. Eight separate
+compile-only probes cover atom/pointer/slice-containing structs, omitted and
+explicit zeroed distinct values, distinct assignment and expression results.
+Each probe retains exactly one L0301; distinct reports contain no struct
+wording. The last label correction exposed one stale golden, which was
+updated before both final runs passed. Both single-worker builds passed;
+fixtures have 30-second or shorter limits and probes have 10-second limits.
+No Landin assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-nominal-wording/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J126's invented bool context for non-scalar integer arguments is next.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

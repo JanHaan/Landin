@@ -1,4 +1,4 @@
-error[L0301]: this is not a value of the struct type written here
+error[L0301]: this is not a value of the nominal type required here
   --> ../tests/fixtures/negative/local-struct-initializer-nominal-mismatch/program.ldn:12:25
    |
 12 |     destination: left = source
@@ -7,4 +7,4 @@ error[L0301]: this is not a value of the struct type written here
    |
 12 |     destination: left = source
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
-  = note: [0710]: two structs are one type when one declaration wrote both, and never otherwise
+  = note: [0710]/D213: nominal identity remains distinct even when representation layouts agree
