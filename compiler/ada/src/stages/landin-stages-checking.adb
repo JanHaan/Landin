@@ -30582,9 +30582,11 @@ package body Landin.Stages.Checking is
       --  view now has a finalized concrete set and any inferred recovery
       --  binding in that same overlay, so check its call, fail and cleanup
       --  paths exactly once through the ordinary machinery.
-      for Position in 1 .. Landin.Checking.Routine_Instance_Count
-        (Types.all)
-      loop
+      --  Save the frontier this pass will visit, so any instances created
+      --  by a body remain visible to the late-instance pass below.
+      Checked_Instance_Count :=
+        Landin.Checking.Routine_Instance_Count (Types.all);
+      for Position in 1 .. Checked_Instance_Count loop
          declare
             Instance : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Routine_Identities.Nth
@@ -30616,8 +30618,6 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end loop;
-      Checked_Instance_Count :=
-        Landin.Checking.Routine_Instance_Count (Types.all);
 
       --  Anonymous bodies can now check calls and `fail` against finalized
       --  concrete sets, including mutually recursive private inference.
