@@ -766,6 +766,7 @@ negative/r490-union-alias-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-nonatom | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-pointer-shapes | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-anonymous-type-scope | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-construction-static-address | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-construction-type-arguments | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-construction-type-fills | linux-x86-64, macos-arm64, synthetic-32

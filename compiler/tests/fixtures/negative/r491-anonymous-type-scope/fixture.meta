@@ -1,0 +1,9 @@
+class: negative
+summary: an anonymous signature reports each out-of-scope type name once without a future-feature promise
+program: main.ldn
+codes: L0201, L0201
+constructs: 0670, 1010, 1350, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-anonymous-type-scope/main.ldn
+status: 1

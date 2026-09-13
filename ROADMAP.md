@@ -5935,7 +5935,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
 | J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
-| J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Implemented: ordinary unresolved type names use L0201 with a scope note, and normalization retains an already-refused name without adding a parameterized-type feature report. The anonymous two-name fixture retains exactly two reports; named deferred widths keep L0304. Standalone generic normalization remains a separate report path. |
 | J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Implemented: aggregate and omitted module initializers explain that the complete type must permit a zero image, including atom, pointer, slice and distinct restrictions. Existing function-field refusals retain their code and source spans. Exact acceptance remains open. |
 
 The flow-dispatch repair closes J1/J3/J16/J19 and the related duplicate-index
@@ -6976,8 +6976,28 @@ foreign arguments through the recoverable `text.from_c` channel. No semantic,
 fixture, generated-code or runtime change was made, and prior runtime coverage
 was not replayed. The full document check passes; exact acceptance remains open.
 
-J138's anonymous-signature report duplication is next. Recheck the current
-small source before changing type-name diagnostics or their catalogue codes.
+J138 development evidence: four negative selectors pass 23 checks in each of
+macOS debug and Linux release. The new two-name anonymous-signature golden
+and existing unknown-width golden report L0201 without future-feature notes;
+real deferred widths and value-capture refusal retain their existing codes.
+Five bounded compile-only probes preserve valid scalar/module-alias anonymous
+signatures, ordinary unknown names and the separate unused-template refusal.
+Both single-worker builds passed; selected tests have 30-second or shorter
+limits and probes have 10-second limits. The diagnostic inventory moves only
+the unknown-width witness and adds the new fixture; its 73 lexical tokens and
+target row are recorded. No Landin assembler, linker or generated executable
+ran. Logs are retained in `.scratch/r491-anonymous-type-reports/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+R4.91-F1, found while validating J138, is next: an instantiated generic routine
+containing an anonymous function with a concrete i32 signature exits 70.
+The nine-line control reproduces in modified macOS debug and in the previous
+Linux release build before J138, so it is a distinct pre-existing compiler
+failure. Its source and before-build evidence are retained in
+`.scratch/r491-anonymous-type-reports/generic-scalar-crash.ldn` and
+`.scratch/r491-anonymous-type-reports/prior-native-control.log`.
+Trace the checking/lowering boundary with a bounded source-to-IR seam; no
+assembler, generated executable or debugger session is authorized.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

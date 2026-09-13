@@ -3350,8 +3350,15 @@ package body Landin.Stages.Checking is
                      end if;
                   end;
                end if;
-               Report_Application
-                 (Of_Tree, Written, "this type argument names no type");
+               --  Type_At may already have refused this exact source name
+               --  while materializing an anonymous signature. Normalization
+               --  must retain that root report rather than add a feature gate.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  /= Ty.Ill_Typed
+               then
+                  Report_Application
+                    (Of_Tree, Written, "this type argument names no type");
+               end if;
                return Invalid;
             end if;
 
@@ -5877,8 +5884,8 @@ package body Landin.Stages.Checking is
             then
                Landin.Checking.Note
                  (Types.all, Of_Tree, Written, Ty.Ill_Typed);
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
+               Name_Bad.Report
+                 (Item    => Name_Bad.Unresolved_Name,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Written),
                   Message => "`" & Spelled (Syn.Name (Of_Tree, Written))

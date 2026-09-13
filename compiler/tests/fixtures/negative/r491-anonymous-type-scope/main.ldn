@@ -1,0 +1,9 @@
+wrap: (t: type, v: t) -> (r: t) =
+    idf: (x: t) -> (y: t) = (x: t) -> (y: t) =
+        y = x
+    end
+    r = v
+end wrap
+public main: () -> (code: i32) =
+    code = wrap(1)
+end main
