@@ -402,8 +402,8 @@ package body Landin.IR.Verifier is
                   end if;
                   Shape := Array_Element_Shape (Of_Unit, Shape);
                elsif Shape.Kind = Aggregate_Field_Shape then
-                  if Natural (Field) > Aggregate_Field_Count
-                    (Of_Unit, Shape)
+                  if Element_Total (Field) > Element_Total
+                    (Aggregate_Field_Count (Of_Unit, Shape))
                   then
                      return Field_Out_Of_Range;
                   end if;
@@ -6535,7 +6535,9 @@ package body Landin.IR.Verifier is
                                     end;
                                  end if;
 
-                                 if Type_Of (Of_Unit, Id, S)
+                                 if Is_Aggregate (Of_Unit, Id, S)
+                                   or else Is_Array (Of_Unit, Id, S)
+                                   or else Type_Of (Of_Unit, Id, S)
                                     /= Result_Of
                                          (Of_Unit, Id,
                                           Nth_Operand (Of_Unit, Id, V, 1))

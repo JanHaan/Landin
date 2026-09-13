@@ -42,6 +42,7 @@ package body Landin.Tests.Verifier_Suite is
    use type IR.Parameter_Convention;
    use type IR.Value_Id;
    use type IR.Item_Id;
+   use type IR.Part_Position;
    use type Landin.Types.Folded;
    use type V.Fault_Kind;
 
@@ -6772,8 +6773,166 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Final_Cursors_Consume_Their_Vectors;
 
+   procedure Runtime_Address_Field_Bounds_Are_Wide
+     (Item : in out Landin.Testing.Context);
+
+   procedure Runtime_Address_Field_Bounds_Are_Wide
+     (Item : in out Landin.Testing.Context)
+   is
+      type Position_Kind is (Valid, Past_End, Beyond_Natural, Maximum);
+   begin
+      for Small in Boolean loop
+         for Store in Boolean loop
+            for Position in Position_Kind loop
+               declare
+                  Facts : constant Landin.Targets.Target_Facts :=
+                    (if Small then Landin.Targets.Synthetic_32
+                     else Landin.Targets.Linux_X86_64);
+                  Work : Landin.Stages.Compilation :=
+                    Landin.Stages.Create (Facts);
+                  Unit : IR.Unit;
+                  Site : Landin.Provenance.Origin;
+                  Routine : IR.Item_Id;
+                  Cell, Address : IR.Slot_Id;
+                  Block : IR.Block_Id;
+                  Value : IR.Value_Id;
+                  Nominal : IR.Nominal_Type_Id;
+                  Shape : IR.Field_Shape;
+                  Field : constant IR.Part_Position :=
+                    (case Position is
+                        when Valid => 1,
+                        when Past_End => 2,
+                        when Beyond_Natural =>
+                           IR.Part_Position (Natural'Last) + 1,
+                        when Maximum => IR.Part_Position'Last);
+               begin
+                  Ready (Work, Site);
+                  IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+                  Nominal := Test_Nominal (Unit);
+                  IR.Set_Nominal_Shape
+                    (Unit, Nominal,
+                     [1 => (Element => Landin.Types.U32, others => <>)]);
+                  Shape :=
+                    (Kind => IR.Aggregate_Field_Shape,
+                     Nominal => Nominal, others => <>);
+                  Routine := IR.Add_Item
+                    (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+                  Cell := IR.Add_Aggregate_Slot
+                    (Unit, Routine, IR.No_Declaration, Site, Nominal);
+                  IR.Add_Slot_Field (Unit, Routine, Cell, Landin.Types.U32);
+                  Address := IR.Add_Address_Slot
+                    (Unit, Routine, Shape, Site);
+                  Block := IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+                  IR.Enter (Unit, Routine, Block);
+                  IR.Emit_Array_Clear
+                    (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Cell),
+                     Site);
+                  Value := IR.Emit_Storage_Address
+                    (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Cell),
+                     Site);
+                  IR.Emit_Store (Unit, Routine, Address, Value, Site);
+                  if Store then
+                     Value := IR.Emit_Number
+                       (Unit, Routine, Landin.Types.U32, 1, False, Site);
+                     IR.Emit_Store_Slot_Field
+                       (Unit, Routine, Address, Field, Value, Site);
+                  else
+                     Value := IR.Emit_Load_Slot_Field
+                       (Unit, Routine, Address, Field, Landin.Types.U32,
+                        Site);
+                  end if;
+                  IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+                  IR.Leave_Block (Unit, Routine);
+                  Expect
+                    (Item, V.Check (Unit, Facts),
+                     (if Position = Valid then V.Nothing_Wrong
+                      else V.Field_Out_Of_Range),
+                     "runtime-address field " & Position'Image
+                     & " store=" & Store'Image);
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Runtime_Address_Field_Bounds_Are_Wide;
+
+   procedure Scalar_Stores_Require_Scalar_Slots
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Stores_Require_Scalar_Slots
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Scalar, Struct_Store, Array_Store, Struct_Field, Array_Element);
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine : IR.Item_Id;
+               Cell : IR.Slot_Id;
+               Block : IR.Block_Id;
+               Value, Index : IR.Value_Id;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               if Scenario = Scalar then
+                  Cell := IR.Add_Slot
+                    (Unit, Routine, Landin.Types.Bool, IR.No_Declaration,
+                     Site);
+               elsif Scenario in Struct_Store | Struct_Field then
+                  Cell := IR.Add_Aggregate_Slot
+                    (Unit, Routine, IR.No_Declaration, Site);
+                  IR.Add_Slot_Field (Unit, Routine, Cell, Landin.Types.Bool);
+               else
+                  Cell := IR.Add_Array_Slot
+                    (Unit, Routine, Landin.Types.Bool, 2, IR.No_Declaration,
+                     Site);
+               end if;
+               Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Routine, Block);
+               Value := IR.Emit_Truth (Unit, Routine, True, Site);
+               if Scenario = Struct_Field then
+                  IR.Emit_Store_Slot_Field
+                    (Unit, Routine, Cell, 1, Value, Site);
+               elsif Scenario = Array_Element then
+                  Index := IR.Emit_Number
+                    (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+                  IR.Emit_Store_Slot_Element
+                    (Unit, Routine, Cell, Index, Value, Site);
+               else
+                  IR.Emit_Store (Unit, Routine, Cell, Value, Site);
+               end if;
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Routine);
+               Expect
+                 (Item, V.Check (Unit, Facts),
+                  (if Scenario in Struct_Store | Array_Store
+                   then V.Store_Disagrees_With_Slot else V.Nothing_Wrong),
+                  "a scalar store requires scalar storage: "
+                  & Scenario'Image);
+            end;
+         end loop;
+      end loop;
+   end Scalar_Stores_Require_Scalar_Slots;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "scalar stores require scalar slots",
+         Scalar_Stores_Require_Scalar_Slots'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "runtime address field bounds are wide",
+         Runtime_Address_Field_Bounds_Are_Wide'Access);
       Landin.Testing.Register
         (Into, "verifier", "final cursors consume their vectors",
          Final_Cursors_Consume_Their_Vectors'Access);
