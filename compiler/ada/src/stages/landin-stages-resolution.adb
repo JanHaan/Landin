@@ -107,6 +107,9 @@ package body Landin.Stages.Resolution is
          Node    : Syn.Node_Id;
          Inside  : Landin.Resolution.Scope_Id);
 
+      function Is_Builtin_Conversion
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Boolean;
+
       procedure Resolve_Labeled_Application
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -338,6 +341,30 @@ package body Landin.Stages.Resolution is
          Resolve (Of_Tree, Node, Inside);
       end Resolve_Type_View;
 
+      function Is_Builtin_Conversion
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Boolean
+      is
+      begin
+         if Syn.Kind (Of_Tree, Callee) /= Syn.Name_Reference then
+            return False;
+         end if;
+         for Scalar in Landin.Types.Scalar_Name loop
+            if Landin.Types.Spelling (Scalar)
+              = Spelled (Syn.Name (Of_Tree, Callee))
+            then
+               return True;
+            end if;
+         end loop;
+         for View in Landin.Types.Text_View loop
+            if Landin.Types.Spelling (View)
+              = Spelled (Syn.Name (Of_Tree, Callee))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Is_Builtin_Conversion;
+
       --  [0980]/D72: bind and classify the direct callee first.  Only the
       --  projection selected by a matched formal or construction role is
       --  then resolved; the other projection remains immutable syntax, not a
@@ -350,7 +377,9 @@ package body Landin.Stages.Resolution is
       is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Named  : constant Landin.Source.Names.Name_Id :=
-           Syn.Name (Of_Tree, Callee);
+           (if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+            then Syn.Name (Of_Tree, Callee)
+            else Landin.Source.Names.No_Name);
          Meant  : Landin.Resolution.Declaration_Id :=
            (if Named = Landin.Source.Names.No_Name
             then Landin.Resolution.No_Declaration
@@ -361,10 +390,12 @@ package body Landin.Stages.Resolution is
       begin
          if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
             if Meant = Landin.Resolution.No_Declaration then
-               --  Keep the ambiguous direct spelling neutral.  Construction
-               --  checking owns the existing source diagnostic for an
-               --  undeclared or nonconstructible name.
-               null;
+               --  Builtin conversion spellings keep checker ownership.
+               --  Other absent names are ordinary unresolved value uses,
+               --  even while their application cannot yet be classified.
+               if not Is_Builtin_Conversion (Of_Tree, Callee) then
+                  Resolve (Of_Tree, Callee, Inside);
+               end if;
             else
                Landin.Resolution.Bind (Meanings.all, Of_Tree, Callee, Meant);
                case Landin.Resolution.Sort_Of (Meanings.all, Meant) is
@@ -550,11 +581,12 @@ package body Landin.Stages.Resolution is
                   end;
                end loop;
             end;
-         elsif Class = Landin.Resolution.Function_Call then
-            --  Only checking has the structural signature of a stored or
-            --  selected function value.  Resolve every runtime projection
-            --  now in written order and let that shared matcher assign ABI
-            --  formal positions later.
+         elsif Class in Landin.Resolution.Function_Call
+                          | Landin.Resolution.Unclassified_Application
+         then
+            --  Only checking has a stored function's structural signature.
+            --  Unknown callees still have written runtime projections to
+            --  resolve; type-only arguments await a known formal role.
             for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                Resolve
                  (Of_Tree,
@@ -648,21 +680,8 @@ package body Landin.Stages.Resolution is
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
-                  Is_Type_Conversion : Boolean := False;
                begin
-                  if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
-                     for Scalar in Landin.Types.Scalar_Name loop
-                        Is_Type_Conversion := Is_Type_Conversion
-                          or else Landin.Types.Spelling (Scalar)
-                            = Spelled (Syn.Name (Of_Tree, Callee));
-                     end loop;
-                     for View in Landin.Types.Text_View loop
-                        Is_Type_Conversion := Is_Type_Conversion
-                          or else Landin.Types.Spelling (View)
-                            = Spelled (Syn.Name (Of_Tree, Callee));
-                     end loop;
-                  end if;
-                  if Is_Type_Conversion then
+                  if Is_Builtin_Conversion (Of_Tree, Callee) then
                      Resolve_Type_View (Of_Tree, Callee, Inside);
                   else
                      Resolve (Of_Tree, Callee, Inside);
