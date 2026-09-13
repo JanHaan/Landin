@@ -190,6 +190,32 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Unbounded.To_String (Found);
    end Codes_In;
 
+   procedure Check_Compiler_Outcome
+     (Case_Item : Fixture;
+      Outcome   : Landin.Platform.Tool_Result;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Check_Compiler_Outcome
+     (Case_Item : Fixture;
+      Outcome   : Landin.Platform.Tool_Result;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label : constant String := Label_Of (Case_Item);
+   begin
+      Landin.Testing.Check
+        (Item, Outcome.Ended = Landin.Platform.Exited,
+         Label & ": refine returned a status");
+      Landin.Testing.Check_Equal
+        (Item, Outcome.Exit_Code, Status (Case_Item),
+         Label & ": recorded exit status");
+      if Class (Case_Item) = Negative_Program then
+         Landin.Testing.Check_Equal
+           (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
+            Normalized_Codes (Codes (Case_Item)),
+            Label & ": the report carries its pinned codes");
+      end if;
+   end Check_Compiler_Outcome;
+
    procedure Run_Recorded
      (Case_Item : Fixture;
       Host      : in out Landin.Platform.Filesystem'Class;
@@ -234,12 +260,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Label & ": recorded "
          & (if Stream (Case_Item) = Output
             then "standard output" else "merged output"));
-      Landin.Testing.Check
-        (Item, Outcome.Ended = Landin.Platform.Exited,
-         Label & ": refine returned a status");
-      Landin.Testing.Check_Equal
-        (Item, Outcome.Exit_Code, Status (Case_Item),
-         Label & ": recorded exit status");
+      Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Recorded;
 
    procedure Emit_Positive
@@ -294,7 +315,6 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Program   : String;
       Item      : in out Landin.Testing.Context)
    is
-      Label   : constant String := "negative/" & Name (Case_Item);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
@@ -302,15 +322,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
       Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
 
-      Landin.Testing.Check
-        (Item, Outcome.Ended = Landin.Platform.Exited,
-         Label & ": refine returned a status");
-      Landin.Testing.Check_Equal
-        (Item, Outcome.Exit_Code, 1, Label & ": the program was refused");
-      Landin.Testing.Check_Equal
-        (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
-         Normalized_Codes (Codes (Case_Item)),
-         Label & ": the report carries its pinned codes");
+      Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Negative;
 
    procedure Recorded_Expectations_Hold
@@ -920,8 +932,100 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Item, Ran, 1, Wanted & ": exactly one fixture was selected");
    end Selected_Fixture_Executes;
 
+   --  Exercise the shared verdict against fake metadata and outcomes.
+   --  No fixture program, compiler or host tool is started by this case.
+   procedure Negative_Metadata_Decides_The_Verdict
+     (Item : in out Landin.Testing.Context);
+
+   procedure Negative_Metadata_Decides_The_Verdict
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Found : Catalogue;
+      LF : constant Character := ASCII.LF;
+      Report : constant String :=
+        "error[L0004]: first" & LF & "error[L0004]: second" & LF
+        & "error[L0103]: last" & LF;
+
+      procedure Check
+        (Case_Item : Fixture; Exit_Code : Integer; Text : String;
+         Ended : Landin.Platform.Termination; Expected_Failures : Natural);
+
+      procedure Check
+        (Case_Item : Fixture; Exit_Code : Integer; Text : String;
+         Ended : Landin.Platform.Termination; Expected_Failures : Natural)
+      is
+         Probe : Landin.Testing.Context;
+         Outcome : constant Landin.Platform.Tool_Result :=
+           (Ended, Exit_Code, Unbounded.To_Unbounded_String (Text));
+      begin
+         Check_Compiler_Outcome (Case_Item, Outcome, Probe);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Testing.Checks (Probe), 3,
+            "each negative compares termination, status and ordered codes");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Testing.Failures (Probe), Expected_Failures,
+            "the declared contract alone decides the verdict"
+            & ASCII.LF & Landin.Testing.Failure_Text (Probe));
+      end Check;
+   begin
+      Host.Add_Directory ("root/negative");
+      Host.Add_Directory ("root/negative/compiled");
+      Host.Add_File
+        ("root/negative/compiled/fixture.meta",
+         "class: negative" & LF & "summary: a compiled refusal" & LF
+         & "constructs: 1740" & LF & "program: bad.ldn" & LF
+         & "status: 2" & LF & "codes: L0004,L0004, L0103" & LF
+         & "targets: linux-x86-64" & LF);
+      Host.Add_Directory ("root/negative/recorded");
+      Host.Add_File
+        ("root/negative/recorded/fixture.meta",
+         "class: negative" & LF & "summary: a recorded refusal" & LF
+         & "constructs: 1740" & LF & "expect: expected.txt" & LF
+         & "args: --bad" & LF & "status: 2" & LF
+         & "codes: L0004,L0004, L0103" & LF
+         & "targets: linux-x86-64" & LF);
+      Host.Add_Directory ("root/negative/default-status");
+      Host.Add_File
+        ("root/negative/default-status/fixture.meta",
+         "class: negative" & LF & "summary: the default refusal status" & LF
+         & "constructs: 1740" & LF & "program: bad.ldn" & LF
+         & "codes: L0004,L0004, L0103" & LF
+         & "targets: linux-x86-64" & LF);
+      Discover (Found, "root", Host);
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0, "the fake metadata is valid");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 3, "both forms and the default are covered");
+      for Position in 1 .. Count (Found) loop
+         declare
+            Case_Item : constant Fixture := Nth (Found, Position);
+            Expected_Status : constant Integer :=
+              (if Name (Case_Item) = "default-status" then 1 else 2);
+         begin
+            Check
+              (Case_Item, Expected_Status, Report, Landin.Platform.Exited, 0);
+            Check
+              (Case_Item, 3 - Expected_Status, Report,
+               Landin.Platform.Exited, 1);
+            Check
+              (Case_Item, Expected_Status, "error[L0103]: first" & LF
+               & "error[L0004]: next" & LF & "error[L0004]: last" & LF,
+               Landin.Platform.Exited, 1);
+            Check
+              (Case_Item, Expected_Status, "error[L0004]: first" & LF
+               & "error[L0103]: last" & LF, Landin.Platform.Exited, 1);
+            Check (Case_Item, 0, Report, Landin.Platform.Timed_Out, 2);
+            Check (Case_Item, 0, Report, Landin.Platform.Signaled, 2);
+         end;
+      end loop;
+   end Negative_Metadata_Decides_The_Verdict;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixture execution", "negative metadata decides the verdict",
+         Negative_Metadata_Decides_The_Verdict'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "a timeout cannot satisfy a trap",
          A_Timeout_Cannot_Satisfy_A_Trap'Access);

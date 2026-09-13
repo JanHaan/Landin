@@ -862,6 +862,12 @@ package body Landin.Testing.Fixtures is
            ("only a runtime or ABI fixture runs a program that could trap");
       end if;
 
+      if Seen_Class and then Item.Class = Negative_Program
+        and then not Seen_Status
+      then
+         Item.Status := 1;
+      end if;
+
       --  Any reported fault rejects the fixture.  A fixture that is
       --  half-accepted is a fixture whose fault stops being visible.
       Accepted := Natural (Problems.Length) = Before;
