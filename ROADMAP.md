@@ -5867,7 +5867,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Implemented as consistent DWARF serialization: direct values use a register location; indirect bindings use the address in that register with zero displacement. Alias and variable paths share the formatter. The allocator still pins address slots, so this is latent-path maintenance rather than a reproduced source miscompile. |
 | J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Guard repaired as backend consistency: suffix offsets share the arithmetic-immediate predicate, using a full-width scratch register above signed imm32. The large-source reachability claim was not replayed; scalar encoding-boundary and three/four-element fill controls cover the repair without a giant image. |
 | J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Implemented: snippets display tabs as `\t` and bytes outside printable ASCII as `\xNN`; underlines count their displayed characters. Headers and structured spans retain original byte coordinates. This deterministic byte display covers valid UTF-8, invalid bytes and control bytes without a locale/font width assumption. |
-| J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Semantic agreement question: reconcile completion-block assignment with [1810]/D157 and the existing loop decisions. Sounder flow precision alone does not authorize changing the normative rule. |
+| J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Implemented against the existing [1810]/D156/D157 rule: post-loop assignment is limited to entry and condition facts, preserving evaluated for-header effects. The iterative head and actual exit joins still retain consumption and restoration. Scalar, sparse/whole-array and nested-field refusals pass; incoming values, loop results, header effects and early returns remain valid. |
 | J71 | tour [0220]'s `hex_value := 0xDEAD_BEEF` does not compile | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
@@ -7381,6 +7381,27 @@ executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-suite-inventory/` and `.scratch/r491-final-values/`.
 The remaining M14/N5/N7/N8 task is independent fixture-discovery and selection
 accounting in place of historical corpus floors. Exact acceptance remains open.
+
+J70 development evidence: [1810] and D156/D157 both explicitly exclude new
+post-loop assignment facts established only in an iteration or completion.
+Tiny baseline while/for completion and unconditional-break examples were
+accepted despite that rule. The repair retains the existing iterative head
+and actual exit joins, then limits positive assignment facts to entry and
+condition facts using the existing sparse containment-aware merge. It adds no
+fictional consumed edge: consumed places still come only from actual exits,
+so a genuinely restored initialized reference remains live. Bounds evaluated
+before a `for` and assignments in a while condition retain their effects.
+Six exact selectors pass 54 checks in each of macOS debug and Linux release.
+Controls cover scalar results, sparse/whole arrays, nested fields, array
+fields, previously assigned values, condition/bound effects, loop values,
+body/completion returns, consumed exits and restored references. The existing
+`loop-control-flow`, `loop-values` and `for-range-traversal` runtime sources
+also compile to verified IR in both modes; they were not executed. Fixture
+arrays contain at most two elements; the existing controls at most three.
+Both single-worker builds and the inventories pass. Positive fixture checking
+emits text only. No native assembly, generated executable, debugger or giant
+image ran. Evidence is in `.scratch/r491-loop-assignment/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

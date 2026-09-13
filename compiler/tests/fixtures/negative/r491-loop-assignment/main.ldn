@@ -1,0 +1,27 @@
+while_completion: (flag: bool) -> (r: i32) =
+    while flag do
+    complete
+        r = 1
+    end while
+end while_completion
+
+break_assignment: () -> (r: i32) =
+    loop do
+        r = 1
+        break
+    end loop
+end break_assignment
+
+for_completion: () -> (r: i32) =
+    for i in 0..<1 do
+    complete
+        r = 1
+    end for
+end for_completion
+
+array_completion: (flag: bool) -> (r: [2]i32) =
+    while flag do
+    complete
+        r = [1, 2]
+    end while
+end array_completion
