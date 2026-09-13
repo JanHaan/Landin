@@ -7136,21 +7136,36 @@ limits. No Landin assembler, linker, generated executable, debugger or large
 input ran. Evidence is retained in `.scratch/r491-owed-checks/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-R4.91-F2, found while validating J136, is open and next: generic publication
-loses a written scalar range constraint on a local, parameter or result.
-`Publish_Descriptor` publishes the scalar kind without its source constraint;
-`Type_At` then returns that prepublished kind before copying the constraint.
-The generic signature's `Part_For` also omits the constraint that ordinary
-signature construction carries. A ten-line source with two generic instances
-emits 1,584 bytes of assembly text with neither required range check. A small
-generic local initialized to zero is accepted even though its written range
-is 5 through 10; the corresponding ordinary routine correctly reports L0300.
-These probes had ten-second limits and no assembly or execution. A separate
-generic-parameter literal probe stopped earlier at the existing exact scalar
-pattern check, so it is not range-check evidence. Repair source-constraint
-publication and validate known refusals plus dynamic checks in small IR cases;
-do not change the policy on constrained generic actuals. This finding is
-upstream of J136's table storage and was not established by the older review.
+R4.91-F2, found while validating J136, is implemented: generic publication
+copies a written scalar range constraint to its type position and declaration,
+and the instance signature carries written parameter/result constraints.
+Previously `Publish_Descriptor` published only the scalar kind, after which
+`Type_At` returned before copying the constraint. The signature's `Part_For`
+also omitted the constraint that ordinary signature construction retained.
+This repair preserves the policy on constrained generic actuals.
+
+F2 development evidence: six selected cases pass 177 checks in each of macOS
+debug and Linux release. Five tiny IR programs each instantiate one generic
+routine twice and verify dynamic checks for locals, parameters, results and
+updates, including the absence of redundant checks when a written local
+already carries a range proof. A new nine-line negative fixture now reports
+one L0300 for a zero initializer outside 5 through 10 across two instances.
+Existing owed-check, generic-actual, control-result and diagnostic-coalescing
+controls pass. A ten-line source's assembly text now contains both bounds in
+each instance (1,972 bytes); before repair it contained neither check (1,584
+bytes). A separate literal argument probe hit the existing exact scalar type
+pattern refusal and is not range-check evidence. Both single-worker builds
+passed, individual tests were limited to 30 seconds or less, and direct probes
+to ten seconds. The inventories record the new fixture. No Landin assembler,
+linker, generated executable, debugger or large input ran. Evidence is retained
+in `.scratch/r491-generic-ranges/`, `.scratch/r491-owed-checks/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J100's repeated malformed-input lookahead remains open. Source inspection
+confirms two separate costs: rescanning the same delimiter-free conformance
+suffix and looking again for the close of an unmatched signature parenthesis.
+Repair lookahead reuse with bounded small syntax controls; do not replay the
+older scaling runs.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

@@ -1,0 +1,9 @@
+class: negative
+summary: a written local range in a generic body refuses a known out-of-range initializer once across two instances
+program: main.ldn
+codes: L0300
+constructs: 0660, 1290, 1950
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-generic-written-range/main.ldn
+status: 1

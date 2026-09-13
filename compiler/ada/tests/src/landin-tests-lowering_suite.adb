@@ -12298,8 +12298,86 @@ package body Landin.Tests.Lowering_Suite is
       end loop;
    end Fixed_Measurement_Bounds_Keep_Refusals;
 
+   procedure Generic_Written_Ranges_Keep_Checks
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Written_Ranges_Keep_Checks
+     (Item : in out Landin.Testing.Context)
+   is
+      Common : constant String := "level: type = u8 range 5 .. 10 ";
+      Caller : constant String :=
+        " f: (input: u8, other: i32) -> (r: u8) = "
+        & "left: u8 = g(other, input) right: u8 = g(true, input) "
+        & "r = left + right end f";
+
+      procedure Check_Source (Label, Text : String; Expected : Natural);
+
+      procedure Check_Source (Label, Text : String; Expected : Natural) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran, Checks : Natural := 0;
+      begin
+         Lower (Work, Common & Text & Caller, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            Label & " reaches verified IR with two instances");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         begin
+            for Position in 1 .. IR.Item_Count (Unit) loop
+               declare
+                  Routine : constant IR.Item_Id := IR.Item_Id (Position);
+               begin
+                  if IR.Kind_Of (Unit, Routine) = IR.Routine then
+                     for Index in 1 .. IR.Value_Count (Unit, Routine) loop
+                        if IR.Op_Of (Unit, Routine, IR.Value_Id (Index))
+                          = IR.Range_Check
+                        then
+                           Checks := Checks + 1;
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Checks, Expected, Label & " retains each owed check");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+                 = IR.Verifier.Nothing_Wrong,
+               Label & " retains sound constraint instructions");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("local range",
+         "g: (t: type, ignored: t, input: u8) -> (r: u8) = "
+         & "value: level = input r = value end g", 2);
+      Check_Source
+        ("parameter range",
+         "g: (t: type, ignored: t, input: level) -> (r: u8) = "
+         & "r = input end g", 2);
+      Check_Source
+        ("result range",
+         "g: (t: type, ignored: t, input: u8) -> (r: level) = "
+         & "r = input end g", 2);
+      Check_Source
+        ("written local proof",
+         "g: (t: type, ignored: t, input: level) -> (r: level) = "
+         & "value: level = input r = value end g", 2);
+      Check_Source
+        ("local update",
+         "g: (t: type, ignored: t, input: u8) -> (r: u8) = "
+         & "mut value: level = 7 inc value r = value end g", 2);
+   end Generic_Written_Ranges_Keep_Checks;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "generic written ranges keep checks",
+         Generic_Written_Ranges_Keep_Checks'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "generic bodies keep anonymous routines independent",

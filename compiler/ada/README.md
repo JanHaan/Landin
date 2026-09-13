@@ -262,6 +262,11 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Generic instances preserve written range constraints when publishing local,
+parameter and result types. Their signatures carry those bounds too, so
+ordinary range checking covers generic stores and call boundaries. This does
+not enable constrained types as generic actuals.
+
 Owed runtime range checks belong to the active routine view. Unwritten views
 inherit the global answer; instance writes preserve the global layer and other
 instances. Repeating a constraint is idempotent, while a conflicting rewrite
