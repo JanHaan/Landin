@@ -3693,6 +3693,45 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12", "8", "l");
    end An_Array_Fill_Follows_The_Target_Element_Width;
 
+   procedure Slice_Scaling_Uses_Element_Extents
+     (Item : in out Landin.Testing.Context);
+
+   procedure Slice_Scaling_Uses_Element_Extents
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct left: u64 right: u64 end pair" & LF
+         & "small: (a: []u8, low: usize, high: usize) -> none =" & LF
+         & "    view := a[low..<high]" & LF & "end small" & LF
+         & "word: (a: []u64, low: usize, high: usize) -> none =" & LF
+         & "    view := a[low..<high]" & LF & "end word" & LF
+         & "wide: (a: []pair, low: usize, high: usize) -> none =" & LF
+         & "    view := a[low..<high]" & LF & "end wide" & LF,
+         Ran);
+      Landin.Testing.Check
+        (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+         "three small slice element types reach verified IR");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "imulq $1, %rcx, %rcx")
+            and then Occurrences (Text, HT & "imulq $8, %rcx, %rcx") = 1
+            and then Occurrences (Text, HT & "imulq $16, %rcx, %rcx") = 1,
+            "unit stride is free and wider elements scale the lower bound");
+         Landin.Testing.Check
+           (Item, Occurrences (Text, "_upper:") = 3
+            and then Occurrences (Text, "_lower:") = 3
+            and then Occurrences (Text, HT & "addq %rcx, %rax") = 3,
+            "each checked slice keeps both bounds and its base addition");
+      end;
+   end Slice_Scaling_Uses_Element_Extents;
+
    --  D10 zeroes a module binding with no value, and zero bytes do not
    --  have to be in the image to be zero: `.bss` reserves them and `.data`
    --  carries them.  A 32 KB part is in this compiler's range, so a
@@ -6510,6 +6549,9 @@ package body Landin.Tests.Backend_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "slice scaling uses element extents",
+         Slice_Scaling_Uses_Element_Extents'Access);
       Landin.Testing.Register
         (Into, "backend", "recursive array descriptors use target strides",
          Recursive_Array_Descriptors_Use_Target_Strides'Access);

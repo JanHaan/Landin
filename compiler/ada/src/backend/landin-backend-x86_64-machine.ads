@@ -4,6 +4,7 @@
 private with Ada.Containers.Vectors;
 private with Ada.Strings.Unbounded;
 with Landin.Build_Reports;
+with Landin.Targets;
 
 package Landin.Backend.X86_64.Machine is
 
@@ -24,6 +25,12 @@ package Landin.Backend.X86_64.Machine is
    --  Pure selection; only encodings with exactly the same flag/register
    --  effects are shortened.  Empty means a redundant non-widening self move.
    function Selected (Text : String) return String;
+
+   --  Nonnegative target extents fit addq/imulq immediates only through
+   --  signed imm32's maximum. Larger constants need a register operand.
+   function Fits_Arithmetic_Immediate
+     (Value : Landin.Targets.Byte_Count) return Boolean;
+
 
 private
 
