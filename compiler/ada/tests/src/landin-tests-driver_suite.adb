@@ -1964,6 +1964,25 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("unary: type = struct t: missing end unary" & ASCII.LF
+            & "bundle: () -> (d: i32, k: [2]unary) = d = 1 k = zeroed "
+            & "end bundle" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("unary: type = struct t: missing end unary" & ASCII.LF
+            & "bundle: () -> (d: i32, k: [2][2]unary) = d = 1 "
+            & "k = zeroed end bundle" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("unary: type = struct t: missing end unary" & ASCII.LF
+            & "bundle: () -> (d: i32, k: unary) = d = 1 k = zeroed "
+            & "end bundle" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("unary: type = struct t: missing end unary" & ASCII.LF
+            & "callback: type = () -> (d: i32, k: unary)" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
            ("n: u8 = 2" & ASCII.LF
             & "flags: [2]bool = [bool(n), false]" & ASCII.LF,
             "L0300", 1, Executable);

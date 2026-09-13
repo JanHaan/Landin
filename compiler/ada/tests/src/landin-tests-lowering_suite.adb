@@ -10662,8 +10662,85 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Types.Bool, 1);
    end Measurements_Use_Target_Carriers;
 
+   procedure Result_Signatures_Wait_For_Layouts
+     (Item : in out Landin.Testing.Context);
+
+   procedure Result_Signatures_Wait_For_Layouts
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Landin.Stages.Code (Work).all, Facts).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " retains valid finite result layouts");
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("none and scalar results",
+         "empty: () -> none = end empty" & LF
+         & "one: () -> (value: i32) = value = 1 end one" & LF);
+      Check_Source
+        ("forward written signature",
+         "callback: type = () -> (d: i32, k: unary)" & LF
+         & "unary: type = struct t: u8 end unary" & LF);
+      Check_Source
+        ("self callback result",
+         "node: type = struct callback: () -> (code: i32, value: "
+         & "node) end node" & LF);
+      Check_Source
+        ("forward array result",
+         "callback: type = () -> (d: i32, k: [2]unary)" & LF
+         & "unary: type = struct t: u8 end unary" & LF);
+      Check_Source
+        ("forward alias result",
+         "callback: type = () -> (d: i32, k: alias)" & LF
+         & "alias: type = unary" & LF
+         & "unary: type = struct t: u8 end unary" & LF);
+      Check_Source
+        ("mutual callback results",
+         "left: type = struct callback: () -> (code: i32, value: "
+         & "right) end left" & LF
+         & "right: type = struct callback: () -> (code: i32, value:"
+         & " left) end right" & LF);
+      Check_Source
+        ("nested array results",
+         "callback: type = () -> (first: [2][3]u16, second: "
+         & "[2]ptr u8)" & LF);
+      Check_Source
+        ("empty array results",
+         "callback: type = () -> (first: [0]u16, second: "
+         & "[0][2]u32)" & LF);
+      Check_Source
+        ("distinct result",
+         "callback: type = () -> (code: i32, value: meter)" & LF
+         & "meter: type = distinct u16" & LF);
+   end Result_Signatures_Wait_For_Layouts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "result signatures wait for layouts",
+         Result_Signatures_Wait_For_Layouts'Access);
       Landin.Testing.Register
         (Into, "lowering", "measurements use target carriers",
          Measurements_Use_Target_Carriers'Access);
