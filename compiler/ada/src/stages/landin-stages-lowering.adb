@@ -11454,7 +11454,8 @@ package body Landin.Stages.Lowering is
                         Temporary : IR.Slot_Id := IR.No_Slot;
                      begin
                         if Syn.Kind (Of_Tree, Value)
-                             in Syn.Call | Syn.If_Statement
+                             in Syn.Call | Syn.Labeled_Application
+                          | Syn.Try_Expression | Syn.If_Statement
                           | Syn.Match_Statement | Syn.Bare_Block
                           | Syn.Loop_Statement | Syn.While_Statement
                           | Syn.For_Statement
@@ -11858,8 +11859,11 @@ package body Landin.Stages.Lowering is
                            pragma Assert
                              (Destination.Kind = IR.Frame_Slot);
                            if Syn.Kind (Of_Tree, From)
-                                in Syn.Call | Syn.If_Statement
+                                in Syn.Call | Syn.Labeled_Application
+                                   | Syn.Try_Expression | Syn.If_Statement
                                    | Syn.Match_Statement | Syn.Bare_Block
+                                   | Syn.Loop_Statement | Syn.While_Statement
+                                   | Syn.For_Statement
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, From, Scope, Destination.Slot);
@@ -11937,6 +11941,9 @@ package body Landin.Stages.Lowering is
                                                | Syn.Struct_Literal
                                                | Syn.Labeled_Application
                                                | Syn.Zeroed_Literal
+                                               | Syn.Loop_Statement
+                                               | Syn.While_Statement
+                                               | Syn.For_Statement
                                        then
                                           declare
                                              Temporary : constant IR.Slot_Id :=
@@ -11954,7 +11961,10 @@ package body Landin.Stages.Lowering is
                                                    | Syn.Try_Expression
                                                    | Syn.If_Statement
                                                    | Syn.Match_Statement
-                                                   | Syn.Bare_Block =>
+                                                   | Syn.Bare_Block
+                                                   | Syn.Loop_Statement
+                                                   | Syn.While_Statement
+                                                   | Syn.For_Statement =>
                                                    Lower_Stored_Expression
                                                      (Of_Tree, From, Scope,
                                                       Temporary);

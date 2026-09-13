@@ -9863,8 +9863,205 @@ package body Landin.Tests.Lowering_Suite is
          2);
    end Traversal_Locals_Infer_From_Headers;
 
+   procedure Stored_Control_Values_Keep_Their_Shapes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Stored_Control_Values_Keep_Their_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Calls : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Position)) = IR.Call
+                  then
+                     Calls := Calls + 1;
+                     if Label = "indexed destination captured once" then
+                        Landin.Testing.Check
+                          (Item, IR.Callee_Of
+                             (Unit, Routine, IR.Value_Id (Position))
+                               = Named_Item
+                                 (Work, (if Calls = 1 then "next"
+                                         else "make_pair")),
+                           "destination evaluation precedes the value");
+                     end if;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Calls = Expected_Calls,
+                  Label & " preserves only reachable calls");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " has no unfinished or orphan blocks");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("positional destructure",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: () -> (r: i32) = (left, right) := make(1, 2) r = left + "
+         & "right end f" & LF,
+         1);
+      Check_Source
+        ("labelled destructure",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: () -> (r: i32) = (left, right) := make(b: 2, a: 1) r = "
+         & "left + right end f" & LF,
+         1);
+      Check_Source
+        ("try destructure",
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "make: (a: i32, b: i32) -> (left: i32, right: i32) ! problem "
+         & "= left = a right = b end make" & LF
+         & "f: () -> (r: i32) ! problem = (left, right) := try make(1, "
+         & "2) r = left + right end f" & LF,
+         1);
+      Check_Source
+        ("labelled try destructure",
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "make: (a: i32, b: i32) -> (left: i32, right: i32) ! problem "
+         & "= left = a right = b end make" & LF
+         & "f: () -> (r: i32) ! problem = (left, right) := try make(b: "
+         & "2, a: 1) r = left + right end f" & LF,
+         1);
+      Check_Source
+        ("positional result assignment",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: () -> (r: i32) = mut d := make(1, 2) d = make(3, 4) r = "
+         & "d.left + d.right end f" & LF,
+         2);
+      Check_Source
+        ("labelled result assignment",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: () -> (r: i32) = mut d := make(1, 2) d = make(b: 4, a: "
+         & "3) r = d.left + d.right end f" & LF,
+         2);
+      Check_Source
+        ("loop result assignment",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: () -> (r: i32) = mut d := make(1, 2) d = loop do break "
+         & "with make(3, 4) end loop r = d.left + d.right end f" & LF,
+         2);
+      Check_Source
+        ("while result assignment",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: (flag: bool) -> (r: i32) = mut d := make(1, 2) d = while "
+         & "flag do break with make(3, 4) complete break with make(5, "
+         & "6) end while r = d.left + d.right end f" & LF,
+         3);
+      Check_Source
+        ("range result assignment",
+         "make: (a: i32, b: i32) -> (left: i32, right: i32) = left = "
+         & "a right = b end make" & LF
+         & "f: (flag: bool) -> (r: i32) = mut d := make(1, 2) d = for n "
+         & "in 0 ..< 2 do break with make(3, 4) when flag complete "
+         & "break with make(5, 6) end for r = d.left + d.right end f" & LF,
+         3);
+      Check_Source
+        ("try result assignment",
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "make: (a: i32, b: i32) -> (left: i32, right: i32) ! problem "
+         & "= left = a right = b end make" & LF
+         & "f: () -> (r: i32) ! problem = mut d := try make(1, 2) d = "
+         & "try make(b: 4, a: 3) r = d.left + d.right end f" & LF,
+         2);
+      Check_Source
+        ("indexed loop assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: [2]pair, index: usize) -> (r: i32) = a[index] "
+         & "= loop do break with pair(left: 3, right: 4) end loop r = "
+         & "a[index].left + a[index].right end f" & LF);
+      Check_Source
+        ("pointer loop assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (a: ptr mut pair) -> (r: i32) = a.val = loop do break "
+         & "with pair(left: 3, right: 4) end loop r = a.val.left + "
+         & "a.val.right end f" & LF);
+      Check_Source
+        ("inout loop assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: pair) -> (r: i32) = a = loop do break with "
+         & "pair(left: 3, right: 4) end loop r = a.left + a.right end f" & LF);
+      Check_Source
+        ("indexed while assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: [2]pair, index: usize, flag: bool) -> (r: i32) "
+         & "= a[index] = while flag do break with pair(left: 3, right: "
+         & "4) complete break with pair(left: 5, right: 6) end while r "
+         & "= a[index].left + a[index].right end f" & LF);
+      Check_Source
+        ("indexed range assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: [2]pair, index: usize, flag: bool) -> (r: i32) "
+         & "= a[index] = for n in 0 ..< 2 do break with pair(left: 3, "
+         & "right: 4) when flag complete break with pair(left: 5, "
+         & "right: 6) end for r = a[index].left + a[index].right end f" & LF);
+      Check_Source
+        ("indexed if assignment",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: [2]pair, index: usize, flag: bool) -> (r: i32) "
+         & "= a[index] = if flag then pair(left: 3, right: 4) else "
+         & "pair(left: 5, right: 6) end if r = a[index].left + "
+         & "a[index].right end f" & LF);
+      Check_Source
+        ("indexed destination captured once",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "mut cursor: usize = 0" & LF
+         & "next: () -> (r: usize) = r = cursor end next" & LF
+         & "make_pair: () -> (r: pair) = cursor = 1 r = pair(left: 3, "
+         & "right: 4) end make_pair" & LF
+         & "f: (inout a: [2]pair) -> (r: i32) = a[next()] = loop do "
+         & "break with make_pair() end loop r = a[0].left end f" & LF,
+         2);
+      Check_Source
+        ("returning loop skips destination copy",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "f: (inout a: [2]pair, index: usize) -> (r: i32) = r = 9 "
+         & "a[index] = loop do break with if begin return end then "
+         & "pair(left: 3, right: 4) else pair(left: 5, right: 6) end if "
+         & "end loop r = 0 end f" & LF);
+   end Stored_Control_Values_Keep_Their_Shapes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "stored control values keep their shapes",
+         Stored_Control_Values_Keep_Their_Shapes'Access);
       Landin.Testing.Register
         (Into, "lowering", "traversal locals infer from headers",
          Traversal_Locals_Infer_From_Headers'Access);
