@@ -5934,7 +5934,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Bookkeeping contract repaired: capture the initial instance count before its fixed-bound body pass and retain that exact visited boundary for the late pass. Any instances created during body checking remain eligible afterward. The small provider witness already accepted/refused correctly before this change, so no reached source miscompilation is claimed. Exact acceptance remains open. |
 | J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
-| J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
+| J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Implemented as API maintenance: removed the scalar-only query and migrated its two callers to complete element shapes. The alleged source miscompile remains refuted: recursive images already bypassed this scalar path and ordinary type checking refused mismatches. |
 | J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Implemented: ordinary unresolved type names use L0201 with a scope note, and normalization retains an already-refused name without adding a parameterized-type feature report. The anonymous two-name fixture retains exactly two reports; named deferred widths keep L0304. Standalone generic normalization remains a separate report path. |
 | J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Implemented: aggregate and omitted module initializers explain that the complete type must permit a zero image, including atom, pointer, slice and distinct restrictions. Existing function-field refusals retain their code and source spans. Exact acceptance remains open. |
 
@@ -7111,8 +7111,22 @@ linker, generated executable, debugger or large input ran. Evidence is retained
 in `.scratch/r491-entry-source/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J136/J137's checking-table contracts are next for source inspection and small
-seam evidence where needed.
+J137 development evidence: six selected cases pass 142 checks in each of
+macOS debug and Linux release. The two callers of the removed scalar-only
+`Field_Array_Element` query now use complete field shapes; the compiler's
+module-image edge compares full element identity. Existing target-layout,
+struct-image, recursive-source and pointer/erased-array copy controls pass,
+as do two scalar element-mismatch refusals. All sources contain small arrays;
+no giant foundation seam was rerun. This resolves a misleading API, not a
+reproduced source miscompile: the retained review's mismatch was already
+refused, and recursive images already take the complete-shape path. Both
+single-worker builds passed, with individual test limits of 30 seconds or
+less. No Landin assembler, linker, generated executable or debugger ran.
+Evidence is retained in `.scratch/r491-array-query/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J136's owed-check ownership is next: preserve per-view facts and reject a
+conflicting rewrite within one view, using a small checking-table seam.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

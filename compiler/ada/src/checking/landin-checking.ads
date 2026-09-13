@@ -1947,17 +1947,6 @@ package Landin.Checking is
                  and then Field_Kind_Of (Of_Table, Id, Field)
                             = Fixed_Array_Field;
 
-   function Field_Array_Element
-     (Of_Table : Table;
-      Id       : Nominal_Type_Id;
-      Field    : Positive) return Landin.Types.Scalar_Name
-     with Pre => Is_Prepared (Of_Table)
-                 and then Holds (Of_Table, Id)
-                 and then Has_Layout (Of_Table, Id)
-                 and then Field <= Layout_Field_Count (Of_Table, Id)
-                 and then Field_Kind_Of (Of_Table, Id, Field)
-                            = Fixed_Array_Field;
-
    function Layout_Extent (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      with Pre => Is_Prepared (Of_Table)
