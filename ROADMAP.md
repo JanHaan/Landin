@@ -5930,7 +5930,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Implemented: local typed payload copies are admitted before match-header types are available, then checked against their nominal destination. Inferred aliases and chains wait for the match header, retain their nominal descriptor and resume in the body walk; this also repairs a related inferred-copy internal defect. Read-only/writable, unused, chained, generic and different-nominal controls cover both target widths. Exact acceptance remains open. |
 | J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Implemented: range traversal preserves an ill-typed lower endpoint without a second type report, and pointer conversion refuses an already ill-typed operand before numeric checks or pointer facts. Independent non-integer refusals remain. Exact acceptance remains open. |
 | J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Implemented: pointer-union refusal precedes all any-construction conformance lookup and instantiation. A real missing conformance still reports L0318; its related origin now names the current required any type rather than the first same-concept reference elsewhere in the program. Exact acceptance remains open. |
-| J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Implemented: checking attributes new diagnostics at instance-view transitions and coalesces identical complete reports across instances of the same template. Early discovery, nested views and final body checks share the policy; different spans, labels, notes or actual-type messages remain. Ordinary checking and transport retain duplicates. |
 | J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Bookkeeping contract repaired: capture the initial instance count before its fixed-bound body pass and retain that exact visited boundary for the late pass. Any instances created during body checking remain eligible afterward. The small provider witness already accepted/refused correctly before this change, so no reached source miscompilation is claimed. Exact acceptance remains open. |
 | J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
@@ -7066,9 +7066,26 @@ Logs are retained in `.scratch/r491-rendering/` and
 separate; excerpt boundaries preserve bytes without claiming display-width
 alignment. Exact-revision acceptance remains open.
 
-J133's repeated generic-body diagnostics are next. A bounded two-instance
-range-type mismatch still prints the same complete diagnostic twice; keep any
-coalescing within checking and preserve diagnostic transport's duplicate policy.
+J133 development evidence: six selected cases pass 47 checks in each of
+macOS debug and Linux release. The original two-instance range mismatch
+reproduced two complete L0301 reports before repair; the new negative golden
+retains one, including its original primary, related span and note. Six checking
+controls cover one mistake, two source locations, differing actual-type messages,
+an ordinary routine, independent templates and nested instance views. Existing
+declared/inferred generic errors, instance keys and independent anonymous bodies
+also pass. Each new diagnostic is attributed once at a view transition, including
+early traversal discovery; exception unwinding retains partial reports without
+allocating a key. The maps and attribution frontier live only for this checking
+invocation. Both single-worker builds passed; selected cases have 30-second or
+shorter limits and the three initial compile-only probes had 10-second limits.
+The diagnostic and fixture inventories record the new refusal. No Landin
+assembler, linker, generated executable or debugger ran. Evidence is retained
+in `.scratch/r491-generic-reports/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J69's caret alignment is next: source byte coordinates must remain stable while
+the displayed snippet and underline agree for tabs and non-ASCII bytes, without
+depending on the terminal's Unicode width behavior.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

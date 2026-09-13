@@ -1,5 +1,8 @@
+with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Hashed_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
+with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
@@ -95,6 +98,144 @@ package body Landin.Stages.Checking is
 
       Facts : constant Landin.Targets.Target_Facts := Target (Context);
       Found : Landin.Diagnostics.Diagnostic_List;
+
+      --  Keep transport's duplicate policy intact. Only exact diagnostics
+      --  produced by different instances of one generic template coalesce.
+      type Generic_Report_Key is record
+         Template : Res.Declaration_Id;
+         Item     : Landin.Diagnostics.Diagnostic;
+      end record;
+
+      function Hash_Report (Key : Generic_Report_Key)
+        return Ada.Containers.Hash_Type;
+
+      function Hash_Report (Key : Generic_Report_Key)
+        return Ada.Containers.Hash_Type
+      is
+         use type Ada.Containers.Hash_Type;
+         Seed : Ada.Containers.Hash_Type :=
+           Ada.Containers.Hash_Type (Key.Template);
+
+         procedure Mix (Value : Ada.Containers.Hash_Type);
+         procedure Mix_Label (Value : Landin.Diagnostics.Label);
+
+         procedure Mix (Value : Ada.Containers.Hash_Type) is
+         begin
+            Seed := (Seed * 31) xor Value;
+         end Mix;
+
+         procedure Mix_Label (Value : Landin.Diagnostics.Label) is
+            Where : constant Landin.Source.Span :=
+              Landin.Diagnostics.Span_Of (Value);
+         begin
+            Mix (Ada.Containers.Hash_Type
+              (Landin.Diagnostics.Source_Of (Value)));
+            Mix (Ada.Containers.Hash_Type (Where.First));
+            Mix (Ada.Containers.Hash_Type (Where.Last));
+            Mix (Ada.Containers.Hash_Type (Landin.Diagnostics.Label_Role'Pos
+              (Landin.Diagnostics.Role (Value))));
+            Mix (Ada.Strings.Hash (Landin.Diagnostics.Message (Value)));
+         end Mix_Label;
+      begin
+         Mix (Ada.Strings.Hash (Landin.Diagnostics.Code (Key.Item)));
+         Mix (Ada.Containers.Hash_Type (Landin.Diagnostics.Severity'Pos
+           (Landin.Diagnostics.Level (Key.Item))));
+         Mix_Label (Landin.Diagnostics.Primary (Key.Item));
+         for Index in 1 .. Landin.Diagnostics.Label_Count (Key.Item) loop
+            Mix_Label (Landin.Diagnostics.Nth_Label (Key.Item, Index));
+         end loop;
+         for Index in 1 .. Landin.Diagnostics.Note_Count (Key.Item) loop
+            Mix (Ada.Strings.Hash
+              (Landin.Diagnostics.Nth_Note (Key.Item, Index)));
+         end loop;
+         return Seed;
+      end Hash_Report;
+
+      function Hash_Report_Index (Index : Positive)
+        return Ada.Containers.Hash_Type
+        is (Ada.Containers.Hash_Type (Index));
+
+      package Generic_Report_Maps is new Ada.Containers.Hashed_Maps
+        (Key_Type        => Generic_Report_Key,
+         Element_Type    => Landin.Checking.Routine_Instance_Id,
+         Hash            => Hash_Report,
+         Equivalent_Keys => "=");
+      package Report_Index_Sets is new Ada.Containers.Hashed_Sets
+        (Element_Type        => Positive,
+         Hash                => Hash_Report_Index,
+         Equivalent_Elements => "=");
+
+      Generic_Reports : Generic_Report_Maps.Map;
+      Repeated_Reports : Report_Index_Sets.Set;
+      Attributed_Reports : Natural := 0;
+
+      procedure Close_Report_View;
+      procedure Activate_Routine_View
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Previous : out Landin.Checking.Routine_Instance_Id);
+      procedure Restore_Routine_View
+        (Previous : Landin.Checking.Routine_Instance_Id);
+      procedure Restore_Failed_Routine_View
+        (Previous : Landin.Checking.Routine_Instance_Id);
+
+      --  A view transition closes one uninterrupted report interval. Each
+      --  report is visited once, including errors from early discovery and
+      --  nested instances; an outer view never recaptures an inner report.
+      procedure Close_Report_View is
+         Last : constant Natural := Landin.Diagnostics.Count (Found);
+         Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Current_Routine_View (Types.all);
+      begin
+         if Instance /= Landin.Checking.No_Routine_Instance then
+            for Added in 1 .. Last - Attributed_Reports loop
+               declare
+                  Position : constant Positive := Attributed_Reports + Added;
+                  Key : constant Generic_Report_Key :=
+                    (Template => Landin.Checking.Routine_Template_Of
+                       (Types.all, Instance),
+                     Item => Landin.Diagnostics.Get (Found, Position));
+                  Previous : Generic_Report_Maps.Cursor;
+                  Inserted : Boolean;
+               begin
+                  Generic_Reports.Insert (Key, Instance, Previous, Inserted);
+                  if not Inserted
+                    and then Generic_Report_Maps.Element (Previous)
+                      /= Instance
+                  then
+                     Repeated_Reports.Include (Position);
+                  end if;
+               end;
+            end loop;
+         end if;
+         Attributed_Reports := Last;
+      end Close_Report_View;
+
+      procedure Activate_Routine_View
+        (Instance : Landin.Checking.Routine_Instance_Id;
+         Previous : out Landin.Checking.Routine_Instance_Id)
+      is
+      begin
+         Close_Report_View;
+         Landin.Checking.Activate_Routine_View (Types.all, Instance, Previous);
+      end Activate_Routine_View;
+
+      procedure Restore_Routine_View
+        (Previous : Landin.Checking.Routine_Instance_Id)
+      is
+      begin
+         Close_Report_View;
+         Landin.Checking.Restore_Routine_View (Types.all, Previous);
+      end Restore_Routine_View;
+
+      procedure Restore_Failed_Routine_View
+        (Previous : Landin.Checking.Routine_Instance_Id)
+      is
+      begin
+         --  Unwinding must not allocate a report key or replace the original
+         --  failure. Keep any partial reports unsuppressed and unattributed.
+         Attributed_Reports := Landin.Diagnostics.Count (Found);
+         Landin.Checking.Restore_Routine_View (Types.all, Previous);
+      end Restore_Failed_Routine_View;
 
       --  Generic declarations are templates, not runtime types.  This
       --  short-lived stack detects expansion cycles without recording an
@@ -9591,8 +9732,8 @@ package body Landin.Stages.Checking is
                      end;
                   end Part_For;
                begin
-                  Landin.Checking.Activate_Routine_View
-                    (Types.all, Instance, Previous);
+                  Activate_Routine_View
+                    (Instance, Previous);
                   for Index in Parameters'Range loop
                      Parameters (Index) := Part_For
                        (Syn.Nth_Parameter
@@ -9782,8 +9923,8 @@ package body Landin.Stages.Checking is
                        (Template_Tree.all,
                         Syn.Body_Of (Template_Tree.all, Function_Node));
                   end if;
-                  Landin.Checking.Restore_Routine_View
-                    (Types.all, Previous);
+                  Restore_Routine_View
+                    (Previous);
 
                   if not Valid
                     or else Signature = Landin.Checking.No_Signature
@@ -9807,8 +9948,7 @@ package body Landin.Stages.Checking is
                   end if;
                exception
                   when others =>
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
+                     Restore_Failed_Routine_View (Previous);
                      if Landin.Checking.Routine_State_Of
                        (Types.all, Instance) = Landin.Checking.Routine_Building
                      then
@@ -28774,17 +28914,17 @@ package body Landin.Stages.Checking is
                Previous : constant Landin.Checking.Routine_Instance_Id :=
                  Landin.Checking.Current_Routine_View (Types.all);
             begin
-               Landin.Checking.Restore_Routine_View (Types.all, Pending.View);
+               Restore_Routine_View (Pending.View);
                declare
                   Held : constant Ty.Type_Kind :=
                     Synthesise (Tree_For (Pending.Source).all, Pending.Node);
                begin
                   pragma Unreferenced (Held);
                end;
-               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+               Restore_Routine_View (Previous);
             exception
                when others =>
-                  Landin.Checking.Restore_Routine_View (Types.all, Previous);
+                  Restore_Failed_Routine_View (Previous);
                   raise;
             end;
             Next_Selection := Next_Selection + 1;
@@ -29379,8 +29519,8 @@ package body Landin.Stages.Checking is
                          (Types.all, Instance);
                      Previous : Landin.Checking.Routine_Instance_Id;
                   begin
-                     Landin.Checking.Activate_Routine_View
-                       (Types.all, Instance, Previous);
+                     Activate_Routine_View
+                       (Instance, Previous);
                      Owns_Body (Positive (Signature)) := True;
                      Scan
                        (Of_Tree.all,
@@ -29388,12 +29528,11 @@ package body Landin.Stages.Checking is
                           (Of_Tree.all,
                            Res.Node_Of (Meanings.all, Template)),
                         Positive (Signature));
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
+                     Restore_Routine_View
+                       (Previous);
                   exception
                      when others =>
-                        Landin.Checking.Restore_Routine_View
-                          (Types.all, Previous);
+                        Restore_Failed_Routine_View (Previous);
                         raise;
                   end;
                end if;
@@ -29508,8 +29647,8 @@ package body Landin.Stages.Checking is
                   goto Next_Recovery;
                end if;
                if Issue.View /= Landin.Checking.No_Routine_Instance then
-                  Landin.Checking.Activate_Routine_View
-                    (Types.all, Issue.View, Previous);
+                  Activate_Routine_View
+                    (Issue.View, Previous);
                end if;
                declare
                   Recovery : constant Syn.Node_Id :=
@@ -29547,11 +29686,10 @@ package body Landin.Stages.Checking is
 
                   Discover_Generic_Calls (Of_Tree.all, Recovery);
                end;
-               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+               Restore_Routine_View (Previous);
             exception
                when others =>
-                  Landin.Checking.Restore_Routine_View
-                    (Types.all, Previous);
+                  Restore_Failed_Routine_View (Previous);
                   raise;
             end;
             <<Next_Recovery>>
@@ -29756,6 +29894,7 @@ package body Landin.Stages.Checking is
            (Context, Of_Tree, Node, Runs, Found);
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
+
       end Check_Routine_Body;
 
       --  These are exactly the compiler-owned bridge identities, not a
@@ -30539,8 +30678,8 @@ package body Landin.Stages.Checking is
                      Previous : constant Landin.Checking.Routine_Instance_Id :=
                        Landin.Checking.Current_Routine_View (Types.all);
                   begin
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Pending.View);
+                     Restore_Routine_View
+                       (Pending.View);
                      if Landin.Checking.Type_Of
                        (Types.all, Of_Tree.all, Pending.Node)
                          not in Ty.Undecided | Ty.Ill_Typed
@@ -30554,12 +30693,11 @@ package body Landin.Stages.Checking is
                            pragma Unreferenced (Checked);
                         end;
                      end if;
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
+                     Restore_Routine_View
+                       (Previous);
                   exception
                      when others =>
-                        Landin.Checking.Restore_Routine_View
-                          (Types.all, Previous);
+                        Restore_Failed_Routine_View (Previous);
                         raise;
                   end;
                end loop;
@@ -30628,16 +30766,15 @@ package body Landin.Stages.Checking is
                     Tree_For (Res.Source_Of (Meanings.all, Template));
                   Previous : Landin.Checking.Routine_Instance_Id;
                begin
-                  Landin.Checking.Activate_Routine_View
-                    (Types.all, Instance, Previous);
+                  Activate_Routine_View
+                    (Instance, Previous);
                   Check_Routine_Body
                     (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
-                  Landin.Checking.Restore_Routine_View
-                    (Types.all, Previous);
+                  Restore_Routine_View
+                    (Previous);
                exception
                   when others =>
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
+                     Restore_Failed_Routine_View (Previous);
                      raise;
                end;
             end if;
@@ -30724,16 +30861,15 @@ package body Landin.Stages.Checking is
                     Tree_For (Res.Source_Of (Meanings.all, Template));
                   Previous : Landin.Checking.Routine_Instance_Id;
                begin
-                  Landin.Checking.Activate_Routine_View
-                    (Types.all, Instance, Previous);
+                  Activate_Routine_View
+                    (Instance, Previous);
                   Check_Routine_Body
                     (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
-                  Landin.Checking.Restore_Routine_View
-                    (Types.all, Previous);
+                  Restore_Routine_View
+                    (Previous);
                exception
                   when others =>
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
+                     Restore_Failed_Routine_View (Previous);
                      raise;
                end;
             end if;
@@ -30806,10 +30942,24 @@ package body Landin.Stages.Checking is
       end if;
 
       <<Publish_Diagnostics>>
+      Close_Report_View;
       declare
-         Ordered : constant Landin.Diagnostics.Diagnostic_List :=
-           Landin.Diagnostics.Sorted (Found);
+         Ordered : Landin.Diagnostics.Diagnostic_List;
       begin
+         if Repeated_Reports.Is_Empty then
+            Ordered := Landin.Diagnostics.Sorted (Found);
+         else
+            declare
+               Kept : Landin.Diagnostics.Diagnostic_List;
+            begin
+               for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+                  if not Repeated_Reports.Contains (Position) then
+                     Kept.Append (Landin.Diagnostics.Get (Found, Position));
+                  end if;
+               end loop;
+               Ordered := Landin.Diagnostics.Sorted (Kept);
+            end;
+         end if;
          for Position in 1 .. Landin.Diagnostics.Count (Ordered) loop
             Report (Context, Landin.Diagnostics.Get (Ordered, Position));
          end loop;

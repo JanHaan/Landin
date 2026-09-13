@@ -272,6 +272,14 @@ report. Small explicit budgets let tests cover the same boundary without large
 sources. The source layer exposes a terminator-free line span so rendering
 never needs to copy an entire long line merely to select its excerpt.
 
+Generic checking coalesces identical complete diagnostics from different instances
+of one template. Instance-view transitions attribute each newly collected
+report once, covering early discovery, nested instances and final body checks.
+The comparison includes code, severity, primary and related labels, messages
+and notes; distinct actual-type messages or source locations remain separate.
+Ordinary checking and diagnostic transport retain their existing duplicate
+policy. Failure unwinding restores the view without allocating diagnostic keys.
+
 A compilation owns everything a stage builds that outlives the stage that built
 it: the interned identities, the declaration sites, the trees, and what every
 name in them means. Two facts about the seam decide that it has to be there

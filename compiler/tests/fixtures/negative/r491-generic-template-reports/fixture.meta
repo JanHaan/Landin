@@ -1,0 +1,9 @@
+class: negative
+summary: one range type mistake in a generic template reports once across different instances
+program: main.ldn
+codes: L0301
+constructs: 1150, 1290, 1800, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-generic-template-reports/main.ldn
+status: 1
