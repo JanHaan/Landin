@@ -444,6 +444,7 @@ package body Landin.Syntax.Parser is
             function Opens_Arena_Block return Boolean;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
+            function Parse_Delimited_Expression return Node_Id;
             function Parse_Expression_From
               (Seed : Node_Id;
                Min  : Pre.Level := Pre.Level_Expression) return Node_Id;
@@ -1801,7 +1802,7 @@ package body Landin.Syntax.Parser is
                      begin
                         Count_Selector;
                         Advance;
-                        Index := Parse_Expression;
+                        Index := Parse_Delimited_Expression;
 
                         if Peek in Tok.Dot_Dot | Tok.Dot_Dot_Less then
                            declare
@@ -1811,7 +1812,7 @@ package body Landin.Syntax.Parser is
                               Upper : Node_Id;
                            begin
                               Advance;
-                              Upper := Parse_Expression;
+                              Upper := Parse_Delimited_Expression;
                               if not Expect
                                 (Wanted  => Tok.Right_Bracket,
                                  Message => "a slice is closed with `]`",
@@ -2359,7 +2360,7 @@ package body Landin.Syntax.Parser is
                      Advance;
 
                      if Pre.Begins_Expression (Peek) then
-                        Bound := Parse_Expression;
+                        Bound := Parse_Delimited_Expression;
                      else
                         Complain
                           (Item    => Syn.Expression_Expected,
@@ -4655,6 +4656,7 @@ package body Landin.Syntax.Parser is
                Context      : Frame;
                Saved_Loop_Floor : constant Natural := Loop_Floor;
                Saved_Complete : constant Boolean := Complete_Closes_Block;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (Start) then
                   Advance;
@@ -4664,6 +4666,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                --  [1010]: this code address has its own control scope.
                --  Keep outer loop labels intact for parsing after its end.
                Loop_Floor := Loop_Depth;
@@ -4743,6 +4746,7 @@ package body Landin.Syntax.Parser is
 
                Loop_Floor := Saved_Loop_Floor;
                Complete_Closes_Block := Saved_Complete;
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
                declare
                   Head : constant Slot_List (1 .. 3) :=
@@ -5400,6 +5404,7 @@ package body Landin.Syntax.Parser is
                Completed : Node_Id := No_Node;
                Kept : Boolean;
                Saved_Complete : constant Boolean := Complete_Closes_Block;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (Opened) then
                   Advance;
@@ -5409,6 +5414,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                Advance;
                if Is_While then
                   Test := Parse_Condition;
@@ -5485,6 +5491,7 @@ package body Landin.Syntax.Parser is
                         Because => "this loop");
                   end if;
                end if;
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
 
                if Is_While then
@@ -5525,6 +5532,7 @@ package body Landin.Syntax.Parser is
                Completed : Node_Id := No_Node;
                Kept : Boolean;
                Saved_Complete : constant Boolean := Complete_Closes_Block;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
 
                function Parse_Traversal_Binding
                  (Role : String) return Node_Id;
@@ -5565,6 +5573,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                Advance;
                Element := Parse_Traversal_Binding ("element binding");
                if Peek = Tok.Comma then
@@ -5642,6 +5651,7 @@ package body Landin.Syntax.Parser is
                         Because => "this traversal");
                   end if;
                end if;
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
 
                return Add
@@ -5732,6 +5742,7 @@ package body Landin.Syntax.Parser is
                At_If     : constant Landin.Source.Span := Here;
                Arms      : Slot_Vectors.Vector;
                Else_Node : Node_Id := No_Node;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (At_If) then
                   Advance;
@@ -5741,6 +5752,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
 
                loop
                   declare
@@ -5783,6 +5795,7 @@ package body Landin.Syntax.Parser is
                     (Context, Allow_Value => True);
                end if;
 
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
 
                --  P4: an `end` that is not this branch's is left where it
@@ -5822,6 +5835,7 @@ package body Landin.Syntax.Parser is
             function Parse_Bare_Block (Context : Frame) return Node_Id is
                At_Begin : constant Landin.Source.Span := Here;
                Runs     : Node_Id;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (At_Begin) then
                   Advance;
@@ -5832,8 +5846,10 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                Advance;
                Runs := Parse_Block (Context, Allow_Value => True);
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
 
                --  Do not steal the two-word closer of an enclosing control
@@ -5899,6 +5915,7 @@ package body Landin.Syntax.Parser is
                At_Word : constant Landin.Source.Span := Here;
                Runs    : Node_Id;
                Kept    : Boolean;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (At_Word) then
                   Advance;
@@ -5909,6 +5926,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                Advance;
                Advance;
                Runs := Parse_Block (Context, Allow_Value => False);
@@ -5937,6 +5955,7 @@ package body Landin.Syntax.Parser is
                         Because => "this region");
                   end if;
                end if;
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
 
                return Add
@@ -5961,6 +5980,7 @@ package body Landin.Syntax.Parser is
                At_Match : constant Landin.Source.Span := Here;
                Subject  : Node_Id;
                Arms     : Slot_Vectors.Vector;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
                if Too_Deep (At_Match) then
                   Advance;
@@ -5971,6 +5991,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                Depth := Depth + 1;
+               Else_Closes_Arm := False;
                Advance;
                Subject := Parse_Expression;
 
@@ -6143,6 +6164,7 @@ package body Landin.Syntax.Parser is
                   end;
                end loop;
 
+               Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
                if Peek = Tok.Kw_End
                  and then Ahead (1) = Tok.Identifier
@@ -6200,6 +6222,19 @@ package body Landin.Syntax.Parser is
             begin
                return Parse_Expression_From (Parse_Unary, Min);
             end Parse_Expression;
+
+            --  [1820]: an inner delimiter prevents a call's `else` from
+            --  directly closing an outer then/elsif arm.  Restore that arm
+            --  before the caller resumes parsing outside the delimiter.
+            function Parse_Delimited_Expression return Node_Id is
+               Saved : constant Boolean := Else_Closes_Arm;
+               Inner : Node_Id;
+            begin
+               Else_Closes_Arm := False;
+               Inner := Parse_Expression;
+               Else_Closes_Arm := Saved;
+               return Inner;
+            end Parse_Delimited_Expression;
 
             function Parse_Expression_From
               (Seed : Node_Id;
@@ -6448,7 +6483,7 @@ package body Landin.Syntax.Parser is
                        (Count : Node_Id; At_Of : Landin.Source.Span)
                         return Node_Id
                      is
-                        Value : constant Node_Id := Parse_Expression;
+                        Value : constant Node_Id := Parse_Delimited_Expression;
                      begin
                         if not Expect
                                  (Wanted  => Tok.Right_Bracket,
@@ -6518,7 +6553,7 @@ package body Landin.Syntax.Parser is
                               Value : Node_Id;
                            begin
                               Advance;
-                              Value := Parse_Expression;
+                              Value := Parse_Delimited_Expression;
 
                               if not Expect
                                 (Wanted  => Tok.Right_Bracket,
@@ -6545,7 +6580,7 @@ package body Landin.Syntax.Parser is
                            end;
                         end if;
 
-                        Items.Append (Parse_Expression);
+                        Items.Append (Parse_Delimited_Expression);
 
                         if Peek = Tok.Identifier
                           and then Named_Here = Of_Id
@@ -6657,7 +6692,7 @@ package body Landin.Syntax.Parser is
                      return Add (Error_Expression, At_Item);
                   end if;
                   declare
-                     Value : constant Node_Id := Parse_Expression;
+                     Value : constant Node_Id := Parse_Delimited_Expression;
                   begin
                      if not Expect
                        (Wanted  => Tok.Right_Paren,
@@ -6692,7 +6727,7 @@ package body Landin.Syntax.Parser is
                      return Add (Error_Expression, At_Item);
                   end if;
                   declare
-                     Value : constant Node_Id := Parse_Expression;
+                     Value : constant Node_Id := Parse_Delimited_Expression;
                   begin
                      if not Expect
                        (Wanted  => Tok.Right_Paren,
@@ -6841,13 +6876,10 @@ package body Landin.Syntax.Parser is
                   Advance;
 
                   declare
-                     Saved : constant Boolean := Else_Closes_Arm;
                      Inner : Node_Id;
                      Kept  : Boolean;
                   begin
-                     Else_Closes_Arm := False;
-                     Inner := Parse_Expression;
-                     Else_Closes_Arm := Saved;
+                     Inner := Parse_Delimited_Expression;
                      Depth := Depth - 1;
                      Kept := Expect
                        (Wanted  => Tok.Right_Paren,
@@ -7030,7 +7062,7 @@ package body Landin.Syntax.Parser is
                         exit;
                      end if;
 
-                     Value := Parse_Expression;
+                     Value := Parse_Delimited_Expression;
                      Fields.Append
                        (Add
                           (Of_Kind  => Field_Value,
@@ -7050,7 +7082,7 @@ package body Landin.Syntax.Parser is
                     and then Pre.Begins_Expression (Ahead (1))
                   then
                      Advance;
-                     Fill := Parse_Expression;
+                     Fill := Parse_Delimited_Expression;
                      exit;
                   end if;
                end loop;
@@ -7102,15 +7134,18 @@ package body Landin.Syntax.Parser is
             --  cloning their descendants.
             function Parse_Argument_RHS return Node_Id is
                Saved  : constant Boolean := In_Argument_RHS;
+               Saved_Else : constant Boolean := Else_Closes_Arm;
                Result : Node_Id;
             begin
                In_Argument_RHS := True;
+               Else_Closes_Arm := False;
                if Begins_Argument_Type then
                   Result := Parse_Type (False, Here);
                else
                   Result := Parse_Expression;
                end if;
                In_Argument_RHS := Saved;
+               Else_Closes_Arm := Saved_Else;
                return Result;
             end Parse_Argument_RHS;
 
@@ -7279,7 +7314,7 @@ package body Landin.Syntax.Parser is
                               RHS : constant Node_Id :=
                                 (if In_Argument_RHS
                                  then Parse_Argument_RHS
-                                 else Parse_Expression);
+                                 else Parse_Delimited_Expression);
                            begin
                               if Named_Seen then
                                  if not Order_Complained

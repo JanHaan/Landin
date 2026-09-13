@@ -2853,8 +2853,90 @@ package body Landin.Tests.Parser_Suite is
          "extern(c) g: () -> (r: i32)");
    end Optional_End_Names_Preserve_Declarations;
 
+   procedure Recovery_Respects_Enclosing_Arms
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recovery_Respects_Enclosing_Arms
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Label, Value_Text : String; Recoveries, Branches : Natural);
+
+      procedure Check
+        (Label, Value_Text : String; Recoveries, Branches : Natural)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("recovery.ldn", "f: () -> (r: i32) = " & Value_Text & " end f"
+            & ASCII.LF);
+         Calls_With_Recovery, Ifs_With_Else : Natural := 0;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 0,
+               Label & " parses without a false closer diagnostic");
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Parsed)
+            loop
+               if Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.Call | Landin.Syntax.Labeled_Application
+                 and then Landin.Syntax.Recovery_Of (Parsed, Node)
+                   /= Landin.Syntax.No_Node
+               then
+                  Calls_With_Recovery := Calls_With_Recovery + 1;
+               elsif Landin.Syntax.Kind (Parsed, Node)
+                 = Landin.Syntax.If_Statement
+                 and then Landin.Syntax.Else_Body (Parsed, Node)
+                   /= Landin.Syntax.No_Node
+               then
+                  Ifs_With_Else := Ifs_With_Else + 1;
+               end if;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Calls_With_Recovery, Recoveries,
+               Label & " attaches only the call's own recovery");
+            Landin.Testing.Check_Equal
+              (Item, Ifs_With_Else, Branches,
+               Label & " leaves each enclosing else with its branch");
+         end;
+      end Check;
+   begin
+      Check ("direct arm",
+         "if true then leaf() else 0 end if", 0, 1);
+      Check ("parenthesized recovery",
+         "if true then (leaf() else 0) else 1 end if", 1, 1);
+      Check ("nested else arm",
+         "if true then if false then 0 else leaf() else 1 end if else "
+         & "2 end if", 1, 2);
+      Check ("nested bare block",
+         "if true then begin leaf() else 0 end else 1 end if", 1, 1);
+      Check ("positional argument",
+         "if true then outer(leaf() else 0) else 1 end if", 1, 1);
+      Check ("labelled argument",
+         "if true then outer(value: leaf() else 0) else 1 end if", 1, 1);
+      Check ("selected index",
+         "if true then values[leaf() else 0] else 1 end if", 1, 1);
+      Check ("any construction",
+         "if true then any(leaf() else ptr(1)) else other end if", 1, 1);
+      Check ("elsif arm",
+         "if false then 0 elsif true then leaf() else 1 end if", 0, 1);
+      Check ("recovered call in elsif",
+         "if false then 0 elsif true then (leaf() else 1) else 2 end "
+         & "if", 1, 1);
+   end Recovery_Respects_Enclosing_Arms;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "recovery respects enclosing arms",
+         Recovery_Respects_Enclosing_Arms'Access);
       Landin.Testing.Register
         (Into, "parser", "optional end names preserve declarations",
          Optional_End_Names_Preserve_Declarations'Access);

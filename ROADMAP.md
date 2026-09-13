@@ -5833,7 +5833,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
 | J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Repaired: empty-variant recovery cannot consume the enclosing struct's own closer. A real case still establishes a variant part, including one sharing the struct's name. Earlier/later scalar aliases and an aggregate user type retain ordinary field selection and measurement; empty and mismatched parts retain their diagnostics. |
 | J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
-| J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Repaired: nested control scopes and delimited expressions save and restore enclosing arm context. Loops, blocks, matches, anonymous bodies, nested else arms, arguments, literals, conversions and selected bounds keep their own call recovery. A direct then/elsif arm still owns its else; parentheses retain explicit recovery priority. |
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
@@ -6392,7 +6392,22 @@ or generated Landin executable ran. Logs are retained in
 `.scratch/r491-variant-name/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Nested call-recovery context J36 is next.
+J36 development evidence: four selected cases pass 942 checks in each of
+macOS debug and Linux release. Seventeen tiny programs compile directly and
+inside an if arm on both target widths, retaining one fallible call and
+verified recovery continuations. They cover loop/while/for, bare/unchecked
+blocks, nested else arms, anonymous functions, match, positional/labelled
+arguments, struct fields, array elements/repetition/fills, indexes, slice
+bounds and pointer conversion. Ten parser controls retain the exact number
+of call recovery clauses and enclosing else bodies, including direct then/
+elsif priority, parentheses and any construction. Existing list recovery and
+672 driver refusal/output checks pass. This applies [1820]'s existing direct
+arm-boundary rule. Builds use one worker and selected tests have 30-second or
+shorter timeouts. No assembler, linker or generated Landin executable ran.
+Logs are retained in `.scratch/r491-nested-recovery/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Struct closer recovery J5 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

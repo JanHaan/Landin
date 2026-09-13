@@ -10932,8 +10932,156 @@ package body Landin.Tests.Lowering_Suite is
          Nested => True);
    end Contextual_Variant_Fields_Keep_Their_Shape;
 
+   procedure Nested_Recovery_Keeps_Its_Call
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Recovery_Keeps_Its_Call
+     (Item : in out Landin.Testing.Context)
+   is
+      Prefix : constant String :=
+        "missing: atom" & LF
+        & "point: type = struct item: i32 end point" & LF
+        & "leaf: (a: i32) -> (r: i32) ! missing = fail missing when a "
+        & "< 0 r = a end leaf" & LF
+        & "index: (a: i32) -> (r: usize) ! missing = fail missing "
+        & "when a < 0 r = usize(a) end index" & LF
+        & "identity: (a: i32) -> (r: i32) = a end identity" & LF;
+      procedure Check_Source (Label, Body_Text, Callee : String);
+
+      procedure Check_Source (Label, Body_Text, Callee : String) is
+         procedure Check_Target
+           (Facts : Landin.Targets.Target_Facts; Nested : Boolean);
+
+         procedure Check_Target
+           (Facts : Landin.Targets.Target_Facts; Nested : Boolean)
+         is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower
+              (Work, Prefix & "f: (a: i32) -> (r: i32) = r = 0 "
+               & (if Nested then "if true then " else "") & Body_Text
+               & (if Nested then " end if" else "") & " end f" & LF, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " accepts recovery in either enclosing context");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Called : constant IR.Item_Id := Named_Item (Work, Callee);
+               Calls : Natural := 0;
+            begin
+               for Position in 1 .. IR.Item_Count (Unit) loop
+                  declare
+                     Routine : constant IR.Item_Id := IR.Item_Id (Position);
+                  begin
+                     if IR.Kind_Of (Unit, Routine) = IR.Routine then
+                        for V in 1 .. IR.Value_Count (Unit, Routine) loop
+                           if IR.Op_Of (Unit, Routine, IR.Value_Id (V))
+                             = IR.Call and then IR.Callee_Of
+                               (Unit, Routine, IR.Value_Id (V)) = Called
+                           then
+                              Calls := Calls + 1;
+                           end if;
+                        end loop;
+                     end if;
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Calls = 1,
+                  Label & " retains one call of the fallible routine");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " verifies the recovered call and its continuation");
+            end;
+         end Check_Target;
+      begin
+         for Nested in Boolean loop
+            Check_Target (Landin.Targets.Linux_X86_64, Nested);
+            Check_Target (Landin.Targets.Synthetic_32, Nested);
+         end loop;
+      end Check_Source;
+   begin
+      Check_Source
+        ("loop",
+         "loop do r = leaf(a) else 0 break end loop" & LF,
+         "leaf");
+      Check_Source
+        ("while",
+         "while a > 0 do r = leaf(a) else 0 break end while" & LF,
+         "leaf");
+      Check_Source
+        ("for",
+         "for i in 0 ..< 1 do r = leaf(a) else 0 end for" & LF,
+         "leaf");
+      Check_Source
+        ("bare",
+         "begin r = leaf(a) else 0 end" & LF,
+         "leaf");
+      Check_Source
+        ("unchecked",
+         "unchecked begin r = leaf(a) else 0 end unchecked" & LF,
+         "leaf");
+      Check_Source
+        ("inner-else",
+         "if a > 0 then r = 0 else r = leaf(a) else 0 end if" & LF,
+         "leaf");
+      Check_Source
+        ("call-argument",
+         "r = identity(leaf(a) else 0)" & LF,
+         "leaf");
+      Check_Source
+        ("anonymous",
+         "callback := () -> (value: i32) = leaf(1) else 0 end r = "
+         & "callback()" & LF,
+         "leaf");
+      Check_Source
+        ("match",
+         "r = match missing missing: leaf(a) else 0 end match" & LF,
+         "leaf");
+      Check_Source
+        ("labelled-argument",
+         "r = identity(a: leaf(a) else 0)" & LF,
+         "leaf");
+      Check_Source
+        ("struct-field",
+         "local: point = (item: leaf(a) else 0) r = local.item" & LF,
+         "leaf");
+      Check_Source
+        ("array-element",
+         "values: [1]i32 = [leaf(a) else 0] r = values[0]" & LF,
+         "leaf");
+      Check_Source
+        ("array-repetition",
+         "values: [1]i32 = [1 of leaf(a) else 0] r = values[0]" & LF,
+         "leaf");
+      Check_Source
+        ("array-fill",
+         "values: [2]i32 = [1, of leaf(a) else 0] r = values[1]" & LF,
+         "leaf");
+      Check_Source
+        ("index",
+         "values: [1]i32 = [7] r = values[index(a) else 0]" & LF,
+         "index");
+      Check_Source
+        ("slice-bound",
+         "values: [1]i32 = [7] view := values[0 ..< index(a) else 1] "
+         & "r = i32(lenof view)" & LF,
+         "index");
+      Check_Source
+        ("pointer-conversion",
+         "value: ptr u8 = ptr(index(a) else 1) r = 1" & LF,
+         "index");
+   end Nested_Recovery_Keeps_Its_Call;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "nested recovery keeps its call",
+         Nested_Recovery_Keeps_Its_Call'Access);
       Landin.Testing.Register
         (Into, "lowering", "contextual variant fields keep their shape",
          Contextual_Variant_Fields_Keep_Their_Shape'Access);
