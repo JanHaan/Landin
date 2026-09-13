@@ -5806,7 +5806,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
 | J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
 | J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Repaired: resolved declarations take precedence over builtin scalar/text spelling in checking and lowering. Direct, indirect and generic calls retain their targets; scalar/text aliases retain their actual conversion type. Calls cannot masquerade as folded static initializers. |
-| J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Current debug reproduction exits 70. D200 admits matching function signatures; repair lowering/verifier agreement and test equality and inequality without changing that rule. |
+| J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Repaired: the temporary carrying the left operand across right-operand evaluation retains its function signature. Named, local, parameter and control-flow function comparisons satisfy the existing verifier on 32/64-bit targets; a right-side mutation does not change the saved left value. Mismatched signatures remain refused. |
 | J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
@@ -6199,7 +6199,20 @@ executable ran in this batch. Logs are retained in
 `.scratch/r491-conversion-arity/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Function-value comparison J9 is next.
+J9 development evidence: five selected cases pass 413 checks in each of
+macOS debug and Linux release.
+Seven source-to-IR cases run against both 32-bit and 64-bit target facts,
+checking retained signatures, equality/inequality, control values and operand
+order. The new inequality controls initially used a foreign spelling; they now
+use the normative `<>`. The driver case checks 352 refusal/output invariants,
+including incompatible function comparisons. Existing function-assignment,
+pointer-comparison and scalar backend controls pass. Builds use one worker
+and selected tests have timeouts of at most
+30 seconds. No assembler, linker or generated Landin executable ran in this
+batch. Logs are retained in `.scratch/r491-function-comparisons/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Terminated expression lowering J22/K14 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
