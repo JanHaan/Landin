@@ -1374,7 +1374,9 @@ package body Landin.Stages.Lowering is
                  (Types.all, Syn.Name (Of_Tree, Callee))
                else Ty.Ill_Typed);
          begin
-            if Named in Ty.Scalar_Name then
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) /= Res.Bound
+              and then Named in Ty.Scalar_Name
+            then
                return Named;
             end if;
 

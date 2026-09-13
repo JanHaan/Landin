@@ -5805,7 +5805,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
 | J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
-| J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Open call-classification repair: distinguish a resolved user declaration from an intrinsic conversion. Preserve shadowing and conversion controls. |
+| J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Repaired: resolved declarations take precedence over builtin scalar/text spelling in checking and lowering. Direct, indirect and generic calls retain their targets; scalar/text aliases retain their actual conversion type. Calls cannot masquerade as folded static initializers. |
 | J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Current debug reproduction exits 70. D200 admits matching function signatures; repair lowering/verifier agreement and test equality and inequality without changing that rule. |
 | J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
@@ -6045,7 +6045,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
 | K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
-| K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Duplicate J8. Preserve both the scalar exit-70 and text false-refusal baseline witnesses and ordinary conversion controls; resolve meaning before intrinsic classification. |
+| K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
 | K17 | E1: array fill/element atom writes require exact sets | Source confirms `Fill_Array` and `Store_Element` still use exact atom metadata. Compare D216 subset writes with exact reads using small typed-IR and source controls. Finder source-reachability claims need their own bounded witness; the existing indirect-store repair is not evidence for these opcodes. |
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
@@ -6171,7 +6171,20 @@ logs in `.scratch/r491-conformance-boundaries/`; local logs also live under
 `.scratch/r491-final-values/`. No debugger, assembler, linker or generated
 Landin executable ran in this batch. Exact-revision acceptance remains open.
 
-The call-classification group J8/K15 is next.
+J8/K15 development evidence: six selected cases pass 400 checks in each of
+macOS debug and Linux release. Seventeen source-to-IR cases verify direct and indirect call kinds,
+concrete targets, generic calls, scalar conversion types and the verifier;
+scalar and text conversion controls preserve their range, identity and origin
+refusals. The driver case checks 312 refusal/output invariants. A test initially
+used the slot-type accessor for an IR value; correcting it required a clean
+single-worker rebuild, which passed. A tiny ten-second assembly-text emission
+before/after the repair changes the silent scalar witness from no user call to
+`call u8`. No assembler, linker or generated Landin executable ran. Builds
+use one worker and selected checks have timeouts of at most 30 seconds. Logs and the inspected small texts are retained
+in `.scratch/r491-call-classification/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+The conversion-arity boundary J59 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
