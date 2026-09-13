@@ -13369,19 +13369,19 @@ package body Landin.Stages.Checking is
             Of_Tree : constant not null access constant Syn.Tree :=
               Tree_For (Res.Source_Of (Meanings.all, Id));
             Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
-         begin
-            if States (Positive (Id)) in Complete | Invalid then
-               return;
-            end if;
-            States (Positive (Id)) := Visiting;
-            for Position in 1 .. Syn.Concept_Parent_Count
-              (Of_Tree.all, Node)
-            loop
+
+            procedure Visit_Requirement
+              (Required_Node : Syn.Node_Id; Because : String);
+
+            procedure Visit_Requirement
+              (Required_Node : Syn.Node_Id; Because : String) is
+            begin
+               if Required_Node = Syn.No_Node then
+                  return;
+               end if;
                declare
-                  Parent_Node : constant Syn.Node_Id :=
-                    Syn.Nth_Concept_Parent (Of_Tree.all, Node, Position);
                   Parent : constant Landin.Checking.Concept_Id :=
-                    Concept_For (Of_Tree.all, Parent_Node);
+                    Concept_For (Of_Tree.all, Required_Node);
                begin
                   if Parent /= Landin.Checking.No_Concept
                     and then not Landin.Checking.Is_Compiler_Concept
@@ -13397,7 +13397,7 @@ package body Landin.Stages.Checking is
                              (Item    => Bad.Type_Mismatch,
                               Source  => Syn.Source_Of (Of_Tree.all),
                               Where   => Syn.Where
-                                (Of_Tree.all, Parent_Node),
+                                (Of_Tree.all, Required_Node),
                               Message => "this concept composition returns"
                                          & " to a concept already being"
                                          & " composed",
@@ -13408,7 +13408,7 @@ package body Landin.Stages.Checking is
                                    (Res.Source_Of
                                       (Meanings.all, Parent_Id)).all,
                                  Res.Node_Of (Meanings.all, Parent_Id)),
-                              Because => "the active parent concept",
+                              Because => Because,
                               Into    => Found);
                            States (Positive (Id)) := Invalid;
                         else
@@ -13420,6 +13420,29 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
                end;
+            end Visit_Requirement;
+         begin
+            if States (Positive (Id)) in Complete | Invalid then
+               return;
+            end if;
+            States (Positive (Id)) := Visiting;
+            for Position in 1 .. Syn.Concept_Parent_Count
+              (Of_Tree.all, Node)
+            loop
+               Visit_Requirement
+                 (Syn.Nth_Concept_Parent (Of_Tree.all, Node, Position),
+                  "the active parent concept");
+            end loop;
+            --  A formal constraint is a named requirement edge too.  It
+            --  must be finite before conformance lookup follows the graph.
+            for Position in 1 .. Syn.Concept_Formal_Count
+              (Of_Tree.all, Node)
+            loop
+               Visit_Requirement
+                 (Syn.Constraint_Of
+                    (Of_Tree.all,
+                     Syn.Nth_Concept_Formal (Of_Tree.all, Node, Position)),
+                  "the active required concept");
             end loop;
             if States (Positive (Id)) /= Invalid then
                States (Positive (Id)) := Complete;
@@ -13910,7 +13933,9 @@ package body Landin.Stages.Checking is
                               Collision := True;
                            end if;
                         end loop;
-                        if Probe.Template /= Res.No_Declaration then
+                        Valid := Valid and then not Collision;
+                        if Valid and then Probe.Template /= Res.No_Declaration
+                        then
                            Conformance_Probes.Append (Probe);
                         end if;
                      end;
@@ -14040,6 +14065,7 @@ package body Landin.Stages.Checking is
                                  Because => "the conformance that keeps the"
                                             & " key",
                                  Into    => Found);
+                              Valid := False;
                            else
                               declare
                                  Made : constant
@@ -14055,6 +14081,11 @@ package body Landin.Stages.Checking is
                            end if;
                         end;
                      end if;
+                  end if;
+                  if not Valid then
+                     --  Later provider selection must not revisit a source
+                     --  declaration whose entry list or key was refused.
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Node);
                   end if;
                end;
             end;
@@ -14222,7 +14253,9 @@ package body Landin.Stages.Checking is
               (Candidate_Tree : Syn.Tree; Candidate : Syn.Node_Id)
             is
             begin
-               if Syn.Kind (Candidate_Tree, Candidate)
+               if Landin.Checking.Type_Of
+                    (Types.all, Candidate_Tree, Candidate) = Ty.Ill_Typed
+                 or else Syn.Kind (Candidate_Tree, Candidate)
                     /= Syn.Conformance_Declaration
                  or else Syn.Conformance_Binder_Count
                    (Candidate_Tree, Candidate) = 0
@@ -15310,7 +15343,9 @@ package body Landin.Stages.Checking is
          --  canonical actual tuple supplies the complete binder tuple; its
          --  Cur and Item RHSs are then substituted before ordinary evidence
          --  finalization is asked to materialize the exact row.
-         if Matches = 0 and then Actual.Kind = Ty.Aggregate then
+         if Matches = 0 and then Actual.Kind = Ty.Aggregate
+           and then Actual.Nominal /= Landin.Checking.No_Nominal_Type
+         then
             for Probe of Conformance_Probes loop
                if Probe.Concept = Concept
                  and then Probe.Template /= Res.No_Declaration
@@ -15575,7 +15610,9 @@ package body Landin.Stages.Checking is
 
          procedure Validate (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            if Syn.Kind (Of_Tree, Node) /= Syn.Conformance_Declaration
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 = Ty.Ill_Typed
+              or else Syn.Kind (Of_Tree, Node) /= Syn.Conformance_Declaration
               or else Syn.Conformance_Binder_Count (Of_Tree, Node) /= 0
             then
                return;

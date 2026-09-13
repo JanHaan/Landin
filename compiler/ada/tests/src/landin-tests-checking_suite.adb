@@ -11326,8 +11326,369 @@ package body Landin.Tests.Checking_Suite is
          Accepted => True);
    end Range_Type_Actuals_Are_Refused;
 
+   procedure Refused_Conformances_Are_Not_Selected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Refused_Conformances_Are_Not_Selected
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text, Codes : String);
+
+      procedure Check_Source (Label, Text, Codes : String) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         Got : Ada.Strings.Unbounded.Unbounded_String;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "conformance-boundaries.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
+               if Position > 1 then
+                  Ada.Strings.Unbounded.Append (Got, " ");
+               end if;
+               Ada.Strings.Unbounded.Append
+                 (Got, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Reports, Position)));
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, Label & " reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) = (Codes /= "")
+                 and then Ada.Strings.Unbounded.To_String (Got) = Codes,
+               Label & " keeps its ordered source diagnostics");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("duplicate concrete label",
+         "ordered: type = concept (t: type)" & LF
+         & "less: (a: t, b: t) -> (r: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
+         & "less_i32" & LF
+         & "i32 is ordered (less: less_i32, less: less_i32)" & LF,
+         "L0301");
+      Check_Source
+        ("missing concrete entry",
+         "ordered: type = concept (t: type)" & LF
+         & "less: (a: t, b: t) -> (r: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
+         & "less_i32" & LF
+         & "i32 is ordered ()" & LF,
+         "L0301");
+      Check_Source
+        ("unknown concrete label",
+         "ordered: type = concept (t: type)" & LF
+         & "less: (a: t, b: t) -> (r: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
+         & "less_i32" & LF
+         & "i32 is ordered (less: less_i32, other: less_i32)" & LF,
+         "L0301");
+      Check_Source
+        ("nonfunction concrete entry",
+         "ordered: type = concept (t: type)" & LF
+         & "less: (a: t, b: t) -> (r: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
+         & "less_i32" & LF
+         & "value: i32 = 0" & LF
+         & "i32 is ordered (less: value)" & LF,
+         "L0301");
+      Check_Source
+        ("valid concrete entry",
+         "ordered: type = concept (t: type)" & LF
+         & "less: (a: t, b: t) -> (r: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
+         & "less_i32" & LF
+         & "i32 is ordered (less: less_i32)" & LF,
+         "");
+      Check_Source
+        ("valid multi-input keys",
+         "lookup: type = concept (t: type, index: type)" & LF
+         & "    get: (value: t, at: index) -> (answer: i32)" & LF
+         & "end lookup" & LF
+         & "" & LF
+         & "signed_get: (value: i32, at: i32) -> (answer: i32) =" & LF
+         & "    answer = value + at" & LF
+         & "end signed_get" & LF
+         & "unsigned_get: (value: i32, at: u32) -> (answer: i32) =" & LF
+         & "    answer = value - i32(at)" & LF
+         & "end unsigned_get" & LF
+         & "" & LF
+         & "-- The input identity is part of the key, and labels "
+         & "are not its order." & LF
+         & "i32 is lookup (index: i32, get: signed_get)" & LF
+         & "i32 is lookup (get: unsigned_get, index: u32)" & LF
+         & "" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = 42" & LF
+         & "end main" & LF,
+         "");
+      Check_Source
+        ("missing associated input",
+         "lookup: type = concept (t: type, index: type)" & LF
+         & "    get: (value: t, at: index) -> (answer: i32)" & LF
+         & "end lookup" & LF
+         & "" & LF
+         & "signed_get: (value: i32, at: i32) -> (answer: i32) =" & LF
+         & "    answer = value + at" & LF
+         & "end signed_get" & LF
+         & "unsigned_get: (value: i32, at: u32) -> (answer: i32) =" & LF
+         & "    answer = value - i32(at)" & LF
+         & "end unsigned_get" & LF
+         & "" & LF
+         & "-- The input identity is part of the key, and labels "
+         & "are not its order." & LF
+         & "i32 is lookup (get: signed_get)" & LF
+         & "i32 is lookup (get: unsigned_get, index: u32)" & LF
+         & "" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = 42" & LF
+         & "end main" & LF,
+         "L0301");
+      Check_Source
+        ("missing generic entry",
+         "equatable: type = concept (t: type)" & LF
+         & "    equal: (left: t, right: t) -> (yes: bool)" & LF
+         & "end equatable" & LF
+         & "" & LF
+         & "box: type (t: type) = struct" & LF
+         & "    value: t" & LF
+         & "end box" & LF
+         & "" & LF
+         & "equal_box: (t: type, left: box(t), right: box(t)) -> "
+         & "(yes: bool) =" & LF
+         & "    yes = true" & LF
+         & "end equal_box" & LF
+         & "" & LF
+         & "(t: type) box(t) is equatable ()" & LF
+         & "" & LF
+         & "sized: type = concept (t: type)" & LF
+         & "end sized" & LF
+         & "" & LF
+         & "bounded: type (fixed n: u32) = struct" & LF
+         & "    bytes: [n]u8" & LF
+         & "end bounded" & LF
+         & "" & LF
+         & "(fixed n: u32) bounded(n) is sized ()" & LF
+         & "" & LF
+         & "holder: type (t: type is sized) = struct" & LF
+         & "    value: t" & LF
+         & "end holder" & LF
+         & "" & LF
+         & "checked: type = holder(bounded(2))" & LF
+         & "" & LF
+         & "accept: (t: type is equatable, value: t) -> (code: i32) "
+         & "=" & LF
+         & "    code = 42" & LF
+         & "end accept" & LF
+         & "" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    item: box(i32) = (value: 1)" & LF
+         & "    code = accept(item)" & LF
+         & "end main" & LF,
+         "L0301 L0318");
+      Check_Source
+        ("valid generic entry",
+         "equatable: type = concept (t: type)" & LF
+         & "    equal: (left: t, right: t) -> (yes: bool)" & LF
+         & "end equatable" & LF
+         & "" & LF
+         & "box: type (t: type) = struct" & LF
+         & "    value: t" & LF
+         & "end box" & LF
+         & "" & LF
+         & "equal_box: (t: type, left: box(t), right: box(t)) -> "
+         & "(yes: bool) =" & LF
+         & "    yes = true" & LF
+         & "end equal_box" & LF
+         & "" & LF
+         & "(t: type) box(t) is equatable (equal: equal_box)" & LF
+         & "" & LF
+         & "sized: type = concept (t: type)" & LF
+         & "end sized" & LF
+         & "" & LF
+         & "bounded: type (fixed n: u32) = struct" & LF
+         & "    bytes: [n]u8" & LF
+         & "end bounded" & LF
+         & "" & LF
+         & "(fixed n: u32) bounded(n) is sized ()" & LF
+         & "" & LF
+         & "holder: type (t: type is sized) = struct" & LF
+         & "    value: t" & LF
+         & "end holder" & LF
+         & "" & LF
+         & "checked: type = holder(bounded(2))" & LF
+         & "" & LF
+         & "accept: (t: type is equatable, value: t) -> (code: i32) "
+         & "=" & LF
+         & "    code = 42" & LF
+         & "end accept" & LF
+         & "" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    item: box(i32) = (value: 1)" & LF
+         & "    code = accept(item)" & LF
+         & "end main" & LF,
+         "");
+      Check_Source
+        ("nominal-less traversal",
+         "iterable: type = concept (t: type, cur: type, "
+         & "item_type: type)" & LF
+         & "    first:  (s: t) -> (c: cur)" & LF
+         & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
+         & "    item:   (s: t, c: cur) -> (v: item_type)" & LF
+         & "    next:   (s: t, c: cur) -> (c2: cur)" & LF
+         & "end iterable" & LF
+         & "" & LF
+         & "token: type = struct" & LF
+         & "    value: i32" & LF
+         & "end token" & LF
+         & "" & LF
+         & "bag: type = struct" & LF
+         & "    low: i32" & LF
+         & "    count: usize" & LF
+         & "end bag" & LF
+         & "" & LF
+         & "cursor: type = struct" & LF
+         & "    position: usize" & LF
+         & "end cursor" & LF
+         & "" & LF
+         & "cell: type (t: type) = struct" & LF
+         & "    value: t" & LF
+         & "    count: usize" & LF
+         & "end cell" & LF
+         & "" & LF
+         & "cell_first: (t: type, s: cell(t)) -> (c: usize) =" & LF
+         & "    c = 0" & LF
+         & "end cell_first" & LF
+         & "" & LF
+         & "cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: "
+         & "bool) =" & LF
+         & "    yes = c == s.count" & LF
+         & "end cell_at_end" & LF
+         & "" & LF
+         & "cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =" & LF
+         & "    v = s.value" & LF
+         & "end cell_item" & LF
+         & "" & LF
+         & "cell_next: (t: type, s: cell(t), c: usize) -> (c2: "
+         & "usize) =" & LF
+         & "    c2 = c + 1" & LF
+         & "end cell_next" & LF
+         & "" & LF
+         & "(t: type) cell(t) is iterable" & LF
+         & "    (next: cell_next, item_type: t, first: cell_first," & LF
+         & "     cur: usize, item: cell_item, at_end: cell_at_end)" & LF
+         & "" & LF
+         & "two: () -> (a: i32, b: i32) = a = 1 b = 2 end two" & LF
+         & "f: () -> none = for value in two() do _ = value end for "
+         & "end f" & LF,
+         "L0301");
+      Check_Source
+        ("valid nominal traversal",
+         "iterable: type = concept (t: type, cur: type, "
+         & "item_type: type)" & LF
+         & "    first:  (s: t) -> (c: cur)" & LF
+         & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
+         & "    item:   (s: t, c: cur) -> (v: item_type)" & LF
+         & "    next:   (s: t, c: cur) -> (c2: cur)" & LF
+         & "end iterable" & LF
+         & "" & LF
+         & "token: type = struct" & LF
+         & "    value: i32" & LF
+         & "end token" & LF
+         & "" & LF
+         & "bag: type = struct" & LF
+         & "    low: i32" & LF
+         & "    count: usize" & LF
+         & "end bag" & LF
+         & "" & LF
+         & "cursor: type = struct" & LF
+         & "    position: usize" & LF
+         & "end cursor" & LF
+         & "" & LF
+         & "cell: type (t: type) = struct" & LF
+         & "    value: t" & LF
+         & "    count: usize" & LF
+         & "end cell" & LF
+         & "" & LF
+         & "cell_first: (t: type, s: cell(t)) -> (c: usize) =" & LF
+         & "    c = 0" & LF
+         & "end cell_first" & LF
+         & "" & LF
+         & "cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: "
+         & "bool) =" & LF
+         & "    yes = c == s.count" & LF
+         & "end cell_at_end" & LF
+         & "" & LF
+         & "cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =" & LF
+         & "    v = s.value" & LF
+         & "end cell_item" & LF
+         & "" & LF
+         & "cell_next: (t: type, s: cell(t), c: usize) -> (c2: "
+         & "usize) =" & LF
+         & "    c2 = c + 1" & LF
+         & "end cell_next" & LF
+         & "" & LF
+         & "(t: type) cell(t) is iterable" & LF
+         & "    (next: cell_next, item_type: t, first: cell_first," & LF
+         & "     cur: usize, item: cell_item, at_end: cell_at_end)" & LF
+         & "" & LF
+         & "f: () -> none = values: cell(i32) = (value: 1, count: 2)" & LF
+         & "for value in values do _ = value end for end f" & LF,
+         "");
+      Check_Source
+        ("self constrained concept",
+         "loopy: type = concept (t: type is loopy) end loopy" & LF
+         & "i32 is loopy ()" & LF,
+         "L0301");
+      Check_Source
+        ("mutual formal constraints",
+         "left: type = concept (t: type is right) end left" & LF
+         & "right: type = concept (t: type is left) end right" & LF
+         & "i32 is left ()" & LF
+         & "i32 is right ()" & LF,
+         "L0301");
+      Check_Source
+        ("mixed parent and formal cycle",
+         "left: type = concept (t: type) is right end left" & LF
+         & "right: type = concept (t: type is left) end right" & LF
+         & "i32 is left ()" & LF
+         & "i32 is right ()" & LF,
+         "L0301");
+      Check_Source
+        ("unused formal cycle",
+         "loopy: type = concept (t: type is loopy) end loopy" & LF,
+         "L0301");
+      Check_Source
+        ("finite formal requirement",
+         "base: type = concept (t: type) end base" & LF
+         & "child: type = concept (t: type is base) end child" & LF
+         & "i32 is base ()" & LF
+         & "i32 is child ()" & LF,
+         "");
+   end Refused_Conformances_Are_Not_Selected;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "refused conformances are not selected",
+         Refused_Conformances_Are_Not_Selected'Access);
       Landin.Testing.Register
         (Into, "checking", "range type actuals are refused",
          Range_Type_Actuals_Are_Refused'Access);
