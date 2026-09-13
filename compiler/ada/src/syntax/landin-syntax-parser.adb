@@ -907,12 +907,13 @@ package body Landin.Syntax.Parser is
                return False;
             end Expect;
 
-            --  Always from Index + 1, never from Index: Skip_To may return
-            --  where it started, which is the one way to write a parser
-            --  that spins.
+            --  A failed list may already be at its caller's separator or
+            --  closer.  Preserve that anchor; each caller has consumed its
+            --  opener or exits its list, and owns consuming the boundary.
+            --  Away from an anchor the scan must advance.
             procedure Resync (Wanted : Tok.Kind_Set) is
             begin
-               if Index < Last then
+               if Index < Last and then not Wanted (Peek) then
                   Index := Tok.Skip_To (From, Index + 1, Wanted);
                end if;
             end Resync;

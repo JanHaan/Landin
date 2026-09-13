@@ -1964,6 +1964,14 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("f: () -> (r: i32) = (1 + 2 end f" & ASCII.LF
+            & "g: () -> none = end g" & ASCII.LF,
+            "L0103", 1, Executable);
+         Check
+           ("f: () -> (r: i32) = callee(1 end f" & ASCII.LF
+            & "g: () -> none = end g" & ASCII.LF,
+            "L0103", 1, Executable);
+         Check
            ("f: () -> none = while true do callback := (value: "
             & "i32) -> none = break when value == 9 end break end "
             & "while end f" & ASCII.LF,

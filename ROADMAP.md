@@ -5836,7 +5836,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
-| J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Current debug reproduction still adds false L0104 after a missing parenthesis. Distinct from N2/N3: preserve an already-current list closer while proving recovery progress. |
+| J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
 | J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
 | J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
@@ -6350,7 +6350,19 @@ read exited successfully. An early-closing banner pipe is the working
 explanation, not a confirmed storage failure. The untruncated transcript is
 retained with that batch's development logs.
 
-Parser list-recovery anchor preservation J39 is next.
+J39 development evidence: four selected cases pass 748 checks in each of
+macOS debug and Linux release. Nine paired valid/broken syntax cases preserve
+node kinds, names, child structure and binding mutability after a missing list
+closer. They cover later functions, positional/labelled calls, mutable bindings,
+call/array/field separators and nested missing parentheses. Two driver sources
+extend the no-output/no-tool refusal case to 656 checks. Existing recovery of
+valid declaration/statement heads and match-arm refusal pass. No truncation,
+mutation or fixture-wide sweep was run. Builds use one worker and selected
+tests have 30-second or shorter timeouts. No assembler, linker or generated
+Landin executable ran. Logs are retained in `.scratch/r491-list-recovery/`
+and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Toolchain banner pipe cleanup and optional function-end names J35 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
