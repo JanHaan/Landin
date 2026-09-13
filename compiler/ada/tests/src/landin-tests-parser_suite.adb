@@ -2932,6 +2932,77 @@ package body Landin.Tests.Parser_Suite is
          & "if", 1, 1);
    end Recovery_Respects_Enclosing_Arms;
 
+   procedure Lexical_Recovery_Keeps_Signature_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Lexical_Recovery_Keeps_Signature_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Header : String; Parameters : Natural;
+         Code : Landin.Diagnostics.Code_String := "L0012");
+
+      procedure Check
+        (Header : String; Parameters : Natural;
+         Code : Landin.Diagnostics.Code_String := "L0012")
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("lexical.ldn", Header & " = r = 0 end f" & ASCII.LF
+            & "g: () -> (r: i32) = r = 1 end g" & ASCII.LF);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            First : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Parsed, 1);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Count (Found) = 1
+               and then Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Found, 1)) = Code,
+               "the invalid byte does not invent a missing signature arrow");
+            Landin.Testing.Check
+              (Item, Landin.Syntax.Declaration_Count (Parsed) = 2
+               and then Landin.Source.Names.Spelling
+                 (Names, Landin.Syntax.Name (Parsed, First)) = "f"
+               and then Landin.Source.Names.Spelling
+                 (Names, Landin.Syntax.Name
+                    (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))) = "g",
+               "both function declarations keep their own boundaries");
+            Landin.Testing.Check
+              (Item, Landin.Syntax.Parameter_Count (Parsed, First) = Parameters
+               and then Landin.Syntax.Return_Count (Parsed, First) = 1
+               and then Landin.Source.Names.Spelling
+                 (Names, Landin.Syntax.Name
+                    (Parsed, Landin.Syntax.Nth_Return (Parsed, First, 1)))
+                      = "r",
+               "recovery keeps each parameter and the named return");
+            if Parameters = 2 then
+               Landin.Testing.Check
+                 (Item, Landin.Source.Names.Spelling
+                    (Names, Landin.Syntax.Name
+                       (Parsed, Landin.Syntax.Nth_Parameter
+                          (Parsed, First, 2))) = "b",
+                  "a later parameter is not consumed as an earlier type");
+            end if;
+         end;
+      end Check;
+   begin
+      Check ("f: (a@ i32) -> (r: i32)", 1);
+      Check ("f: (a@ i32, b: i32) -> (r: i32)", 2);
+      Check ("f: (a@: i32) -> (r: i32)", 1);
+      Check ("f: (a: i32) @ -> (r: i32)", 1);
+      Check ("f: (a: i32) -> (r@ i32)", 1);
+      Check ("f: (a@ (x: i32) -> (y: i32), b: i32) -> (r: i32)", 2);
+      Check ("f: (a i32, b: i32) -> (r: i32)", 2, "L0103");
+   end Lexical_Recovery_Keeps_Signature_Boundaries;
+
    procedure Struct_Closers_Preserve_Declarations
      (Item : in out Landin.Testing.Context);
 
@@ -3392,6 +3463,9 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "lexical recovery keeps signature boundaries",
+         Lexical_Recovery_Keeps_Signature_Boundaries'Access);
       Landin.Testing.Register
         (Into, "parser", "match arms classify all loop kinds",
          Match_Arms_Classify_All_Loop_Kinds'Access);

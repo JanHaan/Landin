@@ -918,40 +918,19 @@ package body Landin.Syntax.Parser is
                   return True;
                end if;
 
-               --  A lexeme the scanner refused takes the rest of its own
-               --  construct with it: `! not_found` is one error channel
-               --  [0940], and the `!` is the whole of what the parser can
-               --  be told about it.  So when a refused lexeme stood here,
-               --  the terminal is looked for past it rather than reported
-               --  missing, and one refusal stays one report.  Gated on
-               --  Skipped, so it can only ever follow a complaint the
-               --  scanner already made.
-               if Skipped then
-                  declare
-                     Scan : Tok.Token_Index := Index;
-                  begin
-                     while Scan < Last
-                       and then Tok.Kind (From, Scan) not in Tok.Kw_End
-                                  | Tok.Kw_Public | Tok.End_Of_Input
-                     loop
-                        if Tok.Kind (From, Scan) = Wanted then
-                           Index := Scan;
-                           Advance;
-                           return True;
-                        end if;
-
-                        Scan := Scan + 1;
-                     end loop;
-                  end;
+               --  A real kernel token belongs to its current construct.
+               --  Let the caller recover locally instead of searching into
+               --  a sibling parameter or the return signature. A skipped
+               --  lexeme already has its scanner report.
+               if not Skipped then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => After_Previous,
+                     Message => Message,
+                     Note    => Note,
+                     Related => Related,
+                     Because => Because);
                end if;
-
-               Complain
-                 (Item    => Syn.Token_Expected,
-                  Where   => After_Previous,
-                  Message => Message,
-                  Note    => Note,
-                  Related => Related,
-                  Because => Because);
                return False;
             end Expect;
 
@@ -3964,10 +3943,11 @@ package body Landin.Syntax.Parser is
                         Children => [Constraint],
                         Named    => Named);
                   end if;
-                  Type_Node := Parse_Type (True, At_Name);
-               else
-                  Type_Node := Add (Error_Type, After_Previous);
                end if;
+               --  Insert a missing separator locally. Reading this type
+               --  owns its nested delimiters; a forward search for another
+               --  colon would consume a different parameter.
+               Type_Node := Parse_Type (True, At_Name);
 
                if Fixed then
                   return Add
@@ -4027,22 +4007,19 @@ package body Landin.Syntax.Parser is
                      Named     : Landin.Source.Names.Name_Id;
                      At_Name   : constant Landin.Source.Span :=
                        Parse_Declared_Name (Named);
+                     Kept : constant Boolean := Expect
+                       (Wanted  => Tok.Colon,
+                        Message => "a named return names its type after"
+                                   & " `:`",
+                        Note    => "[1800]: named_return ::= identifier"
+                                   & " `:` type",
+                        Related => At_Name,
+                        Because => "the return");
                      Type_Node : Node_Id;
                      Sources   : Slot_Vectors.Vector;
                   begin
-                     if Expect
-                          (Wanted  => Tok.Colon,
-                           Message => "a named return names its type after"
-                                      & " `:`",
-                           Note    => "[1800]: named_return ::= identifier"
-                                      & " `:` type",
-                           Related => At_Name,
-                           Because => "the return")
-                     then
-                        Type_Node := Parse_Type (False, At_Name);
-                     else
-                        Type_Node := Add (Error_Type, After_Previous);
-                     end if;
+                     pragma Unreferenced (Kept);
+                     Type_Node := Parse_Type (False, At_Name);
 
                      if Peek = Tok.Kw_From then
                         Advance;

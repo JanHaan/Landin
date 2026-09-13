@@ -57146,6 +57146,7 @@ file negative/r491-integer-argument-context/main.ldn tokens 73
   297 298 )
   299 302 end
   303 310 refused
+file negative/r491-lexical-signature-recovery/main.ldn refused no rule spells '@'
 file negative/r491-live-payload-aliases/main.ldn tokens 726
   0 6 choice
   6 7 :
