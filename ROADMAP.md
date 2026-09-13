@@ -5919,7 +5919,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
 | J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
-| J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Implemented: contextual mismatches name the required pointer, slice, function, aggregate or erased type without doubled articles or the unknown-type fallback. Their explanation applies to the complete required context rather than asserting every site is a D124 control expression. Exact acceptance remains open. |
 | J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Repaired with J46/J60: placement measures each result's complete descriptor, including nested arrays, nominal elements and reference carriers, instead of its scalar placeholder. Tiny nested/reference/empty array signature controls pass; no oversized source or generated image was executed. |
 | J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Implemented: type normalization and fixed-bound folding retain the active routine instance's type/fixed actuals in newly encountered type positions. Direct, arithmetic, type-formal and parameterized-alias measurements keep separate two/four-element instances. Negative, impossible and runtime bounds retain their specific refusals. Exact acceptance remains open. |
@@ -6791,7 +6791,17 @@ assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-unused-facts/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J122's contextual type wording and explanation are next.
+J122 development evidence: nine selected exact-report fixtures pass 54 checks
+in each of macOS debug and Linux release. They retain their L0301 codes,
+primary/related spans and refusal behavior while correcting the expected type
+name and general contextual explanation. A ten-second macOS compile-only
+module-binding probe also retains one L0301 and no irrelevant D124 note.
+Both single-worker builds passed; selected tests have 30-second or shorter
+limits. No Landin assembler, linker or generated executable ran. Logs are
+retained in `.scratch/r491-context-wording/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J109's preservation of reports across unexpected exceptions is next.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

@@ -1,4 +1,4 @@
-error[L0301]: this does not have the something unknown shape required here
+error[L0301]: this does not have the required function type and shape
   --> ../tests/fixtures/negative/function-result-signature-mismatch/program.ldn:5:32
   |
 5 | wrong: () -> (result: unary) = pair end wrong
@@ -7,4 +7,4 @@ error[L0301]: this does not have the something unknown shape required here
   |
 5 | wrong: () -> (result: unary) = pair end wrong
   |              ^^^^^^^^^^^^^^^ the returns this fills
-  = note: D124: every fallthrough answer of a control expression has one complete type and shape
+  = note: The value must match the complete type, shape and reference permissions required by this context

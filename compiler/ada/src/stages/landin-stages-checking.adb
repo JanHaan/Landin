@@ -24326,10 +24326,21 @@ package body Landin.Stages.Checking is
            (Item    => Bad.Type_Mismatch,
             Source  => Syn.Source_Of (Of_Tree),
             Where   => Syn.Where (Of_Tree, Node),
-            Message => "this does not have the " & Shown (Expected.Kind)
-                       & " shape required here",
-            Note    => "D124: every fallthrough answer of a control"
-                       & " expression has one complete type and shape",
+            Message => "this does not have the required "
+                       & (case Expected.Kind is
+                             when Ty.Pointer_Value => "pointer",
+                             when Ty.Slice_Value => "slice",
+                             when Ty.Function_Value => "function",
+                             when Ty.Any_Value => "erased",
+                             when Ty.Aggregate => "aggregate",
+                             when Ty.Fixed_Array => "array",
+                             when Ty.Atom_Value => "atom",
+                             when Ty.Scalar_Name =>
+                                "`" & Ty.Spelling (Expected.Kind) & "`",
+                             when others => "value")
+                       & " type and shape",
+            Note    => "The value must match the complete type, shape and"
+                       & " reference permissions required by this context",
             Related => Site,
             Because => Because,
             Into    => Found);
