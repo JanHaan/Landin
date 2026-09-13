@@ -11077,8 +11077,69 @@ package body Landin.Tests.Lowering_Suite is
          "index");
    end Nested_Recovery_Keeps_Its_Call;
 
+   procedure Bare_Struct_Ends_Keep_Module_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Bare_Struct_Ends_Keep_Module_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower
+           (Work, "alpha: type = struct x: u32 end" & LF
+            & "beta: () -> (r: u32) = 1 end beta" & LF
+            & "gamma: type = struct y: u32 end gamma" & LF
+            & "f: () -> (r: u32) = beta() end f" & LF, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            "bare struct ends retain an accepted complete module");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            Calls : Natural := 0;
+            Correct : Boolean := True;
+         begin
+            Landin.Testing.Check
+              (Item, IR.Item_Count (Unit) = 2
+                 and then IR.Nominal_Type_Count (Unit) = 2,
+               "both routines and both struct types remain distinct");
+            for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+               declare
+                  Value : constant IR.Value_Id := IR.Value_Id (Position);
+               begin
+                  if IR.Op_Of (Unit, Routine, Value) = IR.Call then
+                     Calls := Calls + 1;
+                     Correct := Correct and then IR.Callee_Of
+                       (Unit, Routine, Value) = Named_Item (Work, "beta");
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Calls = 1 and then Correct,
+               "the later routine calls the first routine's own identity");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit, Facts).Kind
+                 = IR.Verifier.Nothing_Wrong,
+               "the module verifies against its own target facts");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Bare_Struct_Ends_Keep_Module_Identities;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "bare struct ends keep module identities",
+         Bare_Struct_Ends_Keep_Module_Identities'Access);
       Landin.Testing.Register
         (Into, "lowering", "nested recovery keeps its call",
          Nested_Recovery_Keeps_Its_Call'Access);

@@ -1964,6 +1964,23 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("variant: type = u8 separate: type = struct kind: variant "
+            & "next: (x: i32) end separate beta: () -> (r: u32) = 1 "
+            & "end beta" & ASCII.LF,
+            "L0010", 1, Executable);
+         Check
+           ("alpha: type = struct x: u32 end" & ASCII.LF
+            & "beta: () -> (r: u32) = 1 end beta" & ASCII.LF
+            & "gamma: type = struct y: u32 end alpha" & ASCII.LF,
+            "L0109", 1, Executable);
+         Check
+           ("alpha: type = struct x: u32" & ASCII.LF,
+            "L0103", 1, Executable);
+         Check
+           ("alpha: type = struct x: u32 end wrong" & ASCII.LF
+            & "beta: () -> (r: u32) = 1 end beta" & ASCII.LF,
+            "L0109", 1, Executable);
+         Check
            ("f: () -> (r: i32) = 1 end wrong" & ASCII.LF
             & "g: () -> (r: i32) = 2 end g" & ASCII.LF,
             "L0109", 1, Executable);

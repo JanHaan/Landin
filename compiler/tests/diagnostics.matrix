@@ -9,7 +9,7 @@ L0004  Live     false empty-ok    0..0 0     landin-driver.adb                  
 L0005  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0006  Live     true  nonempty    0..0 1     landin-driver.adb                   negative/module-not-found,test:landin-tests-driver_suite.adb
 L0007  Live     false empty-ok    0..0 1     landin-driver.adb                   negative/module-directory-invalid,test:landin-tests-driver_suite.adb
-L0010  Live     true  nonempty    0..0 2     landin-diagnostics-checking.ads,landin-diagnostics-syntactic.ads negative/arena-block-names-owner,negative/arena-block-not-enabled,negative/indexing-not-enabled,negative/struct-construction-all-of-not-enabled,negative/struct-literal-not-enabled,test:landin-tests-parser_suite.adb
+L0010  Live     true  nonempty    0..0 2     landin-diagnostics-checking.ads,landin-diagnostics-syntactic.ads negative/arena-block-names-owner,negative/arena-block-not-enabled,negative/indexing-not-enabled,negative/struct-construction-all-of-not-enabled,negative/struct-literal-not-enabled,test:landin-tests-driver_suite.adb,test:landin-tests-parser_suite.adb
 L0011  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/malformed-integer-digit
 L0012  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/latin1-byte-in-name,negative/non-ascii-outside-comment,negative/unknown-byte,negative/upper-case-name
 L0013  Live     true  empty-ok    1..1 0     landin-diagnostics-lexical.adb      negative/unclosed-block-comment
@@ -23,7 +23,7 @@ L0105  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads   
 L0106  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/chained-comparison
 L0107  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/return-with-value
 L0108  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/public-on-statement
-L0109  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/variant-part-end-name-mismatch,test:landin-tests-driver_suite.adb
+L0109  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/variant-part-end-name-mismatch,test:landin-tests-driver_suite.adb,test:landin-tests-parser_suite.adb
 L0110  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads    negative/r491-function-final-value-prefix,negative/r491-malformed-public-start,negative/r491-match-extra-colon,negative/r491-match-extra-paren,negative/selection-from-a-call,test:landin-tests-diagnostics_suite.adb,test:landin-tests-driver_suite.adb
 L0111  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    test:landin-tests-diagnostics_suite.adb,test:landin-tests-parser_suite.adb,unit/parser-nesting-limit
 L0112  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads    negative/named-call-positional-after-named,test:landin-tests-parser_suite.adb

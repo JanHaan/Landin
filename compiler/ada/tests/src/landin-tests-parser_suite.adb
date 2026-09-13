@@ -2932,8 +2932,99 @@ package body Landin.Tests.Parser_Suite is
          & "if", 1, 1);
    end Recovery_Respects_Enclosing_Arms;
 
+   procedure Struct_Closers_Preserve_Declarations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Closers_Preserve_Declarations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Label, Text, Codes, Declarations : String);
+
+      procedure Check (Label, Text, Codes, Declarations : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("closer.ldn", Text & ASCII.LF);
+         Actual_Codes, Actual_Names : Unbounded.Unbounded_String;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Parsed)
+            loop
+               if Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.Type_Declaration
+                    | Landin.Syntax.Function_Declaration
+               then
+                  if Unbounded.Length (Actual_Names) > 0 then
+                     Unbounded.Append (Actual_Names, ",");
+                  end if;
+                  Unbounded.Append
+                    (Actual_Names, Landin.Source.Names.Spelling
+                       (Names, Landin.Syntax.Name (Parsed, Node)));
+               end if;
+            end loop;
+         end;
+         for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+            if Position > 1 then
+               Unbounded.Append (Actual_Codes, ",");
+            end if;
+            Unbounded.Append
+              (Actual_Codes, Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Found, Position)));
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Actual_Codes), Codes,
+            Label & " reports only the immediate closer mistakes");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Actual_Names), Declarations,
+            Label & " keeps every declaration in source order");
+      end Check;
+   begin
+      Check ("bare closer at end",
+         "alpha: type = struct x: u32 end",
+         "", "alpha");
+      Check ("bare closer before function",
+         "alpha: type = struct x: u32 end beta: () -> (r: u32) = 1 "
+         & "end beta",
+         "", "alpha,beta");
+      Check ("bare closer before struct",
+         "alpha: type = struct x: u32 end gamma: type = struct y: "
+         & "u32 end gamma",
+         "", "alpha,gamma");
+      Check ("later mismatched closer",
+         "alpha: type = struct x: u32 end beta: () -> (r: u32) = 1 "
+         & "end beta gamma: type = struct y: u32 end alpha",
+         "L0109", "alpha,beta,gamma");
+      Check ("two mismatched closers",
+         "alpha: type = struct x: u32 end wrong beta: () -> (r: u32) "
+         & "= 1 end beta gamma: type = struct y: u32 end alpha",
+         "L0109,L0109", "alpha,beta,gamma");
+      Check ("missing closer",
+         "alpha: type = struct x: u32",
+         "L0103", "alpha");
+      Check ("wrong closer at end",
+         "alpha: type = struct x: u32 end wrong",
+         "L0109", "alpha");
+      Check ("compact control",
+         "alpha: type = (x: u32) beta: () -> (r: u32) = 1 end beta",
+         "", "alpha,beta");
+      Check ("refused field before a later declaration",
+         "variant: type = u8 separate: type = struct kind: variant "
+         & "next: (x: i32) end separate beta: () -> (r: u32) = 1 end beta",
+         "L0010", "variant,separate,beta");
+   end Struct_Closers_Preserve_Declarations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "struct closers preserve declarations",
+         Struct_Closers_Preserve_Declarations'Access);
       Landin.Testing.Register
         (Into, "parser", "recovery respects enclosing arms",
          Recovery_Respects_Enclosing_Arms'Access);
