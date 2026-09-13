@@ -10504,12 +10504,21 @@ package body Landin.Stages.Checking is
 
          --  [1880]: this is the only way a literal ever gets a type.
          if Got = Ty.Untyped_Integer then
-            if Wanted in Ty.Integer_Name then
+            if Wanted in Ty.Scalar_Name then
                Commit_To (Of_Tree, Node, Wanted);
-            elsif Wanted in Ty.Float_Name then
-               Commit_To (Of_Tree, Node, Ty.Scalar_Name (Wanted));
-            else
-               Commit_To (Of_Tree, Node, Ty.Bool);
+            elsif Wanted not in Ty.Untyped_Integer | Ty.Untyped_Float then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "this integer literal cannot take the type"
+                             & " required here",
+                  Note    => "[1880]: the supplied context must permit"
+                             & " an integer literal",
+                  Related => Site,
+                  Because => Because,
+                  Into    => Found);
             end if;
 
             return;

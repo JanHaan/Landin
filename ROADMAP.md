@@ -5923,7 +5923,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Repaired with J46/J60: placement measures each result's complete descriptor, including nested arrays, nominal elements and reference carriers, instead of its scalar placeholder. Tiny nested/reference/empty array signature controls pass; no oversized source or generated image was executed. |
 | J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Implemented: type normalization and fixed-bound folding retain the active routine instance's type/fixed actuals in newly encountered type positions. Direct, arithmetic, type-formal and parameterized-alias measurements keep separate two/four-element instances. Negative, impossible and runtime bounds retain their specific refusals. Exact acceptance remains open. |
-| J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Implemented: Require commits integer literals only to real scalar contexts, and refuses non-scalar contexts with the original required-site origin and label. No default numeric commitment or invented bool precedes that report. Struct, two-element array and function argument witnesses are pinned; pointer/slice/erased arguments already use independent paths. Exact acceptance remains open. |
 | J127 | Out-of-range constant index diagnostic is missing its noun: "this index is outside the 2 this array has" | C | Implemented: constant-index diagnostics include `element` for length one and `elements` otherwise, using the target-sized count directly. Empty, singleton and two-element probes retain one L0306 report each. Exact acceptance remains open. |
 | J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Implemented maintenance: removed the direct-named-return alternative already implied by Is_Direct_Binding_Name. Named returns and their allowed scalar subobjects retain the same zeroed contexts. Exact acceptance remains open. |
 | J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
@@ -6837,7 +6837,24 @@ No Landin assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-nominal-wording/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J126's invented bool context for non-scalar integer arguments is next.
+J126 development evidence: the new three-error integer-argument fixture and
+existing bool-condition golden pass 12 checks in each of macOS debug and
+Linux release. Ten additional compile-only probes cover the three repaired
+argument categories, unchanged pointer/slice/erased refusals and accepted
+u32/u64/f32/bool values. A single 2^32 integer is a refused argument or u64
+value, never an array extent; the sole fixed array has two u8 elements.
+The new fixture preserves source order, one report per bad argument and the
+actual required parameter origin, without a default-i32 overflow cascade.
+Both single-worker builds passed; fixture tests have 30-second or shorter
+limits and individual probes have 10-second limits. The diagnostic, token
+and target inventories include the new fixture. No Landin assembler, linker
+or generated executable ran. Logs are retained in
+`.scratch/r491-literal-context/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J123's duplicate C diagnostic snippets and J118's zeroed refusal notes are
+under source inspection next; diagnostic catalogue label/note obligations
+must remain satisfied.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

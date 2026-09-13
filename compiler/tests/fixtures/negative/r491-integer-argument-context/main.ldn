@@ -1,0 +1,11 @@
+thing: type = struct value: i32 end thing
+
+take_struct: (item: thing) -> none = end take_struct
+take_array: (item: [2]u8) -> none = end take_array
+take_function: (item: () -> none) -> none = end take_function
+
+refused: () -> none =
+    take_struct(1)
+    take_array(4294967296)
+    take_function(1)
+end refused

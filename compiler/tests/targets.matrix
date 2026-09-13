@@ -775,6 +775,7 @@ negative/r491-function-final-value-prefix | linux-x86-64, macos-arm64, synthetic
 negative/r491-function-final-value-refusals | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-shape | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-unassigned | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-integer-argument-context | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-malformed-public-start | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-colon | linux-x86-64, macos-arm64, synthetic-32
