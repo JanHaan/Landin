@@ -681,7 +681,9 @@ package body Landin.IR.Dump is
 
             when Measure_Size | Measure_Align =>
                if not Is_Aggregate_Measurement (Of_Unit, Item, Value) then
-                  return Lead & Operands (Item, Value);
+                  return Lead & " measured "
+                    & Shown (Measured_Of (Of_Unit, Item, Value))
+                    & Operands (Item, Value);
                end if;
 
                declare

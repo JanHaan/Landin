@@ -155,7 +155,12 @@ placement order are distinct, and array lengths do not size placement metadata.
 
 `Landin.Build_Reports` is typed off-target evidence. Producers append actual
 specialization decisions, layout plans and routine metrics in stable identity
-order. `Landin.Build_Reports.Sources` adds snapshot hashes, hexadecimal path
+order. A specialization decision's `retains_fallback` says whether any
+indirect call remains in that item immediately after specialization, including
+erased dispatch and ordinary function-value calls; it is independent of the
+action and does not predict later simplification. Scalar IR measurement dumps
+name the measured type separately from the result type.
+`Landin.Build_Reports.Sources` adds snapshot hashes, hexadecimal path
 bytes and half-open item-origin spans using pure computation. The driver alone
 writes `--build-report=PATH` through `Landin.Platform`, after successful output
 and tools; failure is an ordinary failed request, not a source warning. No

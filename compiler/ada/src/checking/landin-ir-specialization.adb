@@ -355,10 +355,16 @@ package body Landin.IR.Specialization is
                      end;
                   end if;
                end loop;
-               Decisions (I).Retains_Fallback := False;
             end;
          end if;
          if Decisions (I).Template /= No_Declaration then
+            Decisions (I).Retains_Fallback := False;
+            for V in 1 .. Value_Count (Into, Item_Id (I)) loop
+               if Code_At (Item_Id (I), Value_Id (V)).Op = Indirect_Call then
+                  Decisions (I).Retains_Fallback := True;
+                  exit;
+               end if;
+            end loop;
             Reports.Append (Report, Decisions (I));
          end if;
       end loop;

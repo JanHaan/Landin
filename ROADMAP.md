@@ -5881,8 +5881,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J81 | Emit_Function_Address is the only Emit_* without Is_Emitting in its precondition | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J82 | Enter's "once per block, one at a time" rule is a precondition only; a re-Enter silently rebases the block's First_Value | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J83 | Set_Slice_Image has no `not Has_Image` guard, unlike the five other image setters | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
-| J84 | Specialization reports retains_fallback=false for any specialized instance, even when indirect calls it could not devirtualize survive in that body | C | Open IR observability group: make fallback metadata and measured-type dumps represent actual IR; add independent assertions and check the integrated IR reader guide. |
-| J85 | The IR dump never renders Measured_Of, so every scalar sizeof/alignof records as the same line and a wrong measured type cannot move the golden file | C | Open IR observability group: make fallback metadata and measured-type dumps represent actual IR; add independent assertions and check the integrated IR reader guide. |
+| J84 | Specialization reports retains_fallback=false for any specialized instance, even when indirect calls it could not devirtualize survive in that body | C | Implemented: decisions report actual surviving indirect calls, including partial erased dispatch, and scalar measurement dumps name the measured type. Independent IR/report assertions cover both target widths; the nine affected scalar golden lines and compiler reader guide are updated. Exact golden comparison and acceptance remain open. |
+| J85 | The IR dump never renders Measured_Of, so every scalar sizeof/alignof records as the same line and a wrong measured type cannot move the golden file | C | Implemented: decisions report actual surviving indirect calls, including partial erased dispatch, and scalar measurement dumps name the measured type. Independent IR/report assertions cover both target widths; the nine affected scalar golden lines and compiler reader guide are updated. Exact golden comparison and acceptance remain open. |
 | J86 | Dead first branch in Rooted_Steps: its guard is strictly implied by the next one and the bodies are identical | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J87 | The slice-element arm of Lower_Unconstrained is unreachable, because every slice index already satisfies Has_Reference_Storage and is taken by the earlier guard | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J88 | Redundant inout test inside a branch already known to be non-inout | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
@@ -6564,7 +6564,20 @@ linker or generated Landin executable ran. Logs are retained in
 `.scratch/r491-shell-status/`. A later compiler build will correctly clean
 because build-script identity changed. Exact-revision acceptance remains open.
 
-IR observability J84/J85 is next. J116's slice-endpoint claim
+J84/J85 development evidence: four selected cases pass 44 checks in each of
+macOS debug and Linux release. Partially specialized function-value and erased-evidence dispatch each
+retain one indirect call and report it, while fully specialized dispatch
+reports no fallback. Scalar size/alignment dump assertions distinguish measured
+types and retain aggregate measurement fields on both target widths. Only the
+nine scalar lines identified from their source fixtures were updated in the
+lowering golden; no fixture-wide regeneration or comparison ran. The compiler
+README defines the report field at the post-specialization boundary; this
+revision has no separate IR reader guide. Both clean builds passed with one worker;
+selected tests have 30-second or shorter timeouts. No Landin assembler, linker or generated executable ran.
+Logs are retained in `.scratch/r491-ir-observability/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J91 block partition and membership validation is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

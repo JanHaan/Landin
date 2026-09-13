@@ -1,4 +1,5 @@
 with Ada.Exceptions;
+with Ada.Strings.Fixed;
 with Landin.Backend.X86_64;
 with Landin.Build_Reports;
 with Landin.IR.Control_Flow;
@@ -187,6 +188,10 @@ package body Landin.Tests.IR_Optimization_Suite is
                Landin.Testing.Check_Equal
                  (Item, Reports.Specialization_Count (Report), 1,
                   "one semantic instance gets one decision");
+               Landin.Testing.Check
+                 (Item, Reports.Nth_Specialization
+                    (Report, 1).Retains_Fallback = (Mode = Opt.Off),
+                  "fallback reflects the remaining indirect dispatch");
                if Mode = Opt.Off then
                   Landin.Testing.Check_Equal
                     (Item, Text (Work), Before,
@@ -777,8 +782,139 @@ package body Landin.Tests.IR_Optimization_Suite is
       end loop;
    end Cyclic_Islands;
 
+   procedure Partial_Dispatch_Reports_Remaining_Calls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Partial_Dispatch_Reports_Remaining_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Common : constant String :=
+        "ordered: type = concept (t: type) "
+        & "less: (a: t, b: t) -> (r: bool) end ordered "
+        & "less: (a: i32, b: i32) -> (r: bool) = a < b end less "
+        & "i32 is ordered (less: less) ";
+
+      procedure Check_Source (Label, Source : String);
+
+      procedure Check_Source (Label, Source : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Report : Reports.Report;
+         begin
+            Lower (Item, Work, Common & Source);
+            IR.Specialization.Run
+              (Landin.Stages.Code (Work).all, Facts,
+               (Opt.Speed, Opt.All_Eligible), Report);
+            Landin.Testing.Check_Equal
+              (Item, Reports.Specialization_Count (Report), 1,
+               Label & " reports the single generic instance");
+            if Reports.Specialization_Count (Report) /= 1 then
+               return;
+            end if;
+            declare
+               Decision : constant Reports.Specialization_Decision :=
+                 Reports.Nth_Specialization (Report, 1);
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Remaining : Natural := 0;
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Decision.Item) loop
+                  if IR.Op_Of (Unit, Decision.Item, IR.Value_Id (V))
+                    = IR.Indirect_Call
+                  then
+                     Remaining := Remaining + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Decision.Action = Reports.Specialized
+                  and then Decision.Direct_Calls_Made = 1,
+                  Label & " specializes the proven evidence call");
+               Landin.Testing.Check_Equal
+                 (Item, Remaining, 1,
+                  Label & " preserves the independent indirect call");
+               Landin.Testing.Check
+                 (Item, Decision.Retains_Fallback,
+                  Label & " reports the surviving indirect dispatch");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("function value",
+         "ready: () -> (r: bool) = true end ready "
+         & "choose: (t: type is ordered, a: t, b: t, callback: () -> "
+         & "(r: bool)) -> (r: t) = if callback() then if t.less(a,b) "
+         & "then a else b end if else a end if end choose "
+         & "main: () -> (r: i32) = choose(1, 2, ready) end main");
+      Check_Source
+        ("erased evidence",
+         "display: type = concept (t: type) "
+         & "ready: (self: ptr t) -> (r: bool) end display "
+         & "ready: (self: ptr i32) -> (r: bool) = true end ready "
+         & "i32 is display (ready: ready) "
+         & "choose: (t: type is ordered, a: t, b: t, view: any display) "
+         & "-> (r: t) = if view.ready() then if t.less(a,b) then a else "
+         & "b end if else a end if end choose "
+         & "main: () -> (r: i32) = item: i32 = 1 view: any display = "
+         & "any(addr item) choose(1, 2, view) end main");
+   end Partial_Dispatch_Reports_Remaining_Calls;
+
+   procedure Measurement_Dumps_Name_Their_Types
+     (Item : in out Landin.Testing.Context);
+
+   procedure Measurement_Dumps_Name_Their_Types
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+      begin
+         Lower
+           (Item, Work,
+            "small: () -> (r: usize) = sizeof u8 end small "
+            & "large: () -> (r: usize) = sizeof u64 end large "
+            & "aligned: () -> (r: usize) = alignof u32 end aligned "
+            & "pair: type = struct a: u8 b: u64 end pair "
+            & "aggregate: () -> (r: usize) = sizeof pair end aggregate");
+         declare
+            Dump : constant String := Text (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Dump, "MEASURE_SIZE usize measured u8") > 0,
+               "a byte measurement names its measured type");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Dump, "MEASURE_SIZE usize measured u64") > 0,
+               "a wide measurement differs despite the same result type");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Dump, "MEASURE_ALIGN usize measured u32") > 0,
+               "alignment names its measured type too");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Dump, "MEASURE_SIZE usize fields u8 u64") > 0,
+               "aggregate measurements retain their field sequence");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Measurement_Dumps_Name_Their_Types;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir opt", "partial dispatch reports remaining calls",
+         Partial_Dispatch_Reports_Remaining_Calls'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "measurement dumps name their types",
+         Measurement_Dumps_Name_Their_Types'Access);
       Landin.Testing.Register
         (Into, "ir opt", "constant shifts", Constant_Shifts'Access);
       Landin.Testing.Register
