@@ -197,7 +197,9 @@ package body Landin.Testing.Fakes is
         ("<" => "<");
 
       Index  : constant Natural := Find (Host, Path);
-      Prefix : constant String := Path & "/";
+      Prefix : constant String :=
+        (if Path'Length > 0 and then Path (Path'Last) = '/'
+         then Path else Path & "/");
    begin
       Entries := Landin.Platform.Path_Vectors.Empty_Vector;
 

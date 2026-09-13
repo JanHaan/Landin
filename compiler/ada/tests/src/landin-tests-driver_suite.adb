@@ -428,6 +428,112 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Reachable_Modules_Are_Loaded;
 
+   procedure Module_Directories_Keep_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Directories_Keep_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "import app" & LF
+        & "public mut counter: u32 = 0" & LF
+        & "public bump: () -> (result: u32) =" & LF
+        & "inc counter result = counter end bump" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "_ = app.bump() code = i32(counter) end main" & LF;
+
+      function Child (Directory : String) return String is
+        ((if Directory (Directory'Last) = '/'
+          then Directory else Directory & "/") & "main.ldn");
+
+      procedure Check
+        (Entry_Path, Root, Selected : String;
+         Same_Object : Boolean; Readable_Alias : Boolean := True);
+
+      procedure Check
+        (Entry_Path, Root, Selected : String;
+         Same_Object : Boolean; Readable_Alias : Boolean := True)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory (Root);
+         Host.Add_Directory (Selected);
+         if Entry_Path /= Selected then
+            Host.Add_Directory (Entry_Path);
+         end if;
+         Host.Add_File (Child (Entry_Path), Source);
+         if Child (Entry_Path) /= Child (Selected) then
+            if Readable_Alias then
+               Host.Add_File (Child (Selected), Source);
+            else
+               Host.Add_Unreadable (Child (Selected));
+            end if;
+         end if;
+         if Same_Object then
+            Host.Add_Alias (Entry_Path, Selected);
+         end if;
+         Args.Append ("--root=" & Root);
+         Args.Append (Entry_Path);
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("out.s");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Tools.Run_Count = 0,
+               "directory spelling emits text without tools: " & Entry_Path);
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Host.Written ("out.s"), ", @object"),
+               (if Same_Object or else Entry_Path = Selected then 1 else 2),
+               "only proven directory identities share module state");
+         end;
+      end Check;
+   begin
+      Check ("root/app", "root", "root/app", False);
+      Check ("root/app/", "root", "root/app", True);
+      Check ("root/./app", "root", "root/app", True);
+      Check ("app", "/work", "/work/app", True);
+      Check ("app", "/work", "/work/app", False);
+      Check ("app", "/work", "/work/app", True, Readable_Alias => False);
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Bad : constant String :=
+           "import app" & LF & "broken: u32 = absent" & LF;
+      begin
+         Host.Add_Directory ("app");
+         Host.Add_Directory ("/work");
+         Host.Add_Directory ("/work/app");
+         Host.Add_Alias ("app", "/work/app");
+         Host.Add_File ("app/main.ldn", Bad);
+         Host.Add_File ("/work/app/main.ldn", Bad);
+         Args.Append ("--root=/work");
+         Args.Append ("app");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Occurrences (Report, "error[L0201]") = 1
+               and then Contains (Report, "app/main.ldn:2:")
+               and then not Contains (Report, "/work/app"),
+               "a module diagnostic retains the first spelling once");
+            Landin.Testing.Check
+              (Item, Tools.Run_Count = 0 and then Host.Write_Count = 0,
+               "module refusal has no output or tool effects");
+         end;
+      end;
+   end Module_Directories_Keep_Identity;
+
    procedure Roots_Are_Searched_In_Order
      (Item : in out Landin.Testing.Context);
 
@@ -2909,6 +3015,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "module directories keep identity",
+         Module_Directories_Keep_Identity'Access);
       Landin.Testing.Register
         (Into, "driver", "missing entry uses entry source",
          Missing_Entry_Uses_Entry_Source'Access);

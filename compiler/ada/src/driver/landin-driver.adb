@@ -578,6 +578,38 @@ package body Landin.Driver is
               Landin.Stages.Modules (Context);
             Queue : Module_Vectors.Vector;
             Next  : Positive := 1;
+
+            function Loaded_Directory (Path : String)
+              return Landin.Modules.Module_Id;
+
+            function Loaded_Directory (Path : String)
+              return Landin.Modules.Module_Id
+            is
+               Exact : constant Landin.Modules.Module_Id :=
+                 Landin.Modules.Find_Directory (Graph.all, Path);
+            begin
+               if Exact /= Landin.Modules.No_Module then
+                  return Exact;
+               end if;
+               --  Preserve the first spelling for reads and diagnostics.
+               --  Only the filesystem can prove that another spelling names
+               --  the same directory; uncertain identities stay apart.
+               for Position in 1 .. Landin.Modules.Module_Count (Graph.all)
+               loop
+                  declare
+                     Candidate : constant Landin.Modules.Module_Id :=
+                       Landin.Modules.Module_Id (Position);
+                  begin
+                     if Host.Same_File
+                       (Path, Landin.Modules.Directory_Path
+                          (Graph.all, Candidate))
+                     then
+                        return Candidate;
+                     end if;
+                  end;
+               end loop;
+               return Landin.Modules.No_Module;
+            end Loaded_Directory;
          begin
             if not Host.Is_Directory (Entry_Directory) then
                declare
@@ -759,8 +791,8 @@ package body Landin.Driver is
                                                (Found, 1));
                                        end;
                                     else
-                                       Target := Landin.Modules.Find_Directory
-                                         (Graph.all, Directory_Path);
+                                       Target := Loaded_Directory
+                                         (Directory_Path);
                                        if Target
                                          = Landin.Modules.No_Module
                                        then

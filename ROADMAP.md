@@ -5803,7 +5803,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Repaired: Lower_Slice evaluates the stored access path once and captures a reached runtime descriptor before either carrier load. Component loading consumes that retained place. Tiny struct/array slice, index, traversal and text controls retain one side-effecting index call; terminating paths retain their existing guard. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Repaired: a struct checks its immediate end and optional repeated name, preserving later declarations instead of scanning for a distant matching closer. Missing ends and mismatched names report at the current boundary. Field-type refusal retains its existing recovery and diagnostic without a second missing-end report. |
-| J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
+| J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Implemented: the driver reuses a loaded directory when the platform proves existing-object identity, preserving its first path spelling and module state. Exact paths retain the fast lookup; uncertain or distinct directories remain separate. Relative/trailing/dotted fake paths, native relative/trailing paths, diagnostic spelling, root order and graph controls pass in both modes. |
 | J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
 | J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Repaired: resolved declarations take precedence over builtin scalar/text spelling in checking and lowering. Direct, indirect and generic calls retain their targets; scalar/text aliases retain their actual conversion type. Calls cannot masquerade as folded static initializers. |
 | J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Repaired: the temporary carrying the left operand across right-operand evaluation retains its function signature. Named, local, parameter and control-flow function comparisons satisfy the existing verifier on 32/64-bit targets; a right-side mutation does not change the saved left value. Mismatched signatures remain refused. |
@@ -7298,8 +7298,24 @@ contract produces one exact L0301, and the original source-free Item refusal
 is preserved. Tiny sources and transcripts are in
 `.scratch/r491-iterable-contract/`, `.scratch/r491-alias-backing/` and
 `.scratch/r491-final-values/`. No native assembly, generated executable,
-debugger or giant image ran. Exact-revision acceptance remains open. J6's
-module-directory identity is the next implementation repair.
+debugger or giant image ran. Exact-revision acceptance remains open.
+
+J6 development evidence: ten exact selectors pass 42 checks in each of
+macOS debug and Linux release. Fake-filesystem controls cover exact, trailing,
+dotted and relative directory spellings; uncertain equal-content directories
+retain two independent modules. A proven alias is skipped before a second
+read, and a diagnostic retains its first source spelling once. Existing root
+precedence, visibility, missing-directory, entry-main, conformance-register,
+library-order and shallow-listing checks pass. The fake listing adapter now
+handles a trailing separator like the native adapter. A ten-line native
+self-importing module emitted two state objects under relative or trailing
+entry spellings before repair; all three exact/relative/trailing requests now
+emit one object in both modes. The macOS assembly texts are each 5,270 bytes.
+Single-worker builds pass. These are text-emission and fake-tool checks; no
+native assembly, generated executable, debugger or giant image ran. Evidence
+is in `.scratch/r491-module-identity/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open. J104's contextual-identifier parsing
+is the next implementation repair.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
