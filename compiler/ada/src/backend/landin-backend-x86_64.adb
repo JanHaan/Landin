@@ -2328,7 +2328,7 @@ package body Landin.Backend.X86_64 is
                               Emit ("ud2");
                               Put (Safe & ":");
                            end if;
-                           if Stride <= 2 ** 31 - 1 then
+                           if Machine.Fits_Arithmetic_Immediate (Stride) then
                               Emit
                                 ("imulq $"
                                  & Trimmed
@@ -2982,11 +2982,20 @@ package body Landin.Backend.X86_64 is
                         Put (Safe_Lower & ":");
                      end if;
                      if Stride > 1 then
-                        Emit
-                          ("imulq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Stride))
-                           & ", %rcx, %rcx");
+                        if Machine.Fits_Arithmetic_Immediate (Stride) then
+                           Emit
+                             ("imulq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Stride))
+                              & ", %rcx, %rcx");
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Stride))
+                              & ", %rdx");
+                           Emit ("imulq %rdx, %rcx");
+                        end if;
                      end if;
                      Emit ("movq " & Value_Operand (Operand (1)) & ", %rax");
                      Emit ("addq %rcx, %rax");
@@ -3526,11 +3535,20 @@ package body Landin.Backend.X86_64 is
                        (Destination, Field, "%rdi", Which, Payload_Field,
                         Nested);
                      if Offset /= 0 then
-                        Emit
-                          ("addq $"
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image (Offset))
-                           & ", %rdi");
+                        if Machine.Fits_Arithmetic_Immediate (Offset) then
+                           Emit
+                             ("addq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Offset))
+                              & ", %rdi");
+                        else
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Offset))
+                              & ", %rdx");
+                           Emit ("addq %rdx, %rdi");
+                        end if;
                      end if;
                      Emit
                        ("mov" & Suffix (Held) & " "
@@ -3630,7 +3648,7 @@ package body Landin.Backend.X86_64 is
                      --  An `imul` immediate is a signed 32-bit field, and
                      --  D121's element may be wider than one, so a stride
                      --  that does not fit is formed in a register first.
-                     if Stride <= 2 ** 31 - 1 then
+                     if Machine.Fits_Arithmetic_Immediate (Stride) then
                         Emit
                           ("imulq $"
                            & Trimmed

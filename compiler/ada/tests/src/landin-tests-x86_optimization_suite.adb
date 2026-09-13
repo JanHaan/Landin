@@ -103,6 +103,14 @@ package body Landin.Tests.X86_Optimization_Suite is
          and then Machine.Selected ("movabsq $2147483648, %rax") =
            "movabsq $2147483648, %rax",
          "immediate selection respects sign-extension boundaries");
+      Landin.Testing.Check
+        (Item, Machine.Fits_Arithmetic_Immediate (0)
+         and then Machine.Fits_Arithmetic_Immediate (2_147_483_647)
+         and then not Machine.Fits_Arithmetic_Immediate (2_147_483_648)
+         and then not Machine.Fits_Arithmetic_Immediate (4_294_967_295)
+         and then not Machine.Fits_Arithmetic_Immediate
+           (18_446_744_073_709_551_615),
+         "target byte counts cannot use sign-extended negative immediates");
       Machine.Instruction (Stream, "pushq %rbp");
       Machine.Instruction (Stream, "movq -8(%rbp), %rax");
       Machine.Instruction (Stream, "movq %rax, -16(%rbp)");

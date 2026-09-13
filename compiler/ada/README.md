@@ -155,6 +155,9 @@ the command-line default never inherits that reference convenience.
 `Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
 incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
 conservative neutral rewrites, and x86 allocation/selection owns registers.
+The selected-machine layer owns the signed-immediate boundary for nonnegative
+target extents. Indexed access, slice scaling and array-fill suffix offsets
+use a full-width register when their arithmetic constant exceeds that bound.
 `Landin.Targets.Layouts` supplies one target-byte placement plan to checking,
 measurements, paths and image emission. Source field identity and physical
 placement order are distinct, and array lengths do not size placement metadata.

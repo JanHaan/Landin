@@ -13,6 +13,14 @@ package body Landin.Backend.X86_64.Machine is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
 
+   function Fits_Arithmetic_Immediate
+     (Value : Landin.Targets.Byte_Count) return Boolean
+   is
+      use type Landin.Targets.Byte_Count;
+   begin
+      return Value <= 2 ** 31 - 1;
+   end Fits_Arithmetic_Immediate;
+
    function Selected (Text : String) return String is
       Comma : constant Natural := Ada.Strings.Fixed.Index (Text, ", ");
    begin
