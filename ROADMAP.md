@@ -6049,7 +6049,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API contract repaired: both semantic tables retain immutable tree object identities and compare them in Covers, in addition to source membership and node count. Same-sized different text, independently parsed identical text and absent-source controls accompany acceptance of the owned tree. Three exact cases pass 29 checks on each of macOS debug and Linux release; no CLI failure is claimed and exact acceptance remains open. |
 | K17 | E1: array fill/element atom writes require exact sets | Implemented: Fill_Array and Store_Element allow source atom subsets under D216; reads and whole copies retain exact descriptors. A two-element source fill reproduced exit 70 and now exits 0. Named/parameter direct-store source controls already passed; their Store_Element contract is independently pinned with small IR cases. Exact acceptance remains open. |
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Verifier shape checks now cover ordinary direct and indirect calls as well as erased dispatch. Hidden result and shaped argument addresses must retain their declared extent, element and nominal identity; C and erased-self checks remain. Bounded malformed-IR and valid nested/indexed controls cover both target widths. Four exact selectors pass 107 checks on each host; no accepted-source overwrite is claimed and exact acceptance remains open. |
-| K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
+| K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Contract distinction: plain usize storage/parameters and integer comparisons deliberately transport address bits without a source-pointer promise. They do not restore pointee evidence; typed stores/calls and Pointer_Address still demand it. Documented this existing IR boundary and added small accepted raw-word/refused forged-restoration cases, with the source pointer-comparison refusal as a separate control. Three exact cases pass 81 checks on each host. Disposed as an IR/source-contract conflation, not an established accepted-source defect; no blanket raw-carrier ban or language change. Exact acceptance remains open. |
 | K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
 | K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
 | K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
@@ -7444,6 +7444,26 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K19 is disposed as an IR/source-contract distinction. The IR already exposes
+metadata-free usize address operations: a plain slot or parameter transports
+bits without promising a reached type, and integer comparison does not claim
+source-pointer compatibility. Nine small IR constructions distinguish those
+accepted operations from forged raw-load annotations, typed store/call
+restoration, wrong-pointee arguments and raw Pointer_Address construction.
+The latter all remain refused by the existing verifier. The API comment and
+compiler reader document now state that boundary explicitly; no verifier policy
+or source-language rule was changed.
+
+Three exact cases pass 81 checks on each of macOS debug and Linux release.
+The new case checks all nine constructions without target facts and with both
+32/64-bit targets; existing pointer-origin controls and the source-level
+pointer-comparison referent mismatch remain green. The first Mac build caught
+an incorrect opcode name in the new test; after correction a required clean
+single-worker build passed, as did the Linux developer build. Full document
+checking passes. Logs are under `.scratch/r491-raw-pointees/` and
+`.scratch/r491-final-values/`. No native assembler or generated program runs;
+these bounded results do not replace exact-revision acceptance.
 
 K34 moves informational responses after complete command-line validation.
 Four retained direct CLI probes originally returned zero for invalid target,

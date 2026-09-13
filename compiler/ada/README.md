@@ -160,6 +160,13 @@ array argument and hidden result, for direct calls, ordinary function values
 and erased dispatch. A usize carrier alone does not establish an extent,
 element type or nominal identity. C nominal checks and erased-self adjacency
 remain separate requirements.
+The IR also has deliberate raw usize address transport and integer operations.
+Plain slots or parameters carry bits without promising a reached type, and word
+comparisons do not impose source-pointer compatibility. Reloading plain storage
+does not restore pointee metadata: typed stores, calls and `Pointer_Address`
+still require matching evidence, and annotating a raw load cannot supply it.
+The source checker separately enforces Landin pointer comparison and conversion
+rules; the verifier does not reinterpret every low-level word as a source pointer.
 Backward demand removes a pure function address when it has no users,
 including a projection left after specialization turns a call direct. A live
 function value retains its signature; numeric folding still excludes it.
