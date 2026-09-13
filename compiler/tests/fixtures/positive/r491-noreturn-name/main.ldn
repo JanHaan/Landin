@@ -1,0 +1,10 @@
+noreturn: type = i32
+
+f: (value: noreturn) -> (result: noreturn) =
+    result = value
+end f
+
+use: () -> (result: i32) =
+    noreturn: i32 = 42
+    result = f(noreturn)
+end use

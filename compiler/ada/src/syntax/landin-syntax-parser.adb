@@ -178,6 +178,9 @@ package body Landin.Syntax.Parser is
             --  times -- so the declaration ends at the refusal.
             Type_Refused : Boolean := False;
 
+            Noreturn_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "noreturn");
+
             Distinct_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "distinct");
 
@@ -4073,6 +4076,18 @@ package body Landin.Syntax.Parser is
                Returns_At := Start;
 
                if Peek = Tok.Kw_None then
+                  Advance;
+                  return No_Node;
+               end if;
+
+               --  [0890]'s never-returning signature remains a named
+               --  freestanding deferral. This position cannot be an
+               --  ordinary type/name expression; keep the body in hand.
+               if Peek = Tok.Identifier and then Named_Here = Noreturn_Id
+               then
+                  Refuse
+                    (Syn.Nonreturning_Function, Here,
+                     "the `noreturn` return form is not enabled");
                   Advance;
                   return No_Node;
                end if;

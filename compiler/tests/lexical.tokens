@@ -15873,6 +15873,55 @@ file positive/r491-loop-assignment/main.ldn tokens 213
   901 902 p
   903 906 end
   907 915 restored
+file positive/r491-noreturn-name/main.ldn tokens 48
+  0 8 noreturn
+  8 9 :
+  10 14 type
+  15 16 =
+  17 20 i32
+  22 23 f
+  23 24 :
+  25 26 (
+  26 31 value
+  31 32 :
+  33 41 noreturn
+  41 42 )
+  43 45 ->
+  46 47 (
+  47 53 result
+  53 54 :
+  55 63 noreturn
+  63 64 )
+  65 66 =
+  71 77 result
+  78 79 =
+  80 85 value
+  86 89 end
+  90 91 f
+  93 96 use
+  96 97 :
+  98 99 (
+  99 100 )
+  101 103 ->
+  104 105 (
+  105 111 result
+  111 112 :
+  113 116 i32
+  116 117 )
+  118 119 =
+  124 132 noreturn
+  132 133 :
+  134 137 i32
+  138 139 =
+  140 142 42
+  147 153 result
+  154 155 =
+  156 157 f
+  157 158 (
+  158 166 noreturn
+  166 167 )
+  168 171 end
+  172 175 use
 file positive/r491-ordinary-iterable/main.ldn tokens 439
   0 8 iterable
   8 9 :
@@ -61767,6 +61816,33 @@ file negative/r491-match-extra-paren/main.ldn tokens 71
   274 276 42
   277 280 end
   281 286 later
+file negative/r491-noreturn-signatures/main.ldn tokens 26
+  0 4 halt
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 20 noreturn
+  21 22 =
+  27 31 loop
+  32 34 do
+  39 42 end
+  43 47 loop
+  48 51 end
+  52 56 halt
+  58 66 callback
+  66 67 :
+  68 72 type
+  73 74 =
+  75 76 (
+  76 77 )
+  78 80 ->
+  81 89 noreturn
+  91 99 sentinel
+  99 100 :
+  101 104 i32
+  105 106 =
+  107 108 1
 file negative/r491-operand-diagnostic-cascades/main.ldn tokens 50
   0 1 f
   1 2 :
