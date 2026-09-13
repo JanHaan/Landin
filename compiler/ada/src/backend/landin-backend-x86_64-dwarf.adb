@@ -68,6 +68,13 @@ package body Landin.Backend.X86_64.Dwarf is
           when Allocation.R14 => 14,
           when Allocation.R15 => 15);
 
+   function Register_Location
+     (Register : Allocation.Saved_Register; Indirect : Boolean) return String
+   is
+     (HT & ".byte " & N ((if Indirect then 16#70# else 16#50#)
+                        + Register_Number (Register)) & LF
+      & (if Indirect then HT & ".sleb128 0" & LF else ""));
+
    function Source_Line
      (Info : Landin.Debugging.Information;
       Site : Landin.Provenance.Origin) return String
@@ -504,9 +511,7 @@ package body Landin.Backend.X86_64.Dwarf is
                   begin
                      if Indirect and then Place.Kind = Allocation.GP then
                         Expr := US.To_Unbounded_String
-                          (HT & ".byte " & N (16#70#
-                            + Register_Number (Place.Register)) & LF
-                           & HT & ".sleb128 0" & LF);
+                          (Register_Location (Place.Register, True));
                      elsif Has_Slot_Home (Frame_Plan, Slot) then
                         Expr := US.To_Unbounded_String
                           (HT & ".byte 0x91" & LF & HT & ".sleb128 -"
@@ -541,6 +546,9 @@ package body Landin.Backend.X86_64.Dwarf is
                                  Shape := Array_Element_Shape
                                    (Of_Unit, Shape);
                               end if;
+                           elsif Alias.Field = 0 then
+                              raise Landin.Compiler_Defect with
+                                "a whole datum alias requires array storage";
                            else
                               Shape := Nth_Field_Shape
                                 (Of_Unit, Alias.Place.Datum, Alias.Field);
@@ -568,9 +576,13 @@ package body Landin.Backend.X86_64.Dwarf is
                                       Alias.Place.Slot,
                                       Part_Position (Alias.Field), Facts);
                               end if;
-                           else
+                           elsif Is_Array (Of_Unit, Item, Alias.Place.Slot)
+                           then
                               Shape := Whole_Slot_Array_Shape
                                 (Of_Unit, Item, Alias.Place.Slot);
+                           else
+                              raise Landin.Compiler_Defect with
+                                "a whole slot alias requires array storage";
                            end if;
                         when Runtime_Address =>
                            Frame_Address (Alias.Place.Address, True);
@@ -655,8 +667,9 @@ package body Landin.Backend.X86_64.Dwarf is
                      Put (HT & ".long " & Loc & "-" & Prefix & "debug_loc");
                      if Place.Kind = Allocation.GP then
                         Expr := US.To_Unbounded_String
-                          (HT & ".byte " & N (16#50#
-                            + Register_Number (Place.Register)) & LF);
+                          (Register_Location
+                             (Place.Register, Is_Address
+                                (Of_Unit, Item, Slot)));
                      elsif Has_Slot_Home (Frame_Plan, Slot) then
                         Expr := US.To_Unbounded_String
                           (HT & ".byte 0x91" & LF & HT & ".sleb128 -"

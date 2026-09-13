@@ -262,6 +262,12 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Backend storage addresses require an actual frame home, including zero-byte
+homes. DWARF whole-alias metadata validates array storage before querying its
+shape. Register locations share one formatter: a direct binding resides in
+the register, while an indirect binding resides at the address held there.
+Address slots remain pinned by the current allocator.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature

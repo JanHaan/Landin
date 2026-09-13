@@ -5859,12 +5859,12 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Repaired: scalar/text conversion identities are classified independently of arity, and a malformed conversion reports L0301 before indexing operands or lowering. Aliases and range subtypes keep the same rule; resolved user functions retain their own arities. Refused origin facts no longer manufacture a secondary from-clause mismatch. |
 | J60 | Two named returns where one names a struct whose field type failed to resolve: Layout_Size precondition failure loses the whole report | C | Repaired: routine placement requires settled nominal leaves; written callback signatures wait until all active layouts are complete. Bad field types retain L0304 through scalar, array and nested-array result uses without a false zero-image refusal. Forward, alias, self and mutual callback results are accepted and verified on both target widths. |
 | J61 | Slice_Address scales the slice lower bound with an unguarded imm32 `imulq`, so an element extent >= 2 GiB emits an unencodable instruction | C | Implemented with A7/M19/N6/K29: slice scaling and both indexed-access paths share the nonnegative signed-imm32 predicate. Larger strides load a full-width scratch register before multiplication. Scalar boundary and tiny slice controls replace the forbidden giant-array reproduction. |
-| J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
+| J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Implemented as a defensive guard: Storage_Address checks Has_Slot_Home before either whole-slot or field offset arithmetic. Current allocator pinning already prevents a live source trigger. The frame seam distinguishes an unhomed promoted slot from a real zero-byte home, and small address emission remains valid. |
 | J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
-| J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
+| J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Implemented as release-checked metadata guards: a zero-field alias must name array storage before a whole-array or positive-field query. A small DWARF seam refuses whole scalar slot/datum aliases and accepts whole one-element array aliases. Current lowering did not produce the invalid metadata. |
 | J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
 | J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Implemented: L0502 points at an active entry-module `main` declaration when present, otherwise the first entry source at byte zero. Imported and local names cannot supply the anchor. The same early refusal still precedes output and tools. |
-| J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
+| J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Implemented as consistent DWARF serialization: direct values use a register location; indirect bindings use the address in that register with zero displacement. Alias and variable paths share the formatter. The allocator still pins address slots, so this is latent-path maintenance rather than a reproduced source miscompile. |
 | J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Guard repaired as backend consistency: suffix offsets share the arithmetic-immediate predicate, using a full-width scratch register above signed imm32. The large-source reachability claim was not replayed; scalar encoding-boundary and three/four-element fill controls cover the repair without a giant image. |
 | J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Implemented: snippets display tabs as `\t` and bytes outside printable ASCII as `\xNN`; underlines count their displayed characters. Headers and structured spans retain original byte coordinates. This deterministic byte display covers valid UTF-8, invalid bytes and control bytes without a locale/font width assumption. |
 | J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Semantic agreement question: reconcile completion-block assignment with [1810]/D157 and the existing loop decisions. Sounder flow precision alone does not authorize changing the normative rule. |
@@ -7179,8 +7179,24 @@ the fixture. No timing/scaling campaign, Landin assembler, linker, generated
 executable or debugger ran. Evidence is retained in `.scratch/r491-lookahead/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J62/J64/J67's latent address/debug-location guards are next for source and
-small seam inspection, without new debugger sessions or native assembly.
+J62/J64/J67 development evidence: six selected cases pass 81 checks in each
+of macOS debug and Linux release. Four exact DWARF register expressions cover
+direct and indirect locations in RBX/R15. Four tiny source-to-IR metadata
+controls accept whole one-element array aliases and reject whole scalar
+slot/datum aliases with explicit compiler defects before invalid shape queries.
+A fake-driver array copy emits address and debug text without host tools.
+Existing frame-home, debug-mode and named-result/destructuring controls also
+pass. The frame test confirms that offset zero alone cannot distinguish a
+promoted slot from real zero-byte storage. Current allocation still pins
+address slots and current lowering avoids the invalid whole scalar aliases;
+these are boundary repairs, not new claims of source miscompilation. Both
+single-worker builds passed; individual tests had 30-second or shorter limits.
+No native assembly, generated executable, debugger or giant image ran. Evidence
+is retained in `.scratch/r491-address-guards/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J63's final-result location is next: retain availability during return-value
+preparation and end the range before the epilogue restores any register.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
