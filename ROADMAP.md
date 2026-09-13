@@ -5877,7 +5877,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Implemented under m19: capture and check manifest producers before sorting, propagate inventory/fixed-row failures, and check saved-manifest reads. Bounded fake-command tests preserve the existing manifest format and rebuild decisions on both hosts; exact acceptance remains open. |
 | J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | The masked checksum failure is repaired with J77: require a successful, numeric recipe checksum before container inspection. Fake-container tests pin default/override tags and early refusal. The historical claim about a real container accepting an empty tag remains unestablished; no daemon was started. |
 | J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Implemented with N9: honor explicit status and default negatives to 1 at metadata parsing; compare ordered codes on both execution paths. Fake outcomes pin status 2, default 1, code order/multiplicity and abnormal termination. Exact acceptance remains open. |
-| J80 | Slot_Element_Shape_Is_Valid returns False for every D84/D85 element operation whose base field is a variant part | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J80 | Slot_Element_Shape_Is_Valid returns False for every D84/D85 element operation whose base field is a variant part | C | Implemented: the shared slot-element query resolves root-array paths, field paths, separate variant selectors and below-element selections before returning the selected array length or scalar type. Invalid/mixed selections return False. Source variant controls and direct IR controls cover both target facts; this was an API contract defect, with no production caller established. Exact acceptance remains open. |
 | J81 | Emit_Function_Address is the only Emit_* without Is_Emitting in its precondition | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J82 | Enter's "once per block, one at a time" rule is a precondition only; a re-Enter silently rebases the block's First_Value | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J83 | Set_Slice_Image has no `not Has_Image` guard, unlike the five other image setters | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
@@ -6658,7 +6658,19 @@ shorter timeouts. No Landin assembler, linker or generated executable ran.
 Logs are retained in `.scratch/r491-atom-array-writes/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J80's slot-element query helper is next. J116's slice-endpoint claim
+J80 development evidence: three selected cases pass 121 checks in each of
+macOS debug and Linux release. Ninety-six direct checks cover variant paths,
+separate selectors, root-array paths, below-element leaves and invalid or mixed
+selections. The source variant-payload control now asserts the queried length
+and scalar type; the existing frame-array control still passes. The initial
+macOS build caught a missing operator-visibility declaration in the new test;
+that declaration was corrected and the required clean rebuild passed. Both
+single-worker builds passed; selected tests have 30-second or shorter timeouts.
+No Landin assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-slot-element-queries/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J97's variant-payload slice-image claim is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

@@ -4136,10 +4136,16 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Store_Slot_Element;
 
-   function Slot_Element_Shape_Is_Valid
-     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+   function Find_Slot_Element_Array
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id;
+      Shape : out Field_Shape) return Boolean;
+
+   function Find_Slot_Element_Array
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id;
+      Shape : out Field_Shape) return Boolean
    is
    begin
+      Shape := (others => <>);
       if not Holds (Of_Unit, Item, Value)
         or else Op_Of (Of_Unit, Item, Value)
                   not in Load_Element | Store_Element
@@ -4147,71 +4153,98 @@ package body Landin.IR is
       then
          return False;
       end if;
-
       declare
-         Cell : constant Slot_Id := Held (Of_Unit, Item, Value).Slot;
-         Field : constant Natural :=
-           Element_Field_Of (Of_Unit, Item, Value);
-         Path : constant Path_Step_Array := Path_Of (Of_Unit, Item, Value);
+         Code : constant Instruction := Held (Of_Unit, Item, Value);
+         Cell : constant Slot_Id := Code.Slot;
+         Paths : constant Natural := Natural (Of_Unit.Paths.Length);
       begin
-         if not Holds (Of_Unit, Item, Cell) then
-            return False;
-         end if;
-         if Field = 0 then
-            return Is_Array (Of_Unit, Item, Cell)
-              and then Path_Is_Valid
-                (Of_Unit, Slot_Array_Element_Shape (Of_Unit, Item, Cell),
-                 Element_Path_Of (Of_Unit, Item, Value));
-         end if;
-         if not Is_Aggregate (Of_Unit, Item, Cell)
-           or else Field > Slot_Field_Count (Of_Unit, Item, Cell)
+         if not Holds (Of_Unit, Item, Cell)
+           or else Code.Nested.First > Paths
+           or else Code.Nested.Count > Paths - Code.Nested.First
+           or else Code.Below_Element.First > Paths
+           or else Code.Below_Element.Count > Paths - Code.Below_Element.First
+           or else (Code.Nested.Count > 0
+             and then (Code.Variant_Case /= 0
+               or else Code.Variant_Payload_Field /= 0))
          then
             return False;
          end if;
-         declare
-            Shape : constant Field_Shape :=
-              Nth_Slot_Field_Shape
-                (Of_Unit, Item, Cell, Positive (Field));
-         begin
-            return Path_Is_Valid (Of_Unit, Shape, Path)
-              and then Shape_At (Of_Unit, Shape, Path).Kind
-                         = Array_Field_Shape
-              and then Path_Is_Valid
-                (Of_Unit,
-                 Array_Element_Shape
-                   (Of_Unit, Shape_At (Of_Unit, Shape, Path)),
-                 Element_Path_Of (Of_Unit, Item, Value));
-         end;
+         if Code.Element_Field = 0 then
+            if not Is_Array (Of_Unit, Item, Cell) then
+               return False;
+            end if;
+            Shape := Whole_Slot_Array_Shape (Of_Unit, Item, Cell);
+         else
+            if not Is_Aggregate (Of_Unit, Item, Cell)
+              or else Code.Element_Field
+                > Slot_Field_Count (Of_Unit, Item, Cell)
+            then
+               return False;
+            end if;
+            Shape := Nth_Slot_Field_Shape
+              (Of_Unit, Item, Cell, Code.Element_Field);
+         end if;
+         if not Path_Is_Valid
+           (Of_Unit, Shape, Path_Of (Of_Unit, Item, Value))
+         then
+            return False;
+         end if;
+         Shape := Shape_At
+           (Of_Unit, Shape, Path_Of (Of_Unit, Item, Value));
+         if Code.Variant_Case /= 0 or else Code.Variant_Payload_Field /= 0 then
+            if Code.Variant_Case = 0
+              or else not Variant_Case_Run_Is_Valid
+                (Of_Unit, Shape, Code.Variant_Case)
+              or else Code.Variant_Payload_Field = 0
+              or else Code.Variant_Payload_Field > Variant_Case_Field_Count
+                (Of_Unit, Shape, Code.Variant_Case)
+            then
+               return False;
+            end if;
+            Shape := Nth_Variant_Case_Field
+              (Of_Unit, Shape, Code.Variant_Case, Code.Variant_Payload_Field);
+         end if;
+         return Array_Element_Run_Is_Valid (Of_Unit, Shape)
+           and then Path_Is_Valid
+             (Of_Unit, Array_Element_Shape (Of_Unit, Shape),
+              Element_Path_Of (Of_Unit, Item, Value))
+           and then Shape_At
+             (Of_Unit, Array_Element_Shape (Of_Unit, Shape),
+              Element_Path_Of (Of_Unit, Item, Value)).Kind
+                = Scalar_Field_Shape;
       end;
+   end Find_Slot_Element_Array;
+
+   function Slot_Element_Shape_Is_Valid
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+   is
+      Shape : Field_Shape;
+   begin
+      return Find_Slot_Element_Array (Of_Unit, Item, Value, Shape);
    end Slot_Element_Shape_Is_Valid;
 
-   --  The array shape a slot-reaching element operation names, once its
-   --  base field and D118's path have both been followed.
+   function Slot_Element_Array
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape;
+
+   function Slot_Element_Array
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape
+   is
+      Shape : Field_Shape;
+   begin
+      if not Find_Slot_Element_Array (Of_Unit, Item, Value, Shape) then
+         raise Compiler_Defect with "an element query has no selected array";
+      end if;
+      return Shape;
+   end Slot_Element_Array;
+
    function Slot_Element_Shape
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape
-     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
-         then Slot_Array_Element_Shape
-                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Array_Element_Shape
-                (Of_Unit,
-                 Shape_At
-                   (Of_Unit,
-                    Nth_Slot_Field_Shape
-                      (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                       Positive (Element_Field_Of (Of_Unit, Item, Value))),
-                    Path_Of (Of_Unit, Item, Value))));
+     is (Array_Element_Shape
+           (Of_Unit, Slot_Element_Array (Of_Unit, Item, Value)));
 
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
-     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
-         then Slot_Array_Length
-                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Shape_At
-                (Of_Unit,
-                 Nth_Slot_Field_Shape
-                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
-                 Path_Of (Of_Unit, Item, Value)).Length);
+     is (Slot_Element_Array (Of_Unit, Item, Value).Length);
 
    --  What the operation finally reaches: the element, and then D121's run
    --  below it.
