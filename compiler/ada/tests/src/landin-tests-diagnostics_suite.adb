@@ -611,6 +611,7 @@ package body Landin.Tests.Diagnostics_Suite is
       Wide : constant String := Landin.Diagnostics.Text.Render
         (Across, Sources);
       Accent : constant String := Character'Val (195) & Character'Val (169);
+      Escaped_Accent : constant String := "\xC3\xA9";
       Utf8_Id : constant Landin.Source.Source_Id := Sources.Add
         ("utf8.ldn", Fixed."*" (31, 'a') & Accent & Fixed."*" (47, 'b')
          & "target" & Fixed."*" (105, 'c') & Accent
@@ -630,8 +631,8 @@ package body Landin.Tests.Diagnostics_Suite is
         (Item, Fixed.Count (Wide, "^") = 160 and then Wide'Length < 500,
          "a long span clips its underline to the visible excerpt");
       Landin.Testing.Check
-        (Item, Fixed.Index (Utf8_Text, "1 | ... " & Accent) > 0
-         and then Fixed.Count (Utf8_Text, Accent) = 1
+        (Item, Fixed.Index (Utf8_Text, "1 | ... " & Escaped_Accent) > 0
+         and then Fixed.Count (Utf8_Text, Escaped_Accent) = 1
          and then Fixed.Index
            (Utf8_Text, Fixed."*" (105, 'c') & " ..." & LF) > 0,
          "both excerpt edges preserve complete UTF-8 sequences");
@@ -769,8 +770,69 @@ package body Landin.Tests.Diagnostics_Suite is
       end;
    end Rendering_Budgets_Preserve_Reports;
 
+   procedure Escaped_Bytes_Keep_Carets_Aligned
+     (Item : in out Landin.Testing.Context);
+
+   procedure Escaped_Bytes_Keep_Carets_Aligned
+     (Item : in out Landin.Testing.Context)
+   is
+      package Fixed renames Ada.Strings.Fixed;
+      Accent : constant String := Character'Val (195) & Character'Val (169);
+      Raw : constant String := ASCII.HT & "x" & Accent & "z";
+      Display : constant String := "\tx\xC3\xA9z";
+
+      procedure Check
+        (Bytes : String; Where : Landin.Source.Span;
+         Column, Indent, Marks : Natural; Shown : String;
+         Related : Boolean := False);
+
+      procedure Check
+        (Bytes : String; Where : Landin.Source.Span;
+         Column, Indent, Marks : Natural; Shown : String;
+         Related : Boolean := False)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("columns.ldn", Bytes);
+         Report : Diagnostic := Make ("L0130", Error, Id, Where, "place");
+         Expected : constant String :=
+           "error[L0130]: place" & LF
+           & "  --> columns.ldn:1:"
+           & Fixed.Trim (Column'Image, Ada.Strings.Both) & LF
+           & "  |" & LF
+           & "1 | " & Shown & LF
+           & "  | " & Fixed."*" (Indent, ' ') & Fixed."*" (Marks, '^') & LF
+           & (if Related then
+                "  --> columns.ldn:1:3" & LF
+                & "  |" & LF
+                & "1 | " & Shown & LF
+                & "  |    ^^^^^^^^ bytes here" & LF
+              else "");
+      begin
+         if Related then
+            Add_Label (Report, Make_Label (Id, (2, 4), "bytes here"));
+         end if;
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,
+            "displayed bytes and underline cells agree at the byte location");
+      end Check;
+   begin
+      Check (Raw, (4, 5), 5, 11, 1, Display);
+      Check (Raw, (2, 4), 3, 3, 8, Display);
+      Check (Raw, (3, 4), 4, 7, 4, Display);
+      Check (Raw, (5, 5), 6, 12, 1, Display);
+      Check (Raw, (0, 1), 1, 0, 2, Display);
+      Check ("" & Character'Val (233), (0, 1), 1, 0, 4, "\xE9");
+      Check (ASCII.NUL & ASCII.HT & ASCII.ESC,
+         (2, 3), 3, 6, 4, "\x00\t\x1B");
+      Check (Raw, (4, 5), 5, 11, 1, Display, Related => True);
+   end Escaped_Bytes_Keep_Carets_Aligned;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "escaped bytes keep carets aligned",
+         Escaped_Bytes_Keep_Carets_Aligned'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "long lines use local excerpts",
          Long_Lines_Use_Local_Excerpts'Access);

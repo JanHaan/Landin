@@ -56506,6 +56506,19 @@ file negative/r491-consumed-subplace-reads/main.ldn tokens 570
   1961 1967 second
   1968 1971 end
   1972 1987 partial_restore
+file negative/r491-display-byte-columns/main.ldn tokens 12
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  25 26 _
+  27 28 =
+  29 36 missing
+  37 40 end
+  41 42 f
 file negative/r491-empty-slice-scalar-contexts/main.ldn tokens 80
   0 3 box
   3 4 :
