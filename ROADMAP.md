@@ -5835,7 +5835,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Repaired: nested control scopes and delimited expressions save and restore enclosing arm context. Loops, blocks, matches, anonymous bodies, nested else arms, arguments, literals, conversions and selected bounds keep their own call recovery. A direct then/elsif arm still owns its else; parentheses retain explicit recovery priority. |
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
-| J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Implemented: retain completion boundaries unless `complete` names a visible loop; preserve declarations, assignments and nested labels with that spelling. Selected parser, verified-IR and refusal controls pass in both modes; exact acceptance remains open. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
 | J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
@@ -6477,7 +6477,20 @@ generated Landin executable ran. Logs are retained in
 `.scratch/r491-signature-binders/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Loop transfer/completion boundaries J38 are next.
+J38 development evidence: three selected cases pass 990 checks in each of
+macOS debug and Linux release. Ten tiny accepted sources retain completion
+blocks after transfers, matching and nested labels named `complete`, ordinary
+bindings and assignments with that spelling, separate completion scope and
+anonymous-function loop floors. Parser checks pin completion and transfer
+nodes; lowering checks verify both target widths. Three refused sources
+extend driver refusal/output checks to 920, covering body-local reads from
+completion, unconditional-loop completion and an anonymous transfer that
+cannot see an outer label. Builds use one worker and selected tests have
+30-second or shorter timeouts. No assembler, linker or generated Landin
+executable ran. Logs are retained in `.scratch/r491-complete-transfers/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Nested-call depth and recursive public-prefix recovery J37/C6 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
