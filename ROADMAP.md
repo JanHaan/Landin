@@ -5915,7 +5915,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Implemented maintenance: removed the unused formal-declaration field, query and order-dependent signature-scope lookup. Argument roles and role-local positions remain; checking remaps runtime positions from the complete signature. The existing classification case now calls a later declaration and asserts its static position. Exact acceptance remains open. |
 | J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
-| J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Implemented: the generic zeroed fallback reports L0301 with the permanent contextual requirement at [0540], instead of L0304 promising completed R2.20 enablement. Seven fixture code lists are corrected; unrelated deferred aggregate-initializer refusals remain L0304. Admitted scalar, array and struct zeroed paths remain accepted. Exact acceptance remains open. |
 | J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Implemented: nominal copy and assignment refusals describe identity independently of representation, contextual distinct results name the distinct type category, and zeroed diagnostics use general type/place labels. The reported distinct-u32 refusal no longer invents a struct or function address. Exact acceptance remains open. |
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
 | J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
@@ -6866,8 +6866,22 @@ builds passed; tests have 30-second or shorter limits and probes have
 Logs are retained in `.scratch/r491-c-report-spans/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J118's zeroed refusal notes are next; permanent contextual refusals must not
-promise that completed R2.20 will enable them.
+J118 development evidence: nine selected negative fixtures pass 45 checks in
+each of macOS debug and Linux release. Direct report comparisons justified
+only the L0304-to-L0301 changes attached to the corrected zeroed fallback;
+report counts/order and the two independent feature-limit reports remain.
+Ten additional compile-only probes cover pointer, slice, atom, erased and
+callback contexts, inference and arithmetic, plus accepted scalar, two-element
+array and struct initialization. Invalid uses retain one report with a [0540]
+note and no R2.20 promise. The diagnostic inventory records the seven moved
+fixture witnesses. Both single-worker builds passed; tests have 30-second or
+shorter limits and probes have 10-second limits. No Landin assembler, linker
+or generated executable ran. Logs are retained in
+`.scratch/r491-zeroed-context/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J114's bare-namespace diagnostic is next. The existing unqualified
+same-named module value rule remains authoritative.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

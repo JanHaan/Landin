@@ -17120,12 +17120,14 @@ package body Landin.Stages.Checking is
 
             when Syn.Zeroed_Literal =>
                Bad.Report
-                 (Item    => Bad.Unsupported_Use,
+                 (Item    => Bad.Type_Mismatch,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "`zeroed` needs a directly supplied initializer"
-                             & " or assignment type",
-                  Refused => Bad.Zeroed_Value,
+                  Message => "`zeroed` is not valid in this value context",
+                  Note    => "[0540]: zeroed needs a complete contextual"
+                             & " type that permits zero initialization",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "this use of zeroed",
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
 
