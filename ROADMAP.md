@@ -5808,7 +5808,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Repaired: resolved declarations take precedence over builtin scalar/text spelling in checking and lowering. Direct, indirect and generic calls retain their targets; scalar/text aliases retain their actual conversion type. Calls cannot masquerade as folded static initializers. |
 | J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Repaired: the temporary carrying the left operand across right-operand evaluation retains its function signature. Named, local, parameter and control-flow function comparisons satisfy the existing verifier on 32/64-bit targets; a right-side mutation does not change the saved left value. Mismatched signatures remain refused. |
 | J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
-| J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Implemented: nonzero aggregate payloads use the ordinary shaped-value writer, preserving the selected case path while materializing call results, distinct conversions, control values and computed elements. Selecting the case still supplies the zero image for zeroed payloads. |
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Already repaired with J5: block structs consume their immediate `end`, optionally consume a repeated name, and preserve following declarations. The retained J5 bare-closer/parser and source-to-IR controls cover this duplicate finding; no separate feature or stress run is needed. |
@@ -7034,9 +7034,23 @@ linker or generated executable ran. Evidence is retained in
 `.scratch/r491-flow-width/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J11's aggregate variant payload lowering is next. Inspect and reproduce the
-small call-result and distinct-conversion forms before routing checked values
-through the ordinary shaped-value writer.
+J11 development evidence: the two tiny compile-only inputs reproduced exit 70
+for a returned struct and a distinct conversion before repair. Five selected
+lowering cases now pass 70 checks in each of macOS debug and Linux release.
+Eight new source-to-IR controls cover module/local/nested destinations, returned
+structs, conditional results, a two-element computed selection, distinct
+conversions and literal/zero/rooted-storage controls; they verify complete IR
+and count every written call without duplicated evaluation. Existing variant
+selection, copy, clear and hidden-result controls also pass. Both single-worker
+builds passed; selected cases have 30-second or shorter limits and the original
+probes had 10-second limits. No Landin assembler, linker, generated executable
+or debugger ran. The reader documentation describes the shared writer, and
+evidence is retained in `.scratch/r491-variant-values/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+The remaining diagnostic-rendering and report-boundary findings need bounded
+source inspection and small presentation controls, without replaying the old
+report-size stress cases.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

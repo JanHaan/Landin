@@ -10370,44 +10370,18 @@ package body Landin.Stages.Lowering is
                                    Construction_Field_Value
                                      (Of_Tree, Label);
                               begin
-                                 if Is_Struct_Construction (Of_Tree, Given)
+                                 if Syn.Kind (Of_Tree, Given)
+                                      /= Syn.Zeroed_Literal
                                  then
-                                    Write_Struct_Literal
-                                      (Given, Child, Destination,
-                                       Base  => Base,
-                                       Steps => Into_Steps);
-                                 elsif Syn.Kind (Of_Tree, Given)
-                                         = Syn.Zeroed_Literal
-                                 then
-                                    --  Selecting the case already cleared
-                                    --  the complete padded part, so an
-                                    --  all-zero payload is nothing to do.
-                                    null;
-                                 else
-                                    declare
-                                       Source_Base : constant Natural :=
-                                         Rooted_Base (Of_Tree, Given);
-                                       Source_Steps :
-                                         constant IR.Path_Step_Array :=
-                                           Rooted_Steps (Of_Tree, Given);
-                                       Source : constant IR.Storage :=
-                                         Rooted_Storage (Of_Tree, Given);
-                                    begin
-                                       for Part in
-                                         1 .. Landin.Checking
-                                                .Layout_Field_Count
-                                                  (Types.all, Child)
-                                       loop
-                                          Copy_Field
-                                            (Child, Source, Destination,
-                                             Part,
-                                             Source_Base => Source_Base,
-                                             Source_Steps => Source_Steps,
-                                             Destination_Base => Base,
-                                             Destination_Steps =>
-                                               Into_Steps);
-                                       end loop;
-                                    end;
+                                    --  A checked payload may be a call or
+                                    --  conversion without source storage.
+                                    --  The ordinary writer materializes it
+                                    --  once and retains the selected path.
+                                    Write_Shaped_Value
+                                      (Of_Tree, Given, Scope,
+                                       Neutral_Body (Child),
+                                       Stored_At
+                                         (Destination, Base, Into_Steps));
                                  end if;
                               end;
 

@@ -5682,6 +5682,107 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Variant_Case_Construction_Carries_Its_Identity;
 
+   --  A variant payload accepts the same checked aggregate values as an
+   --  ordinary field, including expressions without pre-existing storage.
+   procedure Variant_Aggregate_Payloads_Materialize_Values
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Aggregate_Payloads_Materialize_Values
+     (Item : in out Landin.Testing.Context)
+   is
+      Prefix : constant String :=
+        "point: type = struct x: i32 y: i32 end point" & LF
+        & "choice: type = struct kind: variant empty | full: (at: point)"
+        & " end kind end choice" & LF
+        & "make: () -> (r: point) = r = (x: 1, y: 2) end make" & LF;
+
+      procedure Check (Label, Text : String; Expected_Calls : Natural);
+
+      procedure Check (Label, Text : String; Expected_Calls : Natural) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+         Calls : Natural := 0;
+      begin
+         Lower (Work, Text, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            Label & " reaches verified lowering");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         begin
+            for Position in 1 .. IR.Item_Count (Unit) loop
+               declare
+                  Routine : constant IR.Item_Id := IR.Item_Id (Position);
+               begin
+                  if IR.Kind_Of (Unit, Routine) = IR.Routine then
+                     for Each in 1 .. IR.Value_Count (Unit, Routine) loop
+                        if IR.Op_Of (Unit, Routine, IR.Value_Id (Each))
+                             = IR.Call
+                        then
+                           Calls := Calls + 1;
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Calls, Expected_Calls,
+               Label & " evaluates each written call once");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+               Label & " preserves payload storage and control flow");
+         end;
+      end Check;
+   begin
+      Check ("returned struct", Prefix
+         & "mut state: choice" & LF
+         & "use: () -> none = state.kind = full(at: make()) end use" & LF,
+         1);
+      Check ("local returned struct", Prefix
+         & "use: () -> none = mut state: choice = zeroed" & LF
+         & "state.kind = full(at: make()) end use" & LF,
+         1);
+      Check ("nested returned struct", Prefix
+         & "outer: type = struct child: choice end outer" & LF
+         & "mut state: outer" & LF
+         & "use: () -> none = state.child.kind = full(at: make())"
+         & " end use" & LF,
+         1);
+      Check ("conditional result", Prefix
+         & "mut state: choice" & LF
+         & "use: (flag: bool) -> none = state.kind = full(at:"
+         & " if flag then make() else make() end if) end use" & LF,
+         2);
+      Check ("computed element", Prefix
+         & "mut state: choice" & LF
+         & "mut row: [2]point" & LF
+         & "index: () -> (r: usize) = r = 1 end index" & LF
+         & "use: () -> none = state.kind = full(at: row[index()])"
+         & " end use" & LF,
+         1);
+      Check ("distinct conversion",
+         "meter: type = distinct u32" & LF
+         & "choice: type = struct kind: variant empty | full: (m: meter)"
+         & " end kind end choice" & LF
+         & "mut state: choice" & LF
+         & "use: () -> none = state.kind = full(m: meter(5)) end use" & LF,
+         0);
+      Check ("literal and zero controls", Prefix
+         & "mut state: choice" & LF
+         & "use: () -> none = state.kind = full(at: (x: 3, y: 4))"
+         & " state.kind = full(at: zeroed) end use" & LF,
+         0);
+      Check ("rooted storage control", Prefix
+         & "mut state: choice" & LF
+         & "use: () -> none = p: point = (x: 3, y: 4)"
+         & " state.kind = full(at: p) end use" & LF,
+         0);
+   end Variant_Aggregate_Payloads_Materialize_Values;
+
    --  D80 keeps whole variant-bearing copies contextual to storage.  Each
    --  common scalar or array field retains its old operation, while the
    --  complete unfolded variant part travels as one Copy_Variant identity.
@@ -12559,6 +12660,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "variant case construction carries its identity",
          Variant_Case_Construction_Carries_Its_Identity'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "variant aggregate payloads materialize values",
+         Variant_Aggregate_Payloads_Materialize_Values'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant whole copy carries one compact part",
