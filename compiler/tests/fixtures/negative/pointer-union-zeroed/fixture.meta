@@ -2,5 +2,5 @@ class: negative
 summary: D189 no zero or default atom exists, so `zeroed` does not name a pointer union's empty case
 constructs: 0480, 0540, 1870
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64, synthetic-32
