@@ -17,7 +17,14 @@ CONTAINERFILE="$LANDIN_ROOT/environments/linux-amd64/Containerfile"
 #  running again cannot silently reuse the image built from the old one.
 #  A digest pin and a checksum check are worth nothing if the image they
 #  describe is never rebuilt.
-RECIPE_TAG="$(cksum "$CONTAINERFILE" | awk '{print $1}')"
+RECIPE_SUM="$(cksum "$CONTAINERFILE")" || exit
+RECIPE_TAG="${RECIPE_SUM%% *}"
+case "$RECIPE_TAG" in
+    '' | *[!0-9]*)
+        echo "landin: the Containerfile checksum is not usable" >&2
+        exit 1
+        ;;
+esac
 IMAGE="${LANDIN_LINUX_IMAGE:-landin-linux-amd64:$RECIPE_TAG}"
 
 if ! command -v container >/dev/null 2>&1; then

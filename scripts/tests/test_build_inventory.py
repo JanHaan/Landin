@@ -4,13 +4,20 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import shutil
+import shlex
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (ROOT / "scripts/build.sh").read_text()
-START = 'if [ -f "$Manifest" ] && [ "$Current" != "$(cat "$Manifest")" ]; then\n'
-DECISION = SCRIPT[SCRIPT.index(START):SCRIPT.index("\nNoop_Arguments=no")]
+START = "Previous=''\n"
+HELPERS = SCRIPT[SCRIPT.index("landin_paths() {"):
+                 SCRIPT.index('Current="$(landin_manifest)"')]
+MANIFEST = SCRIPT[SCRIPT.index("landin_manifest() {"):
+                  SCRIPT.index('Incremental=')]
+DECISION = HELPERS + SCRIPT[SCRIPT.index(START):
+                            SCRIPT.index("\nNoop_Arguments=no")]
 BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
         "4 40 /src/lib.gpr", "5 50 /scripts/build.sh",
         "6 60 /scripts/build_lock.py", "mode debug tag test",
@@ -18,7 +25,7 @@ BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
 
 
 class BuildInventory(unittest.TestCase):
-    def decision(self, old, new, incremental="yes"):
+    def decision(self, old, new, incremental="yes", fail_tool=None):
         # This is deliberately the production branch including both inventory
         # and fixed-identity comparisons, not a copy of its regexes. Its only
         # destructive operation addresses our disposable fixture directory.
@@ -27,12 +34,18 @@ class BuildInventory(unittest.TestCase):
             build.mkdir()
             manifest = build / "source-manifest.txt"
             manifest.write_text("\n".join(sorted(old)) + "\n")
+            env = dict(os.environ)
+            if fail_tool:
+                fake = Path(tmp) / fail_tool
+                fake.write_text("#!/bin/sh\nexit 23\n")
+                fake.chmod(0o755)
+                env["PATH"] = tmp + os.pathsep + env["PATH"]
             result = subprocess.run(
                 ["sh", "-eu", "-c", DECISION], text=True, capture_output=True,
-                env={**os.environ, "Manifest": str(manifest),
+                env={**env, "Manifest": str(manifest),
                      "LANDIN_BUILD_DIR": str(build),
                      "Current": "\n".join(sorted(new)),
-                     "Incremental": incremental}, check=True)
+                     "Incremental": incremental}, check=True, timeout=5)
             return build.exists(), result.stdout
 
     def test_inventory_add_remove_rename(self):
@@ -74,6 +87,127 @@ class BuildInventory(unittest.TestCase):
         exists, text = self.decision(BASE, new, incremental="no")
         self.assertFalse(exists)
         self.assertIn("sources changed since the last build", text)
+
+    def test_failed_inventory_producers_abort(self):
+        changed = ["9 10 /src/main.adb"] + BASE[1:]
+        for tool in ("awk", "sort", "grep", "cat"):
+            with self.subTest(tool=tool):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    self.decision(BASE, changed, fail_tool=tool)
+
+
+class ManifestFailures(unittest.TestCase):
+    def manifest(self, failure=None):
+        with tempfile.TemporaryDirectory(prefix="landin-manifest-") as tmp:
+            root = Path(tmp)
+            ada = root / "compiler/ada"
+            files = ("compiler/ada/src/main.adb",
+                     "compiler/ada/tests/src/test.adb",
+                     "compiler/ada/library.gpr", "scripts/build.sh",
+                     "scripts/env.sh", "scripts/build_lock.py")
+            for name in files:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(name + "\n")
+            fake = root / "fake"
+            fake.mkdir()
+            for tool in ("gnat", "gprbuild"):
+                path = fake / tool
+                path.write_text("#!/bin/sh\nprintf '%s\\n' 'pinned banner' "
+                                "'additional version line'\n")
+                path.chmod(0o755)
+            if failure in ("source", "project", "script"):
+                pattern = {"source": "*.adb", "project": "*.gpr",
+                           "script": "*/scripts/build.sh"}[failure]
+                body = ("#!/bin/sh\ncase \"$1\" in " + pattern
+                        + ") exit 23 ;; esac\nexec "
+                        + shlex.quote(shutil.which("cksum")) + ' "$@"\n')
+                (fake / "cksum").write_text(body)
+                (fake / "cksum").chmod(0o755)
+            elif failure:
+                (fake / failure).write_text("#!/bin/sh\nexit 23\n")
+                (fake / failure).chmod(0o755)
+            written = root / "saved-manifest"
+            written.write_text("previous successful manifest\n")
+            result = subprocess.run(
+                ["sh", "-eu", "-c", MANIFEST
+                 + 'printf \'%s\\n\' "$Current" > "$WRITTEN"\n'],
+                text=True, capture_output=True, timeout=5,
+                env={**os.environ, "PATH": str(fake) + os.pathsep
+                     + os.environ["PATH"], "LANDIN_ROOT": str(root),
+                     "LANDIN_ADA_DIR": str(ada), "LANDIN_BUILD_MODE": "debug",
+                     "LANDIN_BUILD_TAG": "test", "WRITTEN": str(written)})
+            text = written.read_text()
+            if not failure:
+                rows = subprocess.check_output(
+                    ["cksum", *[str(root / name) for name in files]],
+                    text=True, timeout=5).splitlines()
+                expected = (sorted(rows[:2]) + rows[2:3] + sorted(rows[3:])
+                            + ["mode debug tag test", "gnat pinned banner",
+                               "gprbuild pinned banner"])
+                self.assertEqual(text.splitlines(), expected)
+            return result.returncode, text
+
+    def test_manifest_format_is_preserved(self):
+        self.assertEqual(self.manifest()[0], 0)
+
+    def test_failed_manifest_producer_preserves_previous_manifest(self):
+        for failure in ("find", "source", "project", "script", "sort",
+                        "gnat", "gprbuild", "sed"):
+            with self.subTest(failure=failure):
+                code, text = self.manifest(failure)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(text, "previous successful manifest\n")
+
+
+class RecipeChecksum(unittest.TestCase):
+    def test_recipe_failure_stops_before_container(self):
+        for fails, override in ((False, ""), (False, "test:override"),
+                                (True, "test:override"), ("empty", "")):
+            with self.subTest(fails=fails, override=override):
+                with tempfile.TemporaryDirectory(prefix="landin-recipe-") as tmp:
+                    root = Path(tmp)
+                    scripts = root / "scripts"
+                    scripts.mkdir()
+                    shutil.copyfile(ROOT / "scripts/linux-loop.sh",
+                                    scripts / "linux-loop.sh")
+                    (scripts / "env.sh").write_text(
+                        "set -eu\nLANDIN_ROOT=" + shlex.quote(tmp)
+                        + "\nLANDIN_BUILD_MODE=debug\n")
+                    recipe = root / "environments/linux-amd64/Containerfile"
+                    recipe.parent.mkdir(parents=True)
+                    recipe.write_text("FROM scratch\n")
+                    fake = root / "fake"
+                    fake.mkdir()
+                    calls = root / "container-calls"
+                    (fake / "container").write_text(
+                        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\n")
+                    (fake / "container").chmod(0o755)
+                    if fails:
+                        (fake / "cksum").write_text(
+                            "#!/bin/sh\nexit "
+                            + ("0" if fails == "empty" else "23") + "\n")
+                        (fake / "cksum").chmod(0o755)
+                    result = subprocess.run(
+                        ["sh", str(scripts / "linux-loop.sh"), "true"],
+                        text=True, capture_output=True, timeout=5,
+                        env={**os.environ, "PATH": str(fake) + os.pathsep
+                             + os.environ["PATH"], "CALLS": str(calls),
+                             "LANDIN_LINUX_IMAGE": override,
+                             "LANDIN_LINUX_REBUILD": "no"})
+                    if fails:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse(calls.exists())
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        rows = calls.read_text().splitlines()
+                        self.assertEqual(len(rows), 2)
+                        checksum = subprocess.check_output(
+                            ["cksum", str(recipe)], text=True,
+                            timeout=5).split()[0]
+                        expected = override or "landin-linux-amd64:" + checksum
+                        self.assertEqual(rows[0], "image inspect " + expected)
+                        self.assertIn(expected + " true", rows[1])
 
 
 if __name__ == "__main__":

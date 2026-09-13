@@ -5697,7 +5697,7 @@ being silently promoted to bugs or discarded:
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
 | m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
 | m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
-| m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. Container pin duplication and shell-pipeline status remain source-level observations. |
+| m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. J77/J78 repair manifest/image-tag failure propagation with bounded fake-command controls on both hosts. Container pin duplication remains a source-level observation. |
 | m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
 | m24--m25 | Verifier partitioning and simplifier proof identity are latent concerns without an observed accepted-source defect. Validate with focused IR tests before altering passes. |
 | m26--m28 | Deterministic IR numbering, displayed pointer provenance, overlapping writeback/result semantics and redundant bounds checks need focused evidence. Code-size cost or undocumented behaviour alone does not establish wrong code. |
@@ -5874,8 +5874,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
 | J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Open bounded scaling follow-up to C5: cache or move the whole-forest width query to an appropriate pass, with invalidation evidence; no broad timing sweep. |
 | J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
-| J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
+| J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Implemented under m19: capture and check manifest producers before sorting, propagate inventory/fixed-row failures, and check saved-manifest reads. Bounded fake-command tests preserve the existing manifest format and rebuild decisions on both hosts; exact acceptance remains open. |
+| J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | The masked checksum failure is repaired with J77: require a successful, numeric recipe checksum before container inspection. Fake-container tests pin default/override tags and early refusal. The historical claim about a real container accepting an empty tag remains unestablished; no daemon was started. |
 | J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Implemented with N9: honor explicit status and default negatives to 1 at metadata parsing; compare ordered codes on both execution paths. Fake outcomes pin status 2, default 1, code order/multiplicity and abnormal termination. Exact acceptance remains open. |
 | J80 | Slot_Element_Shape_Is_Valid returns False for every D84/D85 element operation whose base field is a variant part | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
 | J81 | Emit_Function_Address is the only Emit_* without Is_Emitting in its precondition | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
@@ -6551,7 +6551,20 @@ retained in `.scratch/r491-negative-contracts/` and
 `.scratch/r491-final-values/`. Runtime stream selection and independent
 inventory obligations under M14 remain open, as does exact acceptance.
 
-Shell pipeline failures J77/J78 are next. J116's slice-endpoint claim
+J77/J78 development evidence: all nine build-inventory/shell test methods
+pass on macOS and Linux. Explicit, bounded fake-command cases cover failed
+source discovery, checksums for sources/projects/scripts, sorting, version
+banners, saved-manifest reads and inventory/fixed-row extraction. A failure
+leaves the previous manifest intact; successful output retains the existing
+format and clean/incremental decisions. Recipe checks retain default and
+override tags, while failed or empty checksums reach no fake-container call.
+Every subprocess has a five-second limit and the test run has a 30-second
+limit. Shell syntax checks pass. No real compiler build, container, assembler,
+linker or generated Landin executable ran. Logs are retained in
+`.scratch/r491-shell-status/`. A later compiler build will correctly clean
+because build-script identity changed. Exact-revision acceptance remains open.
+
+IR observability J84/J85 is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
