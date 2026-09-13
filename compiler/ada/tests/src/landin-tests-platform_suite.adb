@@ -557,7 +557,15 @@ package body Landin.Tests.Platform_Suite is
       Runner.Run ("sh", Args, Result, Landin.Platform.Output_Only);
       Landin.Testing.Check_Equal
         (Item, Unbounded.To_String (Result.Output), Text,
-         "output-only capture excludes inherited stderr");
+         "output-only capture keeps stderr out of stdout");
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Error_Output),
+         "capture-stderr" & ASCII.LF,
+         "output-only capture retains stderr for an independent oracle");
+      Runner.Run ("sh", Args, Result);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Error_Output), "",
+         "a subsequent merged run clears the separate stderr result");
       begin
          Runner.Run ("landin-no-such-test-tool", Landin.Platform.No_Arguments,
                      Result);

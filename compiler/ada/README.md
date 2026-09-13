@@ -788,9 +788,12 @@ failures as ordinary outcomes. Cleanup retains those outcomes without masking
 programming or resource exceptions. A tool capture that cannot be read raises
 `External_Tool_Failed` through the adapter's owned cleanup path.
 `src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
-constants. `Native.Tools` passes the already-open capture descriptor and
-literal argument vector, starts each tool in its own process group, and uses a
-monotonic deadline. On timeout it kills that group and reaps the direct child
+constants. `Native.Tools` passes the already-open capture descriptors and
+literal argument vector. Merged capture retains one ordered byte stream;
+`Output_Only` retains stdout in `Output` and stderr in `Error_Output`, so the
+harness can enforce both expected stdout and empty stderr. Both temporary
+files share the owned cleanup path. The adapter starts each tool in its own
+process group and uses a monotonic deadline. On timeout it kills that group and reaps the direct child
 before reporting `Timed_Out`; adapter exceptions also stop an owned child.
 The group is established before execution through
 [POSIX spawn attributes](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html).

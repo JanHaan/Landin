@@ -51,8 +51,8 @@ package Landin.Testing.Fixtures is
    --  Arguments handed to a compiled runtime or ABI program, separately from
    --  the `args` used to invoke refine for recorded command-line fixtures.
    function Run_Args (Item : Fixture) return String;
-   --  Bytes expected from that compiled program's merged output.  This is
-   --  separate from `expect`, which records refine's own output.
+   --  Bytes expected from the compiled program on its selected Stream.
+   --  This is separate from `expect`, which records refine's own output.
    function Run_Expect (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
 

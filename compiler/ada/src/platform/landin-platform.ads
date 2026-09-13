@@ -106,11 +106,14 @@ package Landin.Platform is
       --  Meaningful when Ended is Exited, and zero otherwise.
       Exit_Code : Integer := 0;
       Output    : Ada.Strings.Unbounded.Unbounded_String;
+      --  Separate stderr for Output_Only; empty when streams are merged.
+      Error_Output : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    --  Whether the tool's error output is folded into its captured output.
    --  A caller that wants to know which stream a message arrived on has to
-   --  be able to ask for them apart.
+   --  be able to ask for them apart. Output_Only captures stderr separately
+   --  in Error_Output, so callers can also require that it is empty.
    type Capture_Mode is (Output_Only, Merged);
 
    type Tool_Runner is limited interface;

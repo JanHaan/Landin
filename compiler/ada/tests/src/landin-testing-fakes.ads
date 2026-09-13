@@ -95,7 +95,8 @@ package Landin.Testing.Fakes is
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String;
-      Ended     : Landin.Platform.Termination := Landin.Platform.Exited);
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited;
+      Error_Output : String := "");
 
    --  Select ordered mode on the first addition, then append one result for
    --  each expected call.  Running past the end of the script is a compiler
@@ -104,7 +105,8 @@ package Landin.Testing.Fakes is
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String;
-      Ended     : Landin.Platform.Termination := Landin.Platform.Exited);
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited;
+      Error_Output : String := "");
 
    --  Make the next run raise a compiler defect instead of answering,
    --  and only the next: a case that arms this and then keeps using the

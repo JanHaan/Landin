@@ -23,7 +23,7 @@ package body Landin.Platform.Native.Tools is
    function Start_Tool
      (Args    : C_Strings.chars_ptr_array;
       Capture : Interfaces.C.int;
-      Merged  : Interfaces.C.int;
+      Errors  : Interfaces.C.int;
       Child   : access Interfaces.C.int) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_tool_start";
 
@@ -57,6 +57,8 @@ package body Landin.Platform.Native.Tools is
       Located        : OS.String_Access := null;
       Name           : OS.String_Access := null;
       FD             : OS.File_Descriptor := OS.Invalid_FD;
+      Error_Name     : OS.String_Access := null;
+      Error_FD       : OS.File_Descriptor := OS.Invalid_FD;
       Success        : Boolean;
       Status         : aliased Interfaces.C.int := 0;
       Pid            : aliased Interfaces.C.int := 0;
@@ -90,22 +92,35 @@ package body Landin.Platform.Native.Tools is
       procedure Cleanup_Capture;
 
       procedure Cleanup_Capture is
-         Closed  : Boolean := True;
-         Deleted : Boolean := True;
-      begin
-         if FD /= OS.Invalid_FD then
-            OS.Close (FD, Closed);
-            if Closed then
-               FD := OS.Invalid_FD;
+         Clean : Boolean := True;
+
+         procedure Remove
+           (File : in out OS.File_Descriptor;
+            Path : in out OS.String_Access);
+
+         procedure Remove
+           (File : in out OS.File_Descriptor;
+            Path : in out OS.String_Access)
+         is
+            Closed : Boolean := True;
+            Deleted : Boolean := True;
+         begin
+            if File /= OS.Invalid_FD then
+               OS.Close (File, Closed);
+               if Closed then
+                  File := OS.Invalid_FD;
+               end if;
             end if;
-         end if;
-
-         if Name /= null then
-            OS.Delete_File (Name.all, Deleted);
-            OS.Free (Name);
-         end if;
-
-         if not Closed or else not Deleted then
+            if Path /= null then
+               OS.Delete_File (Path.all, Deleted);
+               OS.Free (Path);
+            end if;
+            Clean := Clean and Closed and Deleted;
+         end Remove;
+      begin
+         Remove (FD, Name);
+         Remove (Error_FD, Error_Name);
+         if not Clean then
             raise External_Tool_Failed
               with "could not remove temporary tool output";
          end if;
@@ -114,7 +129,8 @@ package body Landin.Platform.Native.Tools is
    begin
       Result := (Ended     => Landin.Platform.Exited,
                  Exit_Code => 0,
-                 Output    => Unbounded.Null_Unbounded_String);
+                 Output    => Unbounded.Null_Unbounded_String,
+                 Error_Output => Unbounded.Null_Unbounded_String);
       Located := OS.Locate_Exec_On_Path (Program);
 
       if Located = null then
@@ -138,6 +154,14 @@ package body Landin.Platform.Native.Tools is
            with "could not create temporary tool output";
       end if;
 
+      if Capture = Output_Only then
+         OS.Create_Temp_Output_File (Error_FD, Error_Name);
+         if Error_FD = OS.Invalid_FD or else Error_Name = null then
+            raise External_Tool_Failed
+              with "could not create temporary tool error output";
+         end if;
+      end if;
+
       declare
          Deadline : constant Ada.Real_Time.Time :=
            Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
@@ -145,7 +169,8 @@ package body Landin.Platform.Native.Tools is
       begin
          if Start_Tool
            (List, Interfaces.C.int (FD),
-            Boolean'Pos (Capture = Merged), Pid'Access) /= 0
+            (if Capture = Merged then -1 else Interfaces.C.int (Error_FD)),
+            Pid'Access) /= 0
          then
             raise External_Tool_Failed with "could not run tool: " & Program;
          end if;
@@ -156,6 +181,14 @@ package body Landin.Platform.Native.Tools is
               with "could not close temporary tool output";
          end if;
          FD := OS.Invalid_FD;
+         if Error_FD /= OS.Invalid_FD then
+            OS.Close (Error_FD, Success);
+            if not Success then
+               raise External_Tool_Failed
+                 with "could not close temporary tool error output";
+            end if;
+            Error_FD := OS.Invalid_FD;
+         end if;
 
          Exceeded_Limit := False;
          loop
@@ -182,6 +215,13 @@ package body Landin.Platform.Native.Tools is
       if Read /= Read_Ok then
          raise External_Tool_Failed
            with "could not read temporary tool output";
+      end if;
+      if Error_Name /= null then
+         Reader.Read_File (Error_Name.all, Result.Error_Output, Read);
+         if Read /= Read_Ok then
+            raise External_Tool_Failed
+              with "could not read temporary tool error output";
+         end if;
       end if;
       if Exceeded_Limit then
          Unbounded.Append
