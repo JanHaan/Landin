@@ -77,6 +77,7 @@ procedure Landin_Tests is
       "backend scale    ",
       "frontend review  ",
       "host reports     ",
+      "catalogue        ",
       "checking         ",
       "debugging        ",
       "diagnostics      ",
@@ -86,6 +87,7 @@ procedure Landin_Tests is
       "harness          ",
       "ir               ",
       "ir opt           ",
+      "lexer            ",
       "lowering         ",
       "opt driver       ",
       "opt foundations  ",
@@ -284,6 +286,11 @@ begin
            with "test suite is not registered: " & Trimmed (Suite);
       end if;
    end loop;
+
+   if Landin.Testing.Suite_Count (Cases) /= Expected_Suites'Length then
+      raise Landin.Compiler_Defect
+        with "a registered suite is absent from the expected inventory";
+   end if;
 
    case Mode is
       when Run_All =>

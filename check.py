@@ -2888,6 +2888,50 @@ def check_catalogue(full_run):
     return out
 
 
+def test_suite_inventory():
+    """Every suite source, registration call and expected name must agree."""
+    out = []
+    directory = os.path.join(ROOT, "compiler/ada/tests/src")
+    where = "compiler/ada/tests/src/landin_tests.adb"
+    main = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    expected_block = re.search(r"Expected_Suites\s*:.*?:=\s*\[(.*?)\];",
+                               main, re.S)
+    if not expected_block:
+        return [(where, 1, "expected suite inventory is missing")]
+    expected = [name.rstrip() for name in
+                re.findall(r'"([^"\n]+)"', expected_block.group(1))]
+    if len(expected) != len(set(expected)):
+        out.append((where, 1, "expected suite inventory repeats a name"))
+    calls = re.findall(r"(Landin\.Tests\.\w+_Suite)\.Register\s*\(Cases\)",
+                       main, re.I)
+    packages = set()
+    names = set()
+    for filename in sorted(os.listdir(directory)):
+        if not re.fullmatch(r"landin-tests-.+_suite\.adb", filename):
+            continue
+        text = io.open(os.path.join(directory, filename),
+                       encoding="utf-8").read()
+        package = re.search(r"package body (Landin\.Tests\.\w+) is", text)
+        if not package:
+            out.append((where, 1, "suite package is unreadable: " + filename))
+            continue
+        packages.add(package.group(1).lower())
+        registered = re.findall(
+            r'Landin\.Testing\.Register\s*\(\s*Into\s*,\s*"([^"\n]+)"',
+            text, re.I)
+        if not registered:
+            out.append((where, 1, "suite has no named registration: " + filename))
+        names.update(registered)
+    if len(calls) != len(set(call.lower() for call in calls)):
+        out.append((where, 1, "a suite package is registered more than once"))
+    if set(call.lower() for call in calls) != packages:
+        out.append((where, 1, "suite package inventory and registration disagree"))
+    if set(expected) != names:
+        out.append((where, 1, "expected suite names differ from source: "
+                    + ", ".join(sorted(set(expected) ^ names))))
+    return out
+
+
 def fixture_profiles():
     """Runtime/ABI profile policy is explicit metadata, independent of names."""
     out = []
@@ -5263,6 +5307,7 @@ def main(argv):
     if full_run:
         extra += fixture_constructs()
         extra += fixture_profiles()
+        extra += test_suite_inventory()
         extra += fixture_sources()
         extra += pinned_fixtures()
         extra += lowering_verifies()

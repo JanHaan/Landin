@@ -52,6 +52,9 @@ package Landin.Testing is
    --  smaller.
    function Has_Suite (In_Registry : Registry; Suite : String) return Boolean;
 
+   --  Distinct suite names, independently of case count and ordering.
+   function Suite_Count (In_Registry : Registry) return Natural;
+
    function Case_Count (In_Registry : Registry) return Natural;
 
    type Summary is record

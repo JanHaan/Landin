@@ -335,6 +335,12 @@ Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples, so the authoritative Linux gate compiles, runs
 and checks all ten during explicit complete native acceptance.
 
+The test program validates its complete suite-name inventory before any
+selected or complete run. It rejects missing and unlisted suites separately
+from individual case selection. `check.py` also compares every suite source
+with its registration call and expected name, so dropping both a call and
+its expected name cannot silently omit a source package.
+
 ## Metadata
 
 `fixture.meta` is `key: value` lines, with `#` comments and blank lines.

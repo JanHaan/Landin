@@ -1,3 +1,4 @@
+with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Exceptions;
 
 package body Landin.Testing is
@@ -108,6 +109,16 @@ package body Landin.Testing is
       end loop;
       return False;
    end Has_Suite;
+
+   function Suite_Count (In_Registry : Registry) return Natural is
+      package Sets is new Ada.Containers.Indefinite_Ordered_Sets (String);
+      Names : Sets.Set;
+   begin
+      for Item of In_Registry.Items loop
+         Names.Include (Unbounded.To_String (Item.Suite));
+      end loop;
+      return Natural (Names.Length);
+   end Suite_Count;
 
    function Case_Count (In_Registry : Registry) return Natural
      is (Natural (In_Registry.Items.Length));
