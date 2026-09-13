@@ -1,0 +1,9 @@
+class: negative
+summary: early iterable typing requires the exact declared traversal contract
+program: main.ldn
+codes: L0301
+constructs: 0430, 1150, 1240, 1280, 1320
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-iterable-contract/main.ldn
+status: 1

@@ -7283,15 +7283,23 @@ assembly, generated executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-alias-backing/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-R4.91-F4, found while validating J73, remains open: a small ordinary `iterable`
-conformance and traversal over a named parameter exit 70, even when the body
-only reads the element. The checker asks for a provider before the row's
-entries have been populated. The preceding `f17e4772` Linux release build
-reproduces the same failure; a generic conformance control succeeds. Preserve
-provider validation and exact Item/Cur identity while deferring dependent
-traversal inference until the evidence is ready. The tiny sources, failed
-checking seam and compile-only baseline are retained in
-`.scratch/r491-alias-backing/`. This is the next implementation repair.
+R4.91-F4, found while validating J73, is implemented: an early iterable
+header obtains its exact entry signature from the declared concept and
+interned conformance key when the provider table is not populated yet. The
+shared contract query already supports erased-call staging. Ordinary provider
+validation remains mandatory, and populated rows retain their provider-backed
+checks. The baseline ordinary traversal over a named parameter exited 70
+while only reading its element; `f17e4772` Linux release reproduced it too.
+Nine exact selectors pass 43 checks in each of macOS debug and Linux
+release; both single-worker builds and the inventories pass. Controls cover ordinary and generic copied element storage,
+inferred locals and loop expressions, early generic calls, inferred errors,
+erased labels, a bad provider and a bad declared iterable contract. Each bad
+contract produces one exact L0301, and the original source-free Item refusal
+is preserved. Tiny sources and transcripts are in
+`.scratch/r491-iterable-contract/`, `.scratch/r491-alias-backing/` and
+`.scratch/r491-final-values/`. No native assembly, generated executable,
+debugger or giant image ran. Exact-revision acceptance remains open. J6's
+module-directory identity is the next implementation repair.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
