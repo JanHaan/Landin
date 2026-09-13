@@ -353,6 +353,16 @@ individual verdicts and output oracles still decide success. Intentionally
 removing a fixture and regenerating the inventory still needs review of the
 semantic coverage that fixture provided.
 
+Live Landin fences in the tour and prototypes also pass the independent lexical
+scanner, including the lowercase identifier rule. Historical findings and the
+tour's dropped-design section retain their original bytes and are excluded.
+This does not make the prototypes standalone programs: their documented
+omissions and future constructs remain. The tour's initialized-object and
+three-buffer acquisition examples are copied into
+`positive/r491-tour-allocator-examples`; `check.py` holds those two excerpts to
+the compiled witness. Its count is two bytes per buffer and validation only
+emits assembly text.
+
 ## Metadata
 
 `fixture.meta` is `key: value` lines, with `#` comments and blank lines.

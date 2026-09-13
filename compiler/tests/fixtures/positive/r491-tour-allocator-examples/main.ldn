@@ -1,0 +1,55 @@
+import core/mem
+
+canvas: type = struct marker: i32 end canvas
+button: type = struct text: utf8 end button
+
+drawable: type = concept (t: type)
+    draw: (self: ptr t, target: ptr mut canvas) -> none
+end drawable
+clickable: type = concept (t: type)
+    click: (self: ptr mut t, x: u32, y: u32) -> none
+end clickable
+widget: type = concept (t: type) is drawable, clickable
+    focus: (self: ptr mut t) -> none
+end widget
+
+button_draw: (self: ptr button, target: ptr mut canvas) -> none =
+    target.val.marker = 1
+end button_draw
+button_click: (self: ptr mut button, x: u32, y: u32) -> none =
+end button_click
+button_focus: (self: ptr mut button) -> none = end button_focus
+button is drawable (draw: button_draw)
+button is clickable (click: button_click)
+button is widget (focus: button_focus)
+
+new_buffers: (provider: type is mem.allocator,
+              inout state: provider, count: usize)
+             -> (first: mem.byte_buffer, second: mem.byte_buffer,
+                 third: mem.byte_buffer) ! mem.out_of_memory =
+    first = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, first)
+
+    second = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, second)
+
+    third = try mem.new_bytes(state: state, count: count)
+    -- All three owners are published by the successful return.
+end new_buffers
+
+make_widget: (provider: type is mem.allocator, inout a: provider)
+             -> (item: any widget) ! mem.out_of_memory =
+    initial: button = (text: "OK")
+    b := try mem.new(state: a, value: initial)
+    item = any(b)
+end make_widget
+
+probe: (inout state: mem.arena) -> none ! mem.out_of_memory =
+    mut buffers := try new_buffers(state, usize(2))
+    chosen := try make_widget(state)
+    mut target: canvas = (marker: 0)
+    chosen.draw(addr target)
+    mem.drop_bytes(state, buffers.first)
+    mem.drop_bytes(state, buffers.second)
+    mem.drop_bytes(state, buffers.third)
+end probe

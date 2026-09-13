@@ -39,8 +39,8 @@ unknown input as recoverable tokens.
 ```landin
 utf8       distinct []u8
 position   an opaque byte offset into a utf8
-utf8 is indexable (Idx: position, Item: []u8, get: ...)
-utf8 is iterable  (Cur: position, Item: u32, ...)
+utf8 is indexable (idx: position, item_type: []u8, get: ...)
+utf8 is iterable  (cur: position, item_type: u32, ...)
 ```
 
 ## config/diag  —  the diagnostics log
@@ -67,10 +67,10 @@ reports, since none of them has to name the log's capacity any
 more.
 
 ```landin
-public log: type = concept (D: type)
-    note:   (inout d: D, where: text.position, kind: severity,
+public log: type = concept (log_type: type)
+    note:   (inout d: log_type, where: text.position, kind: severity,
              what: utf8) -> none
-    failed: (d: D) -> (yes: bool)
+    failed: (d: log_type) -> (yes: bool)
 end log
 
 ```
@@ -81,16 +81,16 @@ not an error: past the limit it counts and stops storing, since
 the twentieth message helps nobody.
 
 ```landin
-public bounded: type (fixed N: u32) = struct
-    notes:   [N]entry
+public bounded: type (fixed capacity: u32) = struct
+    notes:   [capacity]entry
     stored:  usize
     dropped: usize
 end bounded
 
-bounded_note: (inout d: bounded(N), fixed N: u32,
+bounded_note: (inout d: bounded(capacity), fixed capacity: u32,
                where: text.position, kind: severity, what: utf8)
                -> none =
-    if d.stored < N then
+    if d.stored < capacity then
         d.notes[d.stored] = entry(where: where, kind: kind, what: what)
         inc d.stored
     else
@@ -98,7 +98,7 @@ bounded_note: (inout d: bounded(N), fixed N: u32,
     end if
 end bounded_note
 
-bounded_failed: (d: bounded(N), fixed N: u32) -> (yes: bool) =
+bounded_failed: (d: bounded(capacity), fixed capacity: u32) -> (yes: bool) =
     yes = false
     for i in 0..<d.stored do
         if d.notes[i].kind == error then
@@ -116,11 +116,11 @@ aggregate holding one. So the empty note has to be spelt.
 ```landin
 blank: entry = (where: text.nowhere, kind: warning, what: "")
 
-public new_log: (fixed N: u32) -> (d: bounded(N)) =
+public new_log: (fixed capacity: u32) -> (d: bounded(capacity)) =
     d = (notes: [of blank], stored: 0, dropped: 0)
 end new_log
 
-(fixed N: u32) bounded(N) is log (note: bounded_note,
+(fixed capacity: u32) bounded(capacity) is log (note: bounded_note,
                                   failed: bounded_failed)
 
 ```
@@ -310,7 +310,8 @@ parse_entry: (inout p: parser, inout d: any diag.log,
               ! out_of_memory | too_deep =
 
     got = false
-    v = try mem.new(T: value_kind, a: a)
+    initial: value_kind = (name: "", body: group_value(items: []))
+    v = try mem.new(state: a, value: initial)
 
     if p.look.what <> lex.ident then
         d.note(p.look.begins, diag.error, "expected a name")
@@ -383,7 +384,7 @@ public parse_file: (src: utf8, inout d: any diag.log, inout a: mem.arena)
                     ! out_of_memory | too_deep =
 
     mut p := parser(lx: lex.open(src), look: first_token(src), depth: 0)
-    mut list := vec.new_list(T: ptr mut value_kind)
+    mut list := vec.new_list(t: ptr mut value_kind)
 
     loop do
         break when p.look.what == lex.end_of_input
@@ -438,7 +439,7 @@ run: (inout w: any io.world, inout scratch: mem.arena, path: utf8)
             return
         end read_file
 
-        mut notes := diag.new_log(N: 64)
+        mut notes := diag.new_log(capacity: 64)
         d := any(addr notes)
 
         items := parse.parse_file(src, d, scratch) else (e)

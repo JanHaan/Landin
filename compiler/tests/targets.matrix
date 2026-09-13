@@ -1197,6 +1197,7 @@ positive/r491-loop-assignment | linux-x86-64
 positive/r491-noreturn-name | linux-x86-64
 positive/r491-ordinary-iterable | linux-x86-64
 positive/r491-symbolic-c-layout | linux-x86-64
+positive/r491-tour-allocator-examples | linux-x86-64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32

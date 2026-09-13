@@ -1,0 +1,6 @@
+class: positive
+summary: live tour allocator examples publish initialized objects and return all buffer owners after fallible acquisitions
+program: main.ldn
+root: ../../../../..
+constructs: 0510, 0790, 0990, 1200, 1290, 1360, 1380, 1760
+targets: linux-x86-64

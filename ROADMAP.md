@@ -5669,7 +5669,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | C6: nested-call depth | Implemented with J37: shared call-depth accounting includes recovery clauses, and refused calls skip their balanced argument list. Exact boundary and following-declaration controls pass in both modes; no overflow reproduction. | Exact acceptance open |
 | M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
-| M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
+| M4, M16: tour and prototype drift | Named facets reconciled after reading all four complete prototypes: live formals and conformance labels use lowercase names without colliding with runtime parameters; tour allocations use initialized object/byte-buffer APIs; explicit legacy prototype calls supply every static formal; retired worklist links name this roadmap; the reader consumes one file handle with the whole reader. Historical findings remain byte-identical and deliberately retained raw-storage sketches stay labelled historical. The prototypes remain specification sketches, not newly enabled programs. | Fourth batch |
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
 | M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
@@ -7444,6 +7444,36 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+M4/M16 live-example reconciliation preserves all four prototypes' historical
+finding sections and the tour's dropped-design section byte for byte. Live
+formal names and associated type labels now obey [1760]; provider/log/world
+names remain distinct from their runtime parameters. The tour's sort and paint
+clients request the mutable views their callees require. Initialized values
+precede object publication, and the three-acquisition undo example returns
+three byte-buffer owners instead of forging generic capacity slices. Its
+`make_widget` companion returns one explicitly constructed erased value.
+Prototype 2 supplies a complete initial node before allocation. Prototype 4's
+reader keeps one `io.file` because `shut` consumes the whole reader; W3's old
+atom/integer-union discussion remains untouched. Prototype 3's explicitly
+historical raw/slice sketches remain comparison evidence, with saturated
+static argument lists. Active affine-value references point to this roadmap.
+The reported partial `pair` example is absent from the current tour; [1290]
+still explicitly requires a saturated static list.
+
+`check.py` now lexes live Landin fences while excluding the three historical
+section boundaries. The previous documents fail at 62 live fences; the revised
+text passes, and eight tiny controls cover names, comments, literals and those
+exclusions. Exact copies of `new_buffers` and `make_widget` are held to one
+positive fixture that instantiates both through an arena provider. The caller
+uses [0190]'s explicit `usize(2)` for D138's independently typed generic actual;
+plain `2` and a non-language `2usize` suffix were refused during fixture
+preparation. The final exact fixture passes three checks on each of macOS
+debug and Linux release and emits text only. No runtime, assembler, debugger,
+giant array or stress test ran. Evidence is in
+`.scratch/r491-document-examples/` and `.scratch/r491-final-values/`.
+The prototypes retain documented omissions and future constructs; this is not
+a claim that they are standalone compiler inputs. Exact acceptance remains open.
 
 M8's named decision-register drift is reconciled against the current tour,
 enabled grammar, parser/checker and recorded R4.40 closure. The measurement

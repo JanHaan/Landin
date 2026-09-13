@@ -286,10 +286,32 @@ def looks_like_code(line):
     return bool(s) and not s.startswith("--")
 
 
+def live_example_tokens(text):
+    """Live examples obey lexical rules even when their syntax is deferred."""
+    live = re.split(
+        r"^## (?:WHAT THIS ONE FOUND|WHERE THE SPECIFICATION WAS SILENT|"
+        r"WHAT WAS TRIED AND DROPPED)", text, maxsplit=1, flags=re.M)[0]
+    _, trees, problems = read_grammar(os.path.join(ROOT, SPEC_NAME))
+    if problems:
+        return []  # The grammar check owns an unreadable lexical vocabulary.
+    signs = grammar_signs(trees)
+    out = []
+    for block in re.finditer(r"^```landin\n(.*?)^```", live, re.M | re.S):
+        source = block.group(1).encode("utf-8").decode("latin-1")
+        tokens, problem = landin_tokens(source, signs)
+        if tokens is None:
+            line = text.count("\n", 0, block.start()) + 1
+            out.append((line, "live Landin example: " + problem))
+    return out
+
+
 def check(path):
     text = io.open(path, encoding="utf-8").read()
     all_lines = text.split("\n")
     out = []
+    basename = os.path.basename(path)
+    if basename == "tour.md" or re.fullmatch(r"prototype-[1-4]-.+\.md", basename):
+        out += live_example_tokens(text)
 
     #  A fence says what its block is; one that says nothing is a fault.
     #  This was documented and never enforced: `sections` filed a bare
@@ -2914,6 +2936,20 @@ def third_party_notices():
     return out
 
 
+def tour_example_witnesses():
+    """The allocator examples retain their compiled source witnesses."""
+    tour = io.open(os.path.join(ROOT, "tour.md"), encoding="utf-8").read()
+    where = "compiler/tests/fixtures/positive/r491-tour-allocator-examples/main.ldn"
+    source = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    out = []
+    for name in ("new_buffers", "make_widget"):
+        found = re.search(r"^" + name + r": \(.*?^end " + name + r"$",
+                          tour, re.M | re.S)
+        if not found or found.group() not in source:
+            out.append((where, 1, "compiled witness differs from tour " + name))
+    return out
+
+
 def decision_status_references():
     """Decision evidence cannot call a completed roadmap owner active."""
     spec = io.open(os.path.join(ROOT, "spec.md"), encoding="utf-8").read()
@@ -5362,6 +5398,7 @@ def main(argv):
         extra += fixture_profiles()
         extra += test_suite_inventory()
         extra += decision_status_references()
+        extra += tour_example_witnesses()
         extra += third_party_notices()
         extra += fixture_sources()
         extra += pinned_fixtures()
