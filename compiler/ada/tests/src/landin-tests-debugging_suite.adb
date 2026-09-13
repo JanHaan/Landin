@@ -1,9 +1,13 @@
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Debug_Locations;
+with Landin.Backend.X86_64.Allocation;
+with Landin.Backend.X86_64.Dwarf;
 with Landin.Debugging;
 with Landin.Driver;
 with Landin.IR;
+with Landin.Optimization;
 with Landin.Platform;
 with Landin.Resolution;
 with Landin.Source;
@@ -22,6 +26,8 @@ package body Landin.Tests.Debugging_Suite is
    package IR renames Landin.IR;
    use type IR.Declaration_Id;
    use type IR.Item_Kind;
+   use type IR.Item_Id;
+   use type IR.Slot_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Byte_Offset;
    LF : constant Character := Character'Val (10);
@@ -516,8 +522,176 @@ package body Landin.Tests.Debugging_Suite is
       Expect (Item, Work, Text, "residue", "probe(40)", True);
    end Aliases;
 
+   procedure Register_Locations_Preserve_Indirection
+     (Item : in out Landin.Testing.Context);
+
+   procedure Register_Locations_Preserve_Indirection
+     (Item : in out Landin.Testing.Context)
+   is
+      package Dwarf renames Landin.Backend.X86_64.Dwarf;
+      package Allocation renames Landin.Backend.X86_64.Allocation;
+      HT : constant Character := Character'Val (9);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Dwarf.Register_Location (Allocation.RBX, False),
+         HT & ".byte 83" & LF, "a direct RBX value uses DW_OP_reg3");
+      Landin.Testing.Check_Equal
+        (Item, Dwarf.Register_Location (Allocation.RBX, True),
+         HT & ".byte 115" & LF & HT & ".sleb128 0" & LF,
+         "an address in RBX uses DW_OP_breg3 with zero displacement");
+      Landin.Testing.Check_Equal
+        (Item, Dwarf.Register_Location (Allocation.R15, False),
+         HT & ".byte 95" & LF, "a direct R15 value uses DW_OP_reg15");
+      Landin.Testing.Check_Equal
+        (Item, Dwarf.Register_Location (Allocation.R15, True),
+         HT & ".byte 127" & LF & HT & ".sleb128 0" & LF,
+         "an address in R15 uses DW_OP_breg15 with zero displacement");
+   end Register_Locations_Preserve_Indirection;
+
+   procedure Whole_Aliases_Require_Array_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Whole_Aliases_Require_Array_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (From_Module, Array_Storage : Boolean);
+
+      procedure Check (From_Module, Array_Storage : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Text : constant String :=
+           (if Array_Storage then
+              "data: [1]i32 = [1] f: () -> none = "
+              & "local: [1]i32 = [2] end f"
+            else "data: i32 = 1 f: () -> none = local: i32 = 2 end f");
+         Expected : constant String :=
+           (if From_Module then "a whole datum alias requires array storage"
+            else "a whole slot alias requires array storage");
+      begin
+         Lower (Item, Work, Text);
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Info : Landin.Debugging.Information (Landin.Stages.Trees (Work));
+            Routine, Datum : IR.Item_Id := IR.No_Item;
+            Slot : IR.Slot_Id := IR.No_Slot;
+
+            function Symbol (Id : IR.Item_Id) return String;
+
+            function Symbol (Id : IR.Item_Id) return String is
+              ("item_" & Ada.Strings.Fixed.Trim
+                 (Id'Image, Ada.Strings.Both));
+         begin
+            for Index in 1 .. IR.Item_Count (Unit) loop
+               if IR.Kind_Of (Unit, IR.Item_Id (Index)) = IR.Routine then
+                  Routine := IR.Item_Id (Index);
+               else
+                  Datum := IR.Item_Id (Index);
+               end if;
+            end loop;
+            for Index in 1 .. IR.Slot_Count (Unit, Routine) loop
+               declare
+                  Binding : constant IR.Declaration_Id :=
+                    IR.Declares (Unit, Routine, IR.Slot_Id (Index));
+               begin
+                  if Binding /= IR.No_Declaration
+                    and then Landin.Source.Names.Spelling
+                      (Landin.Stages.Identities (Work).all,
+                       Landin.Resolution.Name_Of
+                         (Landin.Stages.Meanings (Work).all, Binding))
+                      = "local"
+                  then
+                     Slot := IR.Slot_Id (Index);
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Slot /= IR.No_Slot and then Datum /= IR.No_Item,
+               "the tiny alias seam has both local and module storage");
+            if Slot = IR.No_Slot or else Datum = IR.No_Item then
+               return;
+            end if;
+            IR.Note_Source_Alias
+              (Unit, Routine,
+               (Binding => IR.Declares (Unit, Routine, Slot),
+                Site => IR.Origin_Of (Unit, Routine, Slot),
+                Place => (if From_Module
+                          then (Kind => IR.Module_Datum, Datum => Datum)
+                          else (Kind => IR.Frame_Slot, Slot => Slot)),
+                Field => 0, Initialized_On_Entry => True), IR.No_Path_Steps);
+            Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+            declare
+               Sections : US.Unbounded_String;
+            begin
+               Sections := US.To_Unbounded_String
+                 (Landin.Backend.X86_64.Dwarf.Sections
+                    (Unit, Landin.Stages.Meanings (Work).all,
+                     Landin.Stages.Identities (Work).all,
+                     Landin.Targets.Linux_X86_64,
+                     Landin.Optimization.Default_Options,
+                     Info, ".Lalias_", Symbol'Access));
+               Landin.Testing.Check
+                 (Item, Array_Storage and then Contains
+                    (US.To_String (Sections), "debug_alias_loc"),
+                  "whole array aliases have a serialized location");
+            exception
+               when Error : Landin.Compiler_Defect =>
+                  Landin.Testing.Check
+                    (Item, not Array_Storage and then
+                       Ada.Exceptions.Exception_Message (Error) = Expected,
+                     "a non-array whole alias fails before a shape query");
+            end;
+         end;
+      end Check;
+   begin
+      Check (False, False);
+      Check (True, False);
+      Check (False, True);
+      Check (True, True);
+   end Whole_Aliases_Require_Array_Storage;
+
+   procedure Array_Addresses_Keep_Homes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Addresses_Keep_Homes
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List := Request;
+   begin
+      Host.Add_File
+        ("main.ldn", "public main: () -> (code: i32) = "
+         & "local: [1]i32 = [42] copy: [1]i32 = local "
+         & "code = copy[0] end main");
+      Args.Append ("--debug=full");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "small frame array addresses emit");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("out.s"), "leaq")
+              and then Contains (Host.Written ("out.s"), ".debug_info")
+              and then Tools.Run_Count = 0,
+            "address and debug output is text in the fake filesystem");
+      end;
+   end Array_Addresses_Keep_Homes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "register locations preserve indirection",
+         Register_Locations_Preserve_Indirection'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "whole aliases require array storage",
+         Whole_Aliases_Require_Array_Storage'Access);
+      Landin.Testing.Register
+        (Into, "debugging", "array addresses keep homes",
+         Array_Addresses_Keep_Homes'Access);
       Landin.Testing.Register
         (Into, "debugging", "invalid debug requests and help",
          Invalid_Requests'Access);

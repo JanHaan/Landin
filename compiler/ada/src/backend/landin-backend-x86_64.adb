@@ -1516,6 +1516,10 @@ package body Landin.Backend.X86_64 is
                      end;
                   end if;
                when Landin.IR.Frame_Slot =>
+                  if not Has_Slot_Home (Layout, Place.Slot) then
+                     raise Landin.Compiler_Defect with
+                       "an unhomed storage slot was addressed";
+                  end if;
                   Emit
                     ("leaq "
                      & Cell

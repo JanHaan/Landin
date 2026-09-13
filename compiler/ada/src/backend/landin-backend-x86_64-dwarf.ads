@@ -13,6 +13,10 @@ package Landin.Backend.X86_64.Dwarf is
       Index : Natural := 0) return String;
    function Register_Number
      (Register : Allocation.Saved_Register) return Natural;
+   --  A value resides in the register; an indirect binding resides at the
+   --  address held there. The latter uses breg with zero displacement.
+   function Register_Location
+     (Register : Allocation.Saved_Register; Indirect : Boolean) return String;
    function Source_Line
      (Info : Landin.Debugging.Information;
       Site : Landin.Provenance.Origin) return String;
