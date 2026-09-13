@@ -3515,6 +3515,8 @@ package body Landin.Syntax.Parser is
                         --  everywhere else, including before another
                         --  ordinary field, so the first case has to prove
                         --  the shape rather than the word alone.
+                        --  An empty-part refusal must not consume the
+                        --  enclosing struct's own ordinary-field closer.
                         Is_Variant_Part :=
                           not Compact
                           and then Peek = Tok.Identifier
@@ -3531,7 +3533,8 @@ package body Landin.Syntax.Parser is
                              or else
                                (Ahead (1) = Tok.Kw_End
                                 and then Ahead (2) = Tok.Identifier
-                                and then Named_Ahead (2) = Field_Named));
+                                and then Named_Ahead (2) = Field_Named
+                                and then Field_Named /= Named));
 
                         if Is_Variant_Part then
                            Fields.Append
