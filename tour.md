@@ -442,7 +442,7 @@ where it is written, and [1100] says when it does instead.
 ### [0420] The dot is not only field access
 
 The dot is not only field access. All of these are member
-selection: p.val (pointer target), T.less (concept entry),
+selection: p.val (pointer target), `t.less` (concept entry),
 http.get (module member), f64.nan (named value of a type).
 Separate tokens: .. (range), ... (inferred error set), and
 the decimal point.
@@ -581,14 +581,14 @@ system-tool policy belongs:
 
 ```landin
 mem.offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
-mem.base_of:    (T: type, s: []T) -> (p: ptr u8)
-mem.base_of:    (T: type, s: []mut T) -> (p: ptr mut u8)
-mem.slice_from: (T: type, p: ptr mut u8, n: usize) -> (s: []mut T)
+mem.base_of:    (t: type, s: []t) -> (p: ptr u8)
+mem.base_of:    (t: type, s: []mut t) -> (p: ptr mut u8)
+mem.slice_from: (t: type, p: ptr mut u8, n: usize) -> (s: []mut t)
 ```
 
 Implementation pressure rejected the third one [0510]: no operation may turn
 an arbitrary allocation into a slice that claims every slot already contains
-`T`. The repository `core/mem` instead keeps pointer arithmetic inside its
+`t`. The repository `core/mem` instead keeps pointer arithmetic inside its
 private raw-storage operations. It can copy one initialized slot directly into
 the next slot of a private replacement, but it exposes neither spare capacity
 nor a general pointer-to-slice conversion. R4.20 records `offset` and `base_of`
@@ -601,23 +601,23 @@ library API. D196 records the disposition without reopening `slice_from`.
 
 slice_from is where uninitialised storage is smuggled in,
 and calling that an answer was too kind to it. It hands
-back a []mut T over memory holding no T, so the type says
+back a `[]mut t` over memory holding no `t`, so the type says
 more than is true from the allocation until the write, and
 nothing checks the gap. Containers hold the invariant
 themselves — a growing array by its length, a hash table by
 its state array — and that works, for a container whose
 author is careful.
-Where it does not work is inline storage. small(T, N) holds
-an [N]T that is not full yet, and there is no honest value
-to put in the empty slots: [0540] forbids zeroed for a T with
-no zero image, and ptr is such a T. So until there is a way
+Where it does not work is inline storage. `small(t, capacity)` holds
+an `[capacity]t` that is not full yet, and there is no honest value
+to put in the empty slots: [0540] forbids zeroed for a `t` with
+no zero image, and ptr is such a `t`. So until there is a way
 to say uninitialised in a type, that shape is restricted to
-a T that has a zero image, and general uninitialised
+a `t` that has a zero image, and general uninitialised
 generic storage is not supported.
-The answer is `core/mem`'s `raw(T)`. It is an ordinary parameterised
+The answer is `core/mem`'s `raw(t)`. It is an ordinary parameterised
 struct whose identity and fields stay private to that module. A caller may
 hold the inferred result of `reserve`; another core module names the same
-private identity through the public alias `storage(T)`. Neither route exposes
+private identity through the public alias `storage(t)`. Neither route exposes
 the representation. `capacity` and `initialized` report the two counts,
 `admit` initializes exactly the next slot, `get` reads only the initialized
 prefix, `replace` writes an existing initialized slot, and `used` exposes that
@@ -639,11 +639,11 @@ That last assignment is the publication point. The private initialized slice
 is the length witness. The first complete typed store precedes taking its
 singleton slice; a later append writes the next item before a narrow
 `unchecked` range extension publishes it. No slice ever describes spare
-capacity and no spare byte is read as `T`. A `used` view must end before a
+capacity and no spare byte is read as `t`. A `used` view must end before a
 capacity or prefix transition; writes through aliases retain [0860]'s stated
 local-analysis limitation.
 
-This is not a memory-safety claim. Before `dispose`, save `capacity * sizeof T`
+This is not a memory-safety claim. Before `dispose`, save `capacity * sizeof t`
 as the allocator's release extent; the caller still supplies a live, aligned
 allocation large enough for that many slots. Pointer validity, alignment and a
 lying extent remain outside the language guarantees [1720]. The private module
@@ -653,7 +653,7 @@ type kind, or the dishonest `slice_from` operation.
 ## ARRAYS, SLICES AND TEXT
 
 The initialized allocation helper `mem.new(state, value)` stores the complete
-initial value before returning `ptr mut T`; reference-containing values must
+initial value before returning `ptr mut t`; reference-containing values must
 satisfy its `escaping` parameter. `mem.delete` consumes one pointer binding
 and releases the original object extent through the supplied allocator.
 `mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
@@ -669,7 +669,7 @@ closed fixed expression: integer literals and fixed parameters combined with
 parentheses, unary `-`, and non-wrapping `+`, `-`, `*`, `/` and `%`. It is
 substitution and arithmetic, never a call or compile-time user execution;
 width-dependent wrapping, bitwise and shift operations are not bound forms. A
-negative result is refused. A zero result is accepted: `[0]T` and an admitted
+negative result is refused. A zero result is accepted: `[0]t` and an admitted
 fixed expression that folds to zero denote a zero-length array. This does not
 add an empty array literal or make zero-length repetition valid.
 An array retains its complete element type through a pointer, slice, generic
@@ -769,7 +769,7 @@ end read_header
 
 The repeated expression runs once, not once for every element. In the mixed form
 `[e1, ..., ek, of repeated]`, an explicitly typed local, explicitly typed module
-binding or assignment to a mutable fixed array requires `1 <= k < N`. A local or
+binding or assignment to a mutable fixed array requires `1 <= k < N`, where `N` is the destination length. A local or
 assignment evaluates and stores the prefix left to right, then evaluates
 `repeated` once and compactly fills the suffix. An assignment reaches its
 destination first; all right-hand reads use the incoming definite-assignment
@@ -796,7 +796,7 @@ row = [header(), of padding()]     -- prefix first, then one padding call
 ```
 
 A zero contextual length and a zero count in the inferred form remain refused:
-`[0]T` is a valid fixed-array type, but repetition still needs a nonzero
+`[0]t` is a valid fixed-array type, but repetition still needs a nonzero
 contextual destination or a count that supplies an inferred element shape. A
 count-less inferred initializer and other general array value positions remain
 later compiler slices. Every
@@ -1270,8 +1270,8 @@ clear:  register(set(irq), read: normal, write: one_clears,
 
 ```
 
-A field of register(T, ...) type reads as a T and is
-assigned a T, and the access behaviour is checked exactly
+A field of `register(t, ...)` type reads as a `t` and is
+assigned a `t`, and the access behaviour is checked exactly
 there: reading one whose read is 'none' is an error, and so
 is writing one whose write is 'none'. Together with the
 rule above that gives the shape of every driver — read the
@@ -1382,12 +1382,14 @@ push_front: (escaping inout head: ptr mut node, escaping item: ptr mut node)
     head = item
 end push_front
 
-build: (A: type is mem.allocator, inout a: A)
-       -> (head: ptr node) ! mem.out_of_memory =
-    n := try mem.new(T: node, a: a)
+build: (provider: type is mem.allocator, inout a: provider,
+        escaping seed: ptr mut node)
+       -> (head: ptr mut node) ! mem.out_of_memory =
+    head = seed
+    n := try mem.new(state: a, value: seed.val)
     push_front(head, n)             -- allocated, fine
 
-    mut local: node = zeroed
+    mut local: node = seed.val
     push_front(head, addr local)    -- error: a frame origin escapes
 end build
 
@@ -1402,12 +1404,12 @@ That, and only that: whether the view may be written is the
 return type's business [0430].
 
 ```landin
-used: (T: type, l: list(T)) -> (s: []mut T from l) = ... end
+used: (t: type, l: list(t)) -> (s: []mut t from l) = ... end
 ```
 
 One accessor, not two. It hands out the widest permission
 the storage has, and a caller who wants less relaxes it by
-[0440] — 'xs: []T = vec.used(l)'. The pair of accessors that
+[0440] — `xs: []t = vec.used(l)`. The pair of accessors that
 every language with deep const ends up needing is not needed
 here.
 Named from several parameters at once it borrows all of
@@ -1654,9 +1656,9 @@ call, so the caller must prove it lives long enough. In
 obligation it is the opposite of sink: sink ends the
 caller's duty, escaping extends it.
 On a generic parameter escaping says the right thing at
-both extremes with no special case. For T = u32 it is
+both extremes with no special case. For `t` = u32 it is
 vacuous, since [0840] already leaves a value holding no
-references unconstrained; for T = ptr node it is exact.
+references unconstrained; for `t` = ptr node it is exact.
 The origin travels with the type, so one word covers both.
 An inout argument need not be a binding. A pointer target,
 c.inner.val, is an ordinary one. The same provable
@@ -1676,7 +1678,7 @@ end process
 ### [0910] sink takes a place
 
 sink takes a place, and a field of a binding is a place,
-so releasing a container's storage needs no ceremony. The
+so consuming a container's field needs no ceremony. The
 path has to be rooted in a binding and contain no
 dereference and no computed index, which is the line where
 the analysis is still provable: two pointers may name one
@@ -1703,12 +1705,13 @@ before the check, so a `defer` or `undo` may restore the field. A failure needs
 no successful named result under [0930], but it still hands back `inout` storage.
 
 ```landin
-release: (T: type, A: type is allocator, inout l: list(T), inout a: A)
-         -> none =
-    mem.drop_slice(a, l.items)     -- l.items is dead from here
-    l.items = []                   -- and live again from here
+consume: (t: type, sink items: []t) -> none = ... end consume
+
+reset: (t: type, inout l: list(t)) -> none =
+    consume(l.items)              -- l.items is dead from here
+    l.items = []                  -- and live again from here
     l.len   = 0
-end release
+end reset
 
 ```
 
@@ -2243,8 +2246,8 @@ transfers are the same as for ordinary iterable evidence.
 ### [1160] There is no marker on a loop binding
 
 There is no marker on a loop binding, because the type
-already decided: over a []mut T an element is a writable
-place, over a []T it is not. Over anything else that
+already decided: over a `[]mut t` an element is a writable
+place, over a `[]t` it is not. Over anything else that
 satisfies iterable the binding is a copy, since item at
 [1320] hands out a value — so assigning to it is an error
 rather than a silent write to nothing.
@@ -2253,7 +2256,7 @@ an `any C` item keeps C and its evidence, while an `any C` source remains an
 erased value passed to the providers; neither pair is interpreted as a slice.
 Text traversal likewise yields an immutable copied `u32`; binding mutability
 cannot make either the item or the hosted view writable.
-When `T` is a fixed array, slice or `any C`, replacing that whole element
+When `t` is a fixed array, slice or `any C`, replacing that whole element
 follows this same rule. Writing through a slice element still follows the
 `mut` permission carried by that inner slice. An `any C` element remains an
 erased value and evidence pair; it is not a slice.
@@ -2323,18 +2326,19 @@ written: the first failing frees nothing, the second
 frees one, the third frees two.
 
 ```landin
-grow: (K: type, V: type, A: type is allocator,
-       inout m: map(K, V), inout a: A, want: usize)
-      -> none ! out_of_memory =
-    ns := try mem.new_slice(T: slot, a: a, n: want)
-    undo mem.drop_slice(a, ns)
+new_buffers: (provider: type is mem.allocator,
+              inout state: provider, count: usize)
+             -> (first: mem.byte_buffer, second: mem.byte_buffer,
+                 third: mem.byte_buffer) ! mem.out_of_memory =
+    first = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, first)
 
-    nk := try mem.new_slice(T: K, a: a, n: want)
-    undo mem.drop_slice(a, nk)
+    second = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, second)
 
-    m.state = ns          -- committed from here, and nothing
-    m.keys  = nk          -- fallible follows
-end grow
+    third = try mem.new_bytes(state: state, count: count)
+    -- All three owners are published by the successful return.
+end new_buffers
 ```
 
 And the discipline it asks for, which has to be said out
@@ -2380,7 +2384,7 @@ end area
 A pattern binding carries a parameter convention: in by
 default, inout to write into the payload that was matched.
 Nothing new is needed, because the conventions of [0900] are
-already the mechanism — and without them a [N]T payload
+already the mechanism — and without them a `[capacity]t` payload
 would be copied in order to be read and could not be
 written at all.
 Both plain and inout payload bindings alias the matched storage, including
@@ -2418,8 +2422,8 @@ end describe
 A concept names a bundle of requirements on a type.
 
 ```landin
-ordered: type = concept (T: type)
-    less: (a: T, b: T) -> (yes: bool)
+ordered: type = concept (t: type)
+    less: (a: t, b: t) -> (yes: bool)
 end ordered
 
 ```
@@ -2443,11 +2447,11 @@ takes — so a variable may carry a constraint, and a fixed
 value parameter may appear among them.
 
 ```landin
-(T: type) list(T) is iterable (Cur: usize, Item: T,
+(t: type) list(t) is iterable (cur: usize, item_type: t,
                                first: list_first, at_end: list_at_end,
                                item:  list_item,  next:   list_next)
 
-(A: type is allocator) counted(A) is allocator
+(provider: type is allocator) counted(provider) is allocator
     (alloc: counted_alloc, free: counted_free)
 ```
 
@@ -2489,12 +2493,12 @@ for it: a guarantee should not depend on how clever the
 compiler happens to be.
 
 ```landin
-indexable: type = concept (T: type, Idx: type, Item: type)
-    get: (s: T, i: Idx) -> (item: Item)
+indexable: type = concept (t: type, idx: type, item_type: type)
+    get: (s: t, i: idx) -> (item: item_type)
 end indexable
 
-utf8 is indexable (Idx: u32,      Item: []u8, get: utf8_nth)
-utf8 is indexable (Idx: position, Item: []u8, get: utf8_at_pos)
+utf8 is indexable (idx: u32,      item_type: []u8, get: utf8_nth)
+utf8 is indexable (idx: position, item_type: []u8, get: utf8_at_pos)
 
 ```
 
@@ -2542,11 +2546,11 @@ a parameter may be used in the type of one that comes
 before it, exactly as declarations inside a module may.
 The compiler collects the names first and resolves the
 types afterwards, so
-  report: (inout d: sink(N), fixed N: u32, ...)
-is as good as putting N first, and at the call site N is
+`report: (inout d: sink(capacity), fixed capacity: u32, ...)`
+is as good as putting `capacity` first, and at the call site `capacity` is
 deduced from whatever argument pins it down.
 Concept entries are reached through the type parameter, so
-two constrained parameters never collide: A.less, B.less.
+two constrained parameters never collide: `left_type.less`, `right_type.less`.
 
 The enabled R2.40 kernel admits the same collected signature scope with
 unconstrained type formals and fixed integer formals. A direct call either
@@ -2558,8 +2562,8 @@ descriptors, including the exact concept of an `any` value. Pointer and slice
 patterns match permission and ordinary view exactly, then match their complete
 referents recursively; deduction does not perform reference relaxation.
 Fixed arrays match exact bounds and elements; a direct fixed bound
-binds its length, while a computed bound such as `N * 2` is never inverted and
-is checked only after another occurrence has bound `N`. Parameterized nominal
+binds its length, while a computed bound such as `capacity * 2` is never inverted and
+is checked only after another occurrence has bound `capacity`. Parameterized nominal
 patterns require the same source template and match their complete stored tuple,
 including phantom actuals. Parameterized aliases expand symbolically, and
 function patterns match parameter and result runs plus their error form while
@@ -2578,10 +2582,10 @@ the instance's compile-time value; it still creates no runtime argument or ABI
 position.
 
 ```landin
-sort: (T: type is ordered, data: []mut T) -> none =
+sort: (t: type is ordered, data: []mut t) -> none =
     for k in 1..<lenof data do
         mut j := k
-        while j > 0 and T.less(data[j], data[j - 1]) do
+        while j > 0 and t.less(data[j], data[j - 1]) do
             tmp        := data[j]
             data[j]     = data[j - 1]
             data[j - 1] = tmp
@@ -2601,9 +2605,9 @@ named suffix keep [0980]'s matching rule. Positional-only calls remain the
 all-deduction form.
 
 ```landin
-sort_demo: (values: []i32) -> none =
+sort_demo: (values: []mut i32) -> none =
     sort(values)
-    sort(T: i32, data: values)
+    sort(t: i32, data: values)
 end sort_demo
 
 ```
@@ -2645,7 +2649,7 @@ The enabled R2.70 bootstrap gives every constrained routine instance hidden
 table pointers for the direct constraint and its separate transitive
 constraint/parent closure, in generic-formal and concept declaration order. A table begins with
 the represented type's target `usize` size and alignment, then carries direct
-concept functions in concept declaration order. `T.entry(...)` loads that
+concept functions in concept declaration order. `t.entry(...)` loads that
 function word and uses the ordinary indirect-call and error conventions; the
 static type formal still occupies no source ABI position. Linux x86-64 emits
 pointer-width table cells, while the same semantic positions are laid out from
@@ -2689,13 +2693,13 @@ stepping is a library call, so the step is visible where it
 is used rather than hidden in a type.
 
 ```landin
-step_range: type (T: type) = struct
-    low:  T
-    high: T
-    by:   T
+step_range: type (t: type) = struct
+    low:  t
+    high: t
+    by:   t
 end step_range
 
-step: (T: type, low: T, high: T, by: T) -> (r: step_range(T)) = ... end
+step: (t: type, low: t, high: t, by: t) -> (r: step_range(t)) = ... end
 ```
 
 used as: for i in step(0, 10, 2) do ... end for
@@ -2708,16 +2712,16 @@ words. Conformance is declared explicitly, even when the
 body is empty.
 
 ```landin
-drawable: type = concept (T: type)
-    draw: (self: ptr T, target: ptr mut canvas) -> none
+drawable: type = concept (t: type)
+    draw: (self: ptr t, target: ptr mut canvas) -> none
 end drawable
 
-clickable: type = concept (T: type)
-    click: (self: ptr mut T, x: u32, y: u32) -> none
+clickable: type = concept (t: type)
+    click: (self: ptr mut t, x: u32, y: u32) -> none
 end clickable
 
-widget: type = concept (T: type) is drawable, clickable
-    focus: (self: ptr mut T) -> none
+widget: type = concept (t: type) is drawable, clickable
+    focus: (self: ptr mut t) -> none
 end widget
 
 button is drawable  (draw:  button_draw)
@@ -2736,8 +2740,8 @@ would be the compile-time evaluation this language does not
 have. Substitution, not execution.
 
 ```landin
-list: type (T: type) = struct
-    items: []T
+list: type (t: type) = struct
+    items: []t
     len:   usize
 end list
 
@@ -2746,7 +2750,7 @@ end list
 An alias body may also unite atom sets after substitution. Declared atom names
 supply their singleton types, aliases flatten, and ordering or repeating members
 does not change the set. The same normalized result can name a function's error
-set or a generic actual. `missing | ptr T` retains the one-atom optional-pointer
+set or a generic actual. `missing | ptr t` retains the one-atom optional-pointer
 representation [0480]; substitution does not enable larger tagged unions.
 
 The enabled declaration form takes type parameters, each optionally carrying
@@ -2762,8 +2766,8 @@ static list, and D139 selects module declaration lists with a closed fixed
 condition; none of the three mechanisms executes user code.
 
 ```landin
-map: type (K: type is hashable, V: type) = struct ... end map
-small: type (T: type is zeroable, fixed N: u32) = struct ... end small
+map: type (key_type: type is hashable, value_type: type) = struct ... end map
+small: type (t: type is zeroable, fixed capacity: u32) = struct ... end small
 
 ```
 
@@ -2779,8 +2783,8 @@ used formal pass one recursively by value through another template. A phantom
 formal or function-signature mention does not promote that obligation, and no
 symbolic walk guesses an actual or annotates the template.
 An alias application may also normalize to one of those nominal instances.
-The alias adds no identity of its own; `mem.storage(T)` can therefore publish a
-name for a private `raw(T)` identity while the private template still decides
+The alias adds no identity of its own; `mem.storage(t)` can therefore publish a
+name for a private `raw(t)` identity while the private template still decides
 whether its fields are accessible.
 
 ### [1360] Allocation is an ordinary concept
@@ -2792,21 +2796,21 @@ out-of-memory paths testable, which almost nobody bothers
 with in C because it is too awkward.
 
 ```landin
-allocator: type = concept (A: type)
-    alloc: (inout a: A, size: usize, alignment: usize)
+allocator: type = concept (provider: type)
+    alloc: (inout a: provider, size: usize, alignment: usize)
            -> (p: ptr mut u8) ! out_of_memory
-    free:  (inout a: A, p: ptr mut u8, size: usize) -> none
+    free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
-push: (T: type, A: type is allocator, inout l: list(T), inout a: A, v: T)
+push: (t: type, provider: type is allocator, inout l: list(t), inout a: provider, v: t)
       -> none ! out_of_memory = ... end
 ```
 
 The allocator is threaded, not stored in the container, and
 the reason is stronger than visibility: a stored allocator
-makes the type list(T, A), so a list in an arena and a list
+makes the type `list(t, provider)`, so a list in an arena and a list
 on the heap become different types and no function takes
-both. Threading keeps the type parameterised by T alone,
+both. Threading keeps the type parameterised by `t` alone,
 and costs one argument at every call that can allocate.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
@@ -2818,7 +2822,7 @@ there is no hidden heap or fallback. A caller sizes the slots for its largest
 allocation and supplies enough metadata for its maximum simultaneous live
 set, including the six extents a transactional map rehash may need.
 
-`core/failing.counted(A)` retains a mutable pointer to any supplied allocator
+`core/failing.counted(provider)` retains a mutable pointer to any supplied allocator
 and gives it a deterministic allocation-attempt budget. Calls within the
 budget are delegated, including failures from the inner allocator; later
 calls report `out_of_memory` without delegation. Attempts, delegations,
@@ -2833,27 +2837,27 @@ really releases each block. It accepts every `usize` alignment, treats zero
 and one as byte alignment, gives a successful zero-byte request a distinct
 non-null freeable token, and reports an unrepresentable request or host refusal
 as `out_of_memory`.
-`core/vec.list(T)` stores an
-honest `mem.storage(T)`: reserve copies its initialized prefix into a private
+`core/vec.list(t)` stores an
+honest `mem.storage(t)`: reserve copies its initialized prefix into a private
 replacement, rolls that replacement back on failure, drains and frees the old
 allocation only after the copy succeeds, and publishes last. `push`, `pop`,
 indexed `get`, length, capacity and release are the minimum parser slice. A
 non-zeroable pointer element is its executable case.
 
-`core/map.map(K, V)` is the ordinary open-addressed map. `K is hashable` uses
+`core/map.map(key_type, value_type)` is the ordinary open-addressed map. `key_type is hashable` uses
 the separately declared `equatable` and composed `hashable` conformances;
 composition does not synthesize the parent conformance [1340]. Construction,
 insert, get, remove, length, capacity, entry enumeration and release are its
 public operations. `get`
-returns `V from map`, while retained pointer keys and values enter through
+returns `value_type from map`, while retained pointer keys and values enter through
 `escaping` parameters. The implementation keeps fully initialized bucket
-records beside dense initialized key and value prefixes, so neither `K` nor
-`V` needs a zero image. A removed entry remains initialized storage until its
+records beside dense initialized key and value prefixes, so neither `key_type` nor
+`value_type` needs a zero image. A removed entry remains initialized storage until its
 tombstone is reused, rehashed away or the allocation is released; resource
 ownership of elements remains manual.
 
 `entries()` creates an enumeration cursor. `next_entry` receives the map and
-an `inout` cursor and returns a key/value `entry(K, V) from map`, or reports
+an `inout` cursor and returns a key/value `entry(key_type, value_type) from map`, or reports
 `end_of_entries`. A complete walk scans each bucket at most once and exposes
 only live entries. References in a returned entry still derive from the map;
 scalar copies do not retain a view [0840]. The cursor is a manually managed
@@ -2906,14 +2910,14 @@ paired with a zero-byte free. Releasing capacity zero, including repeated
 release, makes no allocator call. These rules preserve the raw initialized
 prefix and publication order rather than exposing spare capacity as a slice.
 
-`core/small.small(T, N)` is the corresponding inline-capacity shape, with the
-written `T is zeroable` constraint [0550]. Its inline arm contains an honest
-initialized `[N]T`; a pointer item is therefore rejected even though
-`core/vec` accepts one. The spilled arm owns a `core/vec.list(T)`. A first
+`core/small.small(t, capacity)` is the corresponding inline-capacity shape, with the
+written `t is zeroable` constraint [0550]. Its inline arm contains an honest
+initialized `[capacity]t`; a pointer item is therefore rejected even though
+`core/vec` accepts one. The spilled arm owns a `core/vec.list(t)`. A first
 spill allocates that list privately, copies the complete used inline prefix,
 admits the new value, and changes the variant arm only after all fallible work
 succeeds. Later growth is exactly `core/vec` growth. Zero inline capacity uses
-eight as its first nonzero capacity; otherwise first spill doubles `N` after a
+eight as its first nonzero capacity; otherwise first spill doubles `capacity` after a
 checked `usize` bound. Failed first spill or later growth leaves the active arm,
 length, capacity and initialized values unchanged.
 
@@ -2947,7 +2951,7 @@ never copied, because its size is unknown; the pointee has
 to live somewhere the pair outlives, typically an arena.
 The pair needs no permission marker of its own: the
 concept's entries already carry it. An entry declared with
-'self: ptr mut T' can only be satisfied by a pointer that
+`self: ptr mut t` can only be satisfied by a pointer that
 has the permission, so a stateful implementation behind
 runtime dispatch works and nothing had to be invented for
 it.
@@ -2961,14 +2965,12 @@ Building one is explicit. The concept comes from context
 where it can; otherwise name it.
 
 ```landin
-screen: (A: type is mem.allocator, inout a: A)
-        -> (items: []any widget) ! out_of_memory =
-    b := try mem.new(T: button, a: a)
-    b.val = button(text: "OK")
-
-    items = try mem.new_slice(T: any widget, a: a, n: 1)
-    items[0] = any(b)
-end screen
+make_widget: (provider: type is mem.allocator, inout a: provider)
+             -> (item: any widget) ! mem.out_of_memory =
+    initial: button = (text: "OK")
+    b := try mem.new(state: a, value: initial)
+    item = any(b)
+end make_widget
 
 ```
 
@@ -2979,7 +2981,7 @@ first argument. This is the only place that reads like a
 method call.
 
 ```landin
-paint: (items: []any widget, target: ptr canvas) -> none =
+paint: (items: []any widget, target: ptr mut canvas) -> none =
     for w in items do
         w.draw(target)
     end for
@@ -2991,7 +2993,7 @@ The enabled R2.80 form reserves `any` and gives `any C` the identity of that
 direct concept, not of one hidden concrete type or one of C's parents.
 `any(pointer)` uses the contextual C; without one it requires exactly one
 collected exact conformance. Every erased entry has an object-safe first
-`self: ptr T` or `self: ptr mut T`, and hidden T appears nowhere else in the
+`self: ptr t` or `self: ptr mut t`, and hidden `t` appears nowhere else in the
 entry's runtime signature. Construction from a read-only pointer therefore
 cannot make a table that exposes mutable `self`. Once made, binding mutability
 controls replacing the two-word pair, not the authority already carried by its
@@ -3007,7 +3009,7 @@ arguments and results; the implicit `self` participates in the same `from`,
 ### [1400] This is what generics cannot do
 
 This is what generics cannot do: one array holding values
-of different types. []T is always one T.
+of different types. `[]t` is always one `t`.
 
 ## MODULES
 
@@ -3237,7 +3239,7 @@ and rejects false at the source site. Inactive assertions have no effect.
 A compile-time value parameter.
 
 ```landin
-make_buffer: (fixed N: u32, T: type) -> (b: [N]T) = ... end
+make_buffer: (fixed capacity: u32, t: type) -> (b: [capacity]t) = ... end
 
 ```
 
@@ -3603,7 +3605,7 @@ test_drops_debug: () -> none =
     mut backing := mem.arena_over(addr bytes[0], 4096)
     mut scratch := region.new_region(addr backing)
     defer region.release_region(scratch)
-    mut logger := diag.new_log(N: 32)
+    mut logger := diag.new_log(capacity: 32)
     mut d := any(addr logger)
     kept := run(w, scratch, d, []) else 0
     assert(kept == 1)

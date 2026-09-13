@@ -85,8 +85,9 @@ A single object rather than a slice. No from clause: what comes
 back is independent of the allocator, which is why two live
 allocations from one allocator are unremarkable [0790].
 ```landin
-public new: (T: type, A: type is allocator, inout a: A, escaping value: T)
-            -> (p: ptr mut T) ! out_of_memory = ... end
+public new: (t: type, provider: type is allocator,
+             inout state: provider, escaping value: t)
+            -> (p: ptr mut t) ! out_of_memory = ... end
 
 ```
 
@@ -101,8 +102,6 @@ public not_found: atom
 public no_access: atom
 public io_failed: atom
 public at_end:    atom
-
-public none_open: atom
 
 ```
 A descriptor, distinct so it cannot become arithmetic by accident.
@@ -124,20 +123,20 @@ though: the handle is a copyable value, so a copy taken before
 the close is not refused anything, and closing through both is
 the double-close this does not prevent. It is a use-after-consume
 check on one place, not ownership. Affine values would be the
-other thing, and they are parked with a condition in BACKLOG.md. And
+other thing, and they are parked with a condition in ROADMAP.md's inherited review register. And
 inout
 on the read buffer means, since 0.0.10, hand me a writable view;
 nothing is written back to the slice value and there would be
 nothing to write it back to.
 ```landin
-public world: type = concept (H: type)
-    open_read:  (inout h: H, path: utf8) -> (f: file) ! not_found | no_access
-    open_write: (inout h: H, path: utf8) -> (f: file) ! no_access
-    close:      (inout h: H, sink f: file) -> none
-    read:       (inout h: H, f: file, into: []mut u8) -> (n: usize) ! io_failed
-    write:      (inout h: H, f: file, bytes: []u8) -> none ! io_failed
-    out:        (h: H) -> (f: file)
-    err:        (h: H) -> (f: file)
+public world: type = concept (world_type: type)
+    open_read:  (inout h: world_type, path: utf8) -> (f: file) ! not_found | no_access
+    open_write: (inout h: world_type, path: utf8) -> (f: file) ! no_access
+    close:      (inout h: world_type, sink f: file) -> none
+    read:       (inout h: world_type, f: file, into: []mut u8) -> (n: usize) ! io_failed
+    write:      (inout h: world_type, f: file, bytes: []u8) -> none ! io_failed
+    out:        (h: world_type) -> (f: file)
+    err:        (h: world_type) -> (f: file)
 end world
 
 ```
@@ -190,18 +189,23 @@ backing. Object allocation likewise receives a complete initial value before
 publishing its pointer. These library operations leave copied aliases and the
 application's arena lifetime under manual control.
 
+An open reader holds one `io.file`. `shut` consumes the whole reader, so it
+has no returned closed state to represent. The atom-plus-integer union from
+W3's historical sketch is outside the enabled [1790] grammar; that original
+finding is retained below, without presenting its type as an enabled form.
+
 ```landin
 import core/mem
 import core/io
 
 public reader: type = struct
-    f:    io.none_open | io.file
+    f:    io.file
     buf:  mem.byte_buffer
     fill: usize
     pos:  usize
 end reader
 
-public open: (A: type is allocator, inout h: any io.world, inout a: A,
+public open: (provider: type is allocator, inout h: any io.world, inout a: provider,
               path: utf8, size: usize) -> (r: reader) ! ... =
     f := try io.open_read(h, path)
     undo io.close(h, f)
@@ -249,12 +253,9 @@ The alternative was to sink r.f out of an inout parameter and then
 have nothing to assign back, since there is no i32 that means
 closed. [W3]
 ```landin
-public shut: (A: type is allocator, sink r: reader,
-              inout h: any io.world, inout a: A) -> none =
-    match r.f
-        none_open: _ = 0
-        file (fd): io.close(h, fd)
-    end match
+public shut: (provider: type is allocator, sink r: reader,
+              inout h: any io.world, inout a: provider) -> none =
+    io.close(h, r.f)
     mut owned := r.buf
     mem.drop_bytes(a, owned)
 end shut
@@ -275,13 +276,13 @@ array fields. Initialized allocation and vector growth are exercised by
 `runtime/r420-reference-provider-matrix`; the stateful filter composition is
 executed by `runtime/r420-stateful-filter-list`.
 
-'self: ptr mut T', because a filter may count. The permission is
+`self: ptr mut t`, because a filter may count. The permission is
 in the type since 0.1.0, so the entry says what it does without
 also claiming it might re-point the pointer — which the older
 inout spelling did claim, and which was never true.
 ```landin
-public filter: type = concept (T: type)
-    keep: (self: ptr mut T, line: []u8) -> (yes: bool)
+public filter: type = concept (t: type)
+    keep: (self: ptr mut t, line: []u8) -> (yes: bool)
 end filter
 
 ```
@@ -339,10 +340,10 @@ sample_filter is filter (keep: sample_keep)
 import core/mem
 import core/io
 
-public dest: type = concept (T: type)
-    emit: (self: ptr mut T, inout h: any io.world, line: []u8)
+public dest: type = concept (t: type)
+    emit: (self: ptr mut t, inout h: any io.world, line: []u8)
           -> none ! io.io_failed
-    done: (self: ptr mut T, inout h: any io.world)
+    done: (self: ptr mut t, inout h: any io.world)
           -> none ! io.io_failed
 end dest
 
@@ -355,8 +356,8 @@ public text_dest: type = struct
     used: usize
 end text_dest
 
-public open_text_dest: (A: type is allocator, inout h: any io.world,
-                        inout a: A, path: utf8, size: usize)
+public open_text_dest: (provider: type is allocator, inout h: any io.world,
+                        inout a: provider, path: utf8, size: usize)
                        -> (d: text_dest) ! ... =
     f := try io.open_write(h, path)
     undo io.close(h, f)
@@ -366,8 +367,8 @@ public open_text_dest: (A: type is allocator, inout h: any io.world,
     d = (f: f, buf: buf, used: 0)
 end open_text_dest
 
-public discard_text_dest: (A: type is allocator, inout h: any io.world,
-                           inout a: A, sink d: text_dest) -> none =
+public discard_text_dest: (provider: type is allocator, inout h: any io.world,
+                           inout a: provider, sink d: text_dest) -> none =
     io.close(h, d.f)
     mut owned := d.buf
     mem.drop_bytes(a, owned)
@@ -428,7 +429,7 @@ public bad_argument: atom
 
 ```
 The reason any exists. The chain's length and the types in it are
-decided by the command line, so []T cannot hold it and no generic
+decided by the command line, so `[]t` cannot hold it and no generic
 function can be written over it. [1400] says so; here it is.
 ```landin
 public config: type = struct
@@ -437,10 +438,10 @@ public config: type = struct
     input: utf8
 end config
 
-public build: (A: type is allocator, inout h: any io.world, inout a: A,
+public build: (provider: type is allocator, inout h: any io.world, inout a: provider,
                escaping args: []cstring, inout d: any diag.log)
               -> (c: config from args) ! ... =
-    mut chain := vec.new_list(T: any filter.filter)
+    mut chain := vec.new_list(t: any filter.filter)
     mut input:   utf8 = ""
     mut to_file: utf8 = ""
 
@@ -574,7 +575,7 @@ args is a parameter and not io.args(): a run handed an in-memory
 world must be handed its command line too, or the root is only
 half replaced and the test cannot say what it is testing.
 ```landin
-run: (A: type is mem.allocator, inout h: any io.world, inout a: A,
+run: (provider: type is mem.allocator, inout h: any io.world, inout a: provider,
       inout d: any diag.log,
       escaping args: []cstring) -> (kept: u32) ! ... =
     mut cfg := try config.build(h, a, args, d)
@@ -594,11 +595,11 @@ run: (A: type is mem.allocator, inout h: any io.world, inout a: A,
 ```
 The chain is the prototype's heterogeneous dispatch boundary. Each
 `any filter` retains the mutable data pointer authorized when it was
-constructed, so its `ptr mut T` entry can update the original counting
+constructed, so its `ptr mut t` entry can update the original counting
 filter. Copying the pair preserves that authority (D146); calling `keep`
 does not require replacing the stored pair or writing a copy back.
 This indexed initialized view also permits replacing elements. Whether the
-container meets [1320]'s source-free copied `Item` contract is a separate
+container meets [1320]'s source-free copied `item_type` contract is a separate
 origin question from the mutable dispatch itself [1160].
 ```landin
         mut pass := true
@@ -677,7 +678,7 @@ test_drops_debug_lines: () -> none =
         mut backing := mem.arena_over(addr test_backing[0], lenof test_backing)
         mut scratch := region.new_region(addr backing)
         defer region.release_region(scratch)
-        mut logger := diag.new_log(N: 32)
+        mut logger := diag.new_log(capacity: 32)
         d := any(addr logger)
         kept := run(w, scratch, d, test_args[0..<5]) else 0
         assert(kept == 1)
@@ -688,7 +689,7 @@ end test_drops_debug_lines
 
 The bounded R4.20 executable slice keeps this sketch's provider distinction but
 uses D146's exact object-safe receiver shape: every `world` entry starts with a
-`ptr H` or `ptr mut H`, and both system and memory providers may travel through
+`ptr world_type` or `ptr mut world_type`, and both system and memory providers may travel through
 `any world`. The system provider retains the actual host argument table and
 returns each pointer-and-length argument view from itself, excluding `argv[0]`;
 an in-memory provider returns its caller-supplied argument backing under the

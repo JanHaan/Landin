@@ -59,7 +59,7 @@ question is written out at the end.
 
 R3.40 implements the allocator interface below in repository `core/mem`, plus
 an explicit monotonic arena and a budgeted failing arena. R3.30's private
-`raw(T)` supersedes the later `slice_from` sketch: the public `storage(T)` alias
+`raw(t)` supersedes the later `slice_from` sketch: the public `storage(t)` alias
 lets `core/vec` name that nominal identity without exposing its fields, and a
 checked one-slot transfer copies initialized values during growth. The
 initialized slice witness holds exactly that prefix: a complete typed store
@@ -100,9 +100,9 @@ out of memory, so that is the right answer here — but it is a
 general constraint on concept design that nobody has stated. [Z9]
 
 ```landin
-public allocator: type = concept (A: type)
-    alloc: (inout a: A, size: usize, alignment: usize) -> (p: ptr mut u8) ! out_of_memory
-    free:  (inout a: A, p: ptr mut u8, size: usize) -> none
+public allocator: type = concept (provider: type)
+    alloc: (inout a: provider, size: usize, alignment: usize) -> (p: ptr mut u8) ! out_of_memory
+    free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
 ```
@@ -115,16 +115,16 @@ assumed. [Z3]
 
 ```landin
 public offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8) = ... end
-public base_of:    (T: type, s: []mut T) -> (p: ptr mut u8) = ... end
-public slice_from: (T: type, p: ptr mut u8, n: usize) -> (s: []mut T) = ... end
+public base_of:    (t: type, s: []mut t) -> (p: ptr mut u8) = ... end
+public slice_from: (t: type, p: ptr mut u8, n: usize) -> (s: []mut t) = ... end
 
 ```
 
 slice_from is where the honesty runs out, and it is worth being
-plain about it. It hands back a []T over storage holding no T at
+plain about it. It hands back a `[]t` over storage holding no `t` at
 all. The language has no word for uninitialised memory: bindings
 must be assigned before use, nothing says that about the elements
-of a slice, and requiring T to have a zero image would rule out
+of a slice, and requiring `t` to have a zero image would rule out
 list(ptr node), which is exactly what the tree below needs. So the
 containers carry the invariant themselves — vec by its len, map by
 its state array. slice_from is where the promise is made rather
@@ -203,21 +203,21 @@ out-of-memory path of every container below is reachable from a
 test, by handing it this instead of the real one.
 
 It is also the first type taking a constrained type parameter. The
-tour has list: type (T: type) and it has a constrained parameter
+tour has `list: type (t: type)` and it has a constrained parameter
 on a function, but never the two together. [Z2]
 
 ```landin
-public counted: type (A: type is allocator) = struct
-    inner: ptr A
+public counted: type (provider: type is allocator) = struct
+    inner: ptr provider
     left:  u32
 end counted
 
-public count_down: (A: type is allocator, escaping inner: ptr A, n: u32)
-                   -> (c: counted(A)) =
+public count_down: (provider: type is allocator, escaping inner: ptr provider, n: u32)
+                   -> (c: counted(provider)) =
     c = (inner: inner, left: n)
 end count_down
 
-counted_alloc: (A: type is allocator, inout c: counted(A),
+counted_alloc: (provider: type is allocator, inout c: counted(provider),
                 size: usize, alignment: usize) -> (p: ptr mut u8) ! out_of_memory =
     fail out_of_memory when c.left == 0
     dec c.left
@@ -227,23 +227,23 @@ Passing a pointer target where an inout is wanted. Surely
 intended, never shown. [Z12]
 
 ```landin
-    p = try A.alloc(c.inner.val, size, alignment)
+    p = try provider.alloc(c.inner.val, size, alignment)
 end counted_alloc
 
-counted_free: (A: type is allocator, inout c: counted(A),
+counted_free: (provider: type is allocator, inout c: counted(provider),
                p: ptr mut u8, size: usize) -> none =
-    A.free(c.inner.val, p, size)
+    provider.free(c.inner.val, p, size)
 end counted_free
 
 ```
 
 And here is the hole this file kept walking into. The line means
-"for any A satisfying allocator, counted(A) satisfies allocator",
-and there is nowhere to put the "for any A". Written with a prefix
+"for any provider satisfying allocator, counted(provider) satisfies allocator",
+and there is nowhere to put the "for any provider". Written with a prefix
 binder, which is invented. [Z1]
 
 ```landin
-(A: type is allocator) counted(A) is allocator
+(provider: type is allocator) counted(provider) is allocator
     (alloc: counted_alloc, free: counted_free)
 
 ```
@@ -273,10 +273,10 @@ holding the functions and says nothing about layout. Without this
 no generic container can allocate at all. [Z4]
 
 ```landin
-public new_slice: (T: type, A: type is allocator, inout a: A, n: usize)
-                  -> (s: []mut T) ! out_of_memory =
-    raw := try A.alloc(a, n * sizeof T, alignof T)
-    s   = slice_from(T: T, p: raw, n: n)
+public new_slice: (t: type, provider: type is allocator, inout a: provider, n: usize)
+                  -> (s: []mut t) ! out_of_memory =
+    raw := try provider.alloc(a, n * sizeof t, alignof t)
+    s   = slice_from(t: t, p: raw, n: n)
 end new_slice
 
 ```
@@ -288,15 +288,15 @@ What it is not is ownership. A slice descriptor is a copyable
 value: copy it first and the copy is refused nothing, so freeing
 through both is a double free this does not catch. sink is a
 use-after-consume check on one place. Affine values would be the
-other thing, and they are parked with a condition in BACKLOG.md.
+other thing, and they are parked with a condition in ROADMAP.md's inherited review register.
 The catch: every caller below passes a struct field rather than a
 binding, and what sink means for a field is not stated. [Z13]
 
 ```landin
-public drop_slice: (T: type, A: type is allocator, inout a: A, sink s: []mut T)
+public drop_slice: (t: type, provider: type is allocator, inout a: provider, sink s: []mut t)
                    -> none =
     return when lenof s == 0
-    A.free(a, base_of(s), lenof s * sizeof T)
+    provider.free(a, base_of(s), lenof s * sizeof t)
 end drop_slice
 
 ```
@@ -331,12 +331,12 @@ holds real values. Elements at and above len are the storage that
 slice_from made a promise about and nobody has written yet.
 
 ```landin
-public list: type (T: type) = struct
-    items: []mut T
+public list: type (t: type) = struct
+    items: []mut t
     len:   usize
 end list
 
-public new_list: (T: type) -> (l: list(T)) =
+public new_list: (t: type) -> (l: list(t)) =
     l = (items: [], len: 0)
 end new_list
 
@@ -348,18 +348,18 @@ end grown
 
 The allocator is threaded, not stored, and the reason turned out
 sharper than the visibility argument that was made for it. If list
-stored its allocator it would be list(T, A), so a list in an arena
+stored its allocator it would be `list(t, provider)`, so a list in an arena
 and a list on the heap would be different types and no function
-could take both. Threading keeps the type parameterised by T
+could take both. Threading keeps the type parameterised by `t`
 alone. The price is one more argument at every mutating call,
 which is what the code below reads like: judge it there. [Z10]
 
 ```landin
-public reserve: (T: type, A: type is allocator,
-                 inout l: list(T), inout a: A, want: usize)
+public reserve: (t: type, provider: type is allocator,
+                 inout l: list(t), inout a: provider, want: usize)
                 -> none ! out_of_memory =
     return when want <= lenof l.items
-    fresh := try mem.new_slice(T: T, a: a, n: want)
+    fresh := try mem.new_slice(t: t, provider: provider, a: a, n: want)
     for k in 0..<l.len do
         fresh[k] = l.items[k]
     end for
@@ -369,16 +369,16 @@ end reserve
 
 ```
 
-escaping on v reads oddly until T is taken seriously. For T = u32
+escaping on v reads oddly until `t` is taken seriously. For `t` = u32
 it says nothing: [0840] already has it that a value holding no
 references is unconstrained, so the obligation is vacuous and the
-caller proves nothing. For T = ptr node it is exactly right, since
+caller proves nothing. For `t` = ptr node it is exactly right, since
 the list keeps what v refers to. One word covers both, because the
 origin travels with the type. [Z6]
 
 ```landin
-public push: (T: type, A: type is allocator,
-              inout l: list(T), inout a: A, escaping v: T)
+public push: (t: type, provider: type is allocator,
+              inout l: list(t), inout a: provider, escaping v: t)
              -> none ! out_of_memory =
     if l.len == lenof l.items then
         try reserve(l, a, grown(lenof l.items))
@@ -387,7 +387,7 @@ public push: (T: type, A: type is allocator,
     inc l.len
 end push
 
-public pop: (T: type, inout l: list(T)) -> (v: T) ! empty =
+public pop: (t: type, inout l: list(t)) -> (v: t) ! empty =
     fail empty when l.len == 0
     dec l.len
     v = l.items[l.len]
@@ -404,11 +404,11 @@ could not otherwise: the list has to hold still while the view is
 alive.
 
 ```landin
-public used: (T: type, l: list(T)) -> (s: []mut T from l) =
+public used: (t: type, l: list(t)) -> (s: []mut t from l) =
     s = l.items[0..<l.len]
 end used
 
-public release: (T: type, A: type is allocator, inout l: list(T), inout a: A)
+public release: (t: type, provider: type is allocator, inout l: list(t), inout a: provider)
                 -> none =
     mem.drop_slice(a, l.items)
     l.items = []
@@ -426,12 +426,12 @@ or widening `iterable`. `negative/iterable-retained-item-source` pins the exact
 signature refusal. The cursor sketch below is not an implemented conformance.
 
 ```landin
-list_first:  (T: type, s: list(T)) -> (c: usize)   = 0 end
-list_at_end: (T: type, s: list(T), c: usize) -> (yes: bool) = c >= s.len end
-list_item:   (T: type, s: list(T), c: usize) -> (v: T)      = s.items[c] end
-list_next:   (T: type, s: list(T), c: usize) -> (c2: usize) = c + 1 end
+list_first:  (t: type, s: list(t)) -> (c: usize)   = 0 end
+list_at_end: (t: type, s: list(t), c: usize) -> (yes: bool) = c >= s.len end
+list_item:   (t: type, s: list(t), c: usize) -> (v: t)      = s.items[c] end
+list_next:   (t: type, s: list(t), c: usize) -> (c2: usize) = c + 1 end
 
-(T: type) list(T) is iterable (Cur: usize, Item: T,
+(t: type) list(t) is iterable (cur: usize, item_type: t,
                                first:  list_first, at_end: list_at_end,
                                item:   list_item,  next:   list_next)
 
@@ -448,11 +448,11 @@ import core/vec
 A fixed value parameter on a type. [1520] gives one on a function
 and [1350] a type parameter on a type; a small vector is the
 ordinary shape that wants both. [Z2]
-Restricted to a T with a zero image, and that restriction is the
+Restricted to a `t` with a zero image, and that restriction is the
 honest form of [Z8]: the inline slots have to hold something and
-[0540] gives no honest value for a T without one. So
+[0540] gives no honest value for a `t` without one. So
 small(ptr node, 4) does not exist in this inline shape [0510]. Raw storage now
-lets `vec(ptr node)` exist, but it does not give `[N]T` an initialized image
+lets `vec(ptr node)` exist, but it does not give `[capacity]t` an initialized image
 and therefore does not remove this constraint. The current R2.40 resolution
 gives an unconstrained fully applied
 struct instance the nominal identity `(template, normalized actual tuple)` and
@@ -467,21 +467,21 @@ capacity slice; nominal parameterization and constraint lookup are no longer
 what this sketch waits on.
 
 ```landin
-public small: type (T: type is zeroable, fixed N: u32) = struct
+public small: type (t: type is zeroable, fixed capacity: u32) = struct
     len: usize
     store: variant
-        inline:  (buf: [N]T) |
-        spilled: (items: vec.list(T))
+        inline:  (buf: [capacity]t) |
+        spilled: (items: vec.list(t))
     end store
 end small
 
-public new: (T: type is zeroable, fixed N: u32) -> (s: small(T, N)) =
+public new: (t: type is zeroable, fixed capacity: u32) -> (s: small(t, capacity)) =
     s = (len: 0, store: inline(buf: zeroed))
 end new
 ```
 
-zeroed is honest now, because T is constrained to have a zero
-image. What that costs is that the shape does not exist for the T
+zeroed is honest now, because `t` is constrained to have a zero
+image. What that costs is that the shape does not exist for the `t`
 which wanted it most. [Z8]
 
 The match bindings use D85/D121's resolved alias rule. `inout` names the
@@ -489,18 +489,18 @@ selected payload storage rather than a whole-array copy, so the final arm
 change occurs only after the private list no longer reads `buf`. [Z7]
 
 ```landin
-public push: (T: type is zeroable, fixed N: u32, A: type is mem.allocator,
-              inout s: small(T, N), inout a: A, escaping v: T)
+public push: (t: type is zeroable, fixed capacity: u32, provider: type is mem.allocator,
+              inout s: small(t, capacity), inout a: provider, escaping v: t)
              -> none ! mem.out_of_memory =
     match s.store
         inline (inout buf):
-            if s.len < usize(N) then
+            if s.len < usize(capacity) then
                 buf[s.len] = v
                 inc s.len
                 return
             end if
-            fresh := vec.new_list(item: T)
-            try vec.reserve(fresh, a, first_capacity(N))
+            fresh := vec.new_list(t: t)
+            try vec.reserve(fresh, a, first_capacity(capacity))
             for k in 0..<s.len do
                 try vec.push(fresh, a, buf[k])
             end for
@@ -524,8 +524,8 @@ derived-address use or pending cleanup still keeps the old payload live.
 last-use publication, independent siblings and refused retags. [Z7]
 
 ```landin
-public used: (T: type is zeroable, fixed N: u32,
-             inout s: small(T, N)) -> (v: []mut T from s) =
+public used: (t: type is zeroable, fixed capacity: u32,
+             inout s: small(t, capacity)) -> (v: []mut t from s) =
     v = match s.store
             inline  (inout buf): buf[0..<s.len]
             spilled (items): mem.used(items.values)
@@ -533,7 +533,7 @@ public used: (T: type is zeroable, fixed N: u32,
 end used
 ```
 
-A match as an expression, from [1080]. Both arms yield []T, and the
+A match as an expression, from [1080]. Both arms yield `[]t`, and the
 inline arm yields a slice into the small vector itself — which is
 exactly what the from clause has to say, or the caller could spill
 the vector while holding the view. The `inout` source and payload alias keep
@@ -546,8 +546,8 @@ import core/mem
 
 public missing: atom
 
-public equatable: type = concept (K: type)
-    eq: (a: K, b: K) -> (yes: bool)
+public equatable: type = concept (key_type: type)
+    eq: (a: key_type, b: key_type) -> (yes: bool)
 end equatable
 
 ```
@@ -559,14 +559,14 @@ shows button is widget supplying only focus, with no sign of the
 drawable and clickable conformances it must also have. [Z11]
 
 ```landin
-public hashable: type = concept (K: type) is equatable
-    hash: (k: K) -> (h: u64)
+public hashable: type = concept (key_type: type) is equatable
+    hash: (k: key_type) -> (h: u64)
 end hashable
 
 ```
 
 No null, so no key value can mean empty, and a sentinel key would
-be a lie for K = ptr node in any case. A parallel state array is
+be a lie for `key_type` = ptr node in any case. A parallel state array is
 what a good implementation does anyway, for the probe's cache
 behaviour, so the missing null pushed the design the right way
 without anybody arguing about it.
@@ -577,41 +577,41 @@ slot_used: atom
 slot_dead: atom
 slot: type = slot_free | slot_used | slot_dead
 
-public map: type (K: type is hashable, V: type) = struct
+public map: type (key_type: type is hashable, value_type: type) = struct
     state: []slot
-    keys:  []K
-    vals:  []V
+    keys:  []key_type
+    vals:  []value_type
     len:   usize
     dead:  usize
 end map
 
-public new_map: (K: type is hashable, V: type) -> (m: map(K, V)) =
+public new_map: (key_type: type is hashable, value_type: type) -> (m: map(key_type, value_type)) =
     m = (state: [], keys: [], vals: [], len: 0, dead: 0)
 end new_map
 
 ```
 
 hash returns u64 and the index is usize, which is u32 on the small
-target. usize(K.hash(k)) would compile and then trap in the field
+target. `usize(key_type.hash(k))` would compile and then trap in the field
 on any key wider than a byte or two, so the reduction has to
 happen in u64 first. No implicit conversion caught a portability
 bug that C would truncate silently and Rust would wrap silently,
 and it caught it while reading rather than while running.
 
 ```landin
-index_of: (K: type is hashable, k: K, n: usize) -> (i: usize) =
-    i = usize(K.hash(k) % u64(n))
+index_of: (key_type: type is hashable, k: key_type, n: usize) -> (i: usize) =
+    i = usize(key_type.hash(k) % u64(n))
 end index_of
 
-public get: (K: type is hashable, V: type, m: map(K, V), k: K)
-            -> (v: V) ! missing =
+public get: (key_type: type is hashable, value_type: type, m: map(key_type, value_type), k: key_type)
+            -> (v: value_type) ! missing =
     n := lenof m.state
     fail missing when n == 0
     mut i := index_of(k, n)
     loop do
         s := m.state[i]
         break when s == slot_free
-        if s == slot_used and K.eq(m.keys[i], k) then
+        if s == slot_used and key_type.eq(m.keys[i], k) then
             v = m.vals[i]
             return
         end if
@@ -637,7 +637,7 @@ the complete derivative's enumeration without making the public map
 composition opaque or changing prototype 4's retained-reference obligations.
 
 ```landin
-crowded: (K: type is hashable, V: type, m: map(K, V)) -> (yes: bool) =
+crowded: (key_type: type is hashable, value_type: type, m: map(key_type, value_type)) -> (yes: bool) =
     yes = (m.len + m.dead + 1) * 4 > lenof m.state * 3
 end crowded
 
@@ -648,13 +648,13 @@ already made room. That is why it can be called from inside
 rehash without the cleanup problem below repeating.
 
 ```landin
-place: (K: type is hashable, V: type, inout m: map(K, V),
-        escaping k: K, escaping v: V) -> none =
+place: (key_type: type is hashable, value_type: type, inout m: map(key_type, value_type),
+        escaping k: key_type, escaping v: value_type) -> none =
     n     := lenof m.state
     mut i := index_of(k, n)
     loop do
         s := m.state[i]
-        if s == slot_used and K.eq(m.keys[i], k) then
+        if s == slot_used and key_type.eq(m.keys[i], k) then
             m.vals[i] = v
             return
         end if
@@ -681,16 +681,16 @@ where control reaches them, so the triangle comes out of the order
 rather than out of the text. [Z19]
 
 ```landin
-rehash: (K: type is hashable, V: type, A: type is allocator,
-         inout m: map(K, V), inout a: A, want: usize)
+rehash: (key_type: type is hashable, value_type: type, provider: type is allocator,
+         inout m: map(key_type, value_type), inout a: provider, want: usize)
         -> none ! out_of_memory =
-    ns := try mem.new_slice(T: slot, a: a, n: want)
+    ns := try mem.new_slice(t: slot, provider: provider, a: a, n: want)
     undo mem.drop_slice(a, ns)
 
-    nk := try mem.new_slice(T: K, a: a, n: want)
+    nk := try mem.new_slice(t: key_type, provider: provider, a: a, n: want)
     undo mem.drop_slice(a, nk)
 
-    nv := try mem.new_slice(T: V, a: a, n: want)
+    nv := try mem.new_slice(t: value_type, provider: provider, a: a, n: want)
     undo mem.drop_slice(a, nv)
 
     old_state := m.state
@@ -725,9 +725,9 @@ so a failure after the handover would free what m now owns.
     mem.drop_slice(a, old_vals)
 end rehash
 
-public insert: (K: type is hashable, V: type, A: type is allocator,
-                inout m: map(K, V), inout a: A,
-                escaping k: K, escaping v: V) -> none ! out_of_memory =
+public insert: (key_type: type is hashable, value_type: type, provider: type is allocator,
+                inout m: map(key_type, value_type), inout a: provider,
+                escaping k: key_type, escaping v: value_type) -> none ! out_of_memory =
     if crowded(m) then
         try rehash(m, a, if lenof m.state == 0 then 16
                          else lenof m.state * 2 end if)
@@ -735,7 +735,7 @@ public insert: (K: type is hashable, V: type, A: type is allocator,
     place(m, k, v)
 end insert
 
-public remove: (K: type is hashable, V: type, inout m: map(K, V), k: K)
+public remove: (key_type: type is hashable, value_type: type, inout m: map(key_type, value_type), k: key_type)
                -> none ! missing =
     n := lenof m.state
     fail missing when n == 0
@@ -743,7 +743,7 @@ public remove: (K: type is hashable, V: type, inout m: map(K, V), k: K)
     loop do
         s := m.state[i]
         fail missing when s == slot_free
-        if s == slot_used and K.eq(m.keys[i], k) then
+        if s == slot_used and key_type.eq(m.keys[i], k) then
             m.state[i] = slot_dead
             dec m.len
             inc m.dead
@@ -753,12 +753,12 @@ public remove: (K: type is hashable, V: type, inout m: map(K, V), k: K)
     end loop
 end remove
 
-public release_map: (K: type is hashable, V: type, A: type is allocator,
-                     inout m: map(K, V), inout a: A) -> none =
+public release_map: (key_type: type is hashable, value_type: type, provider: type is allocator,
+                     inout m: map(key_type, value_type), inout a: provider) -> none =
     mem.drop_slice(a, m.state)
     mem.drop_slice(a, m.keys)
     mem.drop_slice(a, m.vals)
-    m = new_map(K: K, V: V)
+    m = new_map(key_type: key_type, value_type: value_type)
 end release_map
 
 ```
@@ -828,10 +828,10 @@ public tree: type = struct
 end tree
 
 public new_tree: () -> (t: tree) =
-    t = (nodes: vec.new_list(T: node))
+    t = (nodes: vec.new_list(t: node))
 end new_tree
 
-public add_leaf: (A: type is allocator, inout t: tree, inout a: A, escaping name: utf8)
+public add_leaf: (provider: type is allocator, inout t: tree, inout a: provider, escaping name: utf8)
                  -> (id: node_id) ! out_of_memory =
     id = node_id(u32(t.nodes.len))
     try vec.push(t.nodes, a, (name: name, kind: leaf))
@@ -845,7 +845,7 @@ usual discipline for this representation and better said out loud
 than discovered.
 
 ```landin
-public add_branch: (A: type is allocator, inout t: tree, inout a: A,
+public add_branch: (provider: type is allocator, inout t: tree, inout a: provider,
                     escaping name: utf8, first: node_id, count: u32)
                    -> (id: node_id) ! out_of_memory =
     id = node_id(u32(t.nodes.len))
@@ -928,14 +928,14 @@ run: () -> none ! out_of_memory =
 The bound above is the concrete pressure for D136's closed fixed-expression
 fold. It is arithmetic over literals, not a hidden call or compile-time user
 execution, and produces the same canonical count a literal bound would. The
-same fold can answer zero: D136 accepts both `[0]T` and an admitted expression
+same fold can answer zero: D136 accepts both `[0]t` and an admitted expression
 that folds to zero, while keeping empty literals and zero-length repetition
 separate.
 
 A list, filled and sorted with the generic sort from [1290].
 
 ```landin
-    mut numbers := vec.new_list(T: i32)
+    mut numbers := vec.new_list(t: i32)
     for k in 0..<20 do
         try vec.push(numbers, a, 20 - i32(k))
     end for
@@ -946,7 +946,7 @@ A list, filled and sorted with the generic sort from [1290].
 A map from those to their squares.
 
 ```landin
-    mut squares := map.new_map(K: u32, V: u32)
+    mut squares := map.new_map(key_type: u32, value_type: u32)
     for n in vec.used(numbers) do
         try map.insert(squares, a, u32(n), u32(n) * u32(n))
     end for
@@ -975,7 +975,7 @@ type is the two-word pair. drawable and canvas are the tour's,
 from [1340].
 
 ```landin
-draw_all: (items: vec.list(any drawable), target: ptr canvas) -> none =
+draw_all: (items: vec.list(any drawable), target: ptr mut canvas) -> none =
     for w in vec.used(items) do
         w.draw(target)
     end for
