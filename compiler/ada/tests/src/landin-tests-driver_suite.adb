@@ -1964,6 +1964,32 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("equatable: type = concept (t: type) "
+            & "equal: (a: t, b: t) -> (r: bool) end equatable "
+            & "box: type (t: type) = struct value: t end box "
+            & "(t: type) box(t) is equatable () "
+            & "accept: (t: type is equatable, v: t) -> none = end accept "
+            & "f: () -> none = v: box(i32) = zeroed accept(v) end f",
+            "L0301", 2, Executable);
+         Check
+           ("loopy: type = concept (t: type is loopy) end loopy "
+            & "i32 is loopy ()",
+            "L0301", 1, Executable);
+         Check
+           ("ordered: type = concept (t: type) "
+            & "less: (a: t, b: t) -> (r: bool) end ordered "
+            & "less_i32: (a: i32, b: i32) -> (r: bool) = "
+            & "r = a < b end less_i32 "
+            & "i32 is ordered (less: less_i32, less: less_i32)",
+            "L0301", 1, Executable);
+         Check
+           ("lookup: type = concept (t: type, index: type) "
+            & "get: (v: t, i: index) -> (r: i32) end lookup "
+            & "get_i32: (v: i32, i: i32) -> (r: i32) = "
+            & "r = v + i end get_i32 "
+            & "i32 is lookup (get: get_i32)",
+            "L0301", 1, Executable);
+         Check
            ("percent: type = u8 range 0..100 "
             & "cell: type (t: type) = struct value: t end cell "
             & "mut a: cell(percent)",

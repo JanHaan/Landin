@@ -5846,10 +5846,10 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J46 | Multi-result placement check overflows Byte_Count and crashes with exit 70 on a written function type | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
 | J47 | Duplicate member names in a non-parameterized struct body are never checked, so the second member is silently unreachable | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
 | J48 | Static generic `T.entry(...)` silently resolves an inherited entry-name collision by parent declaration order instead of diagnosing it | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
-| J49 | Any malformed concrete conformance entry list raises "a collected conformance lost its normalized key" (exit 70) instead of reporting its diagnostic | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
-| J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Open concept-graph guard: include represented-formal constraint edges in finite-cycle detection. Source inspection and bounded graph tests; no recursive exhaustion run. |
-| J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
-| J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
+| J49 | Any malformed concrete conformance entry list raises "a collected conformance lost its normalized key" (exit 70) instead of reporting its diagnostic | C | Repaired: collection marks invalid entry lists and colliding declarations refused. Provider validation skips those declarations and retains their original diagnostics; valid single/multi-input keys and providers still validate. Missing associated input labels also cover K13. |
+| J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Repaired: the existing finite concept-graph walk includes type-formal constraint edges as well as named parents. Tiny self, mutual, mixed and unused cycles report L0301 before lookup; an acyclic constrained-formal control passes. The exhaustion witness was not executed before the guard. |
+| J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Repaired: parameterized provider selection skips declarations refused during collection. A missing entry retains L0301 and its consumer reports the ordinary L0318 unsatisfied constraint, without creating incomplete evidence or raising a compiler defect. Valid generic providers and signature refusals retain their contracts. |
+| J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Repaired: iterable family matching requires an actual nominal identity before reading its template. A multi-result aggregate now reports the existing L0301 missing-iterable diagnostic; a real nominal family retains traversal selection. |
 | J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
 | J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
 | J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
@@ -6043,7 +6043,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
 | K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Repaired: each executed declaration clears its prior instance's assigned and consumed facts, including sparse fields/elements. Ordinary, condition and traversal bindings start fresh; destructured results retain their existing sink restriction. Twenty-one controls preserve outer loop-carried consumption, initializer effects, uninitialized reads and repeated reads after a sink. This applies [0080]/[1910] without changing the sink point or adding ownership. |
 | K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
-| K13 | C1: multi-formal concept conformance loses its normalized key | Additional witness under J49, with historical coordinator reproduction/backtrace. Preserve both valid multi-formal conformance coverage and malformed-entry diagnostics; do not narrow the repair to one malformed list. No new debugger reproduction is required. |
+| K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Duplicate J8. Preserve both the scalar exit-70 and text false-refusal baseline witnesses and ordinary conversion controls; resolve meaning before intrinsic classification. |
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
@@ -6158,8 +6158,20 @@ this batch. Logs are retained in
 `.scratch/r491-range-actuals/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains outstanding.
 
-K1, K3, K4, K5, K6, K8, K11, K36, J7, J10, J12 and J30 are repaired.
-The conformance group is next.
+J49/J50/J51/J52/K13 development evidence: eight selected cases pass 358
+checks in each of macOS debug and Linux release. Sixteen small checker sources
+retain ordered reports,
+valid concrete and generic providers, associated inputs, nominal traversal and
+finite formal-requirement graphs. The driver case checks 296 refusal/output
+invariants. Existing cycle, collision, alias-key and generic-provider-signature
+fixtures retain their exact reports. Builds use one worker; each selected test
+has a timeout of at most 30 seconds.
+The K13 finder transcript and bounded current witnesses are retained beside the
+logs in `.scratch/r491-conformance-boundaries/`; local logs also live under
+`.scratch/r491-final-values/`. No debugger, assembler, linker or generated
+Landin executable ran in this batch. Exact-revision acceptance remains open.
+
+The call-classification group J8/K15 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
