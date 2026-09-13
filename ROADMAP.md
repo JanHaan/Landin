@@ -5873,7 +5873,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
 | J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
 | J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Implemented: the ten later queries reuse `Tracked_Field'Last`, whose subtype elaboration already computes the immutable forest width once per flow invocation. No cross-compilation cache or invalidation state is introduced. |
-| J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Implemented: frame-source selection includes frame-backed payload bindings and value parameters, while excluding external payload storage and inout parameters from that preference. Four exact L0314 reports preserve refusal behavior and identify the actual shorter-lived source. |
 | J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Implemented under m19: capture and check manifest producers before sorting, propagate inventory/fixed-row failures, and check saved-manifest reads. Bounded fake-command tests preserve the existing manifest format and rebuild decisions on both hosts; exact acceptance remains open. |
 | J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | The masked checksum failure is repaired with J77: require a successful, numeric recipe checksum before container inspection. Fake-container tests pin default/override tags and early refusal. The historical claim about a real container accepting an empty tag remains unestablished; no daemon was started. |
 | J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Implemented with N9: honor explicit status and default negatives to 1 at metadata parsing; compare ordered codes on both execution paths. Fake outcomes pin status 2, default 1, code order/multiplicity and abnormal termination. Exact acceptance remains open. |
@@ -7208,8 +7208,22 @@ No native assembly, generated executable, debugger or giant image ran. Evidence
 is retained in `.scratch/r491-return-locations/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J76's escape-diagnostic source selection is next. J65's layout exception
-classification remains independent of the repaired address guards.
+J76 development evidence: four selected negative fixtures pass 22 checks in
+each of macOS debug and Linux release. The new 42-line fixture has only
+one-element arrays and four L0314 reports: a value-parameter payload, a copied
+array-element payload, a scalar value parameter, and an external payload
+joined with a later temporary. The first three baseline reports incorrectly
+pointed to the module `anchor`; the repaired notes select the frame sources,
+and the fourth control excludes the earlier external payload. Existing copied
+payload, escaping-argument and array-return refusals retain their reports.
+Only related source selection changed; reference acceptance is unchanged.
+Single-worker builds, exact fixture runs and the inventories pass. No native
+assembly, generated executable, debugger or giant image ran. Evidence is in
+`.scratch/r491-escape-source/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J65's layout exception classification is next and remains independent of the
+repaired address guards.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

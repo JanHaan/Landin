@@ -1,0 +1,42 @@
+anchor: u32 = 7
+packet: type = struct
+    kind: variant
+        empty |
+        full: (value: u32)
+    end kind
+end packet
+persistent: packet = zeroed
+
+from_parameter: (source: packet) -> (result: ptr u32) =
+    match source.kind
+        empty: result = addr anchor
+        full(value): result = addr value
+    end match
+end from_parameter
+
+from_array: (i: usize) -> (result: ptr u32) =
+    local: [1]packet = zeroed
+    match local[i].kind
+        empty: result = addr anchor
+        full(value): result = addr value
+    end match
+end from_array
+
+from_scalar: (flag: bool, value: u32) -> (result: ptr u32) =
+    if flag then result = addr anchor else result = addr value end if
+end from_scalar
+
+external_pattern_first: (flag: bool, i: usize) -> (result: ptr u32) =
+    if flag then
+        match persistent.kind
+            empty: result = addr anchor
+            full(external): result = addr external
+        end match
+    else
+        local: [1]packet = zeroed
+        match local[i].kind
+            empty: result = addr anchor
+            full(temporary): result = addr temporary
+        end match
+    end if
+end external_pattern_first

@@ -1,0 +1,40 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:10:1
+   |
+10 | from_parameter: (source: packet) -> (result: ptr u32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:10:18
+   |
+10 | from_parameter: (source: packet) -> (result: ptr u32) =
+   |                  ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:17:1
+   |
+17 | from_array: (i: usize) -> (result: ptr u32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:21:14
+   |
+21 |         full(value): result = addr value
+   |              ^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:25:1
+   |
+25 | from_scalar: (flag: bool, value: u32) -> (result: ptr u32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:25:27
+   |
+25 | from_scalar: (flag: bool, value: u32) -> (result: ptr u32) =
+   |                           ^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:29:1
+   |
+29 | external_pattern_first: (flag: bool, i: usize) -> (result: ptr u32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-escape-related-source/main.ldn:39:18
+   |
+39 |             full(temporary): result = addr temporary
+   |                  ^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
