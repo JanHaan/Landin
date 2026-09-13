@@ -5890,7 +5890,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Implemented with K21/K22: bounded block runs partition each item and agree with instruction membership before consumers read them; final item and operand cursors consume their vectors. Small malformed-IR seams and valid reordered/prefixed controls cover both target widths. No accepted-source defect is inferred; exact acceptance remains open. |
 | J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Implemented: variant shapes require D74's smallest unsigned tag that represents every zero-based case. Bounded 255/256/257-case metadata controls cover datum fields, slot fields and measurements on both target widths, rejecting narrow and nonminimal tags. No giant case-count witness ran; exact acceptance remains open. |
-| J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Implemented: alias runs are bounded and partition their vector, alias path runs are bounded before allocation, and every binding/provenance/storage selection is checked after all root shapes. Small malformed-IR controls and existing source alias/payload cases pass in debug and release. No debugger session was started; exact acceptance remains open. |
 | J94 | Scalar_Field_Of converts an unbounded Part_Position with Natural() on the runtime-address path, turning a Fault into a Constraint_Error | C | Implemented: runtime-address field comparisons widen the field count before narrowing a validated index. One-field load/store controls include the first excluded index, an index beyond Natural and the Part_Position maximum, on both target widths. Exact acceptance remains open. |
 | J95 | Store into an aggregate or array slot is not refused, while Load from one is | C | Implemented: scalar stores refuse struct and array slots before Type_Of is called. Tiny controls retain scalar, struct-field and array-element stores in debug and release; this is a malformed-IR backstop, not a source miscompilation claim. Exact acceptance remains open. |
 | J96 | Load_Datum / Store_Datum refuse only an aggregate datum, not a fixed-array datum, and Load_Datum's result is never checked at all | C | Implemented: scalar datum operations refuse nonscalar storage; Load_Datum checks retained callable and atom metadata against its datum. Tiny builder-only controls expose metadata attached after a load. The alleged caller-supplied result-kind mismatch remains refuted: the builder derives that immutable result. Exact acceptance remains open. |
@@ -6631,7 +6631,24 @@ or generated executable ran. Logs are retained in
 `.scratch/r491-variant-tag-width/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J93's source-alias run and selection checks are next. J116's slice-endpoint claim
+J93 development evidence: five selected cases pass 158 checks in each of
+macOS debug and Linux release. Seventy new checks cover root, nested, variant,
+array, runtime-address and module selections, invalid identities/provenance,
+and invalid alias/path runs without allocating their claimed large counts.
+The existing storage-run case now includes aliases (14 checks), and the final
+cursor case includes an orphan alias (42). Named-result/destructuring leaf
+availability and variant-payload source lowering pass. The selection fixture's
+initial variant payload run used a zero-based first position; correcting that
+test setup made its valid controls reach the alias boundary. Both single-worker
+builds passed; selected tests have 30-second or shorter timeouts. No debugger
+session, Landin assembler, linker or generated executable ran. Logs are retained
+in `.scratch/r491-source-aliases/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+K17's atom-array subset writes are next: a two-element source fill still exits
+70, while direct named/parameter stores in the bounded source controls pass.
+Keep the source failure distinct from the Store_Element malformed-IR contract.
+J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

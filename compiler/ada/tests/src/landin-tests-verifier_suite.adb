@@ -6751,6 +6751,11 @@ package body Landin.Tests.Verifier_Suite is
                  (Unit, IR.Routine, 1, Landin.Types.U32, Site);
                Parameter := IR.Add_Parameter
                  (Unit, Routine, Landin.Types.U32, IR.No_Declaration, Site);
+               IR.Note_Source_Alias
+                 (Unit, Routine,
+                  (Binding => 2, Site => Site,
+                   Place => (Kind => IR.Frame_Slot, Slot => Parameter),
+                   others => <>), IR.No_Path_Steps);
                Block := IR.Add_Block
                  (Unit, Routine, Landin.Resolution.Program_Scope, Site);
                IR.Enter (Unit, Routine, Block);
@@ -7214,8 +7219,221 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Variant_Tags_Represent_Their_Cases;
 
+   procedure Source_Aliases_Select_Valid_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Source_Aliases_Select_Valid_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Valid_Field, Field_Past_End, Valid_Whole, Valid_Root_Path,
+         Root_Path_Past_End, Root_Path_Wide, Root_Path_Case,
+         Valid_Nested, Nested_Past_End, Nested_Wide, Valid_Variant,
+         Variant_Case_Past_End, Variant_Field_Past_End,
+         Valid_Array, Array_Past_End, Valid_Array_Path, Array_Path_Past_End,
+         Valid_Runtime, Runtime_Past_End, Runtime_Not_Address,
+         Valid_Module, Module_Past_End, Module_Not_Datum,
+         Missing_Slot, Missing_Datum, Missing_Address,
+         Missing_Binding, Far_Binding, Missing_Site,
+         Path_Run_Base, Path_Run_Count, Empty_Path_Base,
+         Alias_Run_Base, Alias_Run_Count, Alias_Overlap);
+      package Damage renames IR.Testing_Support;
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine, Datum : IR.Item_Id;
+               Root, Address, Scalar, Array_Cell : IR.Slot_Id;
+               Nominal : IR.Nominal_Type_Id;
+               Child : IR.Field_Shape;
+               Alias : IR.Source_Alias;
+               Steps : IR.Path_Step_Array (1 .. 2) :=
+                 [others => (Field => 1, Case_Index => 0)];
+               Count : Natural := 0;
+               Expected : V.Fault_Kind := V.Source_Alias_Malformed;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Nominal := Test_Nominal (Unit);
+               IR.Set_Nominal_Shape
+                 (Unit, Nominal,
+                  [(Element => Landin.Types.U32, others => <>),
+                   (Element => Landin.Types.U16, others => <>)]);
+               Child := (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => Nominal, others => <>);
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               Root := IR.Add_Aggregate_Slot
+                 (Unit, Routine, IR.No_Declaration, Site);
+               IR.Add_Slot_Field (Unit, Routine, Root, Landin.Types.U32);
+               IR.Add_Slot_Field (Unit, Routine, Root, Child);
+               IR.Add_Slot_Field
+                 (Unit, Routine, Root,
+                  (Kind => IR.Variant_Field_Shape, Element => Landin.Types.U8,
+                   Cases => 2, Payloads_First => 1, others => <>),
+                  [(First => 1, Count => 1), (First => 2, Count => 1)],
+                  [(Element => Landin.Types.U32, others => <>),
+                   (Element => Landin.Types.U32, others => <>)]);
+               IR.Add_Slot_Field
+                 (Unit, Routine, Root,
+                  IR.Make_Array_Shape
+                    (Unit, 2, (Element => Landin.Types.U8, others => <>)));
+               Address := IR.Add_Address_Slot (Unit, Routine, Child, Site);
+               Scalar := IR.Add_Slot
+                 (Unit, Routine, Landin.Types.U32, IR.No_Declaration, Site);
+               Array_Cell := IR.Add_Array_Slot
+                 (Unit, Routine, Landin.Types.U8, 2, IR.No_Declaration, Site);
+               Datum := IR.Add_Item
+                 (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+               IR.Add_Field (Unit, Datum, Landin.Types.U32);
+               Alias :=
+                 (Binding => 2, Site => Site,
+                  Place => (Kind => IR.Frame_Slot, Slot => Root),
+                  Field => 1, others => <>);
+               case Scenario is
+                  when Field_Past_End => Alias.Field := 5;
+                  when Valid_Whole => Alias.Field := 0;
+                  when Valid_Root_Path | Root_Path_Past_End
+                     | Root_Path_Wide | Root_Path_Case =>
+                     Alias.Field := 0;
+                     Count := 2;
+                     Steps (1).Field :=
+                       (if Scenario = Root_Path_Past_End then 5
+                        elsif Scenario = Root_Path_Wide
+                        then IR.Part_Position'Last else 2);
+                     if Scenario = Root_Path_Case then
+                        Steps (1).Case_Index := 1;
+                     end if;
+                  when Valid_Nested | Nested_Past_End | Nested_Wide =>
+                     Alias.Field := 2;
+                     Count := 1;
+                     Steps (1).Field :=
+                       (if Scenario = Nested_Past_End then 3
+                        elsif Scenario = Nested_Wide
+                        then IR.Part_Position'Last else 1);
+                  when Valid_Variant | Variant_Case_Past_End
+                     | Variant_Field_Past_End =>
+                     Alias.Field := 3;
+                     Count := 1;
+                     Steps (1) :=
+                       (Field => (if Scenario = Variant_Field_Past_End
+                                  then 2 else 1),
+                        Case_Index => (if Scenario = Variant_Case_Past_End
+                                       then 3 else 2));
+                  when Valid_Array | Array_Past_End | Valid_Array_Path
+                     | Array_Path_Past_End =>
+                     Alias.Place := (Kind => IR.Frame_Slot,
+                                     Slot => Array_Cell);
+                     Alias.Field :=
+                       (if Scenario = Array_Past_End then 3 else 2);
+                     if Scenario in Valid_Array_Path | Array_Path_Past_End
+                     then
+                        Alias.Field := 0;
+                        Count := 1;
+                        Steps (1).Field :=
+                          (if Scenario = Array_Path_Past_End then 3 else 2);
+                     end if;
+                  when Valid_Runtime | Runtime_Past_End
+                     | Runtime_Not_Address | Missing_Address =>
+                     Alias.Place :=
+                       (Kind => IR.Runtime_Address,
+                        Address => (if Scenario = Runtime_Not_Address
+                                    then Scalar
+                                    elsif Scenario = Missing_Address
+                                    then IR.Slot_Id'Last else Address));
+                     Alias.Field :=
+                       (if Scenario = Runtime_Past_End then 3 else 2);
+                  when Valid_Module | Module_Past_End | Module_Not_Datum
+                     | Missing_Datum =>
+                     Alias.Place :=
+                       (Kind => IR.Module_Datum,
+                        Datum => (if Scenario = Module_Not_Datum
+                                  then Routine
+                                  elsif Scenario = Missing_Datum
+                                  then IR.Item_Id'Last else Datum));
+                     Alias.Field :=
+                       (if Scenario = Module_Past_End then 2 else 1);
+                  when Missing_Slot => Alias.Place.Slot := IR.Slot_Id'Last;
+                  when Missing_Binding => Alias.Binding := IR.No_Declaration;
+                  when Far_Binding =>
+                     Alias.Binding := IR.Declaration_Id'Last;
+                  when Missing_Site =>
+                     Alias.Site := Landin.Provenance.No_Origin;
+                  when others => null;
+               end case;
+               --  The public builder owns only provenance and place identity.
+               --  Damage those after construction to exercise release checks.
+               IR.Note_Source_Alias
+                 (Unit, Routine,
+                  (Binding => 2, Site => Site,
+                   Place => (Kind => IR.Frame_Slot, Slot => Root),
+                   Field => 1, others => <>), Steps (1 .. Count));
+               Damage.Overwrite_Alias_Info (Unit, Routine, 1, Alias);
+               IR.Note_Source_Alias
+                 (Unit, Datum,
+                  (Binding => 6, Site => Site,
+                   Place => (Kind => IR.Module_Datum, Datum => Datum),
+                   Field => 1, others => <>), IR.No_Path_Steps);
+               Add_Empty_Body (Unit, Routine, Site);
+               Add_Empty_Body (Unit, Datum, Site);
+               case Scenario is
+                  when Path_Run_Base | Empty_Path_Base =>
+                     Damage.Overwrite_Alias_Path_Run
+                       (Unit, Routine, 1, Natural'Last,
+                        (if Scenario = Empty_Path_Base then 0 else 1));
+                  when Path_Run_Count =>
+                     Damage.Overwrite_Alias_Path_Run
+                       (Unit, Routine, 1, 0, Natural'Last);
+                  when Alias_Run_Base =>
+                     Damage.Overwrite_Item_Run
+                       (Unit, Routine, Damage.Alias_Run, Natural'Last, 1);
+                     Expected := V.Item_Runs_Overlap;
+                  when Alias_Run_Count =>
+                     Damage.Overwrite_Item_Run
+                       (Unit, Routine, Damage.Alias_Run, 0, Natural'Last);
+                     Expected := V.Item_Runs_Overlap;
+                  when Alias_Overlap =>
+                     Damage.Overwrite_Item_Run
+                       (Unit, Datum, Damage.Alias_Run, 0, 1);
+                     Expected := V.Item_Runs_Overlap;
+                  when Valid_Field | Valid_Whole | Valid_Root_Path
+                     | Valid_Nested | Valid_Variant | Valid_Array
+                     | Valid_Array_Path | Valid_Runtime | Valid_Module =>
+                     Expected := V.Nothing_Wrong;
+                  when others => null;
+               end case;
+               declare
+                  Fault : constant V.Fault := V.Check (Unit, Facts);
+               begin
+                  if Scenario = Valid_Field and then Fault.Kind /= Expected
+                  then
+                     Landin.Testing.Check
+                       (Item, False, "alias control item" & Fault.Item'Image
+                        & " " & IR.Dump.Text
+                          (Unit, Landin.Stages.Meanings (Work).all,
+                           Landin.Stages.Identities (Work).all));
+                  end if;
+                  Expect (Item, Fault, Expected,
+                          "source alias selection and ownership: "
+                          & Scenario'Image);
+               end;
+            end;
+         end loop;
+      end loop;
+   end Source_Aliases_Select_Valid_Storage;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "source aliases select valid storage",
+         Source_Aliases_Select_Valid_Storage'Access);
       Landin.Testing.Register
         (Into, "verifier", "variant tags represent their cases",
          Variant_Tags_Represent_Their_Cases'Access);

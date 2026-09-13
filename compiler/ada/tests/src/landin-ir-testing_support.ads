@@ -101,7 +101,7 @@ package Landin.IR.Testing_Support is
    --  Release-mode verifier evidence: corrupt metadata only after a valid
    --  unit has been built, bypassing builder preconditions deliberately.
    type Item_Run_Kind is
-     (Slot_Run, Parameter_Run, Block_Run, Value_Run, Field_Run);
+     (Slot_Run, Parameter_Run, Block_Run, Value_Run, Field_Run, Alias_Run);
 
    procedure Overwrite_Item_Run
      (Into : in out Unit; Item : Item_Id; Which : Item_Run_Kind;
@@ -110,12 +110,22 @@ package Landin.IR.Testing_Support is
 
    type Unclaimed_Vector is
      (Slot_Vector, Parameter_Vector, Block_Vector, Value_Vector,
-      Field_Vector, Operand_Vector);
+      Field_Vector, Operand_Vector, Alias_Vector);
 
    --  Duplicate one existing entry at the end without changing any owner.
    --  The selected vector must already contain an entry.
    procedure Append_Unclaimed_Entry
      (Into : in out Unit; Which : Unclaimed_Vector);
+
+   procedure Overwrite_Alias_Path_Run
+     (Into : in out Unit; Item : Item_Id; Index : Positive;
+      First, Count : Natural)
+     with Pre => Index <= Source_Alias_Count (Into, Item);
+
+   procedure Overwrite_Alias_Info
+     (Into : in out Unit; Item : Item_Id; Index : Positive;
+      Alias : Source_Alias)
+     with Pre => Index <= Source_Alias_Count (Into, Item);
 
    procedure Overwrite_Block_Run
      (Into : in out Unit; Item : Item_Id; Block : Block_Id;
