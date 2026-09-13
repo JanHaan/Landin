@@ -17020,6 +17020,7 @@ package body Landin.Stages.Checking is
 
                      if Held in Ty.Scalar_Name | Ty.Fixed_Array
                         | Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value
+                        | Ty.Atom_Value | Ty.Function_Value
                        or else
                          (Held = Ty.Aggregate
                           and then Landin.Checking.Nominal_Of

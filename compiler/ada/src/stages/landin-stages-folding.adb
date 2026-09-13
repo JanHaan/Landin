@@ -570,14 +570,25 @@ package body Landin.Stages.Folding is
                Sizing : constant Boolean :=
                  Syn.Kind (Of_Tree, Node) = Syn.Size_Of;
             begin
-               if Measured in Ty.Scalar_Name then
+               if Measured in Ty.Scalar_Name | Ty.Atom_Value
+                 | Ty.Function_Value | Ty.Pointer_Value
+                 | Ty.Slice_Value | Ty.Any_Value
+               then
                   declare
+                     Carrier : constant Ty.Scalar_Name :=
+                       (if Measured in Ty.Scalar_Name
+                        then Ty.Scalar_Name (Measured)
+                        elsif Measured = Ty.Atom_Value then Ty.U32
+                        else Ty.Usize);
+                     Words : constant Ty.Folded :=
+                       (if Measured in Ty.Slice_Value | Ty.Any_Value
+                        then 2 else 1);
                      Size : constant Landin.Targets.Scalar_Size :=
-                       Ty.Storage_Size (Ty.Scalar_Name (Measured), Facts);
+                       Ty.Storage_Size (Carrier, Facts);
                   begin
                      Value :=
                        (if Sizing
-                        then Ty.Folded (Landin.Targets.Bytes (Size))
+                        then Ty.Folded (Landin.Targets.Bytes (Size)) * Words
                         else Ty.Folded
                                (Landin.Targets.Alignment_Of (Facts, Size)));
                      Known := True;
