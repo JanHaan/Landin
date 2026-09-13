@@ -5894,7 +5894,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J94 | Scalar_Field_Of converts an unbounded Part_Position with Natural() on the runtime-address path, turning a Fault into a Constraint_Error | C | Implemented: runtime-address field comparisons widen the field count before narrowing a validated index. One-field load/store controls include the first excluded index, an index beyond Natural and the Part_Position maximum, on both target widths. Exact acceptance remains open. |
 | J95 | Store into an aggregate or array slot is not refused, while Load from one is | C | Implemented: scalar stores refuse struct and array slots before Type_Of is called. Tiny controls retain scalar, struct-field and array-element stores in debug and release; this is a malformed-IR backstop, not a source miscompilation claim. Exact acceptance remains open. |
 | J96 | Load_Datum / Store_Datum refuse only an aggregate datum, not a fixed-array datum, and Load_Datum's result is never checked at all | C | Implemented: scalar datum operations refuse nonscalar storage; Load_Datum checks retained callable and atom metadata against its datum. Tiny builder-only controls expose metadata attached after a load. The alleged caller-supplied result-kind mismatch remains refuted: the builder derives that immutable result. Exact acceptance remains open. |
-| J97 | Flat aggregate-image path never checks Aggregate_Field_Image.Slice on variant payload leaves, but the backend acts on it | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J97 | Flat aggregate-image path never checks Aggregate_Field_Image.Slice on variant payload leaves, but the backend acts on it | C | Superseded by J30 (abbdb466): any slice-bearing descriptor, including a variant payload, selects the complete recursive verifier. The reported three-byte array descriptor is now refused; genuine slice payloads retain target/range/shape checks. Dedicated small regressions pin that disposition without changing the verifier again. Exact acceptance remains open. |
 | J98 | Block_Unreachable only checks that an edge exists, so an unreachable cycle of blocks passes | C | Refuted on current and reviewed source: the cited incoming-edge scan is followed unconditionally by Pointer_Provenance, which checks true entry reachability through Control_Flow.Make. Both 0a3d0a28 and 66927e93 already contain this check. Tiny self/pair islands are refused without slots or pointers; reachable cycles pass. No reachability implementation change was needed. |
 | J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J100 | Repeated delimiter-free conformance/signature lookahead on malformed input | C | Open malformed-input lookahead cost, distinct from M1: 326e6a32 adds the := delimiter but does not bound delimiter-free identifier runs or unmatched-signature lookahead. No old scaling case was rerun. |
@@ -6670,7 +6670,21 @@ No Landin assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-slot-element-queries/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J97's variant-payload slice-image claim is next. J116's slice-endpoint claim
+J97 development evidence: two selected cases pass 44 checks in each of
+macOS debug and Linux release. Thirteen new tiny variant-payload scenarios
+cover the reported three-element u8 array, wrong carrier/scalar flags, target
+and range errors, offset/form errors and orphan descriptors. Genuine empty
+and backed slice payloads pass; the existing top-level descriptor controls
+also pass. Source history locates the complete descriptor scan in J30's
+abbdb466 repair, so no verifier implementation change was needed here. The
+initial test registration used the wrong harness operation name; that typo
+was corrected and the required clean macOS rebuild passed. Both single-worker
+builds passed; selected tests have 30-second or shorter timeouts. No Landin
+assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-variant-slice-images/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J102/J103's fixed-conditional recovery is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
