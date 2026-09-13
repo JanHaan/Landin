@@ -5906,8 +5906,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J106 | Two `link(symbol:)` diagnostics cite [1580] (Importing from C) instead of [1610] | C | Implemented: all link-annotation notes consistently cite [1610] and the normative `text` parameter type. Missing-colon and missing-close probes retain their original L0103 code and single report. Exact acceptance remains open. |
 | J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Implemented: a match arm classifies For_Statement alongside loop and while before assigning its value slot. Small syntax controls preserve loops with value-carrying breaks and place ordinary loops in the statement run. No accepted-source miscompilation is claimed; exact acceptance remains open. |
 | J108 | The same source passed twice under two spellings is read twice, so every declaration in it is reported as declared twice | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
-| J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
-| J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Plausible driver-input concern: investigate empty-root handling through fake filesystem effects only, never by traversing the real filesystem root. |
+| J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Implemented: Execute retains collected diagnostics for unexpected exceptions before returning Status_Defect. Compiler_Defect, Constraint_Error, Program_Error and Assertion_Error are pinned by one-shot fake reads; Host_Exhausted, Storage_Error and External_Tool_Failed retain their dedicated outer handling. Exact acceptance remains open. |
+| J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Not a current source defect: the empty-root diagnostic marks the context failed before discovery, and the queue exits before import lookup can reach Select_Module_Directory. This independently confirms the retained review critic's unreachable-path analysis. Preserve that validation boundary when changing module recovery; no real-root traversal was run. |
 | J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Implemented private constructor contract: target labels longer than their fixed storage raise Compiler_Defect in every build mode; valid labels copy in full and remain space-padded. Current named constructors are unchanged and no arbitrary target constructor was added. Exact acceptance remains open. |
 | J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
 | J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
@@ -6801,7 +6801,17 @@ limits. No Landin assembler, linker or generated executable ran. Logs are
 retained in `.scratch/r491-context-wording/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J109's preservation of reports across unexpected exceptions is next.
+J109 development evidence: four selected fake-host driver cases pass 33 checks
+in each of macOS debug and Linux release. Seven explicit, one-shot exception
+identities test four defect reports and three preserved host/tool exceptions;
+no actual resource exhaustion is induced. Existing fake-tool failure,
+refused-program/no-output and unknown-option controls pass. Both single-worker
+builds passed; selected tests have 30-second or shorter limits. No Landin
+assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-driver-exceptions/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J81-J83's IR builder-contract consistency is next.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

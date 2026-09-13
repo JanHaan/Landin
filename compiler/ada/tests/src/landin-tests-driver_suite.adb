@@ -1,3 +1,5 @@
+with Ada.Assertions;
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -1176,6 +1178,15 @@ package body Landin.Tests.Driver_Suite is
    procedure A_Defect_Keeps_What_Was_Reported
      (Item : in out Landin.Testing.Context)
    is
+      use type Ada.Exceptions.Exception_Id;
+      type Exception_List is
+        array (Positive range <>) of Ada.Exceptions.Exception_Id;
+      Defects : constant Exception_List :=
+        [Compiler_Defect'Identity, Constraint_Error'Identity,
+         Program_Error'Identity, Ada.Assertions.Assertion_Error'Identity];
+      Host_Failures : constant Exception_List :=
+        [Host_Exhausted'Identity, Storage_Error'Identity,
+         External_Tool_Failed'Identity];
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
    begin
@@ -1183,33 +1194,60 @@ package body Landin.Tests.Driver_Suite is
         ("fine.ldn",
          "public main: () -> (code: i32) =" & LF
          & "    code = 0" & LF & "end main" & LF);
-      Host.Raise_On_Read;
+      for Reason of Defects loop
+         Host.Raise_On_Read (Reason);
 
-      declare
-         Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute
-             (Both ("--wat", "fine.ldn"), Host, Tools);
-         Report : constant String := Unbounded.To_String (Result.Report);
-      begin
-         Landin.Testing.Check
-           (Item, Contains (Report, "L0002"),
-            "what the run had already reported survives the defect");
-         Landin.Testing.Check
-           (Item, Contains (Report, "internal compiler defect"),
-            "and the defect is written under it");
-         Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Defect,
-            "and the status says the compiler failed, not the program");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (Both ("--wat", "fine.ldn"), Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Report, "L0002"),
+               "what the run had already reported survives the defect");
+            Landin.Testing.Check
+              (Item, Contains (Report, "internal compiler defect"),
+               "and the defect is written under it");
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Defect,
+               "and the status says the compiler failed, not the program");
 
-         --  Once each: the report is rendered on one path or the other
-         --  and never on both.
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Report, "L0002"), 1,
-            "the diagnostic is not rendered twice");
-         Landin.Testing.Check_Equal
-           (Item, Occurrences (Report, "internal compiler defect"), 1,
-            "and neither is the defect");
-      end;
+            --  Once each: the report is rendered on one path or the other
+            --  and never on both.
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Report, "L0002"), 1,
+               "the diagnostic is not rendered twice");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Report, "internal compiler defect"), 1,
+               "and neither is the defect");
+         end;
+      end loop;
+
+      for Reason of Host_Failures loop
+         Host.Raise_On_Read (Reason);
+         declare
+            Escaped : Boolean := False;
+         begin
+            begin
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute
+                      (Both ("--wat", "fine.ldn"), Host, Tools);
+               begin
+                  Landin.Testing.Fail
+                    (Item, "a host exception became status"
+                     & Natural'Image (Result.Status));
+               end;
+            exception
+               when Failure : others =>
+                  Escaped :=
+                    Ada.Exceptions.Exception_Identity (Failure) = Reason;
+            end;
+            Landin.Testing.Check
+              (Item, Escaped, "the dedicated host/tool outcome is retained");
+         end;
+      end loop;
    end A_Defect_Keeps_What_Was_Reported;
 
    --  The regression the driver's promise was found through: a struct one

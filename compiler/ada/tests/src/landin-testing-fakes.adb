@@ -110,9 +110,12 @@ package body Landin.Testing.Fakes is
         and then Host.Items.Element (Index).Kind = A_Directory;
    end Is_Directory;
 
-   procedure Raise_On_Read (Host : in out Fake_Filesystem) is
+   procedure Raise_On_Read
+     (Host : in out Fake_Filesystem;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
    begin
       Host.Writes.Raises := True;
+      Host.Writes.Read_Exception := Reason;
    end Raise_On_Read;
 
    overriding procedure Read_File
@@ -127,8 +130,8 @@ package body Landin.Testing.Fakes is
 
       if Host.Writes.Raises then
          Host.Writes.Raises := False;
-         raise Compiler_Defect
-           with "a fake read was asked to stand in for a compiler defect";
+         Ada.Exceptions.Raise_Exception
+           (Host.Writes.Read_Exception, "a fake read injected an exception");
       end if;
 
       if Index = 0 then
