@@ -167,7 +167,9 @@ package body Landin.Backend.C_ABI is
      (Of_Unit    : Landin.IR.Unit;
       Parameters : Landin.IR.Signature_Part_Array;
       Result     : Landin.IR.Signature_Part;
-      Facts      : Landin.Targets.Target_Facts) return Plan
+      Facts      : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan
    is
       Answer : Plan (Parameters'Length);
       Stack_End : Landin.Targets.Byte_Count := 0;
@@ -214,12 +216,12 @@ package body Landin.Backend.C_ABI is
               or else Answer.SSE_Used + SSE > 8
             then
                Item.On_Stack := True;
-               Item.Stack_At := Landin.Targets.Align_Up
-                 (Stack_End,
-                  Landin.Targets.Byte_Alignment'Max
-                    (8, Item.Shape.Alignment));
-               Stack_End := Item.Stack_At
-                 + Landin.Targets.Align_Up (Item.Shape.Size, 8);
+               Item.Stack_At := Stack_Align
+                 (Stack_End, Landin.Targets.Byte_Alignment'Max
+                    (8, Item.Shape.Alignment), Maximum);
+               Stack_End := Stack_Add
+                 (Item.Stack_At, Stack_Align (Item.Shape.Size, 8, Maximum),
+                  Maximum);
             else
                for Chunk in 1 .. Item.Shape.Count loop
                   case Item.Shape.Classes (Chunk) is
@@ -235,8 +237,8 @@ package body Landin.Backend.C_ABI is
             end if;
          end;
       end loop;
-      Answer.Stack_Bytes := Landin.Targets.Align_Up
-        (Stack_End, Landin.Targets.Stack_Alignment (Facts));
+      Answer.Stack_Bytes := Stack_Align
+        (Stack_End, Landin.Targets.Stack_Alignment (Facts), Maximum);
       return Answer;
    end Assign;
 
@@ -244,7 +246,9 @@ package body Landin.Backend.C_ABI is
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;
       Call    : Landin.IR.Value_Id;
-      Facts   : Landin.Targets.Target_Facts) return Plan
+      Facts   : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan
    is
       Indirect : constant Boolean :=
         Landin.IR.Op_Of (Of_Unit, Item, Call) = Landin.IR.Indirect_Call;
@@ -274,13 +278,15 @@ package body Landin.Backend.C_ABI is
                        (Of_Unit, Item, Call, Index + Offset + Hidden)),
                   others => <>));
       end loop;
-      return Assign (Of_Unit, Parameters, Result, Facts);
+      return Assign (Of_Unit, Parameters, Result, Facts, Maximum);
    end Call_Plan;
 
    function Signature_Plan
      (Of_Unit   : Landin.IR.Unit;
       Signature : Landin.IR.Signature_Id;
-      Facts     : Landin.Targets.Target_Facts) return Plan
+      Facts     : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan
    is
       Parameters : Landin.IR.Signature_Part_Array
         (1 .. Landin.IR.Signature_Parameter_Count (Of_Unit, Signature));
@@ -294,7 +300,7 @@ package body Landin.Backend.C_ABI is
          (if Landin.IR.Signature_Result_Count (Of_Unit, Signature) = 0
           then (others => <>)
           else Landin.IR.Nth_Signature_Result (Of_Unit, Signature, 1)),
-         Facts);
+         Facts, Maximum);
    end Signature_Plan;
 
 end Landin.Backend.C_ABI;

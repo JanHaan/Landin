@@ -1,4 +1,8 @@
+with Ada.Assertions;
+
 with Landin.Backend;
+with Landin.Backend.C_ABI;
+with Landin.Backend.X86_64;
 with Landin.IR;
 with Landin.Layouts;
 with Landin.Provenance;
@@ -366,7 +370,7 @@ package body Landin.Tests.Backend_Plans_Suite is
                when 4 => Spills (1).Alignment := 1;
                when 5 => Spills (1).Alignment := 3;
                when 6 => Saves (1).Alignment := 32;
-               when 7 => Spills (1).Size := Targets.Byte_Count'Last;
+               when 7 => Spills (1).Size := 32;
                when others => null;
             end case;
             declare
@@ -377,15 +381,21 @@ package body Landin.Tests.Backend_Plans_Suite is
                   (if Which = 8 then Backend.Spill_Assignments'(1 .. 0 => 0)
                    else Backend.Spill_Assignments'
                      (1 => (if Which = 2 then 2 else 1))),
-                  Spills, Saves);
+                  Spills, Saves,
+                  Maximum => (if Which = 7 then 16
+                              else Targets.Byte_Count'Last));
             begin
                Landin.Testing.Fail
                  (Item, "invalid storage plan returned frame size"
                   & Targets.Byte_Count'Image (Backend.Extent (Frame)));
             end;
          exception
+            when Backend.Stack_Limit_Exceeded =>
+               Landin.Testing.Check
+                 (Item, Which = 7, "only size exhaustion uses a stack limit");
             when Landin.Compiler_Defect =>
-               Landin.Testing.Check (Item, True, "invalid storage refused");
+               Landin.Testing.Check
+                 (Item, Which /= 7, "invalid storage remains a defect");
          end;
       end loop;
       declare
@@ -432,8 +442,128 @@ package body Landin.Tests.Backend_Plans_Suite is
       end;
    end Invalid_Storage;
 
+   procedure Stack_Limits_Keep_Defects (Item : in out Landin.Testing.Context);
+
+   procedure Stack_Limits_Keep_Defects
+     (Item : in out Landin.Testing.Context)
+   is
+      Unit : IR.Unit;
+      Site : Landin.Provenance.Origin;
+      Routine : IR.Item_Id;
+      Signature : IR.Signature_Id;
+      Nominal : IR.Nominal_Type_Id;
+      Facts : constant Targets.Target_Facts := Targets.Linux_X86_64;
+
+      procedure Frame_Check
+        (Size : Targets.Byte_Count; Alignment : Targets.Byte_Alignment;
+         Maximum : Targets.Byte_Count; Fits : Boolean);
+
+      procedure Frame_Check
+        (Size : Targets.Byte_Count; Alignment : Targets.Byte_Alignment;
+         Maximum : Targets.Byte_Count; Fits : Boolean)
+      is
+      begin
+         declare
+            Frame : constant Backend.Frame := Backend.Laid_Out
+              (Unit, Routine, Facts, Backend.Home_Mask'(1 .. 0 => False),
+               Backend.Spill_Assignments'(1 .. 0 => 0),
+               Layout.Field_Extent_Array'(1 .. 0 => <>),
+               [1 => (Size, Alignment)], Maximum);
+         begin
+            Landin.Testing.Check
+              (Item, Fits and then Backend.Extent (Frame) <= Maximum,
+               "a small frame respects its exact stack budget");
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check (Item, not Fits, "frame budget is exhausted");
+      end Frame_Check;
+
+      procedure C_Check (Maximum : Targets.Byte_Count; Fits : Boolean);
+
+      procedure C_Check (Maximum : Targets.Byte_Count; Fits : Boolean) is
+      begin
+         declare
+            Plan : constant Backend.C_ABI.Plan := Backend.C_ABI.Signature_Plan
+              (Unit, Signature, Facts, Maximum);
+         begin
+            Landin.Testing.Check
+              (Item, Fits and then Plan.Stack_Bytes = 48,
+               "two small C aggregates fit the exact stack budget");
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check
+              (Item, not Fits, "C stack budget is exhausted");
+      end C_Check;
+   begin
+      Prepare (Item, Unit, Site);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      Frame_Check (8, 8, 16, True);
+      Frame_Check (8, 8, 15, False);
+      Frame_Check (8, 8, 7, False);
+      Frame_Check (9, 8, 15, False);
+      Frame_Check (0, 1, 0, True);
+      Frame_Check (1, 1, 0, False);
+      Nominal := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Nominal,
+         [1 .. 3 => (Element => Landin.Types.U64, others => <>)],
+         Landin.Layouts.Natural);
+      Signature := IR.Add_Signature
+        (Unit, [1 .. 2 => (Kind => Landin.Types.Aggregate,
+                          Nominal => Nominal, others => <>)],
+         (others => <>), C_ABI => True);
+      C_Check (48, True);
+      C_Check (47, False);
+      C_Check (23, False);
+      begin
+         declare
+            Plan : constant Backend.C_ABI.Plan := Backend.C_ABI.Assign
+              (Unit, [1 => (Kind => Landin.Types.Aggregate,
+                           Nominal => Nominal, others => <>)],
+               (others => <>), Facts, 31);
+         begin
+            Landin.Testing.Fail
+              (Item, "C final alignment escaped its limit:"
+               & Targets.Byte_Count'Image (Plan.Stack_Bytes));
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check
+              (Item, True, "C final padding obeys its limit");
+      end;
+      --  An absent item used to be swallowed by the broad preflight handler.
+      begin
+         Landin.Testing.Check
+           (Item, Backend.X86_64.Frame_Is_Addressable
+              (Unit, IR.No_Item, Facts), "invalid item must raise");
+         Landin.Testing.Fail (Item, "invalid item was a capability answer");
+      exception
+         when Ada.Assertions.Assertion_Error | Constraint_Error =>
+            Landin.Testing.Check (Item, True, "invalid item stays visible");
+      end;
+      IR.Set_Signature (Unit, Routine, Signature);
+      --  No native C ABI exists for the synthetic target; this is an invalid
+      --  backend request, independent of whether the tiny frame would fit.
+      begin
+         Landin.Testing.Check
+           (Item, Backend.X86_64.Frame_Is_Addressable
+              (Unit, Routine, Targets.Synthetic_32),
+            "unsupported C ABI must raise");
+         Landin.Testing.Fail (Item, "ABI defect was a capability answer");
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check (Item, True, "ABI invariant stays visible");
+      end;
+   end Stack_Limits_Keep_Defects;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend plans", "stack limits keep defects",
+         Stack_Limits_Keep_Defects'Access);
       Landin.Testing.Register
         (Into, "backend plans", "all layout consumers",
          All_Layout_Consumers'Access);

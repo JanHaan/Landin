@@ -262,6 +262,12 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Frame and C argument-stack planning accept an explicit byte budget and check
+addition and alignment before exceeding it. Only `Stack_Limit_Exceeded` becomes
+the x86 preflight's frame-too-wide answer; allocation, shape and ABI defects
+remain visible. The emission plan uses the same placement with the target's
+normal limit.
+
 Backend storage addresses require an actual frame home, including zero-byte
 homes. DWARF whole-alias metadata validates array storage before querying its
 shape. Register locations share one formatter: a direct binding resides in

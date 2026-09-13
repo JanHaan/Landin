@@ -13,6 +13,34 @@ package body Landin.Backend is
    package Targets renames Landin.Targets;
    package Layout renames Landin.Targets.Layouts;
 
+   function Stack_Add
+     (Left, Right, Maximum : Targets.Byte_Count) return Targets.Byte_Count
+   is
+   begin
+      if Left > Maximum or else Right > Maximum - Left then
+         raise Stack_Limit_Exceeded with "a stack extent exceeds its limit";
+      end if;
+      return Left + Right;
+   end Stack_Add;
+
+   function Stack_Align
+     (Offset : Targets.Byte_Count;
+      Alignment : Targets.Byte_Alignment;
+      Maximum : Targets.Byte_Count) return Targets.Byte_Count
+   is
+   begin
+      if not Targets.Is_Power_Of_Two (Alignment) then
+         raise Compiler_Defect with "stack alignment is not a power of two";
+      end if;
+      declare
+         Step : constant Targets.Byte_Count := Targets.Byte_Count (Alignment);
+         Padding : constant Targets.Byte_Count := (Step - Offset mod Step)
+           mod Step;
+      begin
+         return Stack_Add (Offset, Padding, Maximum);
+      end;
+   end Stack_Align;
+
    function Fields_Layout
      (Of_Unit : IR.Unit;
       Fields  : IR.Field_Shape_Array;
@@ -354,12 +382,13 @@ package body Landin.Backend is
       Slots   : Home_Mask;
       Values  : Spill_Assignments;
       Spills  : Layout.Field_Extent_Array;
-      Saves   : Layout.Field_Extent_Array) return Frame
+      Saves   : Layout.Field_Extent_Array;
+      Maximum : Targets.Byte_Count := Targets.Byte_Count'Last) return Frame
    is
       Built : Frame;
       Below : Targets.Byte_Count := 0;
-      Maximum : constant Targets.Byte_Count :=
-        Targets.Maximum_Object_Size (Facts);
+      Limit : constant Targets.Byte_Count := Targets.Byte_Count'Min
+        (Maximum, Targets.Maximum_Object_Size (Facts));
 
       function Placed
         (Size : Targets.Byte_Count; Alignment : Targets.Byte_Alignment)
@@ -375,13 +404,8 @@ package body Landin.Backend is
          then
             raise Compiler_Defect with "a frame home exceeds stack alignment";
          end if;
-         if Size > Maximum - Below then
-            raise Compiler_Defect with "a frame extent exceeds its target";
-         end if;
-         Below := Targets.Align_Up (Below + Size, Alignment);
-         if Below > Maximum then
-            raise Compiler_Defect with "an aligned frame exceeds its target";
-         end if;
+         Below := Stack_Align
+           (Stack_Add (Below, Size, Limit), Alignment, Limit);
          return Below;
       end Placed;
 
@@ -469,17 +493,16 @@ package body Landin.Backend is
             end if;
          end;
       end loop;
-      Built.Size := Targets.Align_Up (Below, Targets.Stack_Alignment (Facts));
-      if Built.Size > Maximum then
-         raise Compiler_Defect with "an aligned frame exceeds its target";
-      end if;
+      Built.Size := Stack_Align
+        (Below, Targets.Stack_Alignment (Facts), Limit);
       return Built;
    end Laid_Out;
 
    function Laid_Out
      (Of_Unit : IR.Unit;
       Item    : IR.Item_Id;
-      Facts   : Targets.Target_Facts) return Frame
+      Facts   : Targets.Target_Facts;
+      Maximum : Targets.Byte_Count := Targets.Byte_Count'Last) return Frame
    is
       package Mask_Buffers is new Work_Arrays (Boolean, Home_Mask, True);
       package Value_Buffers is new Work_Arrays
@@ -516,7 +539,7 @@ package body Landin.Backend is
       end loop;
       return Laid_Out
         (Of_Unit, Item, Facts, Slots, Values, Spills (1 .. Count),
-         Layout.Field_Extent_Array'(1 .. 0 => <>));
+         Layout.Field_Extent_Array'(1 .. 0 => <>), Maximum);
    end Laid_Out;
 
    ------------------------------------------------------------------

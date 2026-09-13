@@ -46,7 +46,9 @@ package Landin.Backend.C_ABI is
      (Of_Unit    : Landin.IR.Unit;
       Parameters : Landin.IR.Signature_Part_Array;
       Result     : Landin.IR.Signature_Part;
-      Facts      : Landin.Targets.Target_Facts) return Plan;
+      Facts      : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan;
 
    --  Lowering keeps the original fixed signature and promotes scalar tail
    --  actuals.  The logical aggregate destination is not a C argument.
@@ -54,11 +56,15 @@ package Landin.Backend.C_ABI is
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;
       Call    : Landin.IR.Value_Id;
-      Facts   : Landin.Targets.Target_Facts) return Plan;
+      Facts   : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan;
 
    function Signature_Plan
      (Of_Unit   : Landin.IR.Unit;
       Signature : Landin.IR.Signature_Id;
-      Facts     : Landin.Targets.Target_Facts) return Plan;
+      Facts     : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Plan;
 
 end Landin.Backend.C_ABI;

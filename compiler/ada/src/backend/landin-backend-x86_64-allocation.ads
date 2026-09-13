@@ -43,7 +43,9 @@ package Landin.Backend.X86_64.Allocation is
       Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
       Of_Plan : Plan;
-      Options : Landin.Optimization.Options) return Frame;
+      Options : Landin.Optimization.Options;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Frame;
 
    function Name (Register : Saved_Register; Size : Width) return String;
    function Save_Count (Of_Plan : Plan) return Natural;
