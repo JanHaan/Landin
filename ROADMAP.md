@@ -5872,7 +5872,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
 | J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
-| J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Open bounded scaling follow-up to C5: cache or move the whole-forest width query to an appropriate pass, with invalidation evidence; no broad timing sweep. |
+| J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Implemented: the ten later queries reuse `Tracked_Field'Last`, whose subtype elaboration already computes the immutable forest width once per flow invocation. No cross-compilation cache or invalidation state is introduced. |
 | J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Implemented under m19: capture and check manifest producers before sorting, propagate inventory/fixed-row failures, and check saved-manifest reads. Bounded fake-command tests preserve the existing manifest format and rebuild decisions on both hosts; exact acceptance remains open. |
 | J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | The masked checksum failure is repaired with J77: require a successful, numeric recipe checksum before container inspection. Fake-container tests pin default/override tags and early refusal. The historical claim about a real container accepting an empty tag remains unestablished; no daemon was started. |
@@ -7020,9 +7020,23 @@ truncation or mutation campaign ran. Evidence is retained in
 `.scratch/r491-lexical-recovery/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J75's repeated whole-forest width queries are next. Reuse the flow invocation's
-already fixed field bound; validate small fieldwise and multiple-result controls
-without timing sweeps or persistent cache state.
+J75 development evidence: five selected checking cases pass 40 checks in
+each of macOS debug and Linux release. Existing controls preserve assigned
+aggregate descendants, missing siblings, branch joins, consumption, scalar
+field/result initialization and multiple-result cleanup calls. The signature
+control checks successive compilation contexts whose maximum widths differ
+(two struct fields, then four results), exercising invocation-local sizing.
+Source inspection establishes that all ten repeated queries now use the bound
+already elaborated once by the local subtype; no timing improvement is claimed
+from measurement. Both single-worker builds passed and selected cases have
+30-second or shorter limits. No new stress case, timing sweep, Landin assembler,
+linker or generated executable ran. Evidence is retained in
+`.scratch/r491-flow-width/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J11's aggregate variant payload lowering is next. Inspect and reproduce the
+small call-result and distinct-conversion forms before routing checked values
+through the ordinary shaped-value writer.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

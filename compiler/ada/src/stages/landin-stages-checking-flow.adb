@@ -195,6 +195,8 @@ package body Landin.Stages.Checking.Flow is
       subtype Tracked is Positive range
         1 .. Positive'Max (1, Res.Declaration_Count (Meanings.all));
 
+      --  The forest is fixed for this invocation. Reuse this elaborated
+      --  bound throughout flow instead of scanning the trees at each read.
       subtype Tracked_Field is Natural range 0 .. Widest_Struct;
 
       --  D118's neutral path, on this side of the compiler: the run of
@@ -618,7 +620,7 @@ package body Landin.Stages.Checking.Flow is
          --  A declaration starts a fresh lifetime on every execution. The
          --  loop head may retain facts about its previous instance, but
          --  neither an assignment nor a consumption belongs to this one.
-         for Field in 0 .. Widest_Struct loop
+         for Field in 0 .. Tracked_Field'Last loop
             State.Fields (Positive (Id), Field) := False;
             State.Dead_Fields (Positive (Id), Field) := False;
          end loop;
@@ -681,7 +683,7 @@ package body Landin.Stages.Checking.Flow is
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Where);
             begin
-               if Which not in 1 .. Widest_Struct then
+               if Which not in 1 .. Tracked_Field'Last then
                   return;
                end if;
                Steps.Prepend (Which);
@@ -752,7 +754,7 @@ package body Landin.Stages.Checking.Flow is
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Where);
             begin
-               if Which not in 1 .. Widest_Struct then
+               if Which not in 1 .. Tracked_Field'Last then
                   return No_Path;
                end if;
                Steps.Prepend (Which);
@@ -854,7 +856,7 @@ package body Landin.Stages.Checking.Flow is
               1 .. Landin.Checking.Layout_Field_Count
                 (Types.all, Landin.Checking.Nominal_Of (Types.all, Id))
             loop
-               if Each in 1 .. Widest_Struct then
+               if Each in 1 .. Tracked_Field'Last then
                   declare
                      Kind : constant Landin.Checking.Field_Kind :=
                        Landin.Checking.Field_Kind_Of
@@ -1420,7 +1422,7 @@ package body Landin.Stages.Checking.Flow is
             if Path.Is_Empty then
                State.Dead_Fields (Positive (Id), 0) := False;
             end if;
-            for Field in 1 .. Widest_Struct loop
+            for Field in 1 .. Tracked_Field'Last loop
                if Prefix (Path, One (Field)) then
                   State.Dead_Fields (Positive (Id), Field) := False;
                end if;
@@ -1489,7 +1491,7 @@ package body Landin.Stages.Checking.Flow is
          end if;
 
          Dead := State.Dead_Fields (Positive (Id), 0);
-         for Field in 1 .. Widest_Struct loop
+         for Field in 1 .. Tracked_Field'Last loop
             Dead := Dead or else
               (State.Dead_Fields (Positive (Id), Field)
                and then (Prefix (One (Field), Path)
@@ -1812,7 +1814,7 @@ package body Landin.Stages.Checking.Flow is
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
             begin
-               if Which in 1 .. Widest_Struct
+               if Which in 1 .. Tracked_Field'Last
                  and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
                  and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
                           = Res.Bound
@@ -1977,7 +1979,7 @@ package body Landin.Stages.Checking.Flow is
                             (Types.all,
                              Landin.Checking.Nominal_Of (Types.all, Id))
                         loop
-                           if Each in 1 .. Widest_Struct then
+                           if Each in 1 .. Tracked_Field'Last then
                               if Landin.Checking.Field_Kind_Of
                                 (Types.all,
                                  Landin.Checking.Nominal_Of (Types.all, Id),
@@ -2990,7 +2992,7 @@ package body Landin.Stages.Checking.Flow is
                   Which : constant Natural :=
                     Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
                begin
-                  if Which in 1 .. Widest_Struct
+                  if Which in 1 .. Tracked_Field'Last
                     and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
                     and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
                              = Res.Bound
@@ -3069,7 +3071,7 @@ package body Landin.Stages.Checking.Flow is
                             (Types.all,
                              Landin.Checking.Nominal_Of (Types.all, Id))
                         loop
-                           if Each in 1 .. Widest_Struct then
+                           if Each in 1 .. Tracked_Field'Last then
                               case Landin.Checking.Field_Kind_Of
                                 (Types.all,
                                  Landin.Checking.Nominal_Of (Types.all, Id),
