@@ -5888,7 +5888,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J88 | Redundant inout test inside a branch already known to be non-inout | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J89 | `Held = Ty.Bool` arm in `Lower_Datum`'s zero path is unreachable | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
-| J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Implemented with K21/K22: bounded block runs partition each item and agree with instruction membership before consumers read them; final item and operand cursors consume their vectors. Small malformed-IR seams and valid reordered/prefixed controls cover both target widths. No accepted-source defect is inferred; exact acceptance remains open. |
 | J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
 | J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
 | J94 | Scalar_Field_Of converts an unbounded Part_Position with Natural() on the runtime-address path, turning a Fault into a Constraint_Error | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
@@ -6051,8 +6051,8 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
 | K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
 | K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
-| K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Duplicate J91. Retain the no-result Leave/rewriter witness under m24 and validate ownership before consumers use it. |
-| K22 | E6: final run cursors allow trailing orphan entries | Additional complete-partition witness under m24/J91, covering values, fields and operands as well as block membership. Bound each cursor and require the final run to consume its owned vector; small direct seam tests only. |
+| K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
+| K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
 | K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
 | K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
 | K25 | F3: devirtualization leaves a typed function-address projection live | Optimization candidate: the rewrite retains signature metadata and the simplifier's Plain predicate excludes it. Prove deadness and preserve any remaining users and verifier contracts before changing removal eligibility; do not clear a live function value's signature merely to satisfy that predicate. |
@@ -6577,7 +6577,22 @@ selected tests have 30-second or shorter timeouts. No Landin assembler, linker o
 Logs are retained in `.scratch/r491-ir-observability/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J91 block partition and membership validation is next. J116's slice-endpoint claim
+J91/K21/K22 development evidence: three selected cases pass 103 checks in
+each of macOS debug and Linux release.
+The block membership case covers omitted instructions, overlapping block runs,
+wrong/missing/out-of-range membership, a no-operand Leave, reordered emission
+and a nonzero item offset. A three-instruction unit exercises final cursors
+for slots, parameters, blocks, values, fields and operands, appending only one
+unclaimed entry to each vector. The initial test helper used an indexed vector
+reference while appending; copying the element avoids Ada's cursor-tampering
+exception. These are malformed-IR backstops, not new accepted-source claims.
+Both single-worker builds passed; selected tests have 30-second or shorter
+timeouts. No giant-array sound-unit case, Landin assembler, linker or generated
+executable ran. Logs are retained in
+`.scratch/r491-block-membership/`, `.scratch/r491-final-cursors/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J94's runtime-address field bound is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

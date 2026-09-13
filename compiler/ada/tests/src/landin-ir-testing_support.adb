@@ -121,6 +121,46 @@ package body Landin.IR.Testing_Support is
       Into.Items (Positive (Item)) := Held;
    end Overwrite_Item_Run;
 
+   procedure Append_Unclaimed_Entry
+     (Into : in out Unit; Which : Unclaimed_Vector)
+   is
+   begin
+      case Which is
+         when Slot_Vector => Into.Slots.Append (Into.Slots.Element (1));
+         when Parameter_Vector =>
+            Into.Parameters.Append (Into.Parameters.Element (1));
+         when Block_Vector => Into.Blocks.Append (Into.Blocks.Element (1));
+         when Value_Vector => Into.Code.Append (Into.Code.Element (1));
+         when Field_Vector => Into.Fields.Append (Into.Fields.Element (1));
+         when Operand_Vector =>
+            Into.Operands.Append (Into.Operands.Element (1));
+      end case;
+   end Append_Unclaimed_Entry;
+
+   procedure Overwrite_Block_Run
+     (Into : in out Unit; Item : Item_Id; Block : Block_Id;
+      First, Count : Natural)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Blocks.First + Positive (Block);
+      Held : Block_Record := Into.Blocks (Position);
+   begin
+      Held.First_Value := First;
+      Held.Values := Count;
+      Into.Blocks (Position) := Held;
+   end Overwrite_Block_Run;
+
+   procedure Overwrite_Value_Block
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id; Block : Block_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+      Held : Instruction := Into.Code (Position);
+   begin
+      Held.In_Block := Block;
+      Into.Code (Position) := Held;
+   end Overwrite_Value_Block;
+
    procedure Overwrite_Parameter
      (Into : in out Unit; Item : Item_Id; Index : Positive; Slot : Slot_Id)
    is
