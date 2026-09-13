@@ -26,6 +26,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    package Reports renames Landin.Build_Reports;
    use type IR.Opcode;
    use type IR.Block_Id;
+   use type IR.Signature_Id;
    use type Opt.Objective;
    use type Landin.Provenance.Origin;
    use type Reports.Specialization_Action;
@@ -907,8 +908,81 @@ package body Landin.Tests.IR_Optimization_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Measurement_Dumps_Name_Their_Types;
 
+   procedure Dead_Function_Addresses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dead_Function_Addresses
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Code : IR.Unit;
+         Report : Reports.Report;
+      begin
+         Lower (Item, Work, "f: () -> none = end f");
+         Evidence_Unit (Code, Work, Literal_Table, 1, False);
+         IR.Specialization.Run
+           (Code, Facts, (Opt.Speed, Opt.All_Eligible), Report);
+         Landin.Testing.Check_Equal
+           (Item, Count (Code, IR.Function_Address), 1,
+            "specialization leaves one typed address after its direct call");
+         IR.Simplification.Run (Code, Facts, Opt.None);
+         Landin.Testing.Check_Equal
+           (Item, Count (Code, IR.Function_Address), 1,
+            "none retains the reference instruction stream");
+         IR.Simplification.Run (Code, Facts, Opt.Speed);
+         Landin.Testing.Check_Equal
+           (Item, Count (Code, IR.Function_Address), 0,
+            "the unused function address has no observable effect");
+         Landin.Testing.Check_Equal
+           (Item, Count (Code, IR.Call), 2,
+            "both the instance call and the provider call remain");
+         declare
+            Live : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         begin
+            Lower
+              (Item, Live,
+               "invoke: (callback: () -> none) -> none = callback() "
+               & "end invoke noop: () -> none = end noop "
+               & "run: () -> none = invoke(noop) end run");
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Live).all;
+               Typed : Natural := 0;
+            begin
+               IR.Simplification.Run (Unit, Facts, Opt.Speed);
+               for I in 1 .. IR.Item_Count (Unit) loop
+                  for V in 1 .. IR.Value_Count (Unit, IR.Item_Id (I)) loop
+                     if IR.Op_Of (Unit, IR.Item_Id (I), IR.Value_Id (V))
+                       = IR.Function_Address
+                       and then IR.Signature_Of
+                         (Unit, IR.Item_Id (I), IR.Value_Id (V))
+                           /= IR.No_Signature
+                     then
+                        Typed := Typed + 1;
+                     end if;
+                  end loop;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Typed, 1,
+                  "a passed function value retains its signature");
+               Landin.Testing.Check_Equal
+                 (Item, Count (Unit, IR.Indirect_Call), 1,
+                  "the callback still has its verified indirect use");
+            end;
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Dead_Function_Addresses;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir opt", "dead function addresses",
+         Dead_Function_Addresses'Access);
       Landin.Testing.Register
         (Into, "ir opt", "partial dispatch reports remaining calls",
          Partial_Dispatch_Reports_Remaining_Calls'Access);
