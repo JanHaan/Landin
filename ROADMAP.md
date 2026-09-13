@@ -6235,12 +6235,26 @@ No assembler, linker or generated Landin executable ran. Logs are retained in
 `.scratch/r491-control-continuations/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-An additional current-source inference defect remains in the type/shape repair
-group: `for n in 0 ..< 2 do v := n complete return end for` reaches lowering
-with an unstorable inferred local and exits 70; `v: i32 = n` passes. The original
-source and a typed-bound witness are retained in
-`.scratch/r491-control-continuations/`. Investigate traversal-header inference
-before continuing the accepted-value lowering group J24/J25/J27.
+The additional current-source traversal inference defect found during J26 is
+repaired. `for n in 0 ..< 2 do v := n complete return end for` previously
+reached lowering with an unstorable inferred local and exited 70. Inference
+now asks the owning traversal header for its checked element/index type,
+retaining the existing wait for provisional error-set sources. This preserves
+inferred scalar, array, struct, pointer and text identities, nested range
+inputs and generic arguments without adding a new language rule.
+
+Traversal-inference development evidence: five selected cases pass 634 checks
+in each of macOS debug and Linux release. Twelve tiny sources run against both
+target widths. Invalid scalar collection sources and noninteger range bounds
+retain L0301 with no output or tool invocation; the driver case now checks 368
+refusal/output invariants. Existing fresh-binding, conformance and control-
+continuation cases pass. Builds use one worker and selected tests have timeouts
+of at most 30 seconds. No assembler, linker or generated Landin executable ran.
+Logs are retained in `.scratch/r491-traversal-inference/`,
+`.scratch/r491-control-continuations/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Accepted-value lowering J24/J25/J27 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
