@@ -27,6 +27,26 @@ package body Landin.Platform.Native is
          return False;
    end Exists;
 
+   overriding function Same_File
+     (Host : Native_Filesystem; Left, Right : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Same_Existing_Object
+        (Left, Right : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_same_existing_file";
+   begin
+      if Left = "" or else Right = ""
+        or else (for some Byte of Left => Byte = Character'Val (0))
+        or else (for some Byte of Right => Byte = Character'Val (0))
+      then
+         return False;
+      end if;
+      return Same_Existing_Object
+        (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) = 1;
+   end Same_File;
+
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean
    is

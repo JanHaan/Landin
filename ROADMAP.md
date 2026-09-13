@@ -5905,7 +5905,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J105 | Diagnostic and recovery for return followed by a name | C | Partly superseded by 7250d298: the final-value-prefix regression now reports one L0110. The targeted return-carries-value wording remains a diagnostic choice; the old cascade is not a current reproduction. |
 | J106 | Two `link(symbol:)` diagnostics cite [1580] (Importing from C) instead of [1610] | C | Implemented: all link-annotation notes consistently cite [1610] and the normative `text` parameter type. Missing-colon and missing-close probes retain their original L0103 code and single report. Exact acceptance remains open. |
 | J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Implemented: a match arm classifies For_Statement alongside loop and while before assigning its value slot. Small syntax controls preserve loops with value-carrying breaks and place ordinary loops in the statement run. No accepted-source miscompilation is claimed; exact acceptance remains open. |
-| J108 | The same source passed twice under two spellings is read twice, so every declaration in it is reported as declared twice | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
+| J108 | The same source passed twice under two spellings is read twice, so every declaration in it is reported as declared twice | C | Implemented: explicit inputs retain the first successful snapshot and spelling, skipping only repeated names or proven existing-object aliases. The new platform identity predicate keeps uncertainty distinct from output-overlap refusal. Equal-content files remain distinct, and rooted module ownership is unchanged. |
 | J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Implemented: Execute retains collected diagnostics for unexpected exceptions before returning Status_Defect. Compiler_Defect, Constraint_Error, Program_Error and Assertion_Error are pinned by one-shot fake reads; Host_Exhausted, Storage_Error and External_Tool_Failed retain their dedicated outer handling. Exact acceptance remains open. |
 | J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Not a current source defect: the empty-root diagnostic marks the context failed before discovery, and the queue exits before import lookup can reach Select_Module_Directory. This independently confirms the retained review critic's unreachable-path analysis. Preserve that validation boundary when changing module recovery; no real-root traversal was run. |
 | J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Implemented private constructor contract: target labels longer than their fixed storage raise Compiler_Defect in every build mode; valid labels copy in full and remain space-padded. Current named constructors are unchanged and no arbitrary target constructor was added. Exact acceptance remains open. |
@@ -6928,9 +6928,20 @@ and probes have 10-second limits. No Landin assembler, linker or generated
 executable ran. Logs are retained in `.scratch/r491-uppercase-diagnostics/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J108's duplicate explicit-source identity is next. Establish identity through
-the platform seam without treating uncertain identity as equality, preserve
-the first diagnostic spelling and retain distinct files with identical bytes.
+J108 development evidence: five exact selectors pass 27 checks in each of
+macOS debug and Linux release. Fake-driver controls cover exact repeats,
+relative/absolute aliases, skipping a later alias before reading it, first
+spelling in diagnostics, distinct equal-content files, trailing separators
+and missing inputs. The bounded native identity seam uses two tiny files,
+hard/symbolic links and missing/invalid names. Existing source diagnostics and
+rooted-module controls also pass. Both single-worker builds passed; selected
+tests have 30-second or shorter limits. No Landin assembler, linker or
+generated executable ran. Logs are retained in `.scratch/r491-source-identity/`
+and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J61/J68's immediate-width guards are next. Validate the encoding boundary with
+small scalar constants and bounded emitted-text controls; do not reproduce
+giant array extents or images.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

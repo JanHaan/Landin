@@ -29,6 +29,7 @@
 #endif
 
 int landin_same_file(const char *left, const char *right);
+int landin_same_existing_file(const char *left, const char *right);
 
 struct destination {
     struct stat object;
@@ -203,4 +204,16 @@ int landin_same_file(const char *left, const char *right)
         || a.parent.st_ino != b.parent.st_ino)
         return 0;
     return same_name(&a, &b);
+}
+
+/* Input deduplication needs positive existing-object identity. In particular,
+   two missing output leaves that overlap do not prove a loaded source alias. */
+int landin_same_existing_file(const char *left, const char *right)
+{
+    struct stat a;
+    struct stat b;
+
+    if (stat(left, &a) != 0 || stat(right, &b) != 0)
+        return -1;
+    return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
 }
