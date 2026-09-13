@@ -28224,9 +28224,166 @@ package body Landin.Stages.Checking is
          Zero_Image   : Boolean := False)
       is
          Bounds : Landin.Checking.Constraint_Descriptor;
-         Held   : Ty.Folded;
          Known  : Boolean;
          Source : Landin.Checking.Constraint_Id;
+
+         procedure Check_Known
+           (Value : Syn.Node_Id; Is_Known : out Boolean);
+         procedure Check_Answers (Value : Syn.Node_Id);
+         procedure Check_Block_Answer (Block : Syn.Node_Id);
+         procedure Check_Transfers
+           (Value : Syn.Node_Id;
+            Target : Landin.Source.Names.Name_Id;
+            Nested : Boolean := False);
+
+         procedure Check_Known
+           (Value : Syn.Node_Id; Is_Known : out Boolean)
+         is
+            Held : Ty.Folded;
+         begin
+            --  [0540]: `zeroed` is the base type's all-bits-zero image, which
+            --  is the value zero, so a subtype that excludes zero excludes it.
+            if (Zero_Image and then Value = Node)
+              or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+            then
+               Held := 0;
+               Is_Known := True;
+            elsif Conversion_Target (Of_Tree, Value)
+              = Ty.Type_Kind (Bounds.Base)
+            then
+               --  `percent(200)`: an integer conversion the base accepts hands
+               --  the value on unchanged, so the literal under it is what the
+               --  bounds are asked about.  A source the base does not hold
+               --  has already been refused by D168.
+               Known_Literal
+                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Value, 1),
+                  Held, Is_Known);
+            else
+               Known_Literal (Of_Tree, Value, Held, Is_Known);
+            end if;
+
+            if Is_Known then
+               if Held < Bounds.Lower or else Held > Bounds.Upper then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Value),
+                     Message => "this is " & Written (Held)
+                                & ", and the declared range is "
+                                & Written (Bounds.Lower) & " .. "
+                                & Written (Bounds.Upper),
+                     Note    => "[0660]: a range subtype is checked at every"
+                                & " assignment and conversion into it",
+                     Related => (if Landin.Provenance.Is_Known (Site)
+                                 then Site else Bounds.Site),
+                     Because => (if Landin.Provenance.Is_Known (Site)
+                                 then Because else "the range written here"),
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               end if;
+            end if;
+         end Check_Known;
+
+         procedure Check_Block_Answer (Block : Syn.Node_Id) is
+         begin
+            if Block /= Syn.No_Node then
+               Check_Answers (Syn.Block_Value (Of_Tree, Block));
+            end if;
+         end Check_Block_Answer;
+
+         procedure Check_Transfers
+           (Value : Syn.Node_Id;
+            Target : Landin.Source.Names.Name_Id;
+            Nested : Boolean := False)
+         is
+            Inside_Loop : Boolean := Nested;
+         begin
+            if Value = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Value)
+                in Syn.Anonymous_Function | Syn.Function_Declaration
+            then
+               return;
+            end if;
+            if Syn.Kind (Of_Tree, Value)
+              in Syn.Loop_Statement | Syn.While_Statement | Syn.For_Statement
+            then
+               if Target = Landin.Source.Names.No_Name
+                 or else Syn.Name (Of_Tree, Value) = Target
+               then
+                  return;
+               end if;
+               Inside_Loop := True;
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Break_Statement
+              and then
+                (if Syn.Name (Of_Tree, Value) = Landin.Source.Names.No_Name
+                 then not Nested
+                 else Syn.Name (Of_Tree, Value) = Target)
+            then
+               Check_Answers (Syn.Transfer_Value (Of_Tree, Value));
+            end if;
+            for Position in 1 .. Syn.Slot_Count (Of_Tree, Value) loop
+               Check_Transfers
+                 (Syn.Slot (Of_Tree, Value, Position), Target, Inside_Loop);
+            end loop;
+         end Check_Transfers;
+
+         procedure Check_Answers (Value : Syn.Node_Id) is
+            Is_Known : Boolean;
+         begin
+            if Value = Syn.No_Node
+              or else Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                = Ty.Ill_Typed
+            then
+               return;
+            end if;
+            Check_Known (Value, Is_Known);
+            if Is_Known then
+               return;
+            end if;
+            if Conversion_Target (Of_Tree, Value)
+              = Ty.Type_Kind (Bounds.Base)
+            then
+               Check_Answers (Syn.Nth_Argument (Of_Tree, Value, 1));
+               return;
+            end if;
+            case Syn.Kind (Of_Tree, Value) is
+               when Syn.Bare_Block =>
+                  Check_Block_Answer (Syn.Body_Of (Of_Tree, Value));
+               when Syn.If_Statement =>
+                  for Position in 1 .. Syn.Arm_Count (Of_Tree, Value) loop
+                     Check_Block_Answer
+                       (Syn.Body_Of
+                          (Of_Tree, Syn.Nth_Arm (Of_Tree, Value, Position)));
+                  end loop;
+                  Check_Block_Answer (Syn.Else_Body (Of_Tree, Value));
+               when Syn.Match_Statement =>
+                  for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Value)
+                  loop
+                     Check_Block_Answer
+                       (Syn.Body_Of
+                          (Of_Tree, Syn.Nth_Match_Arm
+                             (Of_Tree, Value, Position)));
+                  end loop;
+               when Syn.Loop_Statement | Syn.While_Statement
+                  | Syn.For_Statement =>
+                  Check_Transfers
+                    (Syn.Loop_Body (Of_Tree, Value),
+                     Syn.Name (Of_Tree, Value));
+                  Check_Transfers
+                    (Syn.Complete_Body (Of_Tree, Value),
+                     Syn.Name (Of_Tree, Value));
+               when Syn.Try_Expression =>
+                  Check_Answers (Syn.Operand_Of (Of_Tree, Value));
+               when Syn.Call | Syn.Labeled_Application =>
+                  if Syn.Recovery_Of (Of_Tree, Value) /= Syn.No_Node then
+                     Check_Block_Answer
+                       (Syn.Else_Body
+                          (Of_Tree, Syn.Recovery_Of (Of_Tree, Value)));
+                  end if;
+               when others =>
+                  null;
+            end case;
+         end Check_Answers;
       begin
          if Wanted = Landin.Checking.No_Constraint
            or else Node = Syn.No_Node
@@ -28238,45 +28395,15 @@ package body Landin.Stages.Checking is
 
          Bounds := Landin.Checking.Bounds_Of (Types.all, Wanted);
 
-         --  [0540]: `zeroed` is the base type's all-bits-zero image, which
-         --  is the value zero, so a subtype that excludes zero excludes it.
-         if Zero_Image or else Syn.Kind (Of_Tree, Node) = Syn.Zeroed_Literal
-         then
-            Held := 0;
-            Known := True;
-         elsif Conversion_Target (Of_Tree, Node) = Ty.Type_Kind (Bounds.Base)
-         then
-            --  `percent(200)`: an integer conversion the base accepts hands
-            --  the value on unchanged, so the literal under it is what the
-            --  bounds are asked about.  A source the base does not hold
-            --  has already been refused by D168.
-            Known_Literal
-              (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1), Held, Known);
-         else
-            Known_Literal (Of_Tree, Node, Held, Known);
-         end if;
-
+         Check_Known (Node, Known);
          if Known then
-            if Held < Bounds.Lower or else Held > Bounds.Upper then
-               Bad.Report
-                 (Item    => Bad.Literal_Out_Of_Range,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Node),
-                  Message => "this is " & Written (Held)
-                             & ", and the declared range is "
-                             & Written (Bounds.Lower) & " .. "
-                             & Written (Bounds.Upper),
-                  Note    => "[0660]: a range subtype is checked at every"
-                             & " assignment and conversion into it",
-                  Related => (if Landin.Provenance.Is_Known (Site)
-                              then Site else Bounds.Site),
-                  Because => (if Landin.Provenance.Is_Known (Site)
-                              then Because else "the range written here"),
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
-            end if;
             return;
          end if;
+
+         --  D188 applies to each possible control result, without widening
+         --  [1880]'s definition of a known value.  This walk reports literal
+         --  refusals only; the enclosing store still owns one dynamic check.
+         Check_Answers (Node);
 
          --  [1730]: a value whose own subtype lies inside this one carries
          --  the proof already, so no second check is emitted.
@@ -29447,6 +29574,26 @@ package body Landin.Stages.Checking is
             Check_Contextual_Value
               (Of_Tree, Runs, Expected, Result_Site,
                "the returns this fills");
+         end if;
+
+         if Count = 1 and then Gives in Ty.Integer_Name then
+            declare
+               Value : constant Syn.Node_Id :=
+                 (if Syn.Kind (Of_Tree, Runs) = Syn.Block
+                  then Syn.Block_Value (Of_Tree, Runs) else Runs);
+            begin
+               if Value /= Syn.No_Node
+                 and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                   in Ty.Integer_Name
+               then
+                  Apply_Constraint
+                    (Of_Tree, Value,
+                     Landin.Checking.Constraint_Of
+                       (Types.all, Of_Tree,
+                        Syn.Declared_Type (Of_Tree, Result)),
+                     Result_Site, "the return this fills");
+               end if;
+            end;
          end if;
 
          --  D124 extends [1910]'s edge walk through direct expression bodies

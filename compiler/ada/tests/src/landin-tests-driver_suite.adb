@@ -1964,6 +1964,74 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("level: type = u8 range 5 .. 10 f: () -> (r: level) = 3 end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: () -> (r: level) = begin 3 "
+            & "end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> (r: level) "
+            & "= if flag then 3 else 7 end if end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: () -> none = callback := "
+            & "() -> (r: level) = 3 end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = begin 3 end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = begin zeroed end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = if flag then 3 else 7 end if end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = loop do break with 3 end loop end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = loop do if flag then break with 3 else break "
+            & "with 7 end if end loop end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = while flag do break with 7 complete break "
+            & "with 3 end while end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: (flag: bool) -> none = "
+            & "value: level = level(begin 3 end) end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: () -> none = mut value: "
+            & "level = 7 value = begin 3 end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 f: () -> (r: level) = r = "
+            & "begin 3 end end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 take: (value: level) -> none "
+            & "= end take f: () -> none = take(begin 3 end) end f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 a, b: atom choice: type = a | "
+            & "b f: (flag: choice) "
+            & "-> none = value: level = match flag a: 3 b: 7 end match end "
+            & "f",
+            "L0300", 1, Executable);
+         Check
+           ("level: type = u8 range 5 .. 10 missing: atom leaf: () -> (r: "
+            & "u8) ! missing = fail missing end leaf f: () -> none = value: "
+            & "level = leaf() else 3 end f",
+            "L0300", 1, Executable);
+         Check
            ("widget: type = concept (t: type) bad: () -> (n: i32) size: "
             & "(self: ptr t) -> (n: i32) end widget bad_i32: () -> (n: i32) = "
             & "1 end bad_i32 size_i32: (self: ptr i32) -> (n: i32) = 2 end "
