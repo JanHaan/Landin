@@ -1964,6 +1964,34 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("f: () -> none = while true do callback := (value: "
+            & "i32) -> none = break when value == 9 end break end "
+            & "while end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = while true do callback := (value: "
+            & "i32) -> none = continue when value == 9 end break end"
+            & " while end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = outer: loop do callback := () -> none"
+            & " = break outer end break outer end outer end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = outer: loop do callback := () -> none"
+            & " = continue outer end break outer end outer end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = outer: loop do callback := () -> none"
+            & " = inner: loop do break outer end inner end break "
+            & "outer end outer end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = callback := () -> none = loop do "
+            & "nested := () -> none = break end break end loop end "
+            & "end f" & ASCII.LF,
+            "L0110", 1, Executable);
+         Check
            ("unary: type = struct t: missing end unary" & ASCII.LF
             & "bundle: () -> (d: i32, k: [2]unary) = d = 1 k = zeroed "
             & "end bundle" & ASCII.LF,

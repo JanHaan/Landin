@@ -10736,8 +10736,76 @@ package body Landin.Tests.Lowering_Suite is
          & "meter: type = distinct u16" & LF);
    end Result_Signatures_Wait_For_Layouts;
 
+   procedure Anonymous_Functions_Own_Their_Loops
+     (Item : in out Landin.Testing.Context);
+
+   procedure Anonymous_Functions_Own_Their_Loops
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Landin.Stages.Code (Work).all, Facts).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " retains its own loop and completion scope");
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("own unlabelled loop",
+         "f: () -> none = while true do callback := () -> none = "
+         & "loop do break end loop end break end while end f" & LF);
+      Check_Source
+        ("own labelled loop",
+         "f: () -> none = outer: loop do callback := () -> none ="
+         & " inner: loop do continue inner when false break inner "
+         & "end inner end break outer end outer end f" & LF);
+      Check_Source
+        ("nested own loops",
+         "f: () -> none = outer: loop do callback := () -> none ="
+         & " inner: loop do nested := () -> none = loop do break "
+         & "end loop end break inner end inner end break outer end "
+         & "outer end f" & LF);
+      Check_Source
+        ("complete binding belongs to anonymous body",
+         "f: () -> none = while true do callback := () -> none = "
+         & "complete: i32 = 1 _ = complete end break end while end "
+         & "f" & LF);
+      Check_Source
+        ("outer completion restored",
+         "f: () -> none = while false do callback := () -> none ="
+         & " end break when true complete value: i32 = 1 _ = value "
+         & "end while end f" & LF);
+      Check_Source
+        ("anonymous return in loop",
+         "f: () -> none = while true do callback := (value: i32) "
+         & "-> (r: i32) = value end _ = callback(1) break end while"
+         & " end f" & LF);
+   end Anonymous_Functions_Own_Their_Loops;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "anonymous functions own their loops",
+         Anonymous_Functions_Own_Their_Loops'Access);
       Landin.Testing.Register
         (Into, "lowering", "result signatures wait for layouts",
          Result_Signatures_Wait_For_Layouts'Access);

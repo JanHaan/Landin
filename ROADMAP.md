@@ -5838,7 +5838,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Current debug reproduction still adds false L0104 after a missing parenthesis. Distinct from N2/N3: preserve an already-current list closer while proving recovery progress. |
 | J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
-| J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
 | J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
 | J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
 | J44 | Runtime parameters and named returns resolve their types before later binders are collected, so parameter order changes acceptance | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
@@ -6331,7 +6331,26 @@ used to reproduce overflow. Builds use one worker and selected tests have
 executable ran. Logs are retained in `.scratch/r491-result-layouts/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Anonymous-function loop isolation J41 is next.
+J41 development evidence: four selected cases pass 789 checks in each of
+macOS debug and Linux release. Six tiny accepted sources exercise local,
+labelled and nested anonymous loops, a body-local complete binding, outer
+completion and an anonymous return. They reach verified IR on both target
+widths. Six invalid cross-function transfer inputs extend the driver to 640
+checks with exactly one L0110 and no output or tool effects. Existing control
+continuations and capture refusal pass. Builds use one worker and selected
+tests have 30-second or shorter timeouts. No assembler, linker or generated
+Landin executable ran. Logs are retained in `.scratch/r491-anonymous-loops/`
+and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Additional build-probe observation retained for the build-identity audit: the
+J46/J60/J124 Linux transcript emitted `fatal error: disk full` during the
+`gnatls --version | head -n 1` banner probe, then built and passed all selected
+checks. Both hosts had ample free space and inodes; a complete GNATLS banner
+read exited successfully. An early-closing banner pipe is the working
+explanation, not a confirmed storage failure. The untruncated transcript is
+retained with that batch's development logs.
+
+Parser list-recovery anchor preservation J39 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
