@@ -26238,8 +26238,11 @@ package body Landin.Stages.Checking is
                            Related => Syn.Origin (Of_Tree.all, Node),
                            Because => "this inferred binding",
                            Into    => Found);
+                     elsif Got /= Ty.Ill_Typed then
+                        Refuse_Inferred_Array_Element (Of_Tree.all, Repeated);
                      end if;
 
+                     Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
                      Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
                      return;
                   end if;

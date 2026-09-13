@@ -5926,7 +5926,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Implemented: Require commits integer literals only to real scalar contexts, and refuses non-scalar contexts with the original required-site origin and label. No default numeric commitment or invented bool precedes that report. Struct, two-element array and function argument witnesses are pinned; pointer/slice/erased arguments already use independent paths. Exact acceptance remains open. |
 | J127 | Out-of-range constant index diagnostic is missing its noun: "this index is outside the 2 this array has" | C | Implemented: constant-index diagnostics include `element` for length one and `elements` otherwise, using the target-sized count directly. Empty, singleton and two-element probes retain one L0306 report each. Exact acceptance remains open. |
 | J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Implemented maintenance: removed the direct-named-return alternative already implied by Is_Direct_Binding_Name. Named returns and their allowed scalar subobjects retain the same zeroed contexts. Exact acceptance remains open. |
-| J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Implemented: a non-scalar repeated element receives the shared explicit-element-type refusal unless its own error already explains the failure. Every rejected inferred repetition retains an ill-typed expression fact before its binding is settled, preventing the later false counted-binding report. Four source errors now produce four reports instead of seven. Exact acceptance remains open. |
 | J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Implemented: local typed payload copies are admitted before match-header types are available, then checked against their nominal destination. Inferred aliases and chains wait for the match header, retain their nominal descriptor and resume in the body walk; this also repairs a related inferred-copy internal defect. Read-only/writable, unused, chained, generic and different-nominal controls cover both target widths. Exact acceptance remains open. |
 | J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Implemented: range traversal preserves an ill-typed lower endpoint without a second type report, and pointer conversion refuses an already ill-typed operand before numeric checks or pointer facts. Independent non-integer refusals remain. Exact acceptance remains open. |
 | J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Implemented: pointer-union refusal precedes all any-construction conformance lookup and instantiation. A real missing conformance still reports L0318; its related origin now names the current required any type rather than the first same-concept reference elsewhere in the program. Exact acceptance remains open. |
@@ -6905,9 +6905,21 @@ elements. No Landin assembler, linker or generated executable ran. Logs are
 retained in `.scratch/r491-late-ready-instances/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J129's inferred-repetition refusal is next. Four tiny two-element cases
-currently yield seven reports, including misleading counted-binding errors
-and duplicated child refusals.
+J129 development evidence: the new four-error repetition fixture and two
+existing inferred local/module shape controls pass 20 checks in each of
+macOS debug and Linux release. Pointer, already-refused struct, no-value call
+and bad arithmetic elements retain one root report each. Four compile-only
+probes cover module pointer, atom and callback inference refusals plus an
+accepted explicitly typed pointer repetition. All repetitions contain two
+or three elements. Both single-worker builds passed; tests have 30-second or
+shorter limits and probes have 10-second limits. The diagnostic, token and
+target inventories include the new fixture. No Landin assembler, linker or
+generated executable ran. Logs are retained in
+`.scratch/r491-inferred-repetition/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J99's upper-case spelling diagnostic is next; L0012, fault/token boundaries
+and ordinary invalid-byte recovery must remain intact.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
