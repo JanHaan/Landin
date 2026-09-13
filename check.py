@@ -2888,6 +2888,32 @@ def check_catalogue(full_run):
     return out
 
 
+def third_party_notices():
+    """The root inventory must name the notices beside vendored material."""
+    out = []
+    inventory = io.open(os.path.join(ROOT, "LICENSE"), encoding="utf-8").read()
+    notices = {
+        "assets/icons.py": ("Lucide", "ISC", "sourcehut", "CC0"),
+        "assets/fonts/nunito-sans/OFL.txt":
+            ("The Nunito Sans Project Authors", "SIL Open Font License"),
+        "highlight/tree-sitter/src/tree_sitter/LICENSE":
+            ("The MIT License (MIT)", "Copyright (c) 2018 Max Brunsfeld"),
+    }
+    for relative, markers in notices.items():
+        if relative not in inventory:
+            out.append(("LICENSE", 1, "missing third-party notice: " + relative))
+        path = os.path.join(ROOT, relative)
+        if not os.path.isfile(path):
+            out.append((relative, 1, "vendored material's notice is missing"))
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for marker in markers:
+            if marker not in text:
+                out.append((relative, 1, "notice attribution is missing: "
+                            + marker))
+    return out
+
+
 def test_suite_inventory():
     """Every suite source, registration call and expected name must agree."""
     out = []
@@ -5308,6 +5334,7 @@ def main(argv):
         extra += fixture_constructs()
         extra += fixture_profiles()
         extra += test_suite_inventory()
+        extra += third_party_notices()
         extra += fixture_sources()
         extra += pinned_fixtures()
         extra += lowering_verifies()

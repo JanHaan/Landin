@@ -12,17 +12,30 @@ at your option.  You need not comply with both; pick whichever one suits
 you.  The MIT option exists because Apache-2.0 is incompatible with GPLv2,
 so a GPLv2 project can take the MIT terms instead.
 
-This covers the whole tree: the specification and the tour, the compiler,
-the fixtures, the scripts, the site generator and the mark.  There are no
-per-directory exceptions and no per-file headers; this file governs.
+These terms cover Landin-authored material: the specification and the tour,
+the compiler, the fixtures, the scripts, the site generator and the mark.
+Third-party material retains the separate notices listed below.
 
 What `refine` produces is not a derivative work of `refine`.  Compiling a
 program with this toolchain places no licensing condition on that program,
 and neither does linking `core/*` into it.  What you compile is yours.
 
-Third-party material carries its own notice next to it rather than here.
-Today there is one: the icon paths in `assets/icons.py`, from Lucide, under
-the ISC license, whose notice that file preserves.  Keep it.
+Third-party material carries its own notice next to it. Preserve those
+notices when copying the corresponding material:
+
+  * Lucide icon paths: ISC; notice in assets/icons.py.
+  * SourceHut artwork: CC0; attribution and the separate trademark note
+    in assets/icons.py.
+  * Nunito Sans font files: SIL Open Font License 1.1;
+    notice in assets/fonts/nunito-sans/OFL.txt.
+  * Tree-sitter support headers (alloc.h, array.h and parser.h): MIT;
+    notice in highlight/tree-sitter/src/tree_sitter/LICENSE.
+    highlight/tree-sitter/README.md records their pinned upstream sources.
+
+The optional MonoLisa files are supplied by the separate private
+landin-fonts checkout and are not included in this tree. Their separate
+license is documented in assets/fonts/README.md; this project's dual terms
+do not apply to them.
 
 Unless you state otherwise, a contribution you intentionally submit for
 inclusion in this repository is licensed under the same dual terms, without
