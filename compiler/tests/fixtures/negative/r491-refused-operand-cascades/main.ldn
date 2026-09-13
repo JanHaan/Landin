@@ -1,0 +1,38 @@
+percent: type = u8 range 0..100
+
+write: (p: ptr mut percent) -> none =
+    p.val = 200
+end write
+
+walk: () -> none =
+    for i in (1 + true)..<3 do
+        _ = i
+    end for
+end walk
+
+convert: () -> none =
+    view: ptr u32 = ptr(1 + true)
+end convert
+
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+thing: type = struct
+    value: i32
+end thing
+
+none_found: atom
+maybe_thing: type = none_found | ptr thing
+
+erase: (m: maybe_thing) -> none =
+    erased: any display = any(m)
+end erase
+
+missing: (p: ptr thing) -> none =
+    erased: any display = any(p)
+end missing
+
+noninteger: () -> none =
+    view: ptr u32 = ptr(false)
+end noninteger
