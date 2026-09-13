@@ -10149,6 +10149,9 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
               = Syn.Name_Reference
+           and then Res.Verdict_Of
+             (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+               /= Res.Bound
            and then Landin.Checking.Named
               (Types.all,
                Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
@@ -10209,7 +10212,9 @@ package body Landin.Stages.Checking is
                then Syn.Name (Of_Tree, Callee)
                else Landin.Source.Names.No_Name);
          begin
-            if Landin.Checking.Is_Text_Name (Types.all, Name) then
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) /= Res.Bound
+              and then Landin.Checking.Is_Text_Name (Types.all, Name)
+            then
                return Text_Descriptor
                  (Landin.Checking.Named_Text_View (Types.all, Name));
             end if;

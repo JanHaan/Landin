@@ -9065,8 +9065,167 @@ package body Landin.Tests.Lowering_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Static_Slice_Fields_Keep_Descriptors;
 
+   procedure Calls_Respect_Resolved_Declarations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Calls_Respect_Resolved_Declarations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text, Target : String;
+         Calls, Indirect, Conversions : Natural;
+         Converted : Landin.Types.Type_Kind);
+
+      procedure Check_Source
+        (Label, Text, Target : String;
+         Calls, Indirect, Conversions : Natural;
+         Converted : Landin.Types.Type_Kind)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+         Direct_Count, Indirect_Count, Conversion_Count : Natural := 0;
+         Targets_Agree, Conversions_Agree : Boolean := True;
+      begin
+         Lower (Work, Text, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+            Label & " reaches accepted IR");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            Expected : constant IR.Item_Id :=
+              (if Target = "" then IR.No_Item else Named_Item (Work, Target));
+         begin
+            for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+               declare
+                  Value : constant IR.Value_Id := IR.Value_Id (Position);
+               begin
+                  case IR.Op_Of (Unit, Routine, Value) is
+                     when IR.Call =>
+                        Direct_Count := Direct_Count + 1;
+                        Targets_Agree := Targets_Agree and then
+                          (Expected = IR.No_Item or else
+                           IR.Callee_Of (Unit, Routine, Value) = Expected);
+                     when IR.Indirect_Call =>
+                        Indirect_Count := Indirect_Count + 1;
+                     when IR.Conversion =>
+                        Conversion_Count := Conversion_Count + 1;
+                        Conversions_Agree := Conversions_Agree and then
+                          IR.Result_Of (Unit, Routine, Value) = Converted;
+                     when others => null;
+                  end case;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Direct_Count = Calls and then Indirect_Count = Indirect
+                 and then Targets_Agree,
+               Label & " retains the resolved call target and call kind");
+            Landin.Testing.Check
+              (Item, Conversion_Count = Conversions
+                 and then Conversions_Agree,
+               Label & " retains only the intended scalar conversions");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+               Label & " satisfies the verifier");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("u8 function",
+         "u8: (v: i32) -> (r: i32) = r = v + 1 end u8" & LF
+         & "f: (v: i32) -> (r: i32) = r = u8(v) end f" & LF,
+         "u8", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("i32 function",
+         "i32: (v: i32) -> (r: i32) = r = v + 1 end i32" & LF
+         & "f: (v: i32) -> (r: i32) = r = i32(v) end f" & LF,
+         "i32", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("bool function",
+         "bool: (v: i32) -> (r: i32) = r = v + 1 end bool" & LF
+         & "f: (v: i32) -> (r: i32) = r = bool(v) end f" & LF,
+         "bool", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("f32 function",
+         "f32: (v: i32) -> (r: i32) = r = v + 1 end f32" & LF
+         & "f: (v: i32) -> (r: i32) = r = f32(v) end f" & LF,
+         "f32", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("usize function",
+         "usize: (v: i32) -> (r: i32) = r = v + 1 end usize" & LF
+         & "f: (v: i32) -> (r: i32) = r = usize(v) end f" & LF,
+         "usize", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("utf8 function",
+         "utf8: (v: i32) -> (r: i32) = r = v + 1 end utf8" & LF
+         & "f: (v: i32) -> (r: i32) = r = utf8(v) end f" & LF,
+         "utf8", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("utf16 function",
+         "utf16: (v: i32) -> (r: i32) = r = v + 1 end utf16" & LF
+         & "f: (v: i32) -> (r: i32) = r = utf16(v) end f" & LF,
+         "utf16", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("cstring function",
+         "cstring: (v: i32) -> (r: i32) = r = v + 1 end cstring" & LF
+         & "f: (v: i32) -> (r: i32) = r = cstring(v) end f" & LF,
+         "cstring", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("same width shadow",
+         "u8: (v: u8) -> (r: u8) = r = v +% 100 end u8" & LF
+         & "f: () -> (r: i32) = r = i32(u8(41)) end f" & LF,
+         "u8", 1, 0, 1, Landin.Types.I32);
+      Check_Source
+        ("callback parameter",
+         "f: (u8: (v: i32) -> (r: i32), v: i32) -> (r: i32) = r "
+         & "= u8(v) end f" & LF,
+         "", 0, 1, 0, Landin.Types.I32);
+      Check_Source
+        ("local callback",
+         "next: (v: i32) -> (r: i32) = r = v + 1 end next" & LF
+         & "f: (v: i32) -> (r: i32) = utf8: (v: i32) -> (r: i32) "
+         & "= next r = utf8(v) end f" & LF,
+         "", 0, 1, 0, Landin.Types.I32);
+      Check_Source
+        ("generic function",
+         "u8: (t: type, v: t) -> (r: t) = r = v end u8" & LF
+         & "f: (v: i32) -> (r: i32) = r = u8(v) end f" & LF,
+         "", 1, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("builtin conversion",
+         "f: (v: i32) -> (r: u8) = r = u8(v) end f" & LF,
+         "", 0, 0, 1, Landin.Types.U8);
+      Check_Source
+        ("alias conversion",
+         "byte: type = u8" & LF
+         & "f: (v: i32) -> (r: byte) = r = byte(v) end f" & LF,
+         "", 0, 0, 1, Landin.Types.U8);
+      Check_Source
+        ("builtin named alias conversion",
+         "u8: type = u16" & LF
+         & "f: (v: i32) -> (r: u16) = r = u8(v) end f" & LF,
+         "", 0, 0, 1, Landin.Types.U16);
+      Check_Source
+        ("builtin text conversion",
+         "f: (v: []u8) -> (r: utf8 from v) = r = utf8(v) end f" & LF,
+         "", 0, 0, 0, Landin.Types.I32);
+      Check_Source
+        ("alias text conversion",
+         "byte_view: type = []u8" & LF
+         & "f: (v: utf8) -> (r: []u8 from v) =" & LF
+         & "r = byte_view(v) end f" & LF,
+         "", 0, 0, 0, Landin.Types.I32);
+   end Calls_Respect_Resolved_Declarations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "calls respect resolved declarations",
+         Calls_Respect_Resolved_Declarations'Access);
       Landin.Testing.Register
         (Into, "lowering", "static slice fields keep descriptors",
          Static_Slice_Fields_Keep_Descriptors'Access);
