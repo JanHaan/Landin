@@ -5819,7 +5819,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
 | J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
 | J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
-| J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
+| J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Repaired: slice bounds/sources, descriptor copies, addresses, inout and slice actuals, conversions and any operands stop after terminated evaluation. UTF8 indexing creates decoder blocks only after its ordinal continues. Twenty-five tiny sources verify reachable calls and complete IR on both target widths in both modes. J23/J26 retain their separate merge/loop work. |
 | J23 | Lower_If leaves an orphan merge block when a later arm's condition terminates the flow, and the IR verifier then rejects the unit | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
 | J24 | Destructuring binding from a labelled-argument call or `try` raises a compiler defect (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J25 | Assignment to an anonymous multi-result aggregate from a labelled call, `try`, or loop value violates `Res.Bound_To`'s precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
@@ -6044,7 +6044,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Repaired: each executed declaration clears its prior instance's assigned and consumed facts, including sparse fields/elements. Ordinary, condition and traversal bindings start fresh; destructured results retain their existing sink restriction. Twenty-one controls preserve outer loop-carried consumption, initializer effects, uninitialized reads and repeated reads after a sink. This applies [0080]/[1910] without changing the sink point or adding ownership. |
 | K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
 | K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
-| K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
+| K14 | C2: an all-return slice lower bound emits into terminated flow | Repaired with J22: lower/upper returns, array/slice/text sources and ordinary/partially returning bound controls pass in both modes. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
 | K17 | E1: array fill/element atom writes require exact sets | Source confirms `Fill_Array` and `Store_Element` still use exact atom metadata. Compare D216 subset writes with exact reads using small typed-IR and source controls. Finder source-reachability claims need their own bounded witness; the existing indirect-store repair is not evidence for these opcodes. |
@@ -6212,7 +6212,19 @@ and selected tests have timeouts of at most
 batch. Logs are retained in `.scratch/r491-function-comparisons/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Terminated expression lowering J22/K14 is next.
+J22/K14 development evidence: five selected cases pass 178 checks in each of
+macOS debug and Linux release. Twenty-five tiny sources run against 32-bit and
+64-bit target facts. They check that evaluation stops before later calls,
+retains earlier calls, preserves a continuing branch, and leaves every IR block
+reachable and finished. The first conversion and UTF8 ordinal test drafts were
+untyped and correctly refused; typed all-return controls now exercise those
+paths. Existing control-value, all-return, callback/inout and UTF8 storage
+regressions pass. Builds use one worker and selected tests have timeouts of at
+most 30 seconds. No assembler, linker or generated Landin executable ran.
+Logs are retained in `.scratch/r491-terminated-expressions/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Control-flow merges and loop completion J23/J26 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

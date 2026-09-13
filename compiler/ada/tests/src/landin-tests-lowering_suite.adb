@@ -9374,8 +9374,202 @@ package body Landin.Tests.Lowering_Suite is
          "choose");
    end Function_Comparisons_Keep_Signatures;
 
+   procedure Terminated_Expressions_Stop_Emission
+     (Item : in out Landin.Testing.Context);
+
+   procedure Terminated_Expressions_Stop_Emission
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Calls : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Position)) = IR.Call
+                  then
+                     Calls := Calls + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Calls = Expected_Calls,
+                  Label & " preserves only reachable calls");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " has no unfinished or orphan blocks");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("slice lower returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = s := a[begin return end .. "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("slice upper returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = s := a[0 ..< begin return end] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("array lower returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = s := a[begin return end .. "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("array upper returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = s := a[0 ..< begin return end] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("utf8 lower returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf8) -> none = s := a[begin return end .. marker()] "
+         & "end f" & LF);
+      Check_Source
+        ("utf8 upper returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf8) -> none = s := a[0 ..< begin return end] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("utf16 lower returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf16) -> none = s := a[begin return end .. "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("utf16 upper returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf16) -> none = s := a[0 ..< begin return end] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("address index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = p := addr a[begin return end] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("inout index returns",
+         "touch: (inout v: i32, later: usize) -> none = v = 1 end "
+         & "touch" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (inout a: [2]i32) -> none = touch(a[begin return end], "
+         & "marker()) end f" & LF);
+      Check_Source
+        ("slice actual returns",
+         "take: (v: []i32, later: usize) -> none = end take" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = take(a[begin return end ..< 0], "
+         & "marker()) end f" & LF);
+      Check_Source
+        ("conversion operand returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = v := u8(if begin return end then 0 else 1 "
+         & "end if) ignored := marker() end f" & LF);
+      Check_Source
+        ("utf8 index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf8) -> none = s := a[if begin return end then "
+         & "u32(0) else u32(1) end if] ignored := marker() end f" & LF);
+      Check_Source
+        ("text source index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]utf8) -> none = s := a[begin return end][0 ..< "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("array source index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2][2]i32) -> none = s := a[begin return end][0 ..< "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("slice source index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2][]i32) -> none = s := a[begin return end][0 ..< "
+         & "marker()] end f" & LF);
+      Check_Source
+        ("ordinary index returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = v := a[begin return end] ignored "
+         & ":= marker() end f" & LF);
+      Check_Source
+        ("partial lower return",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32, flag: bool) -> none = s := a[if flag then "
+         & "return else 0 end if ..< marker()] end f" & LF,
+         1);
+      Check_Source
+        ("ordinary slice bounds",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = s := a[0 ..< marker()] end f" & LF,
+         1);
+      Check_Source
+        ("any operand returns",
+         "reader: type = concept (t: type) read: (self: ptr t) -> (r: "
+         & "i32) end reader" & LF
+         & "state: type = struct value: i32 end state" & LF
+         & "read_state: (self: ptr state) -> (r: i32) = r = "
+         & "self.val.value end read_state" & LF
+         & "state is reader (read: read_state)" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]state) -> none = v: any reader = any(addr a[begin "
+         & "return end]) ignored := marker() end f" & LF);
+      Check_Source
+        ("upper return keeps earlier call",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = s := a[marker() ..< begin return "
+         & "end] end f" & LF,
+         1);
+      Check_Source
+        ("utf8 index source returns",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]utf8) -> none = s := a[begin return end][u32(0)] "
+         & "ignored := marker() end f" & LF);
+      Check_Source
+        ("ordinary utf8 index",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf8) -> none = s := a[u32(0)] ignored := marker() "
+         & "end f" & LF,
+         1);
+      Check_Source
+        ("ordinary address index",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = p := addr a[0] ignored := marker() "
+         & "end f" & LF,
+         1);
+      Check_Source
+        ("ordinary conversion",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (v: i32) -> none = value := u8(v) ignored := marker() "
+         & "end f" & LF,
+         1);
+   end Terminated_Expressions_Stop_Emission;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "terminated expressions stop emission",
+         Terminated_Expressions_Stop_Emission'Access);
       Landin.Testing.Register
         (Into, "lowering", "function comparisons keep signatures",
          Function_Comparisons_Keep_Signatures'Access);

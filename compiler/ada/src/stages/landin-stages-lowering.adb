@@ -4307,6 +4307,9 @@ package body Landin.Stages.Lowering is
                      Site : constant Landin.Provenance.Origin :=
                        Site_Of (Of_Tree, Argument);
                   begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
                      --  An inout forwarded from another inout already is the
                      --  address the callee needs. Taking its place address
                      --  would instead pass the address slot itself.
@@ -4342,6 +4345,9 @@ package body Landin.Stages.Lowering is
                      begin
                         Lower_Slice_Into
                           (Of_Tree, Argument, Scope, Temporary);
+                        if Current = IR.No_Block then
+                           return IR.No_Value;
+                        end if;
                         Given (Formal_Position) := IR.Emit_Storage_Address
                           (Unit.all, Filling,
                            (Kind => IR.Frame_Slot, Slot => Temporary),
@@ -4909,6 +4915,9 @@ package body Landin.Stages.Lowering is
            (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
             Length => 2, others => <>);
       begin
+         if Current = IR.No_Block then
+            return IR.No_Value;
+         end if;
          if Place.Place.Kind /= IR.Runtime_Address
            and then (Place.Base /= 0 or else Place.Steps.Is_Empty)
          then
@@ -4995,11 +5004,17 @@ package body Landin.Stages.Lowering is
                      Site_Of (Of_Tree, Node)));
             end;
          end if;
-         return
-           (Base => Load_Slice_Component
-              (Of_Tree, Node, Scope, 1),
-            Length => Load_Slice_Component
-              (Of_Tree, Node, Scope, 2));
+         declare
+            Base : constant IR.Value_Id :=
+              Load_Slice_Component (Of_Tree, Node, Scope, 1);
+         begin
+            if Current = IR.No_Block then
+               return (Base => IR.No_Value, Length => IR.No_Value);
+            end if;
+            return
+              (Base => Base,
+               Length => Load_Slice_Component (Of_Tree, Node, Scope, 2));
+         end;
       end Lower_Slice;
 
       procedure Lower_Slice_Into
@@ -5842,13 +5857,20 @@ package body Landin.Stages.Lowering is
                      Nominal : constant Landin.Checking.Nominal_Type_Id :=
                        Landin.Checking.Nominal_Of
                          (Types.all, Of_Tree, Where);
-                     Storage : constant IR.Storage := Addressed_Storage
-                       (Position, Neutral_Body (Nominal), Site);
-                     Address : constant IR.Value_Id := IR.Emit_Place_Address
-                       (Unit.all, Filling, Storage, Site, Field => 1);
                   begin
-                     return IR.Emit_Load_Indirect
-                       (Unit.all, Filling, Address, Ty.Usize, Site);
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     declare
+                        Storage : constant IR.Storage := Addressed_Storage
+                          (Position, Neutral_Body (Nominal), Site);
+                        Address : constant IR.Value_Id :=
+                          IR.Emit_Place_Address
+                            (Unit.all, Filling, Storage, Site, Field => 1);
+                     begin
+                        return IR.Emit_Load_Indirect
+                          (Unit.all, Filling, Address, Ty.Usize, Site);
+                     end;
                   end;
                elsif Syn.Kind (Of_Tree, Where)
                  in Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
@@ -5900,6 +5922,9 @@ package body Landin.Stages.Lowering is
             Parts : constant Slice_Values := Lower_Slice
               (Of_Tree, From, Scope);
          begin
+            if Current = IR.No_Block then
+               return;
+            end if;
             IR.Emit_Store (Unit.all, Filling, Base_Slot, Parts.Base, Site);
             IR.Emit_Store
               (Unit.all, Filling, Length_Slot, Parts.Length, Site);
@@ -5925,14 +5950,14 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site);
                Wanted : constant IR.Value_Id := Lower_Expression
                  (Of_Tree, Where, Scope);
-               Test : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
-               Advance : constant IR.Block_Id := Fresh
-                 (Of_Tree, Node, Scope);
-               Found : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+               Test, Advance, Found : IR.Block_Id;
             begin
                if Current = IR.No_Block then
                   return;
                end if;
+               Test := Fresh (Of_Tree, Node, Scope);
+               Advance := Fresh (Of_Tree, Node, Scope);
+               Found := Fresh (Of_Tree, Node, Scope);
                IR.Emit_Store (Unit.all, Filling, Wanted_Slot, Wanted, Site);
                IR.Emit_Store
                  (Unit.all, Filling, Count_Slot,
@@ -6021,6 +6046,9 @@ package body Landin.Stages.Lowering is
                  Landin.Checking.Evidence_Of (Types.all, Of_Tree, Node);
                Table : IR.Value_Id;
             begin
+               if Current = IR.No_Block then
+                  return;
+               end if;
                if Evidence = Landin.Checking.No_Conformance then
                   raise Landin.Compiler_Defect with
                     "an any construction has no selected evidence";
@@ -6111,6 +6139,9 @@ package body Landin.Stages.Lowering is
                      begin
                         Lower_Slice_Into
                           (Of_Tree, Source, Scope, Temporary);
+                        if Current = IR.No_Block then
+                           return;
+                        end if;
                         Base := IR.Emit_Load_Slot_Field
                           (Unit.all, Filling, Temporary, 1, Ty.Usize, Site);
                         Total := IR.Emit_Load_Slot_Field
@@ -6130,6 +6161,9 @@ package body Landin.Stages.Lowering is
                      Place : constant Stored_Place :=
                        Lower_Stored_Place (Of_Tree, Source, Scope);
                   begin
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
                      Base := IR.Emit_Storage_Address
                        (Unit.all, Filling, Place.Place, Site,
                         Field => Place.Base, Nested => Stored_Steps (Place));
@@ -6141,6 +6175,9 @@ package body Landin.Stages.Lowering is
                   end;
                end if;
 
+               if Current = IR.No_Block then
+                  return;
+               end if;
                IR.Emit_Store (Unit.all, Filling, Base_Slot, Base, Site);
                IR.Emit_Store (Unit.all, Filling, Total_Slot, Total, Site);
 
@@ -6148,12 +6185,18 @@ package body Landin.Stages.Lowering is
                   Lower_Value : constant IR.Value_Id := Lower_Expression
                     (Of_Tree, Syn.Slice_Lower (Of_Tree, Node), Scope);
                begin
+                  if Current = IR.No_Block then
+                     return;
+                  end if;
                   IR.Emit_Store
                     (Unit.all, Filling, Saved_Lower, Lower_Value, Site);
                   declare
                      Upper : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Slice_Upper (Of_Tree, Node), Scope);
                   begin
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
                      IR.Emit_Store
                        (Unit.all, Filling, Saved_Upper, Upper, Site);
                      declare
@@ -6264,6 +6307,9 @@ package body Landin.Stages.Lowering is
             Source : constant Stored_Place :=
               Lower_Stored_Place (Of_Tree, Node, Scope);
          begin
+            if Current = IR.No_Block then
+               return;
+            end if;
             IR.Emit_Array_Copy
               (Unit.all, Filling, Source.Place,
                (Kind => IR.Frame_Slot, Slot => Destination), Site,
@@ -6818,6 +6864,9 @@ package body Landin.Stages.Lowering is
                     Lower_Stored_Place
                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope);
                begin
+                  if Current = IR.No_Block then
+                     return IR.No_Value;
+                  end if;
                   return IR.Emit_Place_Address
                     (Unit.all, Filling, Place.Place, Site,
                      Field => Place.Base, Nested => Stored_Steps (Place));
@@ -7487,6 +7536,9 @@ package body Landin.Stages.Lowering is
                      Value : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1), Scope);
                   begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
                         Ty.Scalar_Name (Conversion_Scalar (Of_Tree, Node)),
