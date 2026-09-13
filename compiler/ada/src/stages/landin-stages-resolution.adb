@@ -1022,6 +1022,25 @@ package body Landin.Stages.Resolution is
                         Into => Found);
                      return;
                   end if;
+                  --  Bare namespaces do not replace ordinary values.
+                  --  Only after lexical lookup finds no value can an
+                  --  import explain this otherwise unresolved use.
+                  if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+                    and then Res.Imported_Module_Of
+                      (Meanings.all, Syn.Source_Of (Of_Tree), Named)
+                        /= Landin.Modules.No_Module
+                  then
+                     Names.Report
+                       (Item => Names.Unresolved_Name,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Anchor (Of_Tree, Node),
+                        Message => "namespace `" & Spelled (Named)
+                                   & "` needs a member selection",
+                        Note => "[1860]: an imported namespace has no"
+                                & " runtime value of its own",
+                        Into => Found);
+                     return;
+                  end if;
                   --  A type name that resolved to nothing is left to the
                   --  checker, which is the stage that can tell a type the
                   --  tour writes and [1790] omits from a name nobody

@@ -5911,7 +5911,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Implemented private constructor contract: target labels longer than their fixed storage raise Compiler_Defect in every build mode; valid labels copy in full and remain space-padded. Current named constructors are unchanged and no arbitrary target constructor was added. Exact acceptance remains open. |
 | J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
 | J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
-| J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Implemented: an otherwise unresolved bare value use of a file-local imported namespace reports that it needs a member selection, with the existing L0201 code/use anchor and a [1860] note. Ordinary lexical lookup still wins, including same-named module values; aliases, parameter shadows, selected imports and sibling-file scope retain their rules. Exact acceptance remains open. |
 | J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Implemented maintenance: removed the unused formal-declaration field, query and order-dependent signature-scope lookup. Argument roles and role-local positions remain; checking remaps runtime positions from the complete signature. The existing classification case now calls a later declaration and asserts its static position. Exact acceptance remains open. |
 | J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
@@ -6880,8 +6880,22 @@ or generated executable ran. Logs are retained in
 `.scratch/r491-zeroed-context/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J114's bare-namespace diagnostic is next. The existing unqualified
-same-named module value rule remains authoritative.
+J114 development evidence: the selected import-scope seam and two existing
+negative import goldens pass 43 checks in each of macOS debug and Linux
+release. Four added seam controls cover a bare namespace, an alias, a
+namespace used as a callee and a same-named parameter; existing controls
+preserve same-named module values, qualified members, selected declarations
+and file-local import scope. Type/concept fallback is unchanged. Both
+single-worker builds passed; tests have 30-second or shorter limits. No
+Landin assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-namespace-values/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J134's instance-pass bookkeeping is next. A small generic wrapper with a
+parameterized conformance provider accepts i32 and correctly refuses its
+u32-to-i32 body mismatch, so it does not establish the proposed missed-check
+window. Any repair must distinguish the bookkeeping contract from a proven
+source failure.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

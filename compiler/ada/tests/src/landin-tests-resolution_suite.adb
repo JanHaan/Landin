@@ -912,6 +912,17 @@ package body Landin.Tests.Resolution_Suite is
       Check
         ("import lib" & LF & "as: i32 = 2" & LF & "lib: i32 = 3" & LF
          & "f: () -> (v: i32) = lib.answer + lib + as end f", "");
+      Check ("import lib" & LF
+             & "f: () -> (v: i32) = lib end f",
+             "namespace `lib` needs a member selection");
+      Check ("import lib as renamed" & LF
+             & "f: () -> (v: i32) = renamed end f",
+             "namespace `renamed` needs a member selection");
+      Check ("import lib" & LF
+             & "f: () -> none = lib() end f",
+             "namespace `lib` needs a member selection");
+      Check ("import lib" & LF
+             & "f: (lib: i32) -> (v: i32) = lib end f", "");
       Check ("import lib (answer, answer)", "L0200");
       Check ("import lib as answer" & LF & "import lib (answer)", "L0200");
       Check ("import lib (answer)" & LF & "import lib as answer", "L0200");
