@@ -180,7 +180,8 @@ package body Landin.Platform.Native.Tools is
 
       Reader.Read_File (Name.all, Result.Output, Read);
       if Read /= Read_Ok then
-         Result.Output := Unbounded.Null_Unbounded_String;
+         raise External_Tool_Failed
+           with "could not read temporary tool output";
       end if;
       if Exceeded_Limit then
          Unbounded.Append

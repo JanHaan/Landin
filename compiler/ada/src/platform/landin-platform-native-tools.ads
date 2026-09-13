@@ -18,9 +18,9 @@ package Landin.Platform.Native.Tools is
    --  not confinement of a process that deliberately leaves its group.
    procedure Set_Limit (Host : in out Native_Tool_Runner; Seconds : Duration);
 
-   --  A tool that cannot be started at all raises External_Tool_Failed; a
-   --  tool that ran and failed reports its exit code, which the driver can
-   --  describe.  Capture files are temporary resources owned by this adapter.
+   --  A tool that cannot be started, or whose capture cannot be read, raises
+   --  External_Tool_Failed. A tool that ran and failed reports its exit code,
+   --  which the driver can describe. Capture files belong to this adapter.
    overriding procedure Run
      (Host      : Native_Tool_Runner;
       Program   : String;
