@@ -26,6 +26,7 @@ package body Landin.Tests.Debugging_Suite is
    package IR renames Landin.IR;
    use type IR.Declaration_Id;
    use type IR.Item_Kind;
+   use type IR.Opcode;
    use type IR.Item_Id;
    use type IR.Slot_Id;
    use type Landin.Source.Source_Id;
@@ -681,8 +682,173 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Array_Addresses_Keep_Homes;
 
+   procedure Terminal_Locations_Stop_Before_Restores
+     (Item : in out Landin.Testing.Context);
+
+   procedure Terminal_Locations_Stop_Before_Restores
+     (Item : in out Landin.Testing.Context)
+   is
+      package Dwarf renames Landin.Backend.X86_64.Dwarf;
+      Result_Source : constant String :=
+        "public main: () -> (code: i32) = code = 42 end main";
+      HT : constant Character := Character'Val (9);
+
+      procedure Check
+        (Text : String; Expected : Natural; On_Failure : Boolean := True);
+
+      procedure Check
+        (Text : String; Expected : Natural; On_Failure : Boolean := True)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      begin
+         Lower (Item, Work, Text);
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Info : Landin.Debugging.Information (Landin.Stages.Trees (Work));
+            Routine : IR.Item_Id := IR.No_Item;
+            Slot : IR.Slot_Id := IR.No_Slot;
+            Terminals : Natural := 0;
+
+            function Symbol (Id : IR.Item_Id) return String;
+
+            function Symbol (Id : IR.Item_Id) return String is
+              ("item_" & Ada.Strings.Fixed.Trim
+                 (Id'Image, Ada.Strings.Both));
+         begin
+            for Index in 1 .. IR.Item_Count (Unit) loop
+               if IR.Kind_Of (Unit, IR.Item_Id (Index)) = IR.Routine then
+                  Routine := IR.Item_Id (Index);
+               end if;
+            end loop;
+            for Index in 1 .. IR.Slot_Count (Unit, Routine) loop
+               declare
+                  Binding : constant IR.Declaration_Id :=
+                    IR.Declares (Unit, Routine, IR.Slot_Id (Index));
+               begin
+                  if Binding /= IR.No_Declaration
+                    and then Landin.Source.Names.Spelling
+                      (Landin.Stages.Identities (Work).all,
+                       Landin.Resolution.Name_Of
+                         (Landin.Stages.Meanings (Work).all, Binding))
+                      = "code"
+                  then
+                     Slot := IR.Slot_Id (Index);
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Slot /= IR.No_Slot, "the named result has storage");
+            if Slot = IR.No_Slot then
+               return;
+            end if;
+            Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+            declare
+               Live : constant Landin.Backend.Debug_Locations.Flags.Vector :=
+                 Landin.Backend.Debug_Locations.Available
+                   (Unit, Landin.Stages.Meanings (Work).all,
+                    Info, Routine, Slot, False);
+               Sections : constant String := Dwarf.Sections
+                 (Unit, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Targets.Linux_X86_64,
+                  Landin.Optimization.Default_Options,
+                  Info, ".Lterminal_", Symbol'Access);
+            begin
+               for Index in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Index))
+                    in IR.Leave | IR.Fail
+                  then
+                     Terminals := Terminals + 1;
+                     Landin.Testing.Check
+                       (Item, Live (Index) =
+                          (IR.Op_Of (Unit, Routine, IR.Value_Id (Index))
+                             = IR.Leave or else On_Failure),
+                        "terminal availability requires initialization");
+                     Landin.Testing.Check
+                       (Item, Contains (Sections, HT & ".quad "
+                          & Dwarf.Label_Name
+                            (".Lterminal_", "epilogue", Routine, Index) & LF),
+                        "each terminal range ends before register restores");
+                  end if;
+               end loop;
+            end;
+            for Index in 1 .. IR.Parameter_Count (Unit, Routine) loop
+               declare
+                  Live : constant
+                    Landin.Backend.Debug_Locations.Flags.Vector :=
+                      Landin.Backend.Debug_Locations.Available
+                        (Unit, Landin.Stages.Meanings (Work).all,
+                         Info, Routine,
+                         IR.Nth_Parameter (Unit, Routine, Index), True);
+               begin
+                  for V in 1 .. IR.Value_Count (Unit, Routine) loop
+                     if IR.Op_Of (Unit, Routine, IR.Value_Id (V))
+                       in IR.Leave | IR.Fail
+                     then
+                        Landin.Testing.Check
+                          (Item, Live (V),
+                           "parameters remain available at terminals");
+                     end if;
+                  end loop;
+               end;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Terminals, Expected, "all terminal paths were inspected");
+         end;
+      end Check;
+   begin
+      Check (Result_Source, 1);
+      Check ("f: (flag: bool) -> (code: i32) = code = 42 "
+         & "return when flag code = 7 end f", 2);
+      Check ("problem: atom f: (flag: bool) -> (code: i32) ! problem = "
+         & "code = 42 fail problem when flag end f", 2);
+      Check ("problem: atom f: (flag: bool) -> (code: i32) ! problem = "
+         & "fail problem when flag code = 42 end f", 2, False);
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Request;
+      begin
+         Host.Add_File ("main.ldn", Result_Source);
+         Args.Append ("--debug=full");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Assembly : constant String := Host.Written ("out.s");
+            First : constant Natural :=
+              Ada.Strings.Fixed.Index (Assembly, ".Ldebug_epilogue_");
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = 0 and then Tools.Run_Count = 0
+                 and then First > 0,
+               "full debug emits a terminal boundary without host tools");
+            if First > 0 then
+               declare
+                  Last : constant Natural := Ada.Strings.Fixed.Index
+                    (Assembly, ":" & LF, From => First);
+                  Label : constant String := Assembly (First .. Last - 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Assembly, Label & ":" & LF
+                        & HT & ".cfi_remember_state" & LF)
+                       and then Contains (Assembly, ".quad " & Label & LF),
+                     "location references use the pre-restore code boundary");
+               end;
+            end if;
+         end;
+      end;
+   end Terminal_Locations_Stop_Before_Restores;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "terminal locations stop before restores",
+         Terminal_Locations_Stop_Before_Restores'Access);
       Landin.Testing.Register
         (Into, "debugging", "register locations preserve indirection",
          Register_Locations_Preserve_Indirection'Access);

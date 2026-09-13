@@ -457,7 +457,10 @@ package body Landin.Backend.X86_64.Dwarf is
                if First /= No_Value then
                   US.Append (Locations,
                     HT & ".quad " & L ("value", Item, Natural (First)) & LF
-                    & HT & ".quad " & L ("after", Item, Natural (Last)) & LF
+                    & HT & ".quad " & L
+                      ((if Op_Of (Of_Unit, Item, Last) in Leave | Fail
+                        then "epilogue" else "after"), Item, Natural (Last))
+                    & LF
                     & HT & ".short " & E & "_end-" & E & LF
                     & E & ":" & LF & US.To_String (Expr)
                     & E & "_end:" & LF);
@@ -478,6 +481,11 @@ package body Landin.Backend.X86_64.Dwarf is
                               First := Value;
                            end if;
                            Last := Value;
+                           --  A following laid-out block must not join a
+                           --  range across this return's register restores.
+                           if Op_Of (Of_Unit, Item, Value) in Leave | Fail then
+                              Flush;
+                           end if;
                         else
                            Flush;
                         end if;

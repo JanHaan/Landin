@@ -266,7 +266,11 @@ Backend storage addresses require an actual frame home, including zero-byte
 homes. DWARF whole-alias metadata validates array storage before querying its
 shape. Register locations share one formatter: a direct binding resides in
 the register, while an indirect binding resides at the address held there.
-Address slots remain pinned by the current allocator.
+Address slots remain pinned by the current allocator. Initialized, in-scope
+bindings remain available during return and failure preparation, including an
+implicit return whose source anchor precedes the binding. Each terminal's
+location range ends before any saved register is restored or the frame is
+removed; following blocks cannot extend that range across an epilogue.
 
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
