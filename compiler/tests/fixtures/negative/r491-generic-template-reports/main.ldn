@@ -1,0 +1,7 @@
+g: (t: type, v: t) -> (out: t) =
+ start: i32 = 0
+ limit: usize = 1
+ for i in start..<limit do end for
+ out = v
+end g
+use: () -> none = _ = g(1) _ = g(true) end use

@@ -11971,8 +11971,111 @@ package body Landin.Tests.Checking_Suite is
       end loop;
    end Erased_Reference_Identity_Is_Reflexive;
 
+   procedure Generic_Body_Reports_Coalesce_Across_Instances
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Body_Reports_Coalesce_Across_Instances
+     (Item : in out Landin.Testing.Context)
+   is
+      Body_Text : constant String :=
+        " start: i32 = 0 limit: usize = 1" & LF
+        & " for i in start..<limit do end for" & LF;
+      Calls : constant String :=
+        "use: () -> none = _ = g(1) _ = g(true) end use" & LF;
+
+      procedure Check
+        (Label, Text : String; Expected : Positive;
+         Different_Messages : Boolean := False);
+
+      procedure Check
+        (Label, Text : String; Expected : Positive;
+         Different_Messages : Boolean := False)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "generic-reports.ldn", Text);
+         Ran : Natural;
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check
+           (Item, Ran = 4 and then Landin.Stages.Failed (Work),
+            Label & " retains the checking refusal");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Reports), Expected,
+               Label & " keeps every distinct diagnostic once");
+            for Index in 1 .. Landin.Diagnostics.Count (Reports) loop
+               declare
+                  Report : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Reports, Index);
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Code (Report) = "L0301"
+                     and then Landin.Diagnostics.Source_Of
+                       (Landin.Diagnostics.Primary (Report)) = Src
+                     and then Landin.Diagnostics.Label_Count (Report) = 1
+                     and then Landin.Diagnostics.Note_Count (Report) = 1,
+                     Label & " retains code, source, related label and note");
+               end;
+            end loop;
+            if Different_Messages and then Landin.Diagnostics.Count
+              (Reports) = 2
+            then
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Message (Landin.Diagnostics.Primary
+                    (Landin.Diagnostics.Get (Reports, 1)))
+                      /= Landin.Diagnostics.Message
+                        (Landin.Diagnostics.Primary
+                          (Landin.Diagnostics.Get (Reports, 2))),
+                  "different actual-type messages do not coalesce");
+            end if;
+         end;
+      end Check;
+   begin
+      Check ("one template mistake",
+         "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " out = v end g" & LF & Calls, 1);
+      Check ("two template locations",
+         "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " for j in start..<limit do end for" & LF
+         & " out = v end g" & LF & Calls, 2);
+      Check ("different actual types",
+         "g: (t: type, v: t) -> (out: t) =" & LF
+         & " b: bool = v out = v end g" & LF
+         & "use: () -> none = _ = g(1) _ = g(u8(1)) end use" & LF,
+         2, Different_Messages => True);
+      Check ("ordinary routine control",
+         "g: (v: i32) -> (out: i32) =" & LF & Body_Text
+         & " out = v end g" & LF, 1);
+      Check ("independent templates",
+         "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " out = v end g" & LF
+         & "h: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " out = v end h" & LF
+         & "use: () -> none = _ = g(1) _ = g(true)"
+         & " _ = h(1) _ = h(true) end use" & LF, 2);
+      Check ("nested instance views",
+         "g: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " out = v end g" & LF
+         & "h: (t: type, v: t) -> (out: t) =" & LF & Body_Text
+         & " out = g(v) end h" & LF
+         & "use: () -> none = _ = h(1) _ = h(true) end use" & LF, 2);
+   end Generic_Body_Reports_Coalesce_Across_Instances;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "generic body reports coalesce across instances",
+         Generic_Body_Reports_Coalesce_Across_Instances'Access);
       Landin.Testing.Register
         (Into, "checking", "erased reference identity is reflexive",
          Erased_Reference_Identity_Is_Reflexive'Access);

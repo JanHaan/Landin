@@ -1,0 +1,10 @@
+error[L0301]: this is `usize` and `i32` belongs here
+  --> ../tests/fixtures/negative/r491-generic-template-reports/main.ldn:4:19
+  |
+4 |  for i in start..<limit do end for
+  |                   ^^^^^
+  --> ../tests/fixtures/negative/r491-generic-template-reports/main.ldn:4:11
+  |
+4 |  for i in start..<limit do end for
+  |           ^^^^^ the other endpoint of this range
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them
