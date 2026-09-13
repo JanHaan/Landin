@@ -760,6 +760,21 @@ package body Landin.Tests.Parser_Suite is
          & "  next: (x: i32)" & ASCII.LF
          & "end separate" & ASCII.LF,
          "L0010", "a following inline struct keeps its own refusal");
+      Check_Program
+        ("variant: type = i32" & ASCII.LF
+         & "x: type = struct x: variant end x" & ASCII.LF
+         & "after: u8" & ASCII.LF,
+         "", "an ordinary field keeps the enclosing struct closer");
+
+      Check_Program
+        ("x: type = struct x: variant end x" & ASCII.LF
+         & "variant: type = i32" & ASCII.LF,
+         "", "a later user type keeps the same contextual parse");
+
+      Check_Program
+        ("x: type = struct x: variant leaf end x end x" & ASCII.LF,
+         "", "a real case proves a variant even with the struct name");
+
    end Variant_Parts_Are_Parsed;
 
    procedure Match_Statements_Are_Parsed

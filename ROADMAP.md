@@ -5831,7 +5831,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Repaired: omitted module pointer/cstring initializers report L0301 at the checker boundary, applying the existing no-all-zero-reference rule. Explicit pointer addresses and cstrings remain accepted, as do local references assigned before use. Driver checks prove no output or tool invocation. |
 | J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Repaired with J31: omitted module slice/utf8/utf16 initializers report L0301 before image lowering. Explicit empty slices retain their non-null base; explicit text, aliases and mutable-slice controls preserve the existing zeroability rule. |
 | J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
-| J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Repaired: empty-variant recovery cannot consume the enclosing struct's own closer. A real case still establishes a variant part, including one sharing the struct's name. Earlier/later scalar aliases and an aggregate user type retain ordinary field selection and measurement; empty and mismatched parts retain their diagnostics. |
 | J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
@@ -6380,7 +6380,19 @@ or generated Landin executable ran. Logs are retained in
 `.scratch/r491-function-ends/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Contextual variant fields J34 are next.
+J34 development evidence: four selected cases pass 58 checks in each of
+macOS debug and Linux release. Three tiny accepted modules reach verified IR
+on both target widths and measure one ordinary field without a variant tag.
+Parser controls preserve following declarations, forward type names and a
+real variant part sharing the struct's name. Existing empty-part and
+mismatched-closer fixtures retain L0101 and L0109/L0102 respectively. This
+applies [1795] and D74's existing contextual-word rule. Builds use one worker
+and selected tests have 30-second or shorter timeouts. No assembler, linker
+or generated Landin executable ran. Logs are retained in
+`.scratch/r491-variant-name/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Nested call-recovery context J36 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

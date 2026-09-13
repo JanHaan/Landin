@@ -10857,8 +10857,86 @@ package body Landin.Tests.Lowering_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Bare_Function_Ends_Keep_Module_Identities;
 
+   procedure Contextual_Variant_Fields_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Contextual_Variant_Fields_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Nested : Boolean := False);
+
+      procedure Check_Source
+        (Label, Text : String; Nested : Boolean := False)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " retains a legal ordinary field");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Datum : constant IR.Item_Id := Named_Item (Work, "size");
+               Shape : constant IR.Field_Shape :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 1);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Is_Aggregate_Measurement (Unit, Datum, 1)
+                    and then IR.Measurement_Field_Count (Unit, Datum, 1) = 1
+                    and then
+                      (if Nested then
+                         Shape.Kind = IR.Aggregate_Field_Shape
+                           and then IR.Aggregate_Field_Count
+                             (Unit, Shape) = 1
+                       else Shape.Kind = IR.Scalar_Field_Shape
+                         and then Shape.Element = Landin.Types.I32),
+                  Label & " measures one ordinary field without a tag");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " retains valid field selection and measurement");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("earlier scalar alias",
+         "variant: type = i32" & LF
+         & "x: type = struct x: variant end x" & LF
+         & "size: usize = sizeof x" & LF
+         & "f: (in value: x) -> (r: i32) = value.x end f" & LF);
+      Check_Source
+        ("later scalar alias",
+         "x: type = struct x: variant end x" & LF
+         & "variant: type = i32" & LF
+         & "size: usize = sizeof x" & LF
+         & "f: (in value: x) -> (r: i32) = value.x end f" & LF);
+      Check_Source
+        ("aggregate user type",
+         "variant: type = struct inner: i32 end variant" & LF
+         & "x: type = struct x: variant end x" & LF
+         & "size: usize = sizeof x" & LF
+         & "f: (in value: x) -> (r: i32) = value.x.inner end f" & LF,
+         Nested => True);
+   end Contextual_Variant_Fields_Keep_Their_Shape;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "contextual variant fields keep their shape",
+         Contextual_Variant_Fields_Keep_Their_Shape'Access);
       Landin.Testing.Register
         (Into, "lowering", "bare function ends keep module identities",
          Bare_Function_Ends_Keep_Module_Identities'Access);
