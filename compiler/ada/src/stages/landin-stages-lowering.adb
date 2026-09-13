@@ -13555,7 +13555,7 @@ package body Landin.Stages.Lowering is
                      Made : constant IR.Item_Id :=
                        IR.Add_Item
                          (Unit.all, IR.Routine, Res.No_Declaration,
-                          (if Held = Ty.Function_Value
+                          (if Held in Ty.Function_Value | Ty.Pointer_Value
                            then Ty.Usize
                            elsif Held = Ty.Atom_Value then Ty.U32
                            elsif Held in Ty.Slice_Value | Ty.Any_Value
