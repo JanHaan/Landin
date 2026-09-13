@@ -37,8 +37,8 @@ landin_manifest() {
         "$LANDIN_ROOT/scripts/build_lock.py" \
         | sort
     printf 'mode %s tag %s\n' "$LANDIN_BUILD_MODE" "$LANDIN_BUILD_TAG"
-    printf 'gnat %s\n' "$(gnat --version 2>/dev/null | head -n 1)"
-    printf 'gprbuild %s\n' "$(gprbuild --version 2>/dev/null | head -n 1)"
+    printf 'gnat %s\n' "$(gnat --version 2>/dev/null | sed -n '1p')"
+    printf 'gprbuild %s\n' "$(gprbuild --version 2>/dev/null | sed -n '1p')"
 }
 
 Current="$(landin_manifest)"

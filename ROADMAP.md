@@ -6342,13 +6342,18 @@ tests have 30-second or shorter timeouts. No assembler, linker or generated
 Landin executable ran. Logs are retained in `.scratch/r491-anonymous-loops/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Additional build-probe observation retained for the build-identity audit: the
-J46/J60/J124 Linux transcript emitted `fatal error: disk full` during the
-`gnatls --version | head -n 1` banner probe, then built and passed all selected
-checks. Both hosts had ample free space and inodes; a complete GNATLS banner
-read exited successfully. An early-closing banner pipe is the working
-explanation, not a confirmed storage failure. The untruncated transcript is
-retained with that batch's development logs.
+Additional build-probe repair: the J46/J60/J124 Linux transcript emitted
+`fatal error: disk full` during the `gnatls --version | head -n 1` banner probe,
+then built and passed all selected checks. Both hosts had ample free space
+and inodes; a complete GNATLS banner read exited successfully. Early closure
+of the banner pipe is the working explanation, not a confirmed storage
+failure. Both toolchain reporting and build-manifest version pipelines now
+use sed to retain the first line while consuming the complete output, so the
+producer is not interrupted by head's early exit. Shell syntax checks and
+standalone macOS debug/Linux release banner probes pass with unchanged
+reported toolchain versions. No compiler build or fixture run was needed for
+this shell-only change. Probe logs are in `.scratch/r491-version-banners/`;
+the untruncated original transcript remains with the result-layout batch.
 
 J39 development evidence: four selected cases pass 748 checks in each of
 macOS debug and Linux release. Nine paired valid/broken syntax cases preserve
@@ -6362,7 +6367,7 @@ tests have 30-second or shorter timeouts. No assembler, linker or generated
 Landin executable ran. Logs are retained in `.scratch/r491-list-recovery/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Toolchain banner pipe cleanup and optional function-end names J35 are next.
+Optional function-end names J35 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
