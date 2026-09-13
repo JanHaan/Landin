@@ -242,6 +242,10 @@ executable's build ID with `readelf -n app`, then resolve recorded coordinates:
 python3 scripts/source-location.py app.sources.json 1 42 9 --build-id HEX_ID
 ```
 
+The resolver writes the original filesystem path bytes followed by ASCII
+`:line:column` and a newline. It does not decode the path through the terminal
+encoding; non-UTF-8 paths therefore survive even with strict UTF-8 stdout.
+
 For `--emit=asm -o app.s`, use `app.s.sources.json` and `--assembly app.s`
 instead. The assembly identity includes a comment binding its file map, even
 when a source edit leaves the instructions unchanged. The decoder rejects a
