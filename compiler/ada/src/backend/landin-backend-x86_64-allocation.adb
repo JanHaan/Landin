@@ -430,11 +430,13 @@ package body Landin.Backend.X86_64.Allocation is
       Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
       Of_Plan : Plan;
-      Options : Landin.Optimization.Options) return Frame
+      Options : Landin.Optimization.Options;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Frame
    is
    begin
       if Options.Optimize = Landin.Optimization.None then
-         return Laid_Out (Of_Unit, Item, Facts);
+         return Laid_Out (Of_Unit, Item, Facts, Maximum);
       end if;
       declare
          package Mask_Buffers is new Work_Arrays (Boolean, Home_Mask, False);
@@ -471,7 +473,8 @@ package body Landin.Backend.X86_64.Allocation is
                end if;
             end;
          end loop;
-         return Laid_Out (Of_Unit, Item, Facts, Slots, Values, Spills, Saves);
+         return Laid_Out
+           (Of_Unit, Item, Facts, Slots, Values, Spills, Saves, Maximum);
       end;
    end Frame_For;
 

@@ -5862,7 +5862,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Implemented as a defensive guard: Storage_Address checks Has_Slot_Home before either whole-slot or field offset arithmetic. Current allocator pinning already prevents a live source trigger. The frame seam distinguishes an unhomed promoted slot from a real zero-byte home, and small address emission remains valid. |
 | J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Implemented: initialized, in-scope bindings remain available during return/failure preparation, including implicit returns with earlier routine anchors. Each terminal ends its DWARF range before the first register restore. Tiny text-emission and initialization/scope controls pass; no debugger or native assembly ran. |
 | J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Implemented as release-checked metadata guards: a zero-field alias must name array storage before a whole-array or positive-field query. A small DWARF seam refuses whole scalar slot/datum aliases and accepts whole one-element array aliases. Current lowering did not produce the invalid metadata. |
-| J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
+| J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Implemented: shared checked stack addition/alignment raises a dedicated limit exception, and x86 preflight catches only that exception. Frame and C stack planners receive the actual displacement budget; allocation, ABI and malformed-IR failures remain visible. Tiny budget tests cover size, padding and invalid inputs. |
 | J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Implemented: L0502 points at an active entry-module `main` declaration when present, otherwise the first entry source at byte zero. Imported and local names cannot supply the anchor. The same early refusal still precedes output and tools. |
 | J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Implemented as consistent DWARF serialization: direct values use a register location; indirect bindings use the address in that register with zero displacement. Alias and variable paths share the formatter. The allocator still pins address slots, so this is latent-path maintenance rather than a reproduced source miscompile. |
 | J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Guard repaired as backend consistency: suffix offsets share the arithmetic-immediate predicate, using a full-width scratch register above signed imm32. The large-source reachability claim was not replayed; scalar encoding-boundary and three/four-element fill controls cover the repair without a giant image. |
@@ -7222,8 +7222,23 @@ assembly, generated executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-escape-source/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J65's layout exception classification is next and remains independent of the
-repaired address guards.
+J65 development evidence: five selected cases pass 57 checks in each of
+macOS debug and Linux release. Explicit 0–48-byte stack budgets exercise size,
+per-home alignment and final padding limits without giant source or assembly.
+The existing malformed-storage case now uses a 32-byte spill against a
+16-byte budget for its size failure; its other seven invalid-home controls
+still require compiler defects. Absent IR items preserve assertion/bounds
+failures, and requesting the native C ABI on the synthetic target preserves
+its compiler defect. Existing allocated-frame, mixed INTEGER/SSE classification
+and narrow C-call text controls pass. Only the dedicated checked stack-limit
+exception is a preflight capability answer; incoming C arguments reserve the
+same 16-byte frame prefix as before. Single-worker builds pass. No native
+assembly, generated executable, debugger or giant image ran. Evidence is in
+`.scratch/r491-stack-limits/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J121's actual-independent C-layout validation is next; symbolic type-formal
+fields must remain deferred until a concrete application.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

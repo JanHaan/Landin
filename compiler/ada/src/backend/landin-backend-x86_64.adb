@@ -246,7 +246,8 @@ package body Landin.Backend.X86_64 is
       end if;
       Layout := Allocation.Frame_For
         (Of_Unit, Item, Facts,
-         Allocation.Make (Of_Unit, Item, Facts, Options), Options);
+         Allocation.Make (Of_Unit, Item, Facts, Options), Options,
+         Largest_Displacement);
       if Extent (Layout) > Largest_Displacement then
          return False;
       end if;
@@ -254,7 +255,8 @@ package body Landin.Backend.X86_64 is
         and then Landin.IR.Signature_Uses_C_ABI
           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
         and then C_ABI.Signature_Plan
-          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts).Stack_Bytes
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts,
+           Largest_Displacement - 16).Stack_Bytes
           > Largest_Displacement - 16
       then
          return False;
@@ -278,8 +280,8 @@ package body Landin.Backend.X86_64 is
                begin
                   if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature)
                     and then C_ABI.Call_Plan
-                      (Of_Unit, Item, Value, Facts).Stack_Bytes
-                      > Largest_Displacement
+                      (Of_Unit, Item, Value, Facts,
+                       Largest_Displacement).Stack_Bytes > Largest_Displacement
                   then
                      return False;
                   end if;
@@ -289,12 +291,9 @@ package body Landin.Backend.X86_64 is
       end loop;
       return True;
    exception
-      when Constraint_Error | Landin.Compiler_Defect =>
-         --  Laid_Out uses target-width arithmetic.  Overflow says the frame
-         --  does not fit even the target address space, and is a backend
-         --  capability answer here rather than a compiler failure.  Align_Up
-         --  names that overflow a defect in general; this preflight is the
-         --  place where an accepted, too-wide frame makes it expected.
+      when Stack_Limit_Exceeded =>
+         --  Only expected stack-budget exhaustion is a capability answer.
+         --  Allocation, shape and ABI invariant failures must stay visible.
          return False;
    end Frame_Is_Addressable;
 

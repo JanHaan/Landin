@@ -40,6 +40,10 @@ package Landin.Backend is
 
    type Frame is private;
 
+   --  Expected exhaustion of a frame or C argument stack budget. Invalid
+   --  shapes, homes and alignments remain compiler defects.
+   Stack_Limit_Exceeded : exception;
+
    --  Slots first, in slot order, then values, in value order.  Both are
    --  functions of the lowering order alone, so the same source yields
    --  the same frame on any host -- the property `Landin.IR` argues for
@@ -47,7 +51,9 @@ package Landin.Backend is
    function Laid_Out
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;
-      Facts   : Landin.Targets.Target_Facts) return Frame
+      Facts   : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Frame
      with Pre => Landin.IR.Holds (Of_Unit, Item);
 
    --  Indexes are source slot/value positions, starting at one.  False
@@ -65,7 +71,9 @@ package Landin.Backend is
       Slots   : Home_Mask;
       Values  : Spill_Assignments;
       Spills  : Landin.Targets.Layouts.Field_Extent_Array;
-      Saves   : Landin.Targets.Layouts.Field_Extent_Array) return Frame;
+      Saves   : Landin.Targets.Layouts.Field_Extent_Array;
+      Maximum : Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count'Last) return Frame;
 
    function Has_Slot_Home
      (Of_Frame : Frame; Slot : Landin.IR.Slot_Id) return Boolean;
@@ -236,6 +244,16 @@ package Landin.Backend is
      return Landin.Targets.Scalar_Size;
 
 private
+
+   --  Shared checked stack arithmetic. The limit is never exceeded even
+   --  transiently; invalid alignment is not a budget failure.
+   function Stack_Add
+     (Left, Right, Maximum : Landin.Targets.Byte_Count)
+      return Landin.Targets.Byte_Count;
+   function Stack_Align
+     (Offset : Landin.Targets.Byte_Count;
+      Alignment : Landin.Targets.Byte_Alignment;
+      Maximum : Landin.Targets.Byte_Count) return Landin.Targets.Byte_Count;
 
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
