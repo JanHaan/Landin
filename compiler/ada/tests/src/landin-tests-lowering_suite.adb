@@ -9737,8 +9737,137 @@ package body Landin.Tests.Lowering_Suite is
          2);
    end Control_Continuations_Stay_Reachable;
 
+   procedure Traversal_Locals_Infer_From_Headers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Traversal_Locals_Infer_From_Headers
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Calls : Natural := 0)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Calls : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Position)) = IR.Call
+                  then
+                     Calls := Calls + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Calls = Expected_Calls,
+                  Label & " preserves only reachable calls");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " has no unfinished or orphan blocks");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("range local before returning completion",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in 0 ..< 2 do v := n complete return "
+         & "end for dead := marker() end f" & LF);
+      Check_Source
+        ("typed range local",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in u8(0) ..< u8(2) do v := n end for "
+         & "live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("range aliases",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in 0 ..< 2 do v := n w := v end for "
+         & "live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("range index local",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n, index in 0 ..< 2 do v := index end "
+         & "for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("nested dependent range",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in 0 ..< 2 do upper := n for m in 0 "
+         & "..< upper do v := m end for end for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("array element local",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]i32) -> none = for n in a do v := n end for live "
+         & ":= marker() end f" & LF,
+         1);
+      Check_Source
+        ("slice element local",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: []i32) -> none = for n in a do v := n end for live "
+         & ":= marker() end f" & LF,
+         1);
+      Check_Source
+        ("array element shape",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2][2]i32) -> none = for row in a do v := row value "
+         & ":= v[0] end for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("struct element shape",
+         "pair: type = struct left: i32 right: i32 end pair" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]pair) -> none = for element in a do v := element "
+         & "value := v.left end for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("pointer element identity",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: [2]ptr i32) -> none = for element in a do v := "
+         & "element value := v.val end for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("text element and index",
+         "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: (a: utf8) -> none = for element, index in a do v := "
+         & "element offset := index end for live := marker() end f" & LF,
+         1);
+      Check_Source
+        ("generic element argument",
+         "identity: (t: type, value: t) -> (r: t) = r = value end "
+         & "identity" & LF
+         & "marker: () -> (r: usize) = r = 1 end marker" & LF
+         & "f: () -> none = for n in 0 ..< 2 do v := n w := identity(v) "
+         & "end for live := marker() end f" & LF,
+         2);
+   end Traversal_Locals_Infer_From_Headers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "traversal locals infer from headers",
+         Traversal_Locals_Infer_From_Headers'Access);
       Landin.Testing.Register
         (Into, "lowering", "control continuations stay reachable",
          Control_Continuations_Stay_Reachable'Access);

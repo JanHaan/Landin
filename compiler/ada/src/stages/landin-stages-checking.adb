@@ -25819,12 +25819,12 @@ package body Landin.Stages.Checking is
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
          Value   : Syn.Node_Id;
 
-         function Is_Traversal_Binding return Boolean;
+         function Traversal_Owner return Syn.Node_Id;
 
-         function Is_Traversal_Binding return Boolean is
+         function Traversal_Owner return Syn.Node_Id is
          begin
             if Syn.Kind (Of_Tree.all, Node) /= Syn.Binding then
-               return False;
+               return Syn.No_Node;
             end if;
             for Candidate in Syn.Node_Id'(1)
               .. Syn.Last_Node (Of_Tree.all)
@@ -25835,11 +25835,11 @@ package body Landin.Stages.Checking is
                     or else Syn.Traversal_Index
                       (Of_Tree.all, Candidate) = Node)
                then
-                  return True;
+                  return Candidate;
                end if;
             end loop;
-            return False;
-         end Is_Traversal_Binding;
+            return Syn.No_Node;
+         end Traversal_Owner;
       begin
          --  A selected result name has no initializer of its own.  An early
          --  match-discovery walk, or another inferred local, can need its
@@ -25886,11 +25886,25 @@ package body Landin.Stages.Checking is
          end if;
 
          Value := Syn.Value_Of (Of_Tree.all, Node);
-         --  A traversal header declares its locals without an initializer;
-         --  Check_Loop settles them from the checked source/range before it
-         --  checks the body that can name them.
-         if Value = Syn.No_Node and then Is_Traversal_Binding then
-            return;
+         --  An inferred body local can request a traversal binding before
+         --  the statement walk reaches its header. Settle that header now,
+         --  retaining the same wait for provisional error-set sources that
+         --  generic discovery uses.
+         if Value = Syn.No_Node then
+            declare
+               Owner : constant Syn.Node_Id := Traversal_Owner;
+            begin
+               if Owner /= Syn.No_Node then
+                  if not Needs_Error_Type
+                    (Of_Tree.all, Syn.Traversal_Lower (Of_Tree.all, Owner))
+                    and then not Needs_Error_Type
+                      (Of_Tree.all, Syn.Traversal_Upper (Of_Tree.all, Owner))
+                  then
+                     Check_Traversal_Header (Of_Tree.all, Owner);
+                  end if;
+                  return;
+               end if;
+            end;
          end if;
 
          if Needs_Error_Type (Of_Tree.all, Value) then
