@@ -550,6 +550,10 @@ package Landin.Checking is
    --  unconstrained, because the value is already known to be inside, or
    --  because [1730]'s proof was carried in.  Lowering reads it and emits
    --  Landin.IR's Range_Check; nothing else decides where a check goes.
+   --  This derived fact belongs to the current routine view. An unwritten
+   --  view inherits the global answer; writing it never changes that global
+   --  fact. Repeating one constraint is idempotent, while a different check
+   --  for the same node in the same view is a release-checked defect.
    function Owed_Check
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -2511,6 +2515,8 @@ private
       Nominal  : Nominal_Type_Id := No_Nominal_Type;
       Has_Atoms : Boolean := False;
       Atoms    : Atom_Set_Id := No_Atom_Set;
+      Has_Owed_Check : Boolean := False;
+      Owed_Check : Constraint_Id := No_Constraint;
       Has_Signature : Boolean := False;
       Signature : Signature_Id := No_Signature;
       Has_Reference : Boolean := False;
