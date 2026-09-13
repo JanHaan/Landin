@@ -573,14 +573,18 @@ checked as its registration is written and not as the exit that runs it, so a
 registered outside one. Which check edges the region removes, which it
 never removes, and what a removed one leaves behind are D187's.
 
-D181 admits only validated hosted views and D183 preserves that validity
-across text slices, so these intrinsic providers are infallible and
-declare no atom error. A well-formed view neither traps nor reports a decoding
-error during traversal. Invalid or stale storage remains [0430]'s existing
-pointer non-guarantee rather than a recoverable text outcome. D181--D183's
-validation, pooling, single trailing terminator, identities, indexing, slicing,
-permissions, origins, traps and errors remain unchanged, as do D159--D160 and
-D178--D180 range, array, slice and declared-evidence traversal.
+These intrinsic providers declare no atom error. D181 validates `utf8` and
+`utf16` views, and D183 preserves that validity across text slices, so a
+well-formed view of either identity does not trap during traversal. A literal
+`cstring` is also valid UTF-8. D199's foreign `cstring` boundary promises
+only accessible backing through the first NUL: D184 validates each scalar
+before decoding and traps on malformed encoding, including inside `unchecked`.
+A NUL continuation is rejected before any later byte is read. Missing
+terminators or stale storage remain [0430]'s pointer validity non-guarantee
+rather than a recoverable text outcome. D181--D183's validation, pooling,
+single trailing terminator, identities, indexing, slicing, permissions,
+origins, traps and errors remain unchanged, as do D159--D160 and D178--D180
+range, array, slice and declared-evidence traversal.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment

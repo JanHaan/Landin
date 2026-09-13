@@ -5682,7 +5682,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
 | M15: profile selection | Name-based selection remains. Some workload coverage expanded, but renaming a fixture still changes specialization coverage. Introduce explicit, validated profile policy. | Fourth batch |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
-| A6: text traversal wording | The broad validated-view promise in [1810] still conflicts with the documented foreign C-string traversal boundary. Qualify it without changing the runtime trap contract. | Fourth batch |
+| A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
 | A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. Special symbol names still require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. Mandatory resource limits govern any assembler work. | Third batch |
 | A9, m18: third-party inventory | Root LICENSE still says only one third-party item. Reconcile the inventory with the already-present local notices; do not change license terms. | Fourth batch |
 | M17: stale refusal ownership | R4.90 changed the implicated notes to describe source-form boundaries and implemented distinct/fill forms. The earlier blanket enabled-yet report is superseded; retain bounded checks for any remaining inaccurate sites. | Existing coverage |
@@ -6966,8 +6966,18 @@ No Landin assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-native-io-outcomes/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-A6's stale validated-text wording is next: reconcile [1810] with D184/D199's
-already-defined foreign C-string validation and trap boundary.
+A6 documentation evidence: [1810] and tour [0600]/[1150] now agree with
+D184/D199 and the existing lowering validation path. The retained
+`runtime/cstring-traversal-invalid-traps` fixture pins malformed foreign text
+inside unchecked; its source and metadata were inspected without executing it.
+The four prototype interactions were reviewed: prototype 2 keeps its byte API,
+prototype 3's utf8 fields retain their origins, and prototype 4 converts
+foreign arguments through the recoverable `text.from_c` channel. No semantic,
+fixture, generated-code or runtime change was made, and prior runtime coverage
+was not replayed. The full document check passes; exact acceptance remains open.
+
+J138's anonymous-signature report duplication is next. Recheck the current
+small source before changing type-name diagnostics or their catalogue codes.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
