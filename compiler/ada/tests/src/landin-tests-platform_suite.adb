@@ -406,6 +406,50 @@ package body Landin.Tests.Platform_Suite is
          "a missing file is reported, not raised");
    end Native_Round_Trips_Bytes;
 
+   --  Deliberately uses the real host, but only tiny owned ordinary files
+   --  and directories. No device failure or resource exhaustion is induced.
+   procedure Native_File_Failures_Are_Outcomes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_File_Failures_Are_Outcomes
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Root : constant String := Scratch & "/io-outcomes-"
+        & Ada.Calendar.Formatting.Image
+          (Ada.Calendar.Clock, Include_Time_Fraction => True);
+      Content : Unbounded.Unbounded_String;
+      Read : Landin.Platform.Read_Status;
+      Written : Landin.Platform.Write_Status;
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Ada.Directories.Create_Directory (Root);
+      Host.Write_File (Root, "x", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Not_Writable,
+         "a directory cannot be overwritten with source bytes");
+      Host.Write_File (Root & "/absent/file", "x", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Not_Writable,
+         "a missing parent is an ordinary write failure");
+      Host.Read_File (Root & "/absent", Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Not_Found,
+         "a missing input retains its ordinary outcome");
+      Host.Read_File (Root, Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Not_Readable
+         and then Unbounded.Length (Content) = 0,
+         "a directory is refused before byte reading");
+      Host.Write_File (Root & "/after.bin", "after", Written);
+      Host.Read_File (Root & "/after.bin", Content, Read);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok
+         and then Read = Landin.Platform.Read_Ok
+         and then Unbounded.To_String (Content) = "after",
+         "ordinary failures leave later byte operations usable");
+   end Native_File_Failures_Are_Outcomes;
+
    --  Writes through the fake are recorded rather than performed, and the
    --  recording is what a later stage will assert against.  Untested, a
    --  fake that silently dropped every write would look like a passing
@@ -755,6 +799,9 @@ package body Landin.Tests.Platform_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "native file failures are outcomes",
+         Native_File_Failures_Are_Outcomes'Access);
       Landin.Testing.Register
         (Into, "platform", "native path identity",
          Native_Path_Identity'Access);

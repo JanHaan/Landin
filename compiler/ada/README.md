@@ -677,6 +677,10 @@ with matching identity. Explicit source arguments load each proven object
 once, retaining its first successful spelling and snapshot for diagnostics.
 Unknown identity still reads and reports normally; equal bytes in distinct
 files do not merge declarations. Rooted module ownership remains separate.
+Native byte reads and writes report expected name, permission/use and device
+failures as ordinary outcomes. Cleanup retains those outcomes without masking
+programming or resource exceptions. A tool capture that cannot be read raises
+`External_Tool_Failed` through the adapter's owned cleanup path.
 `src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
 constants. `Native.Tools` passes the already-open capture descriptor and
 literal argument vector, starts each tool in its own process group, and uses a

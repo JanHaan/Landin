@@ -5676,7 +5676,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
 | A5, M9: source-path bytes | Decoder still uses decoded text through ordinary stdout. The default check's result depends on stdout error policy; pin strict UTF-8 output and preserve original path bytes explicitly. | Third batch |
 | M10: diagnostic rendering growth | The whole-line-per-label implementation remains; the old stress measurement was not rerun. Bound excerpts while retaining useful primary/secondary spans. | Third batch |
-| A4, M11: native failures | Capture-read failure still becomes empty output; native writes still omit device failures from their ordinary outcome. Add explicit failure propagation and cleanup cases through host seams. Layout exception conflation remains a separate audit. | Third batch |
+| A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
 | M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
@@ -5909,7 +5909,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Implemented: Execute retains collected diagnostics for unexpected exceptions before returning Status_Defect. Compiler_Defect, Constraint_Error, Program_Error and Assertion_Error are pinned by one-shot fake reads; Host_Exhausted, Storage_Error and External_Tool_Failed retain their dedicated outer handling. Exact acceptance remains open. |
 | J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Not a current source defect: the empty-root diagnostic marks the context failed before discovery, and the queue exits before import lookup can reach Select_Module_Directory. This independently confirms the retained review critic's unreachable-path analysis. Preserve that validation boundary when changing module recovery; no real-root traversal was run. |
 | J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Implemented private constructor contract: target labels longer than their fixed storage raise Compiler_Defect in every build mode; valid labels copy in full and remain space-padded. Current named constructors are unchanged and no arbitrary target constructor was added. Exact acceptance remains open. |
-| J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
+| J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Implemented expected-outcome handling under A4/M11: Device_Error joins Name_Error/Use_Error for native reads and writes, and failure cleanup suppresses only those expected close outcomes. Programming/resource exceptions retain their separate path. Device failure was not induced; bounded ordinary-file and host-exception controls pass. |
 | J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
 | J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Implemented: an otherwise unresolved bare value use of a file-local imported namespace reports that it needs a member selection, with the existing L0201 code/use anchor and a [1860] note. Ordinary lexical lookup still wins, including same-named module values; aliases, parameter shadows, selected imports and sibling-file scope retain their rules. Exact acceptance remains open. |
 | J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Implemented maintenance: removed the unused formal-declaration field, query and order-dependent signature-scope lookup. Argument roles and role-local positions remain; checking remaps runtime positions from the complete signature. The existing classification case now calls a later declaration and asserts its static position. Exact acceptance remains open. |
@@ -6954,8 +6954,20 @@ has a 10-second limit. Logs are retained in
 `.scratch/r491-arithmetic-immediates/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J112's expected native I/O failures are next. Preserve compiler-defect and
-resource-failure distinctions, and do not simulate device exhaustion.
+J112/A4/M11 development evidence: four exact selectors pass 34 checks in each
+of macOS debug and Linux release. New ordinary-file controls retain missing,
+unreadable and unwritable outcomes and successful later I/O. Existing controls
+round-trip all 256 byte values, capture a tiny native tool result and preserve
+the driver's distinct compiler, host-resource and external-tool outcomes.
+Both single-worker builds passed; every selected test has a 30-second or
+shorter limit. Device_Error and capture-read failure branches were inspected;
+no device exhaustion, active-capture deletion or induced close failure ran.
+No Landin assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-native-io-outcomes/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+A6's stale validated-text wording is next: reconcile [1810] with D184/D199's
+already-defined foreign C-string validation and trap boundary.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

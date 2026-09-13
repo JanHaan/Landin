@@ -99,6 +99,22 @@ package body Landin.Platform.Native is
    --  point at a byte that is not in the file.
    ---------------------------------------------------------------------
 
+   --  Cleanup after an ordinary I/O failure must not replace that result
+   --  with another expected close failure. Programming and resource failures
+   --  remain exceptions; this helper is not a catch-all recovery boundary.
+   procedure Close_After_Failure (File : in out Stream_IO.File_Type);
+
+   procedure Close_After_Failure (File : in out Stream_IO.File_Type) is
+   begin
+      if Stream_IO.Is_Open (File) then
+         Stream_IO.Close (File);
+      end if;
+   exception
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+         | Ada.IO_Exceptions.Device_Error =>
+         null;
+   end Close_After_Failure;
+
    overriding procedure Read_File
      (Host    : Native_Filesystem;
       Path    : String;
@@ -146,10 +162,9 @@ package body Landin.Platform.Native is
       Status := Read_Ok;
 
    exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
-         if Stream_IO.Is_Open (File) then
-            Stream_IO.Close (File);
-         end if;
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+         | Ada.IO_Exceptions.Device_Error =>
+         Close_After_Failure (File);
          Status := Not_Readable;
    end Read_File;
 
@@ -190,10 +205,9 @@ package body Landin.Platform.Native is
       Status := Write_Ok;
 
    exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error =>
-         if Stream_IO.Is_Open (File) then
-            Stream_IO.Close (File);
-         end if;
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+         | Ada.IO_Exceptions.Device_Error =>
+         Close_After_Failure (File);
          Status := Not_Writable;
    end Write_File;
 
