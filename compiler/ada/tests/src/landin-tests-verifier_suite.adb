@@ -42,6 +42,7 @@ package body Landin.Tests.Verifier_Suite is
    use type IR.Parameter_Convention;
    use type IR.Value_Id;
    use type IR.Item_Id;
+   use type IR.Block_Id;
    use type IR.Part_Position;
    use type Landin.Types.Folded;
    use type V.Fault_Kind;
@@ -6925,8 +6926,217 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Scalar_Stores_Require_Scalar_Slots;
 
+   procedure Datum_Loads_Keep_Scalar_Metadata
+     (Item : in out Landin.Testing.Context);
+
+   procedure Datum_Loads_Keep_Scalar_Metadata
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Scalar_Load, Scalar_Store, Array_Load, Array_Store,
+         Struct_Load, Struct_Store, Early_Atom, Late_Atom,
+         Early_Function, Late_Function);
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Caller, Datum : IR.Item_Id;
+               Helper : IR.Item_Id := IR.No_Item;
+               Atoms : IR.Atom_Set_Id := IR.No_Atom_Set;
+               Signature : IR.Signature_Id := IR.No_Signature;
+               Block : IR.Block_Id;
+               Value : IR.Value_Id;
+               Kind : constant Landin.Types.Type_Kind :=
+                 (case Scenario is
+                     when Array_Load | Array_Store =>
+                        Landin.Types.Fixed_Array,
+                     when Struct_Load | Struct_Store =>
+                        Landin.Types.Aggregate,
+                     when Early_Atom | Late_Atom => Landin.Types.U32,
+                     when Early_Function | Late_Function =>
+                        Landin.Types.Usize,
+                     when others => Landin.Types.Bool);
+
+               procedure Attach_Metadata;
+
+               procedure Attach_Metadata is
+               begin
+                  if Scenario in Early_Atom | Late_Atom then
+                     IR.Set_Atom_Set (Unit, Datum, Atoms);
+                  elsif Scenario in Early_Function | Late_Function then
+                     IR.Set_Signature (Unit, Datum, Signature);
+                     IR.Set_Function_Target (Unit, Datum, Helper);
+                  end if;
+               end Attach_Metadata;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Caller := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               Datum := IR.Add_Item (Unit, IR.Datum, 5, Kind, Site);
+               if Scenario in Array_Load | Array_Store then
+                  IR.Set_Array (Unit, Datum, Landin.Types.Bool, 2);
+               elsif Scenario in Struct_Load | Struct_Store then
+                  IR.Add_Field (Unit, Datum, Landin.Types.Bool);
+               elsif Scenario in Early_Atom | Late_Atom then
+                  Atoms := IR.Add_Atom_Set (Unit, [1 => 6]);
+               elsif Scenario in Early_Function | Late_Function then
+                  Signature := IR.Add_Signature
+                    (Unit, IR.No_Signature_Parts,
+                     (Kind => Landin.Types.No_Value, others => <>));
+                  Helper := IR.Add_Item
+                    (Unit, IR.Routine, 3, Landin.Types.No_Value, Site);
+                  IR.Set_Signature (Unit, Helper, Signature);
+               end if;
+               if Scenario in Early_Atom | Early_Function then
+                  Attach_Metadata;
+               end if;
+               Block := IR.Add_Block
+                 (Unit, Caller, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Caller, Block);
+               if Scenario in Scalar_Store | Array_Store | Struct_Store then
+                  Value := IR.Emit_Truth (Unit, Caller, True, Site);
+                  IR.Emit_Store_Datum (Unit, Caller, Datum, Value, Site);
+               else
+                  Value := IR.Emit_Load_Datum (Unit, Caller, Datum, Site);
+               end if;
+               IR.Emit_Leave (Unit, Caller, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Caller);
+               if Scenario in Late_Atom | Late_Function then
+                  Attach_Metadata;
+               end if;
+               Block := IR.Add_Block
+                 (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Datum, Block);
+               if Scenario in Array_Load | Array_Store
+                 | Struct_Load | Struct_Store
+               then
+                  Value := IR.No_Value;
+               elsif Scenario in Early_Atom | Late_Atom then
+                  Value := IR.Emit_Atom (Unit, Datum, 6, Atoms, Site);
+               elsif Scenario in Early_Function | Late_Function then
+                  Value := IR.Emit_Function_Address
+                    (Unit, Datum, Helper, Site);
+               else
+                  Value := IR.Emit_Truth (Unit, Datum, True, Site);
+               end if;
+               IR.Emit_Leave (Unit, Datum, Value, Site);
+               IR.Leave_Block (Unit, Datum);
+               if Scenario in Early_Function | Late_Function then
+                  Add_Empty_Body (Unit, Helper, Site);
+               end if;
+               Expect
+                 (Item, V.Check (Unit, Facts),
+                  (case Scenario is
+                      when Array_Load | Array_Store
+                         | Struct_Load | Struct_Store =>
+                         V.Aggregate_Datum_Is_Not_A_Value,
+                      when Late_Atom => V.Atom_Metadata_Disagrees,
+                      when Late_Function =>
+                         V.Function_Value_Signature_Disagrees,
+                      when others => V.Nothing_Wrong),
+                  "datum scalar representation and metadata: "
+                  & Scenario'Image);
+            end;
+         end loop;
+      end loop;
+   end Datum_Loads_Keep_Scalar_Metadata;
+
+   procedure Reachability_Starts_At_The_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reachability_Starts_At_The_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Return_Only, Self_Island, Pair_Island, Reached_Self, Reached_Pair);
+   begin
+      for Small in Boolean loop
+         for Scenario in Scenario_Kind loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts :=
+                 (if Small then Landin.Targets.Synthetic_32
+                  else Landin.Targets.Linux_X86_64);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Unit : IR.Unit;
+               Site : Landin.Provenance.Origin;
+               Routine : IR.Item_Id;
+               Entry_Block, Second : IR.Block_Id;
+               Third : IR.Block_Id := IR.No_Block;
+               Is_Island : constant Boolean :=
+                 Scenario in Self_Island | Pair_Island;
+            begin
+               Ready (Work, Site);
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               Entry_Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               if Scenario /= Return_Only then
+                  Second := IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+                  if Scenario in Pair_Island | Reached_Pair then
+                     Third := IR.Add_Block
+                       (Unit, Routine, Landin.Resolution.Program_Scope,
+                        Site);
+                  end if;
+               end if;
+               IR.Enter (Unit, Routine, Entry_Block);
+               if Scenario in Return_Only | Self_Island | Pair_Island then
+                  IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               else
+                  IR.Emit_Jump (Unit, Routine, Second, Site);
+               end if;
+               IR.Leave_Block (Unit, Routine);
+               if Scenario /= Return_Only then
+                  IR.Enter (Unit, Routine, Second);
+                  IR.Emit_Jump
+                    (Unit, Routine,
+                     (if Scenario in Pair_Island | Reached_Pair
+                      then Third else Second), Site);
+                  IR.Leave_Block (Unit, Routine);
+                  if Scenario in Pair_Island | Reached_Pair then
+                     IR.Enter (Unit, Routine, Third);
+                     IR.Emit_Jump (Unit, Routine, Second, Site);
+                     IR.Leave_Block (Unit, Routine);
+                  end if;
+               end if;
+               declare
+                  Fault : constant V.Fault := V.Check (Unit, Facts);
+               begin
+                  Expect
+                    (Item, Fault,
+                     (if Is_Island then V.Block_Unreachable
+                      else V.Nothing_Wrong),
+                     "entry reachability without slots or pointers: "
+                     & Scenario'Image);
+                  if Is_Island then
+                     Landin.Testing.Check
+                       (Item, Fault.Block = Second,
+                        "the first disconnected block identifies the island");
+                  end if;
+               end;
+            end;
+         end loop;
+      end loop;
+   end Reachability_Starts_At_The_Entry;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "reachability starts at the entry",
+         Reachability_Starts_At_The_Entry'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "datum loads keep scalar metadata",
+         Datum_Loads_Keep_Scalar_Metadata'Access);
       Landin.Testing.Register
         (Into, "verifier", "scalar stores require scalar slots",
          Scalar_Stores_Require_Scalar_Slots'Access);

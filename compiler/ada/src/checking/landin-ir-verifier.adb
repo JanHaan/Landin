@@ -5654,13 +5654,11 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
-                                 --  [0670]'s state is storage and not a
-                                 --  value yet: reading or writing the
-                                 --  whole of one needs a rule for
-                                 --  carrying it that R2.20 has not
-                                 --  written, so the IR may not say it.
+                                 --  Complete struct and array storage uses
+                                 --  field, element and copy operations. A
+                                 --  scalar load/store cannot carry it whole.
                                  if Result_Of (Of_Unit, D)
-                                    = Landin.Types.Aggregate
+                                    not in Landin.Types.Scalar_Name
                                  then
                                     return
                                       (Kind =>
@@ -6025,6 +6023,28 @@ package body Landin.IR.Verifier is
                                             Value => V);
                                  elsif not Atom_Metadata_Agrees
                                    (Atom_Set_Of (Of_Unit, Id, Slot),
+                                    Atom_Set_Of (Of_Unit, Id, V))
+                                 then
+                                    return (Kind => Atom_Metadata_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
+
+                           when Load_Datum =>
+                              declare
+                                 Datum : constant Item_Id :=
+                                   Datum_Of (Of_Unit, Id, V);
+                              begin
+                                 if not Function_Metadata_Agrees
+                                   (Signature_Of (Of_Unit, Datum),
+                                    Signature_Of (Of_Unit, Id, V))
+                                 then
+                                    return (Kind => Signature_Mismatch,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 elsif not Atom_Metadata_Agrees
+                                   (Atom_Set_Of (Of_Unit, Datum),
                                     Atom_Set_Of (Of_Unit, Id, V))
                                  then
                                     return (Kind => Atom_Metadata_Disagrees,
