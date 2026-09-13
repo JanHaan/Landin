@@ -5809,7 +5809,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Current debug reproduction exits 70. D200 admits matching function signatures; repair lowering/verifier agreement and test equality and inequality without changing that rule. |
 | J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
-| J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Current debug reproduction accepts cell(percent), an out-of-range field store and assignment to cell(u8). Apply the existing D188/R7.20 named refusal to parameterized type actuals before interning; do not silently enable constrained composites. |
+| J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
@@ -6144,8 +6144,22 @@ pass. No assembler, linker or generated Landin executable ran in this batch. Log
 `.scratch/r491-refusal-boundaries/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains outstanding.
 
-K1, K3, K4, K5, K6, K8, K11, K36, J7, J10 and J30 are repaired. J12
-and the conformance group are next.
+J12 development evidence: seven selected cases pass 342 checks in each of
+macOS debug and Linux release.
+Twenty small checker sources cover constrained type actuals and their aliases,
+nested pointer/slice/array actuals, unused formals and accepted counterparts.
+The driver case checks 264 refusal/output invariants, and the existing generic,
+slice and struct range-subtype refusal fixtures retain their reports. An early
+slice-alias control encountered the existing R2.40 alias-result refusal; the
+passing slice control uses an enabled struct instance and does not widen that
+boundary. Single-worker builds and selected checks with timeouts of at most
+30 seconds pass. No assembler, linker or generated Landin executable ran in
+this batch. Logs are retained in
+`.scratch/r491-range-actuals/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains outstanding.
+
+K1, K3, K4, K5, K6, K8, K11, K36, J7, J10, J12 and J30 are repaired.
+The conformance group is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

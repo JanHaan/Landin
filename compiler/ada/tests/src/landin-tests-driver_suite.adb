@@ -1964,6 +1964,16 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("percent: type = u8 range 0..100 "
+            & "cell: type (t: type) = struct value: t end cell "
+            & "mut a: cell(percent)",
+            "L0304", 1, Executable);
+         Check
+           ("percent: type = u8 range 0..100 "
+            & "row: type (t: type, fixed n: u32) = [n]t "
+            & "f: () -> none = mut a: row(percent, 3) = zeroed end f",
+            "L0304", 1, Executable);
+         Check
            ("box: type (t: type) = struct value: t end box "
             & "item: box(u8) = 5",
             "L0304", 1, Executable);
