@@ -933,6 +933,7 @@ kernel these positions give a literal a type:
 - the complete pointer type of `ptr(integer)` and the complete slice type of
   `[]`; the address integer itself takes `usize`
 - the other operand's type, for a binary operator
+- the other endpoint's integer type, for a range traversal (D219)
 - a unary operator's own context, handed on [1820]
 - a branch's or while loop's condition and an exit's 'when', all of which
   want a bool [1050] [1070] [1140] [0970] and so give an integer literal
@@ -9772,7 +9773,9 @@ last body execution.
 
 **Chosen:** the first `for` increment admits ascending integer ranges. The
 lower bound runs once, then the upper bound runs once; both have one integer
-type. The current element is an immutable copy of that type and the optional
+type. D219 lets either typed endpoint supply an untyped integer peer, with
+[0200]'s i32 default when both are untyped. The current element is an immutable
+copy of that type and the optional
 index is immutable `usize`, starting at zero. A half-open range tests `<`; an
 inclusive range tests `<=` and, after its body, checks equality with the saved
 upper bound before incrementing. Thus an inclusive range whose upper bound is
@@ -13237,3 +13240,37 @@ copy derived from prototype 3, `negative/r491-local-self-reference`,
 `negative/r491-local-self-initializer`,
 `negative/r491-local-shadowed-type`, `positive/condition-declarations` and
 `negative/condition-declaration-body-shadowing`.
+
+### D219 — Either integer range endpoint supplies literal context
+
+**The tour said** that an integer literal takes its context [0190], defaults
+to i32 without one [0200], and may appear at either end of a traversal [1150].
+D159 required one integer type for the two bounds but did not specify which
+endpoint supplies context. The implementation previously defaulted an untyped
+lower bound before considering a typed upper bound, although an upper literal
+already took a typed lower bound's type.
+
+**Chosen:** either typed integer endpoint supplies the type of an untyped
+integer peer. With two untyped integer bounds, both take i32. Literal values
+and untyped integer arithmetic must fit that chosen type under [1880]; this
+includes refusing a negative lower literal when the upper bound is unsigned.
+Two bounds that already have different integer types still disagree. A float,
+character or other already typed value does not silently become another
+integer type. The iteration element keeps the selected integer type.
+
+This makes the prototypes' `0..<count` and the tour's `1..<lenof data` use
+usize when their upper bounds do. It changes type selection only: D159's bound
+evaluation remains once each, lower then upper, and its inclusive terminal
+check, immutable element, usize index and completion rules are unchanged.
+
+**The alternatives:** always taking the lower bound's type requires an explicit
+conversion for the same literal that already works at the other endpoint.
+Widening two typed bounds would introduce an implicit conversion forbidden by
+[0310]. Taking an outer result or loop-body use as context would turn the
+header's type into a later dataflow inference. All are declined.
+
+**Pinned by** `positive/r491-range-endpoint-context`, derived from the counted
+prefix loops in all four prototypes and the tour's sort header,
+`negative/r491-range-context-overflow`, `negative/for-range-endpoints-disagree`
+and `negative/for-range-needs-integer`. D159's existing runtime traversal
+fixture retains the independent evaluation and terminal-bound evidence.

@@ -1,0 +1,42 @@
+-- The counted-prefix loop used by prototypes 1, 2, 3 and 4.
+counted_prefix: (stored: usize) -> (count: usize) =
+    count = 0
+    for item in 0..<stored do
+        count += item
+    end for
+end counted_prefix
+
+-- The tour's sort header gets its index type from lenof.
+indexed: (source: []i32) -> (count: usize) =
+    count = 0
+    for item in 1..<lenof source do
+        count += item
+    end for
+end indexed
+
+upper_context: (last: u8) -> (answer: u8) =
+    answer = 0
+    for item in 0..last do answer = item end for
+end upper_context
+
+lower_context: (first: u8) -> (answer: u8) =
+    answer = 0
+    for item in first..<3 do answer = item end for
+end lower_context
+
+both_literals: () -> (answer: i32) =
+    answer = 0
+    for item in 0..<3 do answer += item end for
+end both_literals
+
+arithmetic_lower: (last: usize) -> (answer: usize) =
+    answer = 0
+    for item in (1 + 1)..<last do answer = item end for
+end arithmetic_lower
+
+conditional_lower: (ready: bool, last: usize) -> (answer: usize) =
+    answer = 0
+    for item in (if ready then 0 else 1 end if)..<last do
+        answer = item
+    end for
+end conditional_lower

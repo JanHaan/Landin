@@ -22784,8 +22784,23 @@ package body Landin.Stages.Checking is
                else
                   Range_Type := Synthesise (Of_Tree, Lower);
                   if Range_Type = Ty.Untyped_Integer then
-                     Range_Type := Ty.Default_Integer;
-                     Commit_To (Of_Tree, Lower, Ty.Default_Integer);
+                     declare
+                        Peer : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Upper);
+                     begin
+                        --  D219: either typed endpoint supplies the other.
+                        --  Two untyped integers retain the i32 default.
+                        Range_Type :=
+                          (if Peer in Ty.Integer_Name then Peer
+                           elsif Peer = Ty.Ill_Typed then Ty.Ill_Typed
+                           else Ty.Default_Integer);
+                        if Range_Type in Ty.Integer_Name then
+                           Require
+                             (Of_Tree, Lower, Ty.Scalar_Name (Range_Type),
+                              Syn.Origin (Of_Tree, Upper),
+                              "the other endpoint of this range");
+                        end if;
+                     end;
                   elsif Range_Type /= Ty.Ill_Typed
                     and then Range_Type not in Ty.Integer_Name
                   then

@@ -1,0 +1,6 @@
+class: negative
+summary: D219 a literal lower endpoint must fit the integer type supplied by the upper endpoint
+constructs: 0190, 1150, 1880
+program: program.ldn
+codes: L0300, L0300
+targets: linux-x86-64, macos-arm64

@@ -346,6 +346,12 @@ end grown
 
 ```
 
+The counted-prefix headers below share D219's endpoint context rule with
+prototype 1's receive loop, prototype 2's stored diagnostics and prototype 4's
+filter chain. `positive/r491-range-endpoint-context` pins their `0..<count`
+shape and the tour's `1..<lenof data`; the literal takes the usize endpoint's
+type before the body is checked.
+
 The local type-scope witness `positive/r491-local-type-scope` derives a small
 list-element copy from this shape. Its local `t: t = source.items[0]` uses the
 enclosing generic type formal before introducing the runtime name (D218).
