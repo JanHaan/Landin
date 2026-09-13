@@ -6160,9 +6160,9 @@ package body Landin.IR.Verifier is
                                      and then not Pointees_Agree
                                        (Of_Unit, Element.Pointee,
                                         Pointee_Of (Of_Unit, Id, Source)))
-                                   or else not Atom_Metadata_Agrees
-                                     (Element.Atoms,
-                                      Atom_Set_Of (Of_Unit, Id, Source))
+                                   or else not Atom_Metadata_Is_Subset
+                                     (Atom_Set_Of (Of_Unit, Id, Source),
+                                      Element.Atoms)
                                  then
                                     return
                                       (Kind => Array_Fill_Value_Disagrees,
@@ -6835,9 +6835,14 @@ package body Landin.IR.Verifier is
                                             Function_Value_Signature_Disagrees,
                                           Item => Id, Block => Block,
                                           Value => V);
-                                    elsif not Atom_Metadata_Agrees
-                                      (Leaf.Atoms,
-                                       Atom_Set_Of (Of_Unit, Id, Value))
+                                    elsif
+                                      (if Op = Load_Element
+                                       then not Atom_Metadata_Agrees
+                                         (Leaf.Atoms,
+                                          Atom_Set_Of (Of_Unit, Id, Value))
+                                       else not Atom_Metadata_Is_Subset
+                                         (Atom_Set_Of (Of_Unit, Id, Value),
+                                          Leaf.Atoms))
                                     then
                                        return
                                          (Kind => Atom_Metadata_Disagrees,

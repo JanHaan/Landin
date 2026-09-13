@@ -6047,7 +6047,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Repaired with J22: lower/upper returns, array/slice/text sources and ordinary/partially returning bound controls pass in both modes. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
 | K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
-| K17 | E1: array fill/element atom writes require exact sets | Source confirms `Fill_Array` and `Store_Element` still use exact atom metadata. Compare D216 subset writes with exact reads using small typed-IR and source controls. Finder source-reachability claims need their own bounded witness; the existing indirect-store repair is not evidence for these opcodes. |
+| K17 | E1: array fill/element atom writes require exact sets | Implemented: Fill_Array and Store_Element allow source atom subsets under D216; reads and whole copies retain exact descriptors. A two-element source fill reproduced exit 70 and now exits 0. Named/parameter direct-store source controls already passed; their Store_Element contract is independently pinned with small IR cases. Exact acceptance remains open. |
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
 | K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
 | K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
@@ -6645,10 +6645,20 @@ session, Landin assembler, linker or generated executable ran. Logs are retained
 in `.scratch/r491-source-aliases/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-K17's atom-array subset writes are next: a two-element source fill still exits
-70, while direct named/parameter stores in the bounded source controls pass.
-Keep the source failure distinct from the Store_Element malformed-IR contract.
-J116's slice-endpoint claim
+K17 development evidence: six selected cases pass 106 checks in each of macOS
+debug and Linux release. A tiny two-element fill from a named singleton atom
+exited 70 before the repair and exits 0 afterward, through the default
+compile-only driver under a ten-second limit. Six source forms cover named,
+parameter, complete-set and struct-field fills plus the named/parameter direct
+stores that already passed. IR controls independently prove subset writes,
+exact reads/copies, unrelated-atom refusals and numeric/atom separation. The
+existing typed-indirect case and three source-negative fixtures retain their
+verdicts. Both single-worker builds passed; selected tests have 30-second or
+shorter timeouts. No Landin assembler, linker or generated executable ran.
+Logs are retained in `.scratch/r491-atom-array-writes/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J80's slot-element query helper is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

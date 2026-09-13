@@ -7429,8 +7429,115 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Source_Aliases_Select_Valid_Storage;
 
+   procedure Array_Atom_Writes_Accept_Subsets
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Atom_Writes_Accept_Subsets
+     (Item : in out Landin.Testing.Context)
+   is
+      type Operation_Kind is
+        (Repeated_Fill, Element_Store, Element_Read, Whole_Copy);
+      type Source_Kind is
+        (Equivalent, Narrow, Unrelated, Numeric, Numeric_Destination);
+   begin
+      for Small in Boolean loop
+         for Operation in Operation_Kind loop
+            for Source in Source_Kind loop
+               declare
+                  Facts : constant Landin.Targets.Target_Facts :=
+                    (if Small then Landin.Targets.Synthetic_32
+                     else Landin.Targets.Linux_X86_64);
+                  Work : Landin.Stages.Compilation :=
+                    Landin.Stages.Create (Facts);
+                  Unit : IR.Unit;
+                  Site : Landin.Provenance.Origin;
+                  Routine : IR.Item_Id;
+                  Cell, Other : IR.Slot_Id;
+                  Block : IR.Block_Id;
+                  Value, Index : IR.Value_Id;
+                  Destination, Actual : IR.Atom_Set_Id;
+                  Good : constant Boolean := Source = Equivalent
+                    or else (Source = Narrow and then Operation
+                      in Repeated_Fill | Element_Store);
+               begin
+                  Ready (Work, Site);
+                  IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+                  Destination :=
+                    (if Source = Numeric_Destination then IR.No_Atom_Set
+                     else IR.Add_Atom_Set (Unit, [5, 6]));
+                  Actual :=
+                    (case Source is
+                        when Equivalent => IR.Add_Atom_Set (Unit, [5, 6]),
+                        when Narrow | Numeric_Destination =>
+                           IR.Add_Atom_Set (Unit, [1 => 5]),
+                        when Unrelated => IR.Add_Atom_Set (Unit, [1 => 3]),
+                        when Numeric => IR.No_Atom_Set);
+                  Routine := IR.Add_Item
+                    (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+                  Cell := IR.Add_Array_Slot
+                    (Unit, Routine,
+                     (Element => Landin.Types.U32, Atoms => Destination,
+                      others => <>), 2, IR.No_Declaration, Site);
+                  Other := IR.Add_Array_Slot
+                    (Unit, Routine,
+                     (Element => Landin.Types.U32, Atoms => Actual,
+                      others => <>), 2, IR.No_Declaration, Site);
+                  Block := IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+                  IR.Enter (Unit, Routine, Block);
+                  if Operation = Whole_Copy then
+                     IR.Emit_Array_Copy
+                       (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Cell),
+                        (Kind => IR.Frame_Slot, Slot => Other), Site);
+                  elsif Operation = Element_Read then
+                     Index := IR.Emit_Number
+                       (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+                     Value := IR.Emit_Load_Slot_Element
+                       (Unit, Routine, Cell, Index, Landin.Types.U32, Site);
+                     IR.Testing_Support.Overwrite_Value_Atoms
+                       (Unit, Routine, Value, Actual);
+                  else
+                     Value :=
+                       (if Source = Numeric then IR.Emit_Number
+                          (Unit, Routine, Landin.Types.U32, 1, False, Site)
+                        else IR.Emit_Atom
+                          (Unit, Routine,
+                           (if Source = Unrelated then 3 else 5), Actual,
+                           Site));
+                     if Operation = Repeated_Fill then
+                        IR.Emit_Array_Fill
+                          (Unit, Routine,
+                           (Kind => IR.Frame_Slot, Slot => Cell), 1, Value,
+                           Site);
+                     else
+                        Index := IR.Emit_Number
+                          (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+                        IR.Emit_Store_Slot_Element
+                          (Unit, Routine, Cell, Index, Value, Site);
+                     end if;
+                  end if;
+                  IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+                  IR.Leave_Block (Unit, Routine);
+                  Expect
+                    (Item, V.Check (Unit, Facts),
+                     (if Good then V.Nothing_Wrong
+                      elsif Operation = Repeated_Fill
+                      then V.Array_Fill_Value_Disagrees
+                      elsif Operation = Whole_Copy
+                      then V.Array_Copy_Shapes_Disagree
+                      else V.Atom_Metadata_Disagrees),
+                     "array atoms " & Operation'Image & " " & Source'Image);
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Array_Atom_Writes_Accept_Subsets;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "array atom writes accept subsets",
+         Array_Atom_Writes_Accept_Subsets'Access);
       Landin.Testing.Register
         (Into, "verifier", "source aliases select valid storage",
          Source_Aliases_Select_Valid_Storage'Access);
