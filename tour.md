@@ -907,7 +907,10 @@ An invalid bound or a bound that splits an encoding traps. Traversal remains a
 separate [1320] operation rather than inheriting either backing carrier. Each
 exact hosted view has its own intrinsic iterable conformance, yielding Unicode
 scalar values as copied `u32` items with a private `usize` code-unit cursor;
-`cstring` stops before its first NUL.
+`cstring` stops before its first NUL. Foreign C text is validated before each
+scalar is decoded; malformed encoding traps, including inside `unchecked`.
+Traversal declares no atom error. Use `core/text.from_c` when invalid encoding
+needs a recoverable `invalid_text` result.
 [0610] supplies indexing separately.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
@@ -2218,8 +2221,9 @@ The exact `utf8`, `utf16`, and `cstring` identities have distinct intrinsic
 conformances to that same four-operation contract. Their cursor is a private `usize` byte or
 UTF-16-code-unit offset and their item is the decoded Unicode scalar as `u32`,
 not an alias or encoded subview. `cstring`'s first NUL is the end and is not an
-item. The source still runs once, and provider order, index advancement,
-cleanup and loop transfers are the same as for ordinary iterable evidence.
+item. Foreign C text follows [0600]'s validation and trap boundary. The source
+still runs once, and provider order, index advancement, cleanup and loop
+transfers are the same as for ordinary iterable evidence.
 
 ```landin
     for item in items do
