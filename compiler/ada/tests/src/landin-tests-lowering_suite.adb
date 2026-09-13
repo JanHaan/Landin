@@ -11393,8 +11393,74 @@ package body Landin.Tests.Lowering_Suite is
          & "callbacks[0](1) end f" & LF);
    end Labelled_Callees_Keep_Their_Expression;
 
+   procedure Signature_Binders_Precede_Their_Types
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signature_Binders_Precede_Their_Types
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " retains the complete signature's visibility");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Landin.Stages.Code (Work).all, Facts).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " preserves valid signature and call metadata");
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("module alias",
+         "t: type = i32" & LF
+         & "f: (x: t, y: i32) -> (r: t) = x + y end f" & LF);
+      Check_Source
+        ("later type formal",
+         "f: (value: t, t: type) -> (r: t) = value end f" & LF
+         & "g: () -> (r: i32) = f(7) end g" & LF);
+      Check_Source
+        ("earlier type formal",
+         "f: (t: type, value: t) -> (r: t) = value end f" & LF
+         & "g: () -> (r: i32) = f(7) end g" & LF);
+      Check_Source
+        ("written labels",
+         "t: type = i32" & LF
+         & "callback: type = (value: t, t: i32) -> (r: t)" & LF
+         & "size: usize = sizeof callback" & LF);
+      Check_Source
+        ("anonymous module scope",
+         "t: type = i32" & LF
+         & "f: () -> (r: i32) = t: i32 = 0 callback := (value: t) -> "
+         & "(r: t) = value end callback(1) end f" & LF);
+      Check_Source
+        ("later fixed formal",
+         "f: (values: [n]u8, fixed n: usize) -> (r: usize) = lenof "
+         & "values end f" & LF
+         & "g: () -> (r: usize) = values: [2]u8 = [1, 2] "
+         & "f(values: values, n: 2) end g" & LF);
+   end Signature_Binders_Precede_Their_Types;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "signature binders precede their types",
+         Signature_Binders_Precede_Their_Types'Access);
       Landin.Testing.Register
         (Into, "lowering", "labelled callees keep their expression",
          Labelled_Callees_Keep_Their_Expression'Access);

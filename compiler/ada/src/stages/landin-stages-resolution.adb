@@ -120,6 +120,11 @@ package body Landin.Stages.Resolution is
          Block   : Syn.Node_Id;
          Inside  : Landin.Resolution.Scope_Id);
 
+      procedure Resolve_Runtime_Signature_Types
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Inside : Landin.Resolution.Scope_Id);
+
       procedure Resolve_Anonymous
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
@@ -255,6 +260,27 @@ package body Landin.Stages.Resolution is
          end loop;
       end Associate_Return_Sources;
 
+      --  [1840]: all signature binders are collected before any written
+      --  type is resolved.  Runtime binders share this rule with statics,
+      --  even when a later value name shadows an enclosing type alias.
+      procedure Resolve_Runtime_Signature_Types
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Inside : Landin.Resolution.Scope_Id)
+      is
+      begin
+         for Which in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
+            Resolve
+              (Of_Tree, Syn.Declared_Type
+                 (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which)), Inside);
+         end loop;
+         for Which in 1 .. Syn.Return_Count (Of_Tree, Node) loop
+            Resolve
+              (Of_Tree, Syn.Declared_Type
+                 (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which)), Inside);
+         end loop;
+      end Resolve_Runtime_Signature_Types;
+
       --  [1010]'s anonymous function has a static routine body and captures
       --  nothing.  Its signature therefore encloses the module scope, not the
       --  lexical scope of the expression that produced its code address.
@@ -272,12 +298,15 @@ package body Landin.Stages.Resolution is
 
          for Which in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
             Declare_One
-              (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which), Signature);
+              (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which), Signature,
+               Resolve_Declared => False);
          end loop;
          for Which in 1 .. Syn.Return_Count (Of_Tree, Node) loop
             Declare_One
-              (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which), Signature);
+              (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which), Signature,
+               Resolve_Declared => False);
          end loop;
+         Resolve_Runtime_Signature_Types (Of_Tree, Node, Signature);
          Associate_Return_Sources (Of_Tree, Node);
          Resolve
            (Of_Tree, Syn.Error_Set_Of (Of_Tree, Node),
@@ -1409,7 +1438,7 @@ package body Landin.Stages.Resolution is
                        (Of_Tree,
                         Syn.Nth_Parameter
                           (Of_Tree, Node, Which),
-                        Signature);
+                        Signature, Resolve_Declared => False);
                   end loop;
 
                   --  Named returns are declared here and not in
@@ -1423,8 +1452,10 @@ package body Landin.Stages.Resolution is
                        (Of_Tree,
                         Syn.Nth_Return
                           (Of_Tree, Node, Which),
-                        Signature);
+                        Signature, Resolve_Declared => False);
                   end loop;
+                  Resolve_Runtime_Signature_Types
+                    (Of_Tree, Node, Signature);
                   Associate_Return_Sources (Of_Tree, Node);
 
                   for Which in
