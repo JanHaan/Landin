@@ -1190,10 +1190,9 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
 
       function Load_Slice_Component
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Scope   : Res.Scope_Id;
-         Position : IR.Part_Position) return IR.Value_Id;
+        (Place    : Stored_Place;
+         Position : IR.Part_Position;
+         Site     : Landin.Provenance.Origin) return IR.Value_Id;
 
       function Lower_Slice
         (Of_Tree : Syn.Tree;
@@ -4918,17 +4917,12 @@ package body Landin.Stages.Lowering is
       end Slice_Shape;
 
       function Load_Slice_Component
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Scope   : Res.Scope_Id;
-         Position : IR.Part_Position) return IR.Value_Id
+        (Place    : Stored_Place;
+         Position : IR.Part_Position;
+         Site     : Landin.Provenance.Origin) return IR.Value_Id
       is
-         Place : constant Stored_Place :=
-           Lower_Stored_Place (Of_Tree, Node, Scope);
          Field : IR.Part_Position;
          Steps : Stored_Path_Vectors.Vector := Place.Steps;
-         Site : constant Landin.Provenance.Origin :=
-           Site_Of (Of_Tree, Node);
          Descriptor_Shape : constant IR.Field_Shape :=
            (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
             Length => 2, others => <>);
@@ -5023,15 +5017,33 @@ package body Landin.Stages.Lowering is
             end;
          end if;
          declare
-            Base : constant IR.Value_Id :=
-              Load_Slice_Component (Of_Tree, Node, Scope, 1);
+            Place : Stored_Place := Lower_Stored_Place (Of_Tree, Node, Scope);
+            Site : constant Landin.Provenance.Origin :=
+              Site_Of (Of_Tree, Node);
+            Descriptor_Shape : constant IR.Field_Shape :=
+              (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+               Length => 2, others => <>);
          begin
             if Current = IR.No_Block then
                return (Base => IR.No_Value, Length => IR.No_Value);
             end if;
-            return
-              (Base => Base,
-               Length => Load_Slice_Component (Of_Tree, Node, Scope, 2));
+            --  Capture the reached descriptor once.  In particular, both
+            --  carrier loads must reuse the same computed index or pointer.
+            if Place.Place.Kind = IR.Runtime_Address
+              or else (Place.Base = 0 and then not Place.Steps.Is_Empty)
+            then
+               Place :=
+                 (Place => Addressed_Storage (Place, Descriptor_Shape, Site),
+                  Base => 0, Steps => Stored_Path_Vectors.Empty_Vector);
+            end if;
+            declare
+               Base : constant IR.Value_Id :=
+                 Load_Slice_Component (Place, 1, Site);
+            begin
+               return
+                 (Base => Base,
+                  Length => Load_Slice_Component (Place, 2, Site));
+            end;
          end;
       end Lower_Slice;
 

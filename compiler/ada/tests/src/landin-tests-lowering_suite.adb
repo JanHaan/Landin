@@ -11135,8 +11135,119 @@ package body Landin.Tests.Lowering_Suite is
       Check_Target (Landin.Targets.Synthetic_32);
    end Bare_Struct_Ends_Keep_Module_Identities;
 
+   procedure Slice_Access_Paths_Are_Evaluated_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Slice_Access_Paths_Are_Evaluated_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " accepts the computed slice access path");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+               Pick : constant IR.Item_Id := Named_Item (Work, "pick");
+               Calls : Natural := 0;
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (V)) = IR.Call
+                    and then IR.Callee_Of
+                      (Unit, Routine, IR.Value_Id (V)) = Pick
+                  then
+                     Calls := Calls + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Calls, 1,
+                  Label & " evaluates the side-effecting index once");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " retains verified slice storage and bounds");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("struct-slice",
+         "row: type = struct data: []u8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = items: [4]u8 = [1, 2, 3, 4] rows: "
+         & "[2]row = [row(data: items[0 ..< 2]), row(data: items[2 "
+         & "..< 4])] sub: []u8 = rows[pick()].data[0 ..< 1] lenof sub "
+         & "end f" & LF);
+      Check_Source
+        ("struct-index",
+         "row: type = struct data: []u8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = items: [4]u8 = [1, 2, 3, 4] rows: "
+         & "[2]row = [row(data: items[0 ..< 2]), row(data: items[2 "
+         & "..< 4])] usize(rows[pick()].data[0]) end f" & LF);
+      Check_Source
+        ("struct-traversal",
+         "row: type = struct data: []u8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = items: [4]u8 = [1, 2, 3, 4] rows: "
+         & "[2]row = [row(data: items[0 ..< 2]), row(data: items[2 "
+         & "..< 4])] r = 0 for value in rows[pick()].data do r += "
+         & "usize(value) end for end f" & LF);
+      Check_Source
+        ("slice-array",
+         "row: type = struct data: []u8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = items: [4]u8 = [1, 2, 3, 4] rows: "
+         & "[2][]u8 = [items[0 ..< 2], items[2 ..< 4]] sub: []u8 = "
+         & "rows[pick()][0 ..< 1] lenof sub end f" & LF);
+      Check_Source
+        ("plain-copy-control",
+         "row: type = struct data: []u8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = items: [4]u8 = [1, 2, 3, 4] rows: "
+         & "[2]row = [row(data: items[0 ..< 2]), row(data: items[2 "
+         & "..< 4])] sub: []u8 = rows[pick()].data lenof sub end f" & LF);
+      Check_Source
+        ("text-slice",
+         "row: type = struct data: utf8 end row" & LF
+         & "mut counter: usize = 0" & LF
+         & "pick: () -> (r: usize) = r = counter counter += 1 end "
+         & "pick" & LF
+         & "f: () -> (r: usize) = rows: [2]row = [row(data: ""ab""), "
+         & "row(data: ""cd"")] sub: utf8 = rows[pick()].data[0 ..< 1] "
+         & "lenof sub end f" & LF);
+   end Slice_Access_Paths_Are_Evaluated_Once;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "slice access paths are evaluated once",
+         Slice_Access_Paths_Are_Evaluated_Once'Access);
       Landin.Testing.Register
         (Into, "lowering", "bare struct ends keep module identities",
          Bare_Struct_Ends_Keep_Module_Identities'Access);
