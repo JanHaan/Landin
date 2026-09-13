@@ -5292,6 +5292,124 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Pointer_Origins_Are_Checked;
 
+   procedure Raw_Words_Do_Not_Restore_Pointees
+     (Item : in out Landin.Testing.Context);
+
+   procedure Raw_Words_Do_Not_Restore_Pointees
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Word_Store, Word_Call, Mixed_Comparison, Forged_Reload,
+         Retyped_Store, Retyped_Call, Raw_Address, Wrong_Store, Wrong_Call);
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         declare
+            Unit : IR.Unit;
+            Routine, Callee : IR.Item_Id;
+            Signature : IR.Signature_Id;
+            Reached, Other : IR.Pointee_Id;
+            Cell, Byte_Cell, Saved, Typed, Parameter : IR.Slot_Id;
+            Block : IR.Block_Id;
+            Pointer, Wrong, Raw, Value : IR.Value_Id;
+            Expected : constant V.Fault_Kind :=
+              (case Scenario is
+                  when Word_Store | Word_Call | Mixed_Comparison =>
+                     V.Nothing_Wrong,
+                  when Retyped_Call | Wrong_Call => V.Operands_Disagree,
+                  when others => V.Address_Value_Disagrees);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Reached := IR.Add_Pointee
+              (Unit, (Element => Landin.Types.U32, others => <>));
+            Other := IR.Add_Pointee
+              (Unit, (Element => Landin.Types.U8, others => <>));
+            Callee := IR.Add_Item
+              (Unit, IR.Routine, 3, Landin.Types.No_Value, Site);
+            Signature := IR.Add_Signature
+              (Unit, [1 => (Kind => Landin.Types.Usize,
+                            Pointee =>
+                              (if Scenario in Retyped_Call | Wrong_Call
+                               then Reached else IR.No_Pointee),
+                            others => <>)],
+               (Kind => Landin.Types.No_Value, others => <>));
+            IR.Set_Signature (Unit, Callee, Signature);
+            Parameter := IR.Add_Parameter
+              (Unit, Callee, Landin.Types.Usize, 4, Site,
+               Pointee => (if Scenario in Retyped_Call | Wrong_Call
+                           then Reached else IR.No_Pointee));
+            pragma Assert (IR.Holds (Unit, Callee, Parameter));
+            Add_Empty_Body (Unit, Callee, Site);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+            Cell := IR.Add_Slot
+              (Unit, Routine, Landin.Types.U32, IR.No_Declaration, Site);
+            Byte_Cell := IR.Add_Slot
+              (Unit, Routine, Landin.Types.U8, IR.No_Declaration, Site);
+            Saved := IR.Add_Slot
+              (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site);
+            Typed := IR.Add_Slot
+              (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site,
+               Pointee => Reached);
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            Value := IR.Emit_Number
+              (Unit, Routine, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Store (Unit, Routine, Cell, Value, Site);
+            Value := IR.Emit_Number
+              (Unit, Routine, Landin.Types.U8, 1, False, Site);
+            IR.Emit_Store (Unit, Routine, Byte_Cell, Value, Site);
+            Pointer := IR.Emit_Place_Address
+              (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Cell), Site);
+            IR.Set_Pointee (Unit, Routine, Pointer, Reached);
+            Wrong := IR.Emit_Place_Address
+              (Unit, Routine,
+               (Kind => IR.Frame_Slot, Slot => Byte_Cell), Site);
+            IR.Set_Pointee (Unit, Routine, Wrong, Other);
+            IR.Emit_Store (Unit, Routine, Saved, Pointer, Site);
+            Raw := IR.Emit_Load (Unit, Routine, Saved, Site);
+            case Scenario is
+               when Word_Store => null;
+               when Word_Call | Retyped_Call | Wrong_Call =>
+                  Value := IR.Emit_Call
+                    (Unit, Routine, Callee, Landin.Types.No_Value, Site);
+                  IR.Add_Argument
+                    (Unit, Routine, Value,
+                     (case Scenario is
+                         when Word_Call => Pointer,
+                         when Wrong_Call => Wrong,
+                         when others => Raw));
+               when Mixed_Comparison =>
+                  Value := IR.Emit_Binary
+                    (Unit, Routine, IR.Equal_To, Pointer, Wrong,
+                     Landin.Types.Bool, Site);
+               when Forged_Reload =>
+                  IR.Set_Pointee (Unit, Routine, Raw, Reached);
+               when Retyped_Store | Wrong_Store =>
+                  IR.Emit_Store
+                    (Unit, Routine, Typed,
+                     (if Scenario = Wrong_Store then Wrong else Raw), Site);
+               when Raw_Address =>
+                  Value := IR.Emit_Pointer_Address (Unit, Routine, Raw, Site);
+            end case;
+            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Expect (Item, V.Check (Unit), Expected,
+                    "raw word structure: " & Scenario'Image);
+            Expect (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+                    Expected,
+                    "raw word 32-bit target: " & Scenario'Image);
+            Expect (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+                    Expected,
+                    "raw word 64-bit target: " & Scenario'Image);
+         end;
+      end loop;
+   end Raw_Words_Do_Not_Restore_Pointees;
+
    procedure Inout_Reached_Types_Are_Checked
      (Item : in out Landin.Testing.Context);
 
@@ -7912,6 +8030,9 @@ package body Landin.Tests.Verifier_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "raw words do not restore pointees",
+         Raw_Words_Do_Not_Restore_Pointees'Access);
       Landin.Testing.Register
         (Into, "verifier", "ordinary call carriers keep their shape",
          Ordinary_Call_Carriers_Keep_Their_Shape'Access);

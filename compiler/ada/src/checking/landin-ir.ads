@@ -3663,6 +3663,11 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
      with Pre => Holds (Of_Unit, Item, Value);
 
+   --  A plain usize slot or parameter transports address bits without a
+   --  source-pointer promise; integer operations may compare those bits.
+   --  Reloading that storage does not recover a reached type. Typed stores,
+   --  calls and Pointer_Address still require matching pointee evidence.
+   --
    --  An annotation, never an unchecked conversion. The release verifier
    --  proves it against the producer: typed storage, a declared result,
    --  addr, or the mandatory [1..target maximum] integer conversion check.
