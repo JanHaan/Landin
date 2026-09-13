@@ -27627,6 +27627,12 @@ package body Landin.Stages.Checking is
             Wrote : Landin.Checking.Nominal_Type_Id;
             Field : Positive);
 
+         procedure Check_Image_Field
+           (Each : Syn.Node_Id; Shape : Landin.Checking.Field_Shape);
+
+         function First_Unwritten_Field
+           (Literal : Syn.Node_Id; Count : Natural) return Natural;
+
          procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
          is
@@ -27709,6 +27715,59 @@ package body Landin.Stages.Checking is
             end if;
          end Check_Image_Scalar;
 
+         procedure Check_Image_Field
+           (Each : Syn.Node_Id; Shape : Landin.Checking.Field_Shape)
+         is
+         begin
+            if Each = Syn.No_Node
+              or else Landin.Checking.Type_Of (Types.all, Of_Tree, Each)
+                = Ty.Ill_Typed
+            then
+               return;
+            end if;
+            case Shape.Kind is
+               when Landin.Checking.Scalar_Field =>
+                  if Shape.Signature = Landin.Checking.No_Signature then
+                     Check_Image_Scalar (Each, Shape.Element);
+                  end if;
+               when Landin.Checking.Fixed_Array_Field =>
+                  Check_Array_Image
+                    (Each, Landin.Checking.Array_Field_Element
+                       (Types.all, Shape));
+               when Landin.Checking.Aggregate_Field =>
+                  if Is_Struct_Construction (Of_Tree, Each)
+                    or else Landin.Checking.Distinct_Conversion_Of
+                      (Types.all, Of_Tree, Each)
+                        /= Landin.Checking.No_Nominal_Type
+                  then
+                     Check_Struct_Image (Each, Shape.Nominal);
+                  end if;
+               when Landin.Checking.Reference_Field =>
+                  null;
+               when Landin.Checking.Variant_Field =>
+                  raise Landin.Compiler_Defect with
+                    "a variant became a standalone image field";
+            end case;
+         end Check_Image_Field;
+
+         function First_Unwritten_Field
+           (Literal : Syn.Node_Id; Count : Natural) return Natural
+         is
+         begin
+            for Field in 1 .. Count loop
+               if not
+                 (for some Position in
+                    1 .. Construction_Field_Count (Of_Tree, Literal) =>
+                      Landin.Checking.Field_Index
+                        (Types.all, Of_Tree, Nth_Construction_Field
+                           (Of_Tree, Literal, Position)) = Field)
+               then
+                  return Field;
+               end if;
+            end loop;
+            return 0;
+         end First_Unwritten_Field;
+
          procedure Check_Array_Image
            (Given : Syn.Node_Id; Element : Landin.Checking.Field_Shape)
          is
@@ -27716,36 +27775,7 @@ package body Landin.Stages.Checking is
 
             procedure Visit (Each : Syn.Node_Id) is
             begin
-               if Landin.Checking.Type_Of (Types.all, Of_Tree, Each)
-                 = Ty.Ill_Typed
-               then
-                  return;
-               end if;
-               case Element.Kind is
-                  when Landin.Checking.Scalar_Field =>
-                     if Element.Signature = Landin.Checking.No_Signature
-                       and then Element.Element in Ty.Numeric_Name
-                     then
-                        Check_Image_Scalar (Each, Element.Element);
-                     end if;
-                  when Landin.Checking.Fixed_Array_Field =>
-                     Check_Array_Image
-                       (Each, Landin.Checking.Array_Field_Element
-                          (Types.all, Element));
-                  when Landin.Checking.Aggregate_Field =>
-                     if Is_Struct_Construction (Of_Tree, Each)
-                       or else Landin.Checking.Distinct_Conversion_Of
-                         (Types.all, Of_Tree, Each)
-                           /= Landin.Checking.No_Nominal_Type
-                     then
-                        Check_Struct_Image (Each, Element.Nominal);
-                     end if;
-                  when Landin.Checking.Reference_Field =>
-                     null;
-                  when Landin.Checking.Variant_Field =>
-                     raise Landin.Compiler_Defect with
-                       "a variant became an array image element";
-               end case;
+               Check_Image_Field (Each, Element);
             end Visit;
          begin
             if Syn.Kind (Of_Tree, Given) = Syn.Array_Repetition then
@@ -27768,51 +27798,55 @@ package body Landin.Stages.Checking is
             Field : Positive)
          is
          begin
-            if Syn.Kind (Of_Tree, Value) /= Syn.Struct_Literal then
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                 = Ty.Ill_Typed
+              or else not
+                (Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+                 or else
+                   (Syn.Kind (Of_Tree, Value) = Syn.Labeled_Application
+                    and then Res.Class_Of (Meanings.all, Of_Tree, Value)
+                      = Res.Case_Construction))
+            then
                return;
             end if;
 
             declare
                Selected : constant Positive := Positive
                  (Landin.Checking.Field_Index (Types.all, Of_Tree, Value));
+               Fill : constant Syn.Node_Id := Construction_Fill
+                 (Of_Tree, Value);
             begin
                for Position in
-                 1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                 1 .. Construction_Field_Count (Of_Tree, Value)
                loop
                   declare
                      Label : constant Syn.Node_Id :=
-                       Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                       Nth_Construction_Field (Of_Tree, Value, Position);
                      Payload : constant Positive := Positive
                        (Landin.Checking.Field_Index
                           (Types.all, Of_Tree, Label));
-                     Given : constant Syn.Node_Id :=
-                       Syn.Value_Of (Of_Tree, Label);
-                     Shape : constant Landin.Checking.Field_Shape :=
-                       Landin.Checking.Nth_Variant_Case_Field
-                         (Types.all, Wrote, Field, Selected, Payload);
                   begin
-                     case Shape.Kind is
-                        when Landin.Checking.Scalar_Field =>
-                           if Shape.Element in Ty.Numeric_Name then
-                              Check_Image_Scalar (Given, Shape.Element);
-                           end if;
-                        when Landin.Checking.Reference_Field =>
-                           null;
-                        when Landin.Checking.Fixed_Array_Field =>
-                           Check_Array_Image
-                             (Given, Landin.Checking.Array_Field_Element
-                                (Types.all, Shape));
-                        when Landin.Checking.Aggregate_Field =>
-                           if Is_Struct_Construction (Of_Tree, Given) then
-                              Check_Struct_Image
-                                (Given, Shape.Nominal);
-                           end if;
-                        when Landin.Checking.Variant_Field =>
-                           raise Landin.Compiler_Defect with
-                             "a nested variant payload reached image folding";
-                     end case;
+                     Check_Image_Field
+                       (Construction_Field_Value (Of_Tree, Label),
+                        Landin.Checking.Nth_Variant_Case_Field
+                          (Types.all, Wrote, Field, Selected, Payload));
                   end;
                end loop;
+               if Fill /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree, Fill) /= Syn.Zeroed_Literal
+               then
+                  declare
+                     Payload : constant Natural := First_Unwritten_Field
+                       (Value, Landin.Checking.Variant_Case_Field_Count
+                          (Types.all, Wrote, Field, Selected));
+                  begin
+                     if Payload /= 0 then
+                        Check_Image_Field
+                          (Fill, Landin.Checking.Nth_Variant_Case_Field
+                             (Types.all, Wrote, Field, Selected, Payload));
+                     end if;
+                  end;
+               end if;
             end;
          end Check_Variant_Image;
 
@@ -27820,6 +27854,11 @@ package body Landin.Stages.Checking is
            (Literal : Syn.Node_Id; Wrote : Landin.Checking.Nominal_Type_Id)
          is
          begin
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
+              = Ty.Ill_Typed
+            then
+               return;
+            end if;
             if Landin.Checking.Distinct_Conversion_Of
               (Types.all, Of_Tree, Literal) /= Landin.Checking.No_Nominal_Type
             then
@@ -27834,23 +27873,7 @@ package body Landin.Stages.Checking is
                   Shape : constant Landin.Checking.Field_Shape :=
                     Landin.Checking.Field_Shape_Of (Types.all, Wrote, 1);
                begin
-                  case Shape.Kind is
-                     when Landin.Checking.Scalar_Field =>
-                        Check_Image_Scalar (Given, Shape.Element);
-                     when Landin.Checking.Fixed_Array_Field =>
-                        Check_Array_Image
-                          (Given, Landin.Checking.Array_Field_Element
-                             (Types.all, Shape));
-                     when Landin.Checking.Aggregate_Field =>
-                        if Is_Struct_Construction (Of_Tree, Given)
-                          or else Landin.Checking.Distinct_Conversion_Of
-                            (Types.all, Of_Tree, Given)
-                              /= Landin.Checking.No_Nominal_Type
-                        then
-                           Check_Struct_Image (Given, Shape.Nominal);
-                        end if;
-                     when others => null;
-                  end case;
+                  Check_Image_Field (Given, Shape);
                end;
                return;
             end if;
@@ -27869,29 +27892,36 @@ package body Landin.Stages.Checking is
                     Landin.Checking.Field_Shape_Of
                       (Types.all, Wrote, Which);
                begin
-                  case Shape.Kind is
-                     when Landin.Checking.Scalar_Field =>
-                        if Shape.Signature = Landin.Checking.No_Signature
-                          and then Shape.Element in Ty.Numeric_Name
-                        then
-                           Check_Image_Scalar (Given, Shape.Element);
-                        end if;
-                     when Landin.Checking.Reference_Field =>
-                        null;
-                     when Landin.Checking.Fixed_Array_Field =>
-                        Check_Array_Image
-                             (Given, Landin.Checking.Array_Field_Element
-                                (Types.all, Shape));
-                     when Landin.Checking.Aggregate_Field =>
-                        if Is_Struct_Construction (Of_Tree, Given) then
-                           Check_Struct_Image
-                             (Given, Shape.Nominal);
-                        end if;
-                     when Landin.Checking.Variant_Field =>
-                        Check_Variant_Image (Given, Wrote, Which);
-                  end case;
+                  if Shape.Kind = Landin.Checking.Variant_Field then
+                     Check_Variant_Image (Given, Wrote, Which);
+                  else
+                     Check_Image_Field (Given, Shape);
+                  end if;
                end;
             end loop;
+            declare
+               Fill : constant Syn.Node_Id := Construction_Fill
+                 (Of_Tree, Literal);
+            begin
+               --  D214 checks one shared value against the complete common
+               --  descriptor of its omitted fields. Fold it once as well,
+               --  so one bad fill reports once rather than per destination.
+               if Fill /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree, Fill) /= Syn.Zeroed_Literal
+               then
+                  declare
+                     Field : constant Natural := First_Unwritten_Field
+                       (Literal, Landin.Checking.Layout_Field_Count
+                          (Types.all, Wrote));
+                  begin
+                     if Field /= 0 then
+                        Check_Image_Field
+                          (Fill, Landin.Checking.Field_Shape_Of
+                             (Types.all, Wrote, Field));
+                     end if;
+                  end;
+               end if;
+            end;
          end Check_Struct_Image;
 
       begin

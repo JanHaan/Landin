@@ -1964,6 +1964,98 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: [2]bool = [bool(n), false]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: [2]bool = [2 of bool(n)]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: [2]bool = [false, of bool(n)]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "box: type = struct flag: bool end box" & ASCII.LF
+            & "value: box = (flag: bool(n))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "box: type = struct flag: bool end box" & ASCII.LF
+            & "value: box = box(flag: bool(n))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "choice: type = struct kind: variant empty | full: "
+            & "(flag: bool) end kind end choice" & ASCII.LF
+            & "value: choice = (kind: full(flag: bool(n)))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: [2][2]bool = [[bool(n), false], [false, "
+            & "true]]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "box: type = struct flag: bool end box" & ASCII.LF
+            & "values: [2]box = [(flag: bool(n)), (flag: true)]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("meter: type = distinct u8" & ASCII.LF
+            & "n: u8 = 200" & ASCII.LF
+            & "box: type = struct value: meter end box" & ASCII.LF
+            & "image: box = (value: meter(n + 100))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("meter: type = distinct u8" & ASCII.LF
+            & "n: u8 = 200" & ASCII.LF
+            & "box: type = struct value: meter end box" & ASCII.LF
+            & "images: [2]box = [(value: meter(n + 100)), (value: "
+            & "meter(1))]" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("meter: type = distinct u8" & ASCII.LF
+            & "n: u8 = 200" & ASCII.LF
+            & "choice: type = struct kind: variant empty | full: "
+            & "(value: meter) end kind end choice" & ASCII.LF
+            & "image: choice = (kind: full(value: meter(n + "
+            & "100)))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: type = struct first: bool second: bool end "
+            & "flags" & ASCII.LF
+            & "image: flags = (first: true, of bool(n))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("meter: type = distinct u8" & ASCII.LF
+            & "n: u8 = 200" & ASCII.LF
+            & "box: type = struct first: meter second: meter end "
+            & "box" & ASCII.LF
+            & "image: box = (first: meter(1), of meter(n + 100))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "choice: type = struct kind: variant empty | full: "
+            & "(first: bool, second: bool) end kind end choice" & ASCII.LF
+            & "image: choice = (kind: full(first: true, of "
+            & "bool(n)))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "flags: type = struct first: bool second: bool "
+            & "third: bool end flags" & ASCII.LF
+            & "image: flags = (first: true, of bool(n))" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
+           ("n: u8 = 2" & ASCII.LF
+            & "rows: type = struct first: [2]bool second: [2]bool "
+            & "end rows" & ASCII.LF
+            & "image: rows = (first: [false, true], of [false, "
+            & "bool(n)])" & ASCII.LF,
+            "L0300", 1, Executable);
+         Check
            ("mut p: ptr i32",
             "L0301", 1, Executable);
          Check
