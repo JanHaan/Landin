@@ -47,6 +47,47 @@ package body Landin.Tests.Harness_Suite is
             "a duplicate name is refused and not counted");
    end Duplicate_Names_Are_Refused;
 
+   procedure Suite_Inventory_Counts_Names
+     (Item : in out Landin.Testing.Context);
+
+   procedure Suite_Inventory_Counts_Names
+     (Item : in out Landin.Testing.Context)
+   is
+      Scratch : Landin.Testing.Registry;
+      Refused : Boolean := False;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Suite_Count (Scratch), 0,
+         "an empty registry has no suites");
+      Landin.Testing.Register (Scratch, "beta", "one", Always_Passes'Access);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Suite_Count (Scratch), 1,
+         "one registered suite is counted");
+      Landin.Testing.Register (Scratch, "alpha", "one", Always_Passes'Access);
+      Landin.Testing.Register (Scratch, "beta", "two", Always_Passes'Access);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Suite_Count (Scratch), 2,
+         "nonadjacent names count suites rather than cases");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_Count (Scratch), 3,
+         "the three cases remain independently registered");
+      Landin.Testing.Check
+        (Item, Landin.Testing.Has_Suite (Scratch, "alpha")
+           and then Landin.Testing.Has_Suite (Scratch, "beta")
+           and then not Landin.Testing.Has_Suite (Scratch, "one"),
+         "suite presence distinguishes suite names from case names");
+      begin
+         Landin.Testing.Register
+           (Scratch, "alpha", "one", Always_Passes'Access);
+      exception
+         when Landin.Compiler_Defect => Refused := True;
+      end;
+      Landin.Testing.Check (Item, Refused, "duplicate case remains refused");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Suite_Count (Scratch), 2,
+         "a refused duplicate cannot alter the inventory");
+   end Suite_Inventory_Counts_Names;
+
    procedure Order_Is_Deterministic (Item : in out Landin.Testing.Context);
 
    procedure Order_Is_Deterministic (Item : in out Landin.Testing.Context) is
@@ -228,6 +269,9 @@ package body Landin.Tests.Harness_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "harness", "suite inventory counts names",
+         Suite_Inventory_Counts_Names'Access);
       Landin.Testing.Register
         (Into, "harness", "duplicate names are refused",
          Duplicate_Names_Are_Refused'Access);
