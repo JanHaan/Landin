@@ -21,7 +21,6 @@ package body Landin.Stages.Resolution is
    use type Landin.Resolution.Declaration_Sort;
    use type Landin.Resolution.Verdict;
    use type Landin.Resolution.Argument_Role;
-   use type Landin.Resolution.Scope_Id;
    use type Landin.Resolution.Scope_Sort;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Id;
@@ -483,9 +482,6 @@ package body Landin.Stages.Resolution is
                Declaration : constant Syn.Node_Id :=
                  Landin.Resolution.Node_Of (Meanings.all, Meant);
                Runtime_Position : Natural := 0;
-               Signature : constant Landin.Resolution.Scope_Id :=
-                 Landin.Resolution.Scope_At
-                   (Meanings.all, Callee_Tree.all, Declaration);
             begin
                for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                   declare
@@ -496,9 +492,6 @@ package body Landin.Stages.Resolution is
                      Role : Landin.Resolution.Argument_Role :=
                        Landin.Resolution.Unmatched_Argument;
                      Position : Natural := 0;
-                     Formal_Node : Syn.Node_Id := Syn.No_Node;
-                     Formal : Landin.Resolution.Declaration_Id :=
-                       Landin.Resolution.No_Declaration;
                   begin
                      if Syn.Is_Fill_Argument (Of_Tree, Argument) then
                         Role := Landin.Resolution.Fill_Argument;
@@ -523,7 +516,6 @@ package body Landin.Stages.Resolution is
                                        Role :=
                                          Landin.Resolution.Runtime_Argument;
                                        Position := Runtime;
-                                       Formal_Node := Candidate;
                                        exit;
                                     end if;
                                  end if;
@@ -542,7 +534,6 @@ package body Landin.Stages.Resolution is
                               if Syn.Name (Callee_Tree.all, Candidate) = Label
                               then
                                  Position := Static;
-                                 Formal_Node := Candidate;
                                  Role :=
                                    (if Syn.Kind (Callee_Tree.all, Candidate)
                                          = Syn.Type_Formal
@@ -568,7 +559,6 @@ package body Landin.Stages.Resolution is
                                     Role :=
                                       Landin.Resolution.Runtime_Argument;
                                     Position := Runtime;
-                                    Formal_Node := Candidate;
                                     exit;
                                  end if;
                               end;
@@ -576,18 +566,9 @@ package body Landin.Stages.Resolution is
                         end if;
                      end if;
 
-                     if Formal_Node /= Syn.No_Node
-                       and then Signature /= Landin.Resolution.No_Scope
-                     then
-                        Formal := Landin.Resolution.Declared_Here
-                          (Meanings.all, Signature,
-                           Syn.Name (Callee_Tree.all, Formal_Node));
-                     end if;
-
                      if Role /= Landin.Resolution.Unmatched_Argument then
                         Landin.Resolution.Match_Argument
-                          (Meanings.all, Of_Tree, Argument, Role, Position,
-                           Formal);
+                          (Meanings.all, Of_Tree, Argument, Role, Position);
                         if Role = Landin.Resolution.Type_Argument then
                            Resolve_Type_View
                              (Of_Tree,

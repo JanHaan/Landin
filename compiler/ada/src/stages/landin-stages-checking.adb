@@ -16842,16 +16842,8 @@ package body Landin.Stages.Checking is
       function Is_Zeroed_Scalar_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
-         Is_Direct_Named_Return : constant Boolean :=
-           Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
-           and then Res.Sort_Of
-                      (Meanings.all,
-                       Res.Bound_To (Meanings.all, Of_Tree, Node))
-                    = Res.Named_Return;
       begin
          return Is_Direct_Binding_Name (Of_Tree, Node)
-           or else Is_Direct_Named_Return
            or else
              (Syn.Kind (Of_Tree, Node)
                 in Syn.Member_Selection | Syn.Element_Index

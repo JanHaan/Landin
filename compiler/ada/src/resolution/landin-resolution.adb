@@ -453,13 +453,6 @@ package body Landin.Resolution is
      is (Of_Table.Applications.Element
            (Slot (Of_Table, Of_Tree, Argument)).Role);
 
-   function Formal_Of
-     (Of_Table : Table;
-      Of_Tree  : Landin.Syntax.Tree;
-      Argument : Landin.Syntax.Node_Id) return Declaration_Id
-     is (Of_Table.Applications.Element
-           (Slot (Of_Table, Of_Tree, Argument)).Formal);
-
    function Position_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -485,14 +478,12 @@ package body Landin.Resolution is
       Of_Tree  : Landin.Syntax.Tree;
       Argument : Landin.Syntax.Node_Id;
       As_Role  : Argument_Role;
-      Position : Natural;
-      Formal   : Declaration_Id := No_Declaration)
+      Position : Natural)
    is
       Slot_Index : constant Positive := Slot (Into, Of_Tree, Argument);
       Fact : Application_Fact := Into.Applications.Element (Slot_Index);
    begin
       Fact.Role := As_Role;
-      Fact.Formal := Formal;
       Fact.Position := Position;
       Into.Applications.Replace_Element (Slot_Index, Fact);
    end Match_Argument;
@@ -506,11 +497,6 @@ package body Landin.Resolution is
       Slot_Index : constant Positive := Slot (Into, Of_Tree, Argument);
       Fact : Application_Fact := Into.Applications.Element (Slot_Index);
    begin
-      if Fact.Role /= Runtime_Argument
-        or else Fact.Position /= Position
-      then
-         Fact.Formal := No_Declaration;
-      end if;
       Fact.Role := Runtime_Argument;
       Fact.Position := Position;
       Into.Applications.Replace_Element (Slot_Index, Fact);
