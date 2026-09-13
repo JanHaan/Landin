@@ -1,0 +1,42 @@
+scalar: type = i32
+truth: type = bool
+value: i32 = 7
+
+plain: () -> (r: i32) =
+    mut scalar: scalar
+    scalar = 3
+    value: i32 = value
+    r = scalar + value
+end plain
+
+arrays: (fixed width: usize) -> (r: i32) =
+    width: [width]scalar = [of 4]
+    r = width[0] + width[1]
+end arrays
+
+pointers: (source: ptr scalar) -> none =
+    scalar: ptr scalar = source
+    _ = scalar.val
+end pointers
+
+-- Prototype 3's list element shape, with a local shadowing its type formal.
+list: type (t: type) = struct items: []t end list
+first: (t: type, source: list(t)) -> (r: t from source) =
+    t: t = source.items[0]
+    r = t
+end first
+
+instantiate: (source: []i32) -> (r: i32) =
+    items: list(i32) = (items: source)
+    r = first(items) + arrays(width: 2)
+end instantiate
+
+conditions: () -> none =
+    if truth: truth = true then
+        _ = truth
+    end if
+    while truth: truth = false do
+        _ = truth
+        break
+    end while
+end conditions

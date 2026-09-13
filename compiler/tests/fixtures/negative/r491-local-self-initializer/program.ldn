@@ -1,0 +1,3 @@
+value_self: () -> none =
+    mut missing: i32 = missing
+end value_self

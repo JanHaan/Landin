@@ -1095,9 +1095,14 @@ package body Landin.Stages.Resolution is
             begin
                case Syn.Kind (Of_Tree, Item) is
                   when Syn.Binding =>
+                     --  D218: the written type and value both see the
+                     --  incoming scope, before this local shadows it.
                      Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Item),
                               Inside);
-                     Declare_One (Of_Tree, Item, Inside);
+                     Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Item),
+                              Inside);
+                     Declare_One
+                       (Of_Tree, Item, Inside, Resolve_Declared => False);
 
                   when Syn.Destructuring_Binding =>
                      --  [0990] evaluates the source before introducing any

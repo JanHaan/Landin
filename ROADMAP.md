@@ -5910,7 +5910,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Not a current source defect: the empty-root diagnostic marks the context failed before discovery, and the queue exits before import lookup can reach Select_Module_Directory. This independently confirms the retained review critic's unreachable-path analysis. Preserve that validation boundary when changing module recovery; no real-root traversal was run. |
 | J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Implemented private constructor contract: target labels longer than their fixed storage raise Compiler_Defect in every build mode; valid labels copy in full and remain space-padded. Current named constructors are unchanged and no arbitrary target constructor was added. Exact acceptance remains open. |
 | J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Implemented expected-outcome handling under A4/M11: Device_Error joins Name_Error/Use_Error for native reads and writes, and failure cleanup suppresses only those expected close outcomes. Programming/resource exceptions retain their separate path. Device failure was not induced; bounded ordinary-file and host-exception controls pass. |
-| J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | D218 explicitly settles the previously unstated type-scope rule: written type and initializer resolve before the local is introduced. Small scalar, reference, fixed-bound and generic list-element controls accompany self-reference and later-shadow refusals. Seven exact selectors pass 29 checks on each of macOS debug and Linux release; exact acceptance open. |
 | J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Implemented: an otherwise unresolved bare value use of a file-local imported namespace reports that it needs a member selection, with the existing L0201 code/use anchor and a [1860] note. Ordinary lexical lookup still wins, including same-named module values; aliases, parameter shadows, selected imports and sibling-file scope retain their rules. Exact acceptance remains open. |
 | J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Implemented maintenance: removed the unused formal-declaration field, query and order-dependent signature-scope lookup. Argument roles and role-local positions remain; checking remaps runtime positions from the complete signature. The existing classification case now calls a later declaration and asserts its static position. Exact acceptance remains open. |
 | J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Not established as a normative defect. [1950] explicitly limits its known-bound refusal to an element index; neither that text nor its index-only D148 evidence extends it to slice range endpoints. The implementation checks endpoint types and retains runtime range checks outside unchecked. D187 explicitly removes the slice-range edge inside unchecked. Extending static endpoint rejection requires a new semantic decision, not the J56 range-subtype repair. |
@@ -7444,6 +7444,26 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J113 is repaired under the explicit new D218 scope decision. Ordinary local
+written types now resolve before declaration, matching the incoming scope
+already used by initializers and D185 condition types. Names nested in pointer,
+fixed-array and generic element types retain the enclosing identities; the
+new local still shadows those identities in following statements. Collected
+module/signature scopes are unchanged. The prototype-3-derived list-element
+fixture checks generic substitution as well as the source lookup rule.
+Seven exact selectors pass 29 checks on each of macOS debug and Linux release,
+including both unknown-type and self-initializer refusals, a later shadowed-type
+refusal, and existing condition/duplicate/parameter controls. These two unknown
+uses are separate fixtures because a value-name resolution error stops the
+pipeline before the checker's unknown-type report; their final expected codes
+are each L0201. Fixture preparation also corrected the non-language module
+`fixed` declaration spelling to a genuine fixed signature formal. All source
+cases are tiny; the sole array has two elements. Both single-worker builds
+pass. Positive checks emit text only, and no native Landin assembler, runtime,
+debugger, stress or giant-image check ran. Evidence is retained in
+`.scratch/r491-local-type-scope/` and `.scratch/r491-final-values/`.
+Exact acceptance remains open.
 
 M4/M16 live-example reconciliation preserves all four prototypes' historical
 finding sections and the tour's dropped-design section byte for byte. Live

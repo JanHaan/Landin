@@ -27,7 +27,7 @@
 0110   tour        accepted emitted executed refused  Left of ':' is always the name being introduced
 0120   tour        accepted emitted executed refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed refused  Order inside a module does not matter
-0140   tour        accepted emitted executed          An inner scope may shadow an outer name
+0140   tour        accepted emitted executed refused  An inner scope may shadow an outer name
 0150   tour        accepted emitted executed refused refused-by-name Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        accepted emitted executed refused refused-by-name Floating point: f16, f32, f64

@@ -794,8 +794,9 @@ body, because an expression declares nothing.
 Order matters in a body and does not in a module. [0130]'s set
 is a set of declarations, so a module name may be used above
 the line that introduces it; [1800]'s block is a sequence, so a local is visible
-to the statements and final expression after it and its own value is read
-before its name exists [0110].
+to the statements and final expression after it. Both its written type and
+initializer resolve before its name exists [0110] (D218), including names
+inside pointer, slice, array and applied-type syntax.
 Lookup proceeds through body and signature scopes, then this source file's
 imports, then its module. An import may therefore shadow a same-named module
 declaration for qualified lookup, and a parameter or local may shadow the
@@ -13202,3 +13203,37 @@ keeps that rule visible at the containing assignment.
 `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`,
 `runtime/r491-payload-alias-last-use`, the driver's refusal-without-effects case,
 and the existing pointer-vector growth and initialized-allocation fixtures.
+
+### D218 — A local's written type precedes its own name
+
+**The tour said** that the left of `:` introduces the name and the right
+supplies its type or value [0110]. [1840] explicitly put the initializer
+before the new binding. It did not settle the written type's lookup scope;
+the ordinary-local implementation installed the name first, unlike D185's
+condition-binding implementation.
+
+**Chosen:** an ordinary local's written type and initializer both resolve in
+the incoming lexical scope, before that local is introduced. This includes
+names nested inside reference types, fixed-array bounds and generic actuals,
+and applies with or without an initializer. A local may therefore shadow an
+enclosing type or fixed formal while using it in its own declared type.
+`mut t: t = value` uses the enclosing `t` for the type; following statements
+see the new runtime binding. An absent enclosing name is still unknown, and
+an already declared local in the same block still makes a duplicate.
+
+This agrees with D185's condition bindings. It does not change collected
+module or signature scopes, enable local type declarations, or make a name
+visible in its own initializer. A generic body resolves the outer type/fixed
+formal's identity before concrete substitution, just like its other uses.
+
+**The alternatives:** introducing the local before resolving its type makes
+its spelling hide the very type or fixed bound being declared. Retaining that
+rule only for ordinary statements makes the equivalent condition binding
+behave differently. Resolving all names against the enclosing block would
+instead lose earlier locals from the incoming scope. All are declined.
+
+**Pinned by** `positive/r491-local-type-scope`, including a generic list-element
+copy derived from prototype 3, `negative/r491-local-self-reference`,
+`negative/r491-local-self-initializer`,
+`negative/r491-local-shadowed-type`, `positive/condition-declarations` and
+`negative/condition-declaration-body-shadowing`.
