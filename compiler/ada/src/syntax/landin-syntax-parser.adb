@@ -4994,8 +4994,24 @@ package body Landin.Syntax.Parser is
             end Parse_Block;
 
             function Parse_Statement (Context : Frame) return Node_Id is
-               Start : constant Landin.Source.Span := Here;
+               Start : Landin.Source.Span;
             begin
+               --  Refused prefixes consume tokens without recursive entry.
+               while Peek = Tok.Kw_Public loop
+                  Complain
+                    (Item    => Syn.Public_On_Statement,
+                     Where   => Here,
+                     Message => "`public` rides on a declaration, not"
+                                & " on a statement",
+                     Note    => "[1740]: what a module exports is"
+                                & " decided where the module is"
+                                & " written, never inside a body",
+                     Related => Context.Owner,
+                     Because => "this function's body");
+                  Advance;
+               end loop;
+               Start := Here;
+
                --  P1, one level up: a token no kernel rule spells stands
                --  in for the statement it broke, and says nothing.
                if Peek not in Tok.Kernel_Kind then
@@ -5015,20 +5031,6 @@ package body Landin.Syntax.Parser is
                         Related => Context.Owner,
                         Because => "this function's body");
                      return Add (Error_Statement, Start);
-
-                  when Tok.Kw_Public =>
-                     Complain
-                       (Item    => Syn.Public_On_Statement,
-                        Where   => Here,
-                        Message => "`public` rides on a declaration, not"
-                                   & " on a statement",
-                        Note    => "[1740]: what a module exports is"
-                                   & " decided where the module is"
-                                   & " written, never inside a body",
-                        Related => Context.Owner,
-                        Because => "this function's body");
-                     Advance;
-                     return Parse_Statement (Context);
 
                   when Tok.Kw_If =>
                      return Parse_If (Context);
@@ -7264,6 +7266,14 @@ package body Landin.Syntax.Parser is
                      Join (Starts, After_Previous), [Callee]);
                end if;
 
+               if Too_Deep (Starts) then
+                  Resync_Parentheses;
+                  return Add
+                    (Error_Expression, Starts,
+                     Join (Starts, After_Previous), [Callee]);
+               end if;
+               Depth := Depth + 1;
+
                if Peek /= Tok.Right_Paren then
                   loop
                      declare
@@ -7484,6 +7494,7 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
+               Depth := Depth - 1;
                declare
                   Head : constant Slot_List (1 .. 1) := [1 => Callee];
                begin

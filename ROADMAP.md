@@ -5666,7 +5666,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
-| C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
+| C6: nested-call depth | Implemented with J37: shared call-depth accounting includes recovery clauses, and refused calls skip their balanced argument list. Exact boundary and following-declaration controls pass in both modes; no overflow reproduction. | Exact acceptance open |
 | M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
@@ -5834,7 +5834,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Repaired: empty-variant recovery cannot consume the enclosing struct's own closer. A real case still establishes a variant part, including one sharing the struct's name. Earlier/later scalar aliases and an aggregate user type retain ordinary field selection and measurement; empty and mismatched parts retain their diagnostics. |
 | J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Repaired: nested control scopes and delimited expressions save and restore enclosing arm context. Loops, blocks, matches, anonymous bodies, nested else arms, arguments, literals, conversions and selected bounds keep their own call recovery. A direct then/elsif arm still owns its else; parentheses retain explicit recovery priority. |
-| J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
+| J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Implemented with C6: guard nested calls and recovery clauses; read refused public prefixes iteratively. Bounded parser controls pass in both modes; exact acceptance remains open. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Implemented: retain completion boundaries unless `complete` names a visible loop; preserve declarations, assignments and nested labels with that spelling. Selected parser, verified-IR and refusal controls pass in both modes; exact acceptance remains open. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
 | J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
@@ -6490,7 +6490,21 @@ cannot see an outer label. Builds use one worker and selected tests have
 executable ran. Logs are retained in `.scratch/r491-complete-transfers/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Nested-call depth and recursive public-prefix recovery J37/C6 are next.
+J37/C6 development evidence: three selected parser cases pass 78 checks in
+each of macOS debug and Linux release under five-second test timeouts. Six
+sources, each under two KiB, cover the last permitted call, first refused
+positional and labelled calls, recovery nesting, shallow recovery and three
+refused public prefixes. Following functions survive every case. The first
+test draft counted a function body as a nesting level and used an unsupported
+return spelling; corrected controls isolate the existing 128-level limit and
+statement recovery. One indentation warning was fixed before a clean,
+one-worker rebuild. No overflow reproduction, assembler, linker or generated
+Landin executable ran. Logs are retained in `.scratch/r491-call-depth/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Erased-table closure validation J33 is next. J48 also requires an explicit
+static-selection collision rule: D146's existing uniqueness sentence is
+about erased dispatch, while D144 currently specifies table traversal order.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
