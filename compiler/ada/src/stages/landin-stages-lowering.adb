@@ -2352,10 +2352,6 @@ package body Landin.Stages.Lowering is
       is
          Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
       begin
-         if Roots_At_An_Aggregate_Alias (Of_Tree, Node) then
-            return Aliases
-              (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root))).Source;
-         end if;
          return Storage_For (Of_Tree, Root);
       end Rooted_Storage;
 
@@ -2418,20 +2414,6 @@ package body Landin.Stages.Lowering is
       is
          Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
       begin
-         if Roots_At_An_Aggregate_Alias (Of_Tree, Node) then
-            declare
-               Alias : Payload_Alias renames Aliases
-                 (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root)));
-            begin
-               if Alias.Which = 0 then
-                  return Chain_All_Steps (Of_Tree, Node);
-               end if;
-               return Payload_Steps
-                 (Alias_Steps (Of_Tree, Alias), Positive (Alias.Which),
-                  Positive (Alias.Payload_Field))
-                 & Chain_All_Steps (Of_Tree, Node);
-            end;
-         end if;
          if Syn.Kind (Of_Tree, Root) = Syn.Name_Reference
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Root) = Res.Bound
            and then Aliases
@@ -4418,7 +4400,6 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
                   elsif Has_Runtime_After (Written)
-                    and then Parameter.Convention /= Syn.Inout_Convention
                     and then Type_At (Of_Tree, Argument)
                                in Ty.Aggregate | Ty.Fixed_Array
                   then
@@ -6969,70 +6950,8 @@ package body Landin.Stages.Lowering is
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
             when Syn.Element_Index =>
-               if Has_Reference_Storage (Of_Tree, Node)
-                 and then Type_At
-                   (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Ty.Fixed_Array
-               then
-                  declare
-                     Place : constant Stored_Place :=
-                       Lower_Stored_Place (Of_Tree, Node, Scope);
-                  begin
-                     if Current = IR.No_Block then
-                        return IR.No_Value;
-                     end if;
-                     declare
-                        Address : constant IR.Value_Id :=
-                          (if Place.Base = 0 and then Place.Steps.Is_Empty
-                           then IR.Emit_Load
-                             (Unit.all, Filling, Place.Place.Address, Site)
-                           else IR.Emit_Storage_Address
-                             (Unit.all, Filling, Place.Place, Site,
-                              Field => Place.Base,
-                              Nested => Stored_Steps (Place)));
-                     begin
-                        return IR.Emit_Load_Indirect
-                          (Unit.all, Filling, Address,
-                           Scalar_At (Of_Tree, Node), Site);
-                     end;
-                  end;
-               end if;
-
-               if Type_At
-                    (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Ty.Slice_Value
-               then
-                  declare
-                     Parts : constant Slice_Values := Lower_Slice
-                       (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
-                     Saved_Base : constant IR.Slot_Id := IR.Add_Slot
-                       (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
-                     Saved_Length : constant IR.Slot_Id := IR.Add_Slot
-                       (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
-                  begin
-                     IR.Emit_Store
-                       (Unit.all, Filling, Saved_Base, Parts.Base, Site);
-                     IR.Emit_Store
-                       (Unit.all, Filling, Saved_Length, Parts.Length, Site);
-                     declare
-                        Index : constant IR.Value_Id := Lower_Expression
-                          (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
-                        Base : constant IR.Value_Id := IR.Emit_Load
-                          (Unit.all, Filling, Saved_Base, Site);
-                        Length : constant IR.Value_Id := IR.Emit_Load
-                          (Unit.all, Filling, Saved_Length, Site);
-                        Address : constant IR.Value_Id :=
-                          IR.Emit_Slice_Address
-                            (Unit.all, Filling, Base, Length, Index, Index,
-                             Slice_Shape
-                               (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
-                             True, Site);
-                     begin
-                        return IR.Emit_Load_Indirect
-                          (Unit.all, Filling, Address,
-                           Scalar_At (Of_Tree, Node), Site);
-                     end;
-                  end;
-               end if;
-
+               --  Slice indexes and reference-backed array indexes have
+               --  already used the complete stored-place path above.
                --  [0570]'s element of [1740]'s module array or [1810]'s
                --  local array.  A known position stays the compact static
                --  part operation; every other `usize` is an operand the
@@ -13106,11 +13025,10 @@ package body Landin.Stages.Lowering is
          Filling := IR.Item_For (Unit.all, Id);
          Slots := No_Slots;
 
-         --  Aggregate state has no runtime-producing value.  D10 zeroes a
-         --  struct, while R2.20 has proved that every direct-name module array
-         --  image chain terminates at a D10-zeroed array.  Each declaration
-         --  still owns a distinct datum whose storage is described by the
-         --  fields or shape the item was given, so its block carries no value.
+         --  Aggregate state has no runtime-producing value. Static image
+         --  resolution owns both explicit and loader-zeroed images. Each
+         --  declaration has distinct storage with its complete shape, so
+         --  its block carries no value.
          if Held in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
               | Ty.Any_Value
          then
@@ -13193,17 +13111,10 @@ package body Landin.Stages.Lowering is
          elsif Value = Syn.No_Node
            or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
          then
-            --  D10: a binding with no value holds zero, false for a bool.
-            --  D39's contextual scalar `zeroed` is exactly that existing
-            --  scalar IR, not a separately evaluated expression.
-            if Held = Ty.Bool then
-               Answer :=
-                 IR.Emit_Truth (Unit.all, Filling, False, Site);
-            else
-               Answer :=
-                 IR.Emit_Number
-                   (Unit.all, Filling, Held, 0, False, Site);
-            end if;
+            --  D10/D39: omitted and explicit scalar zero initializers use
+            --  the same value. Booleans already took the static-image path.
+            Answer :=
+              IR.Emit_Number (Unit.all, Filling, Held, 0, False, Site);
          else
             Answer := Lower_Expression (Of_Tree, Value, Res.Program_Scope);
          end if;
@@ -16362,93 +16273,6 @@ package body Landin.Stages.Lowering is
             end;
          end Set_Image_From_Struct_Literal;
 
-         procedure Set_Image_From_Struct_Field
-           (Id        : Res.Declaration_Id;
-            Of_Tree   : Syn.Tree;
-            Selection : Syn.Node_Id);
-
-         procedure Set_Image_From_Struct_Field
-           (Id        : Res.Declaration_Id;
-            Of_Tree   : Syn.Tree;
-            Selection : Syn.Node_Id)
-         is
-            From : constant Syn.Node_Id :=
-              Syn.Target_Of (Of_Tree, Selection);
-            Source_Id : constant Res.Declaration_Id :=
-              Res.Bound_To (Meanings.all, Of_Tree, From);
-            Field : constant Positive :=
-              Positive
-                (Landin.Checking.Field_Index
-                   (Types.all, Of_Tree, Selection));
-         begin
-            --  D70 resolves the containing aggregate first.  An absent
-            --  aggregate image is the complete zero image, so its field and
-            --  the destination array both remain absent loader-zeroed data.
-            Resolve_Image (Source_Id);
-            if not Made (Source_Id) then
-               return;
-            end if;
-
-            declare
-               Source_Item : constant IR.Item_Id :=
-                 IR.Item_For (Unit.all, Source_Id);
-               Image : constant IR.Aggregate_Field_Image :=
-                 IR.Field_Image_Of (Unit.all, Source_Item, Field);
-               Destination : constant IR.Item_Id :=
-                 IR.Item_For (Unit.all, Id);
-            begin
-               case Image.Form is
-                  when IR.Absent =>
-                     null;
-
-                  when IR.Finite =>
-                     if Image.Count = 0 then
-                        return;
-                     end if;
-
-                     declare
-                        Values : Ty.Folded_Array (1 .. Image.Count) :=
-                          [others => 0];
-                     begin
-                        for Position in Values'Range loop
-                           Values (Position) :=
-                             IR.Nth_Field_Element
-                               (Unit.all, Source_Item, Field,
-                                IR.Part_Position (Position));
-                        end loop;
-                        IR.Set_Array_Image
-                          (Unit.all, Destination, Values);
-                     end;
-                     Made (Id) := True;
-
-                  when IR.Repeated =>
-                     IR.Set_Repeated_Array_Image
-                       (Unit.all, Destination, Image.Value);
-                     Made (Id) := True;
-
-                  when IR.Hybrid =>
-                     declare
-                        Prefix : Ty.Folded_Array (1 .. Image.Count) :=
-                          [others => 0];
-                     begin
-                        for Position in Prefix'Range loop
-                           Prefix (Position) :=
-                             IR.Nth_Field_Element
-                               (Unit.all, Source_Item, Field,
-                                IR.Part_Position (Position));
-                        end loop;
-                        IR.Set_Hybrid_Array_Image
-                          (Unit.all, Destination, Prefix, Image.Value);
-                     end;
-                     Made (Id) := True;
-
-                  when IR.Selected | IR.Nested | IR.Element_Sequence =>
-                     raise Landin.Compiler_Defect with
-                       "a non-array field was used as an array image";
-               end case;
-            end;
-         end Set_Image_From_Struct_Field;
-
          procedure Copy_Image_From
            (Destination : Res.Declaration_Id;
             Source_Id   : Res.Declaration_Id);
@@ -16977,9 +16801,6 @@ package body Landin.Stages.Lowering is
                     = Syn.Mixed_Array_Repetition
             then
                Set_Image_From_Mixed_Repetition (Id, Their_Tree.all, Value);
-            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Member_Selection
-            then
-               Set_Image_From_Struct_Field (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of
                          (Meanings.all, Their_Tree.all, Value) = Res.Bound
