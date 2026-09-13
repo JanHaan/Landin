@@ -1964,6 +1964,101 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("widget: type = concept (t: type) bad: () -> (n: i32) size: "
+            & "(self: ptr t) -> (n: i32) end widget bad_i32: () -> (n: i32) = "
+            & "1 end bad_i32 size_i32: (self: ptr i32) -> (n: i32) = 2 end "
+            & "size_i32 i32 is widget (bad: bad_i32, size: size_i32) f: "
+            & "(items: []any widget) -> (n: i32) = items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (value: ptr t) -> (n: "
+            & "i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
+            & "(value: ptr i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: "
+            & "ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: "
+            & "bad_i32, size: size_i32) f: (items: []any widget) "
+            & "-> (n: i32) = "
+            & "items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (inout self: ptr t) -> "
+            & "(n: i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
+            & "(inout self: ptr i32) -> (n: i32) = 1 end bad_i32 size_i32: "
+            & "(self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget "
+            & "(bad: bad_i32, size: size_i32) f: (items: []any widget) -> (n: "
+            & "i32) = items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (self: ptr ptr t) -> (n: "
+            & "i32) size: (self: ptr t) -> (n: i32) end widget "
+            & "bad_i32: (self: "
+            & "ptr ptr i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr "
+            & "i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, "
+            & "size: size_i32) f: (items: []any widget) -> (n: i32) = "
+            & "items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (self: ptr t, other: t) "
+            & "-> (n: i32) size: (self: ptr t) -> (n: i32) end "
+            & "widget bad_i32: "
+            & "(self: ptr i32, other: i32) -> (n: i32) = 1 end bad_i32 "
+            & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
+            & "widget (bad: bad_i32, size: size_i32) f: (items: []any widget) "
+            & "-> (n: i32) = items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (self: ptr t) -> (n: t) "
+            & "size: (self: ptr t) -> (n: i32) end widget bad_i32: (self: ptr "
+            & "i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr i32) -> "
+            & "(n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, size: "
+            & "size_i32) f: (items: []any widget) -> (n: i32) = "
+            & "items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type)  draw: (l: t, r: t) -> (n: "
+            & "bool)  size: (self: ptr t) -> (n: i32) end widget "
+            & "thing: type = "
+            & "struct value: i32 end thing td: (l: thing, r: thing) -> (n: "
+            & "bool) = n = true end td ts: (self: ptr thing) -> "
+            & "(n: i32) = n = "
+            & "2 end ts thing is widget (draw: td, size: ts) use: (items: "
+            & "[]any widget) -> (n: i32) = n = items[0].size() end use",
+            "L0301", 1, Executable);
+         Check
+           ("parent: type = concept (t: type) bad: (value: t) -> (n: i32) "
+            & "end parent widget: type = concept (t: type) is parent size: "
+            & "(self: ptr t) -> (n: i32) end widget bad_i32: (value: i32) -> "
+            & "(n: i32) = value end bad_i32 i32 is parent (bad: bad_i32) "
+            & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
+            & "widget (size: size_i32) f: (items: []any widget) -> (n: i32) = "
+            & "items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("parent: type = concept (t: type) bad: (value: t) -> (n: i32) "
+            & "end parent widget: type = concept (t: type is parent) size: "
+            & "(self: ptr t) -> (n: i32) end widget bad_i32: (value: i32) -> "
+            & "(n: i32) = value end bad_i32 i32 is parent (bad: bad_i32) "
+            & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
+            & "widget (size: size_i32) f: (items: []any widget) -> (n: i32) = "
+            & "items[0].size() end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (left: t, right: t) -> "
+            & "(n: i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
+            & "(left: i32, right: i32) -> (n: i32) = 1 end bad_i32 size_i32: "
+            & "(self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget "
+            & "(bad: bad_i32, size: size_i32) f: () -> none = item: i32 = 1 "
+            & "erased: any widget = any(addr item) end f",
+            "L0301", 1, Executable);
+         Check
+           ("widget: type = concept (t: type) bad: (self: ptr mut t) -> (n: "
+            & "i32) size: (self: ptr t) -> (n: i32) end widget "
+            & "bad_i32: (self: "
+            & "ptr mut i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr "
+            & "i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, "
+            & "size: size_i32) f: () -> none = item: i32 = 1 erased: any "
+            & "widget = any(addr item) end f",
+            "L0301", 1, Executable);
+         Check
            ("f: (flag: bool) -> none = while flag do mark: i32 = 1 "
             & "continue complete _ = mark end while end f" & ASCII.LF,
             "L0201", 1, Executable);

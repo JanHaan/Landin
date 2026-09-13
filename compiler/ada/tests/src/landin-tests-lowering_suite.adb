@@ -11533,8 +11533,121 @@ package body Landin.Tests.Lowering_Suite is
          & "complete end complete end f" & LF);
    end Completion_Blocks_Keep_Their_Scopes;
 
+   procedure Erased_Tables_Validate_Their_Closure
+     (Item : in out Landin.Testing.Context);
+
+   procedure Erased_Tables_Validate_Their_Closure
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Tables, Entries : Natural);
+
+      procedure Check_Source
+        (Label, Text : String; Tables, Entries : Natural)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Erased, Members : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " accepts only the required table closure");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            begin
+               for Position in 1 .. IR.Evidence_Count (Unit) loop
+                  if IR.Evidence_Is_Erased (Unit, IR.Evidence_Id (Position))
+                  then
+                     Erased := Erased + 1;
+                     Members := Members + IR.Evidence_Entry_Count
+                       (Unit, IR.Evidence_Id (Position));
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Erased, Tables,
+                  Label & " materializes only demanded erased tables");
+               Landin.Testing.Check_Equal
+                 (Item, Members, Entries,
+                  Label & " retains every distinct closure entry");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " preserves erased dispatch signatures");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("safe sibling",
+         "widget: type = concept (t: type) bad: (self: ptr t) -> (n: i32) "
+         & "size: (self: ptr t) -> (n: i32) end widget bad_i32: (self: ptr "
+         & "i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr i32) -> "
+         & "(n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, size: "
+         & "size_i32) f: (items: []any widget) -> (n: i32) = items[0].size() "
+         & "end f",
+         1, 2);
+      Check_Source
+        ("unused unsafe transport",
+         "widget: type = concept (t: type) bad: (left: t, right: t) -> (n: "
+         & "i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: (left: "
+         & "i32, right: i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: "
+         & "ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: "
+         & "bad_i32, size: size_i32) f: (value: any widget) -> (r: any "
+         & "widget from value) = value end f",
+         0, 0);
+      Check_Source
+        ("ordinary provider",
+         "widget: type = concept (t: type) bad: (left: t, right: t) -> (n: "
+         & "i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: (left: "
+         & "i32, right: i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: "
+         & "ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: "
+         & "bad_i32, size: size_i32) f: () -> (n: i32) = bad_i32(1, 2) end f",
+         0, 0);
+      Check_Source
+        ("safe construction",
+         "widget: type = concept (t: type) bad: (self: ptr t) -> (n: i32) "
+         & "size: (self: ptr t) -> (n: i32) end widget bad_i32: (self: ptr "
+         & "i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr i32) -> "
+         & "(n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, size: "
+         & "size_i32) f: () -> (n: i32) = item: i32 = 1 erased: any widget = "
+         & "any(addr item) erased.size() end f",
+         1, 2);
+      Check_Source
+        ("mutable construction",
+         "widget: type = concept (t: type) bad: (self: ptr mut t) -> (n: "
+         & "i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: (self: "
+         & "ptr mut i32) -> (n: i32) = 1 end bad_i32 size_i32: (self: ptr "
+         & "i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, "
+         & "size: size_i32) f: () -> (n: i32) = mut item: i32 = 1 erased: "
+         & "any widget = any(addr item) erased.size() end f",
+         1, 2);
+      Check_Source
+        ("safe inherited table",
+         "parent: type = concept (t: type) read: (self: ptr t) -> (n: i32) "
+         & "end parent read_i32: (self: ptr i32) -> (n: i32) = 1 end "
+         & "read_i32 i32 is parent (read: read_i32) widget: type = concept "
+         & "(t: type) is parent size: (self: ptr t) -> (n: i32) end widget "
+         & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
+         & "widget (size: size_i32) f: (items: []any widget) -> (n: i32) = "
+         & "items[0].size() end f",
+         1, 2);
+   end Erased_Tables_Validate_Their_Closure;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "erased tables validate their closure",
+         Erased_Tables_Validate_Their_Closure'Access);
       Landin.Testing.Register
         (Into, "lowering", "completion blocks keep their scopes",
          Completion_Blocks_Keep_Their_Scopes'Access);

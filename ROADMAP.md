@@ -5830,7 +5830,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Repaired: slice-bearing struct images use the existing complete descriptor builder; the verifier selects its recursive checker when any descriptor carries a slice. Direct, named, member, nested, empty and variant slice images retain backing targets, offsets, lengths, element shapes and tags on 32/64-bit targets. Explicit malformed descriptors retain bounds/shape refusals. This also repairs the valid variant slice literal found during K1. |
 | J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Repaired: omitted module pointer/cstring initializers report L0301 at the checker boundary, applying the existing no-all-zero-reference rule. Explicit pointer addresses and cstrings remain accepted, as do local references assigned before use. Driver checks prove no output or tool invocation. |
 | J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Repaired with J31: omitted module slice/utf8/utf16 initializers report L0301 before image lowering. Explicit empty slices retain their non-null base; explicit text, aliases and mutable-slice controls preserve the existing zeroability rule. |
-| J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
+| J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Implemented: selection validates every distinct closure entry before recording erased evidence, sharing construction's object-safety predicate and retaining pointer-permission checks. Safe tables and unused any transport remain accepted; exact acceptance remains open. |
 | J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Repaired: empty-variant recovery cannot consume the enclosing struct's own closer. A real case still establishes a variant part, including one sharing the struct's name. Earlier/later scalar aliases and an aggregate user type retain ordinary field selection and measurement; empty and mismatched parts retain their diagnostics. |
 | J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Repaired: nested control scopes and delimited expressions save and restore enclosing arm context. Loops, blocks, matches, anonymous bodies, nested else arms, arguments, literals, conversions and selected bounds keep their own call recovery. A direct then/elsif arm still owns its else; parentheses retain explicit recovery priority. |
@@ -6502,7 +6502,23 @@ one-worker rebuild. No overflow reproduction, assembler, linker or generated
 Landin executable ran. Logs are retained in `.scratch/r491-call-depth/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Erased-table closure validation J33 is next. J48 also requires an explicit
+J33 development evidence: four selected cases pass 1,066 checks in each of
+macOS debug and Linux release. A tiny compile-only version of the reported
+aggregate-sibling source still exited 70 before the repair. Eleven refused
+sources now extend driver refusal/output checks to 1,008, covering absent,
+misnamed, inout and nested receivers, hidden represented arguments/results,
+parent and represented-formal constraints, and construction permissions. Six
+accepted sources retain safe sibling and inherited tables, mutable and
+read-only construction, ordinary providers and unused unsafe-any transport.
+IR checks pin erased table and entry counts and verify both target widths.
+The two existing object-safety/readonly negative fixtures pass. Builds use
+one worker and selected tests have 30-second or shorter timeouts. No assembler,
+linker or generated Landin executable ran. Logs are retained in
+`.scratch/r491-erased-closure/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Control-value range constraints J56 are next; J116's slice-endpoint claim
+still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
 Keep J2's call-return contract question active. K12 needs a semantic

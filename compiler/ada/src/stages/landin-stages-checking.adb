@@ -12929,6 +12929,92 @@ package body Landin.Stages.Checking is
          return True;
       end Provider_Preserves_Concept_Labels;
 
+      function Entry_Is_Object_Safe
+        (Concept_Tree : Syn.Tree;
+         Entry_Node   : Syn.Node_Id;
+         Formal       : Res.Declaration_Id) return Boolean;
+
+      function Entry_Is_Object_Safe
+        (Concept_Tree : Syn.Tree;
+         Entry_Node   : Syn.Node_Id;
+         Formal       : Res.Declaration_Id) return Boolean
+      is
+         Safe : Boolean := True;
+
+         function Uses_Formal (Node : Syn.Node_Id) return Boolean;
+
+         function Uses_Formal (Node : Syn.Node_Id) return Boolean is
+         begin
+            if Node = Syn.No_Node then
+               return False;
+            end if;
+            if Syn.Kind (Concept_Tree, Node)
+                 in Syn.Type_Reference | Syn.Name_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Concept_Tree, Node) = Res.Bound
+              and then Res.Bound_To
+                (Meanings.all, Concept_Tree, Node) = Formal
+            then
+               return True;
+            end if;
+            for Slot in 1 .. Syn.Slot_Count (Concept_Tree, Node) loop
+               if Uses_Formal
+                 (Syn.Slot (Concept_Tree, Node, Slot))
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Uses_Formal;
+      begin
+         if Syn.Parameter_Count (Concept_Tree, Entry_Node) = 0 then
+            Safe := False;
+         else
+            declare
+               Self : constant Syn.Node_Id := Syn.Nth_Parameter
+                 (Concept_Tree, Entry_Node, 1);
+               Self_Type : constant Syn.Node_Id :=
+                 Syn.Declared_Type (Concept_Tree, Self);
+            begin
+               Safe := Spelled (Syn.Name (Concept_Tree, Self)) = "self"
+                 and then Semantic_Convention (Concept_Tree, Self)
+                   = Syn.Implicit_In
+                 and then Syn.Kind (Concept_Tree, Self_Type)
+                   = Syn.Pointer_Type
+                 and then Syn.Kind
+                   (Concept_Tree,
+                    Syn.Referenced_Type (Concept_Tree, Self_Type))
+                      in Syn.Type_Reference | Syn.Name_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Concept_Tree,
+                    Syn.Referenced_Type (Concept_Tree, Self_Type))
+                      = Res.Bound
+                 and then Res.Bound_To
+                   (Meanings.all, Concept_Tree,
+                    Syn.Referenced_Type (Concept_Tree, Self_Type))
+                      = Formal;
+            end;
+         end if;
+         for Parameter in 2 .. Syn.Parameter_Count
+           (Concept_Tree, Entry_Node)
+         loop
+            Safe := Safe and then not Uses_Formal
+              (Syn.Declared_Type
+                 (Concept_Tree,
+                  Syn.Nth_Parameter
+                    (Concept_Tree, Entry_Node, Parameter)));
+         end loop;
+         for Result in 1 .. Syn.Return_Count
+           (Concept_Tree, Entry_Node)
+         loop
+            Safe := Safe and then not Uses_Formal
+              (Syn.Declared_Type
+                 (Concept_Tree,
+                  Syn.Nth_Return (Concept_Tree, Entry_Node, Result)));
+         end loop;
+         return Safe;
+      end Entry_Is_Object_Safe;
+
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -12945,6 +13031,9 @@ package body Landin.Stages.Checking is
          Flat_Entry : Natural := 0;
          Cursor : Natural := 0;
          Matches : Natural := 0;
+         Unsafe_Concept : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
+         Unsafe_Entry : Natural := 0;
          Seen : array
            (1 .. Positive'Max (1, Landin.Checking.Concept_Count (Types.all)))
            of Boolean := [others => False];
@@ -12981,6 +13070,19 @@ package body Landin.Stages.Checking is
                  (Concept_Tree.all, Concept_Node)
                loop
                   Cursor := Cursor + 1;
+                  if Unsafe_Concept = Landin.Checking.No_Concept
+                    and then not Entry_Is_Object_Safe
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, Position),
+                       Declaration_At
+                         (Syn.Source_Of (Concept_Tree.all),
+                          Syn.Nth_Concept_Formal
+                            (Concept_Tree.all, Concept_Node, 1)))
+                  then
+                     Unsafe_Concept := Concept;
+                     Unsafe_Entry := Position;
+                  end if;
                   if Syn.Name
                     (Concept_Tree.all,
                      Syn.Nth_Concept_Entry
@@ -13079,108 +13181,33 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Signature;
          end if;
 
-         declare
-            Declaration : constant Res.Declaration_Id :=
-              Landin.Checking.Concept_Declaration (Types.all, Declaring);
-            Concept_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Declaration));
-            Concept_Node : constant Syn.Node_Id :=
-              Res.Node_Of (Meanings.all, Declaration);
-            Represented : constant Syn.Node_Id := Syn.Nth_Concept_Formal
-              (Concept_Tree.all, Concept_Node, 1);
-            Formal : constant Res.Declaration_Id := Declaration_At
-              (Syn.Source_Of (Concept_Tree.all), Represented);
-            Entry_Node : constant Syn.Node_Id := Syn.Nth_Concept_Entry
-              (Concept_Tree.all, Concept_Node, Positive (Direct_Entry));
-            Safe : Boolean := True;
-
-            function Uses_Formal (Node : Syn.Node_Id) return Boolean;
-
-            function Uses_Formal (Node : Syn.Node_Id) return Boolean is
+         if Unsafe_Concept /= Landin.Checking.No_Concept then
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration
+                   (Types.all, Unsafe_Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Entry_Node : constant Syn.Node_Id := Syn.Nth_Concept_Entry
+                 (Concept_Tree.all, Res.Node_Of (Meanings.all, Declaration),
+                  Positive (Unsafe_Entry));
             begin
-               if Node = Syn.No_Node then
-                  return False;
-               end if;
-               if Syn.Kind (Concept_Tree.all, Node)
-                    in Syn.Type_Reference | Syn.Name_Reference
-                 and then Res.Verdict_Of
-                   (Meanings.all, Concept_Tree.all, Node) = Res.Bound
-                 and then Res.Bound_To
-                   (Meanings.all, Concept_Tree.all, Node) = Formal
-               then
-                  return True;
-               end if;
-               for Slot in 1 .. Syn.Slot_Count (Concept_Tree.all, Node) loop
-                  if Uses_Formal
-                    (Syn.Slot (Concept_Tree.all, Node, Slot))
-                  then
-                     return True;
-                  end if;
-               end loop;
-               return False;
-            end Uses_Formal;
-         begin
-            if Syn.Parameter_Count (Concept_Tree.all, Entry_Node) = 0 then
-               Safe := False;
-            else
-               declare
-                  Self : constant Syn.Node_Id := Syn.Nth_Parameter
-                    (Concept_Tree.all, Entry_Node, 1);
-                  Self_Type : constant Syn.Node_Id :=
-                    Syn.Declared_Type (Concept_Tree.all, Self);
-               begin
-                  Safe := Spelled (Syn.Name (Concept_Tree.all, Self)) = "self"
-                    and then Semantic_Convention (Concept_Tree.all, Self)
-                      = Syn.Implicit_In
-                    and then Syn.Kind (Concept_Tree.all, Self_Type)
-                      = Syn.Pointer_Type
-                    and then Syn.Kind
-                      (Concept_Tree.all,
-                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
-                         in Syn.Type_Reference | Syn.Name_Reference
-                    and then Res.Verdict_Of
-                      (Meanings.all, Concept_Tree.all,
-                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
-                         = Res.Bound
-                    and then Res.Bound_To
-                      (Meanings.all, Concept_Tree.all,
-                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
-                         = Formal;
-               end;
-            end if;
-            for Parameter in 2 .. Syn.Parameter_Count
-              (Concept_Tree.all, Entry_Node)
-            loop
-               Safe := Safe and then not Uses_Formal
-                 (Syn.Declared_Type
-                    (Concept_Tree.all,
-                     Syn.Nth_Parameter
-                       (Concept_Tree.all, Entry_Node, Parameter)));
-            end loop;
-            for Result in 1 .. Syn.Return_Count
-              (Concept_Tree.all, Entry_Node)
-            loop
-               Safe := Safe and then not Uses_Formal
-                 (Syn.Declared_Type
-                    (Concept_Tree.all,
-                     Syn.Nth_Return (Concept_Tree.all, Entry_Node, Result)));
-            end loop;
-            if not Safe then
                Bad.Report
                  (Item => Bad.Type_Mismatch,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Selection),
                   Message => "this concept entry has no object-safe erased"
                              & " self signature",
-                  Note => "D146: first `self` is an input `ptr [mut] T` and"
-                          & " hidden T appears nowhere else",
+                  Note => "D146: every entry required by the erased table"
+                          & " needs input `self: ptr [mut] T`, with hidden"
+                          & " T nowhere else",
                   Related => Syn.Origin (Concept_Tree.all, Entry_Node),
-                  Because => "the selected concept entry",
+                  Because => "an entry required by the erased table",
                   Into => Found);
                Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
                return Landin.Checking.No_Signature;
-            end if;
-         end;
+            end;
+         end if;
 
          for Position in 1 .. Landin.Checking.Conformance_Count
            (Types.all)
@@ -24816,40 +24843,6 @@ package body Landin.Stages.Checking is
                                      (Syn.Source_Of (Concept_Tree.all),
                                       Represented);
 
-                                 function Uses_Formal
-                                   (Node : Syn.Node_Id) return Boolean;
-
-                                 function Uses_Formal
-                                   (Node : Syn.Node_Id) return Boolean is
-                                 begin
-                                    if Node = Syn.No_Node then
-                                       return False;
-                                    end if;
-                                    if Syn.Kind (Concept_Tree.all, Node)
-                                      in Syn.Type_Reference
-                                         | Syn.Name_Reference
-                                      and then Res.Verdict_Of
-                                        (Meanings.all, Concept_Tree.all, Node)
-                                          = Res.Bound
-                                      and then Res.Bound_To
-                                        (Meanings.all, Concept_Tree.all, Node)
-                                          = Formal
-                                    then
-                                       return True;
-                                    end if;
-                                    for Slot in 1 .. Syn.Slot_Count
-                                      (Concept_Tree.all, Node)
-                                    loop
-                                       if Uses_Formal
-                                         (Syn.Slot
-                                            (Concept_Tree.all, Node, Slot))
-                                       then
-                                          return True;
-                                       end if;
-                                    end loop;
-                                    return False;
-                                 end Uses_Formal;
-
                                  function Add_Parent
                                    (Reference : Syn.Node_Id) return Boolean;
 
@@ -24895,88 +24888,29 @@ package body Landin.Stages.Checking is
                                            (Concept_Tree.all, Concept_Node,
                                             Which);
                                     begin
-                                       if Syn.Parameter_Count
-                                            (Concept_Tree.all, Entry_Node) = 0
+                                       if not Entry_Is_Object_Safe
+                                         (Concept_Tree.all, Entry_Node,
+                                          Formal)
                                        then
                                           return False;
                                        end if;
                                        declare
-                                          Self : constant Syn.Node_Id :=
-                                            Syn.Nth_Parameter
-                                              (Concept_Tree.all, Entry_Node,
-                                               1);
                                           Self_Type : constant Syn.Node_Id :=
                                             Syn.Declared_Type
-                                              (Concept_Tree.all, Self);
-                                       begin
-                                          if Spelled
-                                               (Syn.Name
-                                                  (Concept_Tree.all, Self))
-                                               /= "self"
-                                            or else Syn.Kind
-                                              (Concept_Tree.all, Self_Type)
-                                                /= Syn.Pointer_Type
-                                            or else Semantic_Convention
-                                              (Concept_Tree.all, Self)
-                                                /= Syn.Implicit_In
-                                            or else Syn.Kind
                                               (Concept_Tree.all,
-                                               Syn.Referenced_Type
+                                               Syn.Nth_Parameter
                                                  (Concept_Tree.all,
-                                                  Self_Type))
-                                                not in Syn.Type_Reference
-                                                   | Syn.Name_Reference
-                                            or else Res.Verdict_Of
-                                              (Meanings.all,
-                                               Concept_Tree.all,
-                                               Syn.Referenced_Type
-                                                 (Concept_Tree.all,
-                                                  Self_Type))
-                                                /= Res.Bound
-                                            or else Res.Bound_To
-                                              (Meanings.all,
-                                               Concept_Tree.all,
-                                               Syn.Referenced_Type
-                                                 (Concept_Tree.all,
-                                                  Self_Type)) /= Formal
-                                            or else
-                                              (Syn.Is_Referent_Mutable
-                                                 (Concept_Tree.all, Self_Type)
-                                               and then not Landin.Checking
-                                                 .Descriptor_Of
-                                                   (Types.all, Pointer)
-                                                 .Mutable)
+                                                  Entry_Node, 1));
+                                       begin
+                                          if Syn.Is_Referent_Mutable
+                                            (Concept_Tree.all, Self_Type)
+                                            and then not Landin.Checking
+                                              .Descriptor_Of
+                                                (Types.all, Pointer).Mutable
                                           then
                                              return False;
                                           end if;
                                        end;
-                                       for Parameter in
-                                         2 .. Syn.Parameter_Count
-                                           (Concept_Tree.all, Entry_Node)
-                                       loop
-                                          if Uses_Formal
-                                            (Syn.Declared_Type
-                                               (Concept_Tree.all,
-                                                Syn.Nth_Parameter
-                                                  (Concept_Tree.all,
-                                                   Entry_Node, Parameter)))
-                                          then
-                                             return False;
-                                          end if;
-                                       end loop;
-                                       for Result in 1 .. Syn.Return_Count
-                                         (Concept_Tree.all, Entry_Node)
-                                       loop
-                                          if Uses_Formal
-                                            (Syn.Declared_Type
-                                               (Concept_Tree.all,
-                                                Syn.Nth_Return
-                                                  (Concept_Tree.all,
-                                                   Entry_Node, Result)))
-                                          then
-                                             return False;
-                                          end if;
-                                       end loop;
                                     end;
                                  end loop;
                                  declare
