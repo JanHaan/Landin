@@ -5801,7 +5801,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Repaired: labelled statements use the same flow dispatch as positional calls, including ordered runtime arguments, sink consumption and recovery. Paired initialized/unassigned and sink controls pass in both modes; driver refusals have no output/tool effects. |
 | J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Body-local joins repaired: retain independent external destinations and check every possible parameter destination before granting a store exemption. Nineteen paired controls pass in both modes, including local-only, same-origin, escaping and explicit untracked cases. The additional call-return destination-summary question below remains open; this repair does not infer callee bodies. |
 | J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
-| J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
+| J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Repaired: Lower_Slice evaluates the stored access path once and captures a reached runtime descriptor before either carrier load. Component loading consumes that retained place. Tiny struct/array slice, index, traversal and text controls retain one side-effecting index call; terminating paths retain their existing guard. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Repaired: a struct checks its immediate end and optional repeated name, preserving later declarations instead of scanning for a distant matching closer. Missing ends and mismatched names report at the current boundary. Field-type refusal retains its existing recovery and diagnostic without a second missing-end report. |
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
 | J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
@@ -6421,7 +6421,20 @@ shorter timeouts. No assembler, linker or generated Landin executable ran.
 Logs are retained in `.scratch/r491-struct-closers/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Slice descriptor evaluation J4 is next.
+J4 development evidence: two selected cases pass 156 checks in each of
+macOS debug and Linux release. Six tiny sources cover slicing and indexing a
+struct slice field, traversing it, indexing an array of slices, ordinary slice
+copy and text slicing. Each retains exactly one call to the side-effecting
+index routine and verified storage/bounds operations on both target widths.
+The 120 existing continuation checks retain early returns from indexes,
+bounds and slice sources, with no later operations lowered after termination.
+The two descriptor loads share the captured stored place; simple module/frame
+fields keep direct identity loads. Builds use one worker and selected tests
+have 30-second or shorter timeouts. No assembler, linker or generated Landin
+executable ran. Logs are retained in `.scratch/r491-slice-evaluation/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Struct member-name uniqueness J47 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
