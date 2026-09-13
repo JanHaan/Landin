@@ -1,0 +1,9 @@
+level: type = u8 range 5 .. 10
+g: (t: type, ignored: t) -> (r: u8) =
+    value: level = 0
+    r = value
+end g
+f: () -> (r: u8) =
+    first: u8 = g(true)
+    r = g(1) + first
+end f

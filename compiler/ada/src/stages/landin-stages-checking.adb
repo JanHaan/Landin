@@ -8281,6 +8281,22 @@ package body Landin.Stages.Checking is
                Landin.Checking.Note
                  (Types.all, Template_Tree.all, Node, Descriptor.Kind);
             end if;
+            --  The base kind was substituted above, but a written range
+            --  name still carries its source constraint. Type_At may now
+            --  return the published kind without visiting that name again.
+            if Descriptor.Kind in Ty.Integer_Name then
+               declare
+                  Constraint : constant Landin.Checking.Constraint_Id :=
+                    Value_Constraint (Template_Tree.all, Node);
+               begin
+                  if Constraint /= Landin.Checking.No_Constraint then
+                     Landin.Checking.Note_Constraint
+                       (Types.all, Template_Tree.all, Node, Constraint);
+                     Landin.Checking.Note_Constraint
+                       (Types.all, Declaration, Constraint);
+                  end if;
+               end;
+            end if;
             case Descriptor.Kind is
                when Ty.Atom_Value =>
                   Landin.Checking.Note_Atom_Set
@@ -9727,6 +9743,11 @@ package body Landin.Stages.Checking is
                              (Template_Tree.all, Node);
                            Part.Caller := Syn.Is_Caller
                              (Template_Tree.all, Node);
+                        end if;
+                        if Descriptor.Kind in Ty.Integer_Name then
+                           Part.Constraint := Value_Constraint
+                             (Template_Tree.all,
+                              Syn.Declared_Type (Template_Tree.all, Node));
                         end if;
                         return Part;
                      end;

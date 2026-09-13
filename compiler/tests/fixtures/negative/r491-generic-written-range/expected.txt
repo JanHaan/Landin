@@ -1,0 +1,10 @@
+error[L0300]: this is 0, and the declared range is 5 .. 10
+  --> ../tests/fixtures/negative/r491-generic-written-range/main.ldn:3:20
+  |
+3 |     value: level = 0
+  |                    ^
+  --> ../tests/fixtures/negative/r491-generic-written-range/main.ldn:3:5
+  |
+3 |     value: level = 0
+  |     ^^^^^^^^^^^^^^^^ the type declared here
+  = note: [0660]: a range subtype is checked at every assignment and conversion into it
