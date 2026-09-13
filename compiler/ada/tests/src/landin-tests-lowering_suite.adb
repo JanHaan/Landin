@@ -10342,8 +10342,149 @@ package body Landin.Tests.Lowering_Suite is
          Inspect_Copy => True, Length => 0);
    end Module_Images_Preserve_Valid_Initialization;
 
+   procedure Scalar_Image_Leaves_Keep_Their_Bounds
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Image_Leaves_Keep_Their_Bounds
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Landin.Stages.Code (Work).all, Facts).Kind
+                   = IR.Verifier.Nothing_Wrong,
+               Label & " retains a valid bounded scalar image");
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("bool array",
+         "n: u8 = 1" & LF
+         & "flags: [2]bool = [bool(n), false]" & LF);
+      Check_Source
+        ("bool repetition",
+         "n: u8 = 1" & LF
+         & "flags: [2]bool = [2 of bool(n)]" & LF);
+      Check_Source
+        ("bool mixed repetition",
+         "n: u8 = 1" & LF
+         & "flags: [2]bool = [false, of bool(n)]" & LF);
+      Check_Source
+        ("bool field",
+         "n: u8 = 1" & LF
+         & "box: type = struct flag: bool end box" & LF
+         & "value: box = (flag: bool(n))" & LF);
+      Check_Source
+        ("bool constructor field",
+         "n: u8 = 1" & LF
+         & "box: type = struct flag: bool end box" & LF
+         & "value: box = box(flag: bool(n))" & LF);
+      Check_Source
+        ("bool variant payload",
+         "n: u8 = 1" & LF
+         & "choice: type = struct kind: variant empty | full: (flag: "
+         & "bool) end kind end choice" & LF
+         & "value: choice = (kind: full(flag: bool(n)))" & LF);
+      Check_Source
+        ("bool nested array",
+         "n: u8 = 1" & LF
+         & "flags: [2][2]bool = [[bool(n), false], [false, true]]" & LF);
+      Check_Source
+        ("bool struct array",
+         "n: u8 = 1" & LF
+         & "box: type = struct flag: bool end box" & LF
+         & "values: [2]box = [(flag: bool(n)), (flag: true)]" & LF);
+      Check_Source
+        ("distinct field",
+         "meter: type = distinct u8" & LF
+         & "n: u8 = 100" & LF
+         & "box: type = struct value: meter end box" & LF
+         & "image: box = (value: meter(n + 100))" & LF);
+      Check_Source
+        ("distinct struct array",
+         "meter: type = distinct u8" & LF
+         & "n: u8 = 100" & LF
+         & "box: type = struct value: meter end box" & LF
+         & "images: [2]box = [(value: meter(n + 100)), (value: "
+         & "meter(1))]" & LF);
+      Check_Source
+        ("distinct variant payload",
+         "meter: type = distinct u8" & LF
+         & "n: u8 = 100" & LF
+         & "choice: type = struct kind: variant empty | full: (value: "
+         & "meter) end kind end choice" & LF
+         & "image: choice = (kind: full(value: meter(n + 100)))" & LF);
+      Check_Source
+        ("bool value fill",
+         "n: u8 = 1" & LF
+         & "flags: type = struct first: bool second: bool end flags" & LF
+         & "image: flags = (first: true, of bool(n))" & LF);
+      Check_Source
+        ("distinct value fill",
+         "meter: type = distinct u8" & LF
+         & "n: u8 = 100" & LF
+         & "box: type = struct first: meter second: meter end box" & LF
+         & "image: box = (first: meter(1), of meter(n + 100))" & LF);
+      Check_Source
+        ("bool payload fill",
+         "n: u8 = 1" & LF
+         & "choice: type = struct kind: variant empty | full: (first: "
+         & "bool, second: bool) end kind end choice" & LF
+         & "image: choice = (kind: full(first: true, of bool(n)))" & LF);
+      Check_Source
+        ("bool false boundary",
+         "n: u8 = 0" & LF
+         & "flags: [2]bool = [bool(n), false]" & LF);
+      Check_Source
+        ("distinct upper boundary",
+         "meter: type = distinct u8" & LF
+         & "n: u8 = 155" & LF
+         & "box: type = struct value: meter end box" & LF
+         & "image: box = (value: meter(n + 100))" & LF);
+      Check_Source
+        ("one fill for multiple fields",
+         "n: u8 = 1" & LF
+         & "flags: type = struct first: bool second: bool third: bool "
+         & "end flags" & LF
+         & "image: flags = (first: true, of bool(n))" & LF);
+      Check_Source
+        ("array valued fill",
+         "n: u8 = 1" & LF
+         & "rows: type = struct first: [2]bool second: [2]bool end "
+         & "rows" & LF
+         & "image: rows = (first: [false, true], of [false, bool(n)])" & LF);
+      Check_Source
+        ("callback valued fill",
+         "handler: type = () -> (r: i32)" & LF
+         & "one: () -> (r: i32) = r = 1 end one" & LF
+         & "callbacks: type = struct first: handler second: handler "
+         & "end callbacks" & LF
+         & "image: callbacks = (first: one, of one)" & LF);
+   end Scalar_Image_Leaves_Keep_Their_Bounds;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "scalar image leaves keep their bounds",
+         Scalar_Image_Leaves_Keep_Their_Bounds'Access);
       Landin.Testing.Register
         (Into, "lowering", "module images preserve valid initialization",
          Module_Images_Preserve_Valid_Initialization'Access);

@@ -5854,8 +5854,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
 | J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
 | J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
-| J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
-| J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
+| J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Repaired: one scalar/recursive image-field walk includes bool bounds for array elements, ordinary fields, variant payload constructors and value fills. Invalid known bool carriers report L0300 before lowering; false/true boundaries and callback relocations remain valid. A shared fill is checked once even when several fields consume it. |
+| J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Repaired with J57: ordinary and variant aggregate fields use the same distinct-conversion recursion as array elements and distinct representations. Nested distinct overflow, including value fills, reports L0300; valid nominal images retain their identity and pass both modes. |
 | J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Repaired: scalar/text conversion identities are classified independently of arity, and a malformed conversion reports L0301 before indexing operands or lowering. Aliases and range subtypes keep the same rule; resolved user functions retain their own arities. Refused origin facts no longer manufacture a secondary from-clause mismatch. |
 | J60 | Two named returns where one names a struct whose field type failed to resolve: Layout_Size precondition failure loses the whole report | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
 | J61 | Slice_Address scales the slice lower bound with an unguarded imm32 `imulq`, so an element extent >= 2 GiB emits an unencodable instruction | C | Duplicate A7/M19/N6. Guard wide slice-stride operands; any later assembler check must satisfy the exact-file expansion and process limits below. |
@@ -6289,7 +6289,20 @@ most 30 seconds. No assembler, linker or generated Landin executable ran.
 Logs are retained in `.scratch/r491-module-images/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Boolean and distinct static-image validation J57/J58 is next.
+J57/J58 development evidence: five selected cases pass 753 checks in each of
+macOS debug and Linux release. Nineteen tiny accepted images run against both
+target widths; sixteen out-of-range sources extend the driver to 560 refusal/
+output checks. The first checks confirmed that payload constructors and `of`
+fills also bypassed folding. They now use the same recursive field walk as
+ordinary fields and array elements. Boolean boundaries, distinct upper bounds,
+shared fills, array-valued fills and callback-valued fills retain valid images;
+one bad shared fill reports once. Existing module-image, static slice and
+literal-overflow controls pass. Builds use one worker and selected tests have
+timeouts of at most 30 seconds. No assembler, linker or generated Landin
+executable ran. Logs are retained in `.scratch/r491-image-folds/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Measured atom/function type handling J54 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
