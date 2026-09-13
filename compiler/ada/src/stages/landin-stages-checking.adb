@@ -35,7 +35,6 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Text.Problem;
    use type Landin.Tokens.Assignment_Operator;
-   use type Landin.Targets.Byte_Count;
    use type Landin.Targets.C_ABI_Kind;
    use type Landin.Source.Span;
    use type Landin.Types.Type_Kind;
@@ -1604,6 +1603,23 @@ package body Landin.Stages.Checking is
          end case;
       end Note_Descriptor;
 
+      function Shape_Layout_Ready (Shape : Landin.Checking.Field_Shape)
+        return Boolean;
+
+      function Shape_Layout_Ready (Shape : Landin.Checking.Field_Shape)
+        return Boolean is
+      begin
+         case Shape.Kind is
+            when Landin.Checking.Aggregate_Field =>
+               return Landin.Checking.Has_Layout
+                 (Types.all, Shape.Nominal);
+            when Landin.Checking.Fixed_Array_Field =>
+               return Shape_Layout_Ready
+                 (Landin.Checking.Array_Field_Element (Types.all, Shape));
+            when others =>
+               return True;
+         end case;
+      end Shape_Layout_Ready;
       function Shape_Bytes
         (Shape : Landin.Checking.Field_Shape) return Ty.Magnitude
       is
@@ -5541,6 +5557,14 @@ package body Landin.Stages.Checking is
                       (Types.all, Element_Nominal));
                Length : Landin.Checking.Element_Count := 0;
             begin
+               if Held = Ty.Aggregate and then not Aggregate_Element
+                 and then Element_Nominal
+                   /= Landin.Checking.No_Nominal_Type
+               then
+                  --  The nominal's field refusal owns this missing layout.
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
+                  return Ty.Ill_Typed;
+               end if;
                if Held not in Ty.Scalar_Name
                  and then not Aggregate_Element
                  and then Held not in
@@ -6061,6 +6085,60 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
+      procedure Check_Result_Placement
+        (Results : Landin.Checking.Signature_Part_Array;
+         Site : Landin.Provenance.Origin;
+         Valid : in out Boolean);
+
+      procedure Check_Result_Placement
+        (Results : Landin.Checking.Signature_Part_Array;
+         Site : Landin.Provenance.Origin;
+         Valid : in out Boolean)
+      is
+         Placed : Landin.Targets.Placement := Landin.Targets.Empty_Placement;
+         Ignored : Landin.Targets.Byte_Count;
+
+      begin
+         if not Valid or else Results'Length <= 1 then
+            return;
+         end if;
+         for Part of Results loop
+            declare
+               Shape : constant Landin.Checking.Field_Shape :=
+                 Descriptor_Shape (Part_Descriptor (Part));
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
+               Fits : Boolean;
+            begin
+               --  The field refusal owns its diagnostic.  A nominal
+               --  identity alone is not evidence of a completed layout.
+               if not Shape_Layout_Ready (Shape) then
+                  Valid := False;
+                  return;
+               end if;
+               Landin.Checking.Shape_Extent
+                 (Types.all, Shape, Facts, Size, Alignment, Fits);
+               if not Fits or else not Landin.Targets.Can_Place
+                 (Placed, Size, Alignment,
+                  Landin.Targets.Maximum_Object_Size (Facts))
+               then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Site.Source,
+                     Where   => Site.Where,
+                     Message => "these named returns are too large for"
+                                & " the target's usize",
+                     Note    => "D128: the anonymous result aggregate"
+                                & " has one padded caller-owned image",
+                     Into    => Found);
+                  Valid := False;
+                  return;
+               end if;
+               Landin.Targets.Place (Placed, Size, Alignment, Ignored);
+            end;
+         end loop;
+      end Check_Result_Placement;
+
       function Signature_At
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -6341,89 +6419,13 @@ package body Landin.Stages.Checking is
             end loop;
          end if;
 
-         if Valid and then Results'Length > 1 then
-            declare
-               Placed : Landin.Targets.Placement :=
-                 Landin.Targets.Empty_Placement;
-               Ignored : Landin.Targets.Byte_Count;
-            begin
-               for Part of Results loop
-                  declare
-                     Size : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
-                     Scalar : Landin.Targets.Scalar_Size;
-                  begin
-                     case Part.Kind is
-                        when Ty.Scalar_Name | Ty.Function_Value
-                           | Ty.Atom_Value | Ty.Pointer_Value =>
-                           Scalar :=
-                             (if Part.Kind = Ty.Pointer_Value
-                              then Landin.Targets.Pointer_Size (Facts)
-                              else Ty.Storage_Size
-                                ((if Part.Kind = Ty.Function_Value
-                                  then Ty.Usize
-                                  elsif Part.Kind = Ty.Atom_Value
-                                  then Ty.U32 else Ty.Scalar_Name (Part.Kind)),
-                                 Facts));
-                           Size := Landin.Targets.Byte_Count
-                             (Landin.Targets.Bytes (Scalar));
-                           Alignment := Landin.Targets.Alignment_Of
-                             (Facts, Scalar);
-                        when Ty.Slice_Value | Ty.Any_Value =>
-                           Scalar := Landin.Targets.Pointer_Size (Facts);
-                           Size := 2 * Landin.Targets.Byte_Count
-                             (Landin.Targets.Bytes (Scalar));
-                           Alignment := Landin.Targets.Pointer_Alignment
-                             (Facts);
-                        when Ty.Aggregate =>
-                           Size := Landin.Checking.Layout_Size
-                             (Types.all, Part.Nominal);
-                           Alignment := Landin.Checking.Layout_Alignment
-                             (Types.all, Part.Nominal);
-                        when Ty.Fixed_Array =>
-                           if Part.Nominal
-                             /= Landin.Checking.No_Nominal_Type
-                           then
-                              Size := Landin.Targets.Byte_Count (Part.Length)
-                                * Landin.Checking.Layout_Size
-                                    (Types.all, Part.Nominal);
-                              Alignment := Landin.Checking.Layout_Alignment
-                                (Types.all, Part.Nominal);
-                           else
-                              Scalar := Ty.Storage_Size (Part.Element, Facts);
-                              Size := Landin.Targets.Byte_Count (Part.Length)
-                                * Landin.Targets.Byte_Count
-                                    (Landin.Targets.Bytes (Scalar));
-                              Alignment := Landin.Targets.Alignment_Of
-                                (Facts, Scalar);
-                           end if;
-                        when others =>
-                           Size := 0;
-                           Alignment := 1;
-                     end case;
-
-                     if not Landin.Targets.Can_Place
-                       (Placed, Size, Alignment,
-                        Landin.Targets.Maximum_Object_Size (Facts))
-                     then
-                        Bad.Report
-                          (Item    => Bad.Literal_Out_Of_Range,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where
-                             (Of_Tree, Syn.Returns_Of (Of_Tree, Node)),
-                           Message => "these named returns are too large for"
-                                      & " the target's usize",
-                           Note    => "D128: the anonymous result aggregate"
-                                      & " has one padded caller-owned image",
-                           Into    => Found);
-                        Valid := False;
-                        exit;
-                     end if;
-                     Landin.Targets.Place
-                       (Placed, Size, Alignment, Ignored);
-                  end;
-               end loop;
-            end;
+         if Valid and then Results'Length > 1
+           and then Syn.Kind (Of_Tree, Node)
+             in Syn.Function_Declaration | Syn.Anonymous_Function
+         then
+            Check_Result_Placement
+              (Results, Syn.Origin (Of_Tree, Syn.Returns_Of (Of_Tree, Node)),
+               Valid);
          end if;
 
          if Syn.Error_Set_Of (Of_Tree, Node) /= Syn.No_Node then
@@ -15957,6 +15959,11 @@ package body Landin.Stages.Checking is
          Site    : Landin.Provenance.Origin;
          Because : String) is
       begin
+         if not Landin.Checking.Has_Layout (Types.all, Wrote) then
+            --  The field's earlier refusal leaves no zero-image question.
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
          if not Has_Zero_Image (Wrote) then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -15987,6 +15994,12 @@ package body Landin.Stages.Checking is
          Because : String;
          Shape   : Landin.Checking.Field_Shape := (others => <>)) is
       begin
+         if not Shape_Layout_Ready
+           (Complete_Element (Element, Element_Nominal, Shape))
+         then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
          if not Descriptor_Has_Zero_Image
            ((Kind => Ty.Fixed_Array, Length => Length, Element => Element,
              Element_Nominal => Element_Nominal, Element_Shape => Shape,
@@ -23298,6 +23311,10 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Selected_From (Of_Tree, Place);
                begin
+                  if Wants = Ty.Ill_Typed then
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                     return;
+                  end if;
                   if Wants = Ty.Aggregate then
                      declare
                         Shape : constant Landin.Checking.Signature_Id :=
@@ -30511,6 +30528,37 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end loop;
+
+      --  Written callback signatures keep identity-only edges while their
+      --  enclosing records are building.  All active bodies are settled
+      --  here, so even forward and recursive callback results can now be
+      --  placed.  Earlier field refusals remain their own diagnostics.
+      if not Landin.Diagnostics.Has_Errors (Found) then
+         for Position in 1 .. Landin.Checking.Signature_Count (Types.all) loop
+            declare
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Signature_Id (Position);
+               Results : Landin.Checking.Signature_Part_Array
+                 (1 .. Landin.Checking.Signature_Result_Count
+                   (Types.all, Signature));
+               Valid : Boolean := True;
+            begin
+               for Index in Results'Range loop
+                  Results (Index) := Landin.Checking.Nth_Signature_Result
+                    (Types.all, Signature, Index);
+               end loop;
+               Check_Result_Placement
+                 (Results,
+                  Landin.Checking.Signature_Origin (Types.all, Signature),
+                  Valid);
+               if not Valid and then not Landin.Diagnostics.Has_Errors (Found)
+               then
+                  raise Landin.Compiler_Defect with
+                    "a settled result signature has no layout";
+               end if;
+            end;
+         end loop;
+      end if;
 
       <<Publish_Diagnostics>>
       declare

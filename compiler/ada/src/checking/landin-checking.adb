@@ -3842,6 +3842,17 @@ package body Landin.Checking is
       Field     : Field_Shape;
       Facts     : Landin.Targets.Target_Facts;
       Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment;
+      Fits      : out Boolean) is
+   begin
+      Measure_Shape (Of_Table, Field, Facts, Size, Alignment, Fits);
+   end Shape_Extent;
+
+   procedure Shape_Extent
+     (Of_Table  : Table;
+      Field     : Field_Shape;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment)
    is
       Fits : Boolean;

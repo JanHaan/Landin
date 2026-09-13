@@ -2165,6 +2165,18 @@ package Landin.Checking is
       Alignment : out Landin.Targets.Byte_Alignment)
      with Pre => Is_Prepared (Of_Table);
 
+   --  Source-facing layout validation uses Fits instead of raising when
+   --  a well-formed shape exceeds the target's object limit.  Nominal
+   --  leaves must already have their layouts, as for Shape_Extent above.
+   procedure Shape_Extent
+     (Of_Table  : Table;
+      Field     : Field_Shape;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment;
+      Fits      : out Boolean)
+     with Pre => Is_Prepared (Of_Table);
+
    --  What a fixed-array type node measures: [0520]'s array is its
    --  element repeated, whatever the element is, and [0750] lays the
    --  elements end to end.  A length of zero takes no room and aligns to
