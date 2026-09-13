@@ -155,6 +155,9 @@ the command-line default never inherits that reference convenience.
 `Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
 incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
 conservative neutral rewrites, and x86 allocation/selection owns registers.
+Generic instance ownership follows the resolver's lexical scopes. A nested
+no-capture anonymous signature begins from file scope, so its declarations
+remain independent of the enclosing generic routine's instance overlays.
 The selected-machine layer owns the signed-immediate boundary for nonnegative
 target extents. Indexed access, slice scaling and array-fill suffix offsets
 use a full-width register when their arithmetic constant exceeds that bound.

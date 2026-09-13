@@ -6989,15 +6989,26 @@ target row are recorded. No Landin assembler, linker or generated executable
 ran. Logs are retained in `.scratch/r491-anonymous-type-reports/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-R4.91-F1, found while validating J138, is next: an instantiated generic routine
-containing an anonymous function with a concrete i32 signature exits 70.
-The nine-line control reproduces in modified macOS debug and in the previous
-Linux release build before J138, so it is a distinct pre-existing compiler
-failure. Its source and before-build evidence are retained in
-`.scratch/r491-anonymous-type-reports/generic-scalar-crash.ldn` and
-`.scratch/r491-anonymous-type-reports/prior-native-control.log`.
-Trace the checking/lowering boundary with a bounded source-to-IR seam; no
-assembler, generated executable or debugger session is authorized.
+R4.91-F1, found while validating J138, is implemented: generic instance
+ownership follows the resolver's lexical scope tree instead of textual source
+containment. No-capture anonymous parameters, results and locals therefore
+retain their independent declaration facts instead of being withheld for the
+enclosing generic instance. The original nine-line source reproduced exit 70
+in macOS debug and the previous Linux build before J138; a bounded stage seam
+identified Infer asking an anonymous parameter/result for a binding initializer.
+Six selected cases now pass 29 checks in each of macOS debug and Linux
+release. Three source-to-IR controls cover the original typed binding, two
+instances sharing an inferred anonymous body and nested anonymous signatures.
+Existing generic key/error-set and no-capture refusal controls also pass.
+Both single-worker builds passed; selected tests have 30-second or shorter
+limits and the prior-build probe had a 10-second limit. No Landin assembler,
+linker, generated executable or debugger session ran. Evidence is retained in
+`.scratch/r491-generic-anonymous/`, `.scratch/r491-anonymous-type-reports/`
+and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J101's post-lexical-error recovery scan is next. Keep the small malformed
+signature's punctuation boundaries and subsequent declarations; do not replay
+parser stress, truncation or mutation campaigns.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

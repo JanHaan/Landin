@@ -442,9 +442,9 @@ package body Landin.Stages.Checking is
       function Generic_Routine_Owner
         (Id : Res.Declaration_Id) return Res.Declaration_Id
       is
+         use type Res.Scope_Id;
          Member_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Id));
-         Member_Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
       begin
          for Candidate in Res.Declaration_Id'(1)
            .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
@@ -459,11 +459,26 @@ package body Landin.Stages.Checking is
                begin
                   if Syn.Generic_Formal_Count
                        (Member_Tree.all, Function_Node) /= 0
-                    and then Landin.Source.Contains
-                      (Syn.Where (Member_Tree.all, Function_Node),
-                       Syn.Where (Member_Tree.all, Member_Node))
                   then
-                     return Candidate;
+                     if Id = Candidate then
+                        return Candidate;
+                     end if;
+                     declare
+                        Signature : constant Res.Scope_Id := Res.Scope_At
+                          (Meanings.all, Member_Tree.all, Function_Node);
+                        Scope : Res.Scope_Id :=
+                          Res.Scope_Of (Meanings.all, Id);
+                     begin
+                        --  Text containment crosses a no-capture anonymous
+                        --  signature. Only resolved lexical descendants
+                        --  belong to this generic routine's instance facts.
+                        while Scope /= Res.No_Scope loop
+                           if Scope = Signature then
+                              return Candidate;
+                           end if;
+                           Scope := Res.Enclosing (Meanings.all, Scope);
+                        end loop;
+                     end;
                   end if;
                end;
             end if;
