@@ -643,10 +643,7 @@ package body Landin.Tests.Resolution_Suite is
    begin
       Id := Landin.Stages.Add_Source
         (Work, "label-resolution.ldn",
-         "apply: (t: type, fixed count: usize, first: t, value: t)"
-         & " -> none =" & LF
-         & "end apply" & LF
-         & "box: type = struct" & LF
+         "box: type = struct" & LF
          & "    value: i32" & LF
          & "    kind: variant" & LF
          & "        leaf: (value: i32)" & LF
@@ -656,7 +653,10 @@ package body Landin.Tests.Resolution_Suite is
          & "    apply(1, t: i32, count: 4, value: source)" & LF
          & "    _ = box(value: source)" & LF
          & "    _ = leaf(value: source)" & LF
-         & "end run" & LF);
+         & "end run" & LF
+         & "apply: (t: type, fixed count: usize, first: t, value: t)"
+         & " -> none =" & LF
+         & "end apply" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -704,12 +704,11 @@ package body Landin.Tests.Resolution_Suite is
                            Landin.Syntax.Nth_Argument
                              (Of_Tree.all, Node, 2)) =
                                Landin.Resolution.Type_Argument
-                        and then Landin.Resolution.Formal_Of
+                        and then Landin.Resolution.Position_Of
                           (Meanings.all, Of_Tree.all,
                            Landin.Syntax.Nth_Argument
-                             (Of_Tree.all, Node, 2)) /=
-                               Landin.Resolution.No_Declaration,
-                        "a type label maps to its collected signature formal");
+                             (Of_Tree.all, Node, 2)) = 1,
+                        "a type label maps to its static formal position");
                      Landin.Testing.Check
                        (Item,
                         Landin.Resolution.Role_Of

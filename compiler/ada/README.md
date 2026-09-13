@@ -97,6 +97,12 @@ replaced.
 D201 keeps aliases and selected imports in the source file's import scope.
 Resolution retains each selected declaration's original identity and diagnoses
 private, missing, duplicate and reserved bindings at their import sites.
+Labelled applications retain their callee classification, argument roles and
+role-local positions. Resolution reads a direct callee's immutable signature
+syntax even when its declaration occurs later; checking completes runtime
+positions against the full direct or indirect signature. The table retains no
+separate formal declaration identity for an argument.
+
 D202 adds configuration declarations to immutable syntax but gives them no
 runtime identities or storage. The configuration stage consumes them before
 ordinary declaration traversal; its option origins let resolution diagnose

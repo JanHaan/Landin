@@ -571,15 +571,6 @@ package Landin.Resolution is
                  and then Landin.Syntax.Kind (Of_Tree, Argument)
                             = Landin.Syntax.Call_Argument;
 
-   function Formal_Of
-     (Of_Table : Table;
-      Of_Tree  : Landin.Syntax.Tree;
-      Argument : Landin.Syntax.Node_Id) return Declaration_Id
-     with Pre => Is_Prepared (Of_Table)
-                 and then Covers (Of_Table, Of_Tree)
-                 and then Landin.Syntax.Kind (Of_Tree, Argument)
-                            = Landin.Syntax.Call_Argument;
-
    function Position_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -606,20 +597,16 @@ package Landin.Resolution is
       Of_Tree  : Landin.Syntax.Tree;
       Argument : Landin.Syntax.Node_Id;
       As_Role  : Argument_Role;
-      Position : Natural;
-      Formal   : Declaration_Id := No_Declaration)
+      Position : Natural)
      with Pre => Is_Prepared (Into)
                  and then Covers (Into, Of_Tree)
                  and then Landin.Syntax.Kind (Of_Tree, Argument)
                             = Landin.Syntax.Call_Argument
                  and then Role_Of (Into, Of_Tree, Argument)
-                            = Unmatched_Argument
-                 and then (Formal = No_Declaration
-                           or else Contains (Into, Formal));
+                            = Unmatched_Argument;
 
    --  The checker remaps runtime arguments from written order onto ABI formal
-   --  positions.  A direct-resolution formal is retained when it still
-   --  agrees; indirect signatures have no declaration target and keep none.
+   --  positions using its complete signature for direct and indirect calls.
    procedure Match_Runtime_Argument
      (Into     : in out Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -705,7 +692,6 @@ private
       Class    : Application_Class := Unclassified_Application;
       Match    : Call_Match_State := Call_Not_Matched;
       Role     : Argument_Role := Unmatched_Argument;
-      Formal   : Declaration_Id := No_Declaration;
       Position : Natural := 0;
    end record;
 

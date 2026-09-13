@@ -6,9 +6,11 @@ package body Landin.Targets is
 
    function Padded (Text : String) return String is
       Result : String (1 .. Name_Length) := [others => ' '];
-      Length : constant Natural := Natural'Min (Text'Length, Name_Length);
    begin
-      Result (1 .. Length) := Text (Text'First .. Text'First + Length - 1);
+      if Text'Length > Name_Length then
+         raise Compiler_Defect with "a target label exceeds its storage";
+      end if;
+      Result (1 .. Text'Length) := Text;
       return Result;
    end Padded;
 
