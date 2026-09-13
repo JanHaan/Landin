@@ -5860,7 +5860,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J60 | Two named returns where one names a struct whose field type failed to resolve: Layout_Size precondition failure loses the whole report | C | Repaired: routine placement requires settled nominal leaves; written callback signatures wait until all active layouts are complete. Bad field types retain L0304 through scalar, array and nested-array result uses without a false zero-image refusal. Forward, alias, self and mutual callback results are accepted and verified on both target widths. |
 | J61 | Slice_Address scales the slice lower bound with an unguarded imm32 `imulq`, so an element extent >= 2 GiB emits an unencodable instruction | C | Implemented with A7/M19/N6/K29: slice scaling and both indexed-access paths share the nonnegative signed-imm32 predicate. Larger strides load a full-width scratch register before multiplication. Scalar boundary and tiny slice controls replace the forbidden giant-array reproduction. |
 | J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Implemented as a defensive guard: Storage_Address checks Has_Slot_Home before either whole-slot or field offset arithmetic. Current allocator pinning already prevents a live source trigger. The frame seam distinguishes an unhomed promoted slot from a real zero-byte home, and small address emission remains valid. |
-| J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
+| J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Implemented: initialized, in-scope bindings remain available during return/failure preparation, including implicit returns with earlier routine anchors. Each terminal ends its DWARF range before the first register restore. Tiny text-emission and initialization/scope controls pass; no debugger or native assembly ran. |
 | J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Implemented as release-checked metadata guards: a zero-field alias must name array storage before a whole-array or positive-field query. A small DWARF seam refuses whole scalar slot/datum aliases and accepts whole one-element array aliases. Current lowering did not produce the invalid metadata. |
 | J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109 report preservation is repaired; the native-outcome audit remains separate from assertion policy. |
 | J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Implemented: L0502 points at an active entry-module `main` declaration when present, otherwise the first entry source at byte zero. Imported and local names cannot supply the anchor. The same early refusal still precedes output and tools. |
@@ -7195,8 +7195,21 @@ No native assembly, generated executable, debugger or giant image ran. Evidence
 is retained in `.scratch/r491-address-guards/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J63's final-result location is next: retain availability during return-value
-preparation and end the range before the epilogue restores any register.
+J63 development evidence: five selected cases pass 104 checks in each of
+macOS debug and Linux release. The new case covers final assignments, explicit
+and implicit returns, initialized and uninitialized failure results, and
+parameter availability. Existing debug-mode, destructuring, scope and
+success-edge controls pass. The original one-line `code = 42` program emitted
+an empty location list; its 7,161-byte assembly text now contains the result's
+frame location from return preparation to the new pre-restore label. Each
+terminal flushes its own range before another laid-out block can extend it
+across the epilogue. Single-worker builds and individually bounded tests pass.
+No native assembly, generated executable, debugger or giant image ran. Evidence
+is retained in `.scratch/r491-return-locations/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J76's escape-diagnostic source selection is next. J65's layout exception
+classification remains independent of the repaired address guards.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

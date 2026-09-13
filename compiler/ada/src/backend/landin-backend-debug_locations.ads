@@ -1,6 +1,8 @@
 --  Format-independent variable availability at neutral instruction boundaries.
 --  A physical home is not evidence of initialization.  Meet predecessor
 --  states before describing a local, including joins and loop backedges.
+--  Return/failure entries retain those facts; a machine consumer must end
+--  their ranges before restoring registers or dismantling the frame.
 with Ada.Containers.Vectors;
 with Landin.Debugging;
 with Landin.Resolution;

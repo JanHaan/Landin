@@ -2103,11 +2103,15 @@ package body Landin.Backend.X86_64 is
             end if;
          end Reserve_Stack;
 
-         procedure Emit_Epilogue;
+         procedure Emit_Epilogue (Value : Landin.IR.Value_Id);
 
-         procedure Emit_Epilogue is
+         procedure Emit_Epilogue (Value : Landin.IR.Value_Id) is
          begin
             if Debug /= null then
+               --  Every variable home is still intact through return-value
+               --  preparation. End location ranges before the first restore.
+               Put (Dwarf.Label_Name
+                 (Local_Prefix, "epilogue", Item, Natural (Value)) & ":");
                Emit (".cfi_remember_state");
             end if;
             for Register in Allocation.Saved_Register loop
@@ -4397,7 +4401,7 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Leave =>
                   if Is_C_Item (Item) then
                      Emit_C_Result (Value);
-                     Emit_Epilogue;
+                     Emit_Epilogue (Value);
                      return;
                   end if;
                   --  [1810]'s return carries what the named return place
@@ -4450,11 +4454,11 @@ package body Landin.Backend.X86_64 is
                   then
                      Emit ("xorl %r10d, %r10d");
                   end if;
-                  Emit_Epilogue;
+                  Emit_Epilogue (Value);
 
                when Landin.IR.Fail =>
                   Emit ("movl " & Value_Operand (Operand (1)) & ", %r10d");
-                  Emit_Epilogue;
+                  Emit_Epilogue (Value);
             end case;
          end Emit_Instruction;
 

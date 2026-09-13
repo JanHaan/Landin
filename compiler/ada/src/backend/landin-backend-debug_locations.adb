@@ -613,9 +613,12 @@ package body Landin.Backend.Debug_Locations is
                   Result (Positive (Value)) := Meet (State, Wanted) = Wanted
                     and then Value /= Birth and then Visible
                     and then Control_Flow.Is_Reachable (Graph, Block)
-                    and then Op_Of (Of_Unit, Item, Value) not in Leave | Fail
-                    and then (Parameter or else
-                      (Site.Source = Born.Source
+                    --  An implicit return inherits the routine's anchor,
+                    --  which precedes its bindings. Definite initialization
+                    --  and lexical scope still govern terminal availability.
+                    and then (Parameter
+                      or else Op_Of (Of_Unit, Item, Value) in Leave | Fail
+                      or else (Site.Source = Born.Source
                        and then Site.Where.First >= Born.Where.Last));
                   Transfer (State, Value);
                end;
@@ -662,8 +665,6 @@ package body Landin.Backend.Debug_Locations is
          when Module_Datum =>
             for V in 1 .. Value_Count (Of_Unit, Item) loop
                Result.Append (Alias.Initialized_On_Entry
-                 and then Op_Of (Of_Unit, Item, Value_Id (V))
-                   not in Leave | Fail
                  and then Within (Meanings, Scope_Of
                    (Of_Unit, Item, Block_Of (Of_Unit, Item, Value_Id (V))),
                    Landin.Resolution.Scope_Of (Meanings, Alias.Binding)));
