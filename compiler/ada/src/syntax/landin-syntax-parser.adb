@@ -1,3 +1,5 @@
+with Ada.Containers.Vectors;
+
 with Landin.Diagnostics.Syntactic;
 with Landin.Syntax.Precedence;
 
@@ -102,6 +104,19 @@ package body Landin.Syntax.Parser is
       Returns : Boolean            := False;
    end record;
 
+   type Lookahead_Answer is (Unasked, Absent, Present);
+
+   type Lookahead_Info is record
+      Closing : Natural := 0;
+      Conformance : Lookahead_Answer := Unasked;
+   end record;
+
+   package Lookahead_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Tok.Token_Index, Element_Type => Lookahead_Info);
+
+   package Token_Index_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Tok.Token_Index);
+
    function Parse
      (From   : Landin.Tokens.Token_Stream;
       Names  : in out Landin.Source.Names.Table;
@@ -114,6 +129,13 @@ package body Landin.Syntax.Parser is
             Last      : constant Tok.Token_Index := Tok.Count (From);
 
             Index : Tok.Token_Index := 1;
+
+            --  Heap-backed, per-parse facts about the immutable token stream.
+            --  Allocate only when a discriminator needs lookahead. Each open
+            --  delimiter gets its independently balanced close; conformance
+            --  suffix answers are valid only at zero depth in both counters.
+            Lookahead : Lookahead_Vectors.Vector;
+            Lookahead_Ready : Boolean := False;
 
             --  P3: the parser reports only for a token index strictly
             --  greater than this, which is what keeps one mistake from
@@ -482,6 +504,40 @@ package body Landin.Syntax.Parser is
             --  are the same production, so what tells a place from an
             --  expression is the token after the whole chain and never
             --  the one after the name.
+            procedure Prepare_Lookahead;
+
+            procedure Prepare_Lookahead is
+               Parentheses, Brackets : Token_Index_Vectors.Vector;
+            begin
+               if Lookahead_Ready then
+                  return;
+               end if;
+               Lookahead.Set_Length (Ada.Containers.Count_Type (Last));
+               for Position in Tok.Token_Index range 1 .. Last loop
+                  case Tok.Kind (From, Position) is
+                     when Tok.Left_Paren =>
+                        Parentheses.Append (Position);
+                     when Tok.Right_Paren =>
+                        if not Parentheses.Is_Empty then
+                           Lookahead (Parentheses.Last_Element).Closing :=
+                             Natural (Position);
+                           Parentheses.Delete_Last;
+                        end if;
+                     when Tok.Left_Bracket =>
+                        Brackets.Append (Position);
+                     when Tok.Right_Bracket =>
+                        if not Brackets.Is_Empty then
+                           Lookahead (Brackets.Last_Element).Closing :=
+                             Natural (Position);
+                           Brackets.Delete_Last;
+                        end if;
+                     when others =>
+                        null;
+                  end case;
+               end loop;
+               Lookahead_Ready := True;
+            end Prepare_Lookahead;
+
             function Starts_Signature return Boolean;
             function Starts_Conformance return Boolean;
 
@@ -490,21 +546,17 @@ package body Landin.Syntax.Parser is
             --  the unambiguous discriminator, including nested function
             --  types inside the list.
             function Starts_Signature return Boolean is
-               Step  : Tok.Token_Index := 1;
-               Level : Positive := 1;
             begin
-               while Ahead (Step) /= Tok.End_Of_Input loop
-                  if Ahead (Step) = Tok.Left_Paren then
-                     Level := Level + 1;
-                  elsif Ahead (Step) = Tok.Right_Paren then
-                     if Level = 1 then
-                        return Ahead (Step + 1) = Tok.Minus_Greater;
-                     end if;
-                     Level := Level - 1;
-                  end if;
-                  Step := Step + 1;
-               end loop;
-               return False;
+               Prepare_Lookahead;
+               declare
+                  Closing : constant Natural := Lookahead (Index).Closing;
+               begin
+                  return Peek = Tok.Left_Paren
+                    and then Closing /= 0
+                    and then Closing < Natural (Last)
+                    and then Tok.Kind (From, Tok.Token_Index (Closing + 1))
+                      = Tok.Minus_Greater;
+               end;
             end Starts_Signature;
 
             --  A module-level parenthesized prefix is a conformance binder
@@ -513,42 +565,76 @@ package body Landin.Syntax.Parser is
             --  merely balances type delimiters so `is` stays an ordinary name
             --  in a nested signature or application.
             function Starts_Conformance return Boolean is
-               Step        : Tok.Token_Index := 1;
-               Parentheses : Natural :=
-                 (if Peek = Tok.Left_Paren then 1 else 0);
-               Brackets    : Natural :=
-                 (if Peek = Tok.Left_Bracket then 1 else 0);
+               Position : Tok.Token_Index := Index;
+               Parentheses, Brackets : Natural := 0;
+               Seen : Token_Index_Vectors.Vector;
+
+               function Finish (Answer : Boolean) return Boolean;
+
+               function Finish (Answer : Boolean) return Boolean is
+               begin
+                  for Each of Seen loop
+                     Lookahead (Each).Conformance :=
+                       (if Answer then Present else Absent);
+                  end loop;
+                  return Answer;
+               end Finish;
             begin
+               if Index = Last then
+                  return False;
+               end if;
+               Prepare_Lookahead;
+               --  Processing an initial opener from zero is equivalent to
+               --  starting after it with depth one, and permits one shared
+               --  cache key for every suffix entered at zero depth.
+               if Peek not in Tok.Left_Paren | Tok.Left_Bracket then
+                  Position := Position + 1;
+               end if;
                loop
-                  exit when Ahead (Step) = Tok.End_Of_Input;
+                  if Parentheses = 0 and then Brackets = 0 then
+                     case Lookahead (Position).Conformance is
+                        when Present => return Finish (True);
+                        when Absent => return Finish (False);
+                        when Unasked => Seen.Append (Position);
+                     end case;
+                  end if;
+                  exit when Tok.Kind (From, Position) = Tok.End_Of_Input;
                   exit when Parentheses = 0 and then Brackets = 0
-                    and then Ahead (Step) in Tok.Equal | Tok.Colon
-                                              | Tok.Colon_Equal;
+                    and then Tok.Kind (From, Position)
+                      in Tok.Equal | Tok.Colon | Tok.Colon_Equal;
 
                   if Parentheses = 0 and then Brackets = 0
-                    and then Ahead (Step) = Tok.Identifier
-                    and then Named_Ahead (Step) = Is_Id
+                    and then Tok.Kind (From, Position) = Tok.Identifier
+                    and then Tok.Name (Tok.Token_At (From, Position)) = Is_Id
                   then
-                     return True;
+                     return Finish (True);
                   end if;
 
-                  case Ahead (Step) is
-                     when Tok.Left_Paren => Parentheses := Parentheses + 1;
+                  case Tok.Kind (From, Position) is
+                     when Tok.Left_Paren | Tok.Left_Bracket =>
+                        --  An unmatched opener can never return its counter
+                        --  to zero. Its remainder cannot expose a direct is.
+                        if Lookahead (Position).Closing = 0 then
+                           return Finish (False);
+                        elsif Tok.Kind (From, Position) = Tok.Left_Paren then
+                           Parentheses := Parentheses + 1;
+                        else
+                           Brackets := Brackets + 1;
+                        end if;
                      when Tok.Right_Paren =>
                         if Parentheses = 0 then
-                           return False;
+                           return Finish (False);
                         end if;
                         Parentheses := Parentheses - 1;
-                     when Tok.Left_Bracket => Brackets := Brackets + 1;
                      when Tok.Right_Bracket =>
                         if Brackets > 0 then
                            Brackets := Brackets - 1;
                         end if;
                      when others => null;
                   end case;
-                  Step := Step + 1;
+                  Position := Position + 1;
                end loop;
-               return False;
+               return Finish (False);
             end Starts_Conformance;
 
             function Starts_Named_Declaration return Boolean;

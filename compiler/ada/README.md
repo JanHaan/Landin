@@ -262,6 +262,13 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Parser lookahead keeps a per-parse delimiter index and caches conformance
+suffix decisions only outside nested delimiters. The index balances parentheses
+and brackets independently, preserving the existing lookahead rules. Signature
+queries reuse matching closes and unmatched openers stop conformance lookahead
+without rescanning their tail. These heap-backed tables are proportional to
+the token stream; this is not a general linear-time parser guarantee.
+
 Generic instances preserve written range constraints when publishing local,
 parameter and result types. Their signatures carry those bounds too, so
 ordinary range checking covers generic stores and call boundaries. This does
