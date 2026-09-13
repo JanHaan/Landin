@@ -1,0 +1,9 @@
+class: negative
+summary: integer arguments preserve the actual non-scalar context without inventing bool or overflowing a default type
+program: main.ldn
+codes: L0301, L0301, L0301
+constructs: 0190, 0520, 0710, 1000, 1880
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-integer-argument-context/main.ldn
+status: 1
