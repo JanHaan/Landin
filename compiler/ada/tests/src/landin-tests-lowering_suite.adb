@@ -10211,8 +10211,142 @@ package body Landin.Tests.Lowering_Suite is
          Carrier => Landin.Types.I32, Pointer_Result => False);
    end Anonymous_Results_Keep_Pointer_Carriers;
 
+   procedure Module_Images_Preserve_Valid_Initialization
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Images_Preserve_Valid_Initialization
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String;
+         Inspect_Copy : Boolean := False;
+         Zero : Boolean := True;
+         Length : IR.Element_Total := 2);
+
+      procedure Check_Source
+        (Label, Text : String;
+         Inspect_Copy : Boolean := False;
+         Zero : Boolean := True;
+         Length : IR.Element_Total := 2)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            begin
+               if Inspect_Copy then
+                  declare
+                     Source : constant IR.Item_Id := Named_Item
+                       (Work, "source");
+                     Copy : constant IR.Item_Id := Named_Item (Work, "copy");
+                  begin
+                     Landin.Testing.Check
+                       (Item, Source /= Copy
+                          and then IR.Array_Length (Unit, Copy) = Length
+                          and then IR.Array_Length (Unit, Source) = Length,
+                        Label & " preserves its extent in distinct storage");
+                     Landin.Testing.Check
+                       (Item, IR.Has_Image (Unit, Source) = not Zero
+                          and then IR.Has_Image (Unit, Copy) = not Zero,
+                        Label & " retains its zero or explicit image");
+                  end;
+               end if;
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " satisfies the target verifier");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("explicit pointer address",
+         "mut value: ptr i32 = ptr(4096)" & LF);
+      Check_Source
+        ("explicit cstring",
+         "mut value: cstring = """"" & LF);
+      Check_Source
+        ("explicit empty slice",
+         "mut value: []i32 = []" & LF);
+      Check_Source
+        ("explicit mutable empty slice",
+         "mut value: []mut u8 = []" & LF);
+      Check_Source
+        ("explicit utf8",
+         "mut value: utf8 = """"" & LF);
+      Check_Source
+        ("explicit utf16",
+         "mut value: utf16 = """"" & LF);
+      Check_Source
+        ("local pointer assigned before use",
+         "f: (source: ptr i32) -> (r: ptr i32 from source) = mut "
+         & "value: ptr i32 value = source r = value end f" & LF);
+      Check_Source
+        ("local slice assigned before use",
+         "f: (source: []i32) -> (r: []i32 from source) = mut value: "
+         & "[]i32 value = source r = value end f" & LF);
+      Check_Source
+        ("implicit aggregate array copied",
+         "pair: type = struct value: i32 end pair" & LF
+         & "source: [2]pair" & LF
+         & "copy: [2]pair = source" & LF,
+         Inspect_Copy => True);
+      Check_Source
+        ("explicit zero aggregate array copied",
+         "pair: type = struct value: i32 end pair" & LF
+         & "source: [2]pair = zeroed" & LF
+         & "copy: [2]pair = source" & LF,
+         Inspect_Copy => True);
+      Check_Source
+        ("zero aggregate array copy chain",
+         "pair: type = struct value: i32 end pair" & LF
+         & "source: [2]pair" & LF
+         & "middle: [2]pair = source" & LF
+         & "copy: [2]pair = middle" & LF,
+         Inspect_Copy => True);
+      Check_Source
+        ("forward zero aggregate array copy",
+         "pair: type = struct value: i32 end pair" & LF
+         & "copy: [2]pair = source" & LF
+         & "source: [2]pair" & LF,
+         Inspect_Copy => True);
+      Check_Source
+        ("finite aggregate array copied",
+         "pair: type = struct value: i32 end pair" & LF
+         & "source: [2]pair = [pair(value: 7), pair(value: 9)]" & LF
+         & "copy: [2]pair = source" & LF,
+         Inspect_Copy => True, Zero => False);
+      Check_Source
+        ("scalar zero array copied",
+         "source: [2]i32" & LF
+         & "copy: [2]i32 = source" & LF,
+         Inspect_Copy => True);
+      Check_Source
+        ("empty pointer array copied",
+         "source: [0]ptr i32" & LF
+         & "copy: [0]ptr i32 = source" & LF,
+         Inspect_Copy => True, Length => 0);
+   end Module_Images_Preserve_Valid_Initialization;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "module images preserve valid initialization",
+         Module_Images_Preserve_Valid_Initialization'Access);
       Landin.Testing.Register
         (Into, "lowering", "anonymous results keep pointer carriers",
          Anonymous_Results_Keep_Pointer_Carriers'Access);
