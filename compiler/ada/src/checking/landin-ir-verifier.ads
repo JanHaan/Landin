@@ -55,6 +55,7 @@ package Landin.IR.Verifier is
       Unprepared_Unit,
       Item_Runs_Overlap,
       Block_Membership_Disagrees,
+      Source_Alias_Malformed,
       Operand_Runs_Overlap,
       Atom_Set_Runs_Overlap,
       Atom_Set_Malformed,

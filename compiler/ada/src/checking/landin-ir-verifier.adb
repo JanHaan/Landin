@@ -18,6 +18,8 @@ package body Landin.IR.Verifier is
             when Block_Membership_Disagrees =>
                "block runs do not partition their item's instructions"
                & " with matching membership",
+            when Source_Alias_Malformed =>
+               "a source alias does not name a valid storage selection",
             when Operand_Runs_Overlap =>
                "a call's operands are not where its run says they are",
             when Atom_Set_Runs_Overlap =>
@@ -314,6 +316,10 @@ package body Landin.IR.Verifier is
          Payload_Field : Natural := 0;
          Nested  : Path_Step_Array := No_Path_Steps;
          Aggregate_Field : Boolean := False) return Fault_Kind;
+
+      function Alias_Selection_Is_Valid
+        (Item : Item_Id; Alias : Source_Alias; Steps : Path_Step_Array)
+         return Boolean;
 
       function Root_Shape_Of
         (Item  : Item_Id;
@@ -822,6 +828,64 @@ package body Landin.IR.Verifier is
                return True;
          end case;
       end Root_Shape_Of;
+
+      function Alias_Selection_Is_Valid
+        (Item : Item_Id; Alias : Source_Alias; Steps : Path_Step_Array)
+         return Boolean
+      is
+         Shape : Field_Shape;
+         Skip : Natural := 0;
+         Root_Aggregate : Boolean := False;
+      begin
+         if Alias.Binding = No_Declaration
+           or else Natural (Alias.Binding) > Declaration_Limit (Of_Unit)
+           or else not Landin.Provenance.Is_Known (Alias.Site)
+         then
+            return False;
+         end if;
+         case Alias.Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Alias.Place.Datum)
+                 or else Kind_Of (Of_Unit, Alias.Place.Datum) /= Datum
+               then
+                  return False;
+               end if;
+               Root_Aggregate := Result_Of (Of_Unit, Alias.Place.Datum)
+                 = Landin.Types.Aggregate;
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Alias.Place.Slot) then
+                  return False;
+               end if;
+               Root_Aggregate :=
+                 Is_Aggregate (Of_Unit, Item, Alias.Place.Slot);
+            when Runtime_Address =>
+               if not Holds (Of_Unit, Item, Alias.Place.Address)
+                 or else not Is_Address (Of_Unit, Item, Alias.Place.Address)
+               then
+                  return False;
+               end if;
+         end case;
+         if Alias.Field = 0 and then Steps'Length = 0 then
+            return True;
+         elsif Alias.Field = 0 and then Root_Aggregate then
+            --  Top-level fields live outside the shared nested-shape vector.
+            --  Consume that first selection through the bounded root helper.
+            if Steps (Steps'First).Case_Index /= 0
+              or else Element_Total (Steps (Steps'First).Field)
+                > Element_Total (Natural'Last)
+              or else not Root_Shape_Of
+                (Item, Alias.Place, Natural (Steps (Steps'First).Field), Shape)
+            then
+               return False;
+            end if;
+            Skip := 1;
+         elsif not Root_Shape_Of (Item, Alias.Place, Alias.Field, Shape) then
+            return False;
+         end if;
+         return Path_Is_Valid
+           (Of_Unit, Shape, Steps (Steps'First + Skip .. Steps'Last));
+      end Alias_Selection_Is_Valid;
+
 
       function Is_Whole_Aggregate
         (Item : Item_Id; Place : Storage) return Boolean
@@ -2563,6 +2627,8 @@ package body Landin.IR.Verifier is
                 (Held.Values, Natural (Of_Unit.Code.Length))
               or else not Run_Fits
                 (Held.Fields, Natural (Of_Unit.Fields.Length))
+              or else not Run_Fits
+                (Held.Aliases, Natural (Of_Unit.Aliases.Length))
             then
                return (Kind => Item_Runs_Overlap, Item => Id, others => <>);
             end if;
@@ -2653,6 +2719,11 @@ package body Landin.IR.Verifier is
                        Item => Id, others => <>);
             end if;
          end;
+      end loop;
+      for Alias of Of_Unit.Aliases loop
+         if not Run_Fits (Alias.Path, Natural (Of_Unit.Paths.Length)) then
+            return (Kind => Source_Alias_Malformed, others => <>);
+         end if;
       end loop;
       for Slot of Of_Unit.Slots loop
          if not Run_Fits (Slot.Fields, Natural (Of_Unit.Slot_Fields.Length))
@@ -3203,6 +3274,7 @@ package body Landin.IR.Verifier is
          Blocks     : Natural := 0;
          Values     : Natural := 0;
          Fields     : Natural := 0;
+         Aliases    : Natural := 0;
       begin
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
@@ -3244,6 +3316,14 @@ package body Landin.IR.Verifier is
                           Item => Item_Id (Which), others => <>);
                end if;
 
+               if Held.Aliases.Count /= 0
+                 and then Held.Aliases.First /= Aliases
+               then
+                  return (Kind => Item_Runs_Overlap,
+                          Item => Item_Id (Which), others => <>);
+               end if;
+
+               Aliases    := Aliases + Held.Aliases.Count;
                Slots      := Slots + Held.Slots.Count;
                Parameters := Parameters + Held.Parameters.Count;
                Blocks     := Blocks + Held.Blocks.Count;
@@ -3256,12 +3336,13 @@ package body Landin.IR.Verifier is
            or else Blocks /= Natural (Of_Unit.Blocks.Length)
            or else Values /= Natural (Of_Unit.Code.Length)
            or else Fields /= Natural (Of_Unit.Fields.Length)
+           or else Aliases /= Natural (Of_Unit.Aliases.Length)
          then
             return (Kind => Item_Runs_Overlap, others => <>);
          end if;
       end;
 
-      --  Images do not partition in item-order the way the five runs
+      --  Images do not partition in item-order the way the six runs
       --  above do: D21 chain resolution fills the source's image
       --  before its destination's, so item 1's Image.First can land
       --  beyond item 3's.  The partition still has to hold -- no run
@@ -7476,6 +7557,25 @@ package body Landin.IR.Verifier is
 
             <<Next_IR_Item>>
             null;
+         end;
+      end loop;
+
+      --  Every root and nested storage shape is now checked, including
+      --  datums declared after an alias's routine. Debug readers may replay
+      --  these selections only after this boundary succeeds.
+      for Which in 1 .. Item_Count (Of_Unit) loop
+         declare
+            Id : constant Item_Id := Item_Id (Which);
+         begin
+            for Index in 1 .. Source_Alias_Count (Of_Unit, Id) loop
+               if not Alias_Selection_Is_Valid
+                 (Id, Nth_Source_Alias (Of_Unit, Id, Index),
+                  Source_Alias_Path (Of_Unit, Id, Index))
+               then
+                  return (Kind => Source_Alias_Malformed,
+                          Item => Id, others => <>);
+               end if;
+            end loop;
          end;
       end loop;
 

@@ -117,6 +117,7 @@ package body Landin.IR.Testing_Support is
          when Block_Run     => Held.Blocks := Replacement;
          when Value_Run     => Held.Values := Replacement;
          when Field_Run     => Held.Fields := Replacement;
+         when Alias_Run     => Held.Aliases := Replacement;
       end case;
       Into.Items (Positive (Item)) := Held;
    end Overwrite_Item_Run;
@@ -134,8 +135,33 @@ package body Landin.IR.Testing_Support is
          when Field_Vector => Into.Fields.Append (Into.Fields.Element (1));
          when Operand_Vector =>
             Into.Operands.Append (Into.Operands.Element (1));
+         when Alias_Vector => Into.Aliases.Append (Into.Aliases.Element (1));
       end case;
    end Append_Unclaimed_Entry;
+
+   procedure Overwrite_Alias_Path_Run
+     (Into : in out Unit; Item : Item_Id; Index : Positive;
+      First, Count : Natural)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Aliases.First + Index;
+      Held : Stored_Source_Alias := Into.Aliases (Position);
+   begin
+      Held.Path := (First => First, Count => Count);
+      Into.Aliases (Position) := Held;
+   end Overwrite_Alias_Path_Run;
+
+   procedure Overwrite_Alias_Info
+     (Into : in out Unit; Item : Item_Id; Index : Positive;
+      Alias : Source_Alias)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Aliases.First + Index;
+      Held : Stored_Source_Alias := Into.Aliases (Position);
+   begin
+      Held.Info := Alias;
+      Into.Aliases (Position) := Held;
+   end Overwrite_Alias_Info;
 
    procedure Overwrite_Block_Run
      (Into : in out Unit; Item : Item_Id; Block : Block_Id;
