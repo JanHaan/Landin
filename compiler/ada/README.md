@@ -70,7 +70,7 @@ replaced.
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
-| `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
+| `Landin.Diagnostics.Text` | deterministic rendering, sharing a primary snippet with its first related label only when source and complete span agree | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |

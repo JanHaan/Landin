@@ -5920,7 +5920,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
 | J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
 | J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Implemented: contextual mismatches name the required pointer, slice, function, aggregate or erased type without doubled articles or the unknown-type fallback. Their explanation applies to the complete required context rather than asserting every site is a D124 control expression. Exact acceptance remains open. |
-| J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Implemented in text rendering: a first related label sharing the primary source and complete span supplies the one rendered snippet. C signature/layout labels, every structured diagnostic field and catalogue requirements remain intact; different files or span ends remain separate. Exact acceptance remains open. |
 | J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Repaired with J46/J60: placement measures each result's complete descriptor, including nested arrays, nominal elements and reference carriers, instead of its scalar placeholder. Tiny nested/reference/empty array signature controls pass; no oversized source or generated image was executed. |
 | J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Implemented: type normalization and fixed-bound folding retain the active routine instance's type/fixed actuals in newly encountered type positions. Direct, arithmetic, type-formal and parameterized-alias measurements keep separate two/four-element instances. Negative, impossible and runtime bounds retain their specific refusals. Exact acceptance remains open. |
 | J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Implemented: Require commits integer literals only to real scalar contexts, and refuses non-scalar contexts with the original required-site origin and label. No default numeric commitment or invented bool precedes that report. Struct, two-element array and function argument witnesses are pinned; pointer/slice/erased arguments already use independent paths. Exact acceptance remains open. |
@@ -6852,9 +6852,22 @@ or generated executable ran. Logs are retained in
 `.scratch/r491-literal-context/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J123's duplicate C diagnostic snippets and J118's zeroed refusal notes are
-under source inspection next; diagnostic catalogue label/note obligations
-must remain satisfied.
+J123 development evidence: diagnostics rendering plus 17 selected negative
+fixtures pass 157 checks in each of macOS debug and Linux release. Five new
+renderer assertions cover a shared snippet, retained structured labels and
+label order, separate sources, and different span ends. Twenty duplicate
+snippets are removed from 15 affected small golden reports; their labels,
+messages, notes, codes and source order remain. Two further tiny C-layout
+controls and four direct compile-only probes exercise zero-array fields,
+variadic callback fields, slice parameters and an accepted scalar C signature.
+The compiler reader guide describes the presentation rule. Both single-worker
+builds passed; tests have 30-second or shorter limits and probes have
+10-second limits. No Landin assembler, linker or generated executable ran.
+Logs are retained in `.scratch/r491-c-report-spans/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J118's zeroed refusal notes are next; permanent contextual refusals must not
+promise that completed R2.20 will enable them.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

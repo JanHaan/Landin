@@ -201,6 +201,68 @@ package body Landin.Tests.Diagnostics_Suite is
          "labels render in the order they were added");
    end Multiple_Labels_Render_In_Order;
 
+   procedure A_Primary_Explanation_Shares_Its_Snippet
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Primary_Explanation_Shares_Its_Snippet
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      First : constant Landin.Source.Source_Id :=
+        Sources.Add ("one.ldn", "alpha" & LF);
+      Second : constant Landin.Source.Source_Id :=
+        Sources.Add ("two.ldn", "gamma" & LF);
+      Report : Diagnostic :=
+        Make ("L0301", Error, First, (First => 0, Last => 5), "mismatch");
+      Other_File : Diagnostic := Report;
+      Other_Span : Diagnostic := Report;
+      Heading : constant String := "error[L0301]: mismatch" & LF;
+      Primary_Block : constant String :=
+        "  --> one.ldn:1:1" & LF
+        & "  |" & LF
+        & "1 | alpha" & LF;
+      Other_Block : constant String :=
+        "  --> two.ldn:1:1" & LF
+        & "  |" & LF
+        & "1 | gamma" & LF
+        & "  | ^^^^^ another file" & LF;
+   begin
+      Add_Label
+        (Report, Make_Label (First, (First => 0, Last => 5), "required"));
+      Add_Label
+        (Report,
+         Make_Label (Second, (First => 0, Last => 5), "another file"));
+      Add_Note (Report, "one note");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Report, Sources),
+         Heading & Primary_Block & "  | ^^^^^ required" & LF
+         & Other_Block & "  = note: one note" & LF,
+         "a matching first label shares the primary snippet");
+      Landin.Testing.Check_Equal
+        (Item, Label_Count (Report), 2,
+         "presentation retains both structured labels");
+      Landin.Testing.Check_Equal
+        (Item, Message (Nth_Label (Report, 1)), "required",
+         "presentation retains the first label's explanation");
+
+      Add_Label
+        (Other_File,
+         Make_Label (Second, (First => 0, Last => 5), "another file"));
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Other_File, Sources),
+         Heading & Primary_Block & "  | ^^^^^" & LF & Other_Block,
+         "identical offsets in another source keep separate snippets");
+
+      Add_Label
+        (Other_Span,
+         Make_Label (First, (First => 0, Last => 4), "shorter span"));
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Other_Span, Sources),
+         Heading & Primary_Block & "  | ^^^^^" & LF
+         & Primary_Block & "  | ^^^^ shorter span" & LF,
+         "the complete span must match, including its end");
+   end A_Primary_Explanation_Shares_Its_Snippet;
+
    --  Ties on the span are what the last three comparisons in Precedes
    --  exist for.  Without a case that ties, all three can be deleted and
    --  every other diagnostics case still passes.
@@ -531,6 +593,9 @@ package body Landin.Tests.Diagnostics_Suite is
       Landin.Testing.Register
         (Into, "diagnostics", "multiple labels render in order",
          Multiple_Labels_Render_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics", "a primary explanation shares its snippet",
+         A_Primary_Explanation_Shares_Its_Snippet'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "ties are broken deterministically",
          Ties_Are_Broken_Deterministically'Access);
