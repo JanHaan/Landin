@@ -980,8 +980,13 @@ package body Landin.Checking is
 
    function Covers (Of_Table : Table; Of_Tree : Landin.Syntax.Tree)
      return Boolean
-     is (Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
-         = Landin.Syntax.Node_Count (Of_Tree));
+     is (Landin.Syntax.Source_Of (Of_Tree) /= Landin.Source.No_Source
+         and then Natural (Landin.Syntax.Source_Of (Of_Tree))
+           <= Source_Count (Of_Table)
+         and then Of_Table.Tree_Addresses
+           (Positive (Landin.Syntax.Source_Of (Of_Tree))) = Of_Tree'Address
+         and then Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
+           = Landin.Syntax.Node_Count (Of_Tree));
 
    procedure Prepare
      (Into      : in out Table;
@@ -1000,6 +1005,7 @@ package body Landin.Checking is
             Into.Runs.Append
               (Run'(First => Natural (Into.Node_Types.Length),
                     Count => Held));
+            Into.Tree_Addresses.Append (Of_Tree.all'Address);
 
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);

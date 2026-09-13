@@ -57,6 +57,7 @@
 
 private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
+private with System;
 
 with Landin.Provenance;
 with Landin.Modules;
@@ -669,6 +670,12 @@ private
    package Run_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Run);
 
+   --  Immutable trees are limited heap objects owned by the forest. Their
+   --  addresses identify ownership only, never lookup order or target data.
+   package Tree_Address_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => System.Address,
+      "=" => System."=");
+
    package Binding_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Declaration_Id);
 
@@ -730,6 +737,7 @@ private
       File_Scopes   : Scope_Id_Vectors.Vector;
       Imports       : Import_Maps.Map;
       Runs         : Run_Vectors.Vector;
+      Tree_Addresses : Tree_Address_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;
       Applications : Application_Vectors.Vector;

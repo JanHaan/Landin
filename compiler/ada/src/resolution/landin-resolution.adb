@@ -1,5 +1,7 @@
 package body Landin.Resolution is
 
+   use type System.Address;
+
    ------------------------------------------------------------------
    --  Sizing
    ------------------------------------------------------------------
@@ -19,8 +21,13 @@ package body Landin.Resolution is
 
    function Covers (Of_Table : Table; Of_Tree : Landin.Syntax.Tree)
      return Boolean
-     is (Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
-         = Landin.Syntax.Node_Count (Of_Tree));
+     is (Landin.Syntax.Source_Of (Of_Tree) /= Landin.Source.No_Source
+         and then Natural (Landin.Syntax.Source_Of (Of_Tree))
+           <= Source_Count (Of_Table)
+         and then Of_Table.Tree_Addresses
+           (Positive (Landin.Syntax.Source_Of (Of_Tree))) = Of_Tree'Address
+         and then Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
+           = Landin.Syntax.Node_Count (Of_Tree));
 
    procedure Prepare
      (Into   : in out Table;
@@ -38,6 +45,8 @@ package body Landin.Resolution is
                 (Landin.Syntax.Forest.Tree_Of (Trees, Id).all);
          begin
             Into.Runs.Append (Run'(First => Next + 1, Count => Size));
+            Into.Tree_Addresses.Append
+              (Landin.Syntax.Forest.Tree_Of (Trees, Id).all'Address);
             Next := Next + Size;
          end;
       end loop;

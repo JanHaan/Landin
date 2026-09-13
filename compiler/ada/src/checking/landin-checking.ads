@@ -2291,6 +2291,12 @@ private
    package Run_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Run);
 
+   --  Immutable trees are limited heap objects owned by the forest. Their
+   --  addresses identify ownership only, never lookup order or target data.
+   package Tree_Address_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => System.Address,
+      "=" => System."=");
+
    package Link_Name_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive,
       Element_Type => Landin.Source.Names.Name_Id,
@@ -2597,6 +2603,7 @@ private
       Node_Shapes  : Shape_Vectors.Vector;
       Shapes       : Shape_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
+      Tree_Addresses : Tree_Address_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Link_Names   : Link_Name_Vectors.Vector;
       Declaration_Nominals : Nominal_Id_Vectors.Vector;
