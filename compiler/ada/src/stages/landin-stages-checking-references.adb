@@ -734,8 +734,16 @@ package body Landin.Stages.Checking.References is
          if Fact.Frame then
             for Id in Origins'Range loop
                if Fact.Derives (Positive (Id))
-                 and then Res.Sort_Of (Meanings.all, Id)
-                   in Res.Local_Binding | Res.Named_Return
+                 and then
+                   (case Res.Sort_Of (Meanings.all, Id) is
+                      when Res.Local_Binding | Res.Named_Return => True,
+                      when Res.Pattern_Binding => Pattern_Storage (Id).Frame,
+                      when Res.Parameter =>
+                        Syn.Convention_Of
+                          (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                           Res.Node_Of (Meanings.all, Id))
+                          /= Syn.Inout_Convention,
+                      when others => False)
                then
                   return Id;
                end if;
