@@ -1674,6 +1674,7 @@ package Landin.IR is
       Source    : Item_Id := No_Item;
       First     : Element_Total := 0)
      with Pre  => Holds (Into, Item)
+                  and then not Has_Image (Into, Item)
                   and then Result_Of (Into, Item)
                     = Landin.Types.Fixed_Array
                   and then Array_Length (Into, Item) = 2
@@ -2258,11 +2259,11 @@ package Landin.IR is
                   and then Holds (Into, Item, Add_Block'Result)
                   and then Length (Into, Item, Add_Block'Result) = 0;
 
-   --  Opens a block for emission.  Once per block, and one at a time:
-   --  two open blocks would interleave two runs, and a run that is not
-   --  contiguous is not a run.  This is the builder keeping the table
-   --  whole, not the verifier keeping the program right; the note above
-   --  the Emit subprograms below is where that line is drawn.
+   --  Opens an empty block for emission. Only one block of an item may
+   --  be open, and a populated block cannot be re-entered: interleaving
+   --  its instructions would break the contiguous run. These are caller
+   --  preconditions that keep the table whole, distinct from the verifier's
+   --  checks on the program, documented with the Emit subprograms.
    procedure Enter
      (Into : in out Unit; Item : Item_Id; Block : Block_Id)
      with Pre  => Holds (Into, Item, Block)
@@ -3497,10 +3498,11 @@ package Landin.IR is
       Item  : Item_Id;
       Target : Item_Id;
       Site  : Landin.Provenance.Origin) return Value_Id
-     with Pre  => Holds (Into, Item)
+     with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Target)
                   and then Kind_Of (Into, Target) = Routine
-                  and then Signature_Of (Into, Target) /= No_Signature;
+                  and then Signature_Of (Into, Target) /= No_Signature
+                  and then Landin.Provenance.Is_Known (Site);
 
    function Emit_Evidence_Address
      (Into     : in out Unit;
