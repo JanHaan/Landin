@@ -4172,10 +4172,20 @@ package body Landin.Backend.X86_64 is
                   Emit ("movb %al, " & Value_Operand (Value));
 
                when Landin.IR.Function_Address =>
-                  Emit
-                    ("leaq "
-                     & Symbol (Landin.IR.Callee_Of (Of_Unit, Item, Value))
-                     & "(%rip), %rax");
+                  declare
+                     Callee : constant Landin.IR.Item_Id :=
+                       Landin.IR.Callee_Of (Of_Unit, Item, Value);
+                     Imported : constant Boolean :=
+                       Landin.IR.Is_External (Of_Unit, Callee);
+                  begin
+                     --  A PIE cannot use a PC32 address relocation to an
+                     --  imported definition. The GOT supplies its address.
+                     Emit
+                       ((if Imported then "movq " else "leaq ")
+                        & Symbol (Callee)
+                        & (if Imported then "@GOTPCREL" else "")
+                        & "(%rip), %rax");
+                  end;
                   Emit ("movq %rax, " & Value_Operand (Value));
 
                when Landin.IR.Evidence_Address =>
