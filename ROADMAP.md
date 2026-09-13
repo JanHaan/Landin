@@ -5684,7 +5684,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
 | A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. Special symbol names still require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. Mandatory resource limits govern any assembler work. | Third batch |
-| A9, m18: third-party inventory | Root LICENSE still says only one third-party item. Reconcile the inventory with the already-present local notices; do not change license terms. | Fourth batch |
+| A9, m18: third-party inventory | Implemented: the root inventory names the existing Lucide, SourceHut and Nunito Sans notices, and the Tree-sitter support headers now carry their pinned upstream MIT notice. All three headers match v0.26.9 upstream bytes. Optional private MonoLisa remains separately documented. Project and upstream license terms are unchanged; M5 still owns any historical font disposition. | Fourth batch documentation repair |
 | M17: stale refusal ownership | R4.90 changed the implicated notes to describe source-form boundaries and implemented distinct/fill forms. The earlier blanket enabled-yet report is superseded; retain bounded checks for any remaining inaccurate sites. | Existing coverage |
 
 The remaining minor observations retain these explicit dispositions rather than
@@ -7402,6 +7402,20 @@ Both single-worker builds and the inventories pass. Positive fixture checking
 emits text only. No native assembly, generated executable, debugger or giant
 image ran. Evidence is in `.scratch/r491-loop-assignment/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+A9/m18 current-tree attribution is reconciled. The root inventory no longer
+claims there is only one third-party item or that project terms override every
+file. It names Lucide's ISC and SourceHut's CC0 notices already in
+`assets/icons.py`, the vendored Nunito Sans OFL, and the Tree-sitter header
+notice now retained beside those files. The three support headers are
+byte-identical to the pinned v0.26.9 upstream template/library files; the
+upstream MIT license is copied unchanged and linked from the parser guide.
+`check.py` requires the named notices and their attribution markers. No
+project, font or upstream license terms changed, and no history was rewritten;
+M5's historical font question remains a separate maintainer disposition.
+Source URLs, byte comparisons and hashes are retained in
+`.scratch/r491-third-party-inventory/tree-sitter-provenance.json`.
+This is a source/notice audit; no compiler, assembler or generated program ran.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
