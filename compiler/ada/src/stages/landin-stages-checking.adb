@@ -27361,10 +27361,13 @@ package body Landin.Stages.Checking is
                                (Types.all, Source_Id)
                                  = Landin.Checking.Field_Array_Length
                                      (Types.all, Wrote, Which)
-                             and then Landin.Checking.Array_Element
-                               (Types.all, Source_Id)
-                                 = Landin.Checking.Field_Array_Element
-                                     (Types.all, Wrote, Which);
+                             and then Landin.Checking.Field_Shapes_Agree
+                               (Types.all,
+                                Landin.Checking.Array_Element_Shape
+                                  (Types.all, Source_Id),
+                                Landin.Checking.Array_Field_Element
+                                  (Types.all, Landin.Checking.Field_Shape_Of
+                                     (Types.all, Wrote, Which)));
                         begin
                            if Edge_Is_Valid then
                               Reaches_Image :=

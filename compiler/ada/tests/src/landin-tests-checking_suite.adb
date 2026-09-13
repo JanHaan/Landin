@@ -3462,8 +3462,13 @@ package body Landin.Tests.Checking_Suite is
                  = Landin.Checking.Fixed_Array_Field
                and then Landin.Checking.Field_Array_Length
                           (Types.all, Nested, 2) = 2
-               and then Landin.Checking.Field_Array_Element
-                          (Types.all, Nested, 2) = Landin.Types.Usize,
+               and then Landin.Checking.Field_Shapes_Agree
+                 (Types.all,
+                  Landin.Checking.Array_Field_Element
+                    (Types.all, Landin.Checking.Field_Shape_Of
+                       (Types.all, Nested, 2)),
+                  (Kind => Landin.Checking.Scalar_Field,
+                   Element => Landin.Types.Usize, others => <>)),
                "the array field keeps one compact structural shape");
             Landin.Testing.Check_Equal
               (Item,

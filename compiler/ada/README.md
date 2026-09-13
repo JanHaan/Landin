@@ -262,6 +262,10 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Array-field element queries use the complete child shape, including nominal,
+reference and nested-array identity. The former scalar-only field accessor,
+which could expose a default `bool` for those children, has been removed.
+
 A missing hosted entry reports L0502 at an active top-level `main` declaration
 in the entry module when present, otherwise at the start of its first source
 (including an empty file). Imported and local names do not supply that anchor.

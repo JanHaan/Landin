@@ -3676,18 +3676,6 @@ package body Landin.Checking is
         (Layout.Shape_First + Field - 1).Length;
    end Field_Array_Length;
 
-   function Field_Array_Element
-     (Of_Table : Table;
-      Id       : Nominal_Type_Id;
-      Field    : Positive) return Landin.Types.Scalar_Name
-   is
-      Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
-   begin
-      return Of_Table.Field_Shapes
-        (Layout.Shape_First + Field - 1).Element;
-   end Field_Array_Element;
-
    function Layout_Extent (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Extent_Of
