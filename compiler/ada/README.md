@@ -284,6 +284,14 @@ negative facts to reject unavoidable C-layout errors while leaving unknown
 fields for concrete instantiation. A pointer's own representation remains
 independent of its referent's C compatibility.
 
+Pointer metadata keeps nominal identity through nested arrays; it does not
+require an opaque type's value layout. Accessing the pointee materializes that
+layout before checking fields or element strides. Verification distinguishes
+these identity edges from by-value bodies and checks any explicit body against
+the canonical nominal shape. Debug output uses a DWARF declaration without
+size or members for a type whose layout has not been materialized, and emits
+the full description when the layout exists.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature

@@ -498,7 +498,8 @@ package body Landin.Stages.Lowering is
       end Any_Evidence_For;
 
       function Neutral_Element
-        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
+        (Part : Landin.Checking.Signature_Part;
+         Identity_Only : Boolean := False) return IR.Field_Shape;
 
       function Pointee_For
         (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id;
@@ -1710,7 +1711,8 @@ package body Landin.Stages.Lowering is
       --  part's cases are keyed by the declaration and field that wrote
       --  them, so only Neutral_Field can build one.
       function Neutral_Shape
-        (Source : Landin.Checking.Field_Shape) return IR.Field_Shape;
+        (Source : Landin.Checking.Field_Shape;
+         Identity_Only : Boolean := False) return IR.Field_Shape;
 
       function Neutral_Field
         (Nominal : Landin.Checking.Nominal_Type_Id;
@@ -1745,7 +1747,8 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
 
       function Neutral_Shape
-        (Source : Landin.Checking.Field_Shape) return IR.Field_Shape
+        (Source : Landin.Checking.Field_Shape;
+         Identity_Only : Boolean := False) return IR.Field_Shape
       is
       begin
          case Source.Kind is
@@ -1787,14 +1790,19 @@ package body Landin.Stages.Lowering is
             when Landin.Checking.Fixed_Array_Field =>
                declare
                   Element : constant IR.Field_Shape := Neutral_Shape
-                    (Landin.Checking.Array_Field_Element (Types.all, Source));
+                    (Landin.Checking.Array_Field_Element (Types.all, Source),
+                     Identity_Only);
                begin
                   return IR.Make_Array_Shape
                     (Unit.all, IR.Element_Total (Source.Length), Element);
                end;
 
             when Landin.Checking.Aggregate_Field =>
-               return Neutral_Body (Source.Nominal);
+               return
+                 (if Identity_Only
+                  then (Kind => IR.Aggregate_Field_Shape,
+                        Nominal => Nominal_For (Source.Nominal), others => <>)
+                  else Neutral_Body (Source.Nominal));
 
             when Landin.Checking.Variant_Field =>
                --  Lay_Out refuses a variant part inside a payload run, so
@@ -1824,7 +1832,9 @@ package body Landin.Stages.Lowering is
       end Neutral_Element;
 
       function Neutral_Element
-        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape is
+        (Part : Landin.Checking.Signature_Part;
+         Identity_Only : Boolean := False) return IR.Field_Shape
+      is
       begin
          if Part.Kind /= Ty.Fixed_Array then
             raise Landin.Compiler_Defect with
@@ -1833,9 +1843,13 @@ package body Landin.Stages.Lowering is
            or else Part.Element_Shape.Signature /= Landin.Checking.No_Signature
            or else Part.Element_Shape.Atoms /= Landin.Checking.No_Atom_Set
          then
-            return Neutral_Shape (Part.Element_Shape);
+            return Neutral_Shape (Part.Element_Shape, Identity_Only);
          elsif Part.Nominal /= Landin.Checking.No_Nominal_Type then
-            return Neutral_Body (Part.Nominal);
+            return
+              (if Identity_Only
+               then (Kind => IR.Aggregate_Field_Shape,
+                     Nominal => Nominal_For (Part.Nominal), others => <>)
+               else Neutral_Body (Part.Nominal));
          end if;
          return
            (Kind    => IR.Scalar_Field_Shape,
@@ -1878,7 +1892,7 @@ package body Landin.Stages.Lowering is
                       Element => Descriptor.Element,
                       Nominal => Descriptor.Element_Nominal,
                       Element_Shape => Descriptor.Element_Shape,
-                      others => <>));
+                      others => <>), Identity_Only => True);
                begin
                   Shape := IR.Make_Array_Shape
                     (Unit.all, IR.Element_Total (Descriptor.Length), Child);

@@ -5453,7 +5453,10 @@ package body Landin.Tests.Verifier_Suite is
      (Item : in out Landin.Testing.Context)
    is
       type Scenario_Kind is
-        (Nominal_Link, Invalid_Edge, Pointer_Cycle, Callable_Cycle, Bad_Run);
+        (Nominal_Link, Nominal_Array_Link, Opaque_Nominal, Opaque_Array,
+         Bad_Nominal, Bad_Nominal_Length, Bad_Nominal_Element,
+         Bad_Nominal_Run, Bad_Nominal_Body, By_Value_Opaque,
+         Invalid_Edge, Pointer_Cycle, Callable_Cycle, Bad_Run);
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Site : Landin.Provenance.Origin;
@@ -5468,23 +5471,62 @@ package body Landin.Tests.Verifier_Suite is
             Nominal : IR.Nominal_Type_Id;
             Expected : constant V.Fault_Kind :=
               (case Scenario is
-                  when Nominal_Link => V.Nothing_Wrong,
+                  when Nominal_Link | Nominal_Array_Link
+                     | Opaque_Nominal | Opaque_Array => V.Nothing_Wrong,
                   when Callable_Cycle => V.Signature_Part_Malformed,
+                  when Bad_Nominal_Body => V.Nominal_Shape_Disagrees,
                   when others => V.Field_Shape_Malformed);
          begin
             IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
             Reached := IR.Add_Pointee
               (Unit, (Element => Landin.Types.U8, others => <>));
             case Scenario is
-               when Nominal_Link =>
+               when Nominal_Link | Nominal_Array_Link
+                  | Opaque_Nominal | Opaque_Array | Bad_Nominal
+                  | Bad_Nominal_Length | Bad_Nominal_Element
+                  | Bad_Nominal_Run | Bad_Nominal_Body | By_Value_Opaque =>
                   Nominal := IR.Add_Nominal_Type (Unit, 1);
-                  IR.Testing_Support.Overwrite_Pointee
-                    (Unit, Reached, (Kind => IR.Aggregate_Field_Shape,
-                                     Nominal => Nominal, others => <>));
-                  IR.Set_Nominal_Shape
-                    (Unit, Nominal,
-                     [1 => (Element => Landin.Types.Usize,
-                            Pointee => Reached, others => <>)]);
+                  declare
+                     Shape : IR.Field_Shape :=
+                       (Kind => IR.Aggregate_Field_Shape,
+                        Nominal => Nominal, others => <>);
+                  begin
+                     case Scenario is
+                        when Bad_Nominal =>
+                           Shape.Nominal := IR.No_Nominal_Type;
+                        when Bad_Nominal_Length => Shape.Length := 2;
+                        when Bad_Nominal_Element =>
+                           Shape.Element := Landin.Types.U8;
+                        when Bad_Nominal_Run => Shape.Cases := 1;
+                        when Bad_Nominal_Body =>
+                           IR.Set_Nominal_Shape
+                             (Unit, Nominal,
+                              [1 => (Element => Landin.Types.U8,
+                                     others => <>)]);
+                           Shape.Cases := 1;
+                           Shape.Payloads_First := IR.Add_Shape_Run
+                             (Unit, [1 => (Element => Landin.Types.U16,
+                                           others => <>)]);
+                        when Nominal_Array_Link | Opaque_Array =>
+                           Shape := IR.Make_Array_Shape (Unit, 2, Shape);
+                        when By_Value_Opaque =>
+                           declare
+                              Holder : constant IR.Nominal_Type_Id :=
+                                IR.Add_Nominal_Type (Unit, 2);
+                           begin
+                              IR.Set_Nominal_Shape (Unit, Holder, [Shape]);
+                           end;
+                        when others => null;
+                     end case;
+                     IR.Testing_Support.Overwrite_Pointee
+                       (Unit, Reached, Shape);
+                  end;
+                  if Scenario in Nominal_Link | Nominal_Array_Link then
+                     IR.Set_Nominal_Shape
+                       (Unit, Nominal,
+                        [1 => (Element => Landin.Types.Usize,
+                               Pointee => Reached, others => <>)]);
+                  end if;
                when Invalid_Edge | Pointer_Cycle =>
                   IR.Testing_Support.Overwrite_Pointee
                     (Unit, Reached,
@@ -5511,6 +5553,40 @@ package body Landin.Tests.Verifier_Suite is
                     "pointee graph: " & Scenario'Image);
          end;
       end loop;
+      declare
+         Unit : IR.Unit;
+         A, B : IR.Nominal_Type_Id;
+         First, Equal, Wider, Other : IR.Pointee_Id;
+      begin
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         A := IR.Add_Nominal_Type (Unit, 1);
+         B := IR.Add_Nominal_Type (Unit, 2);
+         First := IR.Add_Pointee
+           (Unit, IR.Make_Array_Shape
+              (Unit, 2, (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => A, others => <>)));
+         Equal := IR.Add_Pointee
+           (Unit, IR.Make_Array_Shape
+              (Unit, 2, (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => A, others => <>)));
+         Wider := IR.Add_Pointee
+           (Unit, IR.Make_Array_Shape
+              (Unit, 3, (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => A, others => <>)));
+         Other := IR.Add_Pointee
+           (Unit, IR.Make_Array_Shape
+              (Unit, 2, (Kind => IR.Aggregate_Field_Shape,
+                         Nominal => B, others => <>)));
+         Landin.Testing.Check
+           (Item, IR.Pointees_Agree (Unit, First, Equal),
+            "separate array runs preserve the same opaque identity");
+         Landin.Testing.Check
+           (Item, not IR.Pointees_Agree (Unit, First, Wider),
+            "pointer array extents remain distinct");
+         Landin.Testing.Check
+           (Item, not IR.Pointees_Agree (Unit, First, Other),
+            "opaque nominal identities remain distinct");
+      end;
    end Pointee_Graphs_Are_Checked;
 
    procedure Address_Initialisation_Is_Checked

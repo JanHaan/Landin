@@ -844,8 +844,55 @@ package body Landin.Tests.Debugging_Suite is
       end;
    end Terminal_Locations_Stop_Before_Restores;
 
+   procedure Opaque_Pointees_Are_Declarations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Opaque_Pointees_Are_Declarations
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Declaration : constant String :=
+        HT & ".uleb128 12" & LF & HT & ".asciz ""plain""" & LF
+        & HT & ".byte 1" & LF;
+   begin
+      for Accessed in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List := Request;
+         begin
+            Host.Add_File
+              ("main.ldn",
+               "plain: type (t: type) = struct member: t end plain "
+               & "hold: (p: ptr plain(u32), a: ptr [2]plain(u32)) -> "
+               & (if Accessed then "(r: u32) = r = p.val.member "
+                  else "none = _ = p ")
+               & "_ = a end hold");
+            Args.Append ("--debug=full");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Assembly : constant String := Host.Written ("out.s");
+            begin
+               Landin.Testing.Check
+                 (Item, Result.Status = 0 and then Tools.Run_Count = 0,
+                  "pointees emit debug text without host tools");
+               Landin.Testing.Check
+                 (Item, Contains (Assembly, Declaration) /= Accessed,
+                  "only an unmaterialized pointee is a declaration");
+               Landin.Testing.Check
+                 (Item, Contains (Assembly, ".asciz ""member""") = Accessed,
+                  "member layout appears only after materialization");
+            end;
+         end;
+      end loop;
+   end Opaque_Pointees_Are_Declarations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "opaque pointees are declarations",
+         Opaque_Pointees_Are_Declarations'Access);
       Landin.Testing.Register
         (Into, "debugging", "terminal locations stop before restores",
          Terminal_Locations_Stop_Before_Restores'Access);
