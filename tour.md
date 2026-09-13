@@ -2107,14 +2107,14 @@ after an `if` condition or `match` subject and only in the selected arm.
 
 ### [1090] Bare block, for scoping
 
-Bare block, for scoping. Without a label it is simply `begin ... end`; a label
-names the block for the later control transfers that need one.
+Bare block, for scoping. The enabled form is `begin ... end`. Labels name
+loops [1180]; labelled bare blocks are outside the enabled [1810] grammar.
 
 ```landin
-    scope: begin
+    begin
         tmp := x * 2
         out = out + tmp
-    end scope
+    end
 
 ```
 

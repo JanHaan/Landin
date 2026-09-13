@@ -374,13 +374,13 @@ path out of the block.
 
 ```landin
 public take_events: () -> (n: u32) =
-    scope: begin
+    begin
         prev := cpu.disable_interrupts()
         defer cpu.restore_interrupts(prev)
 
         n = rx_events
         rx_events = 0
-    end scope
+    end
 end take_events
 
 ```

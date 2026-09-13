@@ -1,0 +1,16 @@
+begin: type = i32
+
+-- The tour's scoping example uses the enabled unlabelled block.
+demo: (x: i32) -> (out: i32) =
+    out = 0
+    begin
+        tmp := x * 2
+        out = out + tmp
+    end
+end demo
+
+-- A type named begin still belongs to the ordinary name space.
+typed: () -> (result: begin) =
+    scope: begin = 3
+    result = scope
+end typed
