@@ -162,6 +162,12 @@ package body Landin.Tests.Parser_Suite is
       Pinned    : Natural := 0;
    begin
       Fixtures.Discover (Catalogue, Corpus, Host);
+      Landin.Testing.Check_Equal
+        (Item, Fixtures.Problem_Count (Catalogue), 0,
+         "the corpus metadata is valid");
+      if Fixtures.Problem_Count (Catalogue) /= 0 then
+         return;
+      end if;
 
       for Index in 1 .. Fixtures.Count (Catalogue) loop
          declare
@@ -250,15 +256,19 @@ package body Landin.Tests.Parser_Suite is
          end;
       end loop;
 
-      --  A corpus that shrank to nothing would pass every case above.
-      Landin.Testing.Check
-        (Item, Accepted >= 42,
+      Landin.Testing.Check_Equal
+        (Item, Accepted,
+         Fixtures.Program_Count (Catalogue, Fixtures.Positive_Program),
          "every positive program in the corpus was parsed");
-      Landin.Testing.Check
-        (Item, Rejected >= 20,
+      Landin.Testing.Check_Equal
+        (Item, Rejected,
+         Fixtures.Program_Count (Catalogue, Fixtures.Negative_Program),
          "every negative program in the corpus was parsed");
       Landin.Testing.Check
-        (Item, Pinned = Rejected,
+        (Item, Accepted > 0 and then Rejected > 0,
+         "both program corpus obligations remain present");
+      Landin.Testing.Check_Equal
+        (Item, Pinned, Rejected,
          "every negative program names the codes its report carries");
    end Agrees_With_The_Corpus;
 
@@ -1460,6 +1470,12 @@ package body Landin.Tests.Parser_Suite is
       end Codes_In;
    begin
       Fixtures.Discover (Catalogue, Corpus, Real);
+      Landin.Testing.Check_Equal
+        (Item, Fixtures.Problem_Count (Catalogue), 0,
+         "the corpus metadata is valid");
+      if Fixtures.Problem_Count (Catalogue) /= 0 then
+         return;
+      end if;
 
       for Index in 1 .. Fixtures.Count (Catalogue) loop
          declare
@@ -1547,9 +1563,13 @@ package body Landin.Tests.Parser_Suite is
          end;
       end loop;
 
+      Landin.Testing.Check_Equal
+        (Item, Pinned,
+         Fixtures.Program_Count
+           (Catalogue, Fixtures.Negative_Program, Require_Codes => True),
+         "every negative program that names codes was attempted");
       Landin.Testing.Check
-        (Item, Pinned >= 24,
-         "every negative fixture that names codes was run");
+        (Item, Pinned > 0, "the diagnostic corpus obligation remains");
    end Reports_Carry_The_Pinned_Codes;
 
    --  D135's first increment is syntax-only: aliases hold both formal

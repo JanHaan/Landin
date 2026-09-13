@@ -5679,7 +5679,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
-| M14: harness contracts | Stream repair implemented: recorded, runtime and ABI oracles honor the selected stream and require empty stderr for output-only expectations, using separately captured native stderr. Fake wrong-stream/additional-stderr controls and tiny native captures pass. Suite inventory is repaired too: startup checks missing and unlisted suite names, while check.py compares every suite source with its registration and expected name. Coarse corpus floors still need independent discovery/selection accounting without manufacturing fixed historical corpus counts. | Fourth batch implementation |
+| M14: harness contracts | Stream repair implemented: recorded, runtime and ABI oracles honor the selected stream and require empty stderr for output-only expectations, using separately captured native stderr. Fake wrong-stream/additional-stderr controls and tiny native captures pass. Suite inventory is repaired too: startup checks missing and unlisted suite names, while check.py compares every suite source with its registration and expected name. Corpus accounting now compares Ada discovery with the independently generated target inventory, then checks attempted programs, recorded outputs and runtime/ABI profiles against metadata obligations. Named nonempty categories remain required. Validation is metadata-only; complete corpus execution and exact acceptance remain open. | Fourth batch implementation |
 | M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
@@ -5720,7 +5720,7 @@ sweep, debugger or stress campaign was used for this reconciliation.
 | N1, N4: frontend and R5 readiness | Duplicate A2/C2/M3, A3, C5, C6 and M1 above. R5 remains planned behind R4.91 and exact acceptance. The review adds no new measured exhaustion threshold. |
 | N2: declaration recovery | Confirmed with small parser inputs and repaired: recovery retains `extern`, array/pointer/erased conformance heads and ordinary named conformances. A C declaration retains both its bodyless flag and convention. |
 | N3: statement recovery | Confirmed and repaired for contextual loops, transfers, match, cleanup and blocks, plus selected assignment/call heads. The focused seam compares the valid source with one stray token inserted before it, requiring one report and preserved node kinds, names, child slots and C convention. |
-| N5, N7, N8: fixture inventory and low floors | Duplicate M14, with concrete parser/execution floor sites. Implement independent discovery/selection accounting and explicit obligations; do not replace historical floors with the report's fixed 955/233 counts. Counts alone cannot prove an intentionally removed fixture's semantic coverage survived. No fixture-deletion experiment was run. |
+| N5, N7, N8: fixture inventory and low floors | Implemented with M14: discovery must match every identity/target row in the independently generated inventory; parser and execution loops account for all eligible programs, recorded outputs and selected profiles, with explicit nonempty categories and metadata-error stops. No historical fixed counts were adopted. Counts cannot prove semantic coverage after intentional deletion and regeneration. Validation uses fake catalogues and real metadata only; no fixture-deletion experiment or broad corpus run was performed. |
 | N6: wide slice stride | Implemented with J61 and A7/M19/K29: shared immediate-width selection and a register multiply for larger strides. Development evidence uses scalar boundary constants and tiny emitted-text controls; no giant extent or assembler reproduction. |
 | N9: negatives without `program` | Implemented with J79: recorded and source negative executions share termination, declared/default status and exact ordered-code checks. Recorded bytes remain independently checked, including CLI fixtures without a program. Exact acceptance remains open. |
 | N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
@@ -7379,8 +7379,25 @@ and a refused duplicate; filtering and ordering remain intact. Both
 single-worker builds pass. No fixture corpus run, native assembly, generated
 executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-suite-inventory/` and `.scratch/r491-final-values/`.
-The remaining M14/N5/N7/N8 task is independent fixture-discovery and selection
-accounting in place of historical corpus floors. Exact acceptance remains open.
+The separate M14/N5/N7/N8 fixture-discovery and selection accounting repair
+is recorded below. Exact acceptance remains open.
+
+M14/N5/N7/N8 fixture accounting replaces the parser and execution floors with
+metadata-derived obligations. Ada discovery must match every fixture identity
+and target list in the independent `check.py` inventory. Missing, extra,
+duplicate, malformed and changed-target rows fail; comments and the four
+prototype scope rows are handled separately. Runners reject metadata problems
+before work, count all eligible programs and recorded expectations, and count
+runtime/ABI attempts inside each selected profile loop. Positive, negative,
+runtime, ABI and recorded-output categories retain explicit nonempty duties.
+The counters describe attempts; existing verdict/output checks still decide
+success. Intentional fixture removal plus inventory regeneration still needs
+semantic coverage review. Both single-worker builds and five exact selectors
+pass, with 150 checks in each of macOS debug and Linux release. Validation
+is restricted to fake catalogues and real metadata; the changed broad parser, emission and runtime cases are not
+executed under the resource limits. Evidence is in
+`.scratch/r491-fixture-accounting/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
 
 J70 development evidence: [1810] and D156/D157 both explicitly exclude new
 post-loop assignment facts established only in an iteration or completion.

@@ -1,3 +1,4 @@
+with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
 
 package body Landin.Testing.Fixtures is
@@ -180,6 +181,96 @@ package body Landin.Testing.Fixtures is
       end loop;
       return Total;
    end Count_Of;
+
+   function Program_Count
+     (In_Catalogue : Catalogue;
+      Of_Class : Fixture_Class;
+      Require_Codes : Boolean := False) return Natural
+   is
+      Total : Natural := 0;
+   begin
+      for Item of In_Catalogue.Items loop
+         if Class (Item) = Of_Class and then Program (Item) /= ""
+           and then (not Require_Codes or else Codes (Item) /= "")
+         then
+            Total := Total + 1;
+         end if;
+      end loop;
+      return Total;
+   end Program_Count;
+
+   function Recorded_Count (In_Catalogue : Catalogue) return Natural is
+      Total : Natural := 0;
+   begin
+      for Item of In_Catalogue.Items loop
+         if Expect (Item) /= "" then
+            Total := Total + 1;
+         end if;
+      end loop;
+      return Total;
+   end Recorded_Count;
+
+   function Profile_Run_Count
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural
+   is
+      Total : Natural := 0;
+   begin
+      for Item of In_Catalogue.Items loop
+         if Class (Item) = Of_Class then
+            Total := Total + Profile_Count (Item);
+         end if;
+      end loop;
+      return Total;
+   end Profile_Run_Count;
+
+   function Matches_Inventory
+     (In_Catalogue : Catalogue; Text : String) return Boolean
+   is
+      package Rows is new Ada.Containers.Indefinite_Ordered_Sets (String);
+      Remaining : Rows.Set;
+      First : Integer := Text'First;
+
+      function Consume (Line : String) return Boolean;
+
+      function Consume (Line : String) return Boolean is
+         Row : constant String :=
+           Ada.Strings.Fixed.Trim (Line, Ada.Strings.Both);
+         Divider : constant Natural := Ada.Strings.Fixed.Index (Row, " | ");
+      begin
+         if Row = "" or else Row (Row'First) = '#' then
+            return True;
+         elsif Divider = 0 or else Divider + 3 > Row'Last then
+            return False;
+         elsif Row (Row'First .. Divider - 1) in
+           "prototype-1" | "prototype-2" | "prototype-3" | "prototype-4"
+         then
+            return True;
+         elsif not Remaining.Contains (Row) then
+            return False;
+         end if;
+         Remaining.Delete (Row);
+         return True;
+      end Consume;
+   begin
+      if Problem_Count (In_Catalogue) /= 0 then
+         return False;
+      end if;
+      for Item of In_Catalogue.Items loop
+         Remaining.Insert
+           (Class_Directory (Class (Item)) & "/" & Name (Item)
+            & " | " & Targets (Item));
+      end loop;
+      for Index in Text'Range loop
+         if Text (Index) = ASCII.LF then
+            if not Consume (Text (First .. Index - 1)) then
+               return False;
+            end if;
+            First := Index + 1;
+         end if;
+      end loop;
+      return Consume (Text (First .. Text'Last))
+        and then Remaining.Is_Empty;
+   end Matches_Inventory;
 
    function Problem_Count (In_Catalogue : Catalogue) return Natural
      is (Natural (In_Catalogue.Problems.Length));

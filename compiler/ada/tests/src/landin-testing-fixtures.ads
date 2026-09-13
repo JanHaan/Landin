@@ -135,6 +135,26 @@ package Landin.Testing.Fixtures is
    function Count_Of
      (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural;
 
+   --  Independent metadata obligations for the corpus runners. These count
+   --  eligible fixtures, not successful verdicts or generated executables.
+   function Program_Count
+     (In_Catalogue : Catalogue;
+      Of_Class : Fixture_Class;
+      Require_Codes : Boolean := False) return Natural;
+
+   function Recorded_Count (In_Catalogue : Catalogue) return Natural;
+
+   function Profile_Run_Count
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural
+     with Pre => Of_Class in Runtime | Abi;
+
+   --  Compare every discovered identity and target list with check.py's
+   --  independently generated targets.matrix. Reject missing, additional or
+   --  duplicate rows and malformed catalogues; only its four prototype scope
+   --  rows and comments are outside the fixture inventory.
+   function Matches_Inventory
+     (In_Catalogue : Catalogue; Text : String) return Boolean;
+
    function Problem_Count (In_Catalogue : Catalogue) return Natural;
 
    function Nth_Problem

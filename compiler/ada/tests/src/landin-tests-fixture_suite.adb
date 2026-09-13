@@ -1,4 +1,5 @@
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Platform.Native;
 with Landin.Testing.Fakes;
@@ -7,6 +8,7 @@ with Landin.Testing.Fixtures;
 package body Landin.Tests.Fixture_Suite is
 
    use Landin.Testing.Fixtures;
+   use type Landin.Platform.Read_Status;
 
    LF : constant Character := Character'Val (10);
 
@@ -144,6 +146,9 @@ package body Landin.Tests.Fixture_Suite is
                Landin.Testing.Check_Equal
                  (Item, Profile_Count (Nth (Found, 1)), Expected,
                   Name & " selects its written policy");
+               Landin.Testing.Check_Equal
+                 (Item, Profile_Run_Count (Found, Kind), Expected,
+                  Name & " contributes every selected profile");
             end if;
          else
             Landin.Testing.Check_Equal
@@ -262,6 +267,73 @@ package body Landin.Tests.Fixture_Suite is
         (Item, Problem_Count (Found), 0,
          "well-formed fixtures have no problems");
       Landin.Testing.Check_Equal (Item, Count (Found), 7, "seven fixtures");
+      Landin.Testing.Check_Equal
+        (Item, Program_Count (Found, Unit), 0, "units need no program");
+      Landin.Testing.Check_Equal
+        (Item, Program_Count (Found, Positive_Program), 1,
+         "rooted positive programs count");
+      Landin.Testing.Check_Equal
+        (Item, Program_Count (Found, Negative_Program), 2,
+         "both negative programs count");
+      Landin.Testing.Check_Equal
+        (Item, Program_Count (Found, Negative_Program, True), 1,
+         "only one negative program pins diagnostic codes");
+      Landin.Testing.Check_Equal
+        (Item, Recorded_Count (Found), 1, "only recorded outputs count");
+      Landin.Testing.Check_Equal
+        (Item, Profile_Run_Count (Found, Abi), 8,
+         "two standard ABI fixtures owe eight profile attempts");
+      Landin.Testing.Check_Equal
+        (Item, Profile_Run_Count (Found, Runtime), 0,
+         "an absent runtime class owes no profile attempts");
+      declare
+         First : constant String := "unit/alpha | linux-x86-64" & LF;
+         Rest : constant String :=
+           "unit/zebra | linux-x86-64" & LF
+           & "positive/rooted-positive | linux-x86-64" & LF
+           & "negative/broken-name | linux-x86-64" & LF
+           & "negative/rooted-negative | linux-x86-64" & LF
+           & "abi/c-bridge | linux-x86-64" & LF
+           & "abi/c-with | linux-x86-64";
+         Empty : Catalogue;
+      begin
+         Landin.Testing.Check
+           (Item, Matches_Inventory (Found, First & Rest),
+            "all identities match without a final newline");
+         Landin.Testing.Check
+           (Item, Matches_Inventory
+              (Found, "# scope | targets" & LF & LF
+               & "prototype-1 | cortex-m" & LF & Rest & LF & First),
+            "comments and prototype scopes do not select fixtures");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory (Found, Rest),
+            "a missing inventory fixture is refused");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory (Found, First & Rest & LF & First),
+            "a duplicate inventory fixture is refused");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory
+              (Found, First & Rest & LF & "unit/extra | linux-x86-64"),
+            "an undiscovered inventory fixture is refused");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory
+              (Found, "unit/alpha | cortex-m" & LF & Rest),
+            "a changed target list is refused");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory
+              (Found, First & Rest & LF & "prototype-5 | cortex-m"),
+            "an unknown scope cannot silently vanish");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory
+              (Found, First & Rest & LF & "malformed"),
+            "a malformed inventory row is refused");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory (Found, ""),
+            "an empty inventory cannot match a nonempty catalogue");
+         Landin.Testing.Check
+           (Item, not Matches_Inventory (Empty, First),
+            "an empty discovery cannot match a nonempty inventory");
+      end;
       Landin.Testing.Check_Equal
         (Item, Count_Of (Found, Unit), 2, "two unit fixtures");
       Landin.Testing.Check_Equal
@@ -828,6 +900,21 @@ package body Landin.Tests.Fixture_Suite is
       Found : Catalogue;
    begin
       Discover (Found, Valid_Root, Host);
+      declare
+         Text : Ada.Strings.Unbounded.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Host.Read_File ("../tests/targets.matrix", Text, Status);
+         Landin.Testing.Check
+           (Item, Status = Landin.Platform.Read_Ok,
+            "the independent fixture inventory is readable");
+         if Status = Landin.Platform.Read_Ok then
+            Landin.Testing.Check
+              (Item, Matches_Inventory
+                 (Found, Ada.Strings.Unbounded.To_String (Text)),
+               "discovery matches every inventoried identity and target");
+         end if;
+      end;
 
       Landin.Testing.Check
         (Item, Count (Found) > 0,
@@ -872,6 +959,9 @@ package body Landin.Tests.Fixture_Suite is
 
    begin
       Discover (Found, Invalid_Root, Host);
+      Landin.Testing.Check
+        (Item, not Matches_Inventory (Found, ""),
+         "malformed discovery cannot match an empty inventory");
 
       Landin.Testing.Check_Equal
         (Item, Count (Found), 0, "no malformed fixture is accepted");

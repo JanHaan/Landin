@@ -341,6 +341,18 @@ from individual case selection. `check.py` also compares every suite source
 with its registration call and expected name, so dropping both a call and
 its expected name cannot silently omit a source package.
 
+The metadata-only `fixtures/repository fixtures are clean` case compares
+Ada discovery with every fixture identity and target list in `targets.matrix`,
+which `check.py` generates independently. Missing, additional and duplicate
+rows fail. Corpus runners separately compare their attempted programs,
+recorded outputs and runtime/ABI profiles with metadata-derived obligations,
+and require the positive, negative, runtime, ABI and recorded-output coverage
+categories they own to remain present. Malformed metadata stops those runners
+before they invoke a compiler. These are inventory and selection checks;
+individual verdicts and output oracles still decide success. Intentionally
+removing a fixture and regenerating the inventory still needs review of the
+semantic coverage that fixture provided.
+
 ## Metadata
 
 `fixture.meta` is `key: value` lines, with `#` comments and blank lines.

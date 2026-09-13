@@ -379,6 +379,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Found   : Catalogue;
       Program : constant String := Refine_Path;
       Ran     : Natural := 0;
+      Pinned  : Natural := 0;
+      Negative_Ran : Boolean := False;
+      End_To_End_Ran : Boolean := False;
    begin
       if not Host.Exists (Program) then
          Landin.Testing.Fail
@@ -393,41 +396,36 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Check_Equal
         (Item, Problem_Count (Found), 0,
          "the fixture tree parses before anything is run");
+      if Problem_Count (Found) /= 0 then
+         return;
+      end if;
 
       for Index in 1 .. Count (Found) loop
          declare
             Case_Item : constant Fixture := Nth (Found, Index);
          begin
             if Expect (Case_Item) /= "" then
-               Ran := Ran + 1;
                Run_Recorded (Case_Item, Host, Program, Item);
+               Ran := Ran + 1;
+               Negative_Ran := Negative_Ran
+                 or else Class (Case_Item) = Negative_Program;
+               End_To_End_Ran := End_To_End_Ran
+                 or else Class (Case_Item) = End_To_End;
+               if Stream (Case_Item) = Output then
+                  Pinned := Pinned + 1;
+               end if;
             end if;
          end;
       end loop;
 
-      --  Without this the whole case would pass by running nothing, which
-      --  is the exact failure it exists to catch.
+      Landin.Testing.Check_Equal
+        (Item, Ran, Recorded_Count (Found),
+         "every recorded expectation was attempted");
       Landin.Testing.Check
-        (Item, Ran >= 2,
-         "at least the recorded end-to-end and negative fixtures ran");
-
-      --  At least one fixture must pin the stream, or swapping refine's
-      --  two streams would again be invisible to every fixture.
-      declare
-         Pinned : Natural := 0;
-      begin
-         for Index in 1 .. Count (Found) loop
-            if Expect (Nth (Found, Index)) /= ""
-              and then Stream (Nth (Found, Index)) = Output
-            then
-               Pinned := Pinned + 1;
-            end if;
-         end loop;
-
-         Landin.Testing.Check
-           (Item, Pinned >= 1,
-            "a fixture pins which stream refine wrote to");
-      end;
+        (Item, Negative_Ran and then End_To_End_Ran,
+         "recorded negative and end-to-end obligations remain present");
+      Landin.Testing.Check
+        (Item, Pinned > 0, "a recorded run pins refine's output stream");
 
       --  And a multi-argument run, because a runner that passed only the
       --  first argument would satisfy every single-argument fixture.
@@ -499,6 +497,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
 
       Discover (Found, Fixture_Root, Host);
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0, "positive metadata is valid");
+      if Problem_Count (Found) /= 0 then
+         return;
+      end if;
 
       for Index in 1 .. Count (Found) loop
          declare
@@ -507,17 +510,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
             if Class (Case_Item) = Positive_Program
               and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
             then
-               Ran := Ran + 1;
                Emit_Positive (Case_Item, Host, Program, Item);
+               Ran := Ran + 1;
             end if;
          end;
       end loop;
 
-      --  Without this the case would pass by emitting nothing, which is
-      --  the failure the whole class exists to prevent.
+      Landin.Testing.Check_Equal
+        (Item, Ran, Program_Count (Found, Positive_Program),
+         "every eligible positive fixture was attempted");
       Landin.Testing.Check
-        (Item, Ran >= 50,
-         "the positive corpus was emitted rather than skipped");
+        (Item, Ran > 0, "the positive program obligation remains present");
    end Every_Positive_Fixture_Is_Emitted;
 
    --  A host that cannot finish the target fails rather than skipping.
@@ -864,6 +867,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Program     : constant String := Refine_Path;
       Runtime_Ran : Natural := 0;
       ABI_Ran     : Natural := 0;
+      Runtime_Profiles : Natural := 0;
+      ABI_Profiles : Natural := 0;
    begin
       if not Host.Exists (Program) then
          Landin.Testing.Fail
@@ -874,6 +879,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
 
       Discover (Found, Fixture_Root, Host);
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0, "runtime and ABI metadata is valid");
+      if Problem_Count (Found) /= 0 then
+         return;
+      end if;
 
       for Index in 1 .. Count (Found) loop
          declare
@@ -883,22 +893,34 @@ package body Landin.Tests.Fixture_Execution_Suite is
                Runtime_Ran := Runtime_Ran + 1;
                for Profile in 1 .. Profile_Count (Case_Item) loop
                   Run_Runtime (Case_Item, Host, Program, Profile, Item);
+                  Runtime_Profiles := Runtime_Profiles + 1;
                end loop;
             elsif Class (Case_Item) = Abi then
                ABI_Ran := ABI_Ran + 1;
                for Profile in 1 .. Profile_Count (Case_Item) loop
                   Run_ABI (Case_Item, Host, Program, Profile, Item);
+                  ABI_Profiles := ABI_Profiles + 1;
                end loop;
             end if;
          end;
       end loop;
 
-      --  Without these the case would pass by running nothing, which is
-      --  the failure both executable fixture classes exist to prevent.
+      Landin.Testing.Check_Equal
+        (Item, Runtime_Ran, Count_Of (Found, Runtime),
+         "every runtime fixture was selected");
+      Landin.Testing.Check_Equal
+        (Item, ABI_Ran, Count_Of (Found, Abi),
+         "every ABI fixture was selected");
+      Landin.Testing.Check_Equal
+        (Item, Runtime_Profiles, Profile_Run_Count (Found, Runtime),
+         "every runtime profile was attempted");
+      Landin.Testing.Check_Equal
+        (Item, ABI_Profiles, Profile_Run_Count (Found, Abi),
+         "every ABI profile was attempted");
       Landin.Testing.Check
-        (Item, Runtime_Ran >= 1, "at least one runtime fixture was found");
+        (Item, Runtime_Ran > 0, "the runtime obligation remains present");
       Landin.Testing.Check
-        (Item, ABI_Ran >= 1, "at least one ABI fixture was found");
+        (Item, ABI_Ran > 0, "the ABI obligation remains present");
    end Runtime_Fixtures_Execute;
 
    procedure Selected_Fixture_Executes
