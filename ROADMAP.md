@@ -2863,7 +2863,7 @@ that has no implementation owner.
 | `[0860]` | hosted-now | R2.50 | matrix evidence |
 | `[0870]` | hosted-now | R2.30 | matrix evidence |
 | `[0880]` | hosted-now | R2.30 | matrix evidence |
-| `[0890]` | hosted-now | R2.30 | matrix evidence |
+| `[0890]` | hosted-now | R2.30 | `none` has matrix evidence; `noreturn` has a named refusal owned by R6.70 |
 | `[0900]` | hosted-now | R2.50 | matrix evidence |
 | `[0910]` | hosted-now | R2.50 | matrix evidence |
 | `[0920]` | hosted-now | R2.30 | matrix evidence |
@@ -5812,7 +5812,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Rendering growth repaired with M10: line excerpts use bounded slices and the complete text defaults to a 1 MiB budget with an explicit truncation notice. Full structured reports remain intact. The old exhaustion/exit-70 magnitude claim remains unmeasured; no stress case was replayed. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Already repaired with J5: block structs consume their immediate `end`, optionally consume a repeated name, and preserve following declarations. The retained J5 bare-closer/parser and source-to-IR controls cover this duplicate finding; no separate feature or stress run is needed. |
-| J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
+| J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Partially implemented: `noreturn` signatures now receive one named L0010 refusal citing [0890] and R6.70, with body/declaration recovery and ordinary-name controls. The `volatile` and multi-name binding forms still need refusal/document agreement; preserve contextual identifier uses. Labelled bare blocks remain the separate J40 item. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
 | J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
@@ -5837,7 +5837,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Implemented with C6: guard nested calls and recovery clauses; read refused public prefixes iteratively. Bounded parser controls pass in both modes; exact acceptance remains open. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Implemented: retain completion boundaries unless `complete` names a visible loop; preserve declarations, assignments and nested labels with that spelling. Selected parser, verified-IR and refusal controls pass in both modes; exact acceptance remains open. |
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
-| J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
+| J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Partially implemented: `noreturn` signatures now receive one named L0010 refusal citing [0890] and R6.70, with body/declaration recovery and ordinary-name controls. The `volatile` and multi-name binding forms still need refusal/document agreement; preserve contextual identifier uses. Labelled bare blocks remain the separate J40 item. |
 | J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
 | J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Repaired: only a Name_Reference supplies a lexical callee name. Indexed, sliced and selected callees resolve their complete expression before arguments. Stored callbacks reach verified indirect calls; indexed/sliced non-functions retain L0301 instead of an accessor failure. |
 | J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Repaired: absent direct callee names and available runtime argument projections use ordinary resolution, even when the application cannot be classified. Missing names report L0201; type-only arguments await known formals. A shared conversion-name predicate preserves builtin checker ownership and declared-name shadowing. |
@@ -7427,6 +7427,18 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J15's `noreturn` facet now follows [1830]'s named-refusal contract.
+Function bodies, function types and foreign signatures receive one L0010
+with [0890] and the existing R6.70 owner. Recovery retains the following
+declaration, and `noreturn` remains usable as an ordinary type or binding
+name. Four exact selectors pass 44 checks in each of macOS debug and Linux
+release; both single-worker builds and the three fixture inventories pass.
+The positive fixture emits assembly text only. No native assembly, generated
+executable, debugger or giant image ran. Evidence is retained in
+`.scratch/r491-noreturn/` and `.scratch/r491-final-values/`. This does not
+enable nonreturning functions. J15's volatile and multi-name binding facets
+and exact-revision acceptance remain open.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

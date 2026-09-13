@@ -102,6 +102,7 @@ package Landin.Diagnostics.Syntactic is
       --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
       --  enabled expression grammar.
       Struct_All_Of,
+      Nonreturning_Function,
       --  D212 withdraws [0820]'s lexical arena block by its shape.  The
       --  word is not reserved and names a library type today, so only a
       --  statement-position `arena name do` is this construct.
@@ -119,7 +120,8 @@ package Landin.Diagnostics.Syntactic is
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
-            when Arena_Block           => "[0820]")
+            when Arena_Block           => "[0820]",
+            when Nonreturning_Function => "[0890]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -161,6 +163,7 @@ private
             --  derived hosted application, before the hosted parity gate.
             when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
-            when Type_Parameter => "R2.40");
+            when Type_Parameter => "R2.40",
+            when Nonreturning_Function => "R6.70");
 
 end Landin.Diagnostics.Syntactic;

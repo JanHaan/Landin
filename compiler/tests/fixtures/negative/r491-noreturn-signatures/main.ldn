@@ -1,0 +1,8 @@
+halt: () -> noreturn =
+    loop do
+    end loop
+end halt
+
+callback: type = () -> noreturn
+
+sentinel: i32 = 1

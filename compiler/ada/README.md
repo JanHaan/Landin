@@ -767,6 +767,11 @@ the grammar already spells. D161 moved ordinary quoted text out of that band:
 the scanner now validates its closed escape set through `Landin.Tokens.Text`
 and emits an enabled text token for the parser.
 
+The parser also recognises [0890]'s `noreturn` return position and gives its
+named refusal with the R6.70 owner while retaining the body and following
+declarations for recovery. The spelling remains an ordinary identifier in
+types and bindings.
+
 The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is
 what keeps the seam a seam rather than an empty directory tree with

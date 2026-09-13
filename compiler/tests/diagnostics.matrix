@@ -9,7 +9,7 @@ L0004  Live     false empty-ok    0..0 0     landin-driver.adb                  
 L0005  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0006  Live     true  nonempty    0..0 1     landin-driver.adb                   negative/module-not-found,test:landin-tests-driver_suite.adb
 L0007  Live     false empty-ok    0..0 1     landin-driver.adb                   negative/module-directory-invalid,test:landin-tests-driver_suite.adb
-L0010  Live     true  nonempty    0..0 2     landin-diagnostics-checking.ads,landin-diagnostics-syntactic.ads negative/arena-block-names-owner,negative/arena-block-not-enabled,negative/indexing-not-enabled,negative/struct-construction-all-of-not-enabled,negative/struct-literal-not-enabled,test:landin-tests-driver_suite.adb,test:landin-tests-parser_suite.adb
+L0010  Live     true  nonempty    0..0 2     landin-diagnostics-checking.ads,landin-diagnostics-syntactic.ads negative/arena-block-names-owner,negative/arena-block-not-enabled,negative/indexing-not-enabled,negative/r491-noreturn-signatures,negative/struct-construction-all-of-not-enabled,negative/struct-literal-not-enabled,test:landin-tests-driver_suite.adb,test:landin-tests-parser_suite.adb
 L0011  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/malformed-integer-digit
 L0012  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/latin1-byte-in-name,negative/non-ascii-outside-comment,negative/r491-lexical-signature-recovery,negative/unknown-byte,negative/upper-case-name,test:landin-tests-parser_suite.adb
 L0013  Live     true  empty-ok    1..1 0     landin-diagnostics-lexical.adb      negative/unclosed-block-comment

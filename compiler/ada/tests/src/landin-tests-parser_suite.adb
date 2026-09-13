@@ -3518,8 +3518,78 @@ package body Landin.Tests.Parser_Suite is
       Check ("arena");
    end Contextual_Names_Start_Ordinary_Statements;
 
+   procedure Noreturn_Has_A_Named_Refusal
+     (Item : in out Landin.Testing.Context);
+
+   procedure Noreturn_Has_A_Named_Refusal
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String);
+
+      procedure Check (Text : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Reports : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("noreturn.ldn", Text & ASCII.LF & "sentinel: i32 = 1");
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Reports);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Reports);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Reports), 1,
+               "noreturn has one named refusal");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
+               "the refused signature preserves the next declaration");
+            if Landin.Syntax.Declaration_Count (Parsed) = 2 then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Source.Names.Spelling
+                    (Names, Landin.Syntax.Name
+                       (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))),
+                  "sentinel", "recovery retains the following name");
+            end if;
+         end;
+         if Landin.Diagnostics.Count (Reports) = 1 then
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Reports, 1);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Code (Report), "L0010",
+                  "the deferred construct owns the diagnostic code");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Note_Count (Report), 2,
+                  "the refusal names both the construct and its work");
+               if Landin.Diagnostics.Note_Count (Report) = 2 then
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 1), "[0890]"),
+                     "the first note names the tour's return form");
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 2), "R6.70"),
+                     "the second note names the existing enabling work");
+               end if;
+            end;
+         end if;
+      end Check;
+   begin
+      Check ("f: () -> noreturn = end f");
+      Check ("f: () -> noreturn = loop do end loop end f");
+      Check ("callback: type = () -> noreturn");
+      Check ("extern (c) f: () -> noreturn");
+   end Noreturn_Has_A_Named_Refusal;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "noreturn has a named refusal",
+         Noreturn_Has_A_Named_Refusal'Access);
       Landin.Testing.Register
         (Into, "parser", "contextual names start ordinary statements",
          Contextual_Names_Start_Ordinary_Statements'Access);
