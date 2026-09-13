@@ -5932,7 +5932,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
-| J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
 | J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
 | J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
@@ -6698,7 +6698,18 @@ reproduction has a ten-second limit. No Landin assembler, linker or generated
 executable ran. Logs are retained in `.scratch/r491-fixed-conditional/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J135's erased reference identity is next. J116's slice-endpoint claim
+J135 development evidence: three selected cases pass 137 checks in each of
+macOS debug and Linux release. The new table case has 116 checks across both
+target facts, covering identical and duplicate erased carriers, absent or
+other concepts, permission direction, carrier-versus-pointer distinctions,
+pointers/slices to any and nested pointers. Existing generic reference-actual
+identity and three-element reference-array layout controls retain their
+verdicts. Both single-worker builds passed; selected tests have 30-second or
+shorter timeouts. No Landin assembler, linker or generated executable ran.
+Logs are retained in `.scratch/r491-any-reference-identity/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J130's struct payload binding copies are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

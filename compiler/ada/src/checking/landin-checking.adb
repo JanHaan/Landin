@@ -1934,6 +1934,15 @@ package body Landin.Checking is
      (Of_Table : Table; Left, Right : Reference_Descriptor) return Boolean
    is
    begin
+      --  An erased carrier stores its concept directly and has no referent.
+      --  A pointer or slice to one instead uses the Any_Value referent arm.
+      if Left.Kind = Landin.Types.Any_Value then
+         return Right.Kind = Left.Kind
+           and then Holds (Of_Table, Left.Concept)
+           and then Holds (Of_Table, Right.Concept)
+           and then Left.Concept = Right.Concept;
+      end if;
+
       if Left.Referent /= Right.Referent then
          return False;
       end if;
