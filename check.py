@@ -2914,6 +2914,27 @@ def third_party_notices():
     return out
 
 
+def decision_status_references():
+    """Decision evidence cannot call a completed roadmap owner active."""
+    spec = io.open(os.path.join(ROOT, "spec.md"), encoding="utf-8").read()
+    roadmap = io.open(os.path.join(ROOT, ROADMAP), encoding="utf-8").read()
+    statuses = dict(re.findall(
+        r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
+        roadmap, re.M))
+    out = []
+    for pin in re.finditer(r"^\*\*Pinned by[^*]*\*\*.*?(?=^\*\*|^### |\Z)",
+                           spec, re.M | re.S):
+        for claim in re.finditer(r"\bactive\s+(R\d+\.\d+)\b", pin.group()):
+            owner = claim.group(1)
+            if statuses.get(owner) != "active":
+                line = spec.count("\n", 0, pin.start() + claim.start()) + 1
+                out.append(("spec.md", line,
+                            "decision evidence calls " + owner + " active, "
+                            "but ROADMAP.md records "
+                            + statuses.get(owner, "no such owner")))
+    return out
+
+
 def test_suite_inventory():
     """Every suite source, registration call and expected name must agree."""
     out = []
@@ -5340,6 +5361,7 @@ def main(argv):
         extra += fixture_constructs()
         extra += fixture_profiles()
         extra += test_suite_inventory()
+        extra += decision_status_references()
         extra += third_party_notices()
         extra += fixture_sources()
         extra += pinned_fixtures()

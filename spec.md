@@ -1936,9 +1936,10 @@ than about this.
 machine being compiled for, which is what [0160] says `usize` is for, and a
 measurement that defaulted to `i32` would need a conversion at every use
 where a width is wanted. `lenof` has the same result type. It takes a direct
-identifier naming a fixed array; D31 also admits a nonempty array literal.
-Slices and every other general expression operand remain deferred. The
-spelling stays contextual rather than joining [1760]'s reserved words.
+identifier naming a fixed array or slice; [0370]'s slice length is a runtime
+value. D31 also admits a parenthesized nonempty array literal. Other general
+expression operands remain outside [1820]'s measurement grammar. The spelling
+stays contextual rather than joining [1760]'s reserved words.
 
 **Where the answer comes from** is the other half of this decision and the
 half with teeth. A scalar `sizeof` or `alignof` is not folded by the checker or
@@ -2854,10 +2855,11 @@ shape exists.
 This admits only a parenthesized nonempty array literal beside D14's direct
 identifier. The parentheses are part of the measurement syntax, not a general
 expression operand: without them, `lenof[index]` continues to index an ordinary
-binding named `lenof`, as [1760]'s contextual spelling requires. A slice,
-selection, index, call and every other general `lenof` expression remain
-deferred. Empty literal syntax remains deferred. D136 later accepts `[0]T`
-source legality independently of that syntax.
+binding named `lenof`, as [1760]'s contextual spelling requires. The direct
+identifier form also measures a slice's runtime length [0370]; selections,
+indexes, calls and other general expression operands remain outside [1820]'s
+measurement grammar. Empty literal syntax remains deferred. D136 later accepts
+`[0]T` source legality independently of that syntax.
 
 **Why type-check expressions that do not run:** the brackets still claim one
 array literal, and D25 already gives that claim a deterministic scalar shape.
@@ -5539,9 +5541,8 @@ replaces its former negative fixture with layout and boundary evidence.
 ### D74 — A variant declaration has one unfolded measurable layout
 
 **The tour said** that an ordinary struct may contain a contextual variant
-part [0680], that each case is an atom and may carry a labelled payload
-[0690], and that the tag and the fields of one selected payload occupy the
-same value [0740]. It did not say where the tag sits, how wide it is, how
+part [0680] and that each case is an atom and may carry a labelled payload
+[0690]. It did not say where the tag sits, how wide it is, how
 payloads share storage, how their padding contributes to the containing
 struct, or whether a declaration may exist before values of it do.
 
@@ -5621,17 +5622,16 @@ boundary. All were declined.
 public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
 `positive/variant-inside-an-element`;
-`negative/variant-case-value-not-enabled`;
-`negative/variant-return-unassigned`; the generated construct, token, IR and
+`negative/variant-case-value-not-enabled`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
 `runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.
 
 ### D75 — A variant-bearing struct has storage and one zero image
 
 **The tour said** that [0540]'s `zeroed` writes the all-bits-zero image of a
-type and that [0740]'s variant value contains one tag and one selected payload.
-D74 fixed their unfolded layout but deliberately created no datum or frame
-cell, and did not say which tag the zero image selects.
+type and that a struct contains its variant part [0680]. D74 fixed that part's
+unfolded layout as one tag and one selected payload, but deliberately created
+no datum or frame cell and did not say which tag the zero image selects.
 
 **Chosen:** a named ordinary struct with a D74 variant part may be declared as
 module or local storage. A declaration-only module binding has D10's static
@@ -6373,8 +6373,8 @@ implements the chain the tour already writes while retaining those boundaries.
 
 ### D89 — A fixed-array element may be selected through one ordinary child
 
-**The tour said** that indexing takes what a selection named, explicitly
-including `a.b[i]` [0570] [1820], and D87 gives a depth-one child a neutral
+**The specification said** that indexing takes what a selection named,
+explicitly including `a.b[i]` [1820], and D87 gives a depth-one child a neutral
 fixed-array field shape. D88 established the two-identity path to a scalar
 leaf but left that fixed-array leaf refused.
 
@@ -6815,7 +6815,7 @@ IR records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
 ### D102 — Variant-bearing struct storage may cross an argument boundary
 
 **The tour said** that an unfolded variant is part of its enclosing struct's
-storage [0680] and matching inspects the selected case [0770]. D74--D85 carry
+storage [0680] and matching inspects the selected case [1210]. D74--D85 carry
 that shape through local and module storage, while D94 initially refused it at
 a parameter declaration.
 
@@ -12551,9 +12551,9 @@ both are declined.
 **Pinned by** `positive/external-scalar-c-boundary` for the retained bodyless
 import form, `positive/r440-c-signatures` for C types, definitions and the
 standalone native link form, and `negative/r440-link-does-not-change-convention`
-for the independence of linkage and convention. Further compiler and ABI
-differential coverage belongs to active R4.40. These recorded cases do not
-claim a passing native gate.
+for the independence of linkage and convention. ROADMAP.md's completed
+R4.40 entry records the compiler and ABI differential evidence for its exact
+historical gate input; R4.91 owns current repair and acceptance obligations.
 
 ### D204 — C layout and transport follow one selected target ABI
 
@@ -12578,8 +12578,8 @@ declined in favor of target-selected layout and signature-selected transport.
 **Pinned by** `positive/r440-c-aliases`, `positive/r440-external-float` and
 `runtime/r440-c-aliases` for the ordinary aliases and admitted f64 signature.
 Bidirectional aggregate, callback and variadic interoperation and
-target-description cases remain R4.40 gate evidence, not a claim made by the
-existence of these fixtures.
+target-description cases have the historical gate evidence recorded under
+R4.40 in ROADMAP.md. That evidence does not approve later R4.91 revisions.
 
 ### D205 — Headers describe ABI shapes, not lifetime policy
 
@@ -12605,11 +12605,11 @@ backend rather than solving bindings. Adding native union, bitfield, TLS and
 freestanding path. Handwritten signature replacement disguises the old
 workflow as generation. These alternatives are declined.
 
-**Pinned by — pending:** `bindings/generate.py`, its Clang-backed
-`bindings/test.py` suite and `abi/r440-bindings-generated` are recorded under
-active R4.40. Deterministic regeneration, compiled adapters and end-to-end
-interoperation still require integration-barrier evidence; the files' presence
-does not assert passing generator or native execution.
+**Pinned by** `bindings/generate.py`, its Clang-backed `bindings/test.py`
+suite and `abi/r440-bindings-generated`. ROADMAP.md's completed R4.40 entry
+records deterministic regeneration, compiled adapters and end-to-end
+interoperation at its exact historical gate input. Current R4.91 acceptance
+remains separately owned there; the files' presence is not execution evidence.
 
 ### D206 — Null construction cannot evade the pointer union
 
@@ -12637,8 +12637,9 @@ the existing one-atom union already expresses the state. All are declined.
 `runtime/null-pointer-unchecked-traps`, `runtime/null-pointer-union-call-else`,
 `negative/null-pointer-union-call-else-frame-escape`,
 `negative/r440-parser-frame-arena` and
-`runtime/core-mem-dispose-empty` are recorded cases; their native execution and
-the static folded/target-width refusals remain part of R4.40 verification.
+`runtime/core-mem-dispose-empty`. Their native execution and the static
+folded/target-width refusals have the historical R4.40 evidence recorded in
+ROADMAP.md; current repair and acceptance remain with R4.91.
 
 ### D207 — Foreign failure detail stays in the provider
 
@@ -12662,8 +12663,9 @@ rather than preserving foreign detail. All are declined.
 
 **Pinned by** `runtime/r440-errno-detail` and
 `runtime/r440-io-partial-progress` record the explicit-state and progress
-contracts. Interrupted-host-call and close evidence remains part of active
-R4.40's native verification.
+contracts. ROADMAP.md's completed R4.40 entry records the historical native
+verification, including interrupted-host-call and close evidence. R4.91 owns
+current repair and exact-revision acceptance.
 
 ### D208 — Hosted argument capabilities retain one C startup root
 
