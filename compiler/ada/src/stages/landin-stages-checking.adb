@@ -2734,6 +2734,25 @@ package body Landin.Stages.Checking is
             if Got.Kind = Ty.Ill_Typed then
                --  The nested normalization already diagnosed its reason.
                Into := Invalid;
+            elsif Value_Constraint (Of_Tree, At_Node)
+                    /= Landin.Checking.No_Constraint
+            then
+               --  D188: normalization cannot carry the bounds into an
+               --  instance key.  Refuse before interning the base identity.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, At_Node)
+                    /= Ty.Ill_Typed
+               then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, At_Node),
+                     Message => "a generic type argument of a range subtype"
+                                & " is not enabled yet",
+                     Refused => Bad.Constrained_Composition,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, At_Node);
+               end if;
+               Into := Invalid;
             elsif Got.Kind
               in Ty.Undecided | Ty.Scalar_Name | Ty.Pointer_Value
                  | Ty.Slice_Value | Ty.Atom_Value | Ty.Fixed_Array
@@ -2817,7 +2836,13 @@ package body Landin.Stages.Checking is
                --  knowing the pointee layout; leave the complete reference
                --  descriptor for that concrete pass, just as a direct
                --  type-formal field below remains symbolic here.
-               if Target.Kind = Ty.Undecided then
+               if Target.Kind = Ty.Ill_Typed
+                 or else Composition_Refused
+                   (Of_Tree, Syn.Referenced_Type (Of_Tree, Written),
+                    "a reference target")
+               then
+                  return Invalid;
+               elsif Target.Kind = Ty.Undecided then
                   return
                     (Kind => Ty.Undecided,
                      Symbolic_Pointer =>
@@ -2853,7 +2878,11 @@ package body Landin.Stages.Checking is
                Folded_Value := Fixed_Bound
                  (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Actuals,
                   Application, Is_Fixed, Is_Known);
-               if Element.Kind = Ty.Ill_Typed or else not Is_Fixed then
+               if Element.Kind = Ty.Ill_Typed or else not Is_Fixed
+                 or else Composition_Refused
+                   (Of_Tree, Syn.Element_Of (Of_Tree, Written),
+                    "an array element")
+               then
                   return Invalid;
                elsif Is_Known and then Folded_Value < 0 then
                   Report_Fixed_Bound_Range
@@ -4486,7 +4515,7 @@ package body Landin.Stages.Checking is
          return Boolean is
       begin
          if Written = Syn.No_Node
-           or else Landin.Checking.Constraint_Of (Types.all, Of_Tree, Written)
+           or else Value_Constraint (Of_Tree, Written)
                      = Landin.Checking.No_Constraint
          then
             return False;

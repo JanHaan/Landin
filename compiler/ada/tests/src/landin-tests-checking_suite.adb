@@ -11157,8 +11157,180 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False, Code => "L0301");
    end Refused_Values_Always_Report;
 
+   procedure Range_Type_Actuals_Are_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Range_Type_Actuals_Are_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0304");
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0304")
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "range-type-actuals.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, Label & " reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & " retains its exact source verdict");
+         end;
+      end Check_Source;
+
+   begin
+      Check_Source
+        ("constrained struct",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "mut a: cell(percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("constrained array",
+         "percent: type = u8 range 0..100" & LF
+         & "row: type (t: type, fixed n: u32) = [n]t" & LF
+         & "mut a: row(percent, 3)" & LF,
+         Accepted => False);
+      Check_Source
+        ("constrained alias",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "alias: type = percent" & LF
+         & "mut a: cell(alias)" & LF,
+         Accepted => False);
+      Check_Source
+        ("identity alias",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "mut a: identity(percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("unused actual",
+         "percent: type = u8 range 0..100" & LF
+         & "constant: type (t: type) = u8" & LF
+         & "mut a: constant(percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested actual",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "identity: type (t: type) = t" & LF
+         & "mut a: cell(identity(percent))" & LF,
+         Accepted => False);
+      Check_Source
+        ("template fixed subtype",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "outer: type (t: type) = struct" & LF
+         & "value: cell(percent) end outer" & LF,
+         Accepted => False);
+      Check_Source
+        ("local constrained struct",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "f: () -> none = mut a: cell(percent) = zeroed end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("unconstrained struct",
+         "cell: type (t: type) = struct value: t end cell" & LF
+         & "mut a: cell(u8)" & LF,
+         Accepted => True);
+      Check_Source
+        ("unconstrained array",
+         "row: type (t: type, fixed n: u32) = [n]t" & LF
+         & "mut a: row(u8, 3)" & LF,
+         Accepted => True);
+      Check_Source
+        ("unconstrained alias",
+         "cell: type (t: type) = struct value: t end cell" & LF
+         & "alias: type = u8" & LF
+         & "mut a: cell(alias)" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested unconstrained actual",
+         "cell: type (t: type) = struct value: t end cell" & LF
+         & "identity: type (t: type) = t" & LF
+         & "mut a: cell(identity(u8))" & LF,
+         Accepted => True);
+      Check_Source
+        ("ordinary subtype",
+         "percent: type = u8 range 0..100" & LF
+         & "mut a: percent = 40" & LF
+         & "f: (v: percent) -> (r: percent) = r = v end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("deduced generic value",
+         "percent: type = u8 range 0..100" & LF
+         & "copy: (t: type, v: t) -> (r: t) = r = v end copy" & LF
+         & "f: () -> (r: u8) = p: percent = 40 r = copy(p) end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested pointer actual",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "held: type = identity(ptr percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested slice actual",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "held: type = identity([]percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested array actual",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "held: type = identity([2]percent)" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested pointer control actual",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "held: type = identity(ptr u8)" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested slice control actual",
+         "percent: type = u8 range 0..100" & LF
+         & "cell: type (t: type) = struct value: t end cell" & LF
+         & "held: type = cell([]u8)" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested array control actual",
+         "percent: type = u8 range 0..100" & LF
+         & "identity: type (t: type) = t" & LF
+         & "held: type = identity([2]u8)" & LF,
+         Accepted => True);
+   end Range_Type_Actuals_Are_Refused;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "range type actuals are refused",
+         Range_Type_Actuals_Are_Refused'Access);
       Landin.Testing.Register
         (Into, "checking", "refused values always report",
          Refused_Values_Always_Report'Access);
