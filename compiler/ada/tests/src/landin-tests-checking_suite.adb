@@ -11684,8 +11684,173 @@ package body Landin.Tests.Checking_Suite is
          "");
    end Refused_Conformances_Are_Not_Selected;
 
+   procedure Conversions_Require_One_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Conversions_Require_One_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0301");
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0301")
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "conversion-arity.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, Label & " reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & " retains its exact source verdict");
+         end;
+      end Check_Source;
+
+   begin
+      Check_Source
+        ("u8 empty",
+         "f: (v: i32) -> (r: u8) = r = u8() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("u8 excess",
+         "f: (v: i32) -> (r: u8) = r = u8(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("bool empty",
+         "f: (v: i32) -> (r: bool) = r = bool() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("bool excess",
+         "f: (v: i32) -> (r: bool) = r = bool(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("f32 empty",
+         "f: (v: i32) -> (r: f32) = r = f32() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("f32 excess",
+         "f: (v: i32) -> (r: f32) = r = f32(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("utf8 empty",
+         "f: (v: []u8) -> (r: utf8 from v) = r = utf8() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("utf8 excess",
+         "f: (v: []u8) -> (r: utf8 from v) = r = utf8(v, v) end "
+         & "f" & LF,
+         Accepted => False);
+      Check_Source
+        ("utf16 empty",
+         "f: (v: []u8) -> (r: utf16 from v) = r = utf16() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("utf16 excess",
+         "f: (v: []u8) -> (r: utf16 from v) = r = utf16(v, v) "
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("cstring empty",
+         "f: (v: cstring) -> (r: cstring from v) = r = "
+         & "cstring() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("cstring excess",
+         "f: (v: cstring) -> (r: cstring from v) = r = "
+         & "cstring(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("scalar alias empty",
+         "word: type = u16" & LF
+         & "f: (v: i32) -> (r: word) = r = word() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("scalar alias excess",
+         "word: type = u16" & LF
+         & "f: (v: i32) -> (r: word) = r = word(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("range alias empty",
+         "percent: type = u8 range 0..100" & LF
+         & "f: (v: i32) -> (r: percent) = r = percent() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("range alias excess",
+         "percent: type = u8 range 0..100" & LF
+         & "f: (v: i32) -> (r: percent) = r = percent(v, v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("text alias empty",
+         "text: type = utf8" & LF
+         & "f: (v: []u8) -> (r: text from v) = r = text() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("text alias excess",
+         "text: type = utf8" & LF
+         & "f: (v: []u8) -> (r: text from v) = r = text(v, v) end "
+         & "f" & LF,
+         Accepted => False);
+      Check_Source
+        ("byte view alias empty",
+         "byte_view: type = []u8" & LF
+         & "f: (v: utf8) -> (r: []u8 from v) = r = byte_view() "
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("byte view alias excess",
+         "byte_view: type = []u8" & LF
+         & "f: (v: utf8) -> (r: []u8 from v) = r = byte_view(v, "
+         & "v) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("zero argument user function",
+         "u8: () -> (r: u8) = r = 41 end u8" & LF
+         & "f: () -> (r: u8) = r = u8() end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("two argument user function",
+         "utf8: (a: i32, b: i32) -> (r: i32) = r = a + b end "
+         & "utf8" & LF
+         & "f: (v: i32) -> (r: i32) = r = utf8(v, v) end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("scalar conversion",
+         "f: (v: i32) -> (r: u8) = r = u8(v) end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("text conversion",
+         "f: (v: []u8) -> (r: utf8 from v) = r = utf8(v) end f" & LF,
+         Accepted => True);
+   end Conversions_Require_One_Value;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "conversions require one value",
+         Conversions_Require_One_Value'Access);
       Landin.Testing.Register
         (Into, "checking", "refused conformances are not selected",
          Refused_Conformances_Are_Not_Selected'Access);

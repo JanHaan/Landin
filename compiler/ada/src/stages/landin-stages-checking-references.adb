@@ -76,6 +76,9 @@ package body Landin.Stages.Checking.References is
          Frame      : Boolean := False;
          External   : Boolean := False;
          Untracked  : Boolean := False;
+         --  A refused value supplies no proof for a return-origin check.
+         --  Keep that diagnostic state distinct from raw address origins.
+         Invalid    : Boolean := False;
          From       : Parameter_Bits := [others => False];
          Derives    : Declaration_Bits := [others => False];
          Presence   : Value_Fact := Unknown_Value;
@@ -333,6 +336,7 @@ package body Landin.Stages.Checking.References is
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
          Into_Fact.External := Into_Fact.External or Other.External;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
+         Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
          --  An explicitly untracked alternative cannot erase a tracked
          --  frame or parameter origin contributed by another alternative.
          if Into_Fact.Frame then
@@ -1603,6 +1607,12 @@ package body Landin.Stages.Checking.References is
       is
          Result : Origin_Fact := Evaluate_Fact (Tree, Node);
       begin
+         if Node /= Syn.No_Node
+           and then Landin.Checking.Type_Of (Types.all, Tree, Node)
+             = Ty.Ill_Typed
+         then
+            Result.Value.Invalid := True;
+         end if;
          --  A present reference with no local or parameter sources still
          --  names external storage.  Record that alternative before a join
          --  can hide it behind a frame or parameter bit.  Empty optionals
@@ -2060,7 +2070,7 @@ package body Landin.Stages.Checking.References is
                Expected : Parameter_Bits := [others => False];
                Same : Boolean := True;
             begin
-               if not Landin.Checking.Contains_References
+               if Fact.Invalid or else not Landin.Checking.Contains_References
                  (Types.all, Part)
                then
                   goto Next_Return;
