@@ -615,6 +615,52 @@ package body Landin.Tests.Lexer_Suite is
       end;
    end Unknown_Bytes_Recover;
 
+   procedure Uppercase_Faults_Keep_Byte_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Uppercase_Faults_Keep_Byte_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("A ABC A;B", Sources, Names, Stream);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Count (Stream) = 4
+           and then Landin.Tokens.Fault_Count (Stream) = 3,
+         "uppercase classification preserves tokens and fault runs");
+      Landin.Testing.Check
+        (Item,
+         (for all Index in Landin.Tokens.Token_Index'(1) .. 3 =>
+            Landin.Tokens.Kind (Stream, Index) = Landin.Tokens.Unknown_Bytes)
+         and then Landin.Tokens.Kind (Stream, 4) = Landin.Tokens.End_Of_Input,
+         "the parser receives its existing unknown-byte tokens and end");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
+           = Landin.Tokens.Uppercase_Byte_Run
+         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 2))
+           = Landin.Tokens.Uppercase_Byte_Run
+         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 3))
+           = Landin.Tokens.Unknown_Byte_Run,
+         "only runs consisting entirely of uppercase ASCII specialize");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 1)).First = 0
+         and then
+           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 1)).Last = 1
+         and then
+           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 2)).First = 2
+         and then
+           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 2)).Last = 5
+         and then
+           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 3)).First = 6
+         and then
+           Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 3)).Last = 9,
+         "single, multiple and mixed bytes retain their exact spans");
+   end Uppercase_Faults_Keep_Byte_Boundaries;
+
    ------------------------------------------------------------------
    --  The agreement
    ------------------------------------------------------------------
@@ -808,6 +854,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "uppercase faults keep byte boundaries",
+         Uppercase_Faults_Keep_Byte_Boundaries'Access);
       Landin.Testing.Register
         (Into, "lexer", "unterminated literals are faults",
          Unterminated_Literals_Are_Faults'Access);

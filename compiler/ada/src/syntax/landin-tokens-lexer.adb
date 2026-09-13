@@ -702,7 +702,11 @@ package body Landin.Tokens.Lexer is
                         Position := Position + 1;
                      end loop;
                      Emit (Unknown_Bytes, First, Position - 1);
-                     Complain (Unknown_Byte_Run, First, Position - 1);
+                     Complain
+                       ((if (for all Index in First .. Position - 1 =>
+                               Text (Index) in 'A' .. 'Z')
+                         then Uppercase_Byte_Run else Unknown_Byte_Run),
+                        First, Position - 1);
                   else
                      Position := Position + Length;
                      if Kind = Compound_Assign then

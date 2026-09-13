@@ -27,6 +27,8 @@ package body Landin.Diagnostics.Lexical is
                "this text literal contains malformed bytes or an escape",
             when Landin.Tokens.Unknown_Byte_Run =>
                "no rule spells these bytes",
+            when Landin.Tokens.Uppercase_Byte_Run =>
+               "identifiers use lower-case letters",
             when Landin.Tokens.Unterminated_Block_Comment =>
                "this block comment is never closed",
             when Landin.Tokens.Unterminated_Literal =>
@@ -45,7 +47,8 @@ package body Landin.Diagnostics.Lexical is
                Rows.Malformed_Raw_Literal,
             when Landin.Tokens.Malformed_Text_Literal_Run =>
                Rows.Malformed_Text_Literal,
-            when Landin.Tokens.Unknown_Byte_Run           =>
+            when Landin.Tokens.Unknown_Byte_Run
+               | Landin.Tokens.Uppercase_Byte_Run =>
                Rows.Unknown_Bytes,
             when Landin.Tokens.Unterminated_Block_Comment =>
                Rows.Unterminated_Comment,
@@ -124,6 +127,11 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "no rule of the grammar spells these bytes [1750]");
+
+               when Landin.Tokens.Uppercase_Byte_Run =>
+                  Add_Note
+                    (Report,
+                     "[1760]: identifier letters are lower-case ASCII");
             end case;
 
             --  The row this code carries is checked against the diagnostic
