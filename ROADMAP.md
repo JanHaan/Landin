@@ -5844,7 +5844,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J44 | Runtime parameters and named returns resolve their types before later binders are collected, so parameter order changes acceptance | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
 | J45 | Any pre-flight CLI diagnostic silently disables the entire frontend (syntax/name/type checking) for the given sources | C | Disposition question, not accepted as a compiler correctness defect: invalid CLI input already returns nonzero. Compare the driver contract before expanding diagnostics or running stages without valid configuration. |
 | J46 | Multi-result placement check overflows Byte_Count and crashes with exit 70 on a written function type | C | Repaired with J60: result placement uses the existing recursive shape measurement with a non-raising Fits result, which guards every target-sized product before multiplication. Final placement still checks field and tail padding. The oversized source witness was not executed; bounded result signatures and scalar placement-boundary checks provide development evidence. |
-| J47 | Duplicate member names in a non-parameterized struct body are never checked, so the second member is silently unreachable | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
+| J47 | Duplicate member names in a non-parameterized struct body are never checked, so the second member is silently unreachable | C | Repaired: ordinary and template structs share label-uniqueness checks for common fields, variant-part labels and each payload's own fields. Collisions report L0309 at the later label with the earlier label related. Separate payloads and nested structs retain independent namespaces; invalid ordinary types propagate refusal to their consumers. |
 | J48 | Static generic `T.entry(...)` silently resolves an inherited entry-name collision by parent declaration order instead of diagnosing it | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
 | J49 | Any malformed concrete conformance entry list raises "a collected conformance lost its normalized key" (exit 70) instead of reporting its diagnostic | C | Repaired: collection marks invalid entry lists and colliding declarations refused. Provider validation skips those declarations and retains their original diagnostics; valid single/multi-input keys and providers still validate. Missing associated input labels also cover K13. |
 | J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Repaired: the existing finite concept-graph walk includes type-formal constraint edges as well as named parents. Tiny self, mutual, mixed and unused cycles report L0301 before lookup; an acyclic constrained-formal control passes. The exhaustion witness was not executed before the guard. |
@@ -6434,7 +6434,21 @@ have 30-second or shorter timeouts. No assembler, linker or generated Landin
 executable ran. Logs are retained in `.scratch/r491-slice-evaluation/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Struct member-name uniqueness J47 is next.
+J47 development evidence: two selected cases pass 826 checks in each of
+macOS debug and Linux release. Seven tiny accepted layouts preserve common,
+compact, nested, payload and generic field positions on both target widths.
+Ten duplicate-label sources extend driver refusal/output checks to 784,
+covering both field/part orders, repeated parts, payload fields, templates,
+parameter use and nested use. The first checks exposed a follow-on layout
+report for a nested invalid type; duplicate-labelled ordinary types now
+propagate refusal and retain the original L0309. Existing template diagnostic
+wording and related-label ownership are preserved by the shared validator.
+Builds use one worker and selected tests have 30-second or shorter timeouts.
+No assembler, linker or generated Landin executable ran. Logs are retained in
+`.scratch/r491-field-names/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Labelled callee resolution J42/J43 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

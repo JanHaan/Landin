@@ -1964,6 +1964,43 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("s: type = struct a: u8 a: u32 end s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = (a: u8, a: u32)" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct kind: u8 kind: variant case end kind end "
+            & "s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct kind: variant case end kind kind: u8 end "
+            & "s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct kind: variant first end kind kind: "
+            & "variant second end kind end s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct kind: variant case: (a: u8, a: u32) end "
+            & "kind end s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type(t: type) = struct a: t a: u32 end s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type(t: type) = struct kind: variant case: (a: t, a: "
+            & "u32) end kind end s" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct a: u8 a: u32 end s f: (value: s) -> none "
+            & "= end f" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
+           ("s: type = struct a: u8 a: u32 end s outer: type = struct "
+            & "value: s end outer" & ASCII.LF,
+            "L0309", 1, Executable);
+         Check
            ("variant: type = u8 separate: type = struct kind: variant "
             & "next: (x: i32) end separate beta: () -> (r: u32) = 1 "
             & "end beta" & ASCII.LF,
