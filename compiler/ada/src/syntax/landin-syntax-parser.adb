@@ -3254,6 +3254,7 @@ package body Landin.Syntax.Parser is
                Opened : constant Landin.Source.Span := Here;
                Fields : Slot_Vectors.Vector;
                Had_Field : Boolean := False;
+               Refused_Field : Boolean := False;
 
                function Payload_Case_Begins_Part
                  (Part_Name : Landin.Source.Names.Name_Id) return Boolean;
@@ -3545,6 +3546,7 @@ package body Landin.Syntax.Parser is
                            Of_Type := Parse_Type (False, At_Field);
 
                            if Type_Refused then
+                              Refused_Field := True;
                               Resync_Declaration;
                               exit;
                            end if;
@@ -3598,8 +3600,38 @@ package body Landin.Syntax.Parser is
                         Advance;
                      end if;
                   end if;
-               elsif Skip_Past_Closer (Named) then
+               elsif Refused_Field then
+                  --  Type refusal already resumed at a module declaration.
+                  --  Its consumed closer needs no second missing-end report.
                   null;
+               elsif Expect
+                 (Wanted  => Tok.Kw_End,
+                  Message => "this struct is never closed",
+                  Note    => "[1795]: a struct body closes with `end`",
+                  Related => Opened,
+                  Because => "opened here")
+               then
+                  --  [1795]: the repeated name is optional, just as for a
+                  --  function.  Check this closer rather than searching
+                  --  later declarations for one that happens to match.
+                  if Peek = Tok.Identifier
+                    and then (Named_Here = Named
+                              or else not Starts_Named_Declaration)
+                  then
+                     if Named /= Landin.Source.Names.No_Name
+                       and then Named_Here /= Named
+                     then
+                        Complain
+                          (Item    => Syn.End_Name_Mismatch,
+                           Where   => Here,
+                           Message => "this name does not close the struct",
+                           Note    => "[1795]: `end` may repeat the struct's"
+                                      & " name, and must name no other",
+                           Related => At_Name,
+                           Because => "declared here");
+                     end if;
+                     Advance;
+                  end if;
                end if;
 
                return Add

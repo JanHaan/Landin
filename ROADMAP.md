@@ -5802,7 +5802,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Body-local joins repaired: retain independent external destinations and check every possible parameter destination before granting a store exemption. Nineteen paired controls pass in both modes, including local-only, same-origin, escaping and explicit untracked cases. The additional call-return destination-summary question below remains open; this repair does not infer callee bodies. |
 | J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
-| J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Repaired: a struct checks its immediate end and optional repeated name, preserving later declarations instead of scanning for a distant matching closer. Missing ends and mismatched names report at the current boundary. Field-type refusal retains its existing recovery and diagnostic without a second missing-end report. |
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
 | J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
 | J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Repaired: resolved declarations take precedence over builtin scalar/text spelling in checking and lowering. Direct, indirect and generic calls retain their targets; scalar/text aliases retain their actual conversion type. Calls cannot masquerade as folded static initializers. |
@@ -6407,7 +6407,21 @@ shorter timeouts. No assembler, linker or generated Landin executable ran.
 Logs are retained in `.scratch/r491-nested-recovery/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Struct closer recovery J5 is next.
+J5 development evidence: four selected cases pass 760 checks in each of
+macOS debug and Linux release. Nine small parser cases retain the ordered
+module declarations through bare, wrong and missing closers, compact syntax
+and field-type refusal. An accepted module keeps both struct identities and
+both functions, including the correct direct call, in verified IR on both
+target widths. Four driver inputs extend refusal/output checks to 704. The
+first run exposed an extra missing-end report after field-type recovery; that
+path now retains its original diagnostic and following declaration. Existing
+contextual variant controls pass. This applies [1795]'s existing optional
+struct-end name. Builds use one worker and selected tests have 30-second or
+shorter timeouts. No assembler, linker or generated Landin executable ran.
+Logs are retained in `.scratch/r491-struct-closers/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Slice descriptor evaluation J4 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
