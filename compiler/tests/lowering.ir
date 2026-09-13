@@ -2734,24 +2734,24 @@ unit signatures 1 items 5
 signature 1 () -> usize
 item 1 DATUM width result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured u32
     2 LEAVE <- 1
 item 2 DATUM step result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_ALIGN usize
+    1 MEASURE_ALIGN usize measured u64
     2 LEAVE <- 1
 item 3 DATUM flag result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured bool
     2 LEAVE <- 1
 item 4 DATUM here result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured usize
     2 LEAVE <- 1
 item 5 ROUTINE pointer_width result usize signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r usize return
   block 1 scope 4 SIGNATURE length 4
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured usize
     2 STORE slot 1 <- 1
     3 LOAD usize slot 1
     4 LEAVE <- 3
@@ -2759,23 +2759,23 @@ file positive/measurement-of-fixed-arrays/program.ldn
 unit signatures 0 items 4
 item 1 DATUM inline_size result usize params 0 slots 0 blocks 1 values 4
   block 1 scope 1 PROGRAM length 4
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured u16
     2 NUMBER usize 4
     3 MULTIPLY usize <- 2 1
     4 LEAVE <- 3
 item 2 DATUM inline_align result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_ALIGN usize
+    1 MEASURE_ALIGN usize measured u16
     2 LEAVE <- 1
 item 3 DATUM aliased_size result usize params 0 slots 0 blocks 1 values 4
   block 1 scope 1 PROGRAM length 4
-    1 MEASURE_SIZE usize
+    1 MEASURE_SIZE usize measured u16
     2 NUMBER usize 4
     3 MULTIPLY usize <- 2 1
     4 LEAVE <- 3
 item 4 DATUM aliased_align result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
-    1 MEASURE_ALIGN usize
+    1 MEASURE_ALIGN usize measured u16
     2 LEAVE <- 1
 file positive/measurement-of-nested-struct-field/program.ldn
 unit signatures 0 items 1

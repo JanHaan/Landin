@@ -29,6 +29,8 @@ package Landin.Build_Reports is
       Estimated_Growth  : Natural := 0;
       Direct_Calls_Made : Natural := 0;
       Retains_Evidence_ABI : Boolean := True;
+      --  Indirect calls remaining in this item after specialization,
+      --  including erased dispatch and ordinary function-value calls.
       Retains_Fallback  : Boolean := True;
    end record;
 
