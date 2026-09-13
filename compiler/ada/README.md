@@ -439,7 +439,10 @@ destination pointing to caller-owned shaped storage and copy from an independent
 named-result slot on leave; runtime evidence covers flat, variant-bearing and
 depth-one nested struct shapes. Matching calls can fill typed locals, direct or
 field-qualified assignments, and named returns without an aggregate SSA value;
-a local can infer that returned nominal body or array shape as well. Calls can
+a local can infer that returned nominal body or array shape as well. Aggregate
+variant payloads use the same shaped-value writer: calls, distinct conversions,
+control values and computed elements preserve the selected payload path without
+requiring the expression itself to name storage. Calls can
 also feed returned storage directly into a matching aggregate argument, or run
 to completion in a shaped temporary before explicit discard. An `if`,
 exhaustive `match`, or bare `begin` block can produce a scalar, fixed-array or
