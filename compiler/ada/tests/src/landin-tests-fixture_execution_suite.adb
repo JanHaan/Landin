@@ -31,6 +31,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use Landin.Testing.Fixtures;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Termination;
+   use type Landin.Platform.Capture_Mode;
 
    Fixture_Root : constant String := "../tests/fixtures";
    Selected     : Unbounded.Unbounded_String;
@@ -216,6 +217,60 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
    end Check_Compiler_Outcome;
 
+   --  All recorded and compiled-program oracles use the same capture
+   --  selection and stderr obligation. The runner seam permits fake checks.
+   procedure Run_With_Stream
+     (Case_Item : Fixture;
+      Label : String;
+      Runner : Landin.Platform.Tool_Runner'Class;
+      Program : String;
+      Arguments : Landin.Platform.Path_List;
+      Outcome : out Landin.Platform.Tool_Result;
+      Item : in out Landin.Testing.Context);
+
+   procedure Run_With_Stream
+     (Case_Item : Fixture;
+      Label : String;
+      Runner : Landin.Platform.Tool_Runner'Class;
+      Program : String;
+      Arguments : Landin.Platform.Path_List;
+      Outcome : out Landin.Platform.Tool_Result;
+      Item : in out Landin.Testing.Context)
+   is
+   begin
+      Runner.Run
+        (Program, Arguments, Outcome,
+         (if Stream (Case_Item) = Output
+          then Landin.Platform.Output_Only else Landin.Platform.Merged));
+      if Stream (Case_Item) = Output then
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Outcome.Error_Output), "",
+            Label & ": standard error is empty");
+      end if;
+   end Run_With_Stream;
+
+   procedure Check_Output
+     (Case_Item : Fixture;
+      Label : String;
+      Outcome : Landin.Platform.Tool_Result;
+      Expected : String;
+      Item : in out Landin.Testing.Context);
+
+   procedure Check_Output
+     (Case_Item : Fixture;
+      Label : String;
+      Outcome : Landin.Platform.Tool_Result;
+      Expected : String;
+      Item : in out Landin.Testing.Context)
+   is
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Outcome.Output), Expected,
+         Label & ": recorded "
+         & (if Stream (Case_Item) = Output
+            then "standard output" else "merged output"));
+   end Check_Output;
+
    procedure Run_Recorded
      (Case_Item : Fixture;
       Host      : in out Landin.Platform.Filesystem'Class;
@@ -244,22 +299,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      Runner.Run
-        (Program   => Program,
-         Arguments => Split (Args (Case_Item)),
-         Result    => Outcome,
-         Capture   =>
-           (if Stream (Case_Item) = Output
-            then Landin.Platform.Output_Only
-            else Landin.Platform.Merged));
-
-      Landin.Testing.Check_Equal
-        (Item,
-         Unbounded.To_String (Outcome.Output),
-         Unbounded.To_String (Expected),
-         Label & ": recorded "
-         & (if Stream (Case_Item) = Output
-            then "standard output" else "merged output"));
+      Run_With_Stream
+        (Case_Item, Label, Runner, Program, Split (Args (Case_Item)),
+         Outcome, Item);
+      Check_Output
+        (Case_Item, Label, Outcome, Unbounded.To_String (Expected), Item);
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Recorded;
 
@@ -567,8 +611,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
             & Built);
       else
          Runtime_Arguments := Split (Run_Args (Case_Item));
-         Runner.Run
-           (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
+         Run_With_Stream
+           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
 
          if Outcome.Ended = Landin.Platform.Timed_Out then
             Landin.Testing.Fail
@@ -583,11 +627,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Landin.Testing.Fail
                     (Item, Label & ": runtime expectation is unreadable");
                else
-                  Landin.Testing.Check_Equal
-                    (Item,
-                     Unbounded.To_String (Outcome.Output),
-                     Unbounded.To_String (Expected),
-                     Label & ": recorded merged runtime output");
+                  Check_Output
+                    (Case_Item, Label, Outcome,
+                     Unbounded.To_String (Expected), Item);
                end if;
             end if;
 
@@ -767,8 +809,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
             & " executable at " & Built);
       else
          Runtime_Arguments := Split (Run_Args (Case_Item));
-         Runner.Run
-           (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
+         Run_With_Stream
+           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
 
          if Outcome.Ended = Landin.Platform.Timed_Out then
             Landin.Testing.Fail
@@ -782,11 +824,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Landin.Testing.Fail
                     (Item, Label & ": runtime expectation is unreadable");
                else
-                  Landin.Testing.Check_Equal
-                    (Item,
-                     Unbounded.To_String (Outcome.Output),
-                     Unbounded.To_String (Expected),
-                     Label & ": recorded merged runtime output");
+                  Check_Output
+                    (Case_Item, Label, Outcome,
+                     Unbounded.To_String (Expected), Item);
                end if;
             end if;
 
@@ -945,7 +985,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       is
          Probe : Landin.Testing.Context;
          Outcome : constant Landin.Platform.Tool_Result :=
-           (Ended, Exit_Code, Unbounded.To_Unbounded_String (Text));
+           (Ended, Exit_Code, Unbounded.To_Unbounded_String (Text),
+            Unbounded.Null_Unbounded_String);
       begin
          Check_Compiler_Outcome (Case_Item, Outcome, Probe);
          Landin.Testing.Check_Equal
@@ -1009,8 +1050,107 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
    end Negative_Metadata_Decides_The_Verdict;
 
+   --  Only fake tools run here. Runtime/ABI metadata exercises the exact
+   --  same oracle used after a native build, without assembling a fixture.
+   procedure Stream_Metadata_Decides_The_Oracle
+     (Item : in out Landin.Testing.Context);
+
+   procedure Stream_Metadata_Decides_The_Oracle
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Class (Kind : Fixture_Class; Choice : Stream_Choice);
+
+      procedure Check_Class (Kind : Fixture_Class; Choice : Stream_Choice) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Found : Catalogue;
+         Directory : constant String :=
+           "root/" & Class_Directory (Kind) & "/stream";
+         LF : constant Character := ASCII.LF;
+
+         procedure Check
+           (Text : String; Errors : String; Expected_Failures : Natural);
+
+         procedure Check
+           (Text : String; Errors : String; Expected_Failures : Natural)
+         is
+            Runner : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Outcome : Landin.Platform.Tool_Result;
+            Probe : Landin.Testing.Context;
+            Case_Item : constant Fixture := Nth (Found, 1);
+         begin
+            Runner.Add_Result (0, Text, Error_Output => Errors);
+            Run_With_Stream
+              (Case_Item, "stream [none-off]", Runner, "fake-program",
+               Landin.Platform.No_Arguments, Outcome, Probe);
+            Check_Output
+              (Case_Item, "stream [none-off]", Outcome, "wanted", Probe);
+            Landin.Testing.Check_Equal
+              (Item, Runner.Run_Count, 1, "the program runs once");
+            Landin.Testing.Check
+              (Item, Runner.Last_Capture =
+                 (if Choice = Output then Landin.Platform.Output_Only
+                  else Landin.Platform.Merged),
+               "metadata selects the actual capture request");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Testing.Checks (Probe),
+               (if Choice = Output then 2 else 1),
+               "output-only has an independent stderr obligation");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Testing.Failures (Probe), Expected_Failures,
+               "the oracle distinguishes wrong and additional streams");
+            if Expected_Failures > 0 then
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Landin.Testing.Failure_Text (Probe), "[none-off]") > 0,
+                  "output failures preserve the profile label");
+            end if;
+         end Check;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/" & Class_Directory (Kind));
+         Host.Add_Directory (Directory);
+         Host.Add_File (Directory & "/main.ldn", "");
+         Host.Add_File (Directory & "/peer.c", "");
+         Host.Add_File
+           (Directory & "/fixture.meta",
+            "class: " & Class_Directory (Kind) & LF
+            & "summary: stream contract" & LF
+            & "targets: linux-x86-64" & LF & "constructs: 1740" & LF
+            & "program: main.ldn" & LF
+            & (if Kind in Runtime | Abi
+               then "profiles: standard" & LF else "")
+            & (if Kind = Abi then "c-sources: peer.c" & LF else "")
+            & "stream: " & (if Choice = Output then "output" else "merged")
+            & LF);
+         Discover (Found, "root", Host);
+         Landin.Testing.Check_Equal
+           (Item, Problem_Count (Found), 0, "stream metadata is valid");
+         Landin.Testing.Check_Equal
+           (Item, Count (Found), 1, "the fixture remains discoverable");
+         if Count (Found) = 1 then
+            Check ("wanted", "", 0);
+            if Choice = Output then
+               Check ("", "wanted", 2);
+               Check ("wanted", "additional", 1);
+            else
+               Check ("wrong", "", 1);
+            end if;
+         end if;
+      end Check_Class;
+   begin
+      Check_Class (Unit, Output);
+      Check_Class (Unit, Merged);
+      Check_Class (Runtime, Output);
+      Check_Class (Runtime, Merged);
+      Check_Class (Abi, Output);
+      Check_Class (Abi, Merged);
+   end Stream_Metadata_Decides_The_Oracle;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixture execution", "stream metadata decides the oracle",
+         Stream_Metadata_Decides_The_Oracle'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "negative metadata decides the verdict",
          Negative_Metadata_Decides_The_Verdict'Access);

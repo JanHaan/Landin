@@ -267,14 +267,16 @@ package body Landin.Testing.Fakes is
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String;
-      Ended     : Landin.Platform.Termination := Landin.Platform.Exited)
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited;
+      Error_Output : String := "")
    is
    begin
       Host.State.Mode := Repeating;
       Host.State.Repeat :=
         (Ended     => Ended,
          Exit_Code => Exit_Code,
-         Output    => Unbounded.To_Unbounded_String (Output));
+         Output    => Unbounded.To_Unbounded_String (Output),
+         Error_Output => Unbounded.To_Unbounded_String (Error_Output));
       Host.State.Script.Clear;
       Host.State.Next_Result := 1;
    end Set_Result;
@@ -283,7 +285,8 @@ package body Landin.Testing.Fakes is
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String;
-      Ended     : Landin.Platform.Termination := Landin.Platform.Exited)
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited;
+      Error_Output : String := "")
    is
    begin
       if Host.State.Mode /= Ordered then
@@ -296,7 +299,8 @@ package body Landin.Testing.Fakes is
         (Landin.Platform.Tool_Result'
            (Ended     => Ended,
             Exit_Code => Exit_Code,
-            Output    => Unbounded.To_Unbounded_String (Output)));
+            Output    => Unbounded.To_Unbounded_String (Output),
+            Error_Output => Unbounded.To_Unbounded_String (Error_Output)));
    end Add_Result;
 
    function Call_At

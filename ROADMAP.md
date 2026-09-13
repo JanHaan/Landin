@@ -5679,7 +5679,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
-| M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
+| M14: harness contracts | Stream repair implemented: recorded, runtime and ABI oracles honor the selected stream and require empty stderr for output-only expectations, using separately captured native stderr. Fake wrong-stream/additional-stderr controls and tiny native captures pass. Suite inventory and coarse corpus floors remain open; replace them with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch implementation |
 | M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
@@ -7349,6 +7349,22 @@ debugger or giant image ran. Evidence is in `.scratch/r491-fixture-profiles/`
 and `.scratch/r491-final-values/`. Expanded matrix execution and exact-revision
 acceptance remain open under the existing resource limits. M14's separate
 stream and inventory contracts remain active.
+
+M14 stream development evidence: eight exact selectors pass 151 checks in
+each of macOS debug and Linux release, counting the final 81-check stream
+oracle with its profile-label controls. Recorded, runtime and ABI paths share
+capture selection and expected-byte comparison. `stream: output` independently
+requires empty stderr even when no output file is named; the default merged
+stream keeps its existing byte oracle. Fake outcomes distinguish correct
+stdout, expected bytes on stderr, extra stderr and wrong merged bytes. Tiny
+native shell probes retain literal argument bytes, nonzero exit status,
+separate stderr and a cleared stderr field on a subsequent merged capture.
+Both captures use already-open descriptors and the same failure cleanup;
+closed-standard-descriptor aliasing is guarded before stdout redirection.
+Both single-worker builds pass. No runtime/ABI fixture, native assembly,
+generated Landin executable, debugger or giant image ran. Evidence is in
+`.scratch/r491-fixture-streams/` and `.scratch/r491-final-values/`. M14's suite
+inventory and coarse floors remain open, as does exact-revision acceptance.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

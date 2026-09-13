@@ -352,7 +352,7 @@ and checks all ten during explicit complete native acceptance.
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `run_args` | no | the arguments handed to a compiled runtime or ABI program |
-| `run_expect` | no | the file holding a runtime or ABI program's expected merged output |
+| `run_expect` | no | the file holding a runtime or ABI program's expected bytes on the selected `stream` |
 | `status` | no | the exit status `refine` or a compiled program must produce (default 1 for a negative, 0 otherwise) |
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
@@ -432,11 +432,15 @@ this exact order:
 ```
 
 The resulting executable may get `main` from Landin or from a C companion.
-The harness passes `run_args`, compares `run_expect` with merged standard
-output and standard error when it is present, and then compares either the
+The harness passes `run_args`, compares `run_expect` with the selected
+`stream` when it is present, and then compares either the
 exit `status` or the non-returning `traps: yes` verdict. Thus a C `main` can
 drive exported Landin routines, and a Landin `main` can drive imported C
-routines, without adding C inputs to the product compiler.
+routines, without adding C inputs to the product compiler. Runtime and ABI
+fixtures honor `stream: output` by capturing stdout and stderr separately:
+stdout must match `run_expect` when present, and stderr must be empty even
+without an output file. The default `merged` policy preserves combined bytes.
+Recorded compiler expectations use the same stream contract.
 
 `constructs` is what R1.90 indexes the corpus by, and it is a written list
 rather than a reading of the summary. A citation in prose is prose: it is
