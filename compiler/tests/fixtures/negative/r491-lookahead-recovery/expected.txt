@@ -1,0 +1,90 @@
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:2
+  |
+1 | a b c d e f g h
+  |  ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:1
+  |
+1 | a b c d e f g h
+  | ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:4
+  |
+1 | a b c d e f g h
+  |    ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:3
+  |
+1 | a b c d e f g h
+  |   ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:6
+  |
+1 | a b c d e f g h
+  |      ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:5
+  |
+1 | a b c d e f g h
+  |     ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:8
+  |
+1 | a b c d e f g h
+  |        ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:7
+  |
+1 | a b c d e f g h
+  |       ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:10
+  |
+1 | a b c d e f g h
+  |          ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:9
+  |
+1 | a b c d e f g h
+  |         ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:12
+  |
+1 | a b c d e f g h
+  |            ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:11
+  |
+1 | a b c d e f g h
+  |           ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:14
+  |
+1 | a b c d e f g h
+  |              ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:13
+  |
+1 | a b c d e f g h
+  |             ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:16
+  |
+1 | a b c d e f g h
+  |                ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:1:15
+  |
+1 | a b c d e f g h
+  |               ^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0103]: a parenthesised expression is closed with `)`
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:2:29
+  |
+2 | probe: () -> none = _ = (((x end probe
+  |                             ^
+  --> ../tests/fixtures/negative/r491-lookahead-recovery/main.ldn:2:27
+  |
+2 | probe: () -> none = _ = (((x end probe
+  |                           ^ opened here
+  = note: [1810]: a parenthesized expression is one primary expression
