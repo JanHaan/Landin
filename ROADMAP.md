@@ -91,7 +91,8 @@ Depends on: R2.10, R2.20
 Allowed statuses are `planned`, `active`, `blocked` and `complete`. `blocked`
 means the work cannot proceed for a reason that is not its own dependencies —
 access to a machine, a decision that has not been taken — and the reason is
-recorded where the work can be read.
+recorded in one nonempty `Blocked because:` line in that work section.
+A completed item requires every declared dependency to be complete.
 Dependencies name work IDs only. `none` is the only empty dependency value.
 A phase closes only when every work item in it is complete and its phase gate
 has reproducible evidence. Exploration may run early when dependencies allow,
@@ -5731,7 +5732,8 @@ being silently promoted to bugs or discarded:
 | m12 | The written digit productions still derive trailing separators that the scanner refuses. The grammar checker also exempts lexical names from undefined-rule checking, leaving unicode_scalar without its own production. Both require agreement at the lexical grammar boundary; no tokenization change is authorized by the heuristic recognizer alone. |
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
 | m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Invalid source bytes in comments and empty raw-delimiter ambiguity still need separate rule/case comparison. |
-| m14, m16 | Sampled dead helpers, historical register naming and roadmap-state invariants still need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m14 | Sampled unused helpers and the unused Needs_Source catalogue facet remain maintenance observations; exception routing is reconciled separately with J109. |
+| m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative phase-gate evidence still requires review; structural checks do not approve a phase. |
 | m17 | Implemented: README and handoff include R2.10, R4.21, R4.30 and R4.40, with the selected C ABI and separate binding generator explicitly described. The zeroable account names settled D143 behavior. Four aggregate fixture summaries now cite the decisions that actually pin them, without changing any source or expected compiler verdict. |
 | m21 | D190 and R7.20 retain the actual carrier ranges without stale source-reference counts. A new tiny negative fixture pins D202's L0305 refusal when an option reuses the compiler-owned debug atom, including its full diagnostic. |
 | m15 | Implemented: the compiler guide now covers all 71 package specifications, including the 18 formerly missing packages for allocation, machine evidence, IR transforms, reports and layout policy. Directory descriptions name the current responsibilities; parent and child package boundaries are explicitly distinct. A mechanical check compares the ownership rows with private, generic and ordinary package specs and rejects missing, repeated or obsolete rows. |
@@ -6071,6 +6073,12 @@ range-check witness, storage-derived load metadata and the simplifier's
 pointer/address-slot exclusion; its proposed forwarded raw Load cannot be a
 valid incoming witness. No optimizer or verifier change or broad replay was
 needed for those dispositions.
+
+For m16, seven temporary roadmap snapshots check the live state, completed
+work depending on active/planned work, absent/empty/repeated blocking reasons,
+and a valid recorded reason. All controls and full `python3 check.py` pass.
+Evidence is in `.scratch/r491-roadmap-invariants/`. No live work status was
+changed, and no execution or acceptance evidence was inferred from prose.
 
 For m17/m21, the four corrected fixture citations match their normative
 Pinned by entries; fixture source programs and previous verdicts are unchanged.
@@ -8559,8 +8567,13 @@ why each exists, its sources and its roadmap owner. Parked and watch entries do
 not block phases unless their stated trigger fires. At R7 each row receives a
 terminal disposition.
 
-D1–D6 are held positions, each challenged by an outside reader and deliberately
-retained. Reopen one only with new evidence that answers its preserved rationale,
+The D1–D6 labels in this appendix name inherited review positions, not the
+specification's D1–D6 decisions. Elsewhere a D-number cites the specification
+unless the surrounding text explicitly identifies a review's own labels.
+F2 is a roadmap-wide process obligation, not deferred successor work.
+
+These six inherited positions were each challenged by an outside reader and
+deliberately retained. Reopen one only with new evidence that answers its preserved rationale,
 and record the reopening explicitly.
 
 | Legacy item | Preserved decision, trigger and sources | Roadmap owner or successor |
@@ -8584,7 +8597,7 @@ and record the reopening explicitly.
 | C3 — Restrict root capability minting | Would make hosted subtrees checkable but cannot close freestanding address literals. Trigger: wanting to run untrusted code. Source: `[1680]`. | Parked; transfer to Language evolution if untriggered. |
 | C4 — Generational observers for graphs and inferred uniqueness | Preserve both parked ideas together. The legacy item gave no trigger or citation; do not invent one. | Parked; transfer to Language evolution unless later evidence supplies a trigger. |
 | C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. |
-| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Linux semantics implemented in R4.10 by D187; applicable target parity remains R5 and R6, which R5.50 already covers by running the shared hosted cases. What an optimizer may assume stays with R4.50. |
+| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Linux semantics implemented in R4.10 by D187; macOS hosted parity is R5.50; applicable freestanding conformance evidence is R6.100. What an optimizer may assume stays with R4.50. |
 | D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implemented in R4.10 by D182; reopen only with new program/measurement evidence. |
 | D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. |
 | D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. |
