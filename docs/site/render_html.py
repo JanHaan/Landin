@@ -38,10 +38,12 @@ from __future__ import annotations
 
 import html
 import json
+import posixpath
 import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
@@ -1099,22 +1101,37 @@ BOLD = re.compile(r"\*\*([^*]+)\*\*")
 MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
-def guide_targets(docs):
-    """Where a link to a source file should point on the site."""
-    targets = {d["src"]: d["out"] for d in docs}
-    for d in docs:
-        #  A document may be named from a directory below it.
-        targets[d["src"].split("/")[-1]] = d["out"]
-    return targets
+class GuideTargets:
+    """Resolve source links from the document that contains them."""
+
+    def __init__(self, docs, source):
+        self.pages = {d["src"]: d["out"] for d in docs}
+        self.directory = posixpath.dirname(source)
+
+    def resolve(self, href):
+        parts = urlsplit(href)
+        if parts.scheme or parts.netloc or not parts.path or href.startswith("/"):
+            return href
+        source = posixpath.normpath(posixpath.join(self.directory, unquote(parts.path)))
+        if source == ".." or source.startswith("../"):
+            return href
+        target = self.pages.get(source)
+        if target is None:
+            target = REPO + "/tree/main/item/" + quote(source, safe="/")
+        return urlunsplit(("", "", target, parts.query, parts.fragment))
+
+
+def guide_targets(docs, source=""):
+    return GuideTargets(docs, source)
 
 
 def rewrite_link(match, targets):
-    label, href = match.group(1), match.group(2)
-    bare = href.split("#")[0]
-    anchor = href[len(bare):]
-    if bare in targets:
-        href = targets[bare] + anchor
-    return f'<a href="{href}">{label}</a>'
+    label, original = match.group(1), match.group(2)
+    href = esc(targets.resolve(html.unescape(original)))
+    # Retain the written target for content verification, whose word count
+    # must not mistake a correctly rewritten source path for dropped prose.
+    source = f' data-source-href="{original}"' if href != original else ""
+    return f'<a href="{href}"{source}>{label}</a>'
 
 
 def inline(text, links, targets):
@@ -2016,6 +2033,10 @@ def verify(src: Path, out: Path):
     #  against the copy of it in the navigation, and this said "every word
     #  is on the page" while 79 citations had gone inert.
     raw = SCRIPTY.sub(" ", body_region(out.read_text()))
+    # Count each source link's original target once, replacing its rendered
+    # destination only in this verification copy. Do not count both paths.
+    raw = re.sub(r'(<a href=")[^"]*" data-source-href="([^"]*)"',
+                 r'\1\2"', raw)
     targets = " ".join(ATTR.findall(raw))
     parts = PRE.split(raw)
     page_text = html.unescape("\n".join(
@@ -2140,8 +2161,6 @@ def main(argv):
         for found in re.findall(r"^([XYZW]\d+)\s", held, re.M):
             finding_page[found] = entry["out"]
 
-    link_targets = guide_targets(DOCS + GUIDES)
-
     for d in docs:
         text = (source / d["src"]).read_text()
         symbols = collect_symbols(text.split("\n"))
@@ -2160,7 +2179,7 @@ def main(argv):
             return f"#{ref}" if where == _here else f"{where}#{ref}"
 
         title, hero, body, nav_sections = render_guide(
-            text, links, link_targets,
+            text, links, guide_targets(DOCS + GUIDES, d["src"]),
             Highlighter(*symbols, links=links))
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
         out = page(tab_title(title, d["nav"]), d["nav"],
@@ -2192,7 +2211,7 @@ def main(argv):
             return f"#{ref}" if where == _here else f"{where}#{ref}"
 
         title, hero, body, nav_sections = render_guide(
-            text, links, link_targets,
+            text, links, guide_targets(DOCS + GUIDES, g["src"]),
             Highlighter(*guide_symbols, links=links))
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],

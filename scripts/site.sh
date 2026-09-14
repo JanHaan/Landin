@@ -1,8 +1,8 @@
 #!/bin/sh
 #  Render the documentation and package it for pages.sr.ht.
 #
-#  Every document in the repository that a reader might want is rendered:
-#  the specification, the four prototypes, and the Markdown guides.  The
+#  Render the specification, tour, prototypes and the Markdown guides
+#  selected by the renderer's DOCS and GUIDES lists. The
 #  render is verified word-for-word against its sources, so a page that
 #  quietly lost a paragraph fails here rather than going up.
 #

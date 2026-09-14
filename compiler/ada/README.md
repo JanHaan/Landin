@@ -720,6 +720,13 @@ nothing outside `Landin.Targets` may ask the host anything: emitting for
 half is not, and says so — a host without the target's triplet-prefixed
 driver reports `L0500` rather than reaching for whatever `gcc` names, which
 on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
+The supported Linux finishing path is the triplet-selected GNU driver and
+its assembler/linker. A named driver override must accept that target's
+emitted assembly and argument conventions; selecting an executable does not
+translate the assembly dialect. In particular, explicit ELF symbol names
+beginning with `.L` remain permitted. Generated local labels choose a disjoint
+prefix. The separately pinned Clang C-header frontend does not establish
+LLVM assembler compatibility for every permitted ELF spelling.
 Declared whole-program symbols keep their readable short spelling when it is
 unique. Repeated short names across modules receive deterministic declaration
 prefixes, as do non-external declarations named like one of the hosted
