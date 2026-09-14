@@ -6065,7 +6065,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K32 | G10: stack-argument start uses max(8, its alignment) | Disposed as no established defect in the supported subset. Under [1975], scalar leaves have at most eight-byte alignment; nested C records take their widest field alignment and fixed arrays inherit their element alignment. Thus max(8, alignment) is eight for every admitted stack argument. Vectors, extended scalars and over-aligned records are excluded. The existing C classification case passes 19 checks on each host; retained native-bank fixture sources cover multiple spills and partial records, without rerunning native execution. Exact acceptance remains open. |
 | K33 | H1: build-report collision checks reserve inactive product/map paths | Confirmed for an inactive map: report preflight now shares the actual artifact list. Product_Path already equals the assembly destination for non-executable emission, so no independent inactive-product defect was established. Fake-host controls cover both emission modes, map production by full debug or caller coordinates, aliases and real source/artifact collisions. Four exact cases pass 194 checks on each host; no real overwrite or tool run is used. Exact acceptance remains open. |
 | K34 | H2: help/identify bypass invalid deferred options | Confirmed by four bounded direct CLI probes. Informational responses now wait for all command-line validation, including target, build mode, override shape/duplicates and root/emit arity. Valid help/identity requests still return before source discovery or reads; unknown targets retain status 1 and option misuse status 2. Fake-host controls cover both action positions and valid counterparts. Five exact cases pass 301 checks on each host; J45's invalid-configuration stage boundary remains and exact acceptance stays open. |
-| K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
+| K35 | H3: build manifest omits the selected C compiler identity | Implemented a native GPR configuration snapshot shared by both project builds. The manifest records its content hash and the selected C driver's absolute path, binary hash and complete version response; both ordinary and checksum modes clean on identity changes. Configuration failures preserve the previous build, and wrapper configuration overrides cannot bypass the snapshot. Thirteen disposable build-inventory tests pass on each host, as do both single-worker bootstrap builds, 13 native-adapter checks and an unchanged developer fast-path check. No machine compiler installation is changed; exact acceptance remains open. |
 | K36 | H4: timeout kills only the direct tool PID | Repaired: POSIX spawn establishes a private process group before exec; a monotonic timeout kills that group and reaps the direct child. Adapter exceptions also stop an owned child. Five focused native cases pass in both modes, including a short-lived descendant's delayed write, literal argument bytes, capture modes, exit/signal distinctions and missing executables. This supervises ordinary group members, not descendants deliberately leaving the group; all assembly limits still apply. |
 
 The K8/K36 batch passes 15 selected cases and 359 checks in each of macOS debug
@@ -7444,6 +7444,33 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K35 records the C compiler selected by the native GPR configuration rather
+than assuming the bare `gcc` banner identifies it. A bounded helper creates
+one configuration snapshot for both project builds, fingerprints its declarations
+and records the selected driver's absolute path, binary hash and full version
+response. The snapshot lives beside the per-mode lock and is regenerated before
+manifest comparison. Both ordinary and checksum builds clean on an identity
+change; unchanged content keeps its timestamp. Wrapper `--config`/`--autoconf`
+overrides are refused so both projects consume the recorded configuration.
+Failed configuration or compiler-version probes leave the previous successful
+build and snapshot alone. Each probe has a ten-second process-group limit.
+
+Thirteen build-inventory tests pass on each host, including the real wrapper
+and helper running against disposable fake toolchains. They distinguish a
+configured C driver from an unrelated `gcc` on PATH, check path/version/binary/
+configuration changes in both invalidation modes, verify both project commands,
+exercise spaces in paths, preserve failed-probe results and cover configuration
+override refusal. No machine compiler installation is changed by these controls.
+The actual single-worker macOS debug and Linux release builds pass, followed by
+13 checks across the native file-identity and argument/capture adapter cases.
+On each host, an unchanged developer run preserves the manifest, configuration
+and both executable timestamps and takes the existing fast path. The recorded
+C driver is the pinned Darwin triplet driver on macOS and pinned gcc on Linux.
+The fake-toolchain suite has a 30-second limit and selected native cases have
+limits of at most 30 seconds. Logs remain in `.scratch/r491-c-identity/` and
+`.scratch/r491-final-values/`. No Landin assembler, linker or generated program
+ran. Exact-revision acceptance remains open.
 
 K31's focused source audit distinguishes the existing C stack guard from a
 missing internal-call bound. Internal entry, direct-call and indirect-call

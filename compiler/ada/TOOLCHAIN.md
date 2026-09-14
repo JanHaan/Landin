@@ -92,6 +92,19 @@ in the same source-checksum manifest as Ada, so editing an adapter cannot
 reuse stale objects. The adapters use only the host C runtime, already a
 GNAT runtime dependency; it adds no separately acquired library.
 
+Before comparing that manifest, `scripts/build_config.py` asks the pinned
+GPRconfig to select the native Ada/C configuration. It records the configuration
+hash and the selected C driver's absolute path, binary hash and complete version
+response. Both project builds receive that same configuration snapshot, stored
+beside the per-mode build lock so cleaning objects cannot remove it. Changes to
+that identity force a clean rebuild in both ordinary and checksum modes;
+failed configuration or version probes preserve the previous successful build.
+An unchanged snapshot keeps its content and timestamp. This identifies the
+configured C driver, which need not be the bare `gcc` printed by the toolchain
+log. The wrappers own this native configuration and reject `--config` and
+`--autoconf` overrides; direct GPRbuild experimentation is outside their manifest
+contract. Configuration and version probes each have a ten-second limit.
+
 `Ada 2022` contracts (`Pre`, `Post`, `Dynamic_Predicate`) are load-bearing in
 debug builds, and debug is the default mode for that reason. Release mode
 drops those checks, so a rule that a package has to keep is written into its
