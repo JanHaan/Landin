@@ -139,11 +139,19 @@ Both `.build.yml` and `scripts/site.sh --publish` call
 `scripts/ci/approval.py`. It requires a clean checkout at current canonical
 main, fetches the exact canonical annotated approval without replacement,
 reconstructs source/tree/policy identities, and verifies all required outcomes.
-The SourceHut guard runs before private-font access. Manual publication checks
-again after rendering. Canonical ref checks detect known-stale revisions;
-there is no cross-service transaction locking Git while Pages uploads. If
-publication fails, diagnose the failure and retain the previous site; do not
-bypass the guard. Non-publishing rendering remains available for any checkout.
+The SourceHut guard runs before private-font access. Automatic and manual
+publication enter `scripts/ci/publish.py`, which holds an owned canonical Git
+lease across rendering, the final approval check and both domain uploads.
+Waiting jobs recheck the exact approved revision after acquiring the lease.
+This serializes participating publishers; it does not lock canonical main
+against promotion or make the two domain uploads atomic. A failed upload may
+have changed one domain, and a timed-out client cannot establish whether its
+server request has finished. The publisher retains its lock after an uncertain
+upload. Inspect the job and server outcome before recovery; do not bypass the
+guard or assume the previous site remains on both domains. The
+[site guide](../../docs/site/README.md) owns activation requirements and
+exact-lease recovery instructions. Non-publishing rendering remains available
+for any checkout.
 
 ## Supplemental Nix validation
 

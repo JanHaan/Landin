@@ -8379,6 +8379,24 @@ retained maintenance and cost observations (M12/K28, m14, m23, m28/m29) do not
 establish additional wrong-code repairs and authorize no stress or giant-image
 replay. Every review row keeps its individual disposition and evidence limits.
 
+Delivery inspection after `ceb687c2` confirms canonical main remains
+`3a3caca4` and canonical `r491` contains the integrated repair revision.
+SourceHut jobs 1888097 (Pages) and 1888098 (GitHub mirror) both report success.
+The Pages task is a non-main no-publication path, not live publisher evidence.
+At inspection, the running-job query returned no jobs and the canonical lock
+ref was absent. These are point-in-time observations, not proof of the Pages
+secret's write permission or assurance that no older/manual publisher can run.
+The native CI guide now also records partial-domain failure and retained-lock
+recovery instead of promising that failure leaves the previous site intact.
+
+The remaining delivery sequence is concrete:
+
+| Step | Required result | Current boundary |
+| --- | --- | --- |
+| Reconcile acceptance execution | Review the eight-job policy against the standing exclusions before starting a run. Preserve giant-image cases as source/seam evidence; any altered gate must explicitly state its coverage and cannot reuse an existing policy identity. | The unchanged policy invokes complete suites, quality workloads and debugger jobs. It cannot be launched under the current execution constraints. No exclusion, debugger permission or acceptance waiver is inferred from a request to continue. |
+| Settle historical dispositions | Record the maintainer's M5 font-history decision and M6 treatment of unrecovered original bundles, preserving the difference between source witnesses and exact run evidence. | No history rewrite or retrospective acceptance claim is authorized. New acceptance cannot recover a historical run. |
+| Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. Live permission verification, approval, promotion and publication remain unperformed. |
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the
