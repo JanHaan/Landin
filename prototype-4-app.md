@@ -719,6 +719,9 @@ The ordinary block supplies cleanup scope, not a new allocation origin.
 exits [0820]. Its provider determines capacity: the hosted root explicitly
 selects the heap, while the memory example names its byte extent. Metadata
 uses that same authority, so finite capacity includes the allocation ledger.
+The executable region starts with an empty ledger variant and initializes its
+list on the first recorded payload, preserving the constructor's explicit
+`from parent` contract under D222.
 Individual arena frees do nothing, and releasing a region over an arena does
 not restore the arena's used offset. A new explicitly backed arena is a
 separate lifetime chosen by its caller. W7's former block-escape argument is
