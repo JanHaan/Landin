@@ -72,7 +72,8 @@ package body Landin.Tests.IR_Optimization_Suite is
    type Incoming_Kind is (Literal_Table, Unknown_Table, Wrong_Table);
    procedure Evidence_Unit
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
-      Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean);
+      Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
+      Split_Template : Boolean := False);
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -301,7 +302,8 @@ package body Landin.Tests.IR_Optimization_Suite is
 
    procedure Evidence_Unit
      (Code : in out IR.Unit; Work : in out Landin.Stages.Compilation;
-      Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean)
+      Incoming : Incoming_Kind; Instances : Positive; Recursive : Boolean;
+      Split_Template : Boolean := False)
    is
       Site : constant Landin.Provenance.Origin :=
         IR.Origin_Of (Landin.Stages.Code (Work).all, 1);
@@ -336,7 +338,8 @@ package body Landin.Tests.IR_Optimization_Suite is
       IR.Add_Evidence_Entry (Code, Other, Provider, Empty);
       for I in Generic_Items'Range loop
          Generic_Items (I) := IR.Add_Routine_Instance_Item
-           (Code, I, 1, Landin.Types.No_Value, Site);
+           (Code, I, (if Split_Template and then I = Instances then 2 else 1),
+            Landin.Types.No_Value, Site);
          IR.Set_Signature (Code, Generic_Items (I), Signature);
          Parameters (I) := IR.Add_Parameter
            (Code, Generic_Items (I), Landin.Types.Usize,
@@ -487,6 +490,77 @@ package body Landin.Tests.IR_Optimization_Suite is
          end loop;
       end loop;
    end Instance_Costs;
+
+   procedure Template_Counts_Are_Independent
+     (Item : in out Landin.Testing.Context);
+
+   procedure Template_Counts_Are_Independent
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         begin
+            Lower (Item, Work,
+                   "f: () -> none = end f g: () -> none = end g");
+            for Expose in Boolean loop
+               declare
+                  Code : IR.Unit;
+                  Report : Reports.Report;
+               begin
+                  Evidence_Unit
+                    (Code, Work, Literal_Table, 3, False,
+                     Split_Template => True);
+                  if Expose then
+                     --  Item 1 is the provider; item 3 is the second
+                     --  instance of f. A retained table exposes its address.
+                     declare
+                        Table : constant IR.Evidence_Id := IR.Add_Evidence
+                          (Code, (Element => Landin.Types.I32, others => <>));
+                     begin
+                        IR.Add_Evidence_Entry
+                          (Code, Table, 3,
+                           IR.Signature_Of (Code, IR.Item_Id'(3)));
+                     end;
+                  end if;
+                  IR.Specialization.Run (Code, Facts, (Opt.Size, Opt.Auto),
+                                         Report);
+                  Landin.Testing.Check_Equal
+                    (Item, Reports.Specialization_Count (Report), 3,
+                     "two templates retain three normalized decisions");
+                  for I in 1 .. 3 loop
+                     declare
+                        Decision : constant Reports.Specialization_Decision :=
+                          Reports.Nth_Specialization (Report, I);
+                        Single : constant Boolean :=
+                          I = 3 or else (Expose and then I = 1);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Decision.Reason =
+                             (if Single then Reports.Single_Instance
+                              elsif Expose then Reports.Address_Exposed
+                              else Reports.Cost_Threshold),
+                           "counts exclude other templates and exposed roots");
+                        Landin.Testing.Check
+                          (Item, Decision.Action =
+                             (if Single then Reports.Specialized
+                              else Reports.Declined),
+                           "counting does not override evidence or cost");
+                     end;
+                  end loop;
+                  Landin.Testing.Check_Equal
+                    (Item, Count (Code, IR.Indirect_Call),
+                     (if Expose then 1 else 2),
+                     "unselected instances retain their dispatch fallback");
+               end;
+            end loop;
+         end;
+      end loop;
+   end Template_Counts_Are_Independent;
 
    procedure Large_Graph (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -980,6 +1054,9 @@ package body Landin.Tests.IR_Optimization_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir opt", "template counts are independent",
+         Template_Counts_Are_Independent'Access);
       Landin.Testing.Register
         (Into, "ir opt", "dead function addresses",
          Dead_Function_Addresses'Access);

@@ -167,6 +167,10 @@ does not restore pointee metadata: typed stores, calls and `Pointer_Address`
 still require matching evidence, and annotating a raw load cannot supply it.
 The source checker separately enforces Landin pointer comparison and conversion
 rules; the verifier does not reinterpret every low-level word as a source pointer.
+Specialization counts eligible normalized instances once per template before
+profitability decisions. The pass-local counts exclude exposed or unproven
+instances, preserve report order and do not change the evidence proof or cost
+policy; one template's instances cannot affect another's single-instance rule.
 Backward demand removes a pure function address when it has no users,
 including a projection left after specialization turns a call direct. A live
 function value retains its signature; numeric folding still excludes it.
