@@ -12622,7 +12622,7 @@ import form, `positive/r440-c-signatures` for C types, definitions and the
 standalone native link form, and `negative/r440-link-does-not-change-convention`
 for the independence of linkage and convention. ROADMAP.md's completed
 R4.40 entry records the compiler and ABI differential evidence for its exact
-historical gate input; R4.91 owns current repair and acceptance obligations.
+historical gate input; R4.91 records subsequent repairs and acceptance.
 
 ### D204 — C layout and transport follow one selected target ABI
 
@@ -12677,8 +12677,8 @@ workflow as generation. These alternatives are declined.
 **Pinned by** `bindings/generate.py`, its Clang-backed `bindings/test.py`
 suite and `abi/r440-bindings-generated`. ROADMAP.md's completed R4.40 entry
 records deterministic regeneration, compiled adapters and end-to-end
-interoperation at its exact historical gate input. Current R4.91 acceptance
-remains separately owned there; the files' presence is not execution evidence.
+interoperation at its exact historical gate input. R4.91 acceptance is
+separately recorded there; the files' presence is not execution evidence.
 
 ### D206 — Null construction cannot evade the pointer union
 
@@ -12708,7 +12708,7 @@ the existing one-atom union already expresses the state. All are declined.
 `negative/r440-parser-frame-arena` and
 `runtime/core-mem-dispose-empty`. Their native execution and the static
 folded/target-width refusals have the historical R4.40 evidence recorded in
-ROADMAP.md; current repair and acceptance remain with R4.91.
+ROADMAP.md; subsequent repairs and acceptance are recorded under R4.91.
 
 ### D207 — Foreign failure detail stays in the provider
 
@@ -12733,8 +12733,8 @@ rather than preserving foreign detail. All are declined.
 **Pinned by** `runtime/r440-errno-detail` and
 `runtime/r440-io-partial-progress` record the explicit-state and progress
 contracts. ROADMAP.md's completed R4.40 entry records the historical native
-verification, including interrupted-host-call and close evidence. R4.91 owns
-current repair and exact-revision acceptance.
+verification, including interrupted-host-call and close evidence. R4.91
+records subsequent repairs and exact-revision acceptance.
 
 ### D208 — Hosted argument capabilities retain one C startup root
 

@@ -225,7 +225,8 @@ selected Linux x86-64 C ABI and `layout(c)`, callbacks and variadic call
 transport. Its separate header generator and policy-driven C adapters cover
 the supported enum, union, bitfield, global/TLS and incoming-varargs boundaries;
 unsupported C forms receive explicit refusals. ROADMAP.md records their
-contracts and historical closure evidence; R4.91 owns the current repairs.
+contracts and historical closure evidence; R4.91 records the subsequent
+review repairs and their acceptance binding.
 
 R4.50 completes deterministic baseline code generation: compact numeric-array
 loops, strict-saving `layout(optimal)` placement, independently controlled
@@ -247,10 +248,11 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R4.91 — Resolve post-R4 review findings.**
+**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
 
-R4.91 addresses the remaining compiler, tooling and documentation review
-findings. R5 has not begun.
+R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
+completion is bound to this revision's exact native acceptance, approval and
+canonical delivery recorded in ROADMAP.md. R5 has not begun.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

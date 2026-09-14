@@ -132,6 +132,8 @@ package body Landin.Tests.Checking_Suite is
       end loop;
       US.Append
         (Text, "alias_4001: type = i32" & LF
+         & "carrier: type (t: type) = struct flag: atom_alias end carrier"
+         & LF & "atom_alias: type = token" & LF & "token: atom" & LF
          & "use: (value: alias_1) -> (result: i32) = value end use" & LF);
       Src := Landin.Stages.Add_Source
         (Work, "flat-aliases.ldn", US.To_String (Text));
