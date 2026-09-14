@@ -5730,9 +5730,12 @@ being silently promoted to bugs or discarded:
 | m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
 | m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. J77/J78 repair manifest/image-tag failure propagation with bounded fake-command controls on both hosts. Container pin duplication remains a source-level observation. |
 | m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
-| m24--m25 | Verifier partitioning and simplifier proof identity are latent concerns without an observed accepted-source defect. Validate with focused IR tests before altering passes. |
+| m24 | Reconciled with implemented J91/K21/K22: bounded block runs partition each item and every instruction agrees with its owning block; orphan and overlapping claims are refused. The separate one-pass reachability concern is refuted with J98: Pointer_Provenance unconditionally builds the full control-flow graph before acceptance. Existing focused malformed-IR and reachable/unreachable-cycle controls remain the evidence; no broad verifier case was rerun. |
+| m25 | Refuted as a current valid-IR simplifier failure. Simplification verifies its input and output. A pointer-carrying range check either receives matching pointee metadata or an explicit integer-to-usize Conversion. An ordinary Load obtains its pointee from its slot, and pointer/address slots are excluded from store-to-load forwarding. A raw usize Load cannot supply the conversion witness; the verifier refuses that proposed input. Required_Proof therefore pins the actual Conversion on the admissible construction path. This is source-contract evidence, not a newly reproduced optimizer failure or a changed pass. |
 | m26--m28 | Deterministic IR numbering, displayed pointer provenance, overlapping writeback/result semantics and redundant bounds checks need focused evidence. Code-size cost or undocumented behaviour alone does not establish wrong code. |
-| m29--m31 | Compact repetition cost and tool operand/symbol spelling remain visible in source. Use bounded assembly measurements and fake tool argv assertions; do not assemble multi-gigabyte fixtures or execute option-like filenames as experiments. |
+| m29 | Compact compiler repetition still emits assembler repetition for some static images. Assembly cost remains a separate resource concern: the named giant fixtures and enormous expansion directives must never be assembled. Any emission optimization needs tiny shape/text controls; no large timing or memory experiment is authorized. |
+| m30 | The older report distinguishes GNU acceptance of imported `.L` names from LLVM temporary-symbol refusal. Check the supported driver contract and current symbol emission before adopting a portability repair; no LLVM assembler probe or replay of the ABI fixtures is authorized by this row. |
+| m31 | Implemented: relative assembly and output filenames beginning with `-` or `@` gain a `./` prefix in the toolchain argv, retaining native file identity while avoiding option/response-file interpretation. Absolute, already-prefixed, ordinary and spaced paths retain their spelling; ordered libraries, selected linker and build ID remain intact. Pure argument-construction controls perform no filesystem writes or external invocations. |
 | m32 | Routine sharing and observable callback identity remain unconfirmed; reproduce with a small source case before changing optimization policy. |
 
 #### Follow-up review at the repair revision
@@ -6053,6 +6056,22 @@ C4's lifetime repairs remain in force while J18/J73 compare reference roots.
 J21 is already repaired, J105 is partly superseded, and J100 remains distinct
 from the repaired initializer lookahead. Existing N-series dispositions and
 all earlier delivery evidence remain unchanged.
+
+Older minor-review closure: m24 maps to the completed block-partition and
+reachability work (J91/K21/K22/J98). The m25 source audit follows the verifier's
+range-check witness, storage-derived load metadata and the simplifier's
+pointer/address-slot exclusion; its proposed forwarded raw Load cannot be a
+valid incoming witness. No optimizer or verifier change or broad replay was
+needed for those dispositions.
+
+For m31, both single-worker builds pass. The new pure argv case has six path
+pairs and 12 assertions; the existing linker-selection case adds four, for
+16 checks per host in macOS debug and pinned Linux release. They create no
+files and run no toolchain. Full `python3 check.py` passes. Evidence is in
+`.scratch/r491-file-operands/` and the matching final-values logs. Compiler
+file identity, library order and selected linker/build ID remain unchanged;
+only the driver-facing spelling of leading `-`/`@` file operands is guarded.
+Exact-revision acceptance remains open.
 
 N23 development evidence: the single-worker macOS debug and pinned Linux
 release builds pass. Four exact parser cases pass 100 checks per host: the

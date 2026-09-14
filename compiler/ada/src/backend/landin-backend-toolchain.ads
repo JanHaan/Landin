@@ -52,6 +52,8 @@ package Landin.Backend.Toolchain is
       Named : String) return String;
 
    --  The whole command line, in the order a reader would write it.
+   --  Relative file operands beginning with '-' or '@' gain './' so the
+   --  driver reads the named file rather than an option or response file.
    --
    --  `Linker` is a pass-through and not a second driver.  mold, the linker
    --  this exists for, documents three ways to be used and every one of
