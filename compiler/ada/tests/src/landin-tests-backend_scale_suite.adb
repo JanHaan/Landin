@@ -1,5 +1,6 @@
 --  In-memory source and structural probes only.  The large-routine and
 --  C-entry ABI fixtures separately execute the original result oracles.
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -545,8 +546,191 @@ package body Landin.Tests.Backend_Scale_Suite is
       end;
    end Shared_Measurements;
 
+   procedure Shared_Shapes_Keep_Query_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Shapes_Keep_Query_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Targets.Linux_X86_64);
+      Other_Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Targets.Linux_X86_64);
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      Lower (Item, Other_Work, "f: () -> none = end f");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Other_Code : IR.Unit renames Landin.Stages.Code (Other_Work).all;
+         Fields : constant IR.Field_Shape_Array :=
+           [(Element => Landin.Types.U8, others => <>),
+            (Element => Landin.Types.Usize, others => <>),
+            (Element => Landin.Types.U8, others => <>),
+            (Element => Landin.Types.Usize, others => <>)];
+         Other_Nominal : constant IR.Nominal_Type_Id :=
+           IR.Add_Nominal_Type (Other_Code, 1);
+         Other_Shape : constant IR.Field_Shape :=
+           (Kind => IR.Aggregate_Field_Shape, Nominal => Other_Nominal,
+            others => <>);
+
+         function Shape_Of
+           (Parts : IR.Field_Shape_Array; Policy : Landin.Layouts.Policy)
+            return IR.Field_Shape;
+
+         function Shape_Of
+           (Parts : IR.Field_Shape_Array; Policy : Landin.Layouts.Policy)
+            return IR.Field_Shape
+         is
+            Nominal : constant IR.Nominal_Type_Id :=
+              IR.Add_Nominal_Type (Code, 1);
+         begin
+            IR.Set_Nominal_Shape (Code, Nominal, Parts, Policy);
+            return (Kind => IR.Aggregate_Field_Shape, Nominal => Nominal,
+                    others => <>);
+         end Shape_Of;
+      begin
+         IR.Set_Nominal_Shape (Other_Code, Other_Nominal, [Fields (1)]);
+         for Policy in Landin.Layouts.Policy loop
+            declare
+               Base : constant IR.Field_Shape := Shape_Of (Fields, Policy);
+               Shared : IR.Field_Shape := Base;
+            begin
+               --  Four shared levels: at most 512 represented bytes.
+               for Depth in 1 .. 4 loop
+                  Shared :=
+                    Shape_Of ([Shared, Shared], Landin.Layouts.Natural);
+               end loop;
+               declare
+                  Array_Shape : constant IR.Field_Shape :=
+                    IR.Make_Array_Shape (Code, 3, Shared);
+                  Empty : constant IR.Field_Shape :=
+                    IR.Make_Array_Shape (Code, 0, Shared);
+                  Run : constant Natural :=
+                    IR.Add_Shape_Run (Code, [Shared, Shared]);
+                  Cases : constant Natural := IR.Add_Case_Run
+                    (Code, [1 => (First => Run, Count => 2)]);
+                  Variant : constant IR.Field_Shape :=
+                    (Kind => IR.Variant_Field_Shape,
+                     Element => Landin.Types.U8, Cases => 1,
+                     Payloads_First => Cases, others => <>);
+               begin
+                  for Small in Boolean loop
+                     declare
+                        Facts : constant Targets.Target_Facts :=
+                          (if Small then Targets.Synthetic_32
+                           else Targets.Linux_X86_64);
+                        Pointer : constant Targets.Byte_Count :=
+                          Targets.Byte_Count
+                            (Targets.Bytes (Targets.Pointer_Size (Facts)));
+                        Expected : constant Targets.Byte_Count :=
+                          16 * Pointer
+                          * (if Policy = Landin.Layouts.Optimal then 3 else 4);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Measure.Extent
+                             (Code, Shared, Facts, Expected).Size = Expected
+                           and then Measure.Aggregate_Layout
+                             (Code, Shared, Facts, Expected).Size = Expected,
+                           "shared graph respects target width and policy");
+                        Landin.Testing.Check
+                          (Item, Measure.Fields_Layout
+                             (Code, [Shared, Shared], Landin.Layouts.Natural,
+                              Facts, 2 * Expected).Size = 2 * Expected,
+                           "sibling fields share measurement context");
+                        Landin.Testing.Check
+                          (Item, Measure.Case_Layout
+                             (Code, Variant, 1, Facts, 2 * Expected).Size
+                               = 2 * Expected
+                           and then Measure.Variant_Layout
+                             (Code, Variant, Facts, 2 * Expected + Pointer)
+                               .Size = 2 * Expected + Pointer,
+                           "variant payload and tag retain their placement");
+                        Landin.Testing.Check
+                          (Item, Measure.Extent
+                             (Code, Array_Shape, Facts, 3 * Expected).Size
+                               = 3 * Expected
+                           and then Measure.Extent
+                             (Code, Empty, Facts, Expected).Size = 0
+                           and then Measure.Extent
+                             (Code, Empty, Facts, Expected).Alignment = 1,
+                           "array repetition and empty alignment stay intact");
+                        begin
+                           declare
+                              Too_Large : constant Layout.Field_Extent :=
+                                Measure.Extent
+                                  (Code, Shared, Facts, Expected - 1);
+                           begin
+                              Landin.Testing.Fail
+                                (Item, "cached size ignored the smaller limit"
+                                 & Targets.Byte_Count'Image (Too_Large.Size));
+                           end;
+                        exception
+                           when Landin.Compiler_Defect =>
+                              Landin.Testing.Check
+                                (Item, True,
+                                 "a new request rechecks its smaller limit");
+                        end;
+                        Landin.Testing.Check
+                          (Item, Measure.Extent
+                             (Code, Shared, Facts, Expected).Size = Expected,
+                           "a refused request does not retain partial facts");
+                        Landin.Testing.Check
+                          (Item, Measure.Extent
+                             (Other_Code, Other_Shape, Facts, 1).Size = 1,
+                           "another unit may reuse a nominal position");
+                     end;
+                  end loop;
+               end;
+            end;
+         end loop;
+      end;
+   end Shared_Shapes_Keep_Query_Boundaries;
+
+   procedure Cyclic_Shapes_Stop_Measurement
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cyclic_Shapes_Stop_Measurement
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Targets.Linux_X86_64);
+   begin
+      Lower (Item, Work, "f: () -> none = end f");
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Nominal : constant IR.Nominal_Type_Id :=
+           IR.Add_Nominal_Type (Code, 1);
+         Shape : constant IR.Field_Shape :=
+           (Kind => IR.Aggregate_Field_Shape, Nominal => Nominal,
+            others => <>);
+      begin
+         --  One malformed self edge reaches the in-progress memo entry.
+         IR.Set_Nominal_Shape (Code, Nominal, [Shape]);
+         declare
+            Size : constant Layout.Field_Extent :=
+              Measure.Extent (Code, Shape, Targets.Linux_X86_64, 64);
+         begin
+            Landin.Testing.Fail
+              (Item, "cyclic shape returned"
+               & Targets.Byte_Count'Image (Size.Size));
+         end;
+      exception
+         when Failure : Landin.Compiler_Defect =>
+            Landin.Testing.Check_Equal
+              (Item, Ada.Exceptions.Exception_Message (Failure),
+               "cyclic represented shape",
+               "the memo guard refuses the repeated in-progress shape");
+      end;
+   end Cyclic_Shapes_Stop_Measurement;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend scale", "cyclic shapes stop measurement",
+         Cyclic_Shapes_Stop_Measurement'Access);
+      Landin.Testing.Register
+        (Into, "backend scale", "shared shapes keep query boundaries",
+         Shared_Shapes_Keep_Query_Boundaries'Access);
       Landin.Testing.Register
         (Into, "backend scale", "many private bodies",
          Many_Private_Bodies'Access);

@@ -5,6 +5,8 @@ with Landin.Targets.Layouts;
 
 package Landin.IR.Shape_Measurement is
 
+   --  Each query memoizes repeated descendant shapes for its fixed unit,
+   --  target and limit, and discards that memo on return or failure.
    function Extent
      (Of_Unit : Unit; Shape : Field_Shape;
       Facts : Landin.Targets.Target_Facts;

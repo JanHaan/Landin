@@ -167,6 +167,11 @@ does not restore pointee metadata: typed stores, calls and `Pointer_Address`
 still require matching evidence, and annotating a raw load cannot supply it.
 The source checker separately enforces Landin pointer comparison and conversion
 rules; the verifier does not reinterpret every low-level word as a source pointer.
+Recursive shape measurement shares a memo across descendant layout queries
+within one public request. Complete shapes key the results, while the unit,
+target and maximum stay fixed for that request. Return or failure discards the
+memo; later calls recheck their own target, limit and unit. An in-progress entry
+refuses a represented cycle instead of recursing indefinitely.
 Specialization and final-body sharing collect address exposure through one
 shared traversal of retained IR references. Explicit/imported roots, scalar and
 aggregate function images, evidence entries and runtime function addresses feed

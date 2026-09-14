@@ -6054,7 +6054,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
 | K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
 | K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
-| K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
+| K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Implemented a memo shared by recursive calls within one public measurement query, keyed by complete shape. Unit, target and maximum are fixed for that query; no result survives return or failure. Small shared graphs cover layout policy, target width, size limits, unit identity, arrays and variants. Four exact cases pass 111 checks on each host, including one small cycle guard. Scalar queries avoid memo allocation. No long timing runs or giant images; exact acceptance remains open. |
 | K25 | F3: devirtualization leaves a typed function-address projection live | Repaired: backward demand may remove a verified pure Function_Address despite its signature metadata. Live users still retain the instruction and its signature; numeric folding remains restricted to plain values. Small dead/live/no-optimization controls cover both target widths. Three exact cases pass 39 checks on each of macOS debug and Linux release; exact acceptance open. |
 | K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Implemented a shared retained-reference traversal for specialization and final-body sharing. Consumers mark their existing pass-local arrays once; explicit/imported roots, scalar and aggregate images, evidence entries and runtime function addresses share one policy with the single-routine query. Seven exact callback-count and decision/identity cases pass 134 checks on each host; no timing sweep or persistent cache. Exact acceptance remains open. |
 | K27 | F5: profitability recounts eligible instances for every instance | Implemented a pass-local ordered count per normalized template before profitability selection. This removes the nested recount while preserving the same proven/non-exposed/static-entry predicate and decision order. A three-instance, two-template test covers exposed-root exclusion and independent single-instance selection on both target widths. Three exact cases pass 70 checks on each host; no timing or stress campaign. Exact acceptance remains open. |
@@ -7444,6 +7444,27 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K24 memoizes completed compound-shape extents within each public measurement
+request. Recursive fields, arrays, aggregates and variant payloads share that
+memo; complete shapes key the result, while unit, target and maximum remain
+fixed for the request. Return or failure discards it, so later measurements
+cannot reuse another target, limit, unit or incomplete result. An in-progress
+entry refuses a represented cycle. Scalar measurements avoid memo allocation
+because they have no descendant layout to reuse.
+
+Four exact cases pass 111 checks in each of macOS debug and Linux release.
+The shared graph has four levels and at most 512 represented bytes; its array
+control reaches at most 1.5 KiB. Controls vary all layout policies, target width,
+independent units with matching nominal positions, exact and insufficient limits,
+arrays, empty alignment and variant placement. One malformed self edge pins the
+cycle guard; the existing cost and template-selection cases stay green. Both
+single-worker builds and the full document check pass. No large existing
+measurement case or timing sample was replayed, and no assembler or generated
+program runs. Logs are retained under `.scratch/r491-shape-cache/` and
+`.scratch/r491-final-values/`. The earlier successful Linux transcript is kept
+as `native-before-scalar.log`; the final one includes the scalar-allocation
+adjustment. Exact-revision acceptance remains open.
 
 K26 replaces per-routine retained-reference scans with one shared traversal.
 Specialization marks its existing exposure array once before the incoming-proof
