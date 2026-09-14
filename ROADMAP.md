@@ -6050,14 +6050,14 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K17 | E1: array fill/element atom writes require exact sets | Implemented: Fill_Array and Store_Element allow source atom subsets under D216; reads and whole copies retain exact descriptors. A two-element source fill reproduced exit 70 and now exits 0. Named/parameter direct-store source controls already passed; their Store_Element contract is independently pinned with small IR cases. Exact acceptance remains open. |
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Verifier shape checks now cover ordinary direct and indirect calls as well as erased dispatch. Hidden result and shaped argument addresses must retain their declared extent, element and nominal identity; C and erased-self checks remain. Bounded malformed-IR and valid nested/indexed controls cover both target widths. Four exact selectors pass 107 checks on each host; no accepted-source overwrite is claimed and exact acceptance remains open. |
 | K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Contract distinction: plain usize storage/parameters and integer comparisons deliberately transport address bits without a source-pointer promise. They do not restore pointee evidence; typed stores/calls and Pointer_Address still demand it. Documented this existing IR boundary and added small accepted raw-word/refused forged-restoration cases, with the source pointer-comparison refusal as a separate control. Three exact cases pass 81 checks on each host. Disposed as an IR/source-contract conflation, not an established accepted-source defect; no blanket raw-carrier ban or language change. Exact acceptance remains open. |
-| K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
+| K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Implemented with J95: scalar stores refuse struct and array slots before Type_Of, with tiny valid scalar/field/element controls passing in debug and release. This is a malformed-IR backstop, not a source miscompilation claim; exact acceptance remains open. |
 | K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
 | K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
 | K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
 | K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
 | K25 | F3: devirtualization leaves a typed function-address projection live | Repaired: backward demand may remove a verified pure Function_Address despite its signature metadata. Live users still retain the instruction and its signature; numeric folding remains restricted to plain values. Small dead/live/no-optimization controls cover both target widths. Three exact cases pass 39 checks on each of macOS debug and Linux release; exact acceptance open. |
 | K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Source confirms the per-routine query precedes the off decision. Compute shared exposure facts at the appropriate pass boundary or avoid unneeded work, preserving callback identity and observability; use small operation-count controls, not timing sweeps. |
-| K27 | F5: profitability recounts eligible instances for every instance | Source confirms the nested item scans. Count once per normalized template while preserving evidence proof, exposed roots and policy decisions; validate small mixed-template cases. |
+| K27 | F5: profitability recounts eligible instances for every instance | Implemented a pass-local ordered count per normalized template before profitability selection. This removes the nested recount while preserving the same proven/non-exposed/static-entry predicate and decision order. A three-instance, two-template test covers exposed-root exclusion and independent single-instance selection on both target widths. Three exact cases pass 70 checks on each host; no timing or stress campaign. Exact acceptance remains open. |
 | K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
 | K29 | G1: wide slice stride uses an unencodable immediate multiply | Implemented with A7/M19/N6/J61. Bounded scalar and emitted-text evidence covers the shared encoding decision; no giant extent or image reproduction. |
 | K30 | G3: first-class external C function address uses a bare PC-relative address | Confirmed with one inspected 1,275-byte assembly file and a foreground 20-second-capped invocation of the pinned triplet-selected GNU driver: PIE linking refuses the PC32 puts relocation. Imported runtime function addresses now load through GOTPCREL; defined routines retain relative addresses and quoting is preserved. Two exact backend cases pass eight checks on each host. The inspected replacement links as a PIE and readelf confirms the puts GLOB_DAT relocation; no generated program was executed and exact acceptance remains open. |
@@ -7444,6 +7444,23 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K27 replaces the per-instance nested eligibility recount with a pass-local
+ordered map keyed by normalized template identity. One traversal accumulates
+the same proven, non-exposed, static-entry predicate before any profitability
+choice. Later decisions use those counts without scanning the unit again;
+report order, forced/off modes and the existing cost/evidence rules are retained.
+
+Three exact cases pass 70 checks on each of macOS debug and Linux release.
+The new bounded case has three instances across two templates and checks both
+target widths, with and without an exposed instance. It distinguishes independent
+single-instance selection from cost refusal and retains indirect fallbacks.
+Existing all-mode cost and recursive/unknown/wrong incoming-evidence controls
+stay green. Both single-worker builds and full document checking pass. Logs are
+under `.scratch/r491-template-counts/` and `.scratch/r491-final-values/`.
+No timing sweep, large generated case, native assembler or generated executable
+is used; exact-revision acceptance remains open. K20's duplicate row is also
+aligned with the already implemented J95 disposition and its retained evidence.
 
 K19 is disposed as an IR/source-contract distinction. The IR already exposes
 metadata-free usize address operations: a plain slot or parameter transports

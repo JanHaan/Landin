@@ -1,3 +1,4 @@
+with Ada.Containers.Ordered_Maps;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
 with Landin.IR.Shape_Measurement;
@@ -18,6 +19,9 @@ package body Landin.IR.Specialization is
    is
       package Reports renames Landin.Build_Reports;
       package Layouts renames Landin.Targets.Layouts;
+      package Template_Counts is new Ada.Containers.Ordered_Maps
+        (Key_Type => Declaration_Id, Element_Type => Natural);
+      Eligible : Template_Counts.Map;
       Count : constant Natural := Item_Count (Into);
       Proven, Exposed : array (1 .. Count) of Boolean := [others => False];
       Decisions : array (1 .. Count) of Reports.Specialization_Decision;
@@ -286,22 +290,31 @@ package body Landin.IR.Specialization is
       end loop;
       --  Count eligible normalized instances, never call sites. Profitability
       --  cannot alter the evidence proof or source recursion acceptance.
+      --  Each template is counted once before any profitability decision.
+      for I in 1 .. Count loop
+         if Proven (I) and then not Exposed (I)
+           and then Decisions (I).Entry_Calls > 0
+         then
+            declare
+               Template : constant Declaration_Id := Decisions (I).Template;
+            begin
+               if Eligible.Contains (Template) then
+                  Eligible.Replace (Template, Eligible.Element (Template) + 1);
+               else
+                  Eligible.Insert (Template, 1);
+               end if;
+            end;
+         end if;
+      end loop;
       for I in 1 .. Count loop
          if Decisions (I).Action = Reports.Specialized then
             declare
-               Eligible : Natural := 0;
+               Instances : constant Natural :=
+                 Eligible.Element (Decisions (I).Template);
             begin
-               for J in 1 .. Count loop
-                  if Decisions (J).Template = Decisions (I).Template
-                    and then Proven (J) and then not Exposed (J)
-                    and then Decisions (J).Entry_Calls > 0
-                  then
-                     Eligible := Eligible + 1;
-                  end if;
-               end loop;
                if Options.Specialize = Landin.Optimization.All_Eligible then
                   Decisions (I).Reason := Reports.Forced;
-               elsif Eligible = 1 then
+               elsif Instances = 1 then
                   Decisions (I).Reason := Reports.Single_Instance;
                elsif Specialization_Policy.Profitable
                  (Decisions (I).Benefit, Decisions (I).Estimated_Growth,
