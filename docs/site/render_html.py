@@ -957,6 +957,10 @@ GUIDES = [
          nav="the bootstrap compiler", group="the implementation",
          blurb="The Ada 2022 chassis: what each package owns, what it may "
                "not own, and what is deliberately absent."),
+    dict(key="ir", src="docs/ir.md", out="ir.html",
+         nav="the intermediate representation", group="the implementation",
+         blurb="How checked source becomes verified, target-neutral IR, "
+               "and why it takes this form. A derived implementation guide."),
     dict(key="toolchain", src="compiler/ada/TOOLCHAIN.md", out="toolchain.html",
          nav="the pinned toolchain", group="the implementation",
          blurb="One compiler, recorded exactly, with the warning policy and "
@@ -2152,7 +2156,7 @@ def main(argv):
               or g["src"].split("/")[-1] in named]
     if not docs and not guides:
         print("nothing to render; the documents are "
-              + ", ".join(d["src"] for d in DOCS + GUIDES))
+                + ", ".join(d["src"] for d in DOCS + GUIDES))
         return 1
     SITE.mkdir(exist_ok=True)
     counts = {}
