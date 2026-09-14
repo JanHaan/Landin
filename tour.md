@@ -140,6 +140,11 @@ statements see the local. Condition bindings follow the same rule [1070].
 Module declarations and routine signatures retain their collected scopes
 [0130] [1290].
 
+Control words are reserved in every name position [1760]. Names such as
+`begin`, `match`, `loop`, `break` and `unchecked` cannot be variables,
+parameters, fields or labels. `begin = 10` is invalid; use a name such as
+`begin_value` instead. Parentheses do not turn a keyword into a name.
+
 ### [0120] Types are declared like any other value, with 'type'
 
 Types are declared like any other value, with 'type'.

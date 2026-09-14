@@ -134,8 +134,7 @@ package Landin.Syntax.Precedence is
 
    --  `primary ::= literal | array_literal | indexed | call | measurement
    --               | if | match | bare_block | "(" expression ")"`, plus
-   --  `unary`'s prefix operators.  `match` and `begin` are contextual words
-   --  and therefore already arrive as Identifier.
+   --  `unary`'s prefix operators. Control openers are reserved by D225.
    function Begins_Expression (Of_Kind : Landin.Tokens.Token_Kind)
      return Boolean
      is (Landin.Tokens.Is_Literal (Of_Kind)
@@ -146,6 +145,11 @@ package Landin.Syntax.Precedence is
                             | Landin.Tokens.Kw_Any
                             | Landin.Tokens.Kw_Ptr
                             | Landin.Tokens.Kw_If
+                            | Landin.Tokens.Kw_Begin
+                            | Landin.Tokens.Kw_Match
+                            | Landin.Tokens.Kw_Loop
+                            | Landin.Tokens.Kw_While
+                            | Landin.Tokens.Kw_For
                             | Landin.Tokens.Kw_Try
                             | Landin.Tokens.Kw_Sizeof
                             | Landin.Tokens.Kw_Alignof
@@ -159,7 +163,17 @@ package Landin.Syntax.Precedence is
                     | Landin.Tokens.Kw_Inc | Landin.Tokens.Kw_Dec
                     | Landin.Tokens.Underscore | Landin.Tokens.Left_Paren
                     | Landin.Tokens.Kw_Return | Landin.Tokens.Kw_Fail
-                    | Landin.Tokens.Kw_Try | Landin.Tokens.Kw_If);
+                    | Landin.Tokens.Kw_Try | Landin.Tokens.Kw_If
+                    | Landin.Tokens.Kw_Begin
+                    | Landin.Tokens.Kw_Match
+                    | Landin.Tokens.Kw_Loop
+                    | Landin.Tokens.Kw_While
+                    | Landin.Tokens.Kw_For
+                    | Landin.Tokens.Kw_Break
+                    | Landin.Tokens.Kw_Continue
+                    | Landin.Tokens.Kw_Defer
+                    | Landin.Tokens.Kw_Undo
+                    | Landin.Tokens.Kw_Unchecked);
 
    --  A parameterized conformance may begin with `(`; every other module
    --  declaration keeps [1740]'s existing first token.

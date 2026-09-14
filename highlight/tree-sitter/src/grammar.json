@@ -5987,7 +5987,31 @@
       },
       {
         "type": "STRING",
+        "value": "begin"
+      },
+      {
+        "type": "STRING",
+        "value": "break"
+      },
+      {
+        "type": "STRING",
+        "value": "complete"
+      },
+      {
+        "type": "STRING",
+        "value": "continue"
+      },
+      {
+        "type": "STRING",
         "value": "dec"
+      },
+      {
+        "type": "STRING",
+        "value": "defer"
+      },
+      {
+        "type": "STRING",
+        "value": "do"
       },
       {
         "type": "STRING",
@@ -6023,6 +6047,10 @@
       },
       {
         "type": "STRING",
+        "value": "for"
+      },
+      {
+        "type": "STRING",
         "value": "from"
       },
       {
@@ -6044,6 +6072,14 @@
       {
         "type": "STRING",
         "value": "inout"
+      },
+      {
+        "type": "STRING",
+        "value": "loop"
+      },
+      {
+        "type": "STRING",
+        "value": "match"
       },
       {
         "type": "STRING",
@@ -6103,7 +6139,23 @@
       },
       {
         "type": "STRING",
+        "value": "unchecked"
+      },
+      {
+        "type": "STRING",
+        "value": "undo"
+      },
+      {
+        "type": "STRING",
         "value": "when"
+      },
+      {
+        "type": "STRING",
+        "value": "while"
+      },
+      {
+        "type": "STRING",
+        "value": "with"
       },
       {
         "type": "STRING",

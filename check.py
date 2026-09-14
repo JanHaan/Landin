@@ -2508,8 +2508,8 @@ def check_precedence_table(full_run):
 def check_refused_constructs(full_run):
     """The parser's refusal tables are the tour's, and the corpus is pinned.
 
-    [1760] leaves `loop`, `match` and the rest as ordinary identifiers, so
-    only the parser can meet them.  That makes the
+    [1760] leaves deferred contextual forms as ordinary identifiers, so
+    only the parser can recognize and refuse those forms.  That makes the
     parser a second authority on what the tour describes, which is one more
     than this repository is willing to have: every spelling it refuses has
     to be a word the tour writes and not one the grammar already spells,

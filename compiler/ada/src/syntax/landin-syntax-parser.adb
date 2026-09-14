@@ -41,7 +41,10 @@ package body Landin.Syntax.Parser is
    Statement_Anchor : constant Tok.Kind_Set :=
      [Tok.Kw_Mut | Tok.Identifier | Tok.Underscore | Tok.Left_Paren
         | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return | Tok.Kw_Fail | Tok.Kw_Try
-        | Tok.Kw_If | Tok.Kw_Elsif
+        | Tok.Kw_If | Tok.Kw_Elsif | Tok.Kw_Begin | Tok.Kw_Match
+        | Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For | Tok.Kw_Break
+        | Tok.Kw_Continue | Tok.Kw_Defer | Tok.Kw_Undo | Tok.Kw_Unchecked
+        | Tok.Kw_Complete
         | Tok.Kw_Else | Tok.Kw_End | Tok.Kw_Public
         | Tok.End_Of_Input => True,
       others => False];
@@ -53,8 +56,8 @@ package body Landin.Syntax.Parser is
         | Tok.Kw_Mut | Tok.End_Of_Input => True,
       others => False];
 
-   --  Every currently parsed contextual word remains an ordinary name
-   --  outside the syntactic position which gives it its special meaning.
+   --  D225 reserves control words at the token boundary. Contextual words
+   --  outside that set retain their ordinary name positions.
 
    --  The scalar names [1790].  These are the types the kernel predeclares,
    --  not keywords, which is why they are compared by interned identity
@@ -153,10 +156,10 @@ package body Landin.Syntax.Parser is
             --  end of a then/elsif arm the enclosing branch wins; wrapping a
             --  recovered call in parentheses makes its inner `else` explicit.
             Else_Closes_Arm : Boolean := False;
-            --  `complete` is contextual and closes only the body of the
+            --  `complete` closes only the body of the
             --  loop currently being parsed.
             Complete_Closes_Block : Boolean := False;
-            --  Transfers are contextual identifiers.  Keeping the nesting
+            --  Keeping the transfer nesting
             --  count here lets a stray `break` or `continue` remain a source
             --  diagnostic instead of reaching lowering without a target.
             Loop_Depth : Natural := 0;
@@ -196,47 +199,11 @@ package body Landin.Syntax.Parser is
             Variant_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "variant");
 
-            Match_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "match");
-
-            Begin_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "begin");
-
-            Defer_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "defer");
-
-            Undo_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "undo");
-
-            Loop_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "loop");
-
-            While_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "while");
-
-            For_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "for");
-
-            Break_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "break");
-
-            Continue_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "continue");
-
-            Do_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "do");
-
-            Complete_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "complete");
-
             --  D212's withdrawn [0820] block shape: `arena` is an
             --  ordinary name everywhere else, and the block is recognised
             --  by its shape rather than by its spelling.
             Arena_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "arena");
-
-            With_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "with");
 
             --  These remain ordinary identifiers except in the three
             --  contextual productions below.
@@ -267,11 +234,6 @@ package body Landin.Syntax.Parser is
             --  ordinary meaning and [1760] reserves nothing new.
             Range_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "range");
-
-            --  D187's [1120] region.  Two tokens decide it, so a binding
-            --  or label named `unchecked` keeps its ordinary meaning.
-            Unchecked_Id : constant Landin.Source.Names.Name_Id :=
-              Landin.Source.Names.Intern (Names, "unchecked");
 
             --  D202 recognizes these implicit namespaces in module tool
             --  directives; resolution owns their binding reservation.
@@ -470,7 +432,6 @@ package body Landin.Syntax.Parser is
             function Parse_Match (Context : Frame) return Node_Id;
             function Parse_Bare_Block (Context : Frame) return Node_Id;
             function Parse_Unchecked_Block (Context : Frame) return Node_Id;
-            function Opens_Unchecked return Boolean;
             function Opens_Arena_Block return Boolean;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
@@ -1126,11 +1087,7 @@ package body Landin.Syntax.Parser is
                             and then Ahead (1) = Tok.Equal;
                   exit when Peek = Tok.Identifier
                     and then
-                      (Named_Here in Loop_Id | While_Id | For_Id
-                         | Break_Id | Continue_Id | Defer_Id | Undo_Id
-                         | Match_Id | Begin_Id
-                       or else Opens_Unchecked
-                       or else Opens_Arena_Block
+                      (Opens_Arena_Block
                        or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                        or else After_Selectors in Tok.Equal
                          | Tok.Compound_Assign | Tok.Left_Paren);
@@ -3858,8 +3815,7 @@ package body Landin.Syntax.Parser is
                Is_Label : constant Boolean :=
                  Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
-                 and then Ahead (2) = Tok.Identifier
-                 and then Named_Ahead (2) in Loop_Id | While_Id | For_Id;
+                 and then Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For;
                Declares : constant Boolean :=
                  Peek = Tok.Kw_Mut
                  or else
@@ -4501,10 +4457,8 @@ package body Landin.Syntax.Parser is
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
-                  if Peek = Tok.Identifier
-                    and then (Named_Here in Defer_Id | Undo_Id
-                              or else Opens_Unchecked
-                              or else Opens_Arena_Block)
+                  if Peek in Tok.Kw_Defer | Tok.Kw_Undo | Tok.Kw_Unchecked
+                    or else Opens_Arena_Block
                   then
                      return Parse_Block (Context, Allow_Value => True);
                   end if;
@@ -4513,17 +4467,12 @@ package body Landin.Syntax.Parser is
                   --  sole one is [1800]'s expression body; when another
                   --  statement follows, it seeds the ordinary statement
                   --  block just as the call-shaped ambiguity below does.
-                  if Peek = Tok.Kw_If
+                  if Peek in Tok.Kw_If | Tok.Kw_Match | Tok.Kw_Begin
+                             | Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
                     or else
-                      (Peek = Tok.Identifier
-                       and then
-                         (Named_Here in Match_Id | Begin_Id
-                            | Loop_Id | While_Id | For_Id
-                          or else
-                            (Ahead (1) = Tok.Colon
-                             and then Ahead (2) = Tok.Identifier
-                             and then Named_Ahead (2)
-                               in Loop_Id | While_Id | For_Id)))
+                      (Peek = Tok.Identifier and then Ahead (1) = Tok.Colon
+                       and then Ahead (2)
+                         in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For)
                   then
                      declare
                         Control : constant Node_Id := Parse_Expression;
@@ -4973,11 +4922,7 @@ package body Landin.Syntax.Parser is
                                  | Tok.Kw_Elsif | Tok.Kw_Else
                      or else
                        (Complete_Closes_Block
-                        and then Peek = Tok.Identifier
-                        and then Named_Here = Complete_Id
-                        and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
-                        and then After_Selectors not in
-                          Tok.Equal | Tok.Compound_Assign));
+                        and then Peek = Tok.Kw_Complete));
 
                --  A name beginning a declaration or assignment is not the
                --  final expression [1080].  Every other expression first
@@ -4995,7 +4940,9 @@ package body Landin.Syntax.Parser is
 
                   if Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
                              | Tok.Underscore | Tok.Kw_Return | Tok.Kw_Fail
-                             | Tok.Kw_Public
+                             | Tok.Kw_Public | Tok.Kw_Defer | Tok.Kw_Undo
+                             | Tok.Kw_Break | Tok.Kw_Continue
+                             | Tok.Kw_Unchecked
                   then
                      return True;
                   end if;
@@ -5005,16 +4952,13 @@ package body Landin.Syntax.Parser is
                   end if;
 
                   if Ahead (1) = Tok.Colon
-                    and then Ahead (2) = Tok.Identifier
-                    and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
+                    and then Ahead (2)
+                      in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
                   then
                      return False;
                   end if;
 
-                  return Named_Here in Defer_Id | Undo_Id
-                    | Break_Id | Continue_Id
-                    or else Opens_Unchecked
-                    or else Opens_Arena_Block
+                  return Opens_Arena_Block
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors in Tok.Equal | Tok.Compound_Assign;
                end Clearly_A_Statement;
@@ -5319,109 +5263,24 @@ package body Landin.Syntax.Parser is
                        (Error_Statement, Start,
                         Join (Start, After_Previous));
 
-                  when Tok.Identifier =>
-                     if Ahead (1) = Tok.Colon
-                       and then Ahead (2) = Tok.Identifier
-                       and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
+                  when Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                     | Tok.Kw_Break | Tok.Kw_Continue | Tok.Kw_Defer
+                     | Tok.Kw_Undo | Tok.Kw_Match | Tok.Kw_Begin
+                     | Tok.Kw_Unchecked =>
+                     if Peek in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
                      then
-                        declare
-                           Label : constant Landin.Source.Names.Name_Id :=
-                             Named_Here;
-                           Label_At : constant Landin.Source.Span := Here;
-                           Is_For : constant Boolean :=
-                             Named_Ahead (2) = For_Id;
-                        begin
-                           Advance;
-                           Advance;
-                           if Is_For then
-                              return Parse_For
-                                (Context, Starts => Label_At, Label => Label);
-                           else
-                              return Parse_Loop
-                                (Context, Starts => Label_At, Label => Label);
-                           end if;
-                        end;
-                     --  Binding/assignment punctuation keeps this token an
-                     --  identifier even when its word can open a control form.
-                     elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal
-                       or else (Ahead (1) = Tok.Comma
-                                and then Ahead (2) = Tok.Identifier)
-                     then
-                        return Parse_Binding
-                          (False, Landin.Source.Empty_Span);
-                     elsif After_Selectors in Tok.Equal | Tok.Compound_Assign
-                     then
-                        declare
-                           Target : constant Node_Id := Parse_Place;
-                           At_Op  : Landin.Source.Span;
-                           Operation : Tok.Assignment_Operator;
-                           Value  : Node_Id := No_Node;
-                        begin
-                           --  After_Selectors is a non-consuming lookahead.
-                           --  A damaged selector can satisfy that lookahead
-                           --  while Parse_Place recovers somewhere else; do
-                           --  not read assignment metadata from that token.
-                           if Peek not in Tok.Equal | Tok.Compound_Assign then
-                              return Add
-                                (Error_Statement, Start,
-                                 Join (Start, After_Previous));
-                           end if;
-                           At_Op := Here;
-                           Operation := Tok.Assignment_Operation
-                             (Tok.Token_At (From, Index));
-                           Advance;
-                           Value := Parse_Expression;
-
-                           return Add
-                             (Of_Kind  => Assignment,
-                              At_Token => At_Op,
-                              Extent   => Join (Start, After_Previous),
-                              Children => [Target, Value],
-                              Assignment_Op => Operation);
-                        end;
-                     elsif Named_Here in Loop_Id | While_Id | For_Id
-                     then
-                        if Named_Here = For_Id then
+                        if Peek = Tok.Kw_For then
                            return Parse_For (Context);
                         else
                            return Parse_Loop (Context);
                         end if;
-                     elsif Named_Here in Break_Id | Continue_Id
+                     elsif Peek in Tok.Kw_Break | Tok.Kw_Continue
                      then
                         return Parse_Loop_Transfer;
-                     elsif Opens_Arena_Block then
-                        --  D191: [0820]'s lexical arena block, recognised
-                        --  by shape and refused by name.  `arena` is not a
-                        --  reserved word and this is the only statement
-                        --  shape it opens, so `arena = x`, `arena(x)`,
-                        --  `arena: loop do` and a parameter spelled
-                        --  `arena` are all untouched.
-                        declare
-                           At_Word : constant Landin.Source.Span := Here;
-                           --  [0820] closes the block with its own name,
-                           --  `end scratch`, so the closer is the label
-                           --  and not the word that opened it.
-                           Closer  : constant Landin.Source.Names.Name_Id :=
-                             Named_Ahead (1);
-                        begin
-                           Refuse
-                             (Item    => Syn.Arena_Block,
-                              Where   => At_Word,
-                              Message =>
-                                "the lexical `arena` block is withdrawn");
-
-                           if not Skip_Past_Closer (Closer) then
-                              Resync_Statement;
-                           end if;
-
-                           return Add
-                             (Error_Statement, At_Word,
-                              Join (Start, After_Previous));
-                        end;
-                     elsif Named_Here in Defer_Id | Undo_Id then
+                     elsif Peek in Tok.Kw_Defer | Tok.Kw_Undo then
                         declare
                            Is_Undo : constant Boolean :=
-                             Named_Here = Undo_Id;
+                             Peek = Tok.Kw_Undo;
                            At_Cleanup : constant Landin.Source.Span := Here;
                            Call_Node : Node_Id := No_Node;
 
@@ -5494,12 +5353,103 @@ package body Landin.Syntax.Parser is
                               Extent   => Join (Start, After_Previous),
                               Children => [Call_Node]);
                         end;
-                     elsif Named_Here = Match_Id then
+                     elsif Peek = Tok.Kw_Match then
                         return Parse_Match (Context);
-                     elsif Named_Here = Begin_Id then
+                     elsif Peek = Tok.Kw_Begin then
                         return Parse_Bare_Block (Context);
-                     elsif Opens_Unchecked then
+                     else
                         return Parse_Unchecked_Block (Context);
+                     end if;
+
+                  when Tok.Identifier =>
+                     if Ahead (1) = Tok.Colon
+                       and then Ahead (2)
+                         in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                     then
+                        declare
+                           Label : constant Landin.Source.Names.Name_Id :=
+                             Named_Here;
+                           Label_At : constant Landin.Source.Span := Here;
+                           Is_For : constant Boolean :=
+                             Ahead (2) = Tok.Kw_For;
+                        begin
+                           Advance;
+                           Advance;
+                           if Is_For then
+                              return Parse_For
+                                (Context, Starts => Label_At, Label => Label);
+                           else
+                              return Parse_Loop
+                                (Context, Starts => Label_At, Label => Label);
+                           end if;
+                        end;
+                     --  Ordinary names retain declaration and assignment
+                     --  dispatch after the labelled-loop discriminator.
+                     elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else (Ahead (1) = Tok.Comma
+                                and then Ahead (2) = Tok.Identifier)
+                     then
+                        return Parse_Binding
+                          (False, Landin.Source.Empty_Span);
+                     elsif After_Selectors in Tok.Equal | Tok.Compound_Assign
+                     then
+                        declare
+                           Target : constant Node_Id := Parse_Place;
+                           At_Op  : Landin.Source.Span;
+                           Operation : Tok.Assignment_Operator;
+                           Value  : Node_Id := No_Node;
+                        begin
+                           --  After_Selectors is a non-consuming lookahead.
+                           --  A damaged selector can satisfy that lookahead
+                           --  while Parse_Place recovers somewhere else; do
+                           --  not read assignment metadata from that token.
+                           if Peek not in Tok.Equal | Tok.Compound_Assign then
+                              return Add
+                                (Error_Statement, Start,
+                                 Join (Start, After_Previous));
+                           end if;
+                           At_Op := Here;
+                           Operation := Tok.Assignment_Operation
+                             (Tok.Token_At (From, Index));
+                           Advance;
+                           Value := Parse_Expression;
+
+                           return Add
+                             (Of_Kind  => Assignment,
+                              At_Token => At_Op,
+                              Extent   => Join (Start, After_Previous),
+                              Children => [Target, Value],
+                              Assignment_Op => Operation);
+                        end;
+                     elsif Opens_Arena_Block then
+                        --  D191: [0820]'s lexical arena block, recognised
+                        --  by shape and refused by name.  `arena` is not a
+                        --  reserved word and this is the only statement
+                        --  shape it opens, so `arena = x`, `arena(x)`,
+                        --  `arena: loop do` and a parameter spelled
+                        --  `arena` are all untouched.
+                        declare
+                           At_Word : constant Landin.Source.Span := Here;
+                           --  [0820] closes the block with its own name,
+                           --  `end scratch`, so the closer is the label
+                           --  and not the word that opened it.
+                           Closer  : constant Landin.Source.Names.Name_Id :=
+                             Named_Ahead (1);
+                        begin
+                           Refuse
+                             (Item    => Syn.Arena_Block,
+                              Where   => At_Word,
+                              Message =>
+                                "the lexical `arena` block is withdrawn");
+
+                           if not Skip_Past_Closer (Closer) then
+                              Resync_Statement;
+                           end if;
+
+                           return Add
+                             (Error_Statement, At_Word,
+                              Join (Start, After_Previous));
+                        end;
                      end if;
 
                      if Ahead (1) = Tok.Left_Paren then
@@ -5591,7 +5541,7 @@ package body Landin.Syntax.Parser is
                Opened : constant Landin.Source.Span :=
                  (if Starts = Landin.Source.Empty_Span then Here else Starts);
                Is_While : constant Boolean :=
-                 Named_Here = While_Id;
+                 Peek = Tok.Kw_While;
                Test : Node_Id := No_Node;
                Runs : Node_Id;
                Completed : Node_Id := No_Node;
@@ -5613,7 +5563,7 @@ package body Landin.Syntax.Parser is
                   Test := Parse_Condition;
                end if;
 
-               if Peek = Tok.Identifier and then Named_Here = Do_Id then
+               if Peek = Tok.Kw_Do then
                   Advance;
                else
                   Complain
@@ -5634,8 +5584,7 @@ package body Landin.Syntax.Parser is
                Runs := Parse_Block (Context);
                Complete_Closes_Block := Saved_Complete;
 
-               if Peek = Tok.Identifier
-                 and then Named_Here = Complete_Id
+               if Peek = Tok.Kw_Complete
                then
                   if not Is_While then
                      Complain
@@ -5662,11 +5611,10 @@ package body Landin.Syntax.Parser is
                   Related => Opened,
                   Because => "opened here");
                if Kept then
-                  if Peek = Tok.Identifier
-                    and then Named_Here =
-                      (if Label /= Landin.Source.Names.No_Name
-                       then Label
-                       elsif Is_While then While_Id else Loop_Id)
+                  if (if Label /= Landin.Source.Names.No_Name
+                      then Peek = Tok.Identifier and then Named_Here = Label
+                      else Peek = (if Is_While then Tok.Kw_While
+                                   else Tok.Kw_Loop))
                   then
                      Advance;
                   else
@@ -5789,7 +5737,7 @@ package body Landin.Syntax.Parser is
                   end if;
                end if;
 
-               if Peek = Tok.Identifier and then Named_Here = Do_Id then
+               if Peek = Tok.Kw_Do then
                   Advance;
                else
                   Complain
@@ -5808,8 +5756,7 @@ package body Landin.Syntax.Parser is
                Runs := Parse_Block (Context);
                Complete_Closes_Block := Saved_Complete;
 
-               if Peek = Tok.Identifier
-                 and then Named_Here = Complete_Id
+               if Peek = Tok.Kw_Complete
                then
                   Advance;
                   Completed := Parse_Block (Context);
@@ -5825,10 +5772,9 @@ package body Landin.Syntax.Parser is
                   Related => Opened,
                   Because => "opened here");
                if Kept then
-                  if Peek = Tok.Identifier
-                    and then Named_Here =
-                      (if Label /= Landin.Source.Names.No_Name
-                       then Label else For_Id)
+                  if (if Label /= Landin.Source.Names.No_Name
+                      then Peek = Tok.Identifier and then Named_Here = Label
+                      else Peek = Tok.Kw_For)
                   then
                      Advance;
                   else
@@ -5875,7 +5821,7 @@ package body Landin.Syntax.Parser is
             function Parse_Loop_Transfer return Node_Id is
                Starts : constant Landin.Source.Span := Here;
                Is_Break : constant Boolean :=
-                 Named_Here = Break_Id;
+                 Peek = Tok.Kw_Break;
                Guard : Node_Id := No_Node;
                Value : Node_Id := No_Node;
                Target : Landin.Source.Names.Name_Id :=
@@ -5883,17 +5829,11 @@ package body Landin.Syntax.Parser is
                Targeted : Boolean;
             begin
                Advance;
-               --  [1170]: a following completion belongs to this loop's
-               --  body boundary, unless it names an actual enclosing label.
-               if Peek = Tok.Identifier and then Named_Here /= With_Id
-                 and then (Named_Here /= Complete_Id
-                           or else not Complete_Closes_Block
-                           or else Has_Loop_Label (Complete_Id))
-               then
+               if Peek = Tok.Identifier then
                   Target := Named_Here;
                   Advance;
                end if;
-               if Peek = Tok.Identifier and then Named_Here = With_Id then
+               if Peek = Tok.Kw_With then
                   if not Is_Break then
                      Complain
                        (Item    => Syn.Stray_Token,
@@ -6032,10 +5972,8 @@ package body Landin.Syntax.Parser is
 
             --  bare_block ::= "begin" block "end"              [1080]
             --
-            --  `begin` remains contextual like `match`: it is an ordinary
-            --  identifier everywhere except the expression/statement first
-            --  position that gives this production its shape.  The Block
-            --  owns the lexical scope; this wrapper owns the expression.
+            --  D225 reserves the opener; the Block owns the lexical scope
+            --  and this wrapper owns the expression.
             function Parse_Bare_Block (Context : Frame) return Node_Id is
                At_Begin : constant Landin.Source.Span := Here;
                Runs     : Node_Id;
@@ -6062,8 +6000,7 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Kw_End
                  and then Ahead (1) /= Tok.Kw_If
                  and then not
-                   (Ahead (1) = Tok.Identifier
-                    and then Named_Ahead (1) in Match_Id | Unchecked_Id)
+                   (Ahead (1) in Tok.Kw_Match | Tok.Kw_Unchecked)
                then
                   Advance;
                else
@@ -6089,15 +6026,7 @@ package body Landin.Syntax.Parser is
             --
             --  D187's region is a statement and an ordinary lexical block
             --  with its own scope; only the check edges named there are
-            --  dropped from what the body lowers.  `unchecked` stays a
-            --  contextual word [1760] does not reserve, and two tokens
-            --  decide it, so `unchecked: loop` is still a label and
-            --  `unchecked = 1` is still an assignment.
-            function Opens_Unchecked return Boolean
-              is (Peek = Tok.Identifier
-                  and then Named_Here = Unchecked_Id
-                  and then Ahead (1) = Tok.Identifier
-                  and then Named_Ahead (1) = Begin_Id);
+            --  dropped from what the body lowers. D225 reserves both words.
 
             --  D191's [0820] `arena name do ... end name`, recognised the
             --  same way and for the same reason: `arena` is a word [1760]
@@ -6112,8 +6041,7 @@ package body Landin.Syntax.Parser is
               is (Peek = Tok.Identifier
                   and then Named_Here = Arena_Id
                   and then Ahead (1) = Tok.Identifier
-                  and then Ahead (2) = Tok.Identifier
-                  and then Named_Ahead (2) = Do_Id);
+                  and then Ahead (2) = Tok.Kw_Do);
 
             function Parse_Unchecked_Block (Context : Frame) return Node_Id is
                At_Word : constant Landin.Source.Span := Here;
@@ -6132,7 +6060,17 @@ package body Landin.Syntax.Parser is
                Depth := Depth + 1;
                Else_Closes_Arm := False;
                Advance;
-               Advance;
+               declare
+                  Opened : constant Boolean := Expect
+                    (Wanted  => Tok.Kw_Begin,
+                     Message => "an unchecked region opens with `begin`",
+                     Note    => "[1120]: `unchecked begin`",
+                     Related => At_Word,
+                     Because => "this region");
+                  pragma Unreferenced (Opened);
+               begin
+                  null;
+               end;
                Runs := Parse_Block (Context, Allow_Value => False);
 
                Kept := Expect
@@ -6143,8 +6081,7 @@ package body Landin.Syntax.Parser is
                   Related => At_Word,
                   Because => "opened here");
                if Kept then
-                  if Peek = Tok.Identifier
-                    and then Named_Here = Unchecked_Id
+                  if Peek = Tok.Kw_Unchecked
                   then
                      Advance;
                   else
@@ -6200,8 +6137,7 @@ package body Landin.Syntax.Parser is
                Subject := Parse_Expression;
 
                while not (Peek = Tok.Kw_End
-                           and then Ahead (1) = Tok.Identifier
-                           and then Named_Ahead (1) = Match_Id)
+                           and then Ahead (1) = Tok.Kw_Match)
                  and then Peek /= Tok.End_Of_Input
                loop
                   if Peek not in Tok.Identifier | Tok.Underscore
@@ -6310,18 +6246,19 @@ package body Landin.Syntax.Parser is
                           Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
                                   | Tok.Underscore | Tok.Kw_Return
                                   | Tok.Kw_Fail | Tok.Kw_Public
+                                  | Tok.Kw_Defer | Tok.Kw_Undo
+                                  | Tok.Kw_Break | Tok.Kw_Continue
+                                  | Tok.Kw_Unchecked
                           or else
                             (Peek = Tok.Identifier
                              and then
-                               (Named_Here in Defer_Id | Undo_Id
-                                or else Opens_Unchecked
-                                or else Opens_Arena_Block
+                               (Opens_Arena_Block
                                 or else
                                   (not
                                      (Ahead (1) = Tok.Colon
-                                      and then Ahead (2) = Tok.Identifier
-                                      and then Named_Ahead (2)
-                                        in Loop_Id | While_Id | For_Id)
+                                      and then Ahead (2)
+                                        in Tok.Kw_Loop | Tok.Kw_While
+                                          | Tok.Kw_For)
                                    and then
                                      (Ahead (1)
                                         in Tok.Colon | Tok.Colon_Equal
@@ -6369,8 +6306,7 @@ package body Landin.Syntax.Parser is
                Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
                if Peek = Tok.Kw_End
-                 and then Ahead (1) = Tok.Identifier
-                 and then Named_Ahead (1) = Match_Id
+                 and then Ahead (1) = Tok.Kw_Match
                then
                   Advance;
                   Advance;
@@ -6608,28 +6544,26 @@ package body Landin.Syntax.Parser is
                end if;
 
                --  D124 moves the existing control nodes into the expression
-               --  band.  `if` is reserved; `match`, `begin` and the loop
-               --  forms are contextual identifiers and are intercepted
-               --  before the ordinary name/call path below.
+               --  band. Control keywords dispatch before the ordinary
+               --  name/call path below.
                if Peek = Tok.Kw_If then
                   return Parse_If (Active_Frame);
-               elsif Peek = Tok.Identifier and then Named_Here = Match_Id
+               elsif Peek = Tok.Kw_Match
                then
                   return Parse_Match (Active_Frame);
-               elsif Peek = Tok.Identifier and then Named_Here = Begin_Id
+               elsif Peek = Tok.Kw_Begin
                then
                   return Parse_Bare_Block (Active_Frame);
                elsif Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
-                 and then Ahead (2) = Tok.Identifier
-                 and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
+                 and then Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
                then
                   declare
                      Label : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
                      Label_At : constant Landin.Source.Span := Here;
                      Is_For : constant Boolean :=
-                       Named_Ahead (2) = For_Id;
+                       Ahead (2) = Tok.Kw_For;
                   begin
                      Advance;
                      Advance;
@@ -6641,10 +6575,9 @@ package body Landin.Syntax.Parser is
                           (Active_Frame, Starts => Label_At, Label => Label);
                      end if;
                   end;
-               elsif Peek = Tok.Identifier
-                 and then Named_Here in Loop_Id | While_Id | For_Id
+               elsif Peek in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
                then
-                  if Named_Here = For_Id then
+                  if Peek = Tok.Kw_For then
                      return Parse_For (Active_Frame);
                   else
                      return Parse_Loop (Active_Frame);

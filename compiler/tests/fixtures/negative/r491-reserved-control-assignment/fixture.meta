@@ -1,0 +1,6 @@
+class: negative
+summary: a reserved control word cannot be an assignment name
+program: program.ldn
+codes: L0110
+constructs: 1760, 1810, 1830
+targets: linux-x86-64, macos-arm64, synthetic-32
