@@ -477,6 +477,7 @@ UPPER = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 DIGITS = frozenset("0123456789")
 NOTATION_WORD = re.compile(
     r'\s*("(?:[^"\\]|\\.)*"'
+    r'|any Unicode scalar except apostrophe, backslash or line_end'
     r'|any byte except quote, backslash or line_end'
     r'|any byte(?: that begins neither "[^"]*" nor "[^"]*")?'
     r'(?: except [a-z_]+)?'
@@ -595,6 +596,9 @@ class Notation:
                 upper = self.words[self.at + 1]
                 self.at += 2
                 atom = ("range", word[1:-1], upper[1:-1])
+        elif word.startswith("any Unicode scalar"):
+            self.at += 1
+            atom = ("unicode_scalar", None)
         elif word.startswith("any byte"):
             self.at += 1
             atom = (("text_byte", None)
@@ -669,6 +673,12 @@ def lexical_matches(trees, rule, text):
         elif kind == "text_byte":
             ends = ((at + 1,) if at < len(text)
                     and text[at] not in '"\\\r\n' else ())
+        elif kind == "unicode_scalar":
+            # Source is decoded Unicode here; exclude surrogate code points
+            # and character delimiters before accepting one UTF-8 scalar.
+            ends = ((at + 1,) if at < len(text)
+                    and not 0xD800 <= ord(text[at]) <= 0xDFFF
+                    and text[at] not in "'\\\r\n" else ())
         elif kind == "rule":
             ends = item(trees[node[1]], at) if node[1] in trees else ()
         elif kind == "alt":
@@ -1137,7 +1147,7 @@ def read_grammar(path):
     used = set()
     for tree in trees.values():
         grammar_uses(tree, used)
-    for name in sorted(used - set(trees) - LEXICAL_RULES):
+    for name in sorted(used - set(trees)):
         out.append((offset + 1,
                     "grammar rule %r is used and not defined" % name))
 
@@ -1164,6 +1174,24 @@ def read_grammar(path):
         if not lexical_matches(trees, "identifier", "a_name1"):
             out.append((offset + 1,
                         "the identifier rule refuses an ordinary name"))
+
+    # Lexical productions remain normative even though token-level
+    # recognition delegates to the scanner. Pin the integer boundaries and
+    # the scalar primitive independently of the production spelling.
+    for sample in ("0", "1__0", "0xF__0", "0o7_0", "0b1__0"):
+        if "integer" in trees and not lexical_matches(trees, "integer", sample):
+            out.append((offset + 1, "integer grammar refuses %r" % sample))
+    for sample in ("1_", "0x", "0xF_", "0o7_", "0b1_", "0b2"):
+        if "integer" in trees and lexical_matches(trees, "integer", sample):
+            out.append((offset + 1, "integer grammar admits %r" % sample))
+    for sample, expected in (("a", True), ("é", True), ("😀", True),
+                             ("\U0010ffff", True), ("\ud800", False),
+                             ("'", False), ("\\", False), ("\n", False),
+                             ("ab", False)):
+        if "unicode_scalar" in trees and lexical_matches(
+                trees, "unicode_scalar", sample) != expected:
+            out.append((offset + 1,
+                        "scalar grammar disagrees for %r" % sample))
 
     if "program" not in trees:
         out.append((offset + 1, "the grammar has no 'program' rule"))
