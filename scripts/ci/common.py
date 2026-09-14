@@ -109,7 +109,7 @@ def decoded_name(name):
         raise Invalid("invalid encoded filename") from exc
 
 
-GENERATED = ("compiler/ada/build", "docs/site/site", "docs/site/landin-site.tar.gz",
+GENERATED = ("compiler/ada/.build-locks", "compiler/ada/build", "docs/site/site", "docs/site/landin-site.tar.gz",
              "highlight/build", "highlight/tree-sitter/node_modules",
              "highlight/textmate/node_modules")
 
@@ -299,7 +299,7 @@ def required_jobs():
     result = []
     for purpose in ("suite", "quality", "debugger"):
         for mode in ("debug", "release"):
-            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh", "-j4"]]
+            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh", "-j8"]]
             if purpose == "suite":
                 commands += [["./scripts/test.sh"],
                              ["python3", "compiler/tests/test_native_report_identity.py",

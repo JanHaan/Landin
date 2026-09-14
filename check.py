@@ -5078,6 +5078,23 @@ def check_binding_generator(full_run):
         except (OSError, SyntaxError) as error:
             out.append((relative, getattr(error, "lineno", 1) or 1,
                         "binding generator Python is invalid: %s" % error))
+    # Keyword legality must also be checked without requiring Clang.
+    import ast
+    rules, _, problems = read_grammar(os.path.join(ROOT, SPEC_NAME))
+    try:
+        tree = ast.parse(io.open(required[0], encoding="utf-8").read())
+        tables = [node for node in tree.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and
+                          target.id == "LANDIN_KEYWORDS"
+                          for target in node.targets)]
+        expected = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+        if not problems and (len(tables) != 1 or
+                             ast.literal_eval(tables[0].value) != expected):
+            out.append((required[0], 1,
+                        "LANDIN_KEYWORDS differs from the keyword production"))
+    except (OSError, SyntaxError, ValueError, TypeError) as error:
+        out.append((required[0], 1,
+                    "cannot read binding keyword table: %s" % error))
     readme = io.open(required[2], encoding="utf-8").read()
     for option in ("--clang", "--target", "--sysroot", "--header",
                    "--policy", "--out-dir"):

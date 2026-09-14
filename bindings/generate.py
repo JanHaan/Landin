@@ -28,17 +28,17 @@ LANDIN_IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*\Z")
 DEFINE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:=.*)?\Z", re.DOTALL)
 # spec.md [1760]'s keyword production, independently checked by test.py.
 LANDIN_KEYWORDS = {
-    "addr", "alignof", "and", "any", "atom", "dec", "else", "elsif", "end",
-    "escaping", "extern", "fail", "false", "fixed", "from", "if", "import",
-    "in", "inc", "inout", "mut", "none", "not", "or", "ptr", "public",
-    "return", "sink", "sizeof", "struct", "then", "true", "try", "type",
-    "when", "zeroed",
+    "addr", "alignof", "and", "any", "atom", "begin", "break", "complete",
+    "continue", "dec", "defer", "do", "else", "elsif", "end", "escaping",
+    "extern", "fail", "false", "fixed", "for", "from", "if", "import", "in",
+    "inc", "inout", "loop", "match", "mut", "none", "not", "or", "ptr",
+    "public", "return", "sink", "sizeof", "struct", "then", "true", "try",
+    "type", "unchecked", "undo", "when", "while", "with", "zeroed",
 }
 # Contextual syntax and builtin names also make poor generated identifiers.
 LANDIN_AVOID = LANDIN_KEYWORDS | {
-    "as", "assembler", "begin", "bool", "break", "caller", "compiler", "concept", "consume", "continue",
-    "defer", "for", "layout", "link", "linker", "loop", "match", "packed", "range",
-    "symbol", "text", "unchecked", "variant", "while",
+    "as", "assembler", "bool", "caller", "compiler", "concept", "consume",
+    "layout", "link", "linker", "packed", "range", "symbol", "text", "variant",
 }
 
 BUILTIN_CANONICAL = {

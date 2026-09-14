@@ -15,7 +15,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/test.sh"
@@ -42,7 +42,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/test.sh"
@@ -69,7 +69,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/quality.sh"
@@ -86,7 +86,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/quality.sh"
@@ -103,7 +103,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/debug.sh"
@@ -120,7 +120,7 @@
         ],
         [
           "./scripts/build.sh",
-          "-j4"
+          "-j8"
         ],
         [
           "./scripts/debug.sh"
