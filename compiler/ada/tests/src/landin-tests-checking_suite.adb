@@ -12704,8 +12704,333 @@ package body Landin.Tests.Checking_Suite is
       end loop;
    end Static_Entries_Have_One_Declaration;
 
+   procedure Writable_Returns_Keep_All_Destinations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Writable_Returns_Keep_All_Destinations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text, Code : String; Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Source
+        (Label, Text, Code : String; Facts : Landin.Targets.Target_Facts)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "writable-from.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Order, Work), 4,
+            Label & " reaches checking");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) = (Code /= "")
+               and then
+                 (if Code = "" then Landin.Diagnostics.Count (Reports) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & ": " & Landin.Stages.Rendered_Report (Work));
+         end;
+      end Check_Source;
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+         begin
+            Check_Source
+              ("hidden module choice",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "
+               & "if flag then source else addr slot end if end choose",
+               "L0316", Facts);
+            Check_Source
+              ("direct module return",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "
+               & "addr slot end choose",
+               "L0316", Facts);
+            Check_Source
+              ("statement join",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "
+               & "source if flag then r = addr slot end if end choose",
+               "L0316", Facts);
+            Check_Source
+              ("same source identity",
+               "choose: (source: ptr mut ptr i32, flag: bool) -> (r: ptr "
+               & "mut ptr i32 from source) = r = source end choose",
+               "", Facts);
+            Check_Source
+              ("explicit module actual",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, fallback: ptr mut ptr i32, flag: bool) -> (r: ptr mut "
+               & "ptr i32 from source, fallback) = r = if flag then source "
+               & "else fallback end if end choose f: (inout a: ptr i32, "
+               & "flag: bool) -> none = view: ptr mut ptr i32 = choose(addr "
+               & "a, addr slot, flag) view.val = a end f",
+               "L0314", Facts);
+            Check_Source
+              ("explicit same actual",
+               "choose: (source: ptr mut ptr i32, fallback: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source, "
+               & "fallback) = r = if flag then source else fallback end if "
+               & "end choose f: (inout a: ptr i32, flag: bool) -> none = "
+               & "view: ptr mut ptr i32 = choose(addr a, addr a, flag) "
+               & "view.val = a end f",
+               "", Facts);
+            Check_Source
+              ("hidden wrapper",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, fallback: ptr mut ptr i32, flag: bool) -> (r: ptr mut "
+               & "ptr i32 from source, fallback) = r = if flag then source "
+               & "else fallback end if end choose wrap: (source: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "
+               & "choose(source, addr slot, flag) end wrap",
+               "L0316", Facts);
+            Check_Source
+              ("read only choice",
+               "anchor: i32 = 1 f: (source: ptr i32, flag: bool) -> (r: "
+               & "ptr i32 from source) = r = if flag then source else addr "
+               & "anchor end if end f",
+               "", Facts);
+            Check_Source
+              ("independent module result",
+               "mut slot: ptr i32 = ptr(4096) f: () -> (r: ptr mut ptr "
+               & "i32) = r = addr slot end f",
+               "", Facts);
+            Check_Source
+              ("explicit raw result",
+               "choose: (source: ptr mut ptr i32, flag: bool) -> (r: ptr "
+               & "mut ptr i32 from source) = r = ptr(4096) end choose",
+               "", Facts);
+            Check_Source
+              ("raw and known module",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, flag: bool) -> (r: ptr mut ptr i32 from source) = r = "
+               & "if flag then ptr(4096) else addr slot end if end choose",
+               "L0316", Facts);
+            Check_Source
+              ("raw and parameter",
+               "choose: (source: ptr mut ptr i32, flag: bool) -> (r: ptr "
+               & "mut ptr i32 from source) = r = if flag then source else "
+               & "ptr(4096) end if end choose",
+               "", Facts);
+            Check_Source
+              ("empty optional choice",
+               "absent: atom maybe: type = absent | ptr mut i32 f: "
+               & "(source: ptr mut i32, flag: bool) -> (r: maybe from "
+               & "source) = r = if flag then source else absent end if end f",
+               "", Facts);
+            Check_Source
+              ("empty optional return",
+               "absent: atom maybe: type = absent | ptr mut i32 f: "
+               & "(source: ptr mut i32) -> (r: maybe from source) = r = "
+               & "absent end f",
+               "", Facts);
+            Check_Source
+              ("empty slice choice",
+               "f: (source: []mut i32, flag: bool) -> (r: []mut i32 from "
+               & "source) = r = if flag then source else [] end if end f",
+               "", Facts);
+            Check_Source
+              ("empty slice still owes exact sources",
+               "f: (source: []mut i32) -> (r: []mut i32 from source) = r = "
+               & "[] end f",
+               "L0316", Facts);
+            Check_Source
+              ("subview identity",
+               "f: (source: []mut i32) -> (r: []mut i32 from source) = r = "
+               & "source[0..<lenof source] end f",
+               "", Facts);
+            Check_Source
+              ("module slice choice",
+               "mut slots: [1]i32 = [1] f: (source: []mut i32, flag: bool) "
+               & "-> (r: []mut i32 from source) = r = if flag then source "
+               & "else slots[0..<1] end if end f",
+               "L0316", Facts);
+            Check_Source
+              ("aggregate choice",
+               "box: type = struct view: ptr mut i32 end box mut anchor: "
+               & "i32 = 1 f: (source: box, flag: bool) -> (r: box from "
+               & "source) = r = (view: if flag then source.view else addr "
+               & "anchor end if) end f",
+               "L0316", Facts);
+            Check_Source
+              ("read only aggregate",
+               "box: type = struct view: ptr i32 end box anchor: i32 = 1 "
+               & "f: (source: box, flag: bool) -> (r: box from source) = r = "
+               & "(view: if flag then source.view else addr anchor end if) "
+               & "end f",
+               "", Facts);
+            Check_Source
+              ("nested writable behind read only",
+               "mut anchor: i32 = 1 holder: ptr mut i32 = ptr(4096) f: "
+               & "(source: ptr ptr mut i32, flag: bool) -> (r: ptr ptr mut "
+               & "i32 from source) = r = if flag then source else addr "
+               & "holder end if end f",
+               "L0316", Facts);
+            Check_Source
+              ("nested read only",
+               "anchor: i32 = 1 holder: ptr i32 = ptr(4096) f: (source: "
+               & "ptr ptr i32, flag: bool) -> (r: ptr ptr i32 from source) = "
+               & "r = if flag then source else addr holder end if end f",
+               "", Facts);
+            Check_Source
+              ("array of writable views",
+               "mut anchor: i32 = 1 f: (source: ptr mut i32, flag: bool) "
+               & "-> (r: [1]ptr mut i32 from source) = r = [if flag then "
+               & "source else addr anchor end if] end f",
+               "L0316", Facts);
+            Check_Source
+              ("generic instantiated writable",
+               "mut slot: ptr i32 = ptr(4096) f: (t: type, source: t, "
+               & "fallback: t, flag: bool) -> (r: t from source) = r = if "
+               & "flag then source else fallback end if end f use: (source: "
+               & "ptr mut ptr i32, flag: bool) -> (r: ptr mut ptr i32 from "
+               & "source) = r = f(source, addr slot, flag) end use",
+               "L0316", Facts);
+            Check_Source
+              ("generic accessor",
+               "box: type (t: type) = struct view: []mut t end box used: "
+               & "(t: type, source: box(t)) -> (r: []mut t from source) = r "
+               & "= source.view end used f: (source: box(i32)) -> (r: []mut "
+               & "i32 from source) = r = used(source) end f",
+               "", Facts);
+            Check_Source
+              ("indirect explicit sources",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, fallback: ptr mut ptr i32, flag: bool) -> (r: ptr mut "
+               & "ptr i32 from source, fallback) = r = if flag then source "
+               & "else fallback end if end choose f: (inout a: ptr i32, "
+               & "flag: bool) -> none = operation := choose view: ptr mut "
+               & "ptr i32 = operation(addr a, addr slot, flag) view.val = a "
+               & "end f",
+               "L0314", Facts);
+            Check_Source
+              ("multiple result independent sibling",
+               "mut slot: ptr i32 = ptr(4096) pair: (source: ptr mut ptr "
+               & "i32) -> (a: ptr mut ptr i32 from source, b: ptr mut ptr "
+               & "i32) = a = source b = addr slot end pair f: (source: ptr "
+               & "mut ptr i32, flag: bool) -> (r: ptr mut ptr i32 from "
+               & "source) = values := pair(source) r = if flag then values.a "
+               & "else values.b end if end f",
+               "L0316", Facts);
+            Check_Source
+              ("provider hidden destination",
+               "mut slot: ptr i32 = ptr(4096) access: type = concept (t: "
+               & "type) get: (source: t, flag: bool) -> (r: t from source) "
+               & "end access choose: (source: ptr mut ptr i32, flag: bool) "
+               & "-> (r: ptr mut ptr i32 from source) = r = if flag then "
+               & "source else addr slot end if end choose slot_pointer: type "
+               & "= ptr mut ptr i32 slot_pointer is access (get: choose)",
+               "L0316", Facts);
+            Check_Source
+              ("recursive read only shape",
+               "node: type = struct next: ptr node end node root: node = "
+               & "(next: ptr(4096)) f: (source: ptr node, flag: bool) -> (r: "
+               & "ptr node from source) = r = if flag then source else addr "
+               & "root end if end f",
+               "", Facts);
+            Check_Source
+              ("recursive writable shape",
+               "node: type = struct next: ptr node value: ptr mut i32 end "
+               & "node root: node = (next: ptr(4096), value: ptr(8192)) f: "
+               & "(source: ptr node, flag: bool) -> (r: ptr node from "
+               & "source) = r = if flag then source else addr root end if "
+               & "end f",
+               "L0316", Facts);
+            Check_Source
+              ("generic hidden independent result",
+               "mut slot: ptr i32 = ptr(4096) independent: () -> (r: ptr "
+               & "mut ptr i32) = r = addr slot end independent f: (t: type, "
+               & "source: t, flag: bool) -> (r: t from source) = r = if flag "
+               & "then source else independent() end if end f use: (source: "
+               & "ptr mut ptr i32, flag: bool) -> (r: ptr mut ptr i32 from "
+               & "source) = r = f(source, flag) end use",
+               "L0316", Facts);
+            Check_Source
+              ("variant carries writable reference",
+               "box: type = struct store: variant held: (view: ptr mut "
+               & "i32) | empty end store end box mut anchor: i32 = 1 f: "
+               & "(source: ptr mut i32, flag: bool) -> (r: box from source) "
+               & "= r = (store: held(view: if flag then source else addr "
+               & "anchor end if)) end f",
+               "L0316", Facts);
+            Check_Source
+              ("aggregate sibling origins join",
+               "box: type = struct view: ptr mut i32 text: ptr i32 end box "
+               & "anchor: i32 = 1 f: (source: ptr mut i32) -> (r: box from "
+               & "source) = r = (view: source, text: addr anchor) end f",
+               "L0316", Facts);
+            Check_Source
+              ("anonymous provider body",
+               "mut slot: ptr i32 = ptr(4096) f: () -> none = operation := "
+               & "(source: ptr mut ptr i32, flag: bool) -> (r: ptr mut ptr "
+               & "i32 from source) = if flag then source else addr slot end "
+               & "if end _ = operation end f",
+               "L0316", Facts);
+            Check_Source
+              ("erased carrier",
+               "cap: type = concept (t: type) read: (self: ptr t) -> (r: "
+               & "i32) end cap read: (self: ptr i32) -> (r: i32) = r = "
+               & "self.val end read i32 is cap (read: read) anchor: i32 = 1 "
+               & "f: (source: any cap, flag: bool) -> (r: any cap from "
+               & "source) = r = if flag then source else any(addr anchor) "
+               & "end if end f",
+               "L0316", Facts);
+            Check_Source
+              ("empty optional carrier choice",
+               "absent: atom maybe: type = absent | ptr mut i32 box: type "
+               & "= struct     view: maybe end box f: (source: box, flag: "
+               & "bool) -> (r: box from source) =     r = if flag then "
+               & "source else box(view: absent) end if end f",
+               "", Facts);
+            Check_Source
+              ("empty carrier still owes exact sources",
+               "absent: atom maybe: type = absent | ptr mut i32 box: type "
+               & "= struct     view: maybe end box f: (source: box, flag: "
+               & "bool) -> (r: box from source) =     r = box(view: absent) "
+               & "end f",
+               "L0316", Facts);
+            Check_Source
+              ("empty optional array choice",
+               "absent: atom maybe: type = absent | ptr mut i32 f: "
+               & "(source: [1]maybe, flag: bool) -> (r: [1]maybe from "
+               & "source) = r = if flag then source else [absent] end if end "
+               & "f",
+               "", Facts);
+            Check_Source
+              ("explicit module accepts escaping value",
+               "mut slot: ptr i32 = ptr(4096) choose: (source: ptr mut ptr "
+               & "i32, fallback: ptr mut ptr i32, flag: bool) -> (r: ptr mut "
+               & "ptr i32 from source, fallback) = r = if flag then source "
+               & "else fallback end if end choose f: (escaping a: ptr i32, "
+               & "source: ptr mut ptr i32, flag: bool) -> none = view: ptr "
+               & "mut ptr i32 = choose(source, addr slot, flag) view.val = a "
+               & "end f",
+               "", Facts);
+         end;
+      end loop;
+   end Writable_Returns_Keep_All_Destinations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "writable returns keep all destinations",
+         Writable_Returns_Keep_All_Destinations'Access);
       Landin.Testing.Register
         (Into, "checking", "sink paths stay in their binding",
          Sink_Paths_Stay_In_Their_Binding'Access);

@@ -85,6 +85,14 @@ transition uses an explicit raw destination address for both first and later
 slots before publishing the new witness; that boundary is not an exemption
 for ordinary container or application stores.
 
+D222 strengthens writable `from` results: `mem.used`, `vec.used` and both
+inline/spilled branches of `small.used` retain their explicit container source.
+A helper needing module fallback storage must receive that destination as an
+argument and name it too. This does not require heap storage to live inside
+the container object or change the raw allocation boundary. Generic returned
+items and variant payloads use their instantiated reference permissions;
+read-only text views shared with prototypes 2 and 4 retain their dependencies.
+
 The scalar side of that distinction is [0840]: `lenof` and other scalar
 operators copy no reference into their result. A saved length may survive a
 later container or descriptor mutation without keeping the old view alive.

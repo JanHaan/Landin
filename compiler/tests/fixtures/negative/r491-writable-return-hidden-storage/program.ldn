@@ -1,0 +1,4 @@
+mut slot: ptr i32 = ptr(4096)
+choose: (source: ptr mut ptr i32, flag: bool) -> (r: ptr mut ptr i32 from source) =
+r = if flag then source else addr slot end if
+end choose

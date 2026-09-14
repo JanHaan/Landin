@@ -1,0 +1,5 @@
+class: positive
+summary: explicit same actual obeys the writable return source contract
+program: program.ldn
+constructs: 0430, 0470, 0790, 1800, 1810, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

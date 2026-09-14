@@ -65,12 +65,15 @@ package body Landin.Stages.Checking.References is
 
       --  Absence is a value proof, not an origin.  In this finite chain,
       --  No_Edge is the join identity, Empty_Optional proves absence, and
+      --  Empty_Storage covers empty slices and empty reference carriers. The
+      --  optional atom waives exact `from` agreement under D189.
       --  Unknown_Value includes present pointers with no tracked sources.
       --  Only control-value accumulators start at No_Edge; No_Origin alone
       --  never proves emptiness.  Untracked still belongs exclusively to
       --  [0470]'s address conversion: an empty sibling must not launder a
       --  present sibling's frame or parameter origins.
-      type Value_Fact is (No_Edge, Empty_Optional, Unknown_Value);
+      type Value_Fact is
+        (No_Edge, Empty_Optional, Empty_Storage, Unknown_Value);
 
       type Reference_Fact is record
          Frame      : Boolean := False;
@@ -1744,6 +1747,11 @@ package body Landin.Stages.Checking.References is
                --  body or any transfers in that body's cleanup arguments.
                return No_Origin;
 
+            when Syn.Empty_Slice_Literal =>
+               return
+                 (Value => (Presence => Empty_Storage, others => <>),
+                  others => <>);
+
             when Syn.Len_Of =>
                --  D14/D31: a fixed-array length does not read its storage,
                --  and array-literal elements are typechecked but not run.
@@ -1944,6 +1952,12 @@ package body Landin.Stages.Checking.References is
                                  Landin.Checking.Nth_Signature_Result
                                    (Types.all, Called, Returned))
                               then
+                                 --  Keep each independent result separate:
+                                 --  another position's `from` bits must not
+                                 --  conceal this result's external storage.
+                                 Part.External := Landin.Checking
+                                   .Signature_Return_Source_Count
+                                     (Types.all, Called, Returned) = 0;
                                  for Source in 1 .. Landin.Checking
                                    .Signature_Return_Source_Count
                                      (Types.all, Called, Returned)
@@ -2076,6 +2090,23 @@ package body Landin.Stages.Checking.References is
             exit when not Falls_Through;
             Join (Result, Fact_Of (Tree, Syn.Slot (Tree, Node, Slot)));
          end loop;
+         --  Each reference-bearing child has already supplied an origin,
+         --  an explicit raw boundary, or an empty-value proof. A constructor
+         --  with none of those destinations must not invent external storage
+         --  merely because its aggregate type can hold a present reference.
+         --  This proof does not waive exact `from` agreement for aggregates.
+         if Syn.Kind (Tree, Node)
+              in Syn.Struct_Literal | Syn.Array_Literal
+                 | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
+                 | Syn.Labeled_Application
+           and then not Result.Value.Frame
+           and then not Result.Value.External
+           and then not Result.Value.Untracked
+           and then not Result.Value.Invalid
+           and then (for all Bit of Result.Value.From => not Bit)
+         then
+            Result.Value.Presence := Empty_Storage;
+         end if;
          --  Only anonymous-result producers and their copies carry a
          --  positional shape, never an enclosing conversion or constructor.
          Result.Results.Clear;
@@ -2115,7 +2146,28 @@ package body Landin.Stages.Checking.References is
                        (Types.all, Signature, Position, Source)) := True;
                end loop;
 
-               if not Fact.Untracked and then Fact.Frame then
+               --  D222: callers reconstruct destinations from the written
+               --  sources. A writable return cannot hide an independent
+               --  alternative behind those parameter bits. Raw addresses
+               --  still carry no proof; joining one must not conceal a
+               --  separately known external destination.
+               if Fact.External
+                 and then (for some Bit of Expected => Bit)
+                 and then Landin.Checking.Contains_Writable_References
+                   (Types.all, Part)
+               then
+                  Bad.Report
+                    (Item    => Bad.Return_Sources_Disagree,
+                     Source  => Syn.Source_Of (Tree),
+                     Where   => Syn.Where (Tree, At_Node),
+                     Message => "this writable `from` result also carries"
+                                & " an independent storage origin",
+                     Note    => "[0790]/D222: pass each alternative as an"
+                                & " explicit source, or return it separately",
+                     Related => Part.Site,
+                     Because => "the named return and its declared sources",
+                     Into    => Sink.all);
+               elsif not Fact.Untracked and then Fact.Frame then
                   Report_Escape
                     (Tree, At_Node, Fact,
                      "this returned reference still has frame origin",
