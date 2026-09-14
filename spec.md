@@ -40,12 +40,11 @@ produces nothing of its own. Every other rule reads the tokens that remain,
 and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
-enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
-'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
+enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
-'optimal', 'link', 'symbol' and 'distinct' remain
-identifier tokens everywhere their contextual productions do not meet them.
+'optimal', 'link', 'symbol' and 'distinct' remain identifier tokens everywhere
+their contextual productions do not meet them. D225 reserves control words
+in every position, including ordinary name positions.
 D202 separately reserves the three tool names as declaration/import bindings;
 that semantic reservation does not turn their tokens into keywords.
 A token is as long as it can be, comments excepted, whose
@@ -121,25 +120,31 @@ Two rules narrow it. A word the keyword rule spells is that
 keyword and never a name, so 'if' is not available as a binding;
 that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
-'_' is the discard of [1020] and nothing may be called it. The
-kernel
-reserves thirty-six words; the reserved set of the whole language is
-larger, and each word joins it with the construct that introduces
-it, so a program that avoids a construct never trips over its
-keyword. Type names are not among them: u32 and bool are ordinary
-declared names [0120] that the kernel happens to predeclare.
+'_' is the discard of [1020] and nothing may be called it. The kernel
+reserves forty-nine words; the reserved set of the whole language is larger, and each word joins it when its construct is enabled in the
+language. Once reserved, it is a keyword in every program, even one that
+does not use that construct. Type names are not among them: u32 and bool
+are ordinary declared names [0120] that the kernel happens to predeclare.
+
+Control words cannot name bindings, types, functions, parameters, results,
+fields, atoms, import bindings or loop labels. In particular, `begin = 10`
+and `begin: i32 = 10` are invalid; `(begin)` is not an identifier escape.
+A longer spelling such as `begin_value` remains an ordinary identifier.
+D225 records the reservation and its compatibility consequence.
 
 ```landin-grammar
 identifier  ::= lower (lower | digit | "_")*
               | "_" (lower | digit | "_")+
 lower       ::= "a" ... "z"
 digit       ::= "0" ... "9"
-keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
-              | "elsif" | "end" | "escaping" | "extern" | "fail" | "false"
-              | "fixed" | "from" | "if" | "import" | "in" | "inc" | "inout"
-              | "mut" | "none" | "not" | "or" | "ptr" | "public"
-              | "return" | "sink" | "sizeof" | "struct" | "then"
-              | "true" | "try" | "type" | "when" | "zeroed"
+keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "begin"
+              | "break" | "complete" | "continue" | "dec" | "defer" | "do"
+              | "else" | "elsif" | "end" | "escaping" | "extern" | "fail"
+              | "false" | "fixed" | "for" | "from" | "if" | "import" | "in"
+              | "inc" | "inout" | "loop" | "match" | "mut" | "none" | "not"
+              | "or" | "ptr" | "public" | "return" | "sink" | "sizeof"
+              | "struct" | "then" | "true" | "try" | "type" | "unchecked"
+              | "undo" | "when" | "while" | "with" | "zeroed"
 
 ```
 
@@ -316,9 +321,8 @@ D188 admits [0660]'s range subtype at this one position and nowhere else,
 which is why its base is narrower than `type`: the base must be a name whose
 alias chain reaches an enabled integer scalar, both bounds are D136-folded
 values of that base, and the lower must not be above the upper. `range` is a
-contextual word [1760] does not reserve, exactly as `loop`, `match` and
-`unchecked` are, and only `..` is admitted because the tour writes no
-exclusive bound in a type. The representation, the operands and every
+contextual word [1760] does not reserve, and only `..` is admitted because
+the tour writes no exclusive bound in a type. The representation, the operands and every
 operator result are the base type's, so this is [0650]'s complement and not a
 spelling of it.
 
@@ -569,9 +573,8 @@ For `cstring`, it is the first zero byte; that terminator is not an Item, so an
 embedded U+0000 ends the C string in the same way as its trailing terminator.
 
 D187 enables [1120]'s statement form. `unchecked begin` opens a region and
-`end unchecked` closes it; `unchecked` stays a contextual word [1760] does not
-reserve, and only that word directly before `begin` opens one, so a label, a
-binding and an assignment written with the same name are unchanged. The region
+`end unchecked` closes it. D225 reserves both opener words under [1760];
+neither can name a binding or label. The region
 is a lexical block with its own scope and it is not an expression: the block
 forms that also occupy expression positions are the `if`, the `match` and the
 bare `begin` named above, and this is not one of them. Nesting is idempotent
@@ -11199,10 +11202,9 @@ whether it is an expression, whether it reaches through a call, or what a
 removed check leaves in place of the value it was guarding.
 
 **Chosen:** `unchecked begin ... end unchecked` is a statement and a lexical
-block with its own scope, spelled with a contextual word [1760] does not
-reserve, exactly as `begin`, `match`, `defer` and `undo` already are. Two
-tokens open it, so `unchecked: loop`, `unchecked: u8 = 3` and `unchecked = 1`
-keep their ordinary meanings. It is not an expression, it has no counter-word,
+block with its own scope. D225 supersedes this decision's original contextual
+spelling: `unchecked` and `begin` are now reserved by [1760], so neither can
+name a binding or label. The region is not an expression, it has no counter-word,
 and nesting one inside another says nothing new.
 
 Inside it, and only for instructions lowered from what is lexically inside it,
@@ -11263,9 +11265,9 @@ of being true of instructions the Linux backend happens to decide before
 consulting it and the next backend would not. The recorded IR renders it,
 because an edge that is not emitted is otherwise invisible in a dump.
 
-**The alternatives:** reserving `unchecked` in [1760]'s keyword production
-would retire an ordinary name for a word the tour writes contextually
-everywhere else. Making the region an expression would add a fourth block
+**The alternatives:** this decision originally retained contextual spelling;
+D225 later reserves `unchecked` with the other control words to remove their
+name ambiguity. Making the region an expression would add a fourth block
 form to [1810]'s list, which names only `if`, `match` and bare `begin`. A
 dynamic region reaching through calls would make the word's claim unreadable
 at the place it is written and would need a second lowering of every callee.
@@ -11329,7 +11331,7 @@ an exclusive upper bound in a type is a parse refusal, because the tour writes
 none. `range` is a contextual word [1760] does not reserve, recognized only
 after a parsed base type at a type declaration's right-hand side, so a
 binding, a parameter or a label spelled `range` keeps its ordinary meaning and
-[1760] still reserves thirty-six words.
+[1760] still reserves forty-nine words.
 
 The check happens where [0660] says and nowhere else: storing a value into a
 place whose declared type is the subtype — a local or module binding
@@ -13517,3 +13519,35 @@ range`. The bounded IR control checks exact images and retained runtime u8
 operations on both target widths, plus final-image and positive/negative
 fold-range overflow refusals. Container capacity arithmetic inside a function
 remains subject to the runtime rule.
+
+### D225 — Control words are reserved everywhere
+
+**The discrepancy:** [1760] reserved `if`, `then` and `end`, while other
+already enabled control forms still used identifier tokens. R4.91 J104 first
+repaired declarations and assignments under that contextual contract, but
+ordinary expression reads remained ambiguous. The intended language rule is
+that a control word cannot also be an identifier.
+
+**Chosen:** add `begin`, `break`, `complete`, `continue`, `defer`, `do`, `for`,
+`loop`, `match`, `unchecked`, `undo`, `while` and `with` to [1760]'s keyword
+production. Each is reserved in every name position, regardless of whether
+its control form appears in the program. Parentheses provide no escape.
+`begin = 10` is illegal; an ordinary binding must use another name, such as
+`begin_value`. Existing block, match, loop, transfer, completion and cleanup
+semantics are unchanged. Other contextual words, including `of`, `caller`,
+`range` and `arena`, retain their existing rules.
+
+**The alternatives:** contextual control-word priority plus a parenthesized
+name escape preserves dual meanings, while broader contextual lookahead must
+resolve genuinely ambiguous expressions. Reserving the words removes both
+problems at the lexical boundary. Existing declarations using these words must
+be renamed; this compatibility change is explicit and supersedes the earlier
+contextual-name part of J104 and D187.
+
+**Pinned by** `negative/r491-reserved-control-assignment`,
+`positive/r491-contextual-statements`, `positive/r491-bare-block-examples`,
+and the parser case `control words are reserved`. The bounded case covers all
+thirteen tokens, longer identifiers and forbidden declaration, parameter,
+result, field, label, member and parenthesized-name positions. The derived
+parser, container and hosted prototype controls retain their control-flow
+and cleanup contracts; reservation adds no execution or aliasing rule.

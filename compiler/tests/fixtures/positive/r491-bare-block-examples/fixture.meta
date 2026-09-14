@@ -1,5 +1,5 @@
 class: positive
-summary: J40 the tour uses an unlabelled bare block while begin remains an ordinary type name
+summary: J40 the tour uses an unlabelled bare block with a separately named ordinary type
 constructs: 0110, 1090, 1760, 1810, 1840
 program: program.ldn
 targets: linux-x86-64, macos-arm64

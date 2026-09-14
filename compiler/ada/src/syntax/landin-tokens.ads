@@ -65,13 +65,14 @@ package Landin.Tokens is
       --  the operation that the spelling selected.
       Compound_Assign,
       --  The words [1760] reserves.
-      Kw_Addr, Kw_Alignof, Kw_And, Kw_Any, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif,
-      Kw_End, Kw_Escaping, Kw_Extern, Kw_Fail, Kw_False, Kw_Fixed, Kw_From,
-      Kw_If,
-      Kw_Import, Kw_In, Kw_Inc, Kw_Inout, Kw_Mut, Kw_None, Kw_Not, Kw_Or,
-      Kw_Ptr,
-      Kw_Public, Kw_Return, Kw_Sink, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True,
-      Kw_Try, Kw_Type, Kw_When, Kw_Zeroed,
+      Kw_Addr, Kw_Alignof, Kw_And, Kw_Any, Kw_Atom, Kw_Begin, Kw_Break,
+      Kw_Complete, Kw_Continue, Kw_Dec, Kw_Defer, Kw_Do, Kw_Else, Kw_Elsif,
+      Kw_End, Kw_Escaping, Kw_Extern, Kw_Fail, Kw_False, Kw_Fixed, Kw_For,
+      Kw_From, Kw_If, Kw_Import, Kw_In, Kw_Inc, Kw_Inout, Kw_Loop,
+      Kw_Match, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Ptr, Kw_Public,
+      Kw_Return, Kw_Sink, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True, Kw_Try,
+      Kw_Type, Kw_Unchecked, Kw_Undo, Kw_When, Kw_While, Kw_With,
+      Kw_Zeroed,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
       Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Bracket,
@@ -115,10 +116,10 @@ package Landin.Tokens is
                     | Text_Literal | Raw_Literal
                     | Kw_True | Kw_False | Kw_Zeroed);
 
-   --  The bytes of a kind that has only one spelling.  `escaping` is the
-   --  longest, at eight.
+   --  The bytes of a kind that has only one spelling.  `unchecked` is the
+   --  longest, at nine.
    function Spelling (Of_Kind : Spelled_Kind) return String
-     with Post => Spelling'Result'Length in 1 .. 8;
+     with Post => Spelling'Result'Length in 1 .. 9;
 
    subtype Construct_Reference is String (1 .. 6);
 

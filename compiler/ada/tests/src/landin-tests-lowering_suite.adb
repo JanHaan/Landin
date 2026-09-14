@@ -11226,9 +11226,9 @@ package body Landin.Tests.Lowering_Suite is
          & "end loop end break inner end inner end break outer end "
          & "outer end f" & LF);
       Check_Source
-        ("complete binding belongs to anonymous body",
+        ("completion binding belongs to anonymous body",
          "f: () -> none = while true do callback := () -> none = "
-         & "complete: i32 = 1 _ = complete end break end while end "
+         & "completion: i32 = 1 _ = completion end break end while end "
          & "f" & LF);
       Check_Source
         ("outer completion restored",
@@ -11947,31 +11947,31 @@ package body Landin.Tests.Lowering_Suite is
          "f: () -> none = for value in 0 ..< 2 do continue "
          & "complete mark: i32 = 1 end for end f" & LF);
       Check_Source
-        ("matching complete label",
-         "f: (flag: bool) -> none = complete: while flag do break "
-         & "complete end complete end f" & LF);
+        ("matching completion label",
+         "f: (flag: bool) -> none = completion: while flag do break "
+         & "completion end completion end f" & LF);
       Check_Source
-        ("nested complete label",
-         "f: (flag: bool) -> none = while flag do complete: loop "
-         & "do break complete end complete break end while end f" & LF);
+        ("nested completion label",
+         "f: (flag: bool) -> none = while flag do completion: loop "
+         & "do break completion end completion break end while end f" & LF);
       Check_Source
-        ("complete binding",
-         "f: (flag: bool) -> none = while flag do complete: i32 = "
+        ("completion binding",
+         "f: (flag: bool) -> none = while flag do completion: i32 = "
          & "1 break end while end f" & LF);
       Check_Source
-        ("complete assignment",
-         "f: (flag: bool) -> none = mut complete: i32 = 0 while "
-         & "flag do complete += 1 break end while end f" & LF);
+        ("completion assignment",
+         "f: (flag: bool) -> none = mut completion: i32 = 0 while "
+         & "flag do completion += 1 break end while end f" & LF);
       Check_Source
         ("separate binding scopes",
          "f: (flag: bool) -> none = while flag do mark: i32 = 1 "
          & "continue complete mark: i32 = 2 end while end f" & LF);
       Check_Source
         ("anonymous completion",
-         "f: (flag: bool) -> none = complete: while flag do "
+         "f: (flag: bool) -> none = completion: while flag do "
          & "callback := (value: bool) -> none = while value do "
          & "continue complete mark: i32 = 1 end while end break "
-         & "complete end complete end f" & LF);
+         & "completion end completion end f" & LF);
    end Completion_Blocks_Keep_Their_Scopes;
 
    procedure Erased_Tables_Validate_Their_Closure

@@ -29,6 +29,8 @@ package body Landin.Tests.Parser_Suite is
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Syntax.Parameter_Convention;
+   use type Landin.Tokens.Token_Kind;
+   use type Landin.Tokens.Token_Index;
    use type Fixtures.Fixture_Class;
 
    --  Relative to compiler/ada, which is where the harness runs.
@@ -3253,31 +3255,31 @@ package body Landin.Tests.Parser_Suite is
          "f: () -> none = for value in 0 ..< 2 do continue "
          & "complete mark: i32 = 1 end for end f",
          1, 0);
-      Check ("matching complete label",
-         "f: (flag: bool) -> none = complete: while flag do break "
-         & "complete end complete end f",
+      Check ("matching completion label",
+         "f: (flag: bool) -> none = completion: while flag do break "
+         & "completion end completion end f",
          0, 1);
-      Check ("nested complete label",
-         "f: (flag: bool) -> none = while flag do complete: loop "
-         & "do break complete end complete break end while end f",
+      Check ("nested completion label",
+         "f: (flag: bool) -> none = while flag do completion: loop "
+         & "do break completion end completion break end while end f",
          0, 1);
-      Check ("complete binding",
-         "f: (flag: bool) -> none = while flag do complete: i32 = "
+      Check ("completion binding",
+         "f: (flag: bool) -> none = while flag do completion: i32 = "
          & "1 break end while end f",
          0, 0);
-      Check ("complete assignment",
-         "f: (flag: bool) -> none = mut complete: i32 = 0 while "
-         & "flag do complete += 1 break end while end f",
+      Check ("completion assignment",
+         "f: (flag: bool) -> none = mut completion: i32 = 0 while "
+         & "flag do completion += 1 break end while end f",
          0, 0);
       Check ("separate binding scopes",
          "f: (flag: bool) -> none = while flag do mark: i32 = 1 "
          & "continue complete mark: i32 = 2 end while end f",
          1, 0);
       Check ("anonymous completion",
-         "f: (flag: bool) -> none = complete: while flag do "
+         "f: (flag: bool) -> none = completion: while flag do "
          & "callback := (value: bool) -> none = while value do "
          & "continue complete mark: i32 = 1 end while end break "
-         & "complete end complete end f",
+         & "completion end completion end f",
          1, 1);
    end Transfers_Preserve_Completion_Boundaries;
 
@@ -3593,19 +3595,83 @@ package body Landin.Tests.Parser_Suite is
             Name & " remains an assignment in loop and completion bodies");
       end Check;
    begin
-      Check ("loop");
-      Check ("while");
-      Check ("for");
+      Check ("arena");
+      Check ("range");
+      Check ("caller");
+      Check ("of");
+   end Contextual_Names_Start_Ordinary_Statements;
+
+   procedure Control_Words_Are_Reserved
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Words_Are_Reserved
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Reject (Label, Text : String);
+      procedure Check (Word : String);
+
+      procedure Reject (Label, Text : String) is
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Total > 0 and then Unbounded.Length (Codes) > 0,
+            Label & " refuses a control word as an ordinary name");
+      end Reject;
+
+      procedure Check (Word : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Source : constant Landin.Source.Source_Id := Sources.Add
+           ("keyword.ldn", Word & " " & Word & "_value");
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Source), Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Count (Stream) = 3
+            and then Landin.Tokens.Kind (Stream, 1)
+              in Landin.Tokens.Reserved_Word
+            and then Landin.Tokens.Kind (Stream, 2)
+              = Landin.Tokens.Identifier
+            and then Landin.Tokens.Fault_Count (Stream) = 0,
+            Word & " is reserved but its longer spelling is an identifier");
+         Reject (Word & " module", Word & ": i32 = 10");
+         Reject (Word & " local",
+            "f: () -> none = mut " & Word & ": i32 = 10 end f");
+         Reject (Word & " parameter",
+            "f: (" & Word & ": i32) -> none = end f");
+         Reject (Word & " field",
+            "t: type = struct " & Word & ": i32 end t");
+         Reject (Word & " result",
+            "f: () -> (" & Word & ": i32) = 10 end f");
+         Reject (Word & " label",
+            "f: () -> none = " & Word & ": loop do break end "
+            & Word & " end f");
+         Reject (Word & " grouped name",
+            "f: () -> (r: i32) = (" & Word & ") end f");
+         Reject (Word & " member",
+            "f: (v: i32) -> (r: i32) = v." & Word & " end f");
+      end Check;
+   begin
+      Check ("begin");
       Check ("break");
+      Check ("complete");
       Check ("continue");
       Check ("defer");
-      Check ("undo");
+      Check ("do");
+      Check ("for");
+      Check ("loop");
       Check ("match");
-      Check ("begin");
-      Check ("complete");
       Check ("unchecked");
-      Check ("arena");
-   end Contextual_Names_Start_Ordinary_Statements;
+      Check ("undo");
+      Check ("while");
+      Check ("with");
+      Reject ("bare begin assignment", "begin = 10");
+      Reject ("local begin assignment",
+         "f: () -> none = begin = 10 end f");
+   end Control_Words_Are_Reserved;
 
    procedure Noreturn_Has_A_Named_Refusal
      (Item : in out Landin.Testing.Context);
@@ -4024,6 +4090,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "noreturn has a named refusal",
          Noreturn_Has_A_Named_Refusal'Access);
+      Landin.Testing.Register
+        (Into, "parser", "control words are reserved",
+         Control_Words_Are_Reserved'Access);
       Landin.Testing.Register
         (Into, "parser", "contextual names start ordinary statements",
          Contextual_Names_Start_Ordinary_Statements'Access);

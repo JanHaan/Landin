@@ -804,6 +804,7 @@ negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-range-context-overflow | linux-x86-64, macos-arm64
 negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-reserved-control-assignment | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-shared-declaration | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sink-entry-overlap | linux-x86-64, macos-arm64, synthetic-32

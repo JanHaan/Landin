@@ -24,6 +24,12 @@ optimized outputs. Prototype 4 applies the same rule to its chosen world.
 
 ---
 
+D225 reserves the enabled control words at the lexer boundary [1760]. The
+bootstrap-derived parser's keyword classification must reject them as names,
+including in declarations, parameters and fields; grouping is not an escape.
+This also applies to the blocks, loops and cleanup forms used by prototypes
+1, 3 and 4. Their control-flow and recovery semantics are unchanged.
+
 ## core/text  —  the parts this file leans on
 
 R3.40 implements the byte-oriented pressure this parser needs: `core/text`

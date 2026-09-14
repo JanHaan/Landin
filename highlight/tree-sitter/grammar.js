@@ -36,11 +36,12 @@ module.exports = grammar({
 
   reserved: {
     global: $ => [
-      'addr', 'alignof', 'and', 'any', 'atom', 'dec', 'else', 'elsif', 'end',
-      'escaping', 'extern', 'fail', 'false', 'fixed', 'from', 'if', 'import',
-      'in', 'inc', 'inout', 'mut', 'none', 'not', 'or', 'ptr', 'public',
-      'return', 'sink', 'sizeof', 'struct', 'then', 'true', 'try', 'type',
-      'when', 'zeroed',
+      'addr', 'alignof', 'and', 'any', 'atom', 'begin', 'break', 'complete',
+      'continue', 'dec', 'defer', 'do', 'else', 'elsif', 'end', 'escaping',
+      'extern', 'fail', 'false', 'fixed', 'for', 'from', 'if', 'import',
+      'in', 'inc', 'inout', 'loop', 'match', 'mut', 'none', 'not', 'or',
+      'ptr', 'public', 'return', 'sink', 'sizeof', 'struct', 'then', 'true',
+      'try', 'type', 'unchecked', 'undo', 'when', 'while', 'with', 'zeroed',
     ],
   },
 
@@ -410,10 +411,8 @@ module.exports = grammar({
       $.bare_block,
     )),
 
-    // R4.10's loops, [1130]-[1190].  `loop`, `while`, `for`, `do`, `break`,
-    // `continue`, `complete` and `with` are words [1760] does not reserve,
-    // so they stay out of `reserved` and are keywords only where a rule
-    // expects them, which is how the parser's refusal table treats them.
+    // R4.10's loops, [1130]-[1190]. D225 reserves their control words
+    // globally, including in every ordinary identifier position.
     loop_statement: $ => choice(
       seq('loop', 'do', optional($.block), 'end', 'loop'),
       seq(field('label', $.identifier), ':', 'loop', 'do', optional($.block),

@@ -1,189 +1,189 @@
 selected: atom
 
 declare_loop: () -> none =
-    loop: i32 = 0
+    loop_value: i32 = 0
 end declare_loop
 assign_loop: (v: selected) -> none =
-    mut loop: [1]i32
-    loop[0] = 1
-    loop[0] += 2
+    mut loop_value: [1]i32
+    loop_value[0] = 1
+    loop_value[0] += 2
     match v
-        selected: loop[0] = 3
+        selected: loop_value[0] = 3
     end match
     while false do
-        loop[0] = 4
+        loop_value[0] = 4
     complete
-        loop[0] = 5
+        loop_value[0] = 5
     end while
 end assign_loop
 
 declare_while: () -> none =
-    while: i32 = 0
+    while_value: i32 = 0
 end declare_while
 assign_while: (v: selected) -> none =
-    mut while: [1]i32
-    while[0] = 1
-    while[0] += 2
+    mut while_value: [1]i32
+    while_value[0] = 1
+    while_value[0] += 2
     match v
-        selected: while[0] = 3
+        selected: while_value[0] = 3
     end match
     while false do
-        while[0] = 4
+        while_value[0] = 4
     complete
-        while[0] = 5
+        while_value[0] = 5
     end while
 end assign_while
 
 declare_for: () -> none =
-    for: i32 = 0
+    for_value: i32 = 0
 end declare_for
 assign_for: (v: selected) -> none =
-    mut for: [1]i32
-    for[0] = 1
-    for[0] += 2
+    mut for_value: [1]i32
+    for_value[0] = 1
+    for_value[0] += 2
     match v
-        selected: for[0] = 3
+        selected: for_value[0] = 3
     end match
     while false do
-        for[0] = 4
+        for_value[0] = 4
     complete
-        for[0] = 5
+        for_value[0] = 5
     end while
 end assign_for
 
 declare_break: () -> none =
-    break: i32 = 0
+    break_value: i32 = 0
 end declare_break
 assign_break: (v: selected) -> none =
-    mut break: [1]i32
-    break[0] = 1
-    break[0] += 2
+    mut break_value: [1]i32
+    break_value[0] = 1
+    break_value[0] += 2
     match v
-        selected: break[0] = 3
+        selected: break_value[0] = 3
     end match
     while false do
-        break[0] = 4
+        break_value[0] = 4
     complete
-        break[0] = 5
+        break_value[0] = 5
     end while
 end assign_break
 
 declare_continue: () -> none =
-    continue: i32 = 0
+    continue_value: i32 = 0
 end declare_continue
 assign_continue: (v: selected) -> none =
-    mut continue: [1]i32
-    continue[0] = 1
-    continue[0] += 2
+    mut continue_value: [1]i32
+    continue_value[0] = 1
+    continue_value[0] += 2
     match v
-        selected: continue[0] = 3
+        selected: continue_value[0] = 3
     end match
     while false do
-        continue[0] = 4
+        continue_value[0] = 4
     complete
-        continue[0] = 5
+        continue_value[0] = 5
     end while
 end assign_continue
 
 declare_defer: () -> none =
-    defer: i32 = 0
+    defer_value: i32 = 0
 end declare_defer
 assign_defer: (v: selected) -> none =
-    mut defer: [1]i32
-    defer[0] = 1
-    defer[0] += 2
+    mut defer_value: [1]i32
+    defer_value[0] = 1
+    defer_value[0] += 2
     match v
-        selected: defer[0] = 3
+        selected: defer_value[0] = 3
     end match
     while false do
-        defer[0] = 4
+        defer_value[0] = 4
     complete
-        defer[0] = 5
+        defer_value[0] = 5
     end while
 end assign_defer
 
 declare_undo: () -> none =
-    undo: i32 = 0
+    undo_value: i32 = 0
 end declare_undo
 assign_undo: (v: selected) -> none =
-    mut undo: [1]i32
-    undo[0] = 1
-    undo[0] += 2
+    mut undo_value: [1]i32
+    undo_value[0] = 1
+    undo_value[0] += 2
     match v
-        selected: undo[0] = 3
+        selected: undo_value[0] = 3
     end match
     while false do
-        undo[0] = 4
+        undo_value[0] = 4
     complete
-        undo[0] = 5
+        undo_value[0] = 5
     end while
 end assign_undo
 
 declare_match: () -> none =
-    match: i32 = 0
+    match_value: i32 = 0
 end declare_match
 assign_match: (v: selected) -> none =
-    mut match: [1]i32
-    match[0] = 1
-    match[0] += 2
+    mut match_value: [1]i32
+    match_value[0] = 1
+    match_value[0] += 2
     match v
-        selected: match[0] = 3
+        selected: match_value[0] = 3
     end match
     while false do
-        match[0] = 4
+        match_value[0] = 4
     complete
-        match[0] = 5
+        match_value[0] = 5
     end while
 end assign_match
 
 declare_begin: () -> none =
-    begin: i32 = 0
+    begin_value: i32 = 0
 end declare_begin
 assign_begin: (v: selected) -> none =
-    mut begin: [1]i32
-    begin[0] = 1
-    begin[0] += 2
+    mut begin_value: [1]i32
+    begin_value[0] = 1
+    begin_value[0] += 2
     match v
-        selected: begin[0] = 3
+        selected: begin_value[0] = 3
     end match
     while false do
-        begin[0] = 4
+        begin_value[0] = 4
     complete
-        begin[0] = 5
+        begin_value[0] = 5
     end while
 end assign_begin
 
 declare_complete: () -> none =
-    complete: i32 = 0
+    complete_value: i32 = 0
 end declare_complete
 assign_complete: (v: selected) -> none =
-    mut complete: [1]i32
-    complete[0] = 1
-    complete[0] += 2
+    mut complete_value: [1]i32
+    complete_value[0] = 1
+    complete_value[0] += 2
     match v
-        selected: complete[0] = 3
+        selected: complete_value[0] = 3
     end match
     while false do
-        complete[0] = 4
+        complete_value[0] = 4
     complete
-        complete[0] = 5
+        complete_value[0] = 5
     end while
 end assign_complete
 
 declare_unchecked: () -> none =
-    unchecked: i32 = 0
+    unchecked_value: i32 = 0
 end declare_unchecked
 assign_unchecked: (v: selected) -> none =
-    mut unchecked: [1]i32
-    unchecked[0] = 1
-    unchecked[0] += 2
+    mut unchecked_value: [1]i32
+    unchecked_value[0] = 1
+    unchecked_value[0] += 2
     match v
-        selected: unchecked[0] = 3
+        selected: unchecked_value[0] = 3
     end match
     while false do
-        unchecked[0] = 4
+        unchecked_value[0] = 4
     complete
-        unchecked[0] = 5
+        unchecked_value[0] = 5
     end while
 end assign_unchecked
 
