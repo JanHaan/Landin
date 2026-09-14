@@ -559,8 +559,73 @@ package body Landin.Tests.Backend_Plans_Suite is
       end;
    end Stack_Limits_Keep_Defects;
 
+   procedure Native_Argument_Counts_Stay_Encodable
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Argument_Counts_Stay_Encodable
+     (Item : in out Landin.Testing.Context)
+   is
+      Facts : constant Targets.Target_Facts := Targets.Linux_X86_64;
+      Limit : constant Targets.Byte_Count := 2 ** 31 - 1;
+
+      procedure Check
+        (Count : Natural; Maximum, Expected : Targets.Byte_Count;
+         Fits : Boolean := True);
+
+      procedure Check
+        (Count : Natural; Maximum, Expected : Targets.Byte_Count;
+         Fits : Boolean := True)
+      is
+      begin
+         declare
+            Bytes : constant Targets.Byte_Count :=
+              Backend.X86_64.Native_Argument_Bytes (Count, Facts, Maximum);
+         begin
+            Landin.Testing.Check
+              (Item, Fits and then Bytes = Expected and then Bytes <= Maximum,
+               "the argument count has its exact aligned stack area");
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check
+              (Item, not Fits, "the argument area stops at its stack budget");
+      end Check;
+   begin
+      Check (0, 0, 0);
+      Check (6, 0, 0);
+      Check (7, 16, 16);
+      Check (8, 16, 16);
+      Check (9, 32, 32);
+      Check (7, 7, 0, False);
+      Check (7, 15, 0, False);
+      Check (9, 31, 0, False);
+      --  These are scalar counts only: no argument array, IR item, source
+      --  list, image or stack allocation is created for the boundary values.
+      Check (268_435_460, Limit, Limit - 15);
+      Check (268_435_461, Limit, 0, False);
+      Check (268_435_458, Limit - 16, Limit - 31);
+      Check (268_435_459, Limit - 16, 0, False);
+      begin
+         declare
+            Bytes : constant Targets.Byte_Count :=
+              Backend.X86_64.Native_Argument_Bytes (268_435_461, Facts);
+         begin
+            Landin.Testing.Fail
+              (Item, "the emission default accepted an area of"
+               & Targets.Byte_Count'Image (Bytes));
+         end;
+      exception
+         when Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check
+              (Item, True, "emission defaults to the encoding limit");
+      end;
+   end Native_Argument_Counts_Stay_Encodable;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend plans", "native argument counts stay encodable",
+         Native_Argument_Counts_Stay_Encodable'Access);
       Landin.Testing.Register
         (Into, "backend plans", "stack limits keep defects",
          Stack_Limits_Keep_Defects'Access);

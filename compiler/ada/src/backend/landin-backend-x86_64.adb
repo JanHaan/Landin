@@ -220,6 +220,27 @@ package body Landin.Backend.X86_64 is
 
    Stack_Argument_Bytes : constant Landin.Targets.Byte_Count := 8;
 
+   function Native_Argument_Bytes
+     (Count : Natural;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count := 16#7fff_ffff#)
+      return Landin.Targets.Byte_Count
+   is
+   begin
+      if Count <= Register_Arguments then
+         return 0;
+      elsif Landin.Targets.Byte_Count (Count - Register_Arguments)
+        > Maximum / Stack_Argument_Bytes
+      then
+         raise Stack_Limit_Exceeded with
+           "internal arguments exceed the stack budget";
+      end if;
+      return Stack_Align
+        (Landin.Targets.Byte_Count (Count - Register_Arguments)
+         * Stack_Argument_Bytes,
+         Landin.Targets.Stack_Alignment (Facts), Maximum);
+   end Native_Argument_Bytes;
+
    ------------------------------------------------------------------
    --  Text
    ------------------------------------------------------------------
@@ -254,10 +275,17 @@ package body Landin.Backend.X86_64 is
       if Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
         and then Landin.IR.Signature_Uses_C_ABI
           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
-        and then C_ABI.Signature_Plan
-          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts,
-           Largest_Displacement - 16).Stack_Bytes
-          > Largest_Displacement - 16
+      then
+         if C_ABI.Signature_Plan
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts,
+            Largest_Displacement - 16).Stack_Bytes
+             > Largest_Displacement - 16
+         then
+            return False;
+         end if;
+      elsif Native_Argument_Bytes
+        (Landin.IR.Parameter_Count (Of_Unit, Item), Facts,
+         Largest_Displacement - 16) > Largest_Displacement - 16
       then
          return False;
       end if;
@@ -278,10 +306,18 @@ package body Landin.Backend.X86_64 is
                      else Landin.IR.Signature_Of
                        (Of_Unit, Landin.IR.Callee_Of (Of_Unit, Item, Value)));
                begin
-                  if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature)
-                    and then C_ABI.Call_Plan
-                      (Of_Unit, Item, Value, Facts,
-                       Largest_Displacement).Stack_Bytes > Largest_Displacement
+                  if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature) then
+                     if C_ABI.Call_Plan
+                       (Of_Unit, Item, Value, Facts,
+                        Largest_Displacement).Stack_Bytes
+                          > Largest_Displacement
+                     then
+                        return False;
+                     end if;
+                  elsif Native_Argument_Bytes
+                    (Landin.IR.Operand_Count (Of_Unit, Item, Value)
+                     - (if Op = Landin.IR.Indirect_Call then 1 else 0),
+                     Facts, Largest_Displacement) > Largest_Displacement
                   then
                      return False;
                   end if;
@@ -4301,12 +4337,7 @@ package body Landin.Backend.X86_64 is
                           & Suffix (Held) & Suffix (Wide);
                      end Extension;
                      Stack_Bytes : constant Landin.Targets.Byte_Count :=
-                       (if Count <= Register_Arguments then 0
-                        else Landin.Targets.Align_Up
-                          (Landin.Targets.Byte_Count
-                             (Count - Register_Arguments)
-                           * Stack_Argument_Bytes,
-                           Landin.Targets.Stack_Alignment (Facts)));
+                       Native_Argument_Bytes (Count, Facts);
                   begin
                      Reserve_Stack
                        (Stack_Bytes, "call_"

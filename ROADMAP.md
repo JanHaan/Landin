@@ -6061,8 +6061,8 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
 | K29 | G1: wide slice stride uses an unencodable immediate multiply | Implemented with A7/M19/N6/J61. Bounded scalar and emitted-text evidence covers the shared encoding decision; no giant extent or image reproduction. |
 | K30 | G3: first-class external C function address uses a bare PC-relative address | Confirmed with one inspected 1,275-byte assembly file and a foreground 20-second-capped invocation of the pinned triplet-selected GNU driver: PIE linking refuses the PC32 puts relocation. Imported runtime function addresses now load through GOTPCREL; defined routines retain relative addresses and quoting is preserved. Two exact backend cases pass eight checks on each host. The inspected replacement links as a PIE and readelf confirms the puts GLOB_DAT relocation; no generated program was executed and exact acceptance remains open. |
-| K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
-| K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
+| K31 | G4: outgoing stack sizes lack a wide-immediate fallback | The focused source audit found an internal-call gap; C incoming/outgoing areas were already bounded. Internal entry and direct/indirect call areas now share checked count/alignment arithmetic with emission, preserving the signed displacement budget and the incoming frame/call prefix. Four exact cases pass 52 checks on each host, using scalar counts at encoding boundaries and an eight-argument direct/indirect control. No huge argument list or image is constructed; exact acceptance remains open. |
+| K32 | G10: stack-argument start uses max(8, its alignment) | Disposed as no established defect in the supported subset. Under [1975], scalar leaves have at most eight-byte alignment; nested C records take their widest field alignment and fixed arrays inherit their element alignment. Thus max(8, alignment) is eight for every admitted stack argument. Vectors, extended scalars and over-aligned records are excluded. The existing C classification case passes 19 checks on each host; retained native-bank fixture sources cover multiple spills and partial records, without rerunning native execution. Exact acceptance remains open. |
 | K33 | H1: build-report collision checks reserve inactive product/map paths | Confirmed for an inactive map: report preflight now shares the actual artifact list. Product_Path already equals the assembly destination for non-executable emission, so no independent inactive-product defect was established. Fake-host controls cover both emission modes, map production by full debug or caller coordinates, aliases and real source/artifact collisions. Four exact cases pass 194 checks on each host; no real overwrite or tool run is used. Exact acceptance remains open. |
 | K34 | H2: help/identify bypass invalid deferred options | Confirmed by four bounded direct CLI probes. Informational responses now wait for all command-line validation, including target, build mode, override shape/duplicates and root/emit arity. Valid help/identity requests still return before source discovery or reads; unknown targets retain status 1 and option misuse status 2. Fake-host controls cover both action positions and valid counterparts. Five exact cases pass 301 checks on each host; J45's invalid-configuration stage boundary remains and exact acceptance stays open. |
 | K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
@@ -7444,6 +7444,40 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K31's focused source audit distinguishes the existing C stack guard from a
+missing internal-call bound. Internal entry, direct-call and indirect-call
+areas now use checked physical-count arithmetic, shared with text emission.
+Multiplication and final stack alignment obey the signed displacement limit;
+incoming areas additionally leave room for the saved frame and return address.
+This is a source/seam repair, not a claim that a giant source was reproduced.
+
+Four exact cases pass 52 checks in each of macOS debug and Linux release.
+Thirteen arithmetic checks cover register-only calls, small aligned areas,
+insufficient limits and exact signed-encoding boundaries, including the
+incoming prefix. Those boundary values are scalar counts only: no corresponding
+argument arrays, IR lists, source lists, images or stacks are allocated.
+An eight-argument source retains direct and indirect text emission and entry/call
+preflight; existing stack-exhaustion/defect and C classification controls pass.
+An Ada default-expression visibility error required a corrected clean macOS
+build. The boundary test then needed its expected exception caught inside the
+executable block; that test-only correction passed after checksum recompilation.
+Linux's single-worker build and all four selectors pass. Tests have limits of
+at most 30 seconds. Logs remain in `.scratch/r491-native-stack/` and
+`.scratch/r491-final-values/`. No Landin assembler, linker or executable ran.
+Exact-revision acceptance remains open.
+
+K32 does not establish a current ABI defect. [1975]'s admitted scalar leaves
+have at most eight-byte alignment; C records retain their widest field
+alignment and arrays inherit the element alignment. The questioned
+max(8, alignment) therefore yields eight throughout this subset. Extended
+scalars, vectors and over-aligned records are outside it. Source inspection of
+`abi/r440-native-banks` retains the existing differential coverage for multiple
+spills, mixed banks and partial records; its native execution was not replayed.
+The existing C classification case separately passes 19 checks on each host,
+with logs in `.scratch/r491-c-abi-review/` and `.scratch/r491-final-values/`,
+and is included in the K31 controls above. This disposition adds no ABI rule
+or claim of new exact-revision runtime acceptance.
 
 K23 memoizes completed scalar module-binding values within one shared-folder
 query. Recursive references reuse known, non-overflowing values, while unknown

@@ -884,7 +884,11 @@ package body Landin.Tests.Backend_Suite is
          & "    r = g + h" & LF & "end g" & LF
          & "f: () -> (r: i32) =" & LF
          & "    r = g(1, 2, 3, 4, 5, 6, 19, 23)" & LF
-         & "end f" & LF,
+         & "end f" & LF
+         & "indirect: () -> (r: i32) =" & LF
+         & "    handler := g" & LF
+         & "    r = handler(1, 2, 3, 4, 5, 6, 19, 23)" & LF
+         & "end indirect" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
@@ -914,6 +918,16 @@ package body Landin.Tests.Backend_Suite is
                HT & "call g" & LF
                & HT & "addq $16, %rsp" & LF),
             "the caller reclaims the outgoing run immediately after return");
+      end;
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Index in 1 .. IR.Item_Count (Code) loop
+            Landin.Testing.Check
+              (Item, Landin.Backend.X86_64.Frame_Is_Addressable
+                 (Code, IR.Item_Id (Index), Landin.Targets.Linux_X86_64),
+               "entry, direct and indirect argument areas pass preflight");
+         end loop;
       end;
    end Stack_Arguments_Cross_The_Call;
 
