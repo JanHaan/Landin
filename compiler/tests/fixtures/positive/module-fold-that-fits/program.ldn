@@ -2,3 +2,6 @@ sum: u8 = 200 + 55
 product: i32 = 6 * 7
 borrowed: u32 = sum_base + sum_base
 sum_base: u32 = 9
+-- R1.70/D224: only the final module image must fit the destination width.
+reduced: u8 = 200 + 100 - 100
+reduced_product: i32 = 100000 * 100000 / 100000

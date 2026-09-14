@@ -3191,6 +3191,10 @@ private declaration.
 Values at module level must be known at compile time.
 Nothing runs before the entry point. Immutable ones can
 stay in flash; mutable ones cost RAM and are conspicuous.
+Ordinary integer arithmetic here folds in [1940]'s wider kernel range before
+checking the final image against its type. For example, a module
+`value: u8 = 200 + 100 - 100` holds 200. Inside a function the same u8
+addition overflows and traps before the subtraction.
 
 ```landin
 table: [4]u32 = [1, 2, 4, 8]

@@ -6305,7 +6305,7 @@ file positive/module-binding-with-no-value-reads-zero/program.ldn tokens 44
   163 170 counter
   171 174 end
   175 183 count_up
-file positive/module-fold-that-fits/program.ldn tokens 26
+file positive/module-fold-that-fits/program.ldn tokens 44
   0 3 sum
   3 4 :
   5 7 u8
@@ -6332,6 +6332,24 @@ file positive/module-fold-that-fits/program.ldn tokens 26
   86 89 u32
   90 91 =
   92 93 9
+  169 176 reduced
+  176 177 :
+  178 180 u8
+  181 182 =
+  183 186 200
+  187 188 +
+  189 192 100
+  193 194 -
+  195 198 100
+  199 214 reduced_product
+  214 215 :
+  216 219 i32
+  220 221 =
+  222 228 100000
+  229 230 *
+  231 237 100000
+  238 239 /
+  240 246 100000
 file positive/module-scalar-wrapping-arithmetic/program.ldn tokens 81
   211 223 u8_wraps_add
   223 224 :
