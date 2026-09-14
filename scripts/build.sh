@@ -19,10 +19,23 @@
 landin_build_lock mode "$@"
 
 landin_require gprbuild
+landin_require gprconfig
+
+#  Both projects must consume the snapshot whose identity the manifest records.
+#  A caller-supplied configuration would escape that native toolchain boundary.
+for Argument do
+    case "$Argument" in
+        --config | --config=* | --autoconf | --autoconf=*)
+            echo "landin: build.sh owns the native GPR configuration" >&2
+            exit 2
+            ;;
+    esac
+done
 
 "$LANDIN_ROOT/scripts/toolchain.sh"
 
 Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
+Configuration="$LANDIN_ADA_DIR/.build-locks/$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE.cgpr"
 
 #  Everything that invalidates an object: the sources and project files,
 #  the compiler and builder actually on PATH, the mode and tag, and the
@@ -37,15 +50,19 @@ landin_manifest() {
     printf '%s\n' "$Project_Rows" | sort || return
     Script_Rows="$(cksum "$LANDIN_ROOT/scripts/build.sh" \
         "$LANDIN_ROOT/scripts/env.sh" \
-        "$LANDIN_ROOT/scripts/build_lock.py")" || return
+        "$LANDIN_ROOT/scripts/build_lock.py" \
+        "$LANDIN_ROOT/scripts/build_config.py")" || return
     printf '%s\n' "$Script_Rows" | sort || return
     Gnat_Banner="$(gnat --version 2>/dev/null)" || return
     Gnat_First="$(printf '%s\n' "$Gnat_Banner" | sed -n '1p')" || return
     Gpr_Banner="$(gprbuild --version 2>/dev/null)" || return
     Gpr_First="$(printf '%s\n' "$Gpr_Banner" | sed -n '1p')" || return
+    Configuration_Identity="$(python3 "$LANDIN_ROOT/scripts/build_config.py" \
+        "$Configuration")" || return
     printf 'mode %s tag %s\n' "$LANDIN_BUILD_MODE" "$LANDIN_BUILD_TAG"
     printf 'gnat %s\n' "$Gnat_First"
     printf 'gprbuild %s\n' "$Gpr_First"
+    printf '%s\n' "$Configuration_Identity"
 }
 
 #  Capture each fallible producer before a downstream command can hide its
@@ -60,7 +77,7 @@ EOF
 }
 
 landin_fixed() {
-    grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$' <<EOF
+    grep -E '^(mode |gnat |gprbuild |toolchain )|[.](gpr|sh|py)$' <<EOF
 $1
 EOF
 }
@@ -148,8 +165,8 @@ mkdir -p "$LANDIN_BUILD_DIR"
 rm -f "$Manifest"
 
 cd "$LANDIN_ADA_DIR"
-gprbuild -p -P refine.gpr "$@" || exit
-gprbuild -p -P landin_tests.gpr "$@" || exit
+gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
+gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
 
 printf '%s\n' "$Current" > "$Manifest.tmp"
 mv -f "$Manifest.tmp" "$Manifest"
