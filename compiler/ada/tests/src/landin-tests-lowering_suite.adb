@@ -12579,6 +12579,109 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Stages.Rendered_Report (Work));
    end Generic_Pointees_Materialize_On_Access;
 
+   procedure Module_Folds_Use_Their_Own_Integer_Range
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Folds_Use_Their_Own_Integer_Range
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+
+            procedure Reject (Text : String);
+
+            procedure Reject (Text : String) is
+               Bad_Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Stages : Natural;
+            begin
+               Lower (Bad_Work, Text, Stages);
+               declare
+                  Reports : constant Landin.Diagnostics.Diagnostic_List :=
+                    Landin.Stages.Report (Bad_Work);
+               begin
+                  Landin.Testing.Check
+                    (Item, Stages = 4 and then Landin.Stages.Failed (Bad_Work)
+                     and then Landin.Diagnostics.Count (Reports) = 1
+                     and then Landin.Diagnostics.Code
+                       (Landin.Diagnostics.Get (Reports, 1)) = "L0300",
+                     "a final or intermediate fold overflow is refused: "
+                     & Landin.Stages.Rendered_Report (Bad_Work));
+               end;
+            end Reject;
+         begin
+            Lower
+              (Work,
+               "byte: u8 = 200 + 100 - 100 "
+               & "large: i32 = 100000 * 100000 / 100000 "
+               & "negative: i32 = -100000 * 100000 / 100000 "
+               & "small: usize = 65536 * 65536 / 65536 "
+               & "image: [4]i64 = [i64(byte), i64(large), "
+               & "i64(negative), i64(small)] "
+               & "body: () -> (r: u8) = r = 200 + 100 - 100 end body", Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               "ordinary module folds may exceed their destination width: "
+               & Landin.Stages.Rendered_Report (Work));
+            if not Landin.Stages.Failed (Work) then
+               declare
+                  Code : IR.Unit renames Landin.Stages.Code (Work).all;
+                  Datum : constant IR.Item_Id := Named_Item (Work, "image");
+                  Routine : constant IR.Item_Id := Named_Item (Work, "body");
+                  Expected : constant Landin.Types.Folded_Array :=
+                    [200, 100_000, -100_000, 65_536];
+                  Arithmetic : Natural := 0;
+               begin
+                  Landin.Testing.Check
+                    (Item, IR.Has_Image (Code, Datum)
+                     and then IR.Image_Length (Code, Datum) = 4,
+                     "the folded result is a complete four-element image");
+                  for Index in Expected'Range loop
+                     Landin.Testing.Check
+                       (Item, IR.Nth_Image
+                          (Code, Datum, IR.Part_Position (Index))
+                            = Expected (Index),
+                        "the static image keeps the mathematical result");
+                  end loop;
+                  for Position in 1 .. IR.Value_Count (Code, Routine) loop
+                     declare
+                        Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     begin
+                        if IR.Op_Of (Code, Routine, Value)
+                             in IR.Add | IR.Subtract
+                        then
+                           Arithmetic := Arithmetic + 1;
+                           Landin.Testing.Check
+                             (Item, IR.Result_Of (Code, Routine, Value)
+                                      = Landin.Types.U8
+                              and then not IR.Is_Unchecked
+                                (Code, Routine, Value),
+                              "body arithmetic retains checked u8 width");
+                        end if;
+                     end;
+                  end loop;
+                  Landin.Testing.Check_Equal
+                    (Item, Arithmetic, 2, "both runtime operations remain");
+                  Landin.Testing.Check
+                    (Item, IR.Verifier.Check (Code).Kind
+                             = IR.Verifier.Nothing_Wrong,
+                     "static folding and runtime operations both verify");
+               end;
+            end if;
+            Reject ("value: u8 = 200 + 100");
+            Reject ("value: u64 = (18446744073709551615 + 1) / 2");
+            Reject ("value: i64 = (-9223372036854775807 "
+                    & "- 9223372036854775807 - 2) / 2");
+         end;
+      end loop;
+   end Module_Folds_Use_Their_Own_Integer_Range;
+
    procedure Repeated_Module_Folds_Keep_Images
      (Item : in out Landin.Testing.Context);
 
@@ -12690,6 +12793,9 @@ package body Landin.Tests.Lowering_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "module folds use their own integer range",
+         Module_Folds_Use_Their_Own_Integer_Range'Access);
       Landin.Testing.Register
         (Into, "lowering", "sink arguments keep their evaluated value",
          Sink_Arguments_Keep_Their_Evaluated_Value'Access);

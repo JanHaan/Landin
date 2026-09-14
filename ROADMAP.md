@@ -5726,7 +5726,7 @@ being silently promoted to bugs or discarded:
 | --- | --- |
 | m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
 | m8 | Implemented under the existing [1930] explicit-discard rule: a valued break targeting a statement loop is refused with L0301. Ordinary, guarded, completion, range and labelled transfers keep their selected target; `_ =` explicitly consumes an unwanted loop result. Small checker controls cover both accepted and refused forms without assembling or executing a program. |
-| m9 | Intermediate constant overflow still needs a precise comparison with [1940]; final-value folding versus each typed intermediate is a semantic question, not an approved change. |
+| m9 | Reconciled with the explicit R1.70 decision: ordinary module folds use the kernel’s wider signed range, then check the final destination width. D224/[1940] now state that existing contract; the u8 intermediate-300 example remains accepted, while runtime u8 arithmetic remains checked. Exact image and positive/negative fold-limit controls cover both target widths. No new folding behavior or unbounded integer type was adopted. |
 | m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
 | m12 | Integer productions now require a final base digit while preserving repeated internal underscores, matching the existing scanner. The character grammar defines unicode_scalar through an explicit shortest-form UTF-8 scalar primitive; used lexical names no longer bypass undefined-rule checking. Independent grammar controls pin valid/invalid separators and scalar boundaries. Float-component separator placement remains a separate comparison: this correction leaves decimal_digits and hex_digits unchanged and does not silently alter tokenization. |
@@ -6187,6 +6187,17 @@ permissive scalar) are caught; six character derivations check the new primitive
 and existing escapes. Compiler tokenization is unchanged, including the separate
 float-component separator question. The existing m22 scanner evidence remains
 applicable; no compiler suite, assembler or runtime work was replayed.
+
+For m9, D224 records the already explicit R1.70 folding decision in [1940]
+and the decision register. The extended fitting-fold fixture and a new bounded
+IR case preserve exact static images on 32-bit and 64-bit target descriptions,
+including signed and pointer-width arithmetic. The same u8 body expression
+retains its two checked runtime operations. Final destination overflow and
+both signs of fold-range overflow remain L0300. The controls pass 29 assertions
+per host in macOS debug and pinned Linux release; both single-worker builds
+pass. Evidence is in `.scratch/r491-module-fold-width/` and matching final-values
+logs. The fixture emits only assembly text; no generated program is executed
+and no arithmetic implementation changes.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175

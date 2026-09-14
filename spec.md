@@ -1306,13 +1306,19 @@ bound to a module binding whose value is known. Not a call.
 There is no compile-time execution in this language, so a
 call is not a value the compiler holds, and [1830] refuses
 it as the construct it is rather than as a type error.
-An integer operator in a module value is folded, and a fold no type
-holds is refused. [0300]'s trap has nowhere to happen here:
-[1460] says nothing runs before the entry point, so a module
-value that overflows has no moment in which to trap and no
-value to stand for it. Inside a body the same expression
-traps [0300] and is not this, which is the one place the two
-readings of one sum come apart.
+Ordinary integer `+`, `-`, `*`, `/` and `rem` in a module image fold in the
+signed range from `-(2**64 - 1)` through `2**64 - 1`, independently of the host
+and destination width. Every intermediate must fit that fold range; the final
+image must fit its declared or inferred integer type. Thus a module binding
+`value: u8 = 200 + 100 - 100` holds 200 even though its intermediate 300 does
+not fit u8. Its individually written literals still need their ordinary type
+context. A fold beyond the kernel range or a final image outside its destination
+range is refused: [0300]'s trap has no runtime moment before entry [1460].
+Inside a body ordinary arithmetic retains the operand type's width and traps
+on overflow, so the same u8 addition traps before its subtraction is reached.
+Wrapping arithmetic, bitwise operations, shifts and explicit conversions keep
+their own type-dependent rules. D224 records this existing module-fold boundary;
+D136's fixed expressions and D202's options retain their separate contracts.
 D162's first float increment admitted a decimal float literal, its unary minus,
 `zeroed`, or D167's named infinity and NaN as a module scalar or
 aggregate-field image. D175 admits `+`, `-`, `*`, `/` and comparisons over
@@ -13476,3 +13482,34 @@ checks; postponing value capture would change [0410]. Neither is adopted.
 indirect and generic calls, nested effects, restoration and cleanup. The
 positive derivative covers the descriptor and handle patterns shared by
 prototypes 3 and 4. Assembly and runtime evidence remain separate obligations.
+
+### D224 — Ordinary module arithmetic has a wider folding range
+
+**The tour said** that a module value is known before entry [1460] and ordinary
+runtime arithmetic traps on overflow [0300]. The bootstrap's R1.70 decision
+explicitly admitted `x: u8 = 200 + 100 - 100`: the intermediate 300 exists only
+in the folder. [1940]'s phrase about a fold that no type holds left the final
+image and its intermediates insufficiently distinguished.
+
+**Chosen in the bootstrap and retained:** ordinary module integer arithmetic
+uses the signed, symmetric folding range derived from the widest enabled
+integer magnitude, `-(2**64 - 1)` through `2**64 - 1`. Every intermediate stays
+within it, and the final image must fit its source type. Neither the host word
+size nor a 32-bit target narrows that folding range. Literal typing, explicit
+conversions and the type-dependent wrapping, bitwise and shift rules remain
+separate. Runtime arithmetic keeps its source width and overflow checks.
+This records existing behavior; it adds no compile-time execution or unbounded
+integer type.
+
+**The alternatives:** checking every intermediate at the destination width
+would reject the already adopted u8 example. Unbounded mathematical folding
+would remove the kernel's explicit limit, and silently wrapping a module fold
+would replace an error with a different image. None describes the existing
+contract.
+
+**Pinned by** the extended `positive/module-fold-that-fits`, the existing
+`negative/module-scalar-fold-overflow`, and `module folds use their own integer
+range`. The bounded IR control checks exact images and retained runtime u8
+operations on both target widths, plus final-image and positive/negative
+fold-range overflow refusals. Container capacity arithmetic inside a function
+remains subject to the runtime rule.

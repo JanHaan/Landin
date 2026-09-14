@@ -35,6 +35,11 @@ applicable cleanup. `runtime/r491-consumed-place-restoration` exercises those
 storage paths and cleanup edges; its negative companions pin forbidden reads
 and exits. The rule also governs containers used by prototypes 2 and 4.
 
+D224's wider integer folding applies to module-known images. Capacity and
+allocation arithmetic inside these container functions retains its source
+width and runtime overflow rules [0300]; folding is no exemption for a
+runtime size calculation.
+
 Four containers, deliberately different in shape:
 
 - `vec` — a growing array: the one that reallocates, so it is where the
