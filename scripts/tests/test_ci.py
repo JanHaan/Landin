@@ -469,6 +469,27 @@ class AcceptanceSchedulingTests(GitFixture):
         remote_call.assert_called_once()
         export.assert_not_called()
 
+    def test_busy_job_preserves_peers_and_can_resume(self):
+        state = Path(self.tmp.name) / "state"
+        def slot(*args):
+            return 75 if args[-1] == "suite-debug" else 0
+        with patch.object(controller, "initialize"), \
+                patch.object(controller, "slot_run", side_effect=slot), \
+                patch.object(controller, "remote_job") as remote, \
+                patch.object(controller, "export") as export:
+            with self.assertRaisesRegex(common.Invalid, "incomplete/failed"):
+                controller.accept(self.root, "HEAD", "fixture", state)
+            remote.assert_not_called()
+            export.assert_not_called()
+        run_id, = [path.name for path in state.iterdir()]
+        with patch.object(controller, "initialize"), \
+                patch.object(controller, "slot_run", return_value=0), \
+                patch.object(controller, "remote_job") as remote, \
+                patch.object(controller, "export") as export:
+            controller.accept(self.root, "HEAD", "fixture", state, resume=run_id)
+            self.assertEqual(remote.call_args.args[2], "finalize")
+            export.assert_called_once()
+
     def test_all_parallel_jobs_must_pass_before_finalizing(self):
         with patch.object(controller, "initialize"), patch.object(controller, "slot_run", return_value=0) as slot, \
                 patch.object(controller, "remote_job") as remote, patch.object(controller, "export") as export:

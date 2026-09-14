@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: guarded cleanup exits preserve pop-before-run behavior with heap-owned verifier tables
+program: main.ldn
+status: 42
+constructs: 0410, 1120, 1130
+targets: linux-x86-64

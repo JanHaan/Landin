@@ -4208,7 +4208,8 @@ package body Landin.Stages.Lowering is
            or else Signature = IR.No_Signature
            or else
              (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
-              and then Res.Match_Of (Meanings.all, Of_Tree, Node)
+              and then Landin.Checking.Match_Of
+                (Types.all, Meanings.all, Of_Tree, Node)
                          /= Res.Call_Matched)
          then
             raise Landin.Compiler_Defect with
@@ -4294,8 +4295,8 @@ package body Landin.Stages.Lowering is
                Formal_Position : constant Positive :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Positive
-                    (Res.Position_Of
-                       (Meanings.all, Of_Tree, Raw_Argument))
+                    (Landin.Checking.Position_Of
+                       (Types.all, Meanings.all, Of_Tree, Raw_Argument))
                   else Nth_Written_Parameter (Written));
                Argument : constant Syn.Node_Id :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument

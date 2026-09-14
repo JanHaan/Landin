@@ -1720,6 +1720,109 @@ package body Landin.Checking is
       end if;
    end Note_Owed_Check;
 
+   function Match_Of
+     (Of_Table : Table;
+      Meanings : Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id)
+      return Landin.Resolution.Call_Match_State
+   is
+      use type Landin.Resolution.Call_Match_State;
+      Overlay : constant Natural :=
+        Node_Overlay_Position (Of_Table, Slot (Of_Table, Of_Tree, Node));
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Match
+          /= Landin.Resolution.Call_Not_Matched
+      then
+         return Of_Table.Node_Overlays (Overlay).Match;
+      end if;
+      return Landin.Resolution.Match_Of (Meanings, Of_Tree, Node);
+   end Match_Of;
+
+   function Position_Of
+     (Of_Table : Table;
+      Meanings : Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Natural
+   is
+      Overlay : constant Natural :=
+        Node_Overlay_Position (Of_Table, Slot (Of_Table, Of_Tree, Argument));
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Argument_Position /= 0
+      then
+         return Of_Table.Node_Overlays (Overlay).Argument_Position;
+      end if;
+      return Landin.Resolution.Position_Of (Meanings, Of_Tree, Argument);
+   end Position_Of;
+
+   procedure Match_Runtime_Argument
+     (Into : in out Table;
+      Meanings : in out Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      Position : Positive)
+   is
+      use type Landin.Resolution.Argument_Role;
+   begin
+      if Into.Current_Routine = No_Routine_Instance then
+         Landin.Resolution.Match_Runtime_Argument
+           (Meanings, Of_Tree, Argument, Position);
+      else
+         if Landin.Resolution.Role_Of (Meanings, Of_Tree, Argument)
+           = Landin.Resolution.Unmatched_Argument
+         then
+            Landin.Resolution.Match_Argument
+              (Meanings, Of_Tree, Argument,
+               Landin.Resolution.Runtime_Argument, 0);
+         end if;
+         declare
+            Overlay : constant Positive :=
+              Ensure_Node_Overlay (Into, Slot (Into, Of_Tree, Argument));
+            Previous : constant Natural :=
+              Into.Node_Overlays (Overlay).Argument_Position;
+         begin
+            if Previous not in 0 | Position then
+               raise Landin.Compiler_Defect with
+                 "one argument was matched twice in one routine view";
+            end if;
+            Into.Node_Overlays (Overlay).Argument_Position := Position;
+         end;
+      end if;
+   end Match_Runtime_Argument;
+
+   procedure Finish_Call_Match
+     (Into : in out Table;
+      Meanings : in out Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id;
+      Accepted : Boolean)
+   is
+      use type Landin.Resolution.Call_Match_State;
+      State : constant Landin.Resolution.Call_Match_State :=
+        (if Accepted then Landin.Resolution.Call_Matched
+         else Landin.Resolution.Call_Rejected);
+   begin
+      if Into.Current_Routine = No_Routine_Instance then
+         Landin.Resolution.Finish_Call_Match
+           (Meanings, Of_Tree, Node, Accepted);
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Node_Overlay (Into, Slot (Into, Of_Tree, Node));
+            Previous : constant Landin.Resolution.Call_Match_State :=
+              Into.Node_Overlays (Overlay).Match;
+         begin
+            if Previous not in Landin.Resolution.Call_Not_Matched | State then
+               raise Landin.Compiler_Defect with
+                 "one call was matched twice in one routine view";
+            end if;
+            Into.Node_Overlays (Overlay).Match := State;
+         end;
+      end if;
+   end Finish_Call_Match;
+
    function Reference_Count (Of_Table : Table) return Natural
      is (Natural (Of_Table.References.Length));
 

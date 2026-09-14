@@ -136,6 +136,17 @@ it cannot write a delayed marker after the runner stops the group. These tests
 invoke no compiler, assembler or linker. Existing native cases retain ordinary
 exit, signal and default-capture coverage.
 
+The R4.91 readiness regressions cover static concept labels in both
+instantiation orders and a separately renamed receiver; computed callees
+retain unhandled/undeclared error diagnostics, inference, propagation and
+recovery. The driver exercises those refusals and over-limit binary chains
+with writes and tools disabled. The parser checks the binary-chain boundary
+and following-declaration recovery. A 4,000-link ordinary alias chain checks
+iterative settlement, and `runtime/r491-cleanup-verifier-storage` preserves
+pop-before-run behavior for 12 guarded cleanups across the standard profiles.
+Those fixed controls do not claim unlimited compilation size or linear
+cleanup expansion.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,

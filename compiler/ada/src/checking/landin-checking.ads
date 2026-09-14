@@ -573,6 +573,35 @@ package Landin.Checking is
                   and then Holds (Into, Constraint),
           Post => Owed_Check (Into, Of_Tree, Node) = Constraint;
 
+   --  Runtime matching is a derived fact in the active routine view.
+   --  Source-fixed matches from resolution remain the fallback.
+   function Match_Of
+     (Of_Table : Table;
+      Meanings : Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id)
+      return Landin.Resolution.Call_Match_State;
+
+   function Position_Of
+     (Of_Table : Table;
+      Meanings : Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Natural;
+
+   procedure Match_Runtime_Argument
+     (Into : in out Table;
+      Meanings : in out Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      Position : Positive);
+
+   procedure Finish_Call_Match
+     (Into : in out Table;
+      Meanings : in out Landin.Resolution.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id;
+      Accepted : Boolean);
+
    ------------------------------------------------------------------
    --  Reference and function descriptors
    ------------------------------------------------------------------
@@ -2528,6 +2557,9 @@ private
       Nominal  : Nominal_Type_Id := No_Nominal_Type;
       Has_Atoms : Boolean := False;
       Atoms    : Atom_Set_Id := No_Atom_Set;
+      Match : Landin.Resolution.Call_Match_State :=
+        Landin.Resolution.Call_Not_Matched;
+      Argument_Position : Natural := 0;
       Has_Owed_Check : Boolean := False;
       Owed_Check : Constraint_Id := No_Constraint;
       Has_Signature : Boolean := False;

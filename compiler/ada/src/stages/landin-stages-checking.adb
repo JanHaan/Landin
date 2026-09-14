@@ -1046,7 +1046,8 @@ package body Landin.Stages.Checking is
       function Provider_Preserves_Concept_Labels
         (Evidence  : Landin.Checking.Conformance_Id;
          Position  : Positive;
-         Signature : Landin.Checking.Signature_Id) return Boolean;
+         Signature : Landin.Checking.Signature_Id;
+         Include_Receiver : Boolean := False) return Boolean;
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -4776,10 +4777,7 @@ package body Landin.Stages.Checking is
          Requirement     : Type_Requirement := Value_Layout)
          return Ty.Type_Kind
       is
-         Identity_Seen : array
-           (Positive range 1 .. Positive'Max
-              (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
-                [others => False];
+         Identity_Seen : Index_Sets.Set;
 
          --  Measurements can introduce type syntax that was not published
          --  with a parameter or local declaration. Normalize and fold that
@@ -4848,13 +4846,13 @@ package body Landin.Stages.Checking is
               Syn.Declared_Type (Target_Tree.all, Declaration);
          begin
             if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Type
-              or else Identity_Seen (Positive (Id))
+              or else Identity_Seen.Contains (Positive (Id))
               or else Syn.Type_Formal_Count
                 (Target_Tree.all, Declaration) /= 0
             then
                return Landin.Checking.No_Nominal_Type;
             end if;
-            Identity_Seen (Positive (Id)) := True;
+            Identity_Seen.Include (Positive (Id));
 
             if Syn.Kind (Target_Tree.all, Declared)
                  in Syn.Struct_Body | Syn.Distinct_Body
@@ -7601,13 +7599,59 @@ package body Landin.Stages.Checking is
                   --  one's outer walk reaches the declaration it names.
                   --  Settle that written type now; Infer is only [1790]'s `:=`
                   --  binding and would ask a type declaration for a value.
-                  Landin.Checking.Begin_Inference (Types.all, Id);
-
                   declare
-                     Held : constant Ty.Type_Kind := Declared_As (Id);
+                     package Alias_Runs is new Ada.Containers.Vectors
+                       (Index_Type => Positive,
+                        Element_Type => Res.Declaration_Id);
+                     Chain : Alias_Runs.Vector;
+                     Current : Res.Declaration_Id := Id;
                   begin
-                     Landin.Checking.Settle (Types.all, Id, Held);
-                     return Held;
+                     --  Flat alias chains are not syntax nesting. Mark the
+                     --  dependency run first, then publish backwards so
+                     --  Declared_As retains all ordinary descriptor rules.
+                     --  A cycle still meets a Being_Inferred declaration.
+                     loop
+                        Landin.Checking.Begin_Inference (Types.all, Current);
+                        Chain.Append (Current);
+                        declare
+                           Tree : constant not null access constant Syn.Tree :=
+                             Tree_For (Res.Source_Of (Meanings.all, Current));
+                           Node : constant Syn.Node_Id :=
+                             Res.Node_Of (Meanings.all, Current);
+                           Written : constant Syn.Node_Id :=
+                             Syn.Declared_Type (Tree.all, Node);
+                           Next : Res.Declaration_Id;
+                        begin
+                           exit when Res.Sort_Of (Meanings.all, Current)
+                             /= Res.Module_Type
+                             or else Syn.Type_Formal_Count (Tree.all, Node)
+                               /= 0
+                             or else Written = Syn.No_Node
+                             or else Syn.Kind (Tree.all, Written)
+                               not in Syn.Type_Reference | Syn.Member_Selection
+                             or else Res.Verdict_Of
+                               (Meanings.all, Tree.all, Written) /= Res.Bound;
+                           Next := Res.Bound_To
+                             (Meanings.all, Tree.all, Written);
+                           exit when Res.Sort_Of (Meanings.all, Next)
+                             /= Res.Module_Type
+                             or else Landin.Checking.State_Of (Types.all, Next)
+                               /= Landin.Checking.Untouched
+                             or else Syn.Type_Formal_Count
+                               (Tree_For
+                                  (Res.Source_Of (Meanings.all, Next)).all,
+                                Res.Node_Of (Meanings.all, Next)) /= 0;
+                           Current := Next;
+                        end;
+                     end loop;
+                     for Alias of reverse Chain loop
+                        declare
+                           Held : constant Ty.Type_Kind := Declared_As (Alias);
+                        begin
+                           Landin.Checking.Settle (Types.all, Alias, Held);
+                        end;
+                     end loop;
+                     return Landin.Checking.Type_Of (Types.all, Id);
                   end;
                end if;
 
@@ -7888,7 +7932,8 @@ package body Landin.Stages.Checking is
                   Role : constant Res.Argument_Role :=
                     Res.Role_Of (Meanings.all, Caller_Tree, Argument);
                   Position : constant Natural :=
-                    Res.Position_Of (Meanings.all, Caller_Tree, Argument);
+                    Landin.Checking.Position_Of
+                      (Types.all, Meanings.all, Caller_Tree, Argument);
                begin
                   if Role in Res.Type_Argument | Res.Fixed_Argument
                     and then Position in Bound'Range
@@ -8115,8 +8160,8 @@ package body Landin.Stages.Checking is
                end if;
             end loop;
 
-            Res.Finish_Call_Match
-              (Meanings.all, Caller_Tree, Call, Accepted => Valid);
+            Landin.Checking.Finish_Call_Match
+              (Types.all, Meanings.all, Caller_Tree, Call, Accepted => Valid);
             return Valid;
          end Match_Generic_Runtime_Arguments;
 
@@ -8140,8 +8185,9 @@ package body Landin.Stages.Checking is
                         if Res.Role_Of
                           (Meanings.all, Caller_Tree, Argument)
                             = Res.Runtime_Argument
-                          and then Res.Position_Of
-                            (Meanings.all, Caller_Tree, Argument) = Position
+                          and then Landin.Checking.Position_Of
+                            (Types.all, Meanings.all,
+                             Caller_Tree, Argument) = Position
                         then
                            return Syn.Expression_Projection
                              (Caller_Tree, Argument);
@@ -8177,8 +8223,9 @@ package body Landin.Stages.Checking is
                begin
                   if Res.Role_Of (Meanings.all, Caller_Tree, Argument)
                        = Res.Runtime_Argument
-                    and then Res.Position_Of
-                      (Meanings.all, Caller_Tree, Argument) = Position
+                    and then Landin.Checking.Position_Of
+                      (Types.all, Meanings.all,
+                       Caller_Tree, Argument) = Position
                   then
                      return Syn.Expression_Projection
                        (Caller_Tree, Argument);
@@ -11466,19 +11513,22 @@ package body Landin.Stages.Checking is
                                 (Types.all, Signature),
                               Because => "this variadic signature",
                               Into => Found);
-                           Res.Finish_Call_Match
-                             (Meanings.all, Of_Tree, Node, Accepted => False);
+                           Landin.Checking.Finish_Call_Match
+                             (Types.all, Meanings.all,
+                              Of_Tree, Node, Accepted => False);
                            return False;
                         end if;
-                        Res.Match_Runtime_Argument
-                          (Meanings.all, Of_Tree, Argument, Written);
+                        Landin.Checking.Match_Runtime_Argument
+                          (Types.all, Meanings.all,
+                           Of_Tree, Argument, Written);
                      end if;
                   end;
                end loop;
                if Written_Count >= Wanted then
                   if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application then
-                     Res.Finish_Call_Match
-                       (Meanings.all, Of_Tree, Node, Accepted => True);
+                     Landin.Checking.Finish_Call_Match
+                       (Types.all, Meanings.all,
+                        Of_Tree, Node, Accepted => True);
                   end if;
                   return True;
                end if;
@@ -11504,11 +11554,13 @@ package body Landin.Stages.Checking is
                return True;
             end if;
 
-            if Res.Match_Of (Meanings.all, Of_Tree, Node)
+            if Landin.Checking.Match_Of
+              (Types.all, Meanings.all, Of_Tree, Node)
                  = Res.Call_Matched
             then
                return True;
-            elsif Res.Match_Of (Meanings.all, Of_Tree, Node)
+            elsif Landin.Checking.Match_Of
+              (Types.all, Meanings.all, Of_Tree, Node)
                     = Res.Call_Rejected
             then
                return False;
@@ -11629,8 +11681,8 @@ package body Landin.Stages.Checking is
                               Into    => Found);
                            Valid := False;
                         end if;
-                        Res.Match_Runtime_Argument
-                          (Meanings.all, Of_Tree, Argument,
+                        Landin.Checking.Match_Runtime_Argument
+                          (Types.all, Meanings.all, Of_Tree, Argument,
                            Positive (Position));
 
                         if Parameter.Caller
@@ -11686,8 +11738,8 @@ package body Landin.Stages.Checking is
                end if;
             end loop;
 
-            Res.Finish_Call_Match
-              (Meanings.all, Of_Tree, Node, Accepted => Valid);
+            Landin.Checking.Finish_Call_Match
+              (Types.all, Meanings.all, Of_Tree, Node, Accepted => Valid);
             return Valid;
          end Match_Runtime_Arguments;
       begin
@@ -11797,8 +11849,8 @@ package body Landin.Stages.Checking is
                Position : constant Positive :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Positive
-                    (Res.Position_Of
-                       (Meanings.all, Of_Tree, Raw_Argument))
+                    (Landin.Checking.Position_Of
+                       (Types.all, Meanings.all, Of_Tree, Raw_Argument))
                   else Nth_Written_Parameter (Written));
                Parameter : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Parameter
@@ -13019,7 +13071,7 @@ package body Landin.Stages.Checking is
                        Landin.Checking.Conformance_Provider_Declaration
                          (Types.all, Evidence,
                           Positive (Direct_Entry));
-                     Signature : constant Landin.Checking.Signature_Id :=
+                     Signature : Landin.Checking.Signature_Id :=
                        (if Provider_Instance
                               /= Landin.Checking.No_Routine_Instance
                         then Landin.Checking.Routine_Signature_Of
@@ -13029,6 +13081,14 @@ package body Landin.Stages.Checking is
                           (Types.all, Provider)
                         else Landin.Checking.No_Signature);
                   begin
+                     if Signature = Landin.Checking.No_Signature
+                       or else not Provider_Preserves_Concept_Labels
+                         (Evidence, Positive (Direct_Entry), Signature,
+                          Include_Receiver => True)
+                     then
+                        Signature := Exact_Concept_Entry_Signature
+                          (Evidence, Positive (Direct_Entry));
+                     end if;
                      if Signature /= Landin.Checking.No_Signature then
                         Landin.Checking.Note_Evidence_Selection
                           (Types.all, Of_Tree, Selection, Evidence,
@@ -13214,7 +13274,8 @@ package body Landin.Stages.Checking is
       function Provider_Preserves_Concept_Labels
         (Evidence  : Landin.Checking.Conformance_Id;
          Position  : Positive;
-         Signature : Landin.Checking.Signature_Id) return Boolean
+         Signature : Landin.Checking.Signature_Id;
+         Include_Receiver : Boolean := False) return Boolean
       is
          Concept : constant Landin.Checking.Concept_Id :=
            Landin.Checking.Conformance_Concept (Types.all, Evidence);
@@ -13246,7 +13307,9 @@ package body Landin.Stages.Checking is
          --  The erased receiver is supplied by dispatch and has no written
          --  call-site label.  Every remaining parameter can be named by the
          --  caller, and every result label names a multiple-result field.
-         for Index in 2 .. Syn.Parameter_Count
+         --  Static selection supplies the receiver explicitly as well.
+         for Index in (if Include_Receiver then 1 else 2)
+           .. Syn.Parameter_Count
            (Concept_Tree.all, Entry_Node)
          loop
             if Landin.Checking.Nth_Signature_Parameter
@@ -29440,6 +29503,8 @@ package body Landin.Stages.Checking is
                           in Syn.Call | Syn.Labeled_Application
                        and then Syn.Recovery_Of (Of_Tree, Call) = Syn.No_Node
                      then
+                        Scan
+                          (Of_Tree, Syn.Callee_Of (Of_Tree, Call), Caller);
                         Note_Blocked_Call (Of_Tree, Call);
                         declare
                            Signature : constant
@@ -29481,6 +29546,7 @@ package body Landin.Stages.Checking is
                   return;
 
                when Syn.Call | Syn.Labeled_Application =>
+                  Scan (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Caller);
                   Note_Blocked_Call (Of_Tree, Node);
                   for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                      declare

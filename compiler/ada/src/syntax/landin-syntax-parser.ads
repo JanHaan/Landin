@@ -38,7 +38,8 @@ package Landin.Syntax.Parser is
    --  repeated is a legal prefix.  Reaching this depth is a diagnostic and
    --  an Error node, not an exception, and it is a constant rather than a
    --  literal in the body so that a fixture can be written against it.
-   --  Later stages need no equivalent: they read the table in index order.
+   --  Selector and binary chains also bound spines read by later walks.
+   --  Dependency chains across declarations need separate resource handling.
    Nesting_Limit : constant := 128;
 
    --  Reads one token stream into a tree, appending every syntax diagnostic

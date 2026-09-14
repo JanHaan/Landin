@@ -1,3 +1,6 @@
+with Ada.Finalization;
+with Ada.Unchecked_Deallocation;
+
 with Landin.IR.Control_Flow;
 with Landin.Types;
 
@@ -2474,8 +2477,25 @@ package body Landin.IR.Verifier is
          type Slot_State is array (1 .. Slots) of Boolean;
          type Block_State is array (1 .. Blocks) of Slot_State;
          Entry_State : Slot_State := [others => False];
-         Outputs : Block_State := [others => [others => True]];
-         Inputs : Block_State := [others => [others => True]];
+         type Block_State_Access is access Block_State;
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Object => Block_State, Name => Block_State_Access);
+         package States is
+            type Owner is new Ada.Finalization.Limited_Controlled with record
+               Data : Block_State_Access :=
+                 new Block_State'(others => [others => True]);
+            end record;
+            overriding procedure Finalize (Value : in out Owner);
+         end States;
+         package body States is
+            overriding procedure Finalize (Value : in out Owner) is
+            begin
+               Free (Value.Data);
+            end Finalize;
+         end States;
+         Output_Owner, Input_Owner : States.Owner;
+         Outputs : Block_State renames Output_Owner.Data.all;
+         Inputs : Block_State renames Input_Owner.Data.all;
          Graph : constant Control_Flow.Graph :=
            Control_Flow.Make (Of_Unit, Item);
          Queue : array (1 .. Blocks) of Positive;

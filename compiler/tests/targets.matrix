@@ -768,6 +768,8 @@ negative/r490-union-alias-unused-pointer-shapes | linux-x86-64, macos-arm64, syn
 negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-alias-backing | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-anonymous-type-scope | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-callee-undeclared | linux-x86-64, synthetic-32
+negative/r491-callee-unhandled | linux-x86-64, synthetic-32
 negative/r491-construction-static-address | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-construction-type-arguments | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-construction-type-fills | linux-x86-64, macos-arm64, synthetic-32
@@ -1631,6 +1633,8 @@ runtime/r490-lexical-module-observation | linux-x86-64
 runtime/r490-review-generic-distinct-atom-array | linux-x86-64
 runtime/r490-review-generic-distinct-bool | linux-x86-64
 runtime/r490-review-generic-empty-module-nonzeroable | linux-x86-64
+runtime/r491-callee-errors | linux-x86-64
+runtime/r491-cleanup-verifier-storage | linux-x86-64
 runtime/r491-consumed-place-restoration | linux-x86-64
 runtime/r491-function-final-values | linux-x86-64
 runtime/r491-generic-array-fields | linux-x86-64
@@ -1638,6 +1642,9 @@ runtime/r491-generic-empty-slice-contexts | linux-x86-64
 runtime/r491-overlapping-result-destination | linux-x86-64
 runtime/r491-payload-alias-last-use | linux-x86-64
 runtime/r491-reference-store-origins | linux-x86-64
+runtime/r491-static-entry-labels | linux-x86-64
+runtime/r491-static-entry-labels-reversed | linux-x86-64
+runtime/r491-static-receiver-label | linux-x86-64
 runtime/r491-variant-array-construction | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64

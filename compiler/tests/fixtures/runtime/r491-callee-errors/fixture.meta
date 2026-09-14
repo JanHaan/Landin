@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: computed callee errors propagate and recover through ordinary and generic calls
+program: main.ldn
+status: 42
+constructs: 0940, 0960, 1030, 1290
+targets: linux-x86-64

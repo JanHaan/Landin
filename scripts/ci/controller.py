@@ -153,7 +153,7 @@ def accept(root, revision, host, state, resume=None):
             except Exception as exc:
                 print("[" + name + "] controller error: " + str(exc), flush=True)
                 results[name] = 1
-            if results[name] and not cancelled:
+            if results[name] not in (0, 75) and not cancelled:
                 # Remote workers also cancel locally on command failure, even
                 # when the controller or its SSH observation is disconnected.
                 remote_job(host, run_id, "cancel")

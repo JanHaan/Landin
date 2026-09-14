@@ -1,0 +1,26 @@
+mut trace: i32 = 0
+mark: (value: i32) -> none = trace += value end mark
+cleanup: (flag: bool) -> (result: i32) =
+    result = 42
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+    defer mark(begin return when flag 1 end)
+end cleanup
+public main: () -> (code: i32) =
+    first := cleanup(true)
+    if first <> 42 or trace <> 0 then
+        code = 1
+        return
+    end if
+    second := cleanup(false)
+    if second == 42 and trace == 12 then 42 else 1 end if
+end main
