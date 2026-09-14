@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Lexical;
+with Landin.Diagnostics.Text;
 with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Platform;
@@ -3605,8 +3606,114 @@ package body Landin.Tests.Parser_Suite is
       Check ("extern (c) f: () -> noreturn");
    end Noreturn_Has_A_Named_Refusal;
 
+   procedure Fixed_Inputs_Keep_Canonical_Trees_And_Reports
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Inputs_Keep_Canonical_Trees_And_Reports
+     (Item : in out Landin.Testing.Context)
+   is
+      type Snapshot is record
+         Tree_Text, Report_Text : Unbounded.Unbounded_String;
+         Nodes, Declarations, Reports : Natural;
+         Sound : Boolean;
+      end record;
+
+      function Capture
+        (Text : String; Names : in out Landin.Source.Names.Table)
+         return Snapshot;
+
+      function Capture
+        (Text : String; Names : in out Landin.Source.Names.Table)
+         return Snapshot
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("determinism.ldn", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            return
+              (Tree_Text => Unbounded.To_Unbounded_String
+                 (Landin.Syntax.Dump.Text (Parsed, Names)),
+               Report_Text => Unbounded.To_Unbounded_String
+                 (Landin.Diagnostics.Text.Render (Found, Sources)),
+               Nodes => Landin.Syntax.Node_Count (Parsed),
+               Declarations => Landin.Syntax.Declaration_Count (Parsed),
+               Reports => Landin.Diagnostics.Count (Found),
+               Sound => Landin.Syntax.Is_Sound (Parsed));
+         end;
+      end Capture;
+
+      procedure Check (Label, Text : String; Clean : Boolean);
+
+      procedure Check (Label, Text : String; Clean : Boolean) is
+         Names, Seeded : Landin.Source.Names.Table;
+         First : constant Snapshot := Capture (Text, Names);
+         Again : constant Snapshot := Capture (Text, Names);
+         Ignored : constant Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.Intern (Seeded, "unrelated_prior_spelling");
+         pragma Unreferenced (Ignored);
+         Other : constant Snapshot := Capture (Text, Seeded);
+
+         procedure Same (Actual : Snapshot; Context : String);
+
+         procedure Same (Actual : Snapshot; Context : String) is
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Actual.Tree_Text),
+               Unbounded.To_String (First.Tree_Text),
+               Label & Context & " keeps canonical node/slot text");
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Actual.Report_Text),
+               Unbounded.To_String (First.Report_Text),
+               Label & Context & " keeps complete diagnostic text");
+            Landin.Testing.Check
+              (Item, Actual.Nodes = First.Nodes
+               and then Actual.Declarations = First.Declarations
+               and then Actual.Reports = First.Reports
+               and then Actual.Sound = First.Sound,
+               Label & Context & " keeps tree and report status");
+         end Same;
+      begin
+         Landin.Testing.Check
+           (Item, First.Declarations = 2 and then First.Nodes in 1 .. 80,
+            Label & " preserves both declarations in the small source");
+         Landin.Testing.Check
+           (Item, (First.Reports = 0) = Clean
+            and then (not Clean or else First.Sound),
+            Label & " retains its independent acceptance/refusal oracle");
+         Same (Again, " with the reused name table");
+         Same (Other, " with an independently seeded name table");
+      end Check;
+   begin
+      --  Three fixed small sources, each parsed three times.  No corpus walk,
+      --  generated input, truncation loop or stress depth is used.
+      Check
+        ("accepted call and array",
+         "extern(c) imported: (x: i32) -> (r: i32)" & ASCII.LF
+         & "f: () -> (r: i32) = values: [2]i32 = [1, 2] "
+         & "r = imported(values[0]) end f" & ASCII.LF, True);
+      Check
+        ("ordered parser reports",
+         "f: () -> (r: i32) = public public r = 1 end f "
+         & "g: () -> (r: i32) = 2 end g" & ASCII.LF, False);
+      Check
+        ("lexical and parser recovery",
+         "f: (x # i32, y: bool) -> none = end f "
+         & "g: () -> none = end g" & ASCII.LF, False);
+   end Fixed_Inputs_Keep_Canonical_Trees_And_Reports;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "fixed inputs keep canonical trees and reports",
+         Fixed_Inputs_Keep_Canonical_Trees_And_Reports'Access);
       Landin.Testing.Register
         (Into, "parser", "noreturn has a named refusal",
          Noreturn_Has_A_Named_Refusal'Access);

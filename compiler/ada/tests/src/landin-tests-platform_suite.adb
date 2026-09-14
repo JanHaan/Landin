@@ -104,6 +104,77 @@ package body Landin.Tests.Platform_Suite is
          "a missing directory says so");
    end Fake_Listings_Are_Sorted_And_Shallow;
 
+   procedure Fake_Directory_Separators_Keep_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fake_Directory_Separators_Keep_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Entries : Landin.Platform.Path_List;
+      Content : Unbounded.Unbounded_String;
+      Listed : Landin.Platform.List_Status;
+      Read : Landin.Platform.Read_Status;
+   begin
+      Host.Add_Directory ("root/");
+      Host.Add_Directory ("root/nested/");
+      Host.Add_File ("root/value.ldn", "source");
+      Host.Add_File ("root/nested/deep.ldn", "");
+      Host.Add_Unreadable ("root/locked.ldn");
+      Landin.Testing.Check
+        (Item, Host.Exists ("root") and then Host.Exists ("root/")
+         and then Host.Is_Directory ("root///"),
+         "directory registration and queries share trailing separators");
+      Landin.Testing.Check
+        (Item, Host.Same_File ("root", "root/")
+         and then Host.Paths_Overlap ("root/", "root///"),
+         "an existing directory retains its object identity");
+      Host.List_Directory ("root///", Entries, Listed);
+      Landin.Testing.Check
+        (Item, Listed = Landin.Platform.List_Ok
+         and then Natural (Entries.Length) = 3
+         and then Entries (1) = "locked.ldn"
+         and then Entries (2) = "nested"
+         and then Entries (3) = "value.ldn",
+         "trailing separators preserve sorted immediate children");
+      Host.Read_File ("root/", Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Not_Readable,
+         "a directory still cannot be read as a file");
+      Host.Read_File ("root/value.ldn/", Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Not_Found
+         and then not Host.Exists ("root/value.ldn/")
+         and then not Host.Same_File ("root/value.ldn", "root/value.ldn/"),
+         "a trailing separator does not fabricate a file alias");
+      Host.Read_File ("root/locked.ldn", Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Not_Readable,
+         "the unreadable-file injection remains intact");
+      Host.List_Directory ("missing/", Entries, Listed);
+      Landin.Testing.Check
+        (Item, Listed = Landin.Platform.Directory_Not_Found
+         and then not Host.Paths_Overlap ("missing", "missing/"),
+         "a missing directory gains no existence or identity");
+      Host.Add_Directory ("other");
+      Landin.Testing.Check
+        (Item, not Host.Same_File ("root", "other")
+         and then not Host.Exists ("root/./"),
+         "distinct directories and undeclared dot paths stay separate");
+      Host.Add_Alias ("root", "other");
+      Landin.Testing.Check
+        (Item, Host.Same_File ("root", "other"),
+         "an explicit identity alias is still honored");
+      Host.Add_Directory ("/");
+      Host.Add_File ("/top.ldn", "");
+      Host.List_Directory ("/", Entries, Listed);
+      Landin.Testing.Check
+        (Item, Listed = Landin.Platform.List_Ok
+         and then Natural (Entries.Length) = 1
+         and then Entries (1) = "top.ldn",
+         "the root separator is retained");
+   end Fake_Directory_Separators_Keep_Identity;
+
    procedure Fake_Tools_Record_Their_Command
      (Item : in out Landin.Testing.Context);
 
@@ -819,6 +890,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "fake listings are sorted and shallow",
          Fake_Listings_Are_Sorted_And_Shallow'Access);
+      Landin.Testing.Register
+        (Into, "platform", "fake directory separators keep identity",
+         Fake_Directory_Separators_Keep_Identity'Access);
       Landin.Testing.Register
         (Into, "platform", "fake tools record their command",
          Fake_Tools_Record_Their_Command'Access);

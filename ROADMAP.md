@@ -5755,11 +5755,11 @@ sweep, debugger or stress campaign was used for this reconciliation.
 | N6: wide slice stride | Implemented with J61 and A7/M19/K29: shared immediate-width selection and a register multiply for larger strides. Development evidence uses scalar boundary constants and tiny emitted-text controls; no giant extent or assembler reproduction. |
 | N9: negatives without `program` | Implemented with J79: recorded and source negative executions share termination, declared/default status and exact ordered-code checks. Recorded bytes remain independently checked, including CLI fixtures without a program. Exact acceptance remains open. |
 | N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
-| N11: `Expect` recovery after a refused lexeme | The forward search exists and intentionally avoids repeating a scanner diagnostic. Bound it at the current construct/list boundary and pin preservation of following valid syntax before changing suppression policy. An already refused compilation cannot advance merely because this helper returns success. |
+| N11: `Expect` recovery after a refused lexeme | Implemented with J101: Expect skips only scanner-refused tokens and leaves the next kernel token to its caller. Existing bounded preservation controls retain following declarations and local type recovery without duplicate lexical reports; the earlier broad forward-search description is superseded. |
 | N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
-| N13: fake filesystem paths | Confirmed exact-string lookup differs from native directory handling for trailing slashes. Repair through narrow directory-root/entry controls under m5; preserve fake failure injection and explicit identity semantics. |
+| N13: fake filesystem paths | Implemented under m5: registered directories accept trailing separators for existence, identity, listing and directory-read refusal. File paths retain exact spelling; missing paths gain no identity and other aliases remain explicit. Four entry/root combinations and the existing file/module identity, shallow listing and read-status controls pass on both hosts. |
 | N14: L0010 ownership comments | Repaired the catalogue, syntactic wrapper, fixture guide, checker docstring and repository guidance. D164 already records removal of the scanner's final deferred family; L0010 is now parser-only. Numeric bands still do not determine ownership. |
-| N15: parser determinism oracle | Retain under m1--m7. Add repeated parsing and canonical tree/report comparison for a small fixed set. The old generated-input case is not evidence for determinism and will not be rerun or expanded as part of this review. |
+| N15: parser determinism oracle | Implemented under m1--m7: three fixed small inputs are each parsed three times, comparing canonical node/slot text, full diagnostic text, status and counts across reused and independently seeded name tables. Independent acceptance/refusal and declaration-count checks keep the comparison non-vacuous. Twenty-four checks pass on each host. No corpus, truncation, generated-input or mutation campaign was run. |
 | N16, N17, N18 | Duplicates A4/M11 native failures, M15 explicit profile selection, and M10 diagnostic excerpts. Keep their existing repair order and evidence requirements. |
 | N19: real-host exception comments | Repaired the two missing comments and the corpus agreement case's misleading claim to mutate files. These cases read the native repository corpus and alter strings only. Their broad generated-input workloads were not rerun. |
 | N20: undocumented `r480` profiles | Repaired the fixture guide to match existing selection. This closes the documentation omission, while M15 still owns replacing name-based policy with explicit metadata. |
@@ -6016,6 +6016,30 @@ J2 is fully closed. Do not infer a whole-program guarantee from the body-local
 repair or reject all accessor results without preserving valid same-origin
 controls. No interprocedural analysis or language rule was added in this batch.
 
+Proposed J2 decision, not yet adopted: forbid a known module-storage alternative
+in a writable reference result whose signature says `from source`. In the
+retained witness, `choose` returns either its `source` parameter or `addr slot`
+for a module binding; its caller then stores `a` through that result. The
+proposal rejects that mixed helper at its return contract, while retaining an
+identity accessor that returns `source`. It strengthens the writable `from`
+contract rather than inferring a callee body at each call site or refusing all
+writes through accessor results. The exact treatment of explicit untracked
+references must remain aligned with [0470]/D217, not silently strengthened into
+an alias-safety promise.
+
+Implementation after the language decision would retain known external-storage
+alternatives through local return-value joins and validate them against writable
+`from` returns. Paired controls must cover direct and joined returns, read-only
+results, identity/subview accessors, module-only independent returns and explicit
+untracked boundaries. Stored function values and concept providers must obey
+the same written contract. The retained-store controls must still reject the
+reported caller/module escape without rejecting valid same-origin accessor
+updates. This proposal needs the language owner's choice because [0790] defines
+reference dependency independently of write permission; D217's local store
+exception cannot obtain a stronger destination promise merely by assuming one.
+Until that choice, the call-summary facet of J2 remains open and no such new
+return rule is implemented.
+
 This intake extends the scope of the earlier repairs without erasing their
 controls: C3 covers the recorded direct destination/alias cases, and J2 now
 covers body-local joined destination facts; M2 covers the recorded consumed
@@ -6073,7 +6097,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
 | K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
 | K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Repaired: each executed declaration clears its prior instance's assigned and consumed facts, including sparse fields/elements. Ordinary, condition and traversal bindings start fresh; destructured results retain their existing sink restriction. Twenty-one controls preserve outer loop-carried consumption, initializer effects, uninitialized reads and repeated reads after a sink. This applies [0080]/[1910] without changing the sink point or adding ownership. |
-| K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
+| K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0410]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
 | K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Repaired with J22: lower/upper returns, array/slice/text sources and ordinary/partially returning bound controls pass in both modes. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
@@ -7475,6 +7499,33 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+N13/m5 repairs trailing-directory separators in the fake filesystem without
+claiming general native path normalization. Directory registration and lookup
+share their trailing-separator spelling, preserve the root separator and retain
+sorted shallow listings. Existing directory identity follows that same rule;
+file reads still use exact spelling, missing directories gain no identity,
+dot/relative/symlink equivalence stays explicit and unreadable-file injection
+is unchanged. Four combinations of entry/root trailing separators compile a
+two-module fake-host source without writes or tool calls. Existing source and
+module identity, listing and read-status controls bring this group to 52 checks.
+
+N15 adds a separate determinism oracle: three fixed sources cover accepted C
+call/array syntax, multiple parser reports and lexical/parser recovery. Each
+is parsed with a fresh then reused name table, and with an independently seeded
+name table. Twenty-four checks compare canonical node/slot text, full rendered
+reports, soundness and counts while independently requiring the two source
+declarations and the expected diagnostic presence. No corpus is read or mutated,
+and no generated input, truncation or depth campaign is involved. The syntax
+dump's stale 42/23 corpus-count comment now describes the current stage-aware
+grammar contract without freezing another historical count.
+
+All seven exact cases pass 76 checks in each macOS debug and Linux release
+single-worker build. The compiler's production behavior is unchanged by this
+harness repair. Every selected test is bounded to at most 30 seconds; no
+assembler, linker, generated program or debugger ran. Logs remain in
+`.scratch/r491-harness-controls/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
 
 J48/D221 removes parent-order precedence from static concept entry selection.
 A per-selection visited set examines each declaring concept once, including the
