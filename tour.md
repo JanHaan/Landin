@@ -2352,6 +2352,9 @@ search an expression instead of a mutable variable and a
 flag. Every break of a loop used as an expression must
 yield the same type, and complete supplies the value for
 running out; loop do needs none, having no other exit.
+A loop whose result is unwanted uses an explicit discard [1020],
+as in `_ = loop do break with 1 end loop`. A statement loop
+uses plain `break`; it cannot silently discard a `with` value.
 'with' is required because a bare identifier after break
 could otherwise be either a label or a value.
 

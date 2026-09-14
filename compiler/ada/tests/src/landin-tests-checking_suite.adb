@@ -12342,6 +12342,115 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Owed_Checks_Belong_To_Routine_Views;
 
+   procedure Loop_Results_Require_A_Consumer
+     (Item : in out Landin.Testing.Context);
+
+   procedure Loop_Results_Require_A_Consumer
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Label, Text : String; Codes : String := "");
+
+      procedure Check (Label, Text : String; Codes : String := "") is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "loop-discard.ldn", Text);
+         Ran : Natural;
+         Got : US.Unbounded_String;
+         pragma Unreferenced (Src);
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
+               if Position > 1 then
+                  US.Append (Got, " ");
+               end if;
+               US.Append
+                 (Got, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Reports, Position)));
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, Label & " reaches checking");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) = (Codes /= "")
+              and then US.To_String (Got) = Codes,
+            Label & " retains the exact result verdict: "
+            & US.To_String (Got));
+         if Codes /= "" then
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Landin.Stages.Rendered_Report (Work),
+                  "this break gives a value to a statement loop") > 0
+               and then Ada.Strings.Fixed.Index
+                 (Landin.Stages.Rendered_Report (Work),
+                  "discard a loop result explicitly") > 0,
+               Label & " explains the missing result consumer");
+         end if;
+      end Check;
+   begin
+      Check
+        ("statement loop",
+         "f: () -> none = loop do break with 1 end loop end f" & LF, "L0301");
+      Check
+        ("guarded statement loop",
+         "f: (flag: bool) -> none = loop do break with 1 when flag "
+         & "break end loop end f" & LF, "L0301");
+      Check
+        ("statement while",
+         "f: (flag: bool) -> none = while flag do break with 1 end "
+         & "while end f" & LF, "L0301");
+      Check
+        ("statement completion",
+         "f: (flag: bool) -> none = while flag do complete break with "
+         & "1 end while end f" & LF, "L0301");
+      Check
+        ("statement range",
+         "f: () -> none = for i in 0..<2 do break with i end for end f"
+         & LF, "L0301");
+      Check
+        ("labelled statement target",
+         "f: () -> none = outer: loop do loop do break outer with 1 "
+         & "end loop end outer end f" & LF, "L0301");
+      Check
+        ("plain loop",
+         "f: () -> none = loop do break end loop end f" & LF);
+      Check
+        ("explicit discard",
+         "f: () -> none = _ = loop do break with 1 end loop end f" & LF);
+      Check
+        ("conditional discard",
+         "f: (flag: bool) -> none = _ = while flag do break with 1 "
+         & "complete break with 2 end while end f" & LF);
+      Check
+        ("range discard",
+         "f: () -> none = _ = for i in 0..<2 do break with i complete "
+         & "break with 2 end for end f" & LF);
+      Check
+        ("labelled value target",
+         "f: () -> (r: i32) = r = outer: loop do loop do break outer "
+         & "with 1 end loop end outer end f" & LF);
+      Check
+        ("nearest statement target",
+         "f: () -> (r: i32) = r = loop do loop do break with 1 end "
+         & "loop break with 2 end loop end f" & LF, "L0301");
+      Check
+        ("nested discarded value",
+         "f: () -> none = loop do _ = loop do break with 1 end loop "
+         & "break end loop end f" & LF);
+      Check
+        ("aggregate discard",
+         "f: () -> none = _ = loop do break with [1, 2] end loop end f" & LF);
+   end Loop_Results_Require_A_Consumer;
+
    procedure Loops_Preserve_The_Assignment_Boundary
      (Item : in out Landin.Testing.Context);
 
@@ -13037,6 +13146,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "static entries have one declaration",
          Static_Entries_Have_One_Declaration'Access);
+      Landin.Testing.Register
+        (Into, "checking", "loop results require a consumer",
+         Loop_Results_Require_A_Consumer'Access);
       Landin.Testing.Register
         (Into, "checking", "loops preserve the assignment boundary",
          Loops_Preserve_The_Assignment_Boundary'Access);

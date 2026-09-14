@@ -5724,7 +5724,9 @@ being silently promoted to bugs or discarded:
 | Older minor identifiers | Disposition |
 | --- | --- |
 | m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
-| m8--m9, m11 | Statement-loop values, intermediate constant overflow and explicit atom widening remain bounded semantic questions requiring current rule/case comparison, not confirmed new language decisions. |
+| m8 | Implemented under the existing [1930] explicit-discard rule: a valued break targeting a statement loop is refused with L0301. Ordinary, guarded, completion, range and labelled transfers keep their selected target; `_ =` explicitly consumes an unwanted loop result. Small checker controls cover both accepted and refused forms without assembling or executing a program. |
+| m9 | Intermediate constant overflow still needs a precise comparison with [1940]; final-value folding versus each typed intermediate is a semantic question, not an approved change. |
+| m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
 | m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
 | m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
@@ -6063,6 +6065,17 @@ range-check witness, storage-derived load metadata and the simplifier's
 pointer/address-slot exclusion; its proposed forwarded raw Load cannot be a
 valid incoming witness. No optimizer or verifier change or broad replay was
 needed for those dispositions.
+
+For m8, macOS debug and pinned Linux release single-worker builds pass.
+Fourteen small sources check statement and value loops, guards, completion,
+ranges, aggregate discard and labelled targets across nesting. The new case
+has 35 assertions including diagnostic guidance; the existing assignment-boundary
+case adds 32, for 67 checks per host. Full `python3 check.py` passes.
+Evidence is in `.scratch/r491-loop-discard/` and matching final-values logs.
+These checks stop at checking; no Landin assembly, linking or execution ran.
+The change enforces [1930], with [1190] teaching the explicit-discard form;
+prototype loop examples retain their existing plain-break behavior.
+Exact-revision acceptance remains open.
 
 For m31, both single-worker builds pass. The new pure argv case has six path
 pairs and 12 assertions; the existing linker-selection case adds four, for
