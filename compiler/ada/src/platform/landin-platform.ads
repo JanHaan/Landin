@@ -22,6 +22,7 @@ package Landin.Platform is
 
    type Read_Status is (Read_Ok, Not_Found, Not_Readable);
    type Write_Status is (Write_Ok, Not_Writable);
+   type Remove_Status is (Removed, Already_Absent, Not_Removable);
    type List_Status is (List_Ok, Directory_Not_Found, Not_A_Directory);
 
    ---------------------------------------------------------------------
@@ -67,6 +68,13 @@ package Landin.Platform is
       Path    : String;
       Content : String;
       Status  : out Write_Status) is abstract;
+
+   --  Remove one file, never a directory. Missing files already meet the
+   --  absence requirement. Establish fresh output without reading old bytes.
+   procedure Remove_File
+     (Host   : Filesystem;
+      Path   : String;
+      Status : out Remove_Status) is abstract;
 
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.

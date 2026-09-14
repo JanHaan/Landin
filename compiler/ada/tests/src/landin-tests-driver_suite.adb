@@ -11,6 +11,8 @@ package body Landin.Tests.Driver_Suite is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Platform.Termination;
+
    function Contains (Text : String; Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
@@ -1375,6 +1377,52 @@ package body Landin.Tests.Driver_Suite is
       Check ("f: () -> none = main: i32 = 0 end f" & LF,
          "1:1", "  | ^");
    end Missing_Entry_Uses_Entry_Source;
+
+   procedure Tool_Start_Failures_Keep_Their_Cause
+     (Item : in out Landin.Testing.Context);
+
+   procedure Tool_Start_Failures_Keep_Their_Cause
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Missing in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Why : constant String :=
+              (if Missing then "tool not found: fake-gcc"
+               else "capture file could not be read");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Tools.Raise_On_Run (Landin.External_Tool_Failed'Identity, Why);
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (Both ("main.ldn", "--emit=exe"), Host, Tools);
+               Report : constant String := Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check
+                 (Item, Result.Status = Landin.Driver.Status_Reported
+                  and then Contains (Report, (if Missing then "L0500"
+                                             else "L0501")),
+                  "the external failure retains its diagnostic category");
+               Landin.Testing.Check
+                 (Item, Contains (Report, "install a toolchain") = Missing
+                  and then (Missing or else Contains (Report, Why)),
+                  "only a missing tool asks the user to install one");
+            end;
+            declare
+               Outcome : Landin.Platform.Tool_Result;
+            begin
+               Tools.Run ("fake", Landin.Platform.No_Arguments, Outcome);
+               Landin.Testing.Check
+                 (Item, Outcome.Ended = Landin.Platform.Exited
+                  and then Outcome.Exit_Code = 0,
+                  "injected external failures apply to one run only");
+            end;
+         end;
+      end loop;
+   end Tool_Start_Failures_Keep_Their_Cause;
 
    procedure A_Failing_Toolchain_Is_Reported
      (Item : in out Landin.Testing.Context);
@@ -3159,6 +3207,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "tool start failures keep their cause",
+         Tool_Start_Failures_Keep_Their_Cause'Access);
       Landin.Testing.Register
         (Into, "driver", "directory arguments allow trailing separators",
          Directory_Arguments_Allow_Trailing_Separators'Access);

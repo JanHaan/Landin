@@ -211,6 +211,27 @@ package body Landin.Platform.Native is
          Status := Not_Writable;
    end Write_File;
 
+   overriding procedure Remove_File
+     (Host   : Native_Filesystem;
+      Path   : String;
+      Status : out Remove_Status)
+   is
+      pragma Unreferenced (Host);
+   begin
+      if not Directories.Exists (Path) then
+         Status := Already_Absent;
+      elsif Directories.Kind (Path) = Directories.Directory then
+         Status := Not_Removable;
+      else
+         Directories.Delete_File (Path);
+         Status := Removed;
+      end if;
+   exception
+      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+         | Ada.IO_Exceptions.Device_Error =>
+         Status := Not_Removable;
+   end Remove_File;
+
    ---------------------------------------------------------------------
    --  List_Directory
    --

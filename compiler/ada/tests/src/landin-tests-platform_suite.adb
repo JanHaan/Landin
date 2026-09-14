@@ -15,6 +15,7 @@ package body Landin.Tests.Platform_Suite is
    use type Landin.Platform.Capture_Mode;
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Remove_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
 
@@ -647,6 +648,77 @@ package body Landin.Tests.Platform_Suite is
         (Item, Missed, "a missing executable is a host failure");
    end Native_Arguments_And_Capture_Are_Preserved;
 
+   procedure File_Removal_Preserves_Directories
+     (Item : in out Landin.Testing.Context);
+
+   procedure File_Removal_Preserves_Directories
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Status : Landin.Platform.Remove_Status;
+      Read : Landin.Platform.Read_Status;
+      Content : Unbounded.Unbounded_String;
+   begin
+      Host.Add_File ("old", "stale");
+      Host.Remove_File ("old", Status);
+      Host.Read_File ("old", Content, Read);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Removed
+         and then not Host.Exists ("old")
+         and then Read = Landin.Platform.Not_Found,
+         "removal removes a registered file from the readable namespace");
+      Host.Remove_File ("old", Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Already_Absent,
+         "repeated removal records that the file is already absent");
+      Host.Add_Directory ("kept");
+      Host.Remove_File ("kept", Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Not_Removable
+         and then Host.Is_Directory ("kept"),
+         "file removal cannot remove a directory");
+      Host.Add_File ("locked", "old");
+      Host.Refuse_Removals;
+      Host.Remove_File ("locked", Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Not_Removable
+         and then Host.Exists ("locked"),
+         "an injected refusal leaves the old file in place");
+   end File_Removal_Preserves_Directories;
+
+   --  This case touches one small owned file in the native test scratch.
+   procedure Native_File_Removal_Is_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_File_Removal_Is_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Status : Landin.Platform.Remove_Status;
+      Written : Landin.Platform.Write_Status;
+      Path : constant String := Scratch & "/remove-one-file.bin";
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Host.Write_File (Path, "old", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok,
+         "the small file was written");
+      Host.Remove_File (Path, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Removed
+         and then not Host.Exists (Path),
+         "the native adapter removes the file without reading its contents");
+      Host.Remove_File (Path, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Already_Absent,
+         "the native adapter reports already-absent files");
+      Host.Remove_File (Scratch, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Not_Removable
+         and then Host.Is_Directory (Scratch),
+         "the native adapter preserves directories");
+   end Native_File_Removal_Is_Bounded;
+
    procedure Fake_Writes_Are_Recorded
      (Item : in out Landin.Testing.Context);
 
@@ -655,6 +727,10 @@ package body Landin.Tests.Platform_Suite is
    is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
       Status : Landin.Platform.Write_Status;
+      Read : Landin.Platform.Read_Status;
+      Content : Unbounded.Unbounded_String;
+      Entries : Landin.Platform.Path_List;
+      Listed : Landin.Platform.List_Status;
    begin
       Landin.Testing.Check_Equal
         (Item, Host.Written ("out.s"), "", "nothing was written yet");
@@ -666,8 +742,41 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Check_Equal
         (Item, Host.Written ("out.s"), "  ret", "the write was recorded");
       Landin.Testing.Check
-        (Item, not Host.Exists ("out.s"),
-         "a recorded write does not become a readable file");
+        (Item, Host.Exists ("out.s"), "a successful write creates the file");
+      Host.Read_File ("out.s", Content, Read);
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Read_Ok
+         and then Unbounded.To_String (Content) = "  ret",
+         "reads see the newly written bytes");
+      Host.Write_File ("out.s", "new", Status);
+      Host.Read_File ("out.s", Content, Read);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Write_Ok
+         and then Read = Landin.Platform.Read_Ok
+         and then Unbounded.To_String (Content) = "new"
+         and then Host.Written ("out.s") = "new",
+         "a second write replaces both visible bytes and the write record");
+      Host.Add_Directory ("root");
+      Host.Write_File ("root/child", "child", Status);
+      Host.List_Directory ("root", Entries, Listed);
+      Landin.Testing.Check
+        (Item, Listed = Landin.Platform.List_Ok
+         and then Natural (Entries.Length) = 1
+         and then Entries (1) = "child",
+         "directory listings see created files");
+      Host.Write_File ("root", "cannot replace a directory", Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Not_Writable
+         and then Host.Is_Directory ("root"),
+         "a refused directory write preserves the directory");
+      Host.Refuse_Writes;
+      Host.Write_File ("out.s", "refused", Status);
+      Host.Read_File ("out.s", Content, Read);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Not_Writable
+         and then Unbounded.To_String (Content) = "new"
+         and then Host.Written ("out.s") = "new",
+         "failed writes leave the latest successful bytes intact");
    end Fake_Writes_Are_Recorded;
 
    --  The adapter owns its temporary capture, so a default-initialized
@@ -878,6 +987,12 @@ package body Landin.Tests.Platform_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "file removal preserves directories",
+         File_Removal_Preserves_Directories'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native file removal is bounded",
+         Native_File_Removal_Is_Bounded'Access);
       Landin.Testing.Register
         (Into, "platform", "native file failures are outcomes",
          Native_File_Failures_Are_Outcomes'Access);

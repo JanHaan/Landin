@@ -536,11 +536,20 @@ everywhere.
 | class | today |
 | --- | --- |
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
-| negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
+| negative, end-to-end | executed: recorded cases compare `refine` output/status with `expect`/`status`; program-only negative cases require the expected failure status and ordered `codes:` sequence |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
 | ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected Linux x86-64 C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
 | positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the Linux x86-64 backend must emit assembly for it |
 | debugger | sessions in `debugging/` run separately through `scripts/debug.sh` |
+
+Each producing attempt first removes its expected output through the platform
+filesystem interface. An output that cannot be removed stops that attempt;
+a zero exit status then requires a newly created file. This applies to positive
+assembly, runtime executables and both ABI production steps. Fake-command cases
+pin missing, stale, repeated, failed, timed-out and unavailable producers
+without invoking a compiler or toolchain. A positive fixture may legitimately
+contain only types or external declarations and emit no function body: emission
+is stage coverage, while instruction semantics need IR or runtime oracles.
 
 A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation
@@ -592,6 +601,12 @@ two stopped the program. D11 is where the choice to emit a deliberate `ud2`
 rather than inherit the incidental fault is recorded, and deterministic
 assembly is what pins it.
 
+The defer and undo no-unwind fixtures register `exit(99)` as cleanup. Reaching
+that observer, whether before or after the fault, produces an ordinary exit
+and fails `traps: yes`. Merely changing the divisor in cleanup would not expose
+cleanup reached after the fault. A fake-outcome control pins the distinction;
+the fixture still cannot identify which instruction generated a signal.
+
 ## The grammar corpus
 
 A `.ldn` file under `positive/` must be derivable from the enabled grammar in
@@ -610,10 +625,13 @@ Two rounds of reading the grammar by hand found sixty-eight defects between
 them and still missed that a lone `_` parsed as a name. The corpus found
 that in a second.
 
-A negative fixture may add `lex: <complaint>` to pin why the scanner refused
-it, not merely that it did. Refusing for the wrong reason means the wrong
-span, and a span that names the wrong bytes is the defect rather than a
-detail of the message.
+A negative fixture may add `lex: <complaint>` to pin the independent Python
+grammar scanner's refusal wording. `check.py` compares that field; the Ada
+fixture reader accepts the metadata but does not use it as an Ada diagnostic
+oracle. Ada diagnostics are pinned by the ordered `codes:` list and, when
+present, the exact `expect` report. Lexer unit cases separately inspect tokens,
+spans and complaints. Neither a Python `lex:` match nor codes alone proves the
+Ada report's wording or span is correct.
 
 Programs are read as bytes. Text mode would turn CR LF and a lone CR into
 LF, so the terminator rule `[1750]` states could not be tested however many
