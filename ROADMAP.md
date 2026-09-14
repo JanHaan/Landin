@@ -8406,7 +8406,7 @@ The remaining delivery sequence is concrete:
 | --- | --- | --- |
 | Reconcile acceptance execution | Preserve giant-image cases as source/seam evidence while running the eight existing jobs concurrently under aggregate memory containment. The changed policy cannot reuse an existing policy identity. | The maintainer activated the Docker cap, verified at the kernel boundary, and explicitly authorized the existing capped acceptance jobs. The positive-fixture path emits assembly text only; the native execution path selects runtime and ABI classes. No acceptance waiver is inferred. |
 | Historical dispositions settled | M5 retains the font files for now. The maintainer closes M6 with the original R1/R2/R3 native runs explicitly unverifiable and their source witnesses preserved. | No history rewrite or retrospective acceptance claim is authorized. New acceptance proves only its current revision and cannot recover a historical run. |
-| Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. Live permission verification, approval, promotion and publication remain unperformed. |
+| Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. The SourceHut identity passed live lock creation/release in job 1888216; the maintainer confirms no other publishers. Approval, promotion and publication remain unperformed. |
 
 The maintainer clarified that the resource restrictions address the incident
 in which session-launched work consumed over 60 GB and crashed the Mac, and
@@ -8564,6 +8564,33 @@ the maintainer's M6 disposition in the exact committed acceptance candidate.
 Its partial evidence is retained; this deliberate restart does not indicate
 a compiler failure. The recovery/parser/frame-witness regressions and the
 reviewed lowering corpus also pass focused Linux debug checks before restart.
+
+
+Attempt `20260914T152616Z-f281722b7e6a` on `53b42203` passed bindings,
+documents, release debugger validation (666.2 seconds) and release quality
+validation (1,180.6 seconds). The release compiler suite completed 197,395
+checks with 709 of 710 cases passing; all five previously failing cases pass.
+The remaining bounded `large loop frames stay off the host stack` regression
+raised `STORAGE_ERROR`: recursive reference-checker visits still retained
+whole-program snapshots on the host stack. Scoped limited-controlled owners
+now keep those snapshots on the heap and free them on normal or exceptional
+scope exit. The fixture's 1,220 declarations and four nested loops are unchanged;
+no larger source, assembler sweep or stack-limit increase is introduced.
+All 108 checker cases pass in each Linux debug and release build (2,149 checks
+per build), including the unchanged large-loop case and reference recovery,
+cleanup, alias and sink controls. The exact frame-witness diagnostic also
+passes in both modes. Peer jobs stopped on the failure. Peak cgroup memory was 26.72 GiB, with no
+memory-limit or OOM events; the failed evidence remains retained.
+
+SourceHut permission preflight job 1888216 passed on `53b42203` using the
+existing Pages SSH identity. It created canonical `ci/publication-lock` owner
+`02744221abf722e35729c0581ead11f60bfe3f13` and released it with the exact lease;
+a following canonical-ref read confirmed the lock absent. It uploaded no site.
+The maintainer confirms that only the repository's SourceHut Pages job
+publishes, and the running-job query was empty before preflight. This resolves
+the identity-permission and other-publisher prerequisites. Approval, canonical
+promotion and the resulting two-domain publication still require successful
+exact-revision acceptance and normal delivery.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
