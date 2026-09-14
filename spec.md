@@ -249,9 +249,9 @@ length. Neither has an all-zero value [0540]. A function type is written with
 declare nothing; only a function declaration opens [1840]'s signature scope.
 The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
-[1760] makes the thirteen ordinary declared names the kernel
-predeclares; the grammar spells them out because they are the
-only ones a program does not have to declare for itself.
+[1760] makes scalar and text-view type names ordinary declared names. The
+kernel predeclares the thirteen scalar names and the three text-view names;
+the grammar spells these out because a program need not declare them itself.
 An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
@@ -1045,6 +1045,9 @@ ordinary subobject place: the root binding decides mutability, and replacement
 requires that field's complete recursive signature. A place reached through
 `.val` or slice indexing instead takes writability from the shallow `mut` in
 that reference type, independently of the binding that holds it [0430] [0450].
+`addr` retains that place's writability: its result is `ptr mut T` for a
+writable place and `ptr T` for a read-only place. Taking an address does not
+grant permission to modify immutable storage.
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.

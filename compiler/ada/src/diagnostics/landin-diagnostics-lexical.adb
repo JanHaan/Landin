@@ -97,7 +97,8 @@ package body Landin.Diagnostics.Lexical is
                when Landin.Tokens.Malformed_Integer_Run =>
                   Add_Note
                     (Report,
-                     "a digit outside the base its prefix selected [1770]");
+                     "use digits of the selected base and underscores; start"
+                     & " and end the digit run with a digit [1770]");
 
                when Landin.Tokens.Malformed_Float_Literal_Run =>
                   Add_Note
