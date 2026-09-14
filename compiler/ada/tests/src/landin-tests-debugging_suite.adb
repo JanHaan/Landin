@@ -888,8 +888,40 @@ package body Landin.Tests.Debugging_Suite is
       end loop;
    end Opaque_Pointees_Are_Declarations;
 
+   procedure Implicit_Return_Uses_Closing_Line
+     (Item : in out Landin.Testing.Context);
+
+   procedure Implicit_Return_Uses_Closing_Line
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List := Request;
+   begin
+      Host.Add_File
+        ("main.ldn", "public main: () -> (code: i32) =" & LF
+         & "code = 0" & LF & "loop do break end loop" & LF
+         & "end main" & LF);
+      Args.Append ("--debug=full");
+      Args.Append ("--optimize=size");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = 0 and then Tools.Run_Count = 0,
+            "implicit return debug assembly uses no host tools");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("out.s"), ".loc 1 4 "),
+            "implicit return maps to the closing line after elided break");
+      end;
+   end Implicit_Return_Uses_Closing_Line;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "implicit return uses closing line",
+         Implicit_Return_Uses_Closing_Line'Access);
       Landin.Testing.Register
         (Into, "debugging", "opaque pointees are declarations",
          Opaque_Pointees_Are_Declarations'Access);

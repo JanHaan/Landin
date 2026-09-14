@@ -52,6 +52,24 @@ def transcript(lines: dict[str, int]) -> str:
     return "\n".join(sections) + "\n"
 
 
+class GenericSteppingTests(unittest.TestCase):
+    def test_optimized_implicit_return_uses_closing_line(self):
+        closing = CHECK.source_line(CHECK.MAIN_SOURCE, "end debug_generic")
+        declaration = CHECK.source_line(CHECK.MAIN_SOURCE, "debug_generic: (")
+        for line in (closing, declaration):
+            text = ("LANDIN-BEGIN generic-next-line\n"
+                    f"#0 debug_generic () at main.ldn:{line}\n"
+                    f'Line {line} of "main.ldn"\n'
+                    "LANDIN-END generic-next-line\n")
+            if line == closing:
+                CHECK.expect_one_of_lines(text, "generic-next-line",
+                                          CHECK.GENERIC_NEXT_LINES, "debug_generic")
+            else:
+                with self.assertRaises(ValueError):
+                    CHECK.expect_one_of_lines(text, "generic-next-line",
+                                              CHECK.GENERIC_NEXT_LINES, "debug_generic")
+
+
 class ContainerTranscriptTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lines = CHECK.container_lines()

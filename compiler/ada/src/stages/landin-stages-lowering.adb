@@ -57,6 +57,7 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Signature_Id;
    use type Landin.Checking.Text_Conversion_Kind;
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Byte_Offset;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Tokens.Assignment_Operator;
    use type Res.Application_Class;
@@ -13123,7 +13124,18 @@ package body Landin.Stages.Lowering is
                --  reaches the end, so falling off it leaves with the
                --  value that is in it.
                if Current /= IR.No_Block then
-                  Leave_With (Result, Site);
+                  declare
+                     --  An implicit return executes at the closing source
+                     --  token, not at the declaration/prologue. Optimized
+                     --  fall-through edges may have no machine instruction
+                     --  on which a debugger could stop before this return.
+                     End_Site : Landin.Provenance.Origin := Site;
+                  begin
+                     if End_Site.Where.Last > End_Site.Where.First then
+                        End_Site.Where.First := End_Site.Where.Last - 1;
+                     end if;
+                     Leave_With (Result, End_Site);
+                  end;
                end if;
             end;
          else
