@@ -5683,7 +5683,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
-| A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. Special symbol names still require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. Mandatory resource limits govern any assembler work. | Third batch |
+| A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. The shared renderer now quotes a whole-name dot as well as leading dollar names. Fourteen selected checks pass on each host; bounded pinned-GNU object inspection confirms exact dot/dollar identities, function sizes and direct/runtime/static relocations. No linking or execution was used. Exact-revision acceptance remains open. | Third batch |
 | A9, m18: third-party inventory | Implemented: the root inventory names the existing Lucide, SourceHut and Nunito Sans notices, and the Tree-sitter support headers now carry their pinned upstream MIT notice. All three headers match v0.26.9 upstream bytes. Optional private MonoLisa remains separately documented. Project and upstream license terms are unchanged; M5 still owns any historical font disposition. | Fourth batch documentation repair |
 | M17: stale refusal ownership | R4.90 changed the implicated notes to describe source-form boundaries and implemented distinct/fill forms. The earlier blanket enabled-yet report is superseded; retain bounded checks for any remaining inaccurate sites. | Existing coverage |
 
@@ -7444,6 +7444,29 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+A7/M19's remaining special-name check found a whole-name dot reached assembly
+unquoted. The pinned GNU assembler accepted a 695-byte definition, but its
+`.size` expression resolved both dots as location counters and recorded size
+zero. A 2,403-byte quoted control established that the same tool preserves the
+requested symbol: its definition has the proper size, and direct calls, runtime
+addresses and static data relocations name that exact symbol. The shared renderer
+now quotes a whole-name dot alongside its existing leading-dollar rule. The
+unquoted dot in a size expression remains the actual location counter; semantic
+namespace allocation and the admitted link-name grammar are unchanged.
+
+Three exact backend cases pass 14 checks in each macOS debug and Linux release
+build, including existing dollar and namespace-reservation controls. A final
+4,518-byte source-generated assembly file passes one pinned-GNU object check:
+`readelf` confirms the exact `.`, `$export` and `$foreign` names, nonzero defined
+function sizes and the expected call, address/GOT and static-data relocations.
+Each of these three assembly invocations named one separately inspected file,
+ran alone in the foreground with a 20-second process-group timeout and followed
+an idle compiler/assembler process check. None contains expansion directives;
+the first two expand below 4 KiB and the last below 8 KiB. No link, generated
+program, debugger, clang or fixture sweep ran. Logs, exact files and SHA256
+identities remain in `.scratch/r491-symbol-identity/`; development test logs are
+also in `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
 J53/D220 makes the existing no-dereference sink boundary explicit for slices.
 A literal slice index follows backing storage and is refused; literal fixed-array

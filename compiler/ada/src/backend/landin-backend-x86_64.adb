@@ -757,7 +757,8 @@ package body Landin.Backend.X86_64 is
       end Allocate_Symbols;
 
       --  `$` is part of the requested ELF identity but starts an AT&T
-      --  immediate operand.  Quote at the rendering seam, not in the symbol
+      --  immediate operand; unquoted `.` names the location counter.  Quote
+      --  at the rendering seam, not in the symbol
       --  table: calls, addresses, data relocations and directives all use this
       --  spelling, while namespace comparisons keep the unquoted identity.
       function Symbol (Item : Landin.IR.Item_Id) return String is
@@ -767,7 +768,7 @@ package body Landin.Backend.X86_64 is
          if Spelling'Length = 0 then
             raise Landin.Compiler_Defect with
               "an unallocated linker symbol reached assembly rendering";
-         elsif Spelling (Spelling'First) = '$' then
+         elsif Spelling = "." or else Spelling (Spelling'First) = '$' then
             return '"' & Spelling & '"';
          end if;
          return Spelling;
