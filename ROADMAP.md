@@ -1707,6 +1707,16 @@ reason and says so.
 - Unrelated representation and freestanding questions remain owned by later
   work rather than silently answered.
 
+Historical source witness: `c3facac53b6e174e73103ddba9353d5f96669615`
+is the retained R1.90 closure record and an ancestor of the R4.91 review base.
+At that revision, the generated construct matrix attributes 82 covered rows;
+`runtime/constant-return-exits-with-its-code`,
+`runtime/calls-return-through-the-abi` and
+`runtime/evaluation-order-is-left-then-right` retain native result oracles.
+The grammar and diagnostic corpus are in that same source tree. This identifies
+replayable source, not a recovered native run bundle. R4.91 M6 records the
+remaining historical evidence gap and the rewrite mapping.
+
 ## R2 — Semantic and representation core
 
 R2 supplies the target-parametric representation and evidence foundations
@@ -2984,6 +2994,15 @@ that has no implementation owner.
 - The guarantee, diagnostic and conformance registers cover every implemented
   operation.
 
+Historical source witness: `f0967732f32bd3daa70d88ce57281223a95a4916`
+retains R2.90's guarantee, diagnostic, conformance and target registers and its
+recorded Linux debug/release result of 381 cases and 8,749 checks. In that tree,
+`runtime/any-composed-dispatch`, `runtime/generic-composed-evidence` and
+`runtime/declared-errors-direct-and-inferred` are concrete execution oracles;
+the target cases retain synthetic 32-bit layout checks. The recorded result
+belongs to that historical source, not today's suite. R4.91 M6 records source
+provenance separately from the unrecovered original run bundle.
+
 ## R3 — Hosted parser
 
 R3 is the first major compiler milestone. It derives raw storage from real
@@ -3299,6 +3318,16 @@ renderings to their shared sources.
 - Raw storage came from container pressure and is normative.
 - Diagnostics are useful, deterministic and traceable to current codes and
   spans.
+
+Historical source witness: `58bef7c8f34a85f6f0d9ce2d681242450f6e42fc`
+retains R3.70's complete derived parser, its derivation mapping and the recorded
+Linux debug/release result of 389 cases and 9,153 checks. The
+`runtime/derived-parser` metadata names its input, exact merged output and
+status 42; the program exercises recovery, allocator and diagnostic-delivery
+failures through the shared evidence path. The earlier editor-support commit
+`dcf6aec6` and its generated artifacts are ancestors of that source. This is a
+historical source/result record; R4.91 M6 retains the missing original run-bundle
+question and does not claim that a current run replayed this phase gate.
 
 ## R4 — Complete hosted Linux x86-64 path
 
@@ -4512,7 +4541,8 @@ counts: it added and rewrote running examples and their fixtures under the
 completed slice, and R4.21's gates, which re-ran the complete debug and
 release suites on the tree containing it, are its evidence.
 
-Closure evidence: reviewed integrated commit `22c18b8` passes complete
+Historical pre-rewrite closure evidence: reviewed integrated commit
+`22c18b8` passes complete
 pinned Linux debug and release suites, each with 405/405 cases and
 11,070 checks. The full-font repository check is clean. Authoritative
 native Linux [job 1882927](https://builds.sr.ht/~sinnfrei/job/1882927) passes
@@ -4622,7 +4652,8 @@ was byte-identical before and after, which is the equivalence proof the
 merge needed. The 194 negatives that pinned bare `L0301` are executed with
 their exact reports, and the low rows of the second review are closed.
 
-Closure evidence: twelve commits from `5580220` to `7814476`, each green on
+Historical pre-rewrite closure evidence: twelve commits from `5580220` to
+`7814476`, each green on
 the authoritative native gate, the last as
 [job 1883339](https://builds.sr.ht/~sinnfrei/job/1883339). Complete pinned
 Linux debug and release suites pass 410/410 cases with 11,856 checks on the
@@ -4667,7 +4698,7 @@ inline assembly and section/entry placement remain R6.60, atomics R6.30.
 Sources: `[1430]`, `[1440]`, `[1480]`, `[1500]`, `[1510]`, `[1530]`,
 `[1540]`, `[1560]`, `[1590]`.
 
-Closure evidence: the exact implementation source tree
+Historical pre-rewrite closure evidence: the tested implementation tree
 `22f74589f212f64f6c08da810e35daf208826bb6`, based on `a9c44eba`, passes
 the authoritative native Linux gate as
 [job 1883395](https://builds.sr.ht/~sinnfrei/job/1883395). The job verifies
@@ -5671,7 +5702,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Named facets reconciled after reading all four complete prototypes: live formals and conformance labels use lowercase names without colliding with runtime parameters; tour allocations use initialized object/byte-buffer APIs; explicit legacy prototype calls supply every static formal; retired worklist links name this roadmap; the reader consumes one file handle with the whole reader. Historical findings remain byte-identical and deliberately retained raw-storage sketches stay labelled historical. The prototypes remain specification sketches, not newly enabled programs. | Fourth batch |
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
-| M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
+| M6: historical closure anchors | Source provenance reconciled: R1/R2/R3 gate sections now name retained source witnesses, and the R4.20/R4.21/R4.30 records explicitly identify pre-rewrite inputs. Nine old/rewritten pairs differ only by three removed agent-guidance documents; the R4.30 tested tree differs from its committed successor only in three closure documents. Original R1/R2/R3 run bundles have not been recovered; that historical evidence gap remains open and is not filled by current development checks. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
 | M8: stale decisions/citations | Implemented for the named findings: D203–D207 distinguish completed historical R4.40 evidence from current R4.91 acceptance; D14/D31 retain admitted slice length; D74/D75/D89/D102 cite the actual variant, selection and matching rules, and the current unassigned variant-return pin remains with D106. check.py rejects evidence paragraphs calling a non-active roadmap owner active. No semantic rule or historical acceptance input changes. | Fourth batch |
 | A5, M9: source-path bytes | Implemented: the offline decoder writes exact path bytes and an ASCII coordinate suffix through binary stdout. Build identity remains mandatory. The existing non-UTF-8/quoted/colon path control now runs under strict UTF-8 and strict ASCII output policies with bounded subprocess timeouts. | Third batch implementation |
@@ -7444,6 +7475,42 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+M6's local object audit reconciles historical source identity without changing
+any gate's original input. All rewritten commits below are ancestors of the
+reviewed `66927e93`. For each pair, the complete tree diff consists only of
+removing the three historical agent-guidance documents about domain policy,
+issue tracking and triage labels; compiler, fixture, build and roadmap contents
+are identical within the pair. This is source correspondence, not a transfer
+of an exact-revision acceptance tag from one commit to another.
+
+| Historical source | Pre-rewrite commit | Rewritten source commit |
+| --- | --- | --- |
+| R1.90 closure | `7f6d8f6a` | `c3facac5` |
+| R2.90 closure | `ca3a3e62` | `f0967732` |
+| R3.70 parser closure | `9aea049a` | `58bef7c8` |
+| R3.80 editor support | `981ca477` | `dcf6aec6` |
+| R4.20 integrated closure | `22c18b82` | `e1544d2e` |
+| R4.21 last tested increment | `7814476a` | `e64b79f8` |
+| R4.21 closing prose | `a9c44eba` | `d06cf91a` |
+| R4.30 committed successor | `711c4ccd` | `54bb61ef` |
+| R4.40 implementation | `c1efeb1d` | `22d30e4d` |
+
+The R4.30 tested tree `22f74589f212f64f6c08da810e35daf208826bb6` remains
+locally readable as a tree object. Its diff against pre-rewrite `711c4ccd`
+contains only closure edits in `README.md`, `ROADMAP.md` and `handoff.md`.
+It is neither the committed successor's exact tree nor a commit claimed as an
+ancestor. The original SourceHut job references above remain attached to their
+historical inputs; this audit does not revalidate their remote job contents.
+
+R1/R2/R3's phase gates now identify concrete retained source witnesses and the
+R2/R3 counts recorded at their closure revisions. Their original native run
+bundles are not supplied by those source records and have not been recovered
+in this audit. That part of M6 remains open. Current filtered checks and eventual
+R4.91 acceptance cannot retrospectively establish an earlier exact run. No old
+suite, assembler, debugger, publication or history rewrite ran for this audit.
+Full object IDs, ancestry verdicts and exact path differences are retained in
+`.scratch/r491-history-evidence/anchors.json` and `pairs.json`.
 
 A7/M19's remaining special-name check found a whole-name dot reached assembly
 unquoted. The pinned GNU assembler accepted a 695-byte definition, but its
