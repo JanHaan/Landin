@@ -77,7 +77,9 @@ representation does not make that placement decision.
 
 ## Following a branch
 
-One of the positive fixtures contains this routine:
+The positive fixture
+[`arm-scopes-are-siblings`](../compiler/tests/fixtures/positive/arm-scopes-are-siblings/program.ldn)
+contains this routine. It returns `1` when `c` is true and `2` otherwise:
 
 ```landin
 f: (c: bool) -> (r: u32) =
@@ -96,37 +98,65 @@ The two declarations named `t` belong to different scopes. Lowering gives
 them different slots; it does not identify storage by spelling. The named
 result `r` has one slot shared by both arms and the return path.
 
-The following is a schematic reading of the recorded lowering, with
-instruction numbers and a forwarding block omitted. It is explanatory
-notation, not the dump format:
+Here is its complete compact IR dump, copied from
+[`compiler/tests/lowering.ir`](../compiler/tests/lowering.ir). This is the
+output of lowering, before evidence specialization and simplification:
 
 ```text
-entry:
-    store 0 in r
-    condition = load c
-    branch condition to then_arm or else_arm
-
-then_arm:
-    store 1 in t_then
-    a = load t_then
-    store a in r
-    jump merge
-
-else_arm:
-    store 2 in t_else
-    b = load t_else
-    store b in r
-    jump merge
-
-merge:
-    result = load r
-    leave result
+unit signatures 1 items 1
+signature 1 (in bool) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 4 blocks 5 values 17
+  slot 1 c bool param 1
+  slot 2 r u32 return
+  slot 3 t u32
+  slot 4 t u32
+  block 1 scope 5 BLOCK length 4
+    1 NUMBER u32 0
+    2 STORE slot 2 <- 1
+    3 LOAD bool slot 1
+    4 BRANCH target 2 alternative 3 <- 3
+  block 2 scope 6 BLOCK length 5
+    5 NUMBER u32 1
+    6 STORE slot 3 <- 5
+    7 LOAD u32 slot 3
+    8 STORE slot 2 <- 7
+    9 JUMP target 4
+  block 3 scope 5 BLOCK length 1
+    10 JUMP target 5
+  block 4 scope 5 BLOCK length 2
+    16 LOAD u32 slot 2
+    17 LEAVE <- 16
+  block 5 scope 7 BLOCK length 5
+    11 NUMBER u32 2
+    12 STORE slot 4 <- 11
+    13 LOAD u32 slot 4
+    14 STORE slot 2 <- 13
+    15 JUMP target 4
 ```
 
-Neither `a` nor `b` crosses into `merge`. Each arm writes the shared result
-slot, and the merge block loads it. The actual fixture and its dump are
-recorded under `positive/arm-scopes-are-siblings` in the
-[fixture corpus](../compiler/tests/README.md).
+The headers describe one routine with a Boolean input, a `u32` result, four
+slots and five blocks. `scope` refers to a lexical scope in the resolver's
+tables; `length` counts the block's instructions. The item header's
+`values 17` counts all instruction identities, including stores and
+terminators, even though those instructions produce no usable value.
+
+Read `2 STORE slot 2 <- 1` as: instruction 2 writes the value produced by
+instruction 1 into slot 2 (`r`). The number after `<-` identifies an operand;
+it is not a literal. In contrast, the final `0` in `1 NUMBER u32 0` is the
+literal being produced. `3 LOAD bool slot 1` reads `c`, and instruction 4
+uses that value to choose block 2 when true or block 3 when false.
+
+The true path is `1 -> 2 -> 4`. The false path is `1 -> 3 -> 5 -> 4`:
+block 3 is a forwarding block containing only a jump to the `else` arm.
+The dump lists blocks by identity, so block 4's instructions 16 and 17
+appear before block 5's instructions 11 through 15. Execution follows the
+terminators, not the printed order.
+
+Both arms write slot 2, using separate slots 3 and 4 for their respective
+declarations of `t`. Neither arm's loaded value crosses into the merge block.
+Block 4 loads `r` afresh as value 16, and `17 LEAVE <- 16` returns it. The
+initial store of zero and the loads through `t` are still visible because
+this dump shows lowering before optimization.
 
 The current IR has no phi instructions or block parameters: the mechanisms
 many static single assignment representations use to select a value from
