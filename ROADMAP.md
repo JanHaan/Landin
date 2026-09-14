@@ -5728,8 +5728,11 @@ being silently promoted to bugs or discarded:
 | m9 | Intermediate constant overflow still needs a precise comparison with [1940]; final-value folding versus each typed intermediate is a semantic question, not an approved change. |
 | m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
-| m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
-| m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m12 | The written digit productions still derive trailing separators that the scanner refuses. The grammar checker also exempts lexical names from undefined-rule checking, leaving unicode_scalar without its own production. Both require agreement at the lexical grammar boundary; no tokenization change is authorized by the heuristic recognizer alone. |
+| m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
+| m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Invalid source bytes in comments and empty raw-delimiter ambiguity still need separate rule/case comparison. |
+| m14--m17, m21 | Sampled dead helpers, ownership documentation, historical register names/counts and fixture summaries need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m23 | Source attachment is contractually dense and ordered: Attach_Source requires the next Source_Id and guarantees its module mapping; its sole caller passes the identity just appended to the compilation source set. Ignoring the argument in the append implementation therefore does not lose an admissible identity. Imported_Module still performs a linear source/node lookup; this is a maintenance cost observation, with no established wrong result or new stress run. |
 | m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. J77/J78 repair manifest/image-tag failure propagation with bounded fake-command controls on both hosts. Container pin duplication remains a source-level observation. |
 | m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
 | m24 | Reconciled with implemented J91/K21/K22: bounded block runs partition each item and every instruction agrees with its owning block; orphan and overlapping claims are refused. The separate one-pass reachability concern is refuted with J98: Pointer_Provenance unconditionally builds the full control-flow graph before acceptance. Existing focused malformed-IR and reachable/unreachable-cycle controls remain the evidence; no broad verifier case was rerun. |
@@ -6065,6 +6068,15 @@ range-check witness, storage-derived load metadata and the simplifier's
 pointer/address-slot exclusion; its proposed forwarded raw Load cannot be a
 valid incoming witness. No optimizer or verifier change or broad replay was
 needed for those dispositions.
+
+For m22's integer guidance, both single-worker builds pass. The ten-input
+lexical case has 24 assertions, covering missing digits, wrong-base digits,
+separator placement and unchanged accepted token runs. Existing catalogue
+code/span and rendering controls add six, for 30 checks per host. The generated
+diagnostic catalogue/matrix is refreshed for the note. Full `python3 check.py`
+passes after regeneration. Evidence is in `.scratch/r491-lexical-guidance/`
+and matching final-values logs. No fixture verdict, lexer rule, assembler or
+runtime behavior changed; m12 and m22's other facets remain open.
 
 For m8, macOS debug and pinned Linux release single-worker builds pass.
 Fourteen small sources check statement and value loops, guards, completion,

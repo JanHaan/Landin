@@ -246,8 +246,63 @@ package body Landin.Tests.Catalogue_Suite is
          "uppercase and mixed runs keep their code, span and explanation");
    end Uppercase_And_Mixed_Bytes_Have_Exact_Reports;
 
+   procedure Integer_Guidance_Covers_Missing_Digits
+     (Item : in out Landin.Testing.Context);
+
+   procedure Integer_Guidance_Covers_Missing_Digits
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String; Accepted : Boolean := False);
+
+      procedure Check (Text : String; Accepted : Boolean := False) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Reports : Landin.Diagnostics.Diagnostic_List;
+      begin
+         Lex_And_Report (Text, Sources, Reports);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Reports),
+            (if Accepted then 0 else 1), Text & " has its exact verdict");
+         if not Accepted and then Landin.Diagnostics.Count (Reports) = 1 then
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Reports, 1);
+               Where : constant Landin.Source.Span :=
+                 Landin.Diagnostics.Span_Of
+                   (Landin.Diagnostics.Primary (Report));
+            begin
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Code (Report) = "L0011"
+                  and then Where.First = 0
+                  and then Where.Last = Landin.Source.Byte_Offset
+                    (Text'Length),
+                  Text & " keeps its malformed-integer code and whole run");
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Note_Count (Report) = 1
+                  and then Landin.Diagnostics.Nth_Note (Report, 1) =
+                    "use digits of the selected base and underscores; start"
+                    & " and end the digit run with a digit [1770]",
+                  Text & " names the complete digit-run requirements");
+            end;
+         end if;
+      end Check;
+   begin
+      Check ("0x");
+      Check ("0b");
+      Check ("1_");
+      Check ("0o7_");
+      Check ("0b102");
+      Check ("12a");
+      Check ("0x_FF");
+      Check ("1__0", Accepted => True);
+      Check ("0xDEAD_BEEF", Accepted => True);
+      Check ("12z", Accepted => True);
+   end Integer_Guidance_Covers_Missing_Digits;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "catalogue", "integer guidance covers missing digits",
+         Integer_Guidance_Covers_Missing_Digits'Access);
       Landin.Testing.Register
         (Into, "catalogue", "rows are whole", Rows_Are_Whole'Access);
       Landin.Testing.Register

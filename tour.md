@@ -477,6 +477,10 @@ ro: ptr u32 = addr value         -- same address, read-only through ro
 -- ro.val = 1              -- error
 ```
 
+`addr` of a writable place yields a mutable pointer; `addr` of an immutable
+place yields a read-only pointer. A mutable binding holding that read-only
+pointer may replace the pointer, but cannot write through it [0450].
+
 ### [0440] A mut reference satisfies a plain one, never the reverse
 
 A mut reference satisfies a plain one, never the reverse.
