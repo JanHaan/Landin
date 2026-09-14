@@ -1184,6 +1184,15 @@ def read_grammar(path):
     for sample in ("1_", "0x", "0xF_", "0o7_", "0b1_", "0b2"):
         if "integer" in trees and lexical_matches(trees, "integer", sample):
             out.append((offset + 1, "integer grammar admits %r" % sample))
+    for sample in ("1.5", "1__0.5__0e+1__0", "0x1__A.F__0p-1__0"):
+        if "float" in trees and not lexical_matches(trees, "float", sample):
+            out.append((offset + 1, "float grammar refuses %r" % sample))
+    for sample in ("1_.5", "0x1_.8p0", "0x.8p0", "0x_1.8p0", "1.5_",
+                   "1.5e1_", "0x1.8_p0", "0x1.8p1_"):
+        if "float" in trees and lexical_matches(trees, "float", sample):
+            out.append((offset + 1, "float grammar admits %r" % sample))
+    if "raw" in trees and lexical_matches(trees, "raw", '"' * 6):
+        out.append((offset + 1, "raw grammar admits empty adjacent delimiters"))
     for sample, expected in (("a", True), ("é", True), ("😀", True),
                              ("\U0010ffff", True), ("\ud800", False),
                              ("'", False), ("\\", False), ("\n", False),

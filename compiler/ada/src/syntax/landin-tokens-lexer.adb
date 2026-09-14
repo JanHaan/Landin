@@ -259,6 +259,7 @@ package body Landin.Tokens.Lexer is
          procedure Finish_Float
            (Fraction_From : Natural; Hexadecimal : Boolean)
          is
+            Whole_Last    : constant Natural := Position - 1;
             Fraction_Last : Natural;
             Exponent_From : Natural := 0;
             Exponent_Last : Natural := 0;
@@ -297,8 +298,11 @@ package body Landin.Tokens.Lexer is
                Exponent_Last := Position - 1;
             end if;
 
+            --  D162/D166 apply the same digit-run rule on both sides
+            --  of the dot. The whole run may be empty after a hex prefix.
             Good :=
-              Good_Run
+              Good_Run (Digits_From, Whole_Last, Base)
+              and then Good_Run
                 (Fraction_From, Fraction_Last,
                  (if Hexadecimal then Landin.Tokens.Hexadecimal
                   else Decimal))

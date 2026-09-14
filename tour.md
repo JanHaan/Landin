@@ -222,6 +222,8 @@ zero := 1 / 2         -- 0, integer division
 Bases, separators, exponents. An integer starts and ends its digit run
 with a digit of that base. Underscores may repeat between digits, as in
 `1__000`; a base prefix alone and a trailing underscore are refused.
+Each float component follows that digit-run rule too: both sides of the dot
+and a written exponent need digits, with underscores only between digits.
 
 ```landin
 hex_value := 0xDEAD_BEEF
@@ -313,6 +315,10 @@ byte  := "\xFF"          -- []u8 context only
 
 Raw literals: N quotes on each side, N at least three.
 If the content contains three, use four. Nothing is escaped.
+The entire opening quote run chooses N. Six adjacent quotes are one opener
+of length six, not an empty literal with two delimiters. A later matching
+closer is required. Line endings inside remain content; write `""` for empty
+text.
 The indentation of the closing delimiter is stripped from
 every line, so a block can sit indented in the code and
 still start at the left margin.

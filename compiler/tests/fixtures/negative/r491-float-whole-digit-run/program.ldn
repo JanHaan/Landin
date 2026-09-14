@@ -1,0 +1,5 @@
+decimal_separator: f64 = 1_.5
+hex_separator: f64 = 0x1_.8p0
+hex_empty: f64 = 0x.8p0
+hex_leading: f64 = 0x_1.8p0
+following: i32 = 42

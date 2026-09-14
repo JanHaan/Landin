@@ -61356,6 +61356,7 @@ file negative/r491-escape-related-source/main.ldn tokens 233
   1112 1114 if
   1115 1118 end
   1119 1141 external_pattern_first
+file negative/r491-float-whole-digit-run/program.ldn refused '1_.5' is not a float the rules spell
 file negative/r491-function-final-value-prefix/main.ldn tokens 51
   0 4 noop
   4 5 :

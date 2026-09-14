@@ -5729,9 +5729,9 @@ being silently promoted to bugs or discarded:
 | m9 | Reconciled with the explicit R1.70 decision: ordinary module folds use the kernel’s wider signed range, then check the final destination width. D224/[1940] now state that existing contract; the u8 intermediate-300 example remains accepted, while runtime u8 arithmetic remains checked. Exact image and positive/negative fold-limit controls cover both target widths. No new folding behavior or unbounded integer type was adopted. |
 | m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
-| m12 | Integer productions now require a final base digit while preserving repeated internal underscores, matching the existing scanner. The character grammar defines unicode_scalar through an explicit shortest-form UTF-8 scalar primitive; used lexical names no longer bypass undefined-rule checking. Independent grammar controls pin valid/invalid separators and scalar boundaries. Float-component separator placement remains a separate comparison: this correction leaves decimal_digits and hex_digits unchanged and does not silently alter tokenization. |
+| m12 | Integer productions now require a final base digit while preserving repeated internal underscores, matching the existing scanner. The character grammar defines unicode_scalar through an explicit shortest-form UTF-8 scalar primitive; used lexical names no longer bypass undefined-rule checking. Independent grammar controls pin valid/invalid separators and scalar boundaries. D162/D166 explicitly require the same boundaries for every float component. The scanner now checks the formerly omitted whole-part run, and decimal_digits/hex_digits end in a digit; the bounded whole-part fixture and eighteen lexical controls pin malformed runs, valid repeated separators and recovery. |
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
-| m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Comment encoding is repaired under [1750]: the scanner uses the literal decoder's shortest-form UTF-8 check, reports the first invalid byte per comment with L0012, and retains delimiter/token recovery. Empty raw-delimiter ambiguity still needs separate rule/case comparison. |
+| m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Comment encoding is repaired under [1750]: the scanner uses the literal decoder's shortest-form UTF-8 check, reports the first invalid byte per comment with L0012, and retains delimiter/token recovery. D164 already chooses the maximal opening quote run: six adjacent quotes are an unterminated six-quote opener, not empty raw text. The grammar now requires content; the tour and tiny lexer/decoder controls pin later closers, shorter runs, retained line endings and ordinary empty quoted text. |
 | m14 | Sampled unused helpers and the unused Needs_Source catalogue facet remain maintenance observations; exception routing is reconciled separately with J109. |
 | m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative phase-gate evidence still requires review; structural checks do not approve a phase. |
 | m17 | Implemented: README and handoff include R2.10, R4.21, R4.30 and R4.40, with the selected C ABI and separate binding generator explicitly described. The zeroable account names settled D143 behavior. Four aggregate fixture summaries now cite the decisions that actually pin them, without changing any source or expected compiler verdict. |
@@ -6198,6 +6198,30 @@ per host in macOS debug and pinned Linux release; both single-worker builds
 pass. Evidence is in `.scratch/r491-module-fold-width/` and matching final-values
 logs. The fixture emits only assembly text; no generated program is executed
 and no arithmetic implementation changes.
+
+The remaining m12 float-component question is resolved by source authority:
+D162 and D166 already require complete digit runs on both sides of the dot and
+in the exponent. Four bounded compile-only witnesses (`1_.5`, `0x1_.8p0`,
+`0x.8p0`, `0x_1.8p0`) were incorrectly accepted because `Finish_Float` checked
+only fraction and exponent runs. It now also checks the whole run; malformed
+spelling retains one full-span L0321 and the following token. The two float
+component productions and independent grammar controls match the same rule.
+This enforces existing decisions and preserves repeated internal underscores.
+
+For m22's final raw facet, D164's maximal opening run already fixes the result:
+six adjacent quotes open a six-quote raw literal and supply no closer. Raw
+content is therefore nonempty, and even the newline between delimiters remains
+content. The grammar's former nullable content is tightened and the tour states
+the consequence; lexer behavior is unchanged. Small controls distinguish this
+from ordinary empty quoted text and from later matching or shorter quote runs.
+
+The final m12/m22 batch passes 120 selected checks on each host: 84 float-run
+assertions, 19 existing literal controls, five compile-only fixture assertions,
+and twelve raw opener/decoder controls. Single-worker macOS debug and pinned
+Linux release builds pass. Evidence is in `.scratch/r491-float-digit-runs/`
+and matching final-values logs. Eleven independent float grammar examples and
+the empty-raw-content check supplement the previous scalar/integer invariants.
+No assembler, linker, generated program or broad parser campaign ran.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175

@@ -278,6 +278,67 @@ package body Landin.Tests.Lexer_Suite is
 
    --  [1770] gives each base its own digits, enables text, and [1830]
    --  refuses a float.
+   procedure Float_Digit_Runs_Have_Both_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Float_Digit_Runs_Have_Both_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+
+      procedure Check (Text : String; Expected : Landin.Tokens.Token_Kind);
+
+      procedure Check (Text : String; Expected : Landin.Tokens.Token_Kind) is
+         Stream : Landin.Tokens.Token_Stream;
+         Bad : constant Boolean := Expected = Landin.Tokens.Malformed_Float;
+      begin
+         Lex_Text (Text & " tail", Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Count (Stream) = 3
+            and then Landin.Tokens.Kind (Stream, 1) = Expected,
+            Text & " remains one complete float run");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Stream), (if Bad then 1 else 0),
+            Text & " keeps its exact fault count");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Where (Stream, 1).First = 0
+            and then Landin.Tokens.Where (Stream, 1).Last
+                       = Landin.Source.Byte_Offset (Text'Length),
+            Text & " keeps the entire spelling in its token span");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Stream, 2) = Landin.Tokens.Identifier
+            and then Landin.Tokens.Where (Stream, 2).First
+                       = Landin.Source.Byte_Offset (Text'Length + 1),
+            Text & " preserves the following token");
+         if Bad then
+            Landin.Testing.Check
+              (Item, Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
+                       = Landin.Tokens.Malformed_Float_Literal_Run,
+               Text & " retains the floating-point diagnostic category");
+         end if;
+      end Check;
+   begin
+      Check ("1_.5", Landin.Tokens.Malformed_Float);
+      Check ("1__.5", Landin.Tokens.Malformed_Float);
+      Check ("0x1_.8p0", Landin.Tokens.Malformed_Float);
+      Check ("0x_1.8p0", Landin.Tokens.Malformed_Float);
+      Check ("0x.8p0", Landin.Tokens.Malformed_Float);
+      Check ("0x_.8p0", Landin.Tokens.Malformed_Float);
+      Check ("1.5_", Landin.Tokens.Malformed_Float);
+      Check ("1.5e1_", Landin.Tokens.Malformed_Float);
+      Check ("1.5e_1", Landin.Tokens.Malformed_Float);
+      Check ("0x1.8_p0", Landin.Tokens.Malformed_Float);
+      Check ("0x1.8p1_", Landin.Tokens.Malformed_Float);
+      Check ("0x1.8p_1", Landin.Tokens.Malformed_Float);
+      Check ("1.5", Landin.Tokens.Float_Literal);
+      Check ("1__0.5__0e+1__0", Landin.Tokens.Float_Literal);
+      Check ("0x1__A.F__0p-1__0", Landin.Tokens.Hex_Float_Literal);
+      Check ("0x0.0p0", Landin.Tokens.Hex_Float_Literal);
+      Check ("1.5e-0", Landin.Tokens.Float_Literal);
+      Check ("0xA.0P+1", Landin.Tokens.Hex_Float_Literal);
+   end Float_Digit_Runs_Have_Both_Boundaries;
+
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
 
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context) is
@@ -573,6 +634,57 @@ package body Landin.Tests.Lexer_Suite is
 
    --  D164's decoder owns both the variable delimiter and the exact
    --  indentation removal shared by checking and lowering.
+   procedure Raw_Delimiters_Use_The_Maximal_Opener
+     (Item : in out Landin.Testing.Context);
+
+   procedure Raw_Delimiters_Use_The_Maximal_Opener
+     (Item : in out Landin.Testing.Context)
+   is
+      Three : constant String (1 .. 3) := [others => '"'];
+      Six : constant String (1 .. 6) := [others => '"'];
+      Sources : Landin.Source.Sets.Source_Set;
+      Names : Landin.Source.Names.Table;
+      Stream : Landin.Tokens.Token_Stream;
+      Bytes : String (1 .. 32);
+      Length, First, Last : Natural;
+      Fault : Landin.Tokens.Text.Problem;
+   begin
+      Lex_Text (Six, Sources, Names, Stream);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Count (Stream) = 2
+         and then Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Raw_Literal
+         and then Landin.Tokens.Where (Stream, 1).Last = 6,
+         "six adjacent quotes form one six-quote raw opener");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Fault_Count (Stream) = 1
+         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
+                    = Landin.Tokens.Unterminated_Literal,
+         "adjacent quotes do not split into an empty raw literal");
+      Lex_Text (Six & LF & Six, Sources, Names, Stream);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Count (Stream) = 2
+         and then Landin.Tokens.Fault_Count (Stream) = 0
+         and then Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Raw_Literal,
+         "a later complete six-quote closer closes the token");
+      Landin.Tokens.Text.Decode_Raw
+        (Six & LF & Six, Bytes, Length, Fault, First, Last);
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Well_Formed
+         and then Length = 1 and then Bytes (1) = LF,
+         "the intervening line ending is content");
+      Lex_Text (Six & "a" & Three, Sources, Names, Stream);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Fault_Count (Stream) = 1
+         and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
+                    = Landin.Tokens.Unterminated_Literal,
+         "a shorter quote run cannot close the longer opener");
+      Lex_Text ("""""", Sources, Names, Stream);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Fault_Count (Stream) = 0
+         and then Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Text_Literal,
+         "two quotes retain ordinary empty text");
+   end Raw_Delimiters_Use_The_Maximal_Opener;
+
    procedure Raw_Literal_Decoding
      (Item : in out Landin.Testing.Context);
 
@@ -919,6 +1031,12 @@ package body Landin.Tests.Lexer_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lexer", "raw delimiters use the maximal opener",
+         Raw_Delimiters_Use_The_Maximal_Opener'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "float digit runs have both boundaries",
+         Float_Digit_Runs_Have_Both_Boundaries'Access);
       Landin.Testing.Register
         (Into, "lexer", "kinds and spans", Kinds_And_Spans'Access);
       Landin.Testing.Register
