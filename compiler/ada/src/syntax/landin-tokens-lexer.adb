@@ -9,8 +9,8 @@ package body Landin.Tokens.Lexer is
    CR  : constant Character := Character'Val (13);
 
    --  The byte classes, spelled out.  Ada's own Is_Lower would answer for a
-   --  Latin-1 letter, and [1750] allows UTF-8 in a comment and nowhere
-   --  else, so a scanner that used it would swallow a byte it must report.
+   --  Latin-1 letter, and [1750] allows UTF-8 only in comments and literals,
+   --  so using it for identifiers would swallow a byte it must report.
    function Is_Lower (Item : Character) return Boolean
      is (Item in 'a' .. 'z');
 
@@ -554,6 +554,26 @@ package body Landin.Tokens.Lexer is
       --  where the comment ends rather than the general longest-token rule.
       procedure Scan_Comment is
          First : constant Natural := Position;
+         Encoding_Reported : Boolean := False;
+
+         procedure Advance;
+
+         procedure Advance is
+            Count : constant Natural :=
+              Landin.Tokens.Text.UTF8_Length (Text, Position, Last);
+         begin
+            if Count = 0 then
+               --  Keep delimiters visible and report only the first invalid
+               --  byte in this comment, rather than one report per byte.
+               if not Encoding_Reported then
+                  Complain (Invalid_Comment_Encoding, Position, Position);
+                  Encoding_Reported := True;
+               end if;
+               Position := Position + 1;
+            else
+               Position := Position + Count;
+            end if;
+         end Advance;
       begin
          if Ahead ("--(") then
             declare
@@ -569,7 +589,7 @@ package body Landin.Tokens.Lexer is
                      Depth := Depth - 1;
                      Position := Position + 3;
                   else
-                     Position := Position + 1;
+                     Advance;
                   end if;
                end loop;
 
@@ -593,7 +613,7 @@ package body Landin.Tokens.Lexer is
             while Position <= Last and then Text (Position) /= LF
               and then Text (Position) /= CR
             loop
-               Position := Position + 1;
+               Advance;
             end loop;
 
             if Doc then

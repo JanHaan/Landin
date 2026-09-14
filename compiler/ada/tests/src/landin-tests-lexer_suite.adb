@@ -9,6 +9,8 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Diagnostics.Lexical;
+with Landin.Diagnostics;
 with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
@@ -189,6 +191,90 @@ package body Landin.Tests.Lexer_Suite is
             "and points at the opener as well as the end");
       end;
    end Comments_Are_Space;
+
+   procedure Comments_Require_UTF8 (Item : in out Landin.Testing.Context);
+
+   procedure Comments_Require_UTF8 (Item : in out Landin.Testing.Context) is
+      function B (Value : Natural) return Character is
+        (Character'Val (Value));
+
+      procedure Check
+        (Label, Text : String; Bad : Boolean := True;
+         Fault_At : Natural := 5; Tokens : Natural := 3;
+         Unclosed : Boolean := False);
+
+      procedure Check
+        (Label, Text : String; Bad : Boolean := True;
+         Fault_At : Natural := 5; Tokens : Natural := 3;
+         Unclosed : Boolean := False)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Reports : Landin.Diagnostics.Diagnostic_List;
+      begin
+         Lex_Text (Text, Sources, Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Reports);
+         Landin.Testing.Check_Equal
+           (Item, Natural (Landin.Tokens.Count (Stream)), Tokens,
+            Label & " retains the surrounding token count");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Identifier
+            and then (if Tokens = 3 then
+              Landin.Tokens.Kind (Stream, 2) = Landin.Tokens.Identifier),
+            Label & " keeps ordinary names outside the comment");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Reports),
+            Boolean'Pos (Bad) + Boolean'Pos (Unclosed),
+            Label & " has one encoding report per comment");
+         if Bad and then Landin.Diagnostics.Count (Reports) > 0 then
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Reports, 1);
+               Where : constant Landin.Source.Span :=
+                 Landin.Diagnostics.Span_Of
+                   (Landin.Diagnostics.Primary (Report));
+            begin
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Code (Report) = "L0012"
+                  and then Where.First = Landin.Source.Byte_Offset (Fault_At)
+                  and then Where.Last = Where.First + 1
+                  and then Landin.Diagnostics.Note_Count (Report) = 1
+                  and then Landin.Diagnostics.Nth_Note (Report, 1) =
+                    "[1750]: comment text must be shortest-form UTF-8",
+                  Label & " identifies the first invalid byte and rule");
+            end;
+         end if;
+         if Unclosed and then Landin.Diagnostics.Count (Reports) = 2 then
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Reports, 2)), "L0013",
+               Label & " also reports the missing block closer");
+         end if;
+      end Check;
+   begin
+      Check ("line truncation", "a -- " & B (16#C3#), Tokens => 2);
+      Check ("doc truncation", "a ---" & B (16#C3#) & LF & "b");
+      Check ("block delimiter", "a --(" & B (16#C3#) & ")-- b");
+      Check ("stray continuation", "a -- " & B (16#80#) & LF & "b");
+      Check ("overlong", "a -- " & B (16#C0#) & B (16#AF#) & LF & "b");
+      Check ("surrogate", "a -- " & B (16#ED#) & B (16#A0#)
+             & B (16#80#) & LF & "b");
+      Check ("out of range", "a -- " & B (16#F4#) & B (16#90#)
+             & B (16#80#) & B (16#80#) & LF & "b");
+      Check ("bad lead", "a -- " & B (16#FF#) & LF & "b");
+      Check ("nested invalid", "a --(--(" & B (16#C3#) & ")--)-- b",
+             Fault_At => 8);
+      Check ("unclosed invalid", "a --(" & B (16#C3#),
+             Tokens => 2, Unclosed => True);
+      Check ("valid two bytes", "a -- " & B (16#C3#) & B (16#A9#)
+             & LF & "b", Bad => False);
+      Check ("valid three bytes", "a ---" & B (16#E2#) & B (16#98#)
+             & B (16#83#) & LF & "b", Bad => False);
+      Check ("valid four bytes", "a --(" & B (16#F0#) & B (16#9F#)
+             & B (16#98#) & B (16#80#) & ")-- b", Bad => False);
+      Check ("plain bytes", "a --(ascii)-- b", Bad => False);
+   end Comments_Require_UTF8;
 
    --  [1770] gives each base its own digits, enables text, and [1830]
    --  refuses a float.
@@ -839,6 +925,9 @@ package body Landin.Tests.Lexer_Suite is
         (Into, "lexer", "longest token wins", Longest_Token_Wins'Access);
       Landin.Testing.Register
         (Into, "lexer", "comments are space", Comments_Are_Space'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "comments require UTF-8",
+         Comments_Require_UTF8'Access);
       Landin.Testing.Register
         (Into, "lexer", "literals and refusals",
          Literals_And_Refusals'Access);

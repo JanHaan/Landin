@@ -25,6 +25,8 @@ package body Landin.Diagnostics.Lexical is
                "this raw literal has invalid source bytes or indentation",
             when Landin.Tokens.Malformed_Text_Literal_Run =>
                "this text literal contains malformed bytes or an escape",
+            when Landin.Tokens.Invalid_Comment_Encoding =>
+               "this comment contains malformed UTF-8",
             when Landin.Tokens.Unknown_Byte_Run =>
                "no rule spells these bytes",
             when Landin.Tokens.Uppercase_Byte_Run =>
@@ -48,7 +50,8 @@ package body Landin.Diagnostics.Lexical is
             when Landin.Tokens.Malformed_Text_Literal_Run =>
                Rows.Malformed_Text_Literal,
             when Landin.Tokens.Unknown_Byte_Run
-               | Landin.Tokens.Uppercase_Byte_Run =>
+               | Landin.Tokens.Uppercase_Byte_Run
+               | Landin.Tokens.Invalid_Comment_Encoding =>
                Rows.Unknown_Bytes,
             when Landin.Tokens.Unterminated_Block_Comment =>
                Rows.Unterminated_Comment,
@@ -123,6 +126,11 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "the text escape set is closed and small [0270]");
+
+               when Landin.Tokens.Invalid_Comment_Encoding =>
+                  Add_Note
+                    (Report,
+                     "[1750]: comment text must be shortest-form UTF-8");
 
                when Landin.Tokens.Unknown_Byte_Run =>
                   Add_Note

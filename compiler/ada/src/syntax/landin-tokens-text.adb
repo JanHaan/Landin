@@ -11,9 +11,6 @@ package body Landin.Tokens.Text is
      is (Character'Pos (Item) in 16#80# .. 16#BF#);
 
    function UTF8_Length
-     (Lexeme : String; At_Byte : Positive; Last : Natural) return Natural;
-
-   function UTF8_Length
      (Lexeme : String; At_Byte : Positive; Last : Natural) return Natural
    is
       Lead : constant Natural := Character'Pos (Lexeme (At_Byte));
@@ -22,7 +19,7 @@ package body Landin.Tokens.Text is
         is (Character'Pos (Lexeme (At_Byte + Offset)));
 
       function Has (Count : Positive) return Boolean
-        is (At_Byte + Count - 1 <= Last);
+        is (Count - 1 <= Last - At_Byte);
    begin
       if Lead <= 16#7F# then
          return 1;
