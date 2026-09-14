@@ -1094,7 +1094,19 @@ literal fixed-array indexes. Pointer dereferences and slice indexes cross a
 reference boundary and are refused, including a literal slice index. A slice
 binding, field or fixed-array element still names its own descriptor storage
 and may be consumed as a whole. D220 makes this place-form boundary explicit.
-A place passed to `sink` becomes unassigned at that exact binding-rooted path.
+Callee and arguments evaluate left to right before any place is consumed by
+that call. Each by-value argument captures its value when evaluated, including
+an aggregate passed by `sink`; a later argument may read or assign its original
+place. If evaluation transfers control before call entry, that call consumes
+no places. Effects of calls actually entered while evaluating its arguments
+still hold.
+On entry, the pending `sink` places must still be live and become unassigned
+at their exact binding-rooted paths, in written argument order. Repeated or
+provably overlapping sink places are refused. Every `inout` place must remain
+live after these consumptions, so a provable sink/`inout` overlap is refused
+in either argument order. A nested argument call that consumes a pending place
+requires a subsequent assignment before the outer call can enter. D223 pins
+this timing independently of argument-value capture and D149's `inout` rules.
 Every read requires a later assignment on every arriving path, and a part sunk
 out of an `inout` parameter must be assigned again on every return edge [0910].
 Reading an enclosing aggregate reads its consumed parts too; assigning that
@@ -9134,7 +9146,7 @@ classified failure boundary before the repository gate can pass.
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
-| `consume.local` | static | 0910 | L0301 for a sink path crossing a reference boundary or using a computed index; L0302 or L0315 for consumed-place and restoration checks | `negative/use-after-sink`, `negative/sunk-inout-not-restored`, `negative/r491-sink-slice-storage`, `positive/r491-sink-contained-places` |
+| `consume.local` | static | 0910 | L0301 for a sink path crossing a reference boundary or using a computed index; L0302 or L0315 for consumed-place and restoration checks | `negative/use-after-sink`, `negative/sunk-inout-not-restored`, `negative/r491-sink-slice-storage`, `positive/r491-sink-contained-places`, `positive/r491-sink-call-entry`, `negative/r491-sink-entry-overlap` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
 | `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred`, `runtime/r490-generic-recovery-frontier`, `runtime/r490-generic-recovery-alias-chains`, `negative/r490-generic-error-key-cycle` |
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
@@ -13421,3 +13433,42 @@ explicit module and same-origin actuals, hidden wrappers, indirect calls,
 concept providers, instantiated generics, nested permissions, empty and raw
 boundaries and independent anonymous-result positions. Prototype 3's accessor
 and prototype 4's independent-allocation contracts remain separate.
+
+### D223 — Sink places are consumed at call entry
+
+**The tour said** that arguments evaluate left to right [0410] and a sunk place
+becomes dead until assigned again [0910]. It did not say whether consumption
+happens while evaluating each argument or when the call begins. The compiler
+previously consumed each place immediately, including on an outer call whose
+later argument returned before entry.
+
+**Chosen:** evaluate the callee and written arguments first, capturing each
+by-value argument at its own evaluation point. Commit consumption only when
+all arguments reach call entry. A later argument may therefore read an earlier
+sink place, as in `use(value, value.count)`, or assign it. The callee receives
+the previously captured value; the original place becomes dead at entry even
+if a later argument replaced it. An early return or propagated failure during
+argument evaluation does not consume that outer call's pending places.
+Entered nested calls retain their own effects. Cleanup observes the state of
+the edge on which it runs; failure from an entered callee has consumed its
+sinks before recovery or propagation.
+
+Pending sink places must remain live until committed in written argument
+order. Repeated or provably overlapping sinks are refused, as is a provable
+overlap between a sink and an `inout` argument in either order. A nested call
+may consume a pending place only if it is restored before outer entry. An
+`inout` argument names storage and must still be initialized on entry. D149's
+other alias rules and D220's sink-place forms are unchanged. This adds no
+ownership or transitive alias guarantee; separate copies remain live.
+
+**The alternatives:** immediate consumption retains the old refusal of later
+reads and makes a call that never begins consume places. Call-entry timing preserves the place on that exit. Allowing repeated sinks or an `inout` alias of a
+consumed place would weaken the existing consumed-place and initialized-entry
+checks; postponing value capture would change [0410]. Neither is adopted.
+
+**Pinned by** `positive/r491-sink-call-entry`,
+`negative/r491-sink-entry-overlap` and the checker case
+`sinks commit at call entry`, covering later reads, argument exits, named,
+indirect and generic calls, nested effects, restoration and cleanup. The
+positive derivative covers the descriptor and handle patterns shared by
+prototypes 3 and 4. Assembly and runtime evidence remain separate obligations.

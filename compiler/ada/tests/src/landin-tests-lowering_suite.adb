@@ -4761,6 +4761,158 @@ package body Landin.Tests.Lowering_Suite is
 
    --  D94 carries a complete aggregate argument as a storage identity and
    --  gives the callee one shaped aggregate parameter slot.
+   procedure Sink_Arguments_Keep_Their_Evaluated_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Sink_Arguments_Keep_Their_Evaluated_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "box: type = struct items: []mut i32 count: i32 end box "
+         & "take: (sink value: box, other: i32) -> (r: i32) = "
+         & "r = value.count end take "
+         & "replace: (inout value: box) -> (r: i32) = "
+         & "value.count = 9 r = 0 end replace "
+         & "f: () -> (r: i32) = mut value: box = (items: [], count: 3) "
+         & "r = take(value, replace(value)) end f "
+         & "abort: (inout value: box) -> none = "
+         & "_ = take(value, begin return end) end abort", Ran);
+      Landin.Testing.Check
+        (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+         "sink snapshots and argument exits lower: "
+         & Landin.Stages.Rendered_Report (Work));
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := Named_Item (Work, "f");
+         Abort_Routine : constant IR.Item_Id := Named_Item (Work, "abort");
+         Copy, Address, Inner, Outer : IR.Value_Id := IR.No_Value;
+         Saved : IR.Slot_Id := IR.No_Slot;
+         Copies, Calls : Natural := 0;
+
+         function Root_Slot (Place : IR.Storage) return IR.Slot_Id;
+
+         function Root_Slot (Place : IR.Storage) return IR.Slot_Id is
+         begin
+            if Place.Kind = IR.Frame_Slot then
+               return Place.Slot;
+            elsif Place.Kind = IR.Runtime_Address then
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                  begin
+                     if IR.Op_Of (Unit, Routine, Value) = IR.Store
+                       and then IR.Slot_Of
+                         (Unit, Routine, Value) = Place.Address
+                     then
+                        declare
+                           Address : constant IR.Value_Id :=
+                             IR.Nth_Operand (Unit, Routine, Value, 1);
+                        begin
+                           if IR.Op_Of (Unit, Routine, Address)
+                                in IR.Storage_Address | IR.Place_Address
+                             and then IR.Destination_Of
+                               (Unit, Routine, Address).Kind = IR.Frame_Slot
+                           then
+                              return IR.Destination_Of
+                                (Unit, Routine, Address).Slot;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end if;
+            return IR.No_Slot;
+         end Root_Slot;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               case IR.Op_Of (Unit, Routine, Value) is
+                  when IR.Copy_Array =>
+                     if IR.Source_Of (Unit, Routine, Value).Kind
+                          = IR.Runtime_Address
+                       and then IR.Address_Shape
+                         (Unit, Routine, IR.Source_Of
+                            (Unit, Routine, Value).Address).Kind
+                              = IR.Aggregate_Field_Shape
+                     then
+                        Copy := Value;
+                        Copies := Copies + 1;
+                     end if;
+                  when IR.Storage_Address =>
+                     if Copy /= IR.No_Value
+                       and then IR.Destination_Of
+                         (Unit, Routine, Value).Kind = IR.Frame_Slot
+                       and then IR.Destination_Of
+                         (Unit, Routine, Value).Slot = Root_Slot
+                           (IR.Destination_Of (Unit, Routine, Copy))
+                     then
+                        Address := Value;
+                     end if;
+                  when IR.Store =>
+                     if Address /= IR.No_Value
+                       and then IR.Nth_Operand
+                         (Unit, Routine, Value, 1) = Address
+                     then
+                        Saved := IR.Slot_Of (Unit, Routine, Value);
+                     end if;
+                  when IR.Call =>
+                     Calls := Calls + 1;
+                     if Calls = 1 then
+                        Inner := Value;
+                     else
+                        Outer := Value;
+                     end if;
+                  when others =>
+                     null;
+               end case;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Copies = 1 and then Calls = 2
+            and then Copy < Inner and then Inner < Outer,
+            "the sink value is copied before the mutating argument call");
+         if Copy /= IR.No_Value and then Outer /= IR.No_Value then
+            declare
+               Captured : constant IR.Value_Id :=
+                 IR.Nth_Operand (Unit, Routine, Outer, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, Root_Slot (IR.Source_Of (Unit, Routine, Copy))
+                          /= IR.No_Slot
+                  and then Root_Slot (IR.Destination_Of (Unit, Routine, Copy))
+                             /= IR.No_Slot
+                  and then Root_Slot (IR.Source_Of (Unit, Routine, Copy))
+                             /= Root_Slot
+                               (IR.Destination_Of (Unit, Routine, Copy))
+                  and then Saved /= IR.No_Slot
+                  and then IR.Op_Of (Unit, Routine, Captured) = IR.Load
+                  and then IR.Slot_Of (Unit, Routine, Captured) = Saved,
+                  "the entered call receives the separate saved snapshot");
+            end;
+         end if;
+         for Position in 1 .. IR.Value_Count (Unit, Abort_Routine) loop
+            Landin.Testing.Check
+              (Item, IR.Op_Of (Unit, Abort_Routine, IR.Value_Id (Position))
+                       /= IR.Call,
+               "an argument return emits no outer call");
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "both call-entry paths retain verified IR");
+      end;
+   end Sink_Arguments_Keep_Their_Evaluated_Value;
+
    procedure Aggregate_Arguments_Carry_Storage_Identity
      (Item : in out Landin.Testing.Context);
 
@@ -12538,6 +12690,9 @@ package body Landin.Tests.Lowering_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "sink arguments keep their evaluated value",
+         Sink_Arguments_Keep_Their_Evaluated_Value'Access);
       Landin.Testing.Register
         (Into, "lowering", "repeated module folds keep images",
          Repeated_Module_Folds_Keep_Images'Access);

@@ -1734,6 +1734,15 @@ A literal fixed-array index stays within the binding's own storage. A slice
 index follows its backing reference, so it is refused even when its index is a
 literal. The slice descriptor itself, including one held in a field or fixed
 array element, is an ordinary place and may be consumed as a whole.
+Consumption happens when the call begins, after its callee and all arguments
+have evaluated left to right. Thus `use(value, value.count)` is allowed when
+`use` takes its first parameter by sink. If a later argument returns early,
+that call has not consumed `value`. Calls entered during argument evaluation
+still have their own effects. Each by-value argument keeps the value captured
+when it was evaluated; a later assignment does not change that captured value.
+At call entry each sink place must still be live. Repeated or provably
+overlapping sinks are refused, and no inout argument may then name a provably
+consumed place. [1910] and D223 give the exact entry rule.
 A place that was sunk is dead. Reading it before it is
 assigned again is an error, and that is what closes the
 window between releasing storage and repointing the field

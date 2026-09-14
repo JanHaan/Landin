@@ -1,0 +1,60 @@
+-- Prototypes 3 and 4 pass descriptors and handles alongside metadata.
+container: type = struct
+    items: []mut i32
+    count: usize
+end container
+
+drop: (sink value: container, count: usize) -> none =
+end drop
+
+describe_then_drop: (value: container) -> none =
+    drop(value, value.count)
+end describe_then_drop
+
+abort_before_drop: (inout value: container) -> none =
+    drop(value, begin return end)
+end abort_before_drop
+
+replace_then_drop: (inout value: container) -> none =
+    -- The callee gets the old container; the replacement is dead at entry.
+    drop(value, begin value = (items: [], count: 0) 0 end)
+    value = (items: [], count: 0)
+end replace_then_drop
+
+unavailable: atom
+
+metadata: () -> (count: usize) ! unavailable =
+    fail unavailable
+end metadata
+
+observe: (value: i32) -> none =
+end observe
+
+close: (sink handle: i32, count: usize) -> none ! unavailable =
+    fail unavailable
+end close
+
+abort_before_close: (inout handle: i32) -> none ! unavailable =
+    undo observe(handle)
+    close(handle, try metadata()) else begin handle = 0 end
+    handle = 0
+end abort_before_close
+
+restore_entered_close: (inout handle: i32) -> none ! unavailable =
+    defer observe(begin handle = 0 0 end)
+    try close(handle, usize(handle))
+end restore_entered_close
+
+drop_items: (sink items: []mut i32, count: usize) -> none =
+end drop_items
+
+descriptor_count: (items: []mut i32) -> none =
+    drop_items(items, lenof items)
+end descriptor_count
+
+take_array: (t: type, sink items: [2]t, first: t) -> none =
+end take_array
+
+generic_array: (items: [2]i32) -> none =
+    take_array(t: i32, items: items, first: items[0])
+end generic_array

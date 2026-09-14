@@ -43,6 +43,9 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
 
+   package Call_Places is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Syn.Node_Id);
+
    procedure Check_Function
      (Context       : in out Compilation;
       Of_Tree       : Syn.Tree;
@@ -2408,147 +2411,185 @@ package body Landin.Stages.Checking.Flow is
                   Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
 
             when Syn.Call | Syn.Labeled_Application =>
-               --  D131: a direct declaration needs no runtime read, but an
-               --  indirect callee is an ordinary function value and may be a
-               --  field or indexed field with its own DA and control edges.
-               Edges := Fallthrough_Edge;
-               if Syn.Kind (Of_Tree, Node) = Syn.Call
-                 or else Res.Class_Of (Meanings.all, Of_Tree, Node)
-                            = Res.Function_Call
-               then
-                  Flow_Expression
-                    (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Result,
-                     State, Edges, Whole_As);
-               end if;
-               for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-                  exit when not Edges.Falls_Through;
-                  declare
-                     Raw : constant Syn.Node_Id :=
-                       Syn.Nth_Argument (Of_Tree, Node, Index);
-                     Argument : constant Syn.Node_Id :=
-                       (if Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
-                          and then Res.Role_Of
-                            (Meanings.all, Of_Tree, Raw)
-                              in Res.Runtime_Argument | Res.Field_Argument
-                                 | Res.Payload_Argument | Res.Fill_Argument
-                        then Syn.Expression_Projection (Of_Tree, Raw)
-                        elsif Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
-                        then Syn.No_Node
-                        else Raw);
-                     Part : Edge_Facts;
-                  begin
-                     if Argument /= Syn.No_Node then
-                        Flow_Expression
-                          (Of_Tree, Argument, Result, State, Part, Whole_As);
-                        Edges.Returns := Edges.Returns or Part.Returns;
-                        Edges.Falls_Through := Part.Falls_Through;
+               declare
+                  Sinks : Call_Places.Vector;
+                  Inouts : Call_Places.Vector;
+               begin
+                  --  D131: a direct declaration needs no runtime read, but an
+                  --  indirect callee is an ordinary function value. A field or
+                  --  indexed field has its own DA and control edges.
+                  Edges := Fallthrough_Edge;
+                  if Syn.Kind (Of_Tree, Node) = Syn.Call
+                    or else Res.Class_Of (Meanings.all, Of_Tree, Node)
+                               = Res.Function_Call
+                  then
+                     Flow_Expression
+                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Result,
+                        State, Edges, Whole_As);
+                  end if;
+                  for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                     exit when not Edges.Falls_Through;
+                     declare
+                        Raw : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, Index);
+                        Argument : constant Syn.Node_Id :=
+                          (if Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
+                             and then Res.Role_Of
+                               (Meanings.all, Of_Tree, Raw)
+                                 in Res.Runtime_Argument | Res.Field_Argument
+                                    | Res.Payload_Argument | Res.Fill_Argument
+                           then Syn.Expression_Projection (Of_Tree, Raw)
+                           elsif Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
+                           then Syn.No_Node
+                           else Raw);
+                        Part : Edge_Facts;
+                     begin
+                        if Argument /= Syn.No_Node then
+                           Flow_Expression
+                             (Of_Tree, Argument, Result, State, Part,
+                              Whole_As);
+                           Edges.Returns := Edges.Returns or Part.Returns;
+                           Edges.Falls_Through := Part.Falls_Through;
 
-                        if Edges.Falls_Through
-                          and then (Syn.Kind (Of_Tree, Node) = Syn.Call
-                                    or else Res.Class_Of
-                                      (Meanings.all, Of_Tree, Node)
-                                        = Res.Function_Call)
-                        then
-                           declare
-                              Target : constant
-                                Landin.Checking.Routine_Instance_Id :=
-                                  Landin.Checking.Routine_Target_Of
-                                    (Types.all, Of_Tree, Node);
-                              Callee : constant Syn.Node_Id :=
-                                Syn.Callee_Of (Of_Tree, Node);
-                              Node_Signature : constant
-                                Landin.Checking.Signature_Id :=
-                                  Landin.Checking.Signature_Of
-                                    (Types.all, Of_Tree, Callee);
-                              Signature : constant
-                                Landin.Checking.Signature_Id :=
-                                  (if Target /= Landin.Checking
-                                                   .No_Routine_Instance
-                                   then Landin.Checking.Routine_Signature_Of
-                                     (Types.all, Target)
-                                   elsif Node_Signature /=
-                                     Landin.Checking.No_Signature
-                                   then Node_Signature
-                                   elsif Syn.Kind (Of_Tree, Callee)
-                                     = Syn.Name_Reference
-                                     and then Res.Verdict_Of
-                                       (Meanings.all, Of_Tree, Callee)
-                                         = Res.Bound
-                                   then Landin.Checking.Signature_Of
-                                     (Types.all,
-                                      Res.Bound_To
-                                        (Meanings.all, Of_Tree, Callee))
-                                   else Landin.Checking.No_Signature);
-                              Erased_Self : constant Boolean :=
-                                Syn.Kind (Of_Tree, Callee)
-                                  = Syn.Member_Selection
-                                and then Res.Verdict_Of
-                                  (Meanings.all, Of_Tree, Callee)
-                                    /= Res.Bound
-                                and then Landin.Checking.Type_Of
-                                  (Types.all, Of_Tree,
-                                   Syn.Target_Of (Of_Tree, Callee))
-                                    = Ty.Any_Value;
+                           if Edges.Falls_Through
+                             and then (Syn.Kind (Of_Tree, Node) = Syn.Call
+                                       or else Res.Class_Of
+                                         (Meanings.all, Of_Tree, Node)
+                                           = Res.Function_Call)
+                           then
+                              declare
+                                 Target : constant
+                                   Landin.Checking.Routine_Instance_Id :=
+                                     Landin.Checking.Routine_Target_Of
+                                       (Types.all, Of_Tree, Node);
+                                 Callee : constant Syn.Node_Id :=
+                                   Syn.Callee_Of (Of_Tree, Node);
+                                 Node_Signature : constant
+                                   Landin.Checking.Signature_Id :=
+                                     Landin.Checking.Signature_Of
+                                       (Types.all, Of_Tree, Callee);
+                                 Signature : constant
+                                   Landin.Checking.Signature_Id :=
+                                     (if Target /= Landin.Checking
+                                                      .No_Routine_Instance
+                                      then Landin.Checking.Routine_Signature_Of
+                                        (Types.all, Target)
+                                      elsif Node_Signature /=
+                                        Landin.Checking.No_Signature
+                                      then Node_Signature
+                                      elsif Syn.Kind (Of_Tree, Callee)
+                                        = Syn.Name_Reference
+                                        and then Res.Verdict_Of
+                                          (Meanings.all, Of_Tree, Callee)
+                                            = Res.Bound
+                                      then Landin.Checking.Signature_Of
+                                        (Types.all,
+                                         Res.Bound_To
+                                           (Meanings.all, Of_Tree, Callee))
+                                      else Landin.Checking.No_Signature);
+                                 Erased_Self : constant Boolean :=
+                                   Syn.Kind (Of_Tree, Callee)
+                                     = Syn.Member_Selection
+                                   and then Res.Verdict_Of
+                                     (Meanings.all, Of_Tree, Callee)
+                                       /= Res.Bound
+                                   and then Landin.Checking.Type_Of
+                                     (Types.all, Of_Tree,
+                                      Syn.Target_Of (Of_Tree, Callee))
+                                       = Ty.Any_Value;
 
-                              function Plain_Position
-                                (Written : Positive) return Natural;
+                                 function Plain_Position
+                                   (Written : Positive) return Natural;
 
-                              function Plain_Position
-                                (Written : Positive) return Natural
-                              is
-                                 Seen : Natural := 0;
-                                 First : constant Positive :=
-                                   (if Erased_Self then 2 else 1);
-                              begin
-                                 if not Landin.Checking.Holds
-                                   (Types.all, Signature)
-                                 then
-                                    return 0;
-                                 end if;
-                                 for Position in First ..
-                                   Landin.Checking.Signature_Parameter_Count
-                                     (Types.all, Signature)
-                                 loop
-                                    if not Landin.Checking
-                                      .Nth_Signature_Parameter
-                                        (Types.all, Signature,
-                                         Position).Caller
+                                 function Plain_Position
+                                   (Written : Positive) return Natural
+                                 is
+                                    Seen : Natural := 0;
+                                    First : constant Positive :=
+                                      (if Erased_Self then 2 else 1);
+                                 begin
+                                    if not Landin.Checking.Holds
+                                      (Types.all, Signature)
                                     then
-                                       Seen := Seen + 1;
-                                       if Seen = Written then
-                                          return Position;
-                                       end if;
+                                       return 0;
                                     end if;
-                                 end loop;
-                                 return 0;
-                              end Plain_Position;
+                                    for Position in First ..
+                                      Landin.Checking.Signature_Parameter_Count
+                                        (Types.all, Signature)
+                                    loop
+                                       if not Landin.Checking
+                                         .Nth_Signature_Parameter
+                                           (Types.all, Signature,
+                                            Position).Caller
+                                       then
+                                          Seen := Seen + 1;
+                                          if Seen = Written then
+                                             return Position;
+                                          end if;
+                                       end if;
+                                    end loop;
+                                    return 0;
+                                 end Plain_Position;
 
-                              Formal : constant Natural :=
-                                (if Syn.Kind (Of_Tree, Raw)
-                                      = Syn.Call_Argument
-                                 then Res.Position_Of
-                                   (Meanings.all, Of_Tree, Raw)
-                                 else Plain_Position (Index));
-                           begin
-                              if Landin.Checking.Holds
-                                (Types.all, Signature)
-                                and then Formal > 0
-                                and then Formal <=
-                                  Landin.Checking.Signature_Parameter_Count
-                                    (Types.all, Signature)
-                                and then Landin.Checking
-                                  .Nth_Signature_Parameter
-                                    (Types.all, Signature, Formal).Convention
-                                      = Syn.Sink_Convention
-                              then
-                                 Consume_Place
-                                   (Of_Tree, Argument, State);
-                              end if;
-                           end;
+                                 Formal : constant Natural :=
+                                   (if Syn.Kind (Of_Tree, Raw)
+                                         = Syn.Call_Argument
+                                    then Res.Position_Of
+                                      (Meanings.all, Of_Tree, Raw)
+                                    else Plain_Position (Index));
+                              begin
+                                 if Landin.Checking.Holds
+                                   (Types.all, Signature)
+                                   and then Formal > 0
+                                   and then Formal <=
+                                     Landin.Checking.Signature_Parameter_Count
+                                       (Types.all, Signature)
+                                   and then Require_Live
+                                     (Of_Tree, Argument, State,
+                                      Report_Error => False)
+                                 then
+                                    case Landin.Checking
+                                      .Nth_Signature_Parameter
+                                        (Types.all, Signature, Formal)
+                                          .Convention
+                                    is
+                                       when Syn.Sink_Convention =>
+                                          Sinks.Append (Argument);
+                                       when Syn.Inout_Convention =>
+                                          Inouts.Append (Argument);
+                                       when others =>
+                                          null;
+                                    end case;
+                                 end if;
+                              end;
+                           end if;
                         end if;
-                     end if;
-                  end;
-               end loop;
+                     end;
+                  end loop;
+
+                  --  D223: only an entered call consumes its sink places.
+                  --  A later argument may read or restore a pending place;
+                  --  a nested call may instead have consumed it already.
+                  if Edges.Falls_Through then
+                     for Place of Sinks loop
+                        if Require_Live (Of_Tree, Place, State) then
+                           Consume_Place (Of_Tree, Place, State);
+                        end if;
+                     end loop;
+                     --  Inout passes storage, so every such place must
+                     --  remain live after the sink commits, in either order.
+                     for Place of Inouts loop
+                        declare
+                           Live : constant Boolean :=
+                             Require_Live (Of_Tree, Place, State);
+                           --  Require_Live records the entry diagnostic.
+                           pragma Unreferenced (Live);
+                        begin
+                           null;
+                        end;
+                     end loop;
+                  end if;
+               end;
 
                if Edges.Falls_Through
                  and then (Syn.Kind (Of_Tree, Node) = Syn.Call

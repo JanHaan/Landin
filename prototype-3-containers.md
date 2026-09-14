@@ -284,6 +284,12 @@ may be consumed as a whole, while `l.items[0]` follows a slice's backing
 reference and is outside the sink-place form. A literal fixed-array element
 can itself hold a consumable descriptor. The small
 `positive/r491-sink-contained-places` derivative pins that distinction.
+D223 permits reading a container's count in a later argument of a call that
+sinks the whole container or its descriptor. Consumption waits for call entry;
+an argument that returns first leaves the pending place live. Entered calls
+still consume it before recovery. `positive/r491-sink-call-entry` derives the
+descriptor case and its early-exit restoration obligation; the overlap negative
+keeps an allocator passed by `inout` distinct from any consumed place.
 
 sizeof and alignof applied to a type parameter. Specialised they
 are constants; compiled once against a table they are not, so the

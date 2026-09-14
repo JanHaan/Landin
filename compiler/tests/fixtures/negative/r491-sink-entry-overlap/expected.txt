@@ -1,0 +1,30 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:14:17
+   |
+14 |     both(value, value)
+   |                 ^^^^^
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:13:12
+   |
+13 | repeated: (value: i32) -> none =
+   |            ^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:19:11
+   |
+19 |     mixed(value, value)
+   |           ^^^^^
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:18:5
+   |
+18 |     mut value: i32 = 1
+   |     ^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:23:10
+   |
+23 |     take(value, begin drop(value) 1 end)
+   |          ^^^^^
+  --> ../tests/fixtures/negative/r491-sink-entry-overlap/program.ldn:22:10
+   |
+22 | nested: (value: i32) -> none =
+   |          ^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment

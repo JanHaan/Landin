@@ -6146,6 +6146,35 @@ changes. Full `python3 check.py` passes. Logs are in
 `.scratch/r491-inequality-hint/` and the matching final-values files; no
 assembler, linker, generated executable or broad parser campaign ran.
 
+K12/D223 delays consumption until call entry, as explicitly selected by the
+user. Arguments keep left-to-right evaluation and capture; later reads are
+accepted, and an argument exit leaves pending places live. Entered nested calls
+retain their effects. Commit checks preserve repeated/overlapping sink refusal
+and require every `inout` place to remain live after the sink commits. Recovery
+and cleanup after an entered call see the consumed state. The descriptor and
+handle derivatives update prototypes 3 and 4 with the specification and tour.
+
+The newly accepted descriptor call exposed an existing IR carrier gap: saving
+an ordinary aggregate's address before a later argument discarded the storage
+shape, so the verifier rejected the reload at call entry. All saved aggregate,
+array and descriptor arguments now retain a shaped address slot. The snapshot
+still occurs at argument evaluation; the change preserves its proof across
+later evaluation without changing the callee ABI. A bounded lowering control
+checks a separate saved snapshot before a mutating argument and no outer call
+on an early-return path. No verifier condition was weakened.
+
+K12 development validation passes 221 selected assertions on each host
+(macOS debug and pinned Linux release), including 29 small call-entry checker
+sources, the snapshot/early-exit IR case, existing place and cleanup controls,
+and the two new fixtures. The positive fixture emits assembly text only;
+the negative fixture runs compile-only. Three older nested-flow slice sources
+now retain D220's exact refusals, including the existing consumed-read follow-on,
+with fixed-array companions preserving their original flow distinctions.
+Both single-worker builds and full `python3 check.py` pass. Evidence is in
+`.scratch/r491-sink-entry/` and matching final-values logs. No assembler,
+linker, generated program, debugger or broad campaign ran. Exact-revision
+acceptance remains open.
+
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175
 findings, alongside the older and N-series reviews. Most compiler repairs are
@@ -6156,8 +6185,9 @@ planning ranges, not acceptance evidence or measured historical work hours;
 missing original run bundles and new validation failures can extend closure.
 
 D222's approved J2 contract and bounded controls are implemented.
-The remaining semantic/refusal boundaries include K12's sink-argument timing,
-J15's contextual volatile/multi-name refusals and J104's contextual-word reads.
+D223 implements K12's user-selected call-entry sink timing. The remaining
+semantic/refusal boundaries include J15's contextual volatile/multi-name
+refusals and J104's contextual-word reads.
 N12 still needs lexical diagnostic agreement; K28/M12 remain scoped maintenance
 observations, and M6's original historical native bundles remain unrecovered.
 M5's font-history decision does not authorize rewriting history. The intake
@@ -6202,7 +6232,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
 | K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
 | K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Repaired: each executed declaration clears its prior instance's assigned and consumed facts, including sparse fields/elements. Ordinary, condition and traversal bindings start fresh; destructured results retain their existing sink restriction. Twenty-one controls preserve outer loop-carried consumption, initializer effects, uninitialized reads and repeated reads after a sink. This applies [0080]/[1910] without changing the sink point or adding ownership. |
-| K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0410]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
+| K12 | B6: sink consumption occurs before later arguments finish evaluating | D223 adopts the user-selected call-entry timing: callee and arguments evaluate first, then pending sink places are consumed. Early argument exits preserve the outer call’s pending places; entered nested calls retain their effects. Repeated/overlapping sinks and consumed inout places remain refused at entry. The checker, captured aggregate carrier, cleanup and prototype derivatives are implemented; bounded validation is recorded below. Exact acceptance remains open. |
 | K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Repaired with J22: lower/upper returns, array/slice/text sources and ordinary/partially returning bound controls pass in both modes. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
@@ -8132,8 +8162,8 @@ no new runtime, assembler or stress reproduction was needed.
 J48 still requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
-Keep J2's call-return contract question active. K12 needs a semantic
-disposition before implementation. The verifier, optimization, build-identity
+J2 and K12 were semantic questions at intake; D222 and D223 now record their
+approved contracts and implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
 The review's passing backend observations and inconclusive long-routine/stack
 scaling notes are coverage limits, not additional confirmed defects or reasons

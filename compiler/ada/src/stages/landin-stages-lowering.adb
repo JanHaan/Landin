@@ -4417,7 +4417,7 @@ package body Landin.Stages.Lowering is
                     and then Type_At (Of_Tree, Argument)
                                in Ty.Aggregate | Ty.Fixed_Array
                   then
-                     --  [0410]/D94: an `in` aggregate is a value, evaluated
+                     --  [0410]/D94: an in/sink aggregate is a value, evaluated
                      --  where it is written.  Its address alone kept its
                      --  identity across the later arguments but not its
                      --  bytes, so a later argument's side effect reached
@@ -4548,24 +4548,16 @@ package body Landin.Stages.Lowering is
                end if;
 
                if Has_Runtime_After (Written) then
-                  --  Erased dispatch retains every nonself carrier shape.
-                  --  Saving just its usize address loses that proof on reload.
+                  --  Every saved storage carrier retains its full shape.
+                  --  A scalar usize slot loses that proof on reload, even
+                  --  for an ordinary direct call with a later argument.
                   Saved (Formal_Position) :=
                     (if Parameter.Convention = Syn.Inout_Convention
-                     then IR.Add_Address_Slot
-                       (Unit.all, Filling, Neutral_Result_Part (Parameter),
-                        Site_Of (Of_Tree, Argument))
-                     elsif Erased_Self
-                       and then Parameter.Kind in
+                       or else Parameter.Kind in
                          Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
                            | Ty.Any_Value
                      then IR.Add_Address_Slot
                        (Unit.all, Filling, Neutral_Result_Part (Parameter),
-                        Site_Of (Of_Tree, Argument))
-                     elsif IR.Signature_Uses_C_ABI (Unit.all, Signature)
-                        and then Parameter.Kind = Ty.Aggregate
-                     then IR.Add_Address_Slot
-                       (Unit.all, Filling, Neutral_Body (Parameter.Nominal),
                         Site_Of (Of_Tree, Argument))
                      else IR.Add_Slot
                       (Unit.all, Filling,
