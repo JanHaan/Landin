@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D106 result transfer overwrites the assigned subobject after inout writes
+program: main.ldn
+status: 42
+constructs: 0410, 0670, 0900, 1800, 1810, 1920
+targets: linux-x86-64

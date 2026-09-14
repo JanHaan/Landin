@@ -1,0 +1,23 @@
+pair: type = struct
+    x: i32
+    y: i32
+end pair
+outer: type = struct
+    p: pair
+    q: i32
+end outer
+shrink: (inout value: outer) -> (result: pair) =
+    value.p.x = 1
+    value.p.y = 2
+    value.q = 3
+    result = (x: 4, y: 5)
+end shrink
+public main: () -> (code: i32) =
+    mut value: outer = (p: (x: 0, y: 0), q: 0)
+    value.p = shrink(value)
+    if value.p.x == 4 and value.p.y == 5 and value.q == 3 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
