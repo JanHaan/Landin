@@ -56,8 +56,8 @@ different responsibilities.
 | `Landin.Debugging` | optional source snapshots, source result labels and compilation-directory context, with access to immutable declaration syntax | copy represented types/layouts, read the host or encode a debugger file format |
 | `Landin.Source.Names` | identities for the byte runs a program names | know that a spelling is reserved |
 | `Landin.Tokens` | the lexical vocabulary, the token, the fault, the stream | render prose, assign a diagnostic code, or build a token |
-| `Landin.Tokens.Lexer` | the scan, the only construction of a token, and D161's validation of complete text-literal spelling | know what a token means or decide its contextual text view |
-| `Landin.Tokens.Text` | D161/D181's shared UTF-8 validation and byte, UTF-8 and UTF-16 literal decoder | diagnose, choose a literal context, or own emitted storage |
+| `Landin.Tokens.Lexer` | the scan, the only construction of a token, and D161's validation of complete text-literal spelling and [1750]'s comment encoding | know what a token means or decide its contextual text view |
+| `Landin.Tokens.Text` | D161/D181's shared UTF-8 validation for literals and comments, and byte, UTF-8 and UTF-16 literal decoder | diagnose, choose a literal context, or own emitted storage |
 | `Landin.Syntax` | the node table, extents, anchors, origins, soundness, and the retained independent C-convention, variadic, bodyless-import, visibility, C-layout and symbol-literal facts | know that types or IR values exist, or hold a diagnostic |
 | `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
 | `Landin.Syntax.Parser` | the parse, including contextual separation of a final `try` expression from a `try` statement followed by more body items, D185's initialized condition-binding form D186's contextual caller parameter and D187's two-token contextual `unchecked` region, contextual-name bindings and assignments selected by their punctuation before control-word dispatch, and the only construction of a tree | assign a diagnostic code, or read a byte |

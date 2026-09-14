@@ -39,6 +39,15 @@ package Landin.Tokens.Text is
       --  A backslash as the last byte before the closing quote.
       Dangling_Backslash);
 
+   --  One shortest-form UTF-8 scalar, shared by literals and comments.
+   --  Returns its byte count, or zero for a malformed or truncated run.
+   --  Last is the final byte available to this source construct.
+   function UTF8_Length
+     (Lexeme : String; At_Byte : Positive; Last : Natural) return Natural
+     with Pre  => At_Byte in Lexeme'Range and then Last in Lexeme'Range
+                  and then At_Byte <= Last,
+          Post => UTF8_Length'Result <= 4;
+
    type Literal_Encoding is (Byte_Units, UTF8_Units, UTF16_Units);
 
    type Code_Unit is range 0 .. 16#FFFF#;

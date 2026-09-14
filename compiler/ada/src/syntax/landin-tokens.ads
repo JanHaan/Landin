@@ -198,6 +198,7 @@ package Landin.Tokens is
       Malformed_Raw_Literal_Run,
       Unknown_Byte_Run,
       Uppercase_Byte_Run,
+      Invalid_Comment_Encoding,
       Unterminated_Block_Comment,
       Unterminated_Literal);
 
