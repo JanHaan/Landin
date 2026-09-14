@@ -12,6 +12,7 @@ with Landin.Optimization;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
@@ -25,6 +26,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    package Opt renames Landin.Optimization;
    package Reports renames Landin.Build_Reports;
    use type IR.Opcode;
+   use type IR.Item_Kind;
    use type IR.Block_Id;
    use type IR.Signature_Id;
    use type Opt.Objective;
@@ -562,6 +564,110 @@ package body Landin.Tests.IR_Optimization_Suite is
       end loop;
    end Template_Counts_Are_Independent;
 
+   procedure Exposure_Traversal_Keeps_References
+     (Item : in out Landin.Testing.Context);
+
+   procedure Exposure_Traversal_Keeps_References
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "callback: type = () -> none "
+        & "public exported: () -> none = end exported "
+        & "plain: () -> none = end plain "
+        & "static_target: () -> none = end static_target "
+        & "aggregate_target: () -> none = end aggregate_target "
+        & "addressed: () -> none = end addressed "
+        & "current: callback = static_target "
+        & "holder: type = struct cb: callback end holder "
+        & "image: holder = (cb: aggregate_target) "
+        & "public run: () -> none = "
+        & "a := addressed b := addressed a() b() end run";
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Evidence_Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Facts);
+         begin
+            Lower (Item, Work, Source
+                   & (if Wide then " extern(c) imported: () -> none"
+                      else ""));
+            declare
+               Code : IR.Unit renames Landin.Stages.Code (Work).all;
+               Visits : array (1 .. IR.Item_Count (Code)) of Natural :=
+                 [others => 0];
+               Total : Natural := 0;
+               procedure Note (Target : IR.Item_Id);
+
+               procedure Note (Target : IR.Item_Id) is
+               begin
+                  Visits (Positive (Target)) := Visits (Positive (Target)) + 1;
+                  Total := Total + 1;
+               end Note;
+            begin
+               IR.Visit_Address_Exposures (Code, Note'Access);
+               Landin.Testing.Check_Equal
+                 (Item, Total, (if Wide then 8 else 7),
+                  "one callback per retained reference or explicit marker");
+               for Index in Visits'Range loop
+                  declare
+                     Target : constant IR.Item_Id := IR.Item_Id (Index);
+                  begin
+                     if IR.Kind_Of (Code, Target) = IR.Routine then
+                        declare
+                           Name : constant String :=
+                             Landin.Source.Names.Spelling
+                               (Landin.Stages.Identities (Work).all,
+                                Landin.Resolution.Name_Of
+                                  (Landin.Stages.Meanings (Work).all,
+                                   IR.Declares (Code, Target)));
+                           Expected : constant Natural :=
+                             (if Name = "plain" then 0
+                              elsif Name in "addressed" | "static_target"
+                              then 2 else 1);
+                        begin
+                           Landin.Testing.Check_Equal
+                             (Item, Visits (Index), Expected,
+                              "retained exposure source: " & Name);
+                           Landin.Testing.Check
+                             (Item, IR.Has_Address_Exposure (Code, Target)
+                                = (Expected > 0),
+                              "single queries share the traversal policy");
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end;
+            Lower (Item, Evidence_Work, "f: () -> none = end f");
+            declare
+               Code : IR.Unit;
+               Visits : array (1 .. 3) of Natural := [others => 0];
+               procedure Note (Target : IR.Item_Id);
+
+               procedure Note (Target : IR.Item_Id) is
+               begin
+                  Visits (Positive (Target)) := Visits (Positive (Target)) + 1;
+               end Note;
+            begin
+               Evidence_Unit (Code, Evidence_Work, Literal_Table, 1, False);
+               IR.Visit_Address_Exposures (Code, Note'Access);
+               Landin.Testing.Check
+                 (Item, Visits = [2, 0, 0],
+                  "two retained evidence entries expose the provider only");
+               IR.Mark_Address_Exposed (Code, 2);
+               Visits := [others => 0];
+               IR.Visit_Address_Exposures (Code, Note'Access);
+               Landin.Testing.Check
+                 (Item, Visits = [2, 1, 0],
+                  "a fresh traversal sees a later explicit exposure marker");
+            end;
+         end;
+      end loop;
+   end Exposure_Traversal_Keeps_References;
+
    procedure Large_Graph (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -1054,6 +1160,9 @@ package body Landin.Tests.IR_Optimization_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir opt", "exposure traversal keeps references",
+         Exposure_Traversal_Keeps_References'Access);
       Landin.Testing.Register
         (Into, "ir opt", "template counts are independent",
          Template_Counts_Are_Independent'Access);

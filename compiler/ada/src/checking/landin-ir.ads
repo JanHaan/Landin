@@ -1003,6 +1003,12 @@ package Landin.IR is
    --  relocations and evidence-table entries conservatively expose an
    --  address.  Public/exported entries must be marked by lowering too.
    procedure Mark_Address_Exposed (Into : in out Unit; Item : Item_Id);
+   --  Visit retained references once for consumers needing every exposure.
+   --  A routine may be visited more than once. The callback must not mutate
+   --  the unit; callers own any marks and refresh them after IR changes.
+   procedure Visit_Address_Exposures
+     (Of_Unit : Unit;
+      Process : not null access procedure (Item : Item_Id));
    function Has_Address_Exposure
      (Of_Unit : Unit; Item : Item_Id) return Boolean;
 

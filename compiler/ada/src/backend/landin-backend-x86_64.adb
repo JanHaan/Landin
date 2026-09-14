@@ -342,10 +342,17 @@ package body Landin.Backend.X86_64 is
       Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
         Landin.Build_Reports.Routine_Statistics;
       Capturing : Landin.IR.Item_Id := Landin.IR.No_Item;
-      --  The emission unit is immutable.  Query retained exposure once per
-      --  candidate, never inside the pairwise final-body equality proof.
+      --  The emission unit is immutable. One retained-reference traversal
+      --  excludes exposed routines before final-body equality comparisons.
       Shareable : Home_Mask (1 .. Landin.IR.Item_Count (Of_Unit)) :=
         [others => False];
+
+      procedure Exclude_Exposed (Item : Landin.IR.Item_Id);
+
+      procedure Exclude_Exposed (Item : Landin.IR.Item_Id) is
+      begin
+         Shareable (Positive (Item)) := False;
+      end Exclude_Exposed;
 
       procedure Put (Line : String);
 
@@ -5924,10 +5931,10 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
                  and then Item /= Hosted_Entry
                  and then not Is_Public_Item (Item)
-                 and then not Is_Forced (Item)
-                 and then not Landin.IR.Has_Address_Exposure (Of_Unit, Item);
+                 and then not Is_Forced (Item);
             end;
          end loop;
+         Landin.IR.Visit_Address_Exposures (Of_Unit, Exclude_Exposed'Access);
       end if;
       --  Selection/allocation happen once per body before comparing final
       --  instruction evidence.  The entry symbol is deliberately excluded

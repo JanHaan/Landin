@@ -167,6 +167,11 @@ does not restore pointee metadata: typed stores, calls and `Pointer_Address`
 still require matching evidence, and annotating a raw load cannot supply it.
 The source checker separately enforces Landin pointer comparison and conversion
 rules; the verifier does not reinterpret every low-level word as a source pointer.
+Specialization and final-body sharing collect address exposure through one
+shared traversal of retained IR references. Explicit/imported roots, scalar and
+aggregate function images, evidence entries and runtime function addresses feed
+each consumer's existing local marks. The traversal retains no cache; consumers
+refresh their marks after IR changes, and single-routine queries share its policy.
 Specialization counts eligible normalized instances once per template before
 profitability decisions. The pass-local counts exclude exposed or unproven
 instances, preserve report order and do not change the evidence proof or cost
