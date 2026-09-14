@@ -1,0 +1,7 @@
+choose: (source: ptr mut ptr i32, fallback: ptr mut ptr i32, flag: bool) -> (r: ptr mut ptr i32 from source, fallback) =
+r = if flag then source else fallback end if
+end choose
+f: (inout a: ptr i32, flag: bool) -> none =
+view: ptr mut ptr i32 = choose(addr a, addr a, flag)
+view.val = a
+end f

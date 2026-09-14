@@ -5830,7 +5830,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | Intake | Baseline observation | Evidence | Disposition and repair scope |
 | --- | --- | --- | --- |
 | J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Repaired: labelled statements use the same flow dispatch as positional calls, including ordered runtime arguments, sink consumption and recovery. Paired initialized/unassigned and sink controls pass in both modes; driver refusals have no output/tool effects. |
-| J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Body-local joins repaired: retain independent external destinations and check every possible parameter destination before granting a store exemption. Nineteen paired controls pass in both modes, including local-only, same-origin, escaping and explicit untracked cases. The additional call-return destination-summary question below remains open; this repair does not infer callee bodies. |
+| J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Implemented: body-local joins retain every external/parameter destination, and the approved D222 writable-return contract rejects hidden independent storage behind a `from` clause. Explicit fallback arguments retain their destinations at direct and indirect calls. The final batch passes 217 selected checks per host plus compile-only mem/vec/small accessor probes. Empty, raw, read-only, generic, provider and same-origin controls remain pinned. Exact acceptance remains open; no callee-body inference was added. |
 | J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Repaired: Lower_Slice evaluates the stored access path once and captures a reached runtime descriptor before either carrier load. Component loading consumes that retained place. Tiny struct/array slice, index, traversal and text controls retain one side-effecting index call; terminating paths retain their existing guard. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Repaired: a struct checks its immediate end and optional repeated name, preserving later declarations instead of scanning for a distant matching closer. Missing ends and mismatched names report at the current boundary. Field-type refusal retains its existing recovery and diagnostic without a second missing-end report. |
@@ -6004,41 +6004,45 @@ timeout. Evidence is retained in `.scratch/r491-origin-joins/`. No Landin
 assembly, linking, runtime execution or debugger was used. This is filtered
 development evidence; exact acceptance remains outstanding.
 
-J2 retains a separate contract question found while reviewing this repair.
-A helper returning an expression that chooses between a parameter and a module
-address can satisfy its declared `from` set; at a subsequent call, the caller
-reconstructs only that declared origin and loses the possible module
-destination. A small compiler-only debug witness, `call-summary.ldn` in the
-same evidence directory, is accepted when the caller stores its same-origin
-parameter through that result. This behavior is observed, but its disposition
-must reconcile [0790]/[1910] with D217's explicit local-analysis boundary before
-J2 is fully closed. Do not infer a whole-program guarantee from the body-local
-repair or reject all accessor results without preserving valid same-origin
-controls. No interprocedural analysis or language rule was added in this batch.
+The body-local J2 repair exposed a separate call-return contract question.
+A helper could return a choice between a parameter and a module address while
+satisfying its declared parameter-only `from` set. The caller reconstructed
+only that source and lost the module destination. The retained compiler-only
+`call-summary.ldn` witness in the same evidence directory was accepted at that
+revision. D222 below resolves this facet through an approved written contract;
+the earlier body-local repair alone did not provide that promise.
 
-Proposed J2 decision, not yet adopted: forbid a known module-storage alternative
-in a writable reference result whose signature says `from source`. In the
-retained witness, `choose` returns either its `source` parameter or `addr slot`
-for a module binding; its caller then stores `a` through that result. The
-proposal rejects that mixed helper at its return contract, while retaining an
-identity accessor that returns `source`. It strengthens the writable `from`
-contract rather than inferring a callee body at each call site or refusing all
-writes through accessor results. The exact treatment of explicit untracked
-references must remain aligned with [0470]/D217, not silently strengthened into
-an alias-safety promise.
+J2's writable-return recommendation was approved by the language owner after
+reviewing the hidden-module witness and an explicit two-input `choose`.
+D222 adopts the stronger contract: a writable `from` result cannot conceal
+known independent storage. Passing the fallback explicitly and naming both
+sources preserves `choose`; the module actual remains visible to the caller,
+while a same-origin update stays valid. Read-only results, ordinary container
+accessors, independent allocator results and [0470]'s explicit boundary retain
+their stated contracts. Nested writable references and erased/aggregate
+carriers use conservative permissions and origins.
 
-Implementation after the language decision would retain known external-storage
-alternatives through local return-value joins and validate them against writable
-`from` returns. Paired controls must cover direct and joined returns, read-only
-results, identity/subview accessors, module-only independent returns and explicit
-untracked boundaries. Stored function values and concept providers must obey
-the same written contract. The retained-store controls must still reject the
-reported caller/module escape without rejecting valid same-origin accessor
-updates. This proposal needs the language owner's choice because [0790] defines
-reference dependency independently of write permission; D217's local store
-exception cannot obtain a stronger destination promise merely by assuming one.
-Until that choice, the call-summary facet of J2 remains open and no such new
-return rule is implemented.
+Implementation and bounded validation are complete for this facet. The checker uses its
+existing external-origin fact at the return boundary and retains each
+independent anonymous result before joining it with other results. Controls
+cover hidden wrappers, indirect calls, providers, concrete generic instances,
+empty and raw boundaries and the explicit two-destination API. This work does
+not add callee-body inference, authorize excluded stress tests or close exact
+revision acceptance.
+
+Both single-worker builds pass: macOS debug and pinned Linux release. The
+39-source checker case makes 156 assertions over the synthetic 32-bit and
+Linux 64-bit targets. The existing 38 joined-destination checks, paired new
+fixtures (5 and 3 checks), three accepted origin fixtures (3 each), and the
+retained-store negative fixture (6) bring the final selected total to 217 per
+host. Positive fixture selectors emit assembly text only. A separate tiny
+compile-only client of `mem.used`, `vec.used` (scalar and pointer elements)
+and inline/spilled `small.used` passes on both hosts. No generated executable,
+assembler, linker, debugger, giant fixture or broad sweep ran for this batch.
+The four fixture inventories and full `python3 check.py` pass. Evidence is in
+`.scratch/r491-writable-from/` and the matching final-values logs. Initial
+control syntax corrections and the empty-carrier proof adjustment are retained
+in those logs; the final counts above describe the corrected sources.
 
 This intake extends the scope of the earlier repairs without erasing their
 controls: C3 covers the recorded direct destination/alias cases, and J2 now
@@ -6050,16 +6054,16 @@ J21 is already repaired, J105 is partly superseded, and J100 remains distinct
 from the repaired initializer lookahead. Existing N-series dispositions and
 all earlier delivery evidence remain unchanged.
 
-The next work is to settle J2's call-return contract question, then repair
-checker refusal and type-identity boundaries J7/J10/J12 and conformance
-failures J49/J51/J52. Each change needs paired accepted/refused controls and
-both compiler modes before closure. Then repair parser preservation and
-bounded recursion/inference storage, the accepted-value/control-flow lowering
-group, and backend/native boundaries. Complete fixture accounting, explicit
-profiles, diagnostic/document agreement and the remaining focused IR audits
-before seeking exact acceptance. Small independent repairs may be interleaved,
-but a passing filtered run cannot close any untested group. Source-only giant
-layout findings remain source/seam work; no giant image reproduction is needed.
+D222's approved J2 contract and bounded controls are implemented.
+The remaining semantic/refusal boundaries include K12's sink-argument timing,
+J15's contextual volatile/multi-name refusals and J104's contextual-word reads.
+N12/N23 still need diagnostic agreement; K28/M12 remain scoped maintenance
+observations, and M6's original historical native bundles remain unrecovered.
+M5's font-history decision does not authorize rewriting history. The intake
+rows retain each other disposition and any outstanding evidence. Complete
+fixture accounting, diagnostic/document agreement and focused IR review
+before seeking exact acceptance. Passing filtered checks cannot close an
+untested group, and excluded giant images remain source/seam work only.
 The review intake is reconciled; implementation and acceptance remain active.
 
 #### Additional review consolidated at 1aa0746a

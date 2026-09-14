@@ -1407,8 +1407,9 @@ end build
 The other direction. What a returned reference was derived
 from is written down, because the caller cannot otherwise
 know that the thing it came from has to hold still now.
-That, and only that: whether the view may be written is the
-return type's business [0430].
+Write permission remains the return type's business [0430]. A writable
+result also owes the destination contract below; `from` does not grant
+permission to write.
 
 ```landin
 used: (t: type, l: list(t)) -> (s: []mut t from l) = ... end
@@ -1431,6 +1432,40 @@ is an error too, so the clause cannot drift away from the
 body. For [0480]'s optional pointer this exact comparison is made only on an
 edge that actually returns the pointer; an edge provably returning the empty
 atom has no reference origin at all.
+For a result that carries a writable reference, D222 also requires that its
+`from` clause conceal no known independent storage alternative. A helper
+cannot choose between its parameter and a module address while advertising
+only the parameter. Pass the fallback explicitly and name both sources:
+
+```landin
+choose: (source: ptr mut ptr i32, fallback: ptr mut ptr i32, flag: bool)
+        -> (r: ptr mut ptr i32 from source, fallback) =
+    r = if flag then source else fallback end if
+end choose
+```
+
+Calling `choose(addr local_slot, addr module_slot, flag)` keeps both possible
+destinations visible. Storing a non-escaping caller reference through that
+result is refused; choosing between two views of the same caller origin
+still permits a same-origin update [1910]. Wrapping this call in a helper
+that hides `module_slot` and declares only `from source` is also refused.
+Ordinary container accessors remain valid, including heap-backed views:
+`from` does not require storage physically inside the argument object.
+
+This applies to writable references inside arrays, structs and variants,
+and behind read-only references: permission is not deep const. Erased state
+is checked conservatively because its hidden type may carry writable views.
+Origins within a reference-bearing aggregate join conservatively; a read-only
+field does not isolate its independent origin from a writable sibling.
+A result with no reachable writable reference keeps the dependency-only rule.
+An optional empty atom and an empty slice literal add no storage destination;
+constructors preserve that empty-storage fact, but the slice or aggregate
+still owes the ordinary exact `from` comparison. Independent results with no
+`from` remain valid. Explicit integer-to-pointer conversion
+keeps [0470]'s untracked boundary, but cannot erase a separately known module
+alternative. These are local checks of a written contract, not inferred
+interprocedural alias analysis.
+
 In obligation it is the mirror of escaping. escaping says
 the callee keeps a reference to what the caller handed in;
 from says the caller keeps a reference to what the callee

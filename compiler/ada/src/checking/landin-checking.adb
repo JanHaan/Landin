@@ -2475,6 +2475,112 @@ package body Landin.Checking is
       end case;
    end Contains_References;
 
+   function Contains_Writable_References
+     (Of_Table : Table; Part : Signature_Part) return Boolean
+   is
+      Seen_Nominals : array
+        (1 .. Positive'Max (1, Nominal_Type_Count (Of_Table))) of Boolean :=
+          [others => False];
+      Seen_References : array
+        (1 .. Positive'Max (1, Reference_Count (Of_Table))) of Boolean :=
+          [others => False];
+
+      function Visit (Item : Signature_Part) return Boolean;
+      function Visit (Item : Field_Shape) return Boolean;
+      function Visit (Id : Nominal_Type_Id) return Boolean;
+      function Visit (Id : Reference_Id) return Boolean;
+
+      function Visit (Id : Nominal_Type_Id) return Boolean is
+         Position : constant Positive :=
+           Nominal_Identities.Position (Of_Table, Id);
+      begin
+         if Seen_Nominals (Position) or else not Has_Layout (Of_Table, Id) then
+            return False;
+         end if;
+         Seen_Nominals (Position) := True;
+         for Field in 1 .. Layout_Field_Count (Of_Table, Id) loop
+            if Visit (Field_Shape_Of (Of_Table, Id, Field)) then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Visit;
+
+      function Visit (Id : Reference_Id) return Boolean is
+         Item : constant Reference_Descriptor := Descriptor_Of (Of_Table, Id);
+      begin
+         if Seen_References (Positive (Id)) then
+            return False;
+         end if;
+         Seen_References (Positive (Id)) := True;
+         if Item.Mutable or else Item.Kind = Landin.Types.Any_Value then
+            return True;
+         end if;
+         --  Read permission on one descriptor does not remove permission
+         --  from a reference loaded through it: Landin has no deep const.
+         return Visit
+           (Signature_Part'
+              (Kind => Item.Referent, Nominal => Item.Nominal,
+               Length => Item.Length, Element => Item.Element,
+               Element_Shape => Item.Element_Shape,
+               Reference => Item.Reference, Concept => Item.Concept,
+               Signature => Item.Signature, Atoms => Item.Atoms,
+               others => <>));
+      end Visit;
+
+      function Visit (Item : Field_Shape) return Boolean is
+      begin
+         case Item.Kind is
+            when Reference_Field =>
+               return Visit (Item.Reference);
+            when Aggregate_Field =>
+               return Visit (Item.Nominal);
+            when Fixed_Array_Field =>
+               return Item.Length > 0
+                 and then Visit (Array_Field_Element (Of_Table, Item));
+            when Variant_Field =>
+               for Which in 1 .. Item.Cases loop
+                  declare
+                     Payload : constant Case_Run := Of_Table.Case_Runs
+                       (Item.Payloads_First + Which - 1);
+                  begin
+                     for Index in 1 .. Payload.Count loop
+                        if Visit (Of_Table.Field_Shapes
+                          (Payload.First + Index - 1))
+                        then
+                           return True;
+                        end if;
+                     end loop;
+                  end;
+               end loop;
+               return False;
+            when Scalar_Field =>
+               return False;
+         end case;
+      end Visit;
+
+      function Visit (Item : Signature_Part) return Boolean is
+      begin
+         case Item.Kind is
+            when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+               return Visit (Item.Reference);
+            when Landin.Types.Any_Value =>
+               return True;
+            when Landin.Types.Aggregate =>
+               return Visit (Item.Nominal);
+            when Landin.Types.Fixed_Array =>
+               return Item.Length > 0
+                 and then (Visit (Item.Element_Shape)
+                           or else (Item.Nominal /= No_Nominal_Type
+                                    and then Visit (Item.Nominal)));
+            when others =>
+               return False;
+         end case;
+      end Visit;
+   begin
+      return Visit (Part);
+   end Contains_Writable_References;
+
    function Holds
      (Of_Table : Table; Parts : Signature_Part_Array) return Boolean is
    begin

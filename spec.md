@@ -1126,7 +1126,24 @@ On each return edge, [0790]'s exact
 A provably empty arm of [0480]'s optional pointer carries no reference and
 therefore no origin to compare; it is not an `Untracked` reference. For every
 edge that does return a tracked reference, the set of parameter origins is
-exactly the signature's `from` set. A live local view records the binding it
+exactly the signature's `from` set. In addition, D222 forbids a known
+independent storage origin in a result with a nonempty `from` clause when
+its type carries a reachable writable reference. The permission walk includes
+pointer and slice referents, array elements, struct fields and variant
+payloads; a read-only outer view does not remove a nested view's permission.
+An erased value conservatively qualifies, while a function value's signature
+does not describe storage carried by that code value. Aggregate value origins
+remain a conservative union, including origins from read-only sibling fields.
+A separately known independent alternative is retained across control joins,
+local copies, calls and selection of anonymous result positions. An optional
+empty atom and an empty slice literal contribute no storage destination;
+a constructor containing only such empty references preserves that fact.
+Only the optional atom has D189's exemption from exact source agreement.
+Explicit untracked conversion alone supplies no origin proof, and does not
+erase another alternative's known independent origin. A helper which needs
+parameter and module alternatives passes both as explicit arguments and
+names both in its `from` clause. Calls reconstruct those written sources;
+no body inference is introduced. A live local view records the binding it
 derives from; an `inout` or `sink` use of that binding is refused when the view
 is read before being replaced.
 Volatile reference paths remain exempt [0850].
@@ -9098,7 +9115,7 @@ classified failure boundary before the repository gate can pass.
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, and payload aliases keep scalar storage live through last use | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, payload aliases keep scalar storage live through last use, and D222 forbids hidden independent storage in writable `from` results | `negative/r491-writable-return-hidden-storage`, `positive/r491-writable-return-explicit-sources`, `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
 | `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
@@ -13354,3 +13371,47 @@ selection reports L0301 instead of choosing a provider.
 represented constraints, direct/inherited collisions, distinct names and unused
 colliding closures. `runtime/generic-composed-evidence` retains the independent
 execution obligation for the unchanged parent-table ABI.
+
+### D222 — Writable return sources cannot hide independent storage
+
+**The tour said** that `from` states exact parameter dependencies [0790],
+independently of the return type's write permission. D217 permits a same-origin
+store through caller storage. A helper could join a parameter address with a
+module address, satisfy that parameter set, and return a writable view whose
+caller then knew only the parameter destination.
+
+**Chosen:** a result with a nonempty `from` clause and a reachable writable
+reference must not carry a known independent storage alternative [1910]. The
+body is checked against the written contract. A helper choosing between two
+destinations receives both as arguments and names both in `from`; an explicit
+module actual then remains visible at the caller's retained-store check.
+A wrapper cannot hide that module actual behind a narrower writable contract.
+The rule includes instantiated generic results, aggregate carriers and nested
+references without deep const. Erased carriers and aggregate origin unions
+are conservative. It applies equally to bodies used as function values and
+concept providers; external declarations retain their written obligations.
+
+Read-only results without reachable writable references retain their previous
+source comparison. Ordinary identity and container-subview accessors retain
+their parameter source; storage need not lie physically inside the parameter.
+Module-only and allocator results remain independent without `from`. Optional
+empty atoms retain D189's exception; empty slice literals add no destination
+and constructors of empty reference carriers do not waive exact source
+agreement. Integer-created pointers retain [0470]'s explicit untracked boundary. Joining one cannot conceal a separately
+known independent destination. No transitive lifetime or ownership guarantee
+is added to D217's local checks.
+
+**The alternatives:** inferring every callee body at its calls would replace
+the written contract and complicate function values and external calls.
+Refusing every write through an accessor would lose valid same-origin updates.
+Keeping the previous dependency-only rule for writable results would retain
+the hidden-module store witness. All are declined in favor of an explicit,
+stronger writable return contract.
+
+**Pinned by** `negative/r491-writable-return-hidden-storage`,
+`positive/r491-writable-return-explicit-sources` and the checker case
+`writable returns keep all destinations`, including direct and joined returns,
+explicit module and same-origin actuals, hidden wrappers, indirect calls,
+concept providers, instantiated generics, nested permissions, empty and raw
+boundaries and independent anonymous-result positions. Prototype 3's accessor
+and prototype 4's independent-allocation contracts remain separate.

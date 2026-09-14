@@ -892,6 +892,13 @@ package Landin.Checking is
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Boolean
      with Pre => Holds (Of_Table, Nominal);
 
+   --  D222: include writable references reachable through read-only views,
+   --  aggregate fields and array elements. Erased state is conservative;
+   --  code signatures do not describe storage held by a function value.
+   function Contains_Writable_References
+     (Of_Table : Table; Part : Signature_Part) return Boolean
+     with Pre => Holds (Of_Table, Part);
+
    function Holds
      (Of_Table : Table; Parts : Signature_Part_Array) return Boolean;
 
