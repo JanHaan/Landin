@@ -17,6 +17,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Configuration;
+with Landin.Diagnostics;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
@@ -12426,8 +12427,123 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Stages.Rendered_Report (Work));
    end Generic_Pointees_Materialize_On_Access;
 
+   procedure Repeated_Module_Folds_Keep_Images
+     (Item : in out Landin.Testing.Context);
+
+   procedure Repeated_Module_Folds_Keep_Images
+     (Item : in out Landin.Testing.Context)
+   is
+      Base : constant String := "base: usize = 1 ";
+      First : constant String := "first: usize = base + base ";
+      Second : constant String := "second: usize = first + first ";
+      Third : constant String := "third: usize = second + second ";
+      Last : constant String := "last: usize = third + third ";
+      Wrapped : constant String := "wrapped: u8 = u8(last) +% 240 ";
+      Zero : constant String := "omitted: i32 zero: i32 = omitted + omitted ";
+      Image : constant String :=
+        "image: [8]usize = [base, first, second, third, last, "
+        & "usize(wrapped), usize(omitted), usize(zero)] ";
+   begin
+      for Wide in Boolean loop
+         for Reordered in Boolean loop
+            declare
+               Work : Landin.Stages.Compilation := Landin.Stages.Create
+                 (if Wide then Landin.Targets.Linux_X86_64
+                  else Landin.Targets.Synthetic_32);
+               Ran : Natural;
+
+            begin
+               Lower
+                 (Work,
+                  (if Reordered then Wrapped & Last & Third & Second & First
+                     & Base else Base & First & Second & Third & Last
+                     & Wrapped) & Zero & Image, Ran);
+               Landin.Testing.Check_Equal
+                 (Item, Ran, 5, "small shared module values reach lowering");
+               if Landin.Stages.Failed (Work) then
+                  Landin.Testing.Fail
+                    (Item, Landin.Stages.Rendered_Report (Work));
+               else
+                  declare
+                     Code : IR.Unit renames Landin.Stages.Code (Work).all;
+                     Datum : constant IR.Item_Id := Named_Item (Work, "image");
+                     Expected : constant Landin.Types.Folded_Array :=
+                       [1, 2, 4, 8, 16, 0, 0, 0];
+                  begin
+                     Landin.Testing.Check
+                       (Item, Datum /= IR.No_Item
+                        and then IR.Has_Image (Code, Datum)
+                        and then IR.Image_Length (Code, Datum) = 8,
+                        "lowering records the complete small scalar image");
+                     for Index in Expected'Range loop
+                        Landin.Testing.Check
+                          (Item, IR.Nth_Image
+                             (Code, Datum, IR.Part_Position (Index))
+                             = Expected (Index),
+                           "repeated folds retain every static image value");
+                     end loop;
+                  end;
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Repeated_Module_Folds_Keep_Images;
+
+   procedure Module_Fold_Refusals_Keep_Diagnostics
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Fold_Refusals_Keep_Diagnostics
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Reject
+        (Text : String; Code : Landin.Diagnostics.Code_String;
+         Count : Natural);
+
+      procedure Reject
+        (Text : String; Code : Landin.Diagnostics.Code_String;
+         Count : Natural)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower (Work, Text, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, "the refused fold stops before lowering");
+         declare
+            Found : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), Count,
+               "memoization does not suppress or duplicate diagnostics");
+            for Index in 1 .. Landin.Diagnostics.Count (Found) loop
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Found, Index)), Code,
+                  "the fold preserves its diagnostic category");
+            end loop;
+         end;
+      end Reject;
+   begin
+      Reject ("first: i32 = second + second "
+              & "second: i32 = first + first", "L0305", 16);
+      Reject ("seed: u8 = 255 first: u8 = seed + seed "
+              & "second: u8 = first + first", "L0300", 2);
+      Reject ("make: () -> (r: i32) = 1 end make "
+              & "value: i32 = make() + make()", "L0305", 1);
+      Reject ("zero: i32 = 0 one: i32 = 1 "
+              & "value: i32 = one / zero + one / zero", "L0306", 2);
+   end Module_Fold_Refusals_Keep_Diagnostics;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "repeated module folds keep images",
+         Repeated_Module_Folds_Keep_Images'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "module fold refusals keep diagnostics",
+         Module_Fold_Refusals_Keep_Diagnostics'Access);
       Landin.Testing.Register
         (Into, "lowering", "generic pointees materialize on access",
          Generic_Pointees_Materialize_On_Access'Access);

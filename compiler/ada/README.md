@@ -167,6 +167,11 @@ does not restore pointee metadata: typed stores, calls and `Pointer_Address`
 still require matching evidence, and annotating a raw load cannot supply it.
 The source checker separately enforces Landin pointer comparison and conversion
 rules; the verifier does not reinterpret every low-level word as a source pointer.
+The shared checker/lowering constant folder memoizes known module-binding
+values only within one fold request. Recursive references reuse completed
+values; unknown and overflowing folds keep the stage's cycle and diagnostic
+behavior. Later requests start fresh because semantic tables may have gained
+facts or changed their active instance context.
 Recursive shape measurement shares a memo across descendant layout queries
 within one public request. Complete shapes key the results, while the unit,
 target and maximum stay fixed for that request. Return or failure discards the
