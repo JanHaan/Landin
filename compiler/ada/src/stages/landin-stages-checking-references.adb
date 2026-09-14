@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
@@ -149,6 +150,39 @@ package body Landin.Stages.Checking.References is
 
       procedure Free is new Ada.Unchecked_Deallocation
         (Object => Function_Table, Name => Function_Table_Access);
+
+      --  Recursive control visits retain program-sized snapshots. Keep only
+      --  their owners on the host stack, including on exceptional exits.
+      package Snapshots is
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Data : Function_Table_Access := null;
+         end record;
+
+         overriding procedure Finalize (Value : in out Owner);
+         function Empty return Owner;
+         function Saved (Initial : Function_Table) return Owner;
+      end Snapshots;
+
+      package body Snapshots is
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            Free (Value.Data);
+         end Finalize;
+
+         function Empty return Owner is
+         begin
+            return Value : Owner do
+               Value.Data := new Function_Table;
+            end return;
+         end Empty;
+
+         function Saved (Initial : Function_Table) return Owner is
+         begin
+            return Value : Owner do
+               Value.Data := new Function_Table'(Initial);
+            end return;
+         end Saved;
+      end Snapshots;
 
       --  The lexical cleanup stack, kept the way
       --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
@@ -2028,7 +2062,10 @@ package body Landin.Stages.Checking.References is
                         declare
                            Recovery : constant Syn.Node_Id := Syn.Else_Body
                              (Tree, Syn.Recovery_Of (Tree, Node));
-                           Success : constant Function_Table := Origins;
+                           Success_Owner : constant Snapshots.Owner :=
+                             Snapshots.Saved (Origins);
+                           Success : Function_Table renames
+                             Success_Owner.Data.all;
                            Fallback : Origin_Fact;
                            Falls : Boolean := True;
                         begin
@@ -2061,7 +2098,9 @@ package body Landin.Stages.Checking.References is
                Result := Fact_Of (Tree, Syn.Left_Of (Tree, Node));
                if Falls_Through then
                   declare
-                     Skipped : constant Function_Table := Origins;
+                     Skipped_Owner : constant Snapshots.Owner :=
+                       Snapshots.Saved (Origins);
+                     Skipped : Function_Table renames Skipped_Owner.Data.all;
                      Right : constant Origin_Fact :=
                        Fact_Of (Tree, Syn.Right_Of (Tree, Node));
                   begin
@@ -2494,8 +2533,11 @@ package body Landin.Stages.Checking.References is
 
             when Syn.If_Statement =>
                declare
-                  Remaining : Function_Table := Origins;
-                  Merged : Function_Table := [others => No_Origin];
+                  Remaining_Owner : constant Snapshots.Owner :=
+                    Snapshots.Saved (Origins);
+                  Remaining : Function_Table renames Remaining_Owner.Data.all;
+                  Merged_Owner : constant Snapshots.Owner := Snapshots.Empty;
+                  Merged : Function_Table renames Merged_Owner.Data.all;
                   First  : Boolean := True;
                   Can_Test : Boolean := True;
                   Value  : Origin_Fact := No_Value_Edge;
@@ -2583,8 +2625,11 @@ package body Landin.Stages.Checking.References is
                     (if Match_Subject_Is_Copied (Tree, Subject_Node)
                      then (Frame => True, others => <>)
                      else Subject_Value.Storage);
-                  Before : constant Function_Table := Origins;
-                  Merged : Function_Table := [others => No_Origin];
+                  Before_Owner : constant Snapshots.Owner :=
+                    Snapshots.Saved (Origins);
+                  Before : Function_Table renames Before_Owner.Data.all;
+                  Merged_Owner : constant Snapshots.Owner := Snapshots.Empty;
+                  Merged : Function_Table renames Merged_Owner.Data.all;
                   First  : Boolean := True;
                   Value  : Origin_Fact := No_Value_Edge;
                begin
@@ -2689,9 +2734,16 @@ package body Landin.Stages.Checking.References is
                     Syn.Kind (Tree, Node) = Syn.While_Statement;
                   Is_For : constant Boolean :=
                     Syn.Kind (Tree, Node) = Syn.For_Statement;
-                  Entry_State : Function_Table;
-                  Head : Function_Table;
-                  Exhausted_State : Function_Table;
+                  Entry_State_Owner : constant Snapshots.Owner :=
+                    Snapshots.Empty;
+                  Entry_State : Function_Table renames
+                    Entry_State_Owner.Data.all;
+                  Head_Owner : constant Snapshots.Owner := Snapshots.Empty;
+                  Head : Function_Table renames Head_Owner.Data.all;
+                  Exhausted_State_Owner : constant Snapshots.Owner :=
+                    Snapshots.Empty;
+                  Exhausted_State : Function_Table renames
+                    Exhausted_State_Owner.Data.all;
                   Can_Exhaust : Boolean := False;
                   Frame : Loop_Frame;
                   Scratch : aliased Landin.Diagnostics.Diagnostic_List;
@@ -2727,7 +2779,9 @@ package body Landin.Stages.Checking.References is
 
                   procedure Pass (Reporting : Boolean) is
                      Body_Fell : Boolean;
-                     Next : Function_Table := Entry_State;
+                     Next_Owner : constant Snapshots.Owner :=
+                       Snapshots.Saved (Entry_State);
+                     Next : Function_Table renames Next_Owner.Data.all;
                   begin
                      Release (Frame);
                      Sink := (if Reporting
@@ -2894,7 +2948,10 @@ package body Landin.Stages.Checking.References is
                Evaluate (Syn.Condition_Of (Tree, Node));
                if Falls_Through then
                   declare
-                     Continuing : constant Function_Table := Origins;
+                     Continuing_Owner : constant Snapshots.Owner :=
+                       Snapshots.Saved (Origins);
+                     Continuing : Function_Table renames
+                       Continuing_Owner.Data.all;
                      Guarded : constant Boolean :=
                        Syn.Condition_Of (Tree, Node) /= Syn.No_Node;
                   begin
