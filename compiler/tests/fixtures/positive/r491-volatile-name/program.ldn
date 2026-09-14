@@ -1,0 +1,5 @@
+volatile: type = u32
+copy: volatile = 1
+use: (volatile: u32) -> (result: u32) =
+    result = volatile
+end use

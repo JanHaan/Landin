@@ -18090,6 +18090,36 @@ file positive/r491-tour-allocator-examples/main.ldn tokens 452
   1933 1934 )
   1935 1938 end
   1939 1944 probe
+file positive/r491-volatile-name/program.ldn tokens 29
+  0 8 volatile
+  8 9 :
+  10 14 type
+  15 16 =
+  17 20 u32
+  21 25 copy
+  25 26 :
+  27 35 volatile
+  36 37 =
+  38 39 1
+  40 43 use
+  43 44 :
+  45 46 (
+  46 54 volatile
+  54 55 :
+  56 59 u32
+  59 60 )
+  61 63 ->
+  64 65 (
+  65 71 result
+  71 72 :
+  73 76 u32
+  76 77 )
+  78 79 =
+  84 90 result
+  91 92 =
+  93 101 volatile
+  102 105 end
+  106 109 use
 file positive/r491-writable-return-explicit-sources/program.ldn tokens 87
   0 6 choose
   6 7 :
@@ -64345,6 +64375,13 @@ file negative/r491-retained-reference-stores/main.ldn tokens 352
   1550 1551 )
   1552 1555 end
   1556 1569 variant_frame
+file negative/r491-shared-declaration/program.ldn tokens 6
+  0 3 mut
+  4 9 first
+  9 10 ,
+  11 17 second
+  17 18 :
+  19 22 i32
 file negative/r491-sink-entry-overlap/program.ldn tokens 129
   0 4 both
   4 5 :
@@ -65130,6 +65167,13 @@ file negative/r491-symbolic-c-layout/main.ldn tokens 215
   808 812 none
   813 816 end
   817 829 bad_callback
+file negative/r491-volatile-pointer/program.ldn tokens 6
+  0 4 port
+  4 5 :
+  6 14 volatile
+  15 18 ptr
+  19 22 mut
+  23 26 u32
 file negative/r491-writable-return-hidden-storage/program.ldn tokens 49
   0 3 mut
   4 8 slot
