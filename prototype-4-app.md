@@ -56,6 +56,10 @@ If a handle is consumed out of an `inout` reader, [0910] requires replacement
 even when close fails and its caller recovers; consuming the whole reader by
 `sink` leaves no such returned-storage obligation. Applicable cleanup can
 restore a field before that exit check.
+D220 applies the same boundary to a handle table: a literal fixed-array
+element is contained storage, while indexing a slice table follows referenced
+backing and is not a sink place. Whole descriptor fields keep the container
+consumption form shared with prototype 3.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
 contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose

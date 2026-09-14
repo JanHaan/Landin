@@ -264,6 +264,11 @@ a fabricated non-null allocation; repeated raw disposal reports `raw_empty`.
 No generic
 uninitialized `new_slice` is supplied. Copied aliases remain the caller's
 manual-lifetime responsibility.
+D220 keeps the consuming place at the descriptor binding or field: `l.items`
+may be consumed as a whole, while `l.items[0]` follows a slice's backing
+reference and is outside the sink-place form. A literal fixed-array element
+can itself hold a consumable descriptor. The small
+`positive/r491-sink-contained-places` derivative pins that distinction.
 
 sizeof and alignof applied to a type parameter. Specialised they
 are constants; compiled once against a table they are not, so the

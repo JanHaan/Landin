@@ -12456,8 +12456,119 @@ package body Landin.Tests.Checking_Suite is
          & "flag do complete p = addr v end while _ = p end f" & LF);
    end Loops_Preserve_The_Assignment_Boundary;
 
+   procedure Sink_Paths_Stay_In_Their_Binding
+     (Item : in out Landin.Testing.Context);
+
+   procedure Sink_Paths_Stay_In_Their_Binding
+     (Item : in out Landin.Testing.Context)
+   is
+      Consume : constant String :=
+        "consume: (sink value: i32) -> none = end consume ";
+      Drop : constant String :=
+        "drop: (sink value: []mut i32) -> none = end drop ";
+      Box : constant String :=
+        "box: type = struct items: []mut i32 end box ";
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Facts : Landin.Targets.Target_Facts)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "sink-path.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Order, Work), 4,
+            Label & " reaches checking");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+               and then
+                 (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0301"),
+               Label & ": " & Landin.Stages.Rendered_Report (Work));
+         end;
+      end Check_Source;
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+         begin
+            Check_Source
+              ("slice parameter", Consume
+               & "bad: (values: []mut i32) -> none = "
+               & "consume(values[0]) end bad", False, Facts);
+            Check_Source
+              ("local view of inout array", Consume
+               & "bad: (inout values: [1]i32) -> none = "
+               & "view: []mut i32 = values[0..1] "
+               & "consume(view[0]) end bad", False, Facts);
+            Check_Source
+              ("restored slice field", Consume & Box
+               & "bad: (inout value: box) -> none = "
+               & "consume(value.items[0]) value.items[0] = 7 end bad",
+               False, Facts);
+            Check_Source
+              ("generic slice", "consume: (t: type, sink value: t) "
+               & "-> none = end consume "
+               & "bad: (t: type, values: []mut t) -> none = "
+               & "consume(t: t, value: values[0]) end bad "
+               & "use: (values: []mut i32) -> none = "
+               & "bad(t: i32, values: values) end use", False, Facts);
+            Check_Source
+              ("explicit pointer dereference", Consume
+               & "bad: (value: ptr mut i32) -> none = "
+               & "consume(value.val) end bad", False, Facts);
+            Check_Source
+              ("computed array index", Consume
+               & "bad: (inout values: [1]i32, index: usize) -> none = "
+               & "consume(values[index]) values = zeroed end bad",
+               False, Facts);
+            Check_Source
+              ("restored fixed element", Consume
+               & "good: (inout values: [1]i32) -> none = "
+               & "consume(values[0]) values[0] = 7 end good", True, Facts);
+            Check_Source
+              ("restored descriptor field", Drop & Box
+               & "good: (inout value: box) -> none = "
+               & "drop(value.items) value.items = [] end good", True, Facts);
+            Check_Source
+              ("restored descriptor array element", Drop
+               & "good: (inout values: [1][]mut i32) -> none = "
+               & "drop(values[0]) values[0] = [] end good", True, Facts);
+            Check_Source
+              ("generic descriptor", "drop: (t: type, "
+               & "sink value: []mut t) -> none = end drop "
+               & "good: (t: type, values: []mut t) -> none = "
+               & "drop(t: t, value: values) end good "
+               & "use: (values: []mut i32) -> none = "
+               & "good(t: i32, values: values) end use", True, Facts);
+         end;
+      end loop;
+   end Sink_Paths_Stay_In_Their_Binding;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "sink paths stay in their binding",
+         Sink_Paths_Stay_In_Their_Binding'Access);
       Landin.Testing.Register
         (Into, "checking", "loops preserve the assignment boundary",
          Loops_Preserve_The_Assignment_Boundary'Access);

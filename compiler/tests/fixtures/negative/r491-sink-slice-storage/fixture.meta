@@ -1,0 +1,9 @@
+class: negative
+summary: a literal slice index still dereferences backing and cannot be sunk
+program: program.ldn
+codes: L0301, L0301
+constructs: 0430, 0510, 0520, 0900, 0910, 1800, 1810, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-sink-slice-storage/program.ldn
+status: 1

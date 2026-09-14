@@ -1691,6 +1691,10 @@ dereference and no computed index, which is the line where
 the analysis is still provable: two pointers may name one
 place, so p.val.items is refused, and a computed index
 names none in particular, so xs[i].items is too.
+A literal fixed-array index stays within the binding's own storage. A slice
+index follows its backing reference, so it is refused even when its index is a
+literal. The slice descriptor itself, including one held in a field or fixed
+array element, is an ordinary place and may be consumed as a whole.
 A place that was sunk is dead. Reading it before it is
 assigned again is an error, and that is what closes the
 window between releasing storage and repointing the field

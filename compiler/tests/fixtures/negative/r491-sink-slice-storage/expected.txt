@@ -1,0 +1,20 @@
+error[L0301]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/r491-sink-slice-storage/program.ldn:5:13
+  |
+5 |     consume(values[0])
+  |             ^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-sink-slice-storage/program.ldn:1:11
+  |
+1 | consume: (sink value: i32) -> none =
+  |           ^^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable
+error[L0301]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/r491-sink-slice-storage/program.ldn:10:13
+   |
+10 |     consume(view[0])
+   |             ^^^^^^^
+  --> ../tests/fixtures/negative/r491-sink-slice-storage/program.ldn:1:11
+  |
+1 | consume: (sink value: i32) -> none =
+  |           ^^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable
