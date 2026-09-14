@@ -57,6 +57,7 @@ ROADMAP = "ROADMAP.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/environments.md",
+                     "docs/ir.md",
                      "compiler/ada/README.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",

@@ -5739,7 +5739,7 @@ being silently promoted to bugs or discarded:
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
 | m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Comment encoding is repaired under [1750]: the scanner uses the literal decoder's shortest-form UTF-8 check, reports the first invalid byte per comment with L0012, and retains delimiter/token recovery. D164 already chooses the maximal opening quote run: six adjacent quotes are an unterminated six-quote opener, not empty raw text. The grammar now requires content; the tour and tiny lexer/decoder controls pin later closers, shorter runs, retained line endings and ordinary empty quoted text. |
 | m14 | Sampled unused helpers and the unused Needs_Source catalogue facet remain maintenance observations; exception routing is reconciled separately with J109. |
-| m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative phase-gate evidence still requires review; structural checks do not approve a phase. |
+| m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative gate accounts are reconciled: historical source witnesses and missing original bundles are distinguished under M6; current R4 and R4.91 remain active, both project status pointers name R4.91, and R5 depends on it. No development transcript supplies a new acceptance tag or closes a phase. |
 | m17 | Implemented: README and handoff include R2.10, R4.21, R4.30 and R4.40, with the selected C ABI and separate binding generator explicitly described. The zeroable account names settled D143 behavior. Four aggregate fixture summaries now cite the decisions that actually pin them, without changing any source or expected compiler verdict. |
 | m21 | D190 and R7.20 retain the actual carrier ranges without stale source-reference counts. A new tiny negative fixture pins D202's L0305 refusal when an option reuses the compiler-owned debug atom, including its full diagnostic. |
 | m15 | Implemented: the compiler guide now covers all 71 package specifications, including the 18 formerly missing packages for allocation, machine evidence, IR transforms, reports and layout policy. Directory descriptions name the current responsibilities; parent and child package boundaries are explicitly distinct. A mechanical check compares the ownership rows with private, generic and ordinary package specs and rejects missing, repeated or obsolete rows. |
@@ -6319,6 +6319,17 @@ checks require entry through the shared publisher; their own file readers now
 close handles instead of issuing ResourceWarnings. These are local protocol and
 rendering controls, not SourceHut credential or live-upload evidence. Logs are
 in `.scratch/r491-publication-lock/`.
+
+At the user's request, integration also includes canonical main through
+`3a3caca4`, its derived IR guide, and the six pending main-worktree files captured
+for the next push. These include the README's consistent backtick reference,
+the task-directed context-pack helper and its eight focused tests, compiler
+guidance, and matching registration in the existing documents acceptance job.
+The site keeps source-relative links and the IR guide's non-authoritative role;
+the guide now explains the compact/detailed dump distinction. No Ada compiler
+source changes during this integration. Its context-pack, publication and link
+checks are bounded Python tests; they do not execute a compiler corpus, a model
+request, a live publisher or exact-revision native acceptance.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175
@@ -8358,6 +8369,15 @@ these repairs. The user's constraint excludes new mutation-based probing and
 debugger sessions. Normal builds and repository regressions remain authorized.
 Required debugger acceptance is not waived: R4.91 remains active until its full
 acceptance can be performed within the user's authorized scope.
+
+The remaining closure work is live activation of the SourceHut publisher,
+the expanded runtime/profile and exact-revision acceptance evidence (including
+required debugger coverage), and maintainer disposition of M5/M6's font-history
+and missing historical-bundle records. Broader mutation coverage remains absent
+under the user's constraint; generator-only checks do not supply it. The
+retained maintenance and cost observations (M12/K28, m14, m23, m28/m29) do not
+establish additional wrong-code repairs and authorize no stress or giant-image
+replay. Every review row keeps its individual disposition and evidence limits.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler

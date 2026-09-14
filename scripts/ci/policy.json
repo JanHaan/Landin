@@ -149,6 +149,10 @@
         ],
         [
           "python3",
+          "scripts/tests/test_context_pack.py"
+        ],
+        [
+          "python3",
           "scripts/tests/test_roadmap_progress.py"
         ],
         [

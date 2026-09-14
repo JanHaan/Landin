@@ -2,8 +2,10 @@
 
 `render_html.py` renders the language documents and the guides selected in
 its `DOCS` and `GUIDES` lists as self-contained HTML pages. `scripts/site.sh`
-packages them for pages.sr.ht. The text files
-are the specification; these pages are a reading of them.
+packages them for pages.sr.ht. The Markdown files are the rendering sources;
+publication does not change their authority. The specification remains
+normative, and derived guides such as [the IR explanation](../ir.md) remain
+non-authoritative.
 
 ## What it renders
 

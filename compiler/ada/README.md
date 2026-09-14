@@ -5,6 +5,10 @@ It is a real compiler under construction, not a prototype: `spec.md` is the
 normative language specification and `tour.md` explains the language, and
 nothing here may quietly decide language semantics.
 
+For an introduction to the intermediate representation and the reasons for
+its structure, read [the IR guide](../../docs/ir.md). It is a maintained,
+non-authoritative account derived from the implementation and its tests.
+
 ## Layout
 
 ```text
@@ -33,6 +37,32 @@ compiler/ada/
 `compiler/tests/` sits outside this directory on purpose. Fixtures describe
 the language, not this implementation, and must survive the bootstrap being
 replaced.
+
+## Preparing task-directed model context
+
+`scripts/context_pack.py` builds a read-only context pack for a particular
+task without putting every compiler body in one prompt. From the repository
+root, for example:
+
+```sh
+python3 scripts/context_pack.py compiler/ada \
+    --query='variant match checking and its fixtures' \
+    --budget-tokens=500000
+```
+
+The pack contains the applicable `AGENTS.md`, compiler guidance and project
+files, Ada specifications, a mechanical declaration and dependency index, and
+exact source slices ranked by the query. Every source block names its original
+path and SHA-256 digest, and exact slices also name their line span. Outlines
+are navigation aids, not source, and an exact file must be consulted before it
+is edited.
+
+The script is standard-library-only. If the optional `tiktoken` package is
+available, `--tokenizer=auto` counts `o200k_base` tokens; otherwise it visibly
+uses an estimate of one token per three UTF-8 bytes. `--tokenizer=o200k` fails
+unless the exact counter is available. `--compact-interfaces` removes comments
+and optional layout from the specification copies in the pack, but it is off by
+default because specification comments often carry compiler invariants.
 
 ## Package ownership
 

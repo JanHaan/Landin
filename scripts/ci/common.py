@@ -313,6 +313,7 @@ def required_jobs():
                {"id": "documents", "mode": "debug", "commands": [
                    ["python3", "scripts/tests/test_build_inventory.py"],
                    ["python3", "scripts/tests/test_build_lock.py"],
+                   ["python3", "scripts/tests/test_context_pack.py"],
                    ["python3", "scripts/tests/test_roadmap_progress.py"],
                    ["python3", "scripts/tests/test_ci.py"],
                    ["python3", "compiler/tests/debugging/test_check.py"],
