@@ -8525,6 +8525,34 @@ harnesses left `compiler/ada/GNAT-TEMP-001361.TMP`, explaining their source
 inventory failures; no tracked source changed, and the archive rules are not
 broadened to hide arbitrary temporary files. The failed attempt is retained.
 
+
+Attempt `20260914T143510Z-0c8df5444802` on `2d30e1a3` passed bindings,
+documents and the full release debugger job. The release suite completed
+197,313 checks across 710 cases, with five failing cases. The failure batch
+owns discarded/statement recovery blocks incorrectly requiring a value,
+reference-transport fixtures missing the now-required retention contracts,
+variadic-tail recovery producing phantom outer declarations, a frame escape
+report pointing to a parameter instead of its frame witness, stale diagnostic
+code counts, and the recorded IR corpus. Flow now carries whether a result is
+consumed; used recovery expressions still require a value on fallthrough.
+Reference facts retain a bounded declaration witness for frame diagnostics.
+The invalid variadic tail is consumed as parameters of its own list. Unknown
+type spellings keep their resolver-owned L0201; already-invalid range/array
+uses do not require redundant downstream diagnostics. Transport helpers mark
+retained replacements `escaping`; replacement backing is independent while
+local descriptors and runtime value/dispatch assertions remain exercised.
+No language-origin rule is relaxed. Three existing I/O assignments now return
+their previous pointer from expected-failure recovery instead of supplying no
+value. The regenerated corpus adds 17 R4.91 positive fixtures and preserves
+all 233 previous entries. Its nine changed entries reflect control-block
+ordering, explicit pointee metadata, the added exact-intermediate arithmetic
+cases, and aggregate payload copies through their storage addresses. The
+layout corpus is unchanged. Focused release checks pass for all previously
+failing source verdicts, parser recovery and diagnostic codes, and the I/O,
+generic carrier and erased argument runtime profiles. The failed attempt
+remains retained; cancellation stopped its peers, with a 20.60 GiB peak and
+no memory-limit or OOM events.
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the

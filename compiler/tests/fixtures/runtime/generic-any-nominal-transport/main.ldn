@@ -29,10 +29,10 @@ end pack
 copy: (t: type, source: box(t)) -> (result: box(t) from source) =
     result = source
 end copy
-replace: (t: type, inout target: box(t), value: t) -> none =
+replace: (t: type, inout target: box(t), escaping value: t) -> none =
     target.value = value
 end replace
-explicit_replace: (inout target: box(any counter), value: any counter)
+explicit_replace: (inout target: box(any counter), escaping value: any counter)
                   -> none =
     replace(t: any counter, target: target, value: value)
 end explicit_replace

@@ -11,7 +11,7 @@ end copy
 identity: (t: type, value: t) -> (result: t from value) =
     result = value
 end identity
-replace: (fixed n: usize, t: type, target: ptr mut [n]t, value: t) -> none =
+replace: (fixed n: usize, t: type, target: ptr mut [n]t, escaping value: t) -> none =
     target.val[0] = value
 end replace
 shelf: type (t: type) = struct

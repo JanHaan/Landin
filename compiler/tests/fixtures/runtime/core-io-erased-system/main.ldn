@@ -12,6 +12,7 @@ path_rules_code: () -> (code: i32) =
         then
             return
         end if
+        empty_path
     end
     _ = empty_path
     code = 11
@@ -25,6 +26,7 @@ path_rules_code: () -> (code: i32) =
         then
             return
         end if
+        nul_path
     end
     _ = nul_path
     code = 12
@@ -39,6 +41,7 @@ path_rules_code: () -> (code: i32) =
         then
             return
         end if
+        long_path
     end
     _ = long_path
     code = 13

@@ -49,15 +49,17 @@ argument: () -> (value: i32) =
     value = 2
 end argument
 
-replace: (inout target: any reader, replacement: any reader)
+replace: (inout target: any reader, escaping replacement: any reader)
          -> (value: i32) =
     target = replacement
     value = 2
 end replace
 
+--  Replacement backing may be retained by the transport helpers.
+first: small = (value: 40)
+second: large = (prefix: [101, 202, 3], value: 17)
+
 public main: () -> (code: i32) =
-    first: small = (value: 40)
-    second: large = (prefix: [101, 202, 3], value: 17)
     a: any reader = any(addr first)
     b: any reader = any(addr second)
     receivers: [2]any reader = [a, b]

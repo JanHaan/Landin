@@ -2,5 +2,5 @@ class: negative
 summary: [0370] leaves an unresolved measured type to its one owning diagnostic
 constructs: 0370, 1830, 1860
 program: program.ldn
-codes: L0304
+codes: L0201
 targets: linux-x86-64, macos-arm64

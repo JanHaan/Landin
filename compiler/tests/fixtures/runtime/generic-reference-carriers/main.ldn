@@ -36,19 +36,21 @@ end used
 get: (t: type, source: carrier(t)) -> (result: t from source) =
     result = source.first.val
 end get
-replace: (t: type, source: carrier(t), value: t) -> none =
+replace: (t: type, source: carrier(t), escaping value: t) -> none =
     source.first.val = value
 end replace
-explicit_replace: (source: carrier(any counter), value: any counter)
+explicit_replace: (source: carrier(any counter), escaping value: any counter)
                   -> none =
     replace(t: any counter, source: source, value: value)
 end explicit_replace
-retarget: (t: type, inout target: carrier(t), source: []mut t) -> none =
+retarget: (t: type, inout target: carrier(t), escaping source: []mut t) -> none =
     target.first = addr source[0]
     target.prefix = source
 end retarget
+--  Replacement backing may be retained by the transport helpers.
+mut numbers: [2]u32 = [17, 25]
+
 public main: () -> (code: i32) =
-    mut numbers: [2]u32 = [17, 25]
     mut scalar := make(addr numbers[0], numbers[0..<2])
     copied_scalar := copy(scalar)
     scalar_view := used(copied_scalar)
@@ -102,12 +104,13 @@ public main: () -> (code: i32) =
     erased_view := used(erased_carrier)
     first := get(erased_carrier)
     _ = first.bump()
-    replace(erased_carrier, erased_view[1])
+    replace(erased_carrier, any(addr right))
     second := get(erased_carrier)
     _ = second.bump()
     explicit_carrier: carrier(any counter) = copy(erased_carrier)
-    explicit_replace(explicit_carrier, first)
+    explicit_replace(explicit_carrier, any(addr left))
     third := get(explicit_carrier)
     _ = third.bump()
-    code = if left.value == 18 and right.value == 25 then 42 else 4 end if
+    code = if left.value == 18 and right.value == 25
+              and lenof erased_view == 2 then 42 else 4 end if
 end main

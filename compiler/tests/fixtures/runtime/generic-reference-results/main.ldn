@@ -18,12 +18,15 @@ end identity
 read: (t: type, p: ptr mut t) -> (value: t from p) =
     value = p.val
 end read
-write: (t: type, p: ptr mut t, value: t) -> none =
+write: (t: type, p: ptr mut t, escaping value: t) -> none =
     p.val = value
 end write
 view: (t: type, source: []mut t) -> (result: []mut t from source) =
     result = source
 end view
+--  Replacement backing may be retained by the transport helpers.
+mut words: [2]u32 = [17, 25]
+
 public main: () -> (code: i32) =
     mut number: u32 = 1
     q := identity(addr number)
@@ -36,7 +39,6 @@ public main: () -> (code: i32) =
         code = 1
         return
     end if
-    mut words: [2]u32 = [17, 25]
     mut words_view: []mut u32 = view(words[0..<2])
     vp := identity(addr words_view)
     selected := read(vp)

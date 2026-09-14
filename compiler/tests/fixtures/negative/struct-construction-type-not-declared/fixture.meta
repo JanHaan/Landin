@@ -3,4 +3,4 @@ summary: D72 leaves an unresolved construction type to the type position's one o
 constructs: 0700, 1740, 1810, 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304
+codes: L0201
