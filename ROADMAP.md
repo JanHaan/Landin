@@ -5703,7 +5703,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Named facets reconciled after reading all four complete prototypes: live formals and conformance labels use lowercase names without colliding with runtime parameters; tour allocations use initialized object/byte-buffer APIs; explicit legacy prototype calls supply every static formal; retired worklist links name this roadmap; the reader consumes one file handle with the whole reader. Historical findings remain byte-identical and deliberately retained raw-storage sketches stay labelled historical. The prototypes remain specification sketches, not newly enabled programs. | Fourth batch |
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. The maintainer chose to leave the font files for now. R4.91 therefore makes no font deletion or history rewrite; this disposition does not change license terms or erase the retained finding. | Disposed by maintainer: retain for now |
-| M6: historical closure anchors | Source provenance reconciled: R1/R2/R3 gate sections now name retained source witnesses, and the R4.20/R4.21/R4.30 records explicitly identify pre-rewrite inputs. Nine old/rewritten pairs differ only by three removed agent-guidance documents; the R4.30 tested tree differs from its committed successor only in three closure documents. Original R1/R2/R3 run bundles have not been recovered; that historical evidence gap remains open and is not filled by current development checks. | Fourth batch |
+| M6: historical closure anchors | Source provenance reconciled: R1/R2/R3 gate sections now name retained source witnesses, and the R4.20/R4.21/R4.30 records explicitly identify pre-rewrite inputs. Nine old/rewritten pairs differ only by three removed agent-guidance documents; the R4.30 tested tree differs from its committed successor only in three closure documents. Closed by maintainer disposition: original R1/R2/R3 run bundles have not been recovered, so those historical runs remain explicitly unverifiable. Retained source witnesses are preserved; current acceptance proves only its own revision and does not fill the historical evidence gap. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
 | M8: stale decisions/citations | Implemented for the named findings: D203–D207 distinguish completed historical R4.40 evidence from current R4.91 acceptance; D14/D31 retain admitted slice length; D74/D75/D89/D102 cite the actual variant, selection and matching rules, and the current unassigned variant-return pin remains with D106. check.py rejects evidence paragraphs calling a non-active roadmap owner active. No semantic rule or historical acceptance input changes. | Fourth batch |
 | A5, M9: source-path bytes | Implemented: the offline decoder writes exact path bytes and an ASCII coordinate suffix through binary stdout. Build identity remains mandatory. The existing non-UTF-8/quoted/colon path control now runs under strict UTF-8 and strict ASCII output policies with bounded subprocess timeouts. | Third batch implementation |
@@ -6346,7 +6346,8 @@ refusals now distinguish deferred source shapes from ordinary identifiers and
 implemented atom lists. D225 implements J104's user-selected reservation of
 control words in every identifier position.
 N12 retains the existing adjacent-token contract. K28/M12 remain scoped maintenance
-observations, and M6's original historical native bundles remain unrecovered.
+observations. M6 is closed by maintainer disposition with the original
+historical native runs explicitly unverifiable; their bundles remain unrecovered.
 M5 is disposed by the maintainer's decision to leave the font files for now; no history rewrite is authorized. The intake
 rows retain each other disposition and any outstanding evidence. Complete
 fixture accounting, diagnostic/document agreement and focused IR review
@@ -7872,8 +7873,11 @@ historical inputs; this audit does not revalidate their remote job contents.
 R1/R2/R3's phase gates now identify concrete retained source witnesses and the
 R2/R3 counts recorded at their closure revisions. Their original native run
 bundles are not supplied by those source records and have not been recovered
-in this audit. That part of M6 remains open. Current filtered checks and eventual
-R4.91 acceptance cannot retrospectively establish an earlier exact run. No old
+in this audit. The maintainer closes M6 by accepting this explicit historical
+evidence gap: those original runs remain unverifiable, the retained source
+references remain available, and new acceptance establishes only its current
+revision. Current filtered checks and R4.91 acceptance cannot retrospectively
+establish an earlier exact run. No old
 suite, assembler, debugger, publication or history rewrite ran for this audit.
 Full object IDs, ancestry verdicts and exact path differences are retained in
 `.scratch/r491-history-evidence/anchors.json` and `pairs.json`.
@@ -8377,8 +8381,9 @@ evidence before changing the limit.
 
 The remaining closure work is live activation of the SourceHut publisher,
 the expanded runtime/profile and exact-revision acceptance evidence (including
-required debugger coverage), and maintainer disposition of M6's missing
-historical-bundle records. M5 is disposed: leave the font files for now.
+required debugger coverage). M6 is closed by maintainer disposition with the
+historical evidence gap explicitly retained. M5 is disposed: leave the font
+files for now.
 Broader mutation coverage remains absent under the user's constraint;
 generator-only checks do not supply it. The
 retained maintenance and cost observations (M12/K28, m14, m23, m28/m29) do not
@@ -8400,7 +8405,7 @@ The remaining delivery sequence is concrete:
 | Step | Required result | Current boundary |
 | --- | --- | --- |
 | Reconcile acceptance execution | Preserve giant-image cases as source/seam evidence while running the eight existing jobs concurrently under aggregate memory containment. The changed policy cannot reuse an existing policy identity. | The maintainer activated the Docker cap, verified at the kernel boundary, and explicitly authorized the existing capped acceptance jobs. The positive-fixture path emits assembly text only; the native execution path selects runtime and ABI classes. No acceptance waiver is inferred. |
-| Settle historical dispositions | M5 is disposed by the maintainer's choice to retain the font files for now. Record M6's treatment of unrecovered original bundles, preserving the difference between source witnesses and exact run evidence. | No history rewrite or retrospective acceptance claim is authorized. New acceptance cannot recover a historical run. |
+| Historical dispositions settled | M5 retains the font files for now. The maintainer closes M6 with the original R1/R2/R3 native runs explicitly unverifiable and their source witnesses preserved. | No history rewrite or retrospective acceptance claim is authorized. New acceptance proves only its current revision and cannot recover a historical run. |
 | Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. Live permission verification, approval, promotion and publication remain unperformed. |
 
 The maintainer clarified that the resource restrictions address the incident
@@ -8409,7 +8414,8 @@ allows adjusting execution limits to prevent a recurrence. This is permission
 to prepare contained validation; subsequent instructions explicitly authorize
 the existing parallel gate under the 100 GiB Docker cap.
 M5 is disposed by the separate instruction to leave the font files for now.
-M6's missing historical evidence remains distinct and open.
+M6 is closed by maintainer disposition; its missing historical evidence remains
+explicitly distinct from current acceptance.
 
 The acceptance runner now runs eight isolated jobs concurrently, explicitly
 builds with eight workers per job and holds one of eight host-wide slots
@@ -8552,6 +8558,12 @@ failing source verdicts, parser recovery and diagnostic codes, and the I/O,
 generic carrier and erased argument runtime profiles. The failed attempt
 remains retained; cancellation stopped its peers, with a 20.60 GiB peak and
 no memory-limit or OOM events.
+
+Attempt `20260914T152118Z-c6d82106db12` on `56dd8404` is superseded to include
+the maintainer's M6 disposition in the exact committed acceptance candidate.
+Its partial evidence is retained; this deliberate restart does not indicate
+a compiler failure. The recovery/parser/frame-witness regressions and the
+reviewed lowering corpus also pass focused Linux debug checks before restart.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
