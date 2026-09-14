@@ -1,0 +1,16 @@
+root: type = concept (t: type)
+    value: (x: t) -> (r: i32)
+end root
+left: type = concept (t: type) is root
+end left
+right: type = concept (t: type) is root
+end right
+both: type = concept (t: type) is left, right
+end both
+identity: (x: i32) -> (r: i32) = r = x end identity
+i32 is root (value: identity)
+i32 is left ()
+i32 is right ()
+i32 is both ()
+select: (t: type is both, x: t) -> (r: i32) = r = t.value(x) end select
+f: (x: i32) -> (r: i32) = r = select(x) end f

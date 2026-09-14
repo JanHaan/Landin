@@ -1,0 +1,5 @@
+class: positive
+summary: a repeated path to one inherited concept entry remains unambiguous
+program: program.ldn
+constructs: 1230, 1240, 1280, 1300, 1310, 1800
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -804,6 +804,7 @@ negative/r491-range-context-overflow | linux-x86-64, macos-arm64
 negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sink-slice-storage | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-static-entry-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-symbolic-c-layout | linux-x86-64
 negative/range-subtype-address | linux-x86-64, macos-arm64
@@ -1205,6 +1206,7 @@ positive/r491-noreturn-name | linux-x86-64
 positive/r491-ordinary-iterable | linux-x86-64
 positive/r491-range-endpoint-context | linux-x86-64, macos-arm64
 positive/r491-sink-contained-places | linux-x86-64, macos-arm64, synthetic-32
+positive/r491-static-entry-diamond | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-symbolic-c-layout | linux-x86-64
 positive/r491-tour-allocator-examples | linux-x86-64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64

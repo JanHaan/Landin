@@ -5876,7 +5876,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J45 | Any pre-flight CLI diagnostic silently disables the entire frontend (syntax/name/type checking) for the given sources | C | Disposed as a diagnostic-policy observation, not an established correctness defect. An invalid CLI request already fails with its configuration diagnostic; no contract requires syntax/name/type results under that invalid configuration. The driver deliberately gates stages after errors. Retain that boundary rather than broadening R4.91 into speculative checking after a refused request. |
 | J46 | Multi-result placement check overflows Byte_Count and crashes with exit 70 on a written function type | C | Repaired with J60: result placement uses the existing recursive shape measurement with a non-raising Fits result, which guards every target-sized product before multiplication. Final placement still checks field and tail padding. The oversized source witness was not executed; bounded result signatures and scalar placement-boundary checks provide development evidence. |
 | J47 | Duplicate member names in a non-parameterized struct body are never checked, so the second member is silently unreachable | C | Repaired: ordinary and template structs share label-uniqueness checks for common fields, variant-part labels and each payload's own fields. Collisions report L0309 at the later label with the earlier label related. Separate payloads and nested structs retain independent namespaces; invalid ordinary types propagate refusal to their consumers. |
-| J48 | Static generic `T.entry(...)` silently resolves an inherited entry-name collision by parent declaration order instead of diagnosing it | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
+| J48 | Static generic `T.entry(...)` silently resolves an inherited entry-name collision by parent declaration order instead of diagnosing it | C | D221 resolves static lookup explicitly: distinct declaring concepts make a selected name ambiguous, including direct/inherited collisions; a diamond visits its shared ancestor once. The checker refuses the selection without adding a runtime-type cascade. Unused collisions and distinct names remain legal. Six exact selectors pass 70 checks on each host; ordinary/template field-name findings retain their separate dispositions. Exact-revision acceptance remains open. |
 | J49 | Any malformed concrete conformance entry list raises "a collected conformance lost its normalized key" (exit 70) instead of reporting its diagnostic | C | Repaired: collection marks invalid entry lists and colliding declarations refused. Provider validation skips those declarations and retains their original diagnostics; valid single/multi-input keys and providers still validate. Missing associated input labels also cover K13. |
 | J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Repaired: the existing finite concept-graph walk includes type-formal constraint edges as well as named parents. Tiny self, mutual, mixed and unused cycles report L0301 before lookup; an acyclic constrained-formal control passes. The exhaustion witness was not executed before the guard. |
 | J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Repaired: parameterized provider selection skips declarations refused during collection. A missing entry retains L0301 and its consumer reports the ordinary L0318 unsatisfied constraint, without creating incomplete evidence or raising a compiler defect. Valid generic providers and signature refusals retain their contracts. |
@@ -7475,6 +7475,29 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J48/D221 removes parent-order precedence from static concept entry selection.
+A per-selection visited set examines each declaring concept once, including the
+represented formal's constraint, and stops after a second distinct declaration.
+It preserves diamond inheritance and the existing evidence-table identity and
+order. A refused selection is no longer passed to runtime-value classification,
+which would otherwise add an unrelated type-name diagnostic. The positive-index
+set implementation is shared with diagnostic coalescing; their set instances
+remain independently owned.
+
+Seven small checker sources cover both parent orders, a represented constraint,
+a direct/inherited collision, distinct entry names, an unused colliding closure
+and a shared ancestor. They pass 28 checks across both target widths. The paired
+negative/positive fixtures, erased-label control, generic report-coalescing case
+and object-safety refusal bring the six selected cases to 70 checks in each of
+macOS debug and Linux release. Both single-worker builds pass. The first checker
+run exposed the secondary runtime-type diagnostic; the corrected continuation
+passes the original one-report oracle without weakening it. Four generated
+inventories were refreshed, and prototype 3's historical finding tail is unchanged.
+All positive evidence stops at assembly text: no assembler, linker, generated
+program, debugger, giant source or broad suite ran. Logs remain in
+`.scratch/r491-static-entry/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
 
 M6's local object audit reconciles historical source identity without changing
 any gate's original input. All rewritten commits below are ancestors of the

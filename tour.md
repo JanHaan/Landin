@@ -2634,6 +2634,13 @@ instances required to represent source types from optional specialization of
 their dispatch. The bootstrap retains concrete representation bodies; it does
 not promise one erased body for every possible by-value representation.
 
+A static `T.entry` selection names one declaration across its concept and
+inherited constraints. A shared ancestor reached twice is still one concept;
+two different concepts declaring that name make the selection ambiguous.
+Reordering parents does not select an operation, and a direct child entry does
+not override an inherited one. An unused colliding name does not prevent the
+concept from being declared or conformed to; D221 records the exact boundary.
+
 `--optimize=none|size|speed` and `--specialize=off|auto|all` are independent
 axes, defaulting to `size` and `auto`, independent also of `--build-mode`.
 Specialization needs proof of actual incoming evidence, not merely the table

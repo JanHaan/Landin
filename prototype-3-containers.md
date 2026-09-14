@@ -20,6 +20,13 @@ D209's numeric array loops do not turn arbitrary raw storage into initialized
 array values. These rules also preserve prototype 2's diagnostic provider and
 prototype 4's heterogeneous capability chains.
 
+D221 requires static provider-entry selection to name one declaration across
+the distinct concept closure. A composed map or allocator concept cannot pick
+an operation by parent order; a shared ancestor contributes its entry only once.
+The paired static-entry collision/diamond fixtures pin that rule without changing
+the separate evidence tables or the uniquely named diagnostic and world entries
+used by prototypes 2 and 4.
+
 [0910]'s field consumption also applies to a later copy of the containing
 container. Replacing the whole container restores its consumed fields;
 unrelated fields and known array elements remain live. An `inout` container

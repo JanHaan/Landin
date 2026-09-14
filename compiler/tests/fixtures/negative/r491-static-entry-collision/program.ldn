@@ -1,0 +1,15 @@
+left: type = concept (t: type)
+    value: (x: t) -> (r: i32)
+end left
+right: type = concept (t: type)
+    value: (x: t) -> (r: i32)
+end right
+both: type = concept (t: type) is left, right
+end both
+left_value: (x: i32) -> (r: i32) = r = x end left_value
+right_value: (x: i32) -> (r: i32) = r = x + 1 end right_value
+i32 is left (value: left_value)
+i32 is right (value: right_value)
+i32 is both ()
+select: (t: type is both, x: t) -> (r: i32) = r = t.value(x) end select
+f: (x: i32) -> (r: i32) = r = select(x) end f

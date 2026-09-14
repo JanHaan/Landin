@@ -8,7 +8,7 @@ parameterized-provider | D142, D144 | `positive/parameterized-conformance-lookup
 collision | D142 | `negative/conformance-collision`, `negative/parameterized-conformance-collision`
 constraint-refusal | D142, D143 | `negative/constraint-not-satisfied`, `negative/nonzeroable-zero-length-constraint`
 generic-direct-table | D144 | `runtime/generic-evidence-indirect`, `negative/parameterized-conformance-entry-signature-mismatch`
-generic-parent-tables | D144 | `runtime/generic-composed-evidence`
+generic-parent-tables | D144, D221 | `runtime/generic-composed-evidence`, `negative/r491-static-entry-collision`, `positive/r491-static-entry-diamond`
 erased-direct-table | D145--D147, D154, D155 | `runtime/any-heterogeneous-dispatch`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser`, `negative/any-concept-identity-mismatch`
 erased-parent-flattening | D147 | `runtime/any-composed-dispatch`
 erased-parameterized-provider | D145--D147, D154, D155 | `runtime/any-parameterized-provider`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser`
