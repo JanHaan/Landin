@@ -1268,6 +1268,9 @@ type may be thrown away, including a value nobody computed
 for the purpose: '_ = 1 + 2' is a discard of an i32 by
 [0200], because a rule about wasted work is a rule about
 people and this one is about types.
+A `break with` must target a loop used as an expression [1190]. A statement
+loop has no result consumer; write `_ = loop ...` to discard its result, or
+use a plain `break` when no result is intended.
 What may not is a call of a function returning none [1920]. Discarding is for
 a result, and that call has none. A call with a declared error is also refused
 when a discard would ignore that outcome; `try` propagates it and call-site

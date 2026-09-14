@@ -24231,6 +24231,17 @@ package body Landin.Stages.Checking is
                            Commit_To (Of_Tree, Value, Ty.Default_Float);
                         end if;
                      end;
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "this break gives a value to a statement"
+                          & " loop",
+                        Note    => "[1930]: discard a loop result explicitly"
+                          & " with `_ = loop ...`, or use a plain `break`",
+                        Related => Target.Site,
+                        Because => "this loop has no result consumer",
+                        Into    => Found);
                   elsif Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
                     and then Target.Requires_Value
                   then
