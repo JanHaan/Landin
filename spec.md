@@ -162,7 +162,11 @@ where no enabled construct supplies that context. D161 admits [0260]'s quoted
 literal when its direct context is a read-only `[]u8`; the unescaped source
 content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
 Raw text [0280] takes the same direct byte-slice context by D164, but interprets
-no escape and removes a line-leading closing delimiter's indentation. D181
+no escape and removes a line-leading closing delimiter's indentation. The
+maximal opening quote run chooses the delimiter width; only a later run can
+close it. Adjacent quotes therefore cannot encode an empty raw literal.
+Intervening line endings remain content under D164; empty text uses `""`.
+D181
 adds `utf8`, `utf16` and `cstring` contexts and makes `utf8` the contextless
 default. A scalar escape is encoded as UTF-8 or UTF-16 for those views; a byte
 escape remains exclusive to `[]u8`. D162 admits
@@ -187,7 +191,7 @@ text_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
                   | "u" "{" hex_digit+ "}")
 raw         ::= quote_run raw_content quote_run
 quote_run   ::= "\"" "\"" "\"" "\""*
-raw_content ::= any byte*
+raw_content ::= any byte+
 integer     ::= decimal | hex | octal | binary
 float       ::= decimal_fraction decimal_exponent?
               | hex_fraction binary_exponent
@@ -195,8 +199,8 @@ decimal_fraction ::= decimal_digits "." decimal_digits
 decimal_exponent ::= ("e" | "E") ("+" | "-")? decimal_digits
 hex_fraction ::= "0x" hex_digits "." hex_digits
 binary_exponent ::= ("p" | "P") ("+" | "-")? decimal_digits
-decimal_digits ::= digit (digit | "_")*
-hex_digits  ::= hex_digit (hex_digit | "_")*
+decimal_digits ::= digit ((digit | "_")* digit)?
+hex_digits  ::= hex_digit ((hex_digit | "_")* hex_digit)?
 decimal     ::= digit ((digit | "_")* digit)?
 hex         ::= "0x" hex_digit ((hex_digit | "_")* hex_digit)?
 octal       ::= "0o" octal_digit ((octal_digit | "_")* octal_digit)?

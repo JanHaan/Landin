@@ -1,0 +1,6 @@
+class: negative
+summary: D162 and D166 require the whole part of a float to have a complete digit run
+program: program.ldn
+codes: L0321, L0321, L0321, L0321
+constructs: 0210, 0220, 0230, 1770
+targets: linux-x86-64, macos-arm64, synthetic-32
