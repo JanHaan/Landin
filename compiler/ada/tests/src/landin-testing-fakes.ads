@@ -18,6 +18,7 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem; Path : String; Content : String);
 
    --  A path that exists, can be listed, and cannot be read as a file.
+   --  Trailing directory separators do not create a different entry.
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String);
 
    --  A path that exists and refuses to be read, which is how the driver's
@@ -31,7 +32,8 @@ package Landin.Testing.Fakes is
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
-   --  Namespace equivalence is explicit, including dot/separator spellings.
+   --  Existing directories share identity across trailing separators.
+   --  Other namespace equivalence, including dot spellings, is explicit.
    --  The fake does not guess native symlink or volume case semantics.
    procedure Add_Alias
      (Host : in out Fake_Filesystem; Left, Right : String);

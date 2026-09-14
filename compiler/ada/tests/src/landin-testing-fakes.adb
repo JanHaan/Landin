@@ -2,6 +2,17 @@ package body Landin.Testing.Fakes is
 
    use type Landin.Platform.Read_Status;
 
+   function Directory_Path (Path : String) return String;
+
+   function Directory_Path (Path : String) return String is
+      Last : Natural := Path'Last;
+   begin
+      while Last > Path'First and then Path (Last) = '/' loop
+         Last := Last - 1;
+      end loop;
+      return Path (Path'First .. Last);
+   end Directory_Path;
+
    function Find
      (Host : Fake_Filesystem; Path : String) return Natural;
 
@@ -10,9 +21,17 @@ package body Landin.Testing.Fakes is
    is
    begin
       for Index in 1 .. Natural (Host.Items.Length) loop
-         if Unbounded.To_String (Host.Items.Element (Index).Path) = Path then
-            return Index;
-         end if;
+         declare
+            Item : constant File_Entry := Host.Items.Element (Index);
+            Stored : constant String := Unbounded.To_String (Item.Path);
+         begin
+            if Stored = Path
+              or else (Item.Kind = A_Directory
+                       and then Stored = Directory_Path (Path))
+            then
+               return Index;
+            end if;
+         end;
       end loop;
       return 0;
    end Find;
@@ -51,7 +70,7 @@ package body Landin.Testing.Fakes is
 
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String) is
    begin
-      Add (Host, Path, "", A_Directory);
+      Add (Host, Directory_Path (Path), "", A_Directory);
    end Add_Directory;
 
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String) is
@@ -91,7 +110,11 @@ package body Landin.Testing.Fakes is
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
    begin
-      if Left = Right then
+      if Left = Right
+        or else (Directory_Path (Left) = Directory_Path (Right)
+                 and then Host.Is_Directory (Left)
+                 and then Host.Is_Directory (Right))
+      then
          return True;
       end if;
       for Pair in 1 .. Natural (Host.Aliases.Length) / 2 loop
@@ -197,9 +220,10 @@ package body Landin.Testing.Fakes is
         ("<" => "<");
 
       Index  : constant Natural := Find (Host, Path);
+      Base   : constant String := Directory_Path (Path);
       Prefix : constant String :=
-        (if Path'Length > 0 and then Path (Path'Last) = '/'
-         then Path else Path & "/");
+        (if Base'Length > 0 and then Base (Base'Last) = '/'
+         then Base else Base & "/");
    begin
       Entries := Landin.Platform.Path_Vectors.Empty_Vector;
 

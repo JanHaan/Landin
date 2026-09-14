@@ -377,6 +377,51 @@ package body Landin.Tests.Driver_Suite is
    --  R3.10: directory modules and ordered roots
    ------------------------------------------------------------------
 
+   procedure Directory_Arguments_Allow_Trailing_Separators
+     (Item : in out Landin.Testing.Context);
+
+   procedure Directory_Arguments_Allow_Trailing_Separators
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Entry_Slash in Boolean loop
+         for Root_Slash in Boolean loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Args : Landin.Platform.Path_List;
+            begin
+               Host.Add_Directory ("entry");
+               Host.Add_Directory ("root");
+               Host.Add_Directory ("root/math");
+               Host.Add_File
+                 ("entry/main.ldn", "import math" & LF
+                  & "public main: () -> (code: i32) = "
+                  & "code = math.answer() end main" & LF);
+               Host.Add_File
+                 ("root/math/main.ldn",
+                  "public answer: () -> (value: i32) = "
+                  & "value = 42 end answer" & LF);
+               Args.Append
+                 (if Root_Slash then "--root=root/" else "--root=root");
+               Args.Append (if Entry_Slash then "entry/" else "entry");
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute (Args, Host, Tools);
+               begin
+                  Landin.Testing.Check
+                    (Item, Result.Status = Landin.Driver.Status_Success
+                     and then Unbounded.Length (Result.Report) = 0,
+                     "entry/root slash spellings discover the same sources");
+                  Landin.Testing.Check
+                    (Item, Tools.Run_Count = 0 and then Host.Write_Count = 0,
+                     "compile-only directory discovery has no tool effects");
+               end;
+            end;
+         end loop;
+      end loop;
+   end Directory_Arguments_Allow_Trailing_Separators;
+
    procedure Reachable_Modules_Are_Loaded
      (Item : in out Landin.Testing.Context);
 
@@ -3114,6 +3159,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "directory arguments allow trailing separators",
+         Directory_Arguments_Allow_Trailing_Separators'Access);
       Landin.Testing.Register
         (Into, "driver", "information validates deferred options",
          Information_Validates_Deferred_Options'Access);
