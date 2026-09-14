@@ -299,7 +299,7 @@ def required_jobs():
     result = []
     for purpose in ("suite", "quality", "debugger"):
         for mode in ("debug", "release"):
-            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh"]]
+            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh", "-j1"]]
             if purpose == "suite":
                 commands += [["./scripts/test.sh"],
                              ["python3", "compiler/tests/test_native_report_identity.py",
@@ -321,9 +321,27 @@ def required_jobs():
     return result
 
 
+def required_limits():
+    return {"memory_bytes": 32 * 1024 ** 3, "swap_bytes": 0,
+            "parallel_jobs": 1, "step_seconds": 1800}
+
+
+def validate_limits(limits, policy):
+    require(isinstance(limits, dict) and set(limits) == {"cgroup", "memory_bytes", "swap_bytes"},
+            "missing native memory containment")
+    require(isinstance(limits["cgroup"], str) and limits["cgroup"].startswith("/") and
+            ".." not in limits["cgroup"].split("/"), "invalid native cgroup")
+    for key in ("memory_bytes", "swap_bytes"):
+        require(type(limits[key]) is int and 0 <= limits[key] <= policy["limits"][key],
+                "native " + key + " exceeds acceptance limit")
+    require(limits["memory_bytes"] > 0, "native memory limit must be positive")
+    return limits
+
+
 def validate_policy(policy):
     expected = {"schema": 1, "platform": "Linux-x86_64", "pins": "environments/pins.sh",
-                "build_tag": "native-ci", "clang": "clang-19", "jobs": required_jobs()}
+                "build_tag": "native-ci", "clang": "clang-19", "limits": required_limits(),
+                "jobs": required_jobs()}
     require(policy == expected, "acceptance policy omits or changes required native checks")
     return policy
 

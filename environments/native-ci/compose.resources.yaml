@@ -1,0 +1,7 @@
+# Merge with the existing host's compose.yaml; do not replace its services,
+# credentials, image or named volumes. Equal RAM and RAM+swap limits disable
+# swap in Docker. The runner independently verifies the kernel cgroup values.
+services:
+  runner:
+    mem_limit: 34359738368
+    memswap_limit: 34359738368

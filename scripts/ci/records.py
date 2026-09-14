@@ -4,7 +4,7 @@ import re
 import tarfile
 
 from common import (digest, identity, read_json, require, safe_path,
-                    validate_request, file_hash, decoded_name)
+                    validate_request, validate_limits, file_hash, decoded_name)
 
 
 NATIVE_TOOLS = {"gnatls", "gprbuild", "x86_64-pc-linux-gnu-gcc", "as", "ld",
@@ -19,7 +19,8 @@ def sha(value):
 def validate_environment(environment, request, root):
     require(set(environment) == {"platform", "kernel", "hostname", "os_release", "boot_id",
                                  "packages", "binaries", "slot_runner_sha256", "pins_sha256",
-                                 "execution_environment"}, "incomplete native provenance fields")
+                                 "execution_environment", "resource_limits"}, "incomplete native provenance fields")
+    validate_limits(environment["resource_limits"], request["policy"])
     require(environment["platform"] == "Linux-x86_64", "provenance is not native Linux x86-64")
     for field in ("kernel", "hostname", "os_release"):
         require(isinstance(environment[field], str) and environment[field].strip(), "missing native " + field)
@@ -72,7 +73,7 @@ def validate_environment(environment, request, root):
     require(Path(env["HOME"]).is_absolute(), "invalid native HOME")
     suffix = "/usr/local/bin:/usr/bin:/bin"
     if optional <= set(env):
-        tools = Path(env["HOME"]) / ".local/share/landin-ci-tools"
+        tools = Path(env["HOME"]) / "work/.ci-tools"
         require(env["GIT_EXEC_PATH"] == str(tools / "usr/lib/git-core") and
                 env["GIT_TEMPLATE_DIR"] == str(tools / "usr/share/git-core/templates"), "unexpected Git helpers")
         suffix = str(tools / "usr/bin") + ":" + suffix
