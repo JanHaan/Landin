@@ -5756,7 +5756,7 @@ sweep, debugger or stress campaign was used for this reconciliation.
 | N9: negatives without `program` | Implemented with J79: recorded and source negative executions share termination, declared/default status and exact ordered-code checks. Recorded bytes remain independently checked, including CLI fixtures without a program. Exact acceptance remains open. |
 | N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
 | N11: `Expect` recovery after a refused lexeme | Implemented with J101: Expect skips only scanner-refused tokens and leaves the next kernel token to its caller. Existing bounded preservation controls retain following declarations and local type recovery without duplicate lexical reports; the earlier broad forward-search description is superseded. |
-| N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
+| N12, N23: `12z` and `!=` diagnostics | N23 implemented: parser reports at adjacent `!=` name the existing `<>` operator under [0350]. The hint follows the primary source span after recovery, preserving tokenization, codes and recovery. Six fixed sources cover comparison/condition typos, the correct operator, ordinary/spaced error syntax, literals and comments. N12 remains a separate lexical-rule/actionability question; no malformed-number run was widened. |
 | N13: fake filesystem paths | Implemented under m5: registered directories accept trailing separators for existence, identity, listing and directory-read refusal. File paths retain exact spelling; missing paths gain no identity and other aliases remain explicit. Four entry/root combinations and the existing file/module identity, shallow listing and read-status controls pass on both hosts. |
 | N14: L0010 ownership comments | Repaired the catalogue, syntactic wrapper, fixture guide, checker docstring and repository guidance. D164 already records removal of the scanner's final deferred family; L0010 is now parser-only. Numeric bands still do not determine ownership. |
 | N15: parser determinism oracle | Implemented under m1--m7: three fixed small inputs are each parsed three times, comparing canonical node/slot text, full diagnostic text, status and counts across reused and independently seeded name tables. Independent acceptance/refusal and declaration-count checks keep the comparison non-vacuous. Twenty-four checks pass on each host. No corpus, truncation, generated-input or mutation campaign was run. |
@@ -6054,10 +6054,31 @@ J21 is already repaired, J105 is partly superseded, and J100 remains distinct
 from the repaired initializer lookahead. Existing N-series dispositions and
 all earlier delivery evidence remain unchanged.
 
+N23 development evidence: the single-worker macOS debug and pinned Linux
+release builds pass. Four exact parser cases pass 100 checks per host: the
+six-source inequality hint case (24), canonical tree/report determinism (24),
+lexical signature-boundary recovery (24) and named noreturn refusals (28).
+Recovery may leave a structurally sound tree alongside errors, so the controls
+check diagnostics and retained declaration boundaries separately. The source
+spans are half-open; adjacent `!=` gains guidance, spaced `! =` does not.
+No lexer rule, diagnostic code, fixture inventory or language acceptance rule
+changes. Full `python3 check.py` passes. Logs are in
+`.scratch/r491-inequality-hint/` and the matching final-values files; no
+assembler, linker, generated executable or broad parser campaign ran.
+
+Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
+64 new fixture records are committed. The assessed J/K intake contains 175
+findings, alongside the older and N-series reviews. Most compiler repairs are
+implemented, but grouped minor observations still need individual disposition.
+The working estimate is 85–90% of repair work and 70–80% of complete delivery,
+with roughly 10–15 remaining work packages (30–60 focused hours). These are
+planning ranges, not acceptance evidence or measured historical work hours;
+missing original run bundles and new validation failures can extend closure.
+
 D222's approved J2 contract and bounded controls are implemented.
 The remaining semantic/refusal boundaries include K12's sink-argument timing,
 J15's contextual volatile/multi-name refusals and J104's contextual-word reads.
-N12/N23 still need diagnostic agreement; K28/M12 remain scoped maintenance
+N12 still needs lexical diagnostic agreement; K28/M12 remain scoped maintenance
 observations, and M6's original historical native bundles remain unrecovered.
 M5's font-history decision does not authorize rewriting history. The intake
 rows retain each other disposition and any outstanding evidence. Complete
