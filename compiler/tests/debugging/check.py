@@ -1121,7 +1121,8 @@ SOURCE_LINES = {
     "loop-element": source_line(MAIN_SOURCE, "loop_sum += loop_element"),
 }
 GENERIC_NEXT_LINES = tuple(
-    source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4))
+    source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4)
+) + (source_line(MAIN_SOURCE, "end debug_generic"),)
 CALLER_LINE = source_line(ODD_SOURCE, "code = debug_outer(")
 CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
                      ODD_SOURCE.read_text().splitlines()

@@ -8496,6 +8496,19 @@ build concurrency rises from four to eight workers per job (at most 48 across
 the six compiler jobs). The aggregate 100 GiB cap and failure cancellation stay
 in force. This failed attempt is retained and cannot supply acceptance.
 
+
+The next attempt, `20260914T140751Z-b887724f6583` on `5f203873`, reached
+native debugging and failed optimized generic stepping: after the line-51
+call, GDB stopped on declaration line 35. Retained assembly shows all four
+fall-through break jumps correctly elided, followed by an implicit result
+load and return incorrectly attributed to the function declaration. Lowering
+now assigns that implicit block-body return to the closing source token. The
+native oracle accepts the closing line alongside surviving break lines and
+still refuses the declaration; machine optimization is preserved. A fake-host
+assembly regression and transcript control pin the distinction. Cancellation
+again stopped every peer; peak memory was 16.18 GiB with zero limit/OOM events.
+This failed attempt remains retained and supplies no acceptance.
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the
