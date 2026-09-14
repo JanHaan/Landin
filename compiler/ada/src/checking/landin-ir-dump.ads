@@ -61,9 +61,16 @@ package Landin.IR.Dump is
    --  identity a malformed unit got wrong rather than refusing, because a
    --  dump is what a reader looks at when the verifier has just said
    --  something is wrong.
+   --  With_Metadata adds pointee definitions and references on shapes,
+   --  signatures, results, slots and instructions, plus Place_Address
+   --  endpoints. It is the detailed diagnostic view; the default preserves
+   --  the existing recorded format. Pointee identities are printed as edges,
+   --  never recursively expanded, including on malformed metadata graphs.
+   --  These are reached-type facts, not source positions or lifetime claims.
    function Text
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
-      Names    : Landin.Source.Names.Table) return String;
+      Names    : Landin.Source.Names.Table;
+      With_Metadata : Boolean := False) return String;
 
 end Landin.IR.Dump;

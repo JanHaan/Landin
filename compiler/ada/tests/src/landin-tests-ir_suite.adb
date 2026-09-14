@@ -1988,8 +1988,114 @@ package body Landin.Tests.IR_Suite is
          "storage-derived callback pointers pass release verification");
    end Pointer_Shapes_Survive_Storage;
 
+   --  Metadata-only changes must be visible without rewriting the older
+   --  compact dump corpus. This deliberately changes a slot's reached type
+   --  after construction; a diagnostic dump must also describe bad IR.
+   procedure Detailed_Dumps_Retain_Pointer_Metadata
+     (Item : in out Landin.Testing.Context);
+
+   procedure Detailed_Dumps_Retain_Pointer_Metadata
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Byte, Word, Nested, Array_Pointer : IR.Pointee_Id;
+      Signature : IR.Signature_Id;
+      Routine, Datum : IR.Item_Id;
+      Cell : IR.Slot_Id;
+      Block : IR.Block_Id;
+      Loaded, Address : IR.Value_Id;
+      Child : IR.Field_Shape;
+
+      function Dump (Detailed : Boolean) return String;
+
+      function Dump (Detailed : Boolean) return String is
+        (IR.Dump.Text
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            With_Metadata => Detailed));
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Byte := IR.Add_Pointee
+        (Unit, (Element => Landin.Types.U8, others => <>));
+      Word := IR.Add_Pointee
+        (Unit, (Element => Landin.Types.U32, others => <>));
+      Child := (Element => Landin.Types.Usize,
+                Pointee => Byte, others => <>);
+      Nested := IR.Add_Pointee (Unit, Child);
+      Array_Pointer := IR.Add_Pointee
+        (Unit, IR.Make_Array_Shape (Unit, 2, Child));
+      Signature := IR.Add_Signature
+        (Unit,
+         [1 => (Kind => Landin.Types.Usize, Pointee => Nested,
+                others => <>),
+          2 => (Kind => Landin.Types.Fixed_Array, Length => 2,
+                Element => Landin.Types.Usize, Element_Shape => Child,
+                others => <>),
+          3 => (Kind => Landin.Types.Fixed_Array, Length => 2,
+                Element => Landin.Types.U32, others => <>)],
+         (Kind => Landin.Types.Usize, Pointee => Array_Pointer,
+          others => <>));
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.Usize, Site);
+      IR.Set_Signature (Unit, Routine, Signature);
+      Datum := IR.Add_Item
+        (Unit, IR.Datum, 2, Landin.Types.Usize, Site);
+      IR.Set_Pointee (Unit, Datum, Byte);
+      Cell := IR.Add_Slot
+        (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site,
+         Pointee => Byte);
+      Block := IR.Add_Block
+        (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      IR.Enter (Unit, Routine, Block);
+      Loaded := IR.Emit_Load (Unit, Routine, Cell, Site);
+      Address := IR.Emit_Place_Address
+        (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Cell), Site);
+      IR.Emit_Leave (Unit, Routine, Loaded, Site);
+      IR.Leave_Block (Unit, Routine);
+      declare
+         Compact : constant String := Dump (False);
+         Detailed : constant String := Dump (True);
+      begin
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Detailed, "pointee 1 u8" & LF & "pointee 2 u32" & LF
+               & "pointee 3 usize pointee 1" & LF
+               & "pointee 4 [2]usize pointee 1" & LF) > 0,
+            "pointee definitions preserve nested and array edges");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Detailed, "(in usize pointee 3, in [2]usize pointee 1, "
+               & "in [2]u32) -> usize pointee 4") > 0,
+            "signatures keep metadata and legacy scalar array spelling");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Detailed, "storage slot 1") > 0
+                and then IR.Op_Of (Unit, Routine, Address)
+                  = IR.Place_Address,
+            "place addresses identify the reached storage");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index (Compact, "pointee") = 0,
+            "the existing compact format stays unchanged");
+         IR.Set_Pointee (Unit, Routine, Cell, Word);
+         Landin.Testing.Check
+           (Item, Dump (False) = Compact and then Dump (True) /= Detailed,
+            "a metadata-only slot change is visible in the detailed view");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Detailed, "g result usize pointee 1") > 0,
+            "datum pointer metadata is visible");
+      end;
+   end Detailed_Dumps_Retain_Pointer_Metadata;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir", "detailed dumps retain pointer metadata",
+         Detailed_Dumps_Retain_Pointer_Metadata'Access);
       Landin.Testing.Register
         (Into, "ir", "pointer shapes survive storage",
          Pointer_Shapes_Survive_Storage'Access);

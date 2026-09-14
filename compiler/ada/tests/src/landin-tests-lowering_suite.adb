@@ -4995,7 +4995,8 @@ package body Landin.Tests.Lowering_Suite is
                   "the result selects p inside the same inout frame object"
                   & LF & IR.Dump.Text
                     (Unit, Landin.Stages.Meanings (Work).all,
-                     Landin.Stages.Identities (Work).all));
+                     Landin.Stages.Identities (Work).all,
+                     With_Metadata => True));
             end;
          end if;
          Landin.Testing.Check
@@ -12912,8 +12913,85 @@ package body Landin.Tests.Lowering_Suite is
               & "value: i32 = one / zero + one / zero", "L0306", 2);
    end Module_Fold_Refusals_Keep_Diagnostics;
 
+   --  UTF decoding builds both weighted terms through emitting helpers.
+   --  In the canonical IR the complete left operand must precede the
+   --  right operand; Ada does not promise sibling actual-parameter order.
+   procedure Text_Operands_Have_Explicit_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure Text_Operands_Have_Explicit_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Text : String; UTF16 : Boolean := False);
+
+      procedure Check_Source (Text : String; UTF16 : Boolean := False) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               "the small text traversal reaches IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+               Sums : Natural := 0;
+               Ordered : Boolean := True;
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Routine) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (V);
+                  begin
+                     if IR.Op_Of (Unit, Routine, Value) = IR.Add
+                       and then IR.Result_Of (Unit, Routine, Value)
+                         = Landin.Types.U32
+                       and then (not UTF16 or else IR.Op_Of
+                         (Unit, Routine, IR.Nth_Operand
+                            (Unit, Routine, Value, 1)) = IR.Number)
+                     then
+                        Sums := Sums + 1;
+                        Ordered := Ordered and then IR.Nth_Operand
+                          (Unit, Routine, Value, 1) < IR.Nth_Operand
+                            (Unit, Routine, Value, 2);
+                     end if;
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Sums > 0 and then Ordered,
+                  "UTF weighted sums emit the left term before the right");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  "sequenced text decoding keeps valid IR");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("f: (a: utf8) -> none = for value in a do v := value "
+         & "end for end f" & LF);
+      Check_Source
+        ("f: (a: utf16) -> none = for value in a do v := value "
+         & "end for end f" & LF, UTF16 => True);
+      Check_Source
+        ("f: (a: cstring) -> none = for value in a do v := value "
+         & "end for end f" & LF);
+   end Text_Operands_Have_Explicit_Order;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "text operands have explicit order",
+         Text_Operands_Have_Explicit_Order'Access);
       Landin.Testing.Register
         (Into, "lowering", "aggregate results may overlap inout storage",
          Aggregate_Results_May_Overlap_Inout_Storage'Access);

@@ -31,7 +31,8 @@ package body Landin.IR.Dump is
    function Text
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
-      Names    : Landin.Source.Names.Table) return String
+      Names    : Landin.Source.Names.Table;
+      With_Metadata : Boolean := False) return String
    is
       Out_Text : Unbounded.Unbounded_String;
 
@@ -83,11 +84,23 @@ package body Landin.IR.Dump is
          return Unbounded.To_String (Text);
       end Atom_Set_Text;
 
+      function Pointee_Text (Id : Pointee_Id) return String
+        is (if not With_Metadata or else Id = No_Pointee then ""
+            else " pointee " & Trimmed (Pointee_Id'Image (Id)));
+
+      function Nominal_Text (Id : Nominal_Type_Id) return String
+        is (if not With_Metadata or else Id = No_Nominal_Type then ""
+            elsif not Nominal_Identities.Holds (Of_Unit, Id)
+            then " invalid nominal"
+            else " nominal " & Trimmed (Positive'Image
+              (Nominal_Identities.Position (Of_Unit, Id)))
+              & " " & Named (Template_Of (Of_Unit, Id)));
+
       function Shape_Text
         (Shape : Field_Shape; Budget : Natural := Natural'Last) return String;
 
       function Signature_Part_Text (Part : Signature_Part) return String
-        is (case Part.Kind is
+        is ((case Part.Kind is
                when Landin.Types.No_Value => "none",
                when Landin.Types.Scalar_Name =>
                   Shown (Part.Kind) & Atom_Set_Text (Part.Atoms),
@@ -96,6 +109,13 @@ package body Landin.IR.Dump is
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
                   & (if Part.Element_Shape.Kind = Array_Field_Shape
+                       or else (With_Metadata
+                         and then (Part.Element_Shape.Kind
+                           /= Scalar_Field_Shape
+                           or else Part.Element_Shape.Signature
+                             /= No_Signature
+                           or else Part.Element_Shape.Atoms /= No_Atom_Set
+                           or else Part.Element_Shape.Pointee /= No_Pointee))
                      then Shape_Text (Part.Element_Shape)
                      elsif Part.Nominal = No_Nominal_Type
                      then Landin.Types.Spelling (Part.Element)
@@ -106,7 +126,7 @@ package body Landin.IR.Dump is
                   & Trimmed (Signature_Id'Image (Part.Signature)),
                when Landin.Types.Atom_Value =>
                   "atom-set " & Trimmed (Atom_Set_Id'Image (Part.Atoms)),
-               when others => "invalid");
+               when others => "invalid") & Pointee_Text (Part.Pointee));
 
       --  D74/D75 use one target-neutral shape spelling for measurement,
       --  datum and slot runs.  Variant payloads are depth-one leaves, so
@@ -130,7 +150,8 @@ package body Landin.IR.Dump is
                  & (if Shape.Signature = No_Signature then ""
                     else " signature "
                       & Trimmed (Signature_Id'Image (Shape.Signature)))
-                 & Atom_Set_Text (Shape.Atoms);
+                 & Atom_Set_Text (Shape.Atoms)
+                 & Pointee_Text (Shape.Pointee);
             when Array_Field_Shape =>
                --  D121: the element may be an ordinary struct, and then it
                --  is spelt by the same one spelling every shape is.
@@ -155,7 +176,8 @@ package body Landin.IR.Dump is
                         Left - 1));
                end loop;
                Unbounded.Append (Result, ")");
-               return Unbounded.To_String (Result);
+               return Unbounded.To_String (Result)
+                 & Nominal_Text (Shape.Nominal);
             when Variant_Field_Shape =>
                Unbounded.Append
                  (Result,
@@ -360,6 +382,7 @@ package body Landin.IR.Dump is
       --  is not emitted is otherwise invisible in one.
       function Rendered (Item : Item_Id; Value : Value_Id) return String
         is (Rendered_Op (Item, Value)
+            & Pointee_Text (Pointee_Of (Of_Unit, Item, Value))
             & (if Is_Unchecked (Of_Unit, Item, Value)
                then " unchecked" else ""));
 
@@ -499,7 +522,12 @@ package body Landin.IR.Dump is
                     & Operands (Item, Value);
                end;
 
-            when Storage_Address =>
+            when Storage_Address | Place_Address =>
+               if Op_Of (Of_Unit, Item, Value) = Place_Address
+                 and then not With_Metadata
+               then
+                  return Lead;
+               end if;
                return Lead & " storage "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value))
                  & (if Element_Field_Of (Of_Unit, Item, Value) = 0
@@ -835,6 +863,14 @@ package body Landin.IR.Dump is
          & Trimmed (Natural'Image (Signature_Count (Of_Unit)))
          & " items " & Trimmed (Natural'Image (Item_Count (Of_Unit))));
 
+      if With_Metadata then
+         for Which in 1 .. Pointee_Count (Of_Unit) loop
+            Put
+              ("pointee " & Trimmed (Natural'Image (Which)) & " "
+               & Shape_Text (Pointee_Shape (Of_Unit, Pointee_Id (Which))));
+         end loop;
+      end if;
+
       for Which in 1 .. Atom_Set_Count (Of_Unit) loop
          Put
            ("atom set " & Trimmed (Atom_Set_Id'Image (Atom_Set_Id (Which)))
@@ -963,6 +999,7 @@ package body Landin.IR.Dump is
                  & " " & Item_Named (Id)
                  & " result " & Shown (Result_Of (Of_Unit, Id))
                  & Atom_Set_Text (Atom_Set_Of (Of_Unit, Id))
+                 & Pointee_Text (Pointee_Of (Of_Unit, Id))
                  & (if Signature_Of (Of_Unit, Id) = No_Signature then ""
                     else " signature "
                       & Trimmed
@@ -1274,6 +1311,7 @@ package body Landin.IR.Dump is
                         else Landin.Types.Spelling
                                (Type_Of (Of_Unit, Id, Slot)))
                      & Atom_Set_Text (Atom_Set_Of (Of_Unit, Id, Slot))
+                     & Pointee_Text (Pointee_Of (Of_Unit, Id, Slot))
                      & (if Signature_Of (Of_Unit, Id, Slot) = No_Signature
                         then ""
                         else " signature "
