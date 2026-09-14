@@ -2098,6 +2098,7 @@ USAGE = """render the documentation as HTML
     python3 render_html.py                      render every document
     python3 render_html.py --verify             and check nothing was lost
     python3 render_html.py --from DIR           read the documents from DIR
+    python3 render_html.py --to DIR             isolate generated output in DIR
     python3 render_html.py tour.md spec.md      render only those
 
 An unrecognised argument is refused rather than ignored: '--verfiy' used to
@@ -2105,9 +2106,11 @@ render all sixteen pages without checking one of them."""
 
 
 def main(argv):
+    global SITE
     #  main() is handed argv without the program name, so every element
     #  here is an argument the caller meant.
     expecting = False
+    named = []
     for arg in argv:
         if expecting:                       # the directory after --from
             expecting = False
@@ -2115,7 +2118,7 @@ def main(argv):
         if arg in ("--help", "-h"):
             print(USAGE)
             return 0
-        if arg == "--from":
+        if arg in ("--from", "--to"):
             expecting = True
             continue
         if arg == "--verify":
@@ -2124,6 +2127,7 @@ def main(argv):
         if arg.startswith("-") or not arg.endswith(".md"):
             print(f"render_html: {why}: {arg}\n\n{USAGE}", file=sys.stderr)
             return 2
+        named.append(Path(arg).name)
 
     check = "--verify" in argv
 
@@ -2135,7 +2139,13 @@ def main(argv):
             return 2
         source = Path(argv[at]).resolve()
 
-    named = [Path(a).name for a in argv if a.endswith(".md")]
+    if "--to" in argv:
+        at = argv.index("--to") + 1
+        if at >= len(argv):
+            print("render_html: --to wants a directory", file=sys.stderr)
+            return 2
+        SITE = Path(argv[at]).resolve()
+
     docs = [d for d in DOCS if not named or d["src"] in named
             or d["src"].split("/")[-1] in named]
     guides = [g for g in GUIDES if not named or g["src"] in named

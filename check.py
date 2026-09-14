@@ -5365,7 +5365,8 @@ def check_native_ci(full_run):
                          if name.endswith((".yml", ".yaml")))
     if manifests != {".build.yml", ".builds/github-mirror.yml"}:
         out.append((".build.yml", 1, "only Pages and mirror manifests may remain"))
-    pages = io.open(os.path.join(ROOT, ".build.yml"), encoding="utf-8").read()
+    with io.open(os.path.join(ROOT, ".build.yml"), encoding="utf-8") as stream:
+        pages = stream.read()
     tasks = re.findall(r"^  - ([a-z][a-z-]*): [|]$", pages, re.M)
     if tasks != ["pages"]:
         out.append((".build.yml", 1, "SourceHut must have exactly the Pages task"))
@@ -5376,10 +5377,16 @@ def check_native_ci(full_run):
         out.append((".build.yml", 1, "Pages must skip non-main refs"))
     if re.search(r"^  - (clang-19|gdb|binutils)$", pages, re.M):
         out.append((".build.yml", 1, "SourceHut must not install acceptance tools"))
-    site = io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8").read()
+    with io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8") as stream:
+        site = stream.read()
     guard = 'python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"'
     if guard not in site or site.index(guard) > site.find('render_html.py'):
         out.append(("scripts/site.sh", 1, "manual publication must guard before rendering"))
+    publisher = 'exec python3 "$LANDIN_ROOT/scripts/ci/publish.py" --root "$LANDIN_ROOT"'
+    if publisher not in site or site.index(publisher) > site.find('render_html.py'):
+        out.append(("scripts/site.sh", 1, "publication must enter the shared publisher before rendering"))
+    if "hut pages publish" in site:
+        out.append(("scripts/site.sh", 1, "publication may not bypass the shared publisher"))
     return out
 
 

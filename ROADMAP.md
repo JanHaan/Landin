@@ -5713,7 +5713,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
 | M14: harness contracts | Stream repair implemented: recorded, runtime and ABI oracles honor the selected stream and require empty stderr for output-only expectations, using separately captured native stderr. Fake wrong-stream/additional-stderr controls and tiny native captures pass. Suite inventory is repaired too: startup checks missing and unlisted suite names, while check.py compares every suite source with its registration and expected name. Corpus accounting now compares Ada discovery with the independently generated target inventory, then checks attempted programs, recorded outputs and runtime/ABI profiles against metadata obligations. Named nonempty categories remain required. Validation is metadata-only; complete corpus execution and exact acceptance remain open. | Fourth batch implementation |
 | M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
-| A8, M18: publication and CI | Guarded publication replaces the obsolete automatic compiler manifest and checks approved canonical main before private-font access and again before upload. The audit confirms that uploads from independent jobs still lack a shared lock; a recheck cannot prevent an older in-flight upload from finishing last, and domain uploads are separate. No stale upload was performed or observed. Shared publication serialization remains delivery work. Font subset and shared highlighter checks are present; M5 separately owns history. Guide resolution is repaired to use each source directory, avoid repeated README basename collisions and route unrendered repository guides to their source view. Documentation states the selected guide inventory and the remaining publication guarantee accurately. | Fourth batch; upload serialization open |
+| A8, M18: publication and CI | Guarded publication replaces the obsolete automatic compiler manifest and checks approved canonical main before private-font access and again before upload. The audit confirms that uploads from independent jobs still lack a shared lock; a recheck cannot prevent an older in-flight upload from finishing last, and domain uploads are separate. No stale upload was performed or observed. SourceHut publication serialization is implemented through a canonical Git lease; live activation and write-permission verification remain delivery work. Font subset and shared highlighter checks are present; M5 separately owns history. Guide resolution is repaired to use each source directory, avoid repeated README basename collisions and route unrendered repository guides to their source view. Documentation states the selected guide inventory and the participating-job publication guarantee and activation requirements accurately. | Fourth batch; live activation open |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
 | A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. The shared renderer now quotes a whole-name dot as well as leading dollar names. Fourteen selected checks pass on each host; bounded pinned-GNU object inspection confirms exact dot/dollar identities, function sizes and direct/runtime/static relocations. No linking or execution was used. Exact-revision acceptance remains open. | Third batch |
 | A9, m18: third-party inventory | Implemented: the root inventory names the existing Lucide, SourceHut and Nunito Sans notices, and the Tree-sitter support headers now carry their pinned upstream MIT notice. All three headers match v0.26.9 upstream bytes. Optional private MonoLisa remains separately documented. Project and upstream license terms are unchanged; M5 still owns any historical font disposition. | Fourth batch documentation repair |
@@ -6292,15 +6292,33 @@ this does not validate editor parser execution or resolve private-font history.
 Evidence is retained in `.scratch/r491-minor-dispositions/`.
 
 A8/M18's cross-job upload race is confirmed by the source sequence, not by
-performing stale uploads: the last approval check precedes both independent
-publisher calls. A shared publisher must serialize the final canonical check
-and both uploads, and promotion/publication must use an agreed ordering policy.
-The recommended delivery design is one publisher on the native CI host,
-receiving an immutable rendered archive and serializing publication requests;
-SourceHut and manual clients must use that same route. Credentials and the
-operational owner need maintainer agreement before deployment. A local checkout
-lock or another remote-ref read alone would not settle this distributed race.
-No publisher, approval tag, canonical promotion or remote lock was invoked.
+performing stale uploads. The user chose to retain SourceHut publication.
+The shared publisher now acquires a unique canonical Git lock tag with an
+atomic create-only lease, then rechecks the exact candidate before rendering
+and before uploading. It holds the lock across both domain uploads and renders
+into an isolated temporary directory. Release requires the same owner object;
+failed or timed-out uploads retain the lock because server completion may be
+uncertain. Busy waits and external processes are bounded; locks never expire
+or get stolen automatically. The ordinary and manual entry points share this
+path. A mechanical invariant rejects bypassing the publisher wrapper.
+
+Activation remains separate: confirm canonical lock-ref write permission for
+the SourceHut job's existing SSH identity, finish/cancel older jobs that do not
+participate in the lock, and update manual publishers before the first guarded
+live upload. Documentation records inspection and exact-lease recovery after
+an interrupted/uncertain upload. No live publisher, lock tag, approval tag or
+canonical promotion was invoked during implementation.
+
+Publication development evidence: eleven focused Python cases pass against
+disposable local Git remotes and mocked publishers. They cover mutual exclusion,
+a racing create, lost acquisition acknowledgement, stale-owner release,
+revision changes before/after rendering, both-domain ordering, uncertain upload
+retention, render failure and archive modes/isolation. The isolated --to render
+passes full document content/structure verification. The source/manifest wiring
+checks require entry through the shared publisher; their own file readers now
+close handles instead of issuing ResourceWarnings. These are local protocol and
+rendering controls, not SourceHut credential or live-upload evidence. Logs are
+in `.scratch/r491-publication-lock/`.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175

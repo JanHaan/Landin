@@ -11,6 +11,8 @@ packages:
 oauth: pages.sr.ht/PAGES:RW
 
 # Existing repository key, used only after the canonical approval guard.
+# Publication also requires write access to canonical ci/publication-lock;
+# verify that permission when activating the shared publisher.
 secrets:
   - be6acc31-1dff-4c27-94c0-d223f13d5f8a
 
