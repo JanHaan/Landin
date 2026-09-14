@@ -5748,7 +5748,7 @@ being silently promoted to bugs or discarded:
 | m20 | The quality facet is superseded by the current threshold witness: size/auto must decline while speed/auto selects, with exact source cost inputs, decision reasons and independently counted machine indirect calls. Treating the two objectives identically would fail those assertions. Debugger coverage includes function-name entry stops, stepping, expected local values and stack shape in addition to line-number round trips; those round trips alone remain insufficient proof of every line mapping. This is source-oracle reconciliation, not a new quality/debugger run or acceptance claim. |
 | m24 | Reconciled with implemented J91/K21/K22: bounded block runs partition each item and every instruction agrees with its owning block; orphan and overlapping claims are refused. The separate one-pass reachability concern is refuted with J98: Pointer_Provenance unconditionally builds the full control-flow graph before acceptance. Existing focused malformed-IR and reachable/unreachable-cycle controls remain the evidence; no broad verifier case was rerun. |
 | m25 | Refuted as a current valid-IR simplifier failure. Simplification verifies its input and output. A pointer-carrying range check either receives matching pointee metadata or an explicit integer-to-usize Conversion. An ordinary Load obtains its pointee from its slot, and pointer/address slots are excluded from store-to-load forwarding. A raw usize Load cannot supply the conversion witness; the verifier refuses that proposed input. Required_Proof therefore pins the actual Conversion on the admissible construction path. This is source-contract evidence, not a newly reproduced optimizer failure or a changed pass. |
-| m26 | Sibling IR emissions with Ada-unspecified evaluation order and omitted pointer provenance in the IR dump remain focused determinism/evidence work. No broad golden regeneration or excluded fixture replay is authorized. |
+| m26 | Implemented: 26 expressions with sibling emitting calls now evaluate those calls in explicit written order, including slice descriptors, UTF validation, text traversal and nested decoding helpers. IR.Dump.Text offers a detailed metadata view with pointee definitions/edges, signature/result/slot/value annotations, nominal shape identities and Place_Address endpoints. The default compact format remains compatible; it is not an oracle for metadata equality. Tiny UTF8/UTF16/cstring lowering controls and a metadata-only dump difference control pin these boundaries. No broad golden regeneration or excluded fixture replay was performed. |
 | m27 | Reconciled with [0410] and D106: an assignment's destination is selected before its RHS call; the callee's separate named aggregate result is transferred on return. Thus value.p = shrink(value) overwrites p with the returned pair while preserving inout writes to sibling q. The result destination is not a second source inout parameter under D149. A focused IR case and a small runtime fixture pin this existing behavior; revised runtime execution remains outstanding. |
 | m28 | Confirmed baseline cost limitation: two tiny none/off assembly-text witnesses show two bounds checks for indexed inc and one for +=, with exactly one index-function call in each. The inc witness also uses a smaller frame (32 versus 64 bytes), so replacing its path wholesale is not an established improvement. No wrong result or repeated index evaluation was found. Retain this cost observation without a correctness repair; guard elimination needs separate optimization evidence. No assembler or performance campaign ran. |
 | m29 | Compact compiler repetition still emits assembler repetition for some static images. Assembly cost remains a separate resource concern: the named giant fixtures and enormous expansion directives must never be assembled. Any emission optimization needs tiny shape/text controls; no large timing or memory experiment is authorized. |
@@ -6269,6 +6269,17 @@ or approve the changed parser mutation stream: that campaign remains excluded.
 Evidence is in `.scratch/r491-mutation-generator/` and matching final-values
 logs. No assembler, linker, generated program or debugger ran for this group.
 
+The m26 emission/dump repair passes seven exact cases and 159 assertions on
+each of macOS debug and Linux release, after single-worker bootstrap builds.
+Three tiny UTF8/UTF16/cstring traversal sources check sequencing and verified IR
+on both target widths. The dump control distinguishes metadata-only changes,
+retains nested pointer and array edges, and preserves legacy scalar array
+spelling. Existing bounded slice, callback and aggregate-overlap controls also
+pass. Evidence is in `.scratch/r491-emission-order/` and the matching
+final-values logs. No golden corpus was regenerated and no Landin assembly,
+linker, runtime, debugger or mutation campaign ran. Exact-revision acceptance
+remains outstanding.
+
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175
 findings, alongside the older and N-series reviews. Most compiler repairs are
@@ -6281,7 +6292,8 @@ missing original run bundles and new validation failures can extend closure.
 D222's approved J2 contract and bounded controls are implemented.
 D223 implements K12's user-selected call-entry sink timing. J15's named
 refusals now distinguish deferred source shapes from ordinary identifiers and
-implemented atom lists. J104's contextual-word reads remain open.
+implemented atom lists. D225 implements J104's user-selected reservation of
+control words in every identifier position.
 N12 still needs lexical diagnostic agreement; K28/M12 remain scoped maintenance
 observations, and M6's original historical native bundles remain unrecovered.
 M5's font-history decision does not authorize rewriting history. The intake

@@ -247,6 +247,13 @@ indirect call remains in that item immediately after specialization, including
 erased dispatch and ordinary function-value calls; it is independent of the
 action and does not predict later simplification. Scalar IR measurement dumps
 name the measured type separately from the result type.
+`Landin.IR.Dump.Text` also offers `With_Metadata => True` for diagnostic
+inspection: it adds pointee definitions and references on shapes, signatures,
+results, slots and instructions, and identifies `Place_Address` storage.
+Pointee references are printed as identity edges rather than recursively
+expanded types. The default compact dump retains the older recorded format;
+its equality alone does not establish equality of pointer metadata. These
+reached-type facts are distinct from source positions and lifetime claims.
 `Landin.Build_Reports.Sources` adds snapshot hashes, hexadecimal path
 bytes and half-open item-origin spans using pure computation. The driver alone
 writes `--build-report=PATH` through `Landin.Platform`, after successful output

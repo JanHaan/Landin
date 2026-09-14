@@ -4994,13 +4994,20 @@ package body Landin.Stages.Lowering is
                if Current = IR.No_Block then
                   return (Base => IR.No_Value, Length => IR.No_Value);
                end if;
-               return
-                 (Base => IR.Emit_Load_Slot_Field
-                    (Unit.all, Filling, Temporary, 1, Ty.Usize,
-                     Site_Of (Of_Tree, Node)),
-                  Length => IR.Emit_Load_Slot_Field
-                    (Unit.all, Filling, Temporary, 2, Ty.Usize,
-                     Site_Of (Of_Tree, Node)));
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    IR.Emit_Load_Slot_Field
+                      (Unit.all, Filling, Temporary, 1, Ty.Usize,
+                       Site_Of (Of_Tree, Node));
+                  Operand_2 : constant IR.Value_Id :=
+                    IR.Emit_Load_Slot_Field
+                      (Unit.all, Filling, Temporary, 2, Ty.Usize,
+                       Site_Of (Of_Tree, Node));
+               begin
+                  return
+                    (Base => Operand_1,
+                     Length => Operand_2);
+               end;
             end;
          end if;
          declare
@@ -5158,12 +5165,19 @@ package body Landin.Stages.Lowering is
                            Site),
                         Ty.Usize, Site);
                   end if;
-                  Address := IR.Emit_Slice_Address
-                    (Unit.all, Filling,
-                     IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
-                     IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
-                     Position, Position, Slice_Shape (Of_Tree, Node), True,
-                     Site, Required => True);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Base_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
+                  begin
+                     Address := IR.Emit_Slice_Address
+                       (Unit.all, Filling,
+                        Operand_1,
+                        Operand_2,
+                        Position, Position, Slice_Shape (Of_Tree, Node), True,
+                        Site, Required => True);
+                  end;
                   return IR.Emit_Load_Indirect
                     (Unit.all, Filling, Address, Ty.U8, Site);
                end Byte_At;
@@ -5173,12 +5187,19 @@ package body Landin.Stages.Lowering is
                   return IR.Value_Id
                is
                begin
-                  return IR.Emit_Binary
-                    (Unit.all, Filling, Op,
-                     IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site),
-                     IR.Emit_Number
-                       (Unit.all, Filling, Ty.U8, Value, False, Site),
-                     Ty.Bool, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Value, False, Site);
+                  begin
+                     return IR.Emit_Binary
+                       (Unit.all, Filling, Op,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site);
+                  end;
                end Lead_Is;
 
                procedure Require_Range
@@ -5192,43 +5213,64 @@ package body Landin.Stages.Lowering is
                     Fresh (Of_Tree, Node, Scope);
                begin
                   IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Greater_Or_Equal,
-                        IR.Emit_Load (Unit.all, Filling, Saved, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U8, Lower, False, Site),
-                        Ty.Bool, Site),
-                     Test_Upper, Invalid, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Lower, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Greater_Or_Equal,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Test_Upper, Invalid, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
                   Open (Test_Upper);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Less_Or_Equal,
-                        IR.Emit_Load (Unit.all, Filling, Saved, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U8, Upper, False, Site),
-                        Ty.Bool, Site),
-                     Success, Invalid, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Upper, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Less_Or_Equal,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Success, Invalid, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
                end Require_Range;
 
                procedure Advance (Amount : Ty.Magnitude) is
                begin
-                  IR.Emit_Store
-                    (Unit.all, Filling, Cursor_Slot,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Add,
-                        IR.Emit_Load
-                          (Unit.all, Filling, Cursor_Slot, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.Usize, Amount, False, Site),
-                        Ty.Usize, Site),
-                     Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Cursor_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.Usize, Amount, False, Site);
+                  begin
+                     IR.Emit_Store
+                       (Unit.all, Filling, Cursor_Slot,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Add,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Usize, Site),
+                        Site);
+                  end;
                   Close_With_Jump (Head, Site);
                end Advance;
             begin
@@ -5239,14 +5281,21 @@ package body Landin.Stages.Lowering is
                Close_With_Jump (Head, Site);
 
                Open (Head);
-               IR.Emit_Branch
-                 (Unit.all, Filling,
-                  IR.Emit_Binary
-                    (Unit.all, Filling, IR.Equal_To,
-                     IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site),
-                     IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
-                     Ty.Bool, Site),
-                  Done, Inspect, Site);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site);
+                  Operand_2 : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
+               begin
+                  IR.Emit_Branch
+                    (Unit.all, Filling,
+                     IR.Emit_Binary
+                       (Unit.all, Filling, IR.Equal_To,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site),
+                     Done, Inspect, Site);
+               end;
                IR.Leave_Block (Unit.all, Filling);
                Current := IR.No_Block;
 
@@ -5416,14 +5465,21 @@ package body Landin.Stages.Lowering is
                   Current := IR.No_Block;
                end;
                Open (Advance);
-               IR.Emit_Store
-                 (Unit.all, Filling, Cursor_Slot,
-                  IR.Emit_Binary
-                    (Unit.all, Filling, IR.Add,
-                     IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site),
-                     IR.Emit_Number
-                       (Unit.all, Filling, Ty.Usize, 1, False, Site),
-                     Ty.Usize, Site), Site);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site);
+                  Operand_2 : constant IR.Value_Id :=
+                    IR.Emit_Number
+                      (Unit.all, Filling, Ty.Usize, 1, False, Site);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Cursor_Slot,
+                     IR.Emit_Binary
+                       (Unit.all, Filling, IR.Add,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Usize, Site), Site);
+               end;
                Close_With_Jump (Head, Site);
                Open (Done);
                IR.Emit_Store
@@ -5568,13 +5624,20 @@ package body Landin.Stages.Lowering is
                         return IR.Value_Id
                      is
                      begin
-                        return IR.Emit_Binary
-                          (Unit.all, Filling, Op,
-                           IR.Emit_Load
-                             (Unit.all, Filling, Unit_Slot, Site),
-                           IR.Emit_Number
-                             (Unit.all, Filling, Ty.U8, Value, False, Site),
-                           Ty.Bool, Site);
+                        declare
+                           Operand_1 : constant IR.Value_Id :=
+                             IR.Emit_Load
+                               (Unit.all, Filling, Unit_Slot, Site);
+                           Operand_2 : constant IR.Value_Id :=
+                             IR.Emit_Number
+                               (Unit.all, Filling, Ty.U8, Value, False, Site);
+                        begin
+                           return IR.Emit_Binary
+                             (Unit.all, Filling, Op,
+                              Operand_1,
+                              Operand_2,
+                              Ty.Bool, Site);
+                        end;
                      end Unit_Is;
                   begin
                      IR.Emit_Store
@@ -5649,13 +5712,20 @@ package body Landin.Stages.Lowering is
                         return IR.Value_Id
                      is
                      begin
-                        return IR.Emit_Binary
-                          (Unit.all, Filling, Op,
-                           IR.Emit_Load
-                             (Unit.all, Filling, Unit_Slot, Site),
-                           IR.Emit_Number
-                             (Unit.all, Filling, Ty.U16, Value, False, Site),
-                           Ty.Bool, Site);
+                        declare
+                           Operand_1 : constant IR.Value_Id :=
+                             IR.Emit_Load
+                               (Unit.all, Filling, Unit_Slot, Site);
+                           Operand_2 : constant IR.Value_Id :=
+                             IR.Emit_Number
+                               (Unit.all, Filling, Ty.U16, Value, False, Site);
+                        begin
+                           return IR.Emit_Binary
+                             (Unit.all, Filling, Op,
+                              Operand_1,
+                              Operand_2,
+                              Ty.Bool, Site);
+                        end;
                      end Unit_Is;
                   begin
                      IR.Emit_Store
@@ -6242,26 +6312,38 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling, Saved_Address, Address, Site);
                         if Is_Text then
                            declare
+                              Lower_Width_Operand_1 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Base_Slot, Site);
+                              Lower_Width_Operand_2 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Total_Slot, Site);
+                              Lower_Width_Operand_3 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Saved_Lower, Site);
                               Lower_Width : constant IR.Value_Id :=
                                 Text_Unit_Width
-                                  (IR.Emit_Load
-                                     (Unit.all, Filling, Base_Slot, Site),
-                                   IR.Emit_Load
-                                     (Unit.all, Filling, Total_Slot, Site),
-                                   IR.Emit_Load
-                                     (Unit.all, Filling, Saved_Lower, Site),
+                                  (Lower_Width_Operand_1,
+                                   Lower_Width_Operand_2,
+                                   Lower_Width_Operand_3,
                                    Ty.Text_View (Descriptor.View),
                                    Syn.Kind (Of_Tree, Node)
                                      = Syn.Half_Open_Slice);
                               pragma Unreferenced (Lower_Width);
+                              Upper_Width_Operand_1 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Base_Slot, Site);
+                              Upper_Width_Operand_2 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Total_Slot, Site);
+                              Upper_Width_Operand_3 : constant IR.Value_Id :=
+                                IR.Emit_Load
+                                  (Unit.all, Filling, Saved_Upper, Site);
                               Upper_Width : constant IR.Value_Id :=
                                 Text_Unit_Width
-                                  (IR.Emit_Load
-                                     (Unit.all, Filling, Base_Slot, Site),
-                                   IR.Emit_Load
-                                     (Unit.all, Filling, Total_Slot, Site),
-                                   IR.Emit_Load
-                                     (Unit.all, Filling, Saved_Upper, Site),
+                                  (Upper_Width_Operand_1,
+                                   Upper_Width_Operand_2,
+                                   Upper_Width_Operand_3,
                                    Ty.Text_View (Descriptor.View),
                                    Syn.Kind (Of_Tree, Node)
                                      = Syn.Half_Open_Slice);
@@ -8601,12 +8683,19 @@ package body Landin.Stages.Lowering is
                   IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
                   Position, Ty.Usize, Site);
             else
-               Address := IR.Emit_Slice_Address
-                 (Unit.all, Filling,
-                  IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
-                  IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
-                  Position, Position, Element_Shape, True, Site,
-                  Required => True);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Base_Slot, Site);
+                  Operand_2 : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
+               begin
+                  Address := IR.Emit_Slice_Address
+                    (Unit.all, Filling,
+                     Operand_1,
+                     Operand_2,
+                     Position, Position, Element_Shape, True, Site,
+                     Required => True);
+               end;
             end if;
             return IR.Emit_Load_Indirect
               (Unit.all, Filling, Address, Element, Site);
@@ -8728,12 +8817,19 @@ package body Landin.Stages.Lowering is
                   return IR.Value_Id
                is
                begin
-                  return IR.Emit_Binary
-                    (Unit.all, Filling, Op,
-                     IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site),
-                     IR.Emit_Number
-                       (Unit.all, Filling, Ty.U8, Value, False, Site),
-                     Ty.Bool, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Value, False, Site);
+                  begin
+                     return IR.Emit_Binary
+                       (Unit.all, Filling, Op,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site);
+                  end;
                end Lead_Is;
 
                procedure Require_Range
@@ -8747,27 +8843,41 @@ package body Landin.Stages.Lowering is
                     Fresh (Of_Tree, Node, Inside);
                begin
                   IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Greater_Or_Equal,
-                        IR.Emit_Load (Unit.all, Filling, Saved, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U8, Lower, False, Site),
-                        Ty.Bool, Site),
-                     Test_Upper, Invalid, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Lower, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Greater_Or_Equal,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Test_Upper, Invalid, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
                   Open (Test_Upper);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Less_Or_Equal,
-                        IR.Emit_Load (Unit.all, Filling, Saved, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U8, Upper, False, Site),
-                        Ty.Bool, Site),
-                     Success, Invalid, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Upper, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Less_Or_Equal,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Success, Invalid, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
                end Require_Range;
@@ -8911,30 +9021,44 @@ package body Landin.Stages.Lowering is
                begin
                   IR.Emit_Store
                     (Unit.all, Filling, Lead_Slot, Lead, Site);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Less_Than,
-                        IR.Emit_Load
-                          (Unit.all, Filling, Lead_Slot, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U16, 16#D800#, False, Site),
-                        Ty.Bool, Site),
-                     Single, Maybe_High, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Lead_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U16, 16#D800#, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Less_Than,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Single, Maybe_High, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
 
                   Open (Maybe_High);
-                  IR.Emit_Branch
-                    (Unit.all, Filling,
-                     IR.Emit_Binary
-                       (Unit.all, Filling, IR.Less_Than,
-                        IR.Emit_Load
-                          (Unit.all, Filling, Lead_Slot, Site),
-                        IR.Emit_Number
-                          (Unit.all, Filling, Ty.U16, 16#DC00#, False, Site),
-                        Ty.Bool, Site),
-                     Pair, Single, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Lead_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U16, 16#DC00#, False, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Binary
+                          (Unit.all, Filling, IR.Less_Than,
+                           Operand_1,
+                           Operand_2,
+                           Ty.Bool, Site),
+                        Pair, Single, Site);
+                  end;
                   IR.Leave_Block (Unit.all, Filling);
                   Current := IR.No_Block;
 
@@ -8955,10 +9079,17 @@ package body Landin.Stages.Lowering is
                      Low : constant IR.Value_Id := Minus
                        (As_U32 (Text_Unit_At (1)), 16#DC00#);
                   begin
-                     Keep
-                       (Plus
-                          (Literal (16#10000#),
-                           Plus (Times (High, 16#400#), Low)), 2);
+                     declare
+                        Operand_1 : constant IR.Value_Id :=
+                          Literal (16#10000#);
+                        Operand_2 : constant IR.Value_Id :=
+                          Plus (Times (High, 16#400#), Low);
+                     begin
+                        Keep
+                          (Plus
+                             (Operand_1,
+                              Operand_2), 2);
+                     end;
                   end;
                   Close_With_Jump (Join, Site);
 
@@ -8994,12 +9125,19 @@ package body Landin.Stages.Lowering is
                function Lead_Below
                  (Limit : Ty.Magnitude) return IR.Value_Id is
                begin
-                  return IR.Emit_Binary
-                    (Unit.all, Filling, IR.Less_Than,
-                     IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site),
-                     IR.Emit_Number
-                       (Unit.all, Filling, Ty.U8, Limit, False, Site),
-                     Ty.Bool, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, Limit, False, Site);
+                  begin
+                     return IR.Emit_Binary
+                       (Unit.all, Filling, IR.Less_Than,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site);
+                  end;
                end Lead_Below;
             begin
                IR.Emit_Store (Unit.all, Filling, Lead_Slot, Lead, Site);
@@ -9034,55 +9172,88 @@ package body Landin.Stages.Lowering is
                Close_With_Jump (Join, Site);
 
                Open (Two_Bytes);
-               Keep
-                 (Plus
-                    (Times
-                       (Minus
-                          (As_U32
-                             (IR.Emit_Load
-                                (Unit.all, Filling, Lead_Slot, Site)),
-                           16#C0#), 16#40#),
-                     Minus (As_U32 (Text_Unit_At (1)), 16#80#)), 2);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32
+                            (IR.Emit_Load
+                               (Unit.all, Filling, Lead_Slot, Site)),
+                          16#C0#), 16#40#);
+                  Operand_2 : constant IR.Value_Id :=
+                    Minus (As_U32 (Text_Unit_At (1)), 16#80#);
+               begin
+                  Keep
+                    (Plus
+                       (Operand_1,
+                        Operand_2), 2);
+               end;
                Close_With_Jump (Join, Site);
 
                Open (Three_Bytes);
-               Keep
-                 (Plus
-                    (Times
-                       (Minus
-                          (As_U32
-                             (IR.Emit_Load
-                                (Unit.all, Filling, Lead_Slot, Site)),
-                           16#E0#), 16#1000#),
-                     Plus
-                       (Times
-                          (Minus
-                             (As_U32 (Text_Unit_At (1)), 16#80#), 16#40#),
-                        Minus
-                          (As_U32 (Text_Unit_At (2)), 16#80#))), 3);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32
+                            (IR.Emit_Load
+                               (Unit.all, Filling, Lead_Slot, Site)),
+                          16#E0#), 16#1000#);
+                  Operand_2 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32 (Text_Unit_At (1)), 16#80#), 16#40#);
+                  Operand_3 : constant IR.Value_Id :=
+                    Minus
+                      (As_U32 (Text_Unit_At (2)), 16#80#);
+                  Operand_4 : constant IR.Value_Id :=
+                    Plus
+                      (Operand_2,
+                       Operand_3);
+               begin
+                  Keep
+                    (Plus
+                       (Operand_1,
+                        Operand_4), 3);
+               end;
                Close_With_Jump (Join, Site);
 
                Open (Four_Bytes);
-               Keep
-                 (Plus
-                    (Times
-                       (Minus
-                          (As_U32
-                             (IR.Emit_Load
-                                (Unit.all, Filling, Lead_Slot, Site)),
-                           16#F0#), 16#40000#),
-                     Plus
-                       (Times
-                          (Minus
-                             (As_U32 (Text_Unit_At (1)), 16#80#),
-                           16#1000#),
-                        Plus
-                          (Times
-                             (Minus
-                                (As_U32 (Text_Unit_At (2)), 16#80#),
-                              16#40#),
-                           Minus
-                             (As_U32 (Text_Unit_At (3)), 16#80#)))), 4);
+               declare
+                  Operand_1 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32
+                            (IR.Emit_Load
+                               (Unit.all, Filling, Lead_Slot, Site)),
+                          16#F0#), 16#40000#);
+                  Operand_2 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32 (Text_Unit_At (1)), 16#80#),
+                       16#1000#);
+                  Operand_3 : constant IR.Value_Id :=
+                    Times
+                      (Minus
+                         (As_U32 (Text_Unit_At (2)), 16#80#),
+                       16#40#);
+                  Operand_4 : constant IR.Value_Id :=
+                    Minus
+                      (As_U32 (Text_Unit_At (3)), 16#80#);
+                  Operand_5 : constant IR.Value_Id :=
+                    Plus
+                      (Operand_3,
+                       Operand_4);
+                  Operand_6 : constant IR.Value_Id :=
+                    Plus
+                      (Operand_2,
+                       Operand_5);
+               begin
+                  Keep
+                    (Plus
+                       (Operand_1,
+                        Operand_6), 4);
+               end;
                Close_With_Jump (Join, Site);
 
                Open (Join);
@@ -9383,19 +9554,33 @@ package body Landin.Stages.Lowering is
                --  observes the first NUL and never exposes that terminator
                --  as an Item.
                if Collection_View = Ty.C_String_View then
-                  Ended := IR.Emit_Binary
-                    (Unit.all, Filling, IR.Equal_To, Text_Unit_At (0),
-                     IR.Emit_Number
-                       (Unit.all, Filling, Ty.U8, 0, False, Site),
-                     Ty.Bool, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       Text_Unit_At (0);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.U8, 0, False, Site);
+                  begin
+                     Ended := IR.Emit_Binary
+                       (Unit.all, Filling, IR.Equal_To, Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site);
+                  end;
                else
-                  Ended := IR.Emit_Binary
-                    (Unit.all, Filling, IR.Equal_To,
-                     IR.Emit_Load
-                       (Unit.all, Filling, Cursor_Slot, Site),
-                     IR.Emit_Load
-                       (Unit.all, Filling, Length_Slot, Site),
-                     Ty.Bool, Site);
+                  declare
+                     Operand_1 : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Cursor_Slot, Site);
+                     Operand_2 : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Length_Slot, Site);
+                  begin
+                     Ended := IR.Emit_Binary
+                       (Unit.all, Filling, IR.Equal_To,
+                        Operand_1,
+                        Operand_2,
+                        Ty.Bool, Site);
+                  end;
                end if;
                IR.Emit_Branch
                  (Unit.all, Filling, Ended,
@@ -9468,11 +9653,15 @@ package body Landin.Stages.Lowering is
             declare
                Position : constant IR.Value_Id :=
                  IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+               Address_Operand_1 : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Base_Slot, Site);
+               Address_Operand_2 : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
                Address : constant IR.Value_Id :=
                  IR.Emit_Slice_Address
                    (Unit.all, Filling,
-                    IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
-                    IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
+                    Address_Operand_1,
+                    Address_Operand_2,
                     Position, Position, Element_Shape, True, Site);
             begin
                IR.Emit_Store
