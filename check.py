@@ -2971,6 +2971,46 @@ def decision_status_references():
     return out
 
 
+def compiler_package_inventory():
+    """Every compiler package specification has one ownership-guide row."""
+    where = "compiler/ada/README.md"
+    guide = os.path.join(ROOT, where)
+    directory = os.path.join(ROOT, "compiler/ada/src")
+    missing = absent([guide, directory])
+    if missing:
+        return missing
+    with io.open(guide, encoding="utf-8") as stream:
+        rows = re.findall(r"^\| `(Landin[\w.]*)` \|", stream.read(), re.M)
+    out = []
+    counts = collections.Counter(name.lower() for name in rows)
+    for name, count in sorted(counts.items()):
+        if count != 1:
+            out.append((where, 1, "package ownership row repeats: " + name))
+    packages = {}
+    for folder, directories, files in os.walk(directory):
+        directories.sort()
+        for filename in sorted(files):
+            if not filename.endswith(".ads"):
+                continue
+            path = os.path.join(folder, filename)
+            with io.open(path, encoding="utf-8") as stream:
+                match = re.search(
+                    r"^(?:private )?package\s+(Landin[\w.]*)\s+is\b",
+                    stream.read(), re.M | re.I)
+            if not match:
+                out.append((os.path.relpath(path, ROOT), 1,
+                            "cannot identify compiler package specification"))
+                continue
+            packages[match.group(1).lower()] = match.group(1)
+    for name in sorted(packages.keys() - counts.keys()):
+        out.append((where, 1, "package ownership row is missing: "
+                    + packages[name]))
+    for name in sorted(counts.keys() - packages.keys()):
+        out.append((where, 1, "package ownership row has no specification: "
+                    + name))
+    return out
+
+
 def test_suite_inventory():
     """Every suite source, registration call and expected name must agree."""
     out = []
@@ -5397,6 +5437,7 @@ def main(argv):
         extra += fixture_constructs()
         extra += fixture_profiles()
         extra += test_suite_inventory()
+        extra += compiler_package_inventory()
         extra += decision_status_references()
         extra += tour_example_witnesses()
         extra += third_party_notices()
