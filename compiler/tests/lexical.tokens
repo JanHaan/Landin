@@ -63319,6 +63319,13 @@ file negative/r491-operand-diagnostic-cascades/main.ldn tokens 50
   185 186 )
   187 190 end
   191 192 f
+file negative/r491-option-compiler-atom/main.ldn tokens 6
+  0 6 option
+  7 12 debug
+  12 13 :
+  14 17 u32
+  18 19 =
+  20 21 1
 file negative/r491-public-conformance/main.ldn tokens 51
   0 8 readable
   8 9 :

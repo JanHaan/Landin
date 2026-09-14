@@ -157,10 +157,12 @@ roadmap item that enables it.
 
 Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
-chassis and R1's executable language kernel are complete: the compiler builds
-on macOS arm64 and passes its full suite there when the Linux target toolchain
-is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
-binaries. R2.20's target-parametric aggregate and variant representation and
+chassis and R1's executable language kernel are complete. The compiler builds
+on macOS arm64 for development; exact-revision runtime acceptance runs on
+native Linux x86-64. The pinned `linux/amd64` container provides a separate
+local Linux loop. R2.10 establishes target-derived sizes, alignments and checked
+layout arithmetic, including synthetic 32-bit evidence. R2.20's
+target-parametric aggregate and variant representation and
 R2.30's functions, control-flow expressions, lexical cleanup, declared errors
 and internal aggregate ABI are complete. R2.40's fixed parameters,
 compile-time substitution, generic routine instances, fixed conditional
@@ -214,6 +216,15 @@ destinations, arbitrary-length lines, copied arguments, explicit message
 retry and real file I/O. Ordinary `core/region` provides bulk cleanup over a
 caller-supplied allocator. D212 withdraws the former builtin arena syntax
 and its unsupported transitive escape promise; local origin checks remain.
+
+R4.21 repairs the earlier review's flow, origin, lowering and diagnostic gaps.
+R4.30 adds import aliases, selected imports, typed global options, compiler
+facts, assertions and ordered static-library directives. R4.40 implements the
+selected Linux x86-64 C ABI and `layout(c)`, callbacks and variadic call
+transport. Its separate header generator and policy-driven C adapters cover
+the supported enum, union, bitfield, global/TLS and incoming-varargs boundaries;
+unsupported C forms receive explicit refusals. ROADMAP.md records their
+contracts and historical closure evidence; R4.91 owns the current repairs.
 
 R4.50 completes deterministic baseline code generation: compact numeric-array
 loops, strict-saving `layout(optimal)` placement, independently controlled

@@ -1,0 +1,9 @@
+class: negative
+summary: D202 options cannot reuse compiler-owned atom names
+program: main.ldn
+codes: L0305
+constructs: 1530, 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-option-compiler-atom/main.ldn
+status: 1

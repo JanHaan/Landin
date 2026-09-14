@@ -11551,7 +11551,7 @@ What R7.20 inherits is written down so that the refusal is scoped rather than
 vague, and it is five things and not one.
 
 - `Landin.Types.Magnitude` is `range 0 .. 2 ** 64 - 1` and `Landin.Types.Folded`
-  is `range -(2 ** 64 - 1) .. 2 ** 64 - 1`, across 371 and 364 references. At
+  is `range -(2 ** 64 - 1) .. 2 ** 64 - 1`. At
   128 bits neither is an Ada range type on any host: `Folded`'s symmetric
   form needs 129 bits and `Magnitude`'s upper bound needs an unsigned 128.
   Both become software carriers, and so does the single `type Pattern is mod

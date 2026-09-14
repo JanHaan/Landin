@@ -66,9 +66,9 @@ checked. Overflow traps and wrapping is a separate operator.
 Concepts are named requirement bundles with explicit conformances,
 declared anywhere, and a collision is simply an error. The inherited
 design also requires a closed, named set of representation-derived
-compiler-supplied conformances, beginning with `zeroable`; their exact
-interaction with explicit conformances is resolved from implementation
-evidence at R2. Generic code is a value plus evidence that its type
+compiler-supplied conformances. D143 settled `zeroable` at R2.60 as a closed
+compiler concept family: source conformances can neither add an entry nor
+override one. Generic code is a value plus evidence that its type
 satisfies a concept; `any C` is the same evidence with the type erased,
 which makes static generics and runtime dispatch one mechanism seen from
 two sides. The evidence table is the foundation and specialising is an
@@ -190,7 +190,8 @@ back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
 **The bootstrap compiler is working.** R0's Ada chassis, R1's executable
-kernel, R2.20's aggregate/value-layout work and R2.30's functions, control,
+kernel, R2.10's target sizes, alignments and checked layout arithmetic,
+R2.20's aggregate/value-layout work and R2.30's functions, control,
 declared errors, function fields, recursive module images, computed aggregate
 elements and lexical `defer`/failure-only `undo` cleanup are complete. R2.40's
 fixed parameters, compile-time substitution, generic routine instances and
@@ -247,6 +248,15 @@ with validated conversions; and the system and memory I/O worlds. Every
 container transition, allocation rollback and unsafe obligation is written
 down, and the ten running examples exercise the slice with exact output
 oracles.
+
+R4.21 repairs the earlier review's flow, origin, lowering and diagnostic gaps.
+R4.30 adds import aliases, selected imports, typed global options, compiler
+facts, assertions and ordered static-library directives. R4.40 implements the
+selected Linux x86-64 C ABI and `layout(c)`, callbacks and variadic call
+transport. Its separate header generator and policy-driven C adapters cover
+the supported enum, union, bitfield, global/TLS and incoming-varargs boundaries;
+unsupported C forms receive explicit refusals. ROADMAP.md records their
+contracts and historical closure evidence; R4.91 owns the current repairs.
 
 R4.50 completes deterministic baseline code generation: compact numeric-array
 loops, strict-saving `layout(optimal)` placement, independently controlled
