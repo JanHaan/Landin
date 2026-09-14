@@ -154,7 +154,7 @@ class GitFixture(unittest.TestCase):
                 "hostname": "fixture", "os_release": "ID=debian", "boot_id": "12345678-1234-1234-1234-123456789abc",
                 "packages": "".join(name + "=fixture-version\n" for name in sorted(records.NATIVE_PACKAGES)),
                 "binaries": tools, "slot_runner_sha256": "2" * 64,
-                "resource_limits": {"cgroup": "/acceptance", "memory_bytes": 32 * 1024 ** 3,
+                "resource_limits": {"cgroup": "/acceptance", "memory_bytes": 100 * 1024 ** 3,
                                     "swap_bytes": 0},
                 "pins_sha256": common.file_hash(self.root / "environments/pins.sh")}
 
@@ -231,7 +231,7 @@ class GitTests(GitFixture):
             changed = copy.deepcopy(original); changed[field] = value; variants.append(changed)
         changed = copy.deepcopy(original); changed["execution_environment"]["LANDIN_QEMU"] = "qemu"; variants.append(changed)
         changed = copy.deepcopy(original); changed["execution_environment"]["PATH"] += ":/unapproved"; variants.append(changed)
-        for key, value in (("memory_bytes", 64 * 1024 ** 3), ("swap_bytes", 1),
+        for key, value in (("memory_bytes", 128 * 1024 ** 3), ("swap_bytes", 1),
                            ("memory_bytes", "max"), ("cgroup", "/../elsewhere")):
             changed = copy.deepcopy(original); changed["resource_limits"][key] = value; variants.append(changed)
         for environment in variants:
@@ -266,7 +266,7 @@ class GitTests(GitFixture):
         changed = copy.deepcopy(policy); changed['jobs'][0]['mode'] = 'release'; mutations.append(changed)
         changed = copy.deepcopy(policy); changed['jobs'][0]['commands'][2].append('--case=fast'); mutations.append(changed)
         changed = copy.deepcopy(policy); changed['jobs'][0]['commands'].pop(0); mutations.append(changed)
-        changed = copy.deepcopy(policy); changed['limits']['parallel_jobs'] = 8; mutations.append(changed)
+        changed = copy.deepcopy(policy); changed['limits']['parallel_jobs'] = 9; mutations.append(changed)
         changed = copy.deepcopy(policy); changed['limits']['memory_bytes'] *= 2; mutations.append(changed)
         changed = copy.deepcopy(policy); changed['limits']['swap_bytes'] = 1; mutations.append(changed)
         changed = copy.deepcopy(policy); changed['limits']['step_seconds'] = 0; mutations.append(changed)
@@ -427,18 +427,38 @@ class GitTests(GitFixture):
 
 
 class AcceptanceSchedulingTests(GitFixture):
-    def test_jobs_run_in_order_and_stop_after_failure(self):
+    def test_parallel_jobs_cancel_peers_after_failure(self):
+        import threading
+        barrier = threading.Barrier(8, timeout=5)
+        cancelled = threading.Event()
         calls = []
         def slot(*args):
-            calls.append(args[-1])
-            return 9 if len(calls) == 2 else 0
+            name = args[-1]
+            calls.append(name)
+            barrier.wait()
+            if name == "suite-debug":
+                return 9
+            self.assertTrue(cancelled.wait(5), "peers must receive cancellation")
+            return 125
+        def remote(*args):
+            self.assertEqual(args[2], "cancel")
+            cancelled.set()
         with patch.object(controller, "initialize"), patch.object(controller, "slot_run", side_effect=slot), \
-                patch.object(controller, "remote_job") as remote, patch.object(controller, "export") as export:
+                patch.object(controller, "remote_job", side_effect=remote) as remote_call, \
+                patch.object(controller, "export") as export:
             with self.assertRaisesRegex(common.Invalid, "incomplete/failed"):
                 controller.accept(self.root, "HEAD", "fixture", Path(self.tmp.name) / "state")
-        self.assertEqual(calls, ["suite-debug", "suite-release"])
-        remote.assert_not_called()
+        self.assertEqual(set(calls), {item["id"] for item in common.required_jobs()})
+        remote_call.assert_called_once()
         export.assert_not_called()
+
+    def test_all_parallel_jobs_must_pass_before_finalizing(self):
+        with patch.object(controller, "initialize"), patch.object(controller, "slot_run", return_value=0) as slot, \
+                patch.object(controller, "remote_job") as remote, patch.object(controller, "export") as export:
+            controller.accept(self.root, "HEAD", "fixture", Path(self.tmp.name) / "state")
+        self.assertEqual(slot.call_count, 8)
+        self.assertEqual(remote.call_args.args[2], "finalize")
+        export.assert_called_once()
 
 
 class ResourceControlTests(unittest.TestCase):
@@ -450,7 +470,7 @@ class ResourceControlTests(unittest.TestCase):
         self.proc.write_text("0::/acceptance\n")
         self.group = self.root / "acceptance"
         self.group.mkdir()
-        (self.group / "memory.max").write_text(str(32 * 1024 ** 3))
+        (self.group / "memory.max").write_text(str(100 * 1024 ** 3))
         (self.group / "memory.swap.max").write_text("0")
         self.policy = common.read_json(ROOT / "scripts/ci/policy.json")
 
@@ -458,14 +478,14 @@ class ResourceControlTests(unittest.TestCase):
         return resources.containment(self.policy, self.proc, self.root)
 
     def test_finite_cgroup_limits_and_namespace_root(self):
-        expected = {"cgroup": "/acceptance", "memory_bytes": 32 * 1024 ** 3, "swap_bytes": 0}
+        expected = {"cgroup": "/acceptance", "memory_bytes": 100 * 1024 ** 3, "swap_bytes": 0}
         self.assertEqual(self.inspect(), expected)
         self.proc.write_text("0::/\n")
         self.assertEqual(resources.containment(self.policy, self.proc, self.group),
                          dict(expected, cgroup="/"))
 
     def test_unlimited_missing_and_excessive_limits_refuse(self):
-        for name, value in (("memory.max", "max"), ("memory.max", str(64 * 1024 ** 3)),
+        for name, value in (("memory.max", "max"), ("memory.max", str(128 * 1024 ** 3)),
                             ("memory.max", "0"), ("memory.max", "-1"),
                             ("memory.swap.max", "max"), ("memory.swap.max", "1")):
             with self.subTest(name=name, value=value):
@@ -490,11 +510,11 @@ class ResourceControlTests(unittest.TestCase):
         self.assertEqual(resources.oom_events(self.inspect(), self.root),
                          {"oom_kill": 2, "oom_group_kill": 1})
 
-    def execute(self, script, seconds=2, live=lambda chunk: None):
+    def execute(self, script, seconds=2, live=lambda chunk: None, cancelled=lambda: False):
         output = io.BytesIO()
         code = resources.command([sys.executable, "-c", script], cwd=self.root,
                                  env=os.environ.copy(), pass_fds=(), output=output,
-                                 live=live, seconds=seconds)
+                                 live=live, seconds=seconds, cancelled=cancelled)
         return code, output.getvalue()
 
     def test_small_command_streams_output_and_preserves_exit(self):
@@ -540,6 +560,25 @@ class ResourceControlTests(unittest.TestCase):
         time.sleep(0.7)
         self.assertFalse((self.root / "survivor").exists())
 
+    def test_cancellation_stops_child_despite_slow_output(self):
+        import time
+        marker = self.root / "cancelled"
+        script = ("import time,pathlib; print('ready',flush=True); time.sleep(0.5); "
+                  "pathlib.Path('survivor').write_text('alive')")
+        def observe(chunk):
+            marker.touch()
+            time.sleep(0.7)
+        code, output = self.execute(script, live=observe, cancelled=marker.exists)
+        self.assertEqual(code, 125)
+        self.assertIn(b"cancelled", output)
+        self.assertFalse((self.root / "survivor").exists())
+
+    def test_cancelled_run_never_starts_command(self):
+        with patch.object(resources.subprocess, "Popen") as popen:
+            code, output = self.execute("raise AssertionError", cancelled=lambda: True)
+        self.assertEqual(code, 125)
+        popen.assert_not_called()
+
     def test_preflight_refuses_before_any_native_tool_probe(self):
         with patch.object(job.platform, "system", return_value="Linux"), \
                 patch.object(job.platform, "machine", return_value="x86_64"), \
@@ -568,7 +607,7 @@ class RunnerControlTests(GitFixture):
 
     def fake_run(self, name, code=0):
         def command(*args, **kwargs):
-            self.assertEqual(len(kwargs["pass_fds"]), 2, "child must retain host and job locks")
+            self.assertEqual(len(kwargs["pass_fds"]), 3, "child must retain host and job locks")
             self.assertEqual(kwargs["seconds"], self.request["policy"]["limits"]["step_seconds"])
             chunk = b"fixture command result\n"
             kwargs["output"].write(chunk)
@@ -652,6 +691,26 @@ class RunnerControlTests(GitFixture):
             with self.assertRaisesRegex(common.Invalid, "BUSY"):
                 self.fake_run("suite-debug")
         self.assertFalse((self.run / "attempts").exists())
+
+    def test_host_slots_bound_concurrency_across_runs(self):
+        import contextlib
+        self.native_setup()
+        limit = self.request["policy"]["limits"]["parallel_jobs"]
+        with contextlib.ExitStack() as stack:
+            for _ in range(limit):
+                stack.enter_context(job.execution_slot(limit))
+            with self.assertRaisesRegex(common.Invalid, "capacity exhausted"):
+                self.fake_run("suite-debug")
+        self.assertEqual(self.fake_run("suite-debug"), 0)
+
+    def test_failure_cancels_unstarted_peer_and_prevents_finalization(self):
+        self.native_setup()
+        self.assertEqual(self.fake_run("suite-debug", 9), 9)
+        self.assertTrue((self.run / "cancelled").exists())
+        with self.assertRaisesRegex(common.Invalid, "run cancelled"):
+            self.fake_run("suite-release")
+        with self.assertRaisesRegex(common.Invalid, "cannot finalize"):
+            job.finalize(self.run)
 
     def test_interrupted_attempt_resumes_without_replacing_history(self):
         self.native_setup()
@@ -892,7 +951,7 @@ class PublicationWiringTests(unittest.TestCase):
                 self.assertEqual(checker.check_native_ci(True), [])
                 override = root / "environments/native-ci/compose.resources.yaml"
                 limits = override.read_text()
-                override.write_text(limits.replace("34359738368", "68719476736"))
+                override.write_text(limits.replace("107374182400", "137438953472"))
                 self.assertTrue(checker.check_native_ci(True))
                 override.write_text(limits)
                 pages = root / ".build.yml"

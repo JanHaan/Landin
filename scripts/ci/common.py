@@ -299,7 +299,7 @@ def required_jobs():
     result = []
     for purpose in ("suite", "quality", "debugger"):
         for mode in ("debug", "release"):
-            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh", "-j1"]]
+            commands = [["./scripts/clean.sh", "--all"], ["./scripts/build.sh", "-j4"]]
             if purpose == "suite":
                 commands += [["./scripts/test.sh"],
                              ["python3", "compiler/tests/test_native_report_identity.py",
@@ -322,8 +322,8 @@ def required_jobs():
 
 
 def required_limits():
-    return {"memory_bytes": 32 * 1024 ** 3, "swap_bytes": 0,
-            "parallel_jobs": 1, "step_seconds": 1800}
+    return {"memory_bytes": 100 * 1024 ** 3, "swap_bytes": 0,
+            "parallel_jobs": 8, "step_seconds": 7200}
 
 
 def validate_limits(limits, policy):

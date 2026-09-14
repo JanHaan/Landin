@@ -3,5 +3,5 @@
 # swap in Docker. The runner independently verifies the kernel cgroup values.
 services:
   runner:
-    mem_limit: 34359738368
-    memswap_limit: 34359738368
+    mem_limit: 107374182400
+    memswap_limit: 107374182400

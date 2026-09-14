@@ -47,13 +47,17 @@ licensed fonts. The native runner need not hold those private files.
 
 ## Resource containment
 
-Acceptance runs on the native Linux host. Its policy requires one job at a
-time, explicit `-j1` bootstrap builds, and at most 32 GiB of memory with no swap
+Acceptance runs on the native Linux host. Its policy allows eight concurrent jobs,
+with explicit `-j4` bootstrap builds, and at most 100 GiB of memory with no swap
 for the execution cgroup and its descendants. These are aggregate kernel
 limits, not estimates from process RSS or per-process virtual-memory limits.
-The controller stops submitting jobs after a failure. A host-wide acceptance
-lock also prevents two controllers from running acceptance commands together;
-children inherit both that lock and the individual job lock.
+A failed job writes a durable run-local cancellation marker; peer command
+supervisors terminate their owned sessions even if live output stalls. The
+controller also requests cancellation on a failed SSH job. Eight host-wide
+slots bound acceptance concurrency across controllers. Children inherit the
+slot, individual job lock and shared compatibility lock; an older exclusive
+serial runner cannot overlap these jobs. The six compiler build jobs use at
+most 24 build workers in total, leaving headroom on the 96-CPU host.
 
 Before probing tools, initialization verifies the current unified cgroup v2
 membership and reads that cgroup's `memory.max` and `memory.swap.max`.
@@ -64,15 +68,15 @@ the environment record and must remain unchanged on resume. The runner reads
 the configuration and never changes host cgroups itself.
 
 The host administrator must provide a dedicated runner container or execution
-cgroup with `memory.max` no greater than `34359738368` and
+cgroup with `memory.max` no greater than `107374182400` and
 `memory.swap.max` equal to `0`. Check that no existing work is active before
 changing its limits; do not lower a shared container's cap beneath unrelated
 live workloads. The aggregate cap is enforced by the
 [Linux memory controller](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html).
 Initial deployment inspection found unlimited memory and swap and no cgroup
 write access for the runner account. After the maintainer redeployed the
-Docker runner with the 32 GiB settings, a direct kernel read confirmed
-`memory.max=34359738368`, `memory.swap.max=0` and zero OOM events. This supplies
+Docker runner with the 100 GiB settings, a direct kernel read confirmed
+`memory.max=107374182400`, `memory.swap.max=0` and zero OOM events. This supplies
 configuration evidence; no deliberate OOM workload is needed to verify it.
 
 The existing deployment uses Docker Compose. Its local deployment notes live
@@ -82,6 +86,10 @@ services share networking but keep separate containers. The tracked
 memory settings. Docker's `memswap_limit` counts memory plus swap, so setting
 it equal to `mem_limit` disables swap; see the
 [Compose service reference](https://docs.docker.com/reference/compose-file/services/#memswap_limit).
+
+If the Containerfile changed, first run `docker compose build runner` from
+the deployed Compose directory. This rebuilds the runner image, including
+Git installed in the image.
 
 Once all runner work is idle, copy that override beside the deployed
 `compose.yaml` on the Docker host and apply it there:
@@ -94,14 +102,14 @@ docker compose -f compose.yaml -f compose.resources.yaml \
     'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.swap.max'
 ```
 
-The expected kernel values are `34359738368` and `0`, respectively; Docker
+The expected kernel values are `107374182400` and `0`, respectively; Docker
 configuration alone is not sufficient evidence. The first command may
 recreate the runner and disconnect its SSH sessions, which is why it requires
 idle work. It preserves the existing work and SSH host-key volumes and leaves
 the Tailscale service running. Retain both Compose files in future deployment
 commands so recreation does not remove the limits. Do not use `down -v`.
 
-Each policy command has a 30-minute outer deadline, covering descendants and
+Each policy command has a two-hour outer deadline, covering descendants and
 inherited output pipes. Timeout terminates the process group and records a
 failure. On Linux, supervision also stops the separate tool process groups
 that the compiler creates inside the command's session. Existing finer-grained

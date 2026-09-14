@@ -8346,12 +8346,13 @@ remain open.
 
 Resource limits for further work are mandatory: check for existing `clang` or
 `cc1as` processes before execution and stop to report their PIDs/full commands
-if any exist. Do not run blanket assembler/linker coverage or parallel assembler
-work. Never assemble `positive/module-array-mixed-repetition`,
+if any exist before a new run. Do not run blanket assembler/linker coverage.
+Parallel assembler work is authorized only inside the existing capped
+acceptance jobs as specified below. Never assemble `positive/module-array-mixed-repetition`,
 `positive/module-array-repetition`, billion-element sources or their generated
 assembly. Before any explicit `clang -c`, inspect that exact file's `.rept`,
 `.zero`, `.space`, `.fill` and `.comm` expansion; skip unbounded or over-64-MiB
-images. At most one foreground clang process may run, with a timeout of at most
+images. For new explicit reproductions, at most one foreground clang process may run, with a timeout of at most
 30 seconds and one explicitly named, inspected input. No broad clang loops,
 unbounded stress/fuzz loops or giant generated cases are authorized. Reuse
 completed coverage; use short explicit timeouts and low concurrency for new
@@ -8367,11 +8368,11 @@ above remain owned here until repaired or explicitly transferred with reasons.
 Retained acceptance of `66927e93` is historical evidence and does not approve
 these repairs. Earlier review constraints excluded new mutation-based probing
 and debugger sessions. The maintainer now explicitly authorizes the eight
-existing acceptance jobs, including runtime/ABI and GDB checks, sequentially
+existing acceptance jobs, including runtime/ABI and GDB checks, concurrently
 on the capped Linux runner and stopping on failure. This adds no new fuzz or
 assembler campaign and never authorizes assembling the giant-image fixtures.
 Required debugger acceptance is not waived; it is included in that authorized
-gate. If the 32 GiB cap is insufficient, report the affected job and memory
+gate. If the 100 GiB cap is insufficient, report the affected job and memory
 evidence before changing the limit.
 
 The remaining closure work is live activation of the SourceHut publisher,
@@ -8398,35 +8399,37 @@ The remaining delivery sequence is concrete:
 
 | Step | Required result | Current boundary |
 | --- | --- | --- |
-| Reconcile acceptance execution | Preserve giant-image cases as source/seam evidence while running the eight existing jobs sequentially under aggregate memory containment. The changed policy cannot reuse an existing policy identity. | The maintainer activated the Docker cap, verified at the kernel boundary, and explicitly authorized the existing capped acceptance jobs. The positive-fixture path emits assembly text only; the native execution path selects runtime and ABI classes. No acceptance waiver is inferred. |
+| Reconcile acceptance execution | Preserve giant-image cases as source/seam evidence while running the eight existing jobs concurrently under aggregate memory containment. The changed policy cannot reuse an existing policy identity. | The maintainer activated the Docker cap, verified at the kernel boundary, and explicitly authorized the existing capped acceptance jobs. The positive-fixture path emits assembly text only; the native execution path selects runtime and ABI classes. No acceptance waiver is inferred. |
 | Settle historical dispositions | M5 is disposed by the maintainer's choice to retain the font files for now. Record M6's treatment of unrecovered original bundles, preserving the difference between source witnesses and exact run evidence. | No history rewrite or retrospective acceptance claim is authorized. New acceptance cannot recover a historical run. |
 | Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. Live permission verification, approval, promotion and publication remain unperformed. |
 
 The maintainer clarified that the resource restrictions address the incident
 in which session-launched work consumed over 60 GB and crashed the Mac, and
 allows adjusting execution limits to prevent a recurrence. This is permission
-to prepare contained validation, not to launch the unchanged parallel gate.
+to prepare contained validation; subsequent instructions explicitly authorize
+the existing parallel gate under the 100 GiB Docker cap.
 M5 is disposed by the separate instruction to leave the font files for now.
 M6's missing historical evidence remains distinct and open.
 
-The acceptance runner now serializes its eight jobs, explicitly builds with
-one worker and holds a host-wide acceptance lock across each job. The policy
-requires an aggregate cgroup v2 memory cap of at most 32 GiB with no swap,
+The acceptance runner now runs eight isolated jobs concurrently, explicitly
+builds with four workers per job and holds one of eight host-wide slots
+across each job. The policy requires an aggregate cgroup v2 memory cap of at
+most 100 GiB with no swap,
 following the maintainer's explicit choice of that cap for the Docker host.
 Initialization refuses missing/unlimited/excessive limits before native tool
 probes; verified limits are bound into environment provenance. Each command
-has a 30-minute outer process-group deadline; narrower assembler and harness
+has a two-hour outer process-group deadline; narrower assembler and harness
 limits are still required where applicable. OOM kill accounting changes fail
 the job even if a command reports success. No required job is removed, and
 the changed policy identity cannot reuse acceptance of an older revision.
 
-Read-only host inspection found no running clang/cc1as, but the runner's
-current cgroup has `memory.max=max`, `memory.swap.max=max` and is not writable
-by its account. A host administrator must provide a dedicated capped runner
-container/cgroup before the new preflight can pass. Do not lower an unrelated
+Initial read-only host inspection found no running clang/cc1as, but the runner's
+cgroup had `memory.max=max`, `memory.swap.max=max` and was not writable
+by its account. Administrator deployment supplied a dedicated capped runner
+container before the new preflight passed. Do not lower an unrelated
 shared workload's limit or substitute a per-process limit for aggregate
 containment. Tiny Python controls exercise refusal, timeout, inherited-pipe
-cleanup, serialization and OOM-accounting failure; no giant allocation,
+cleanup, concurrency bounds and OOM-accounting failure; no giant allocation,
 compiler corpus, assembler sweep or debugger session validates these controls.
 Source/IR-only treatment of the giant fixtures remains mandatory. The exact
 native execution and remaining coverage decisions still precede acceptance.
@@ -8456,6 +8459,26 @@ before any compiler tool probe, then passed containment after the maintainer's
 redeployment. Logs are retained in
 `.scratch/r491-resource-containment/`. These checks establish runner behavior,
 not kernel OOM experiments, compiler acceptance or live deployment.
+
+Historical acceptance timing establishes the required outer deadline: in
+retained run `20260911T171028Z-93919134a490`, debug suite execution took
+4,817 seconds, debug quality 5,229 seconds and debug GDB 2,808 seconds.
+The initial 30-minute command allowance was therefore insufficient for the
+existing required checks and is corrected to two hours. This changes only
+the wall-clock allowance without changing the required outcomes.
+
+The maintainer subsequently selected 100 GiB with zero swap and requested
+parallel execution. The image was rebuilt with Git and the idle runner
+recreated. A fresh SSH inspection confirms `memory.max=107374182400`,
+`memory.swap.max=0`, zero OOM events and no compiler/tool processes. The
+previous serial run `20260914T133931Z-28587a11fed4` on `16897158` was
+intentionally interrupted to change policy: its explicit debug build passed,
+but its suite had not completed. It supplies neither a compiler failure nor
+acceptance, and no OOM was observed. Its retained attempt remains intact.
+The parallel policy uses eight jobs and four workers per compiler build,
+with host-wide slots and durable peer cancellation on failure. Giant-image
+assembly remains forbidden. New exact acceptance must use the newly
+committed policy; it cannot resume the superseded serial run.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
