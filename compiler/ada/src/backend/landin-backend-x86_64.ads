@@ -80,6 +80,16 @@ with Landin.Targets;
 
 package Landin.Backend.X86_64 is
 
+   --  Physical internal arguments include hidden result addresses, but not
+   --  an indirect call's code address. Count arithmetic allocates no storage.
+   --  Stack_Limit_Exceeded reports an unencodable aligned area. Incoming
+   --  preflight reserves sixteen additional bytes for the saved frame/call.
+   function Native_Argument_Bytes
+     (Count : Natural;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count := 16#7fff_ffff#)
+      return Landin.Targets.Byte_Count;
+
    --  Frame cells and probe endpoints use signed 32-bit displacements from
    --  %rbp/%rsp.  The driver asks before emission so a larger verified frame
    --  is an explicit refusal rather than bad text or host arithmetic overflow.

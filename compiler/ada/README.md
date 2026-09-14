@@ -611,6 +611,10 @@ use that internal convention. D203/D204's separate C signature facts instead
 select SysV AMD64 LP64 classification: independent integer/SSE banks, complete
 aggregate rollback to inline stack bytes, and C hidden-result storage. This
 never repurposes the internal failure carrier as a C error channel.
+Internal call emission and preflight share checked physical argument-count
+arithmetic. Stack areas must fit the signed displacement encoding after final
+alignment; incoming areas also reserve the saved-frame and return-address
+prefix. This bounds internal calls as well as the separate C placement plan.
 Inferred and explicitly typed local or module function values
 are represented by target code addresses and called through verified
 `Indirect_Call` IR. A first-class recursive neutral descriptor, not a concrete
