@@ -62,6 +62,11 @@ If a handle is consumed out of an `inout` reader, [0910] requires replacement
 even when close fails and its caller recovers; consuming the whole reader by
 `sink` leaves no such returned-storage obligation. Applicable cleanup can
 restore a field before that exit check.
+D223 consumes a handle only when its close call is entered. A later argument
+that returns or propagates failure first leaves the pending handle live;
+a failure from close itself consumes it. The bounded
+`positive/r491-sink-call-entry` derivative distinguishes those edges and shares
+the descriptor/count argument pattern with prototype 3.
 D220 applies the same boundary to a handle table: a literal fixed-array
 element is contained storage, while indexing a slice table follows referenced
 backing and is not a sink place. Whole descriptor fields keep the container

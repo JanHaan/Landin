@@ -1,0 +1,24 @@
+both: (sink first: i32, sink second: i32) -> none =
+end both
+
+mixed: (inout first: i32, sink second: i32) -> none =
+end mixed
+
+take: (sink first: i32, second: i32) -> none =
+end take
+
+drop: (sink value: i32) -> none =
+end drop
+
+repeated: (value: i32) -> none =
+    both(value, value)
+end repeated
+
+shared: () -> none =
+    mut value: i32 = 1
+    mixed(value, value)
+end shared
+
+nested: (value: i32) -> none =
+    take(value, begin drop(value) 1 end)
+end nested

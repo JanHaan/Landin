@@ -8311,10 +8311,12 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Source
-        (Label, Text : String; Accepted : Boolean);
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0302");
 
       procedure Check_Source
-        (Label, Text : String; Accepted : Boolean)
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0302")
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -8332,16 +8334,24 @@ package body Landin.Tests.Checking_Suite is
          declare
             Reports : constant Landin.Diagnostics.Diagnostic_List :=
               Landin.Stages.Report (Work);
+            Got : US.Unbounded_String;
          begin
+            for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
+               if Position > 1 then
+                  US.Append (Got, " ");
+               end if;
+               US.Append
+                 (Got, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Reports, Position)));
+            end loop;
             Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
             Landin.Testing.Check
               (Item, Landin.Stages.Failed (Work) /= Accepted
                  and then
-                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
-                    else Landin.Diagnostics.Count (Reports) = 1
-                      and then Landin.Diagnostics.Code
-                        (Landin.Diagnostics.Get (Reports, 1)) = "L0302"),
-               Label & " retains its exact assignment verdict");
+                   (if Accepted then US.Length (Got) = 0
+                    else US.To_String (Got) = Code),
+               Label & " retains its exact assignment verdict: "
+               & Landin.Stages.Rendered_Report (Work));
          end;
       end Check_Source;
 
@@ -8588,19 +8598,36 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> (r: i32) = mut b: box" & LF
          & "b.value = 7 r = b.value end f" & LF,
          Accepted => True);
+      --  D220 refuses slice-backed sink places before flow. Keep those
+      --  exact refusals and pin the old flow distinction on owned arrays.
       Check_Source
-        ("slice sibling stays live", Prefix
+        ("slice sibling cannot excuse a refused sink", Prefix
          & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[1] end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("slice element cannot be consumed", Prefix
+         & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[0] end f" & LF,
+         Accepted => False, Code => "L0301 L0302");
+      Check_Source
+        ("slice length cannot excuse a refused sink", Prefix
+         & "f: (s: []mut i32) -> (r: usize) =" & LF
+         & "_ = consume(s[0]) r = lenof s end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("fixed-array sibling stays live", Prefix
+         & "f: (s: [2]i32) -> (r: i32) =" & LF
          & "_ = consume(s[0]) r = s[1] end f" & LF,
          Accepted => True);
       Check_Source
-        ("consumed slice element stays dead", Prefix
-         & "f: (s: []mut i32) -> (r: i32) =" & LF
+        ("consumed fixed-array element stays dead", Prefix
+         & "f: (s: [2]i32) -> (r: i32) =" & LF
          & "_ = consume(s[0]) r = s[0] end f" & LF,
          Accepted => False);
       Check_Source
-        ("slice length does not read elements", Prefix
-         & "f: (s: []mut i32) -> (r: usize) =" & LF
+        ("fixed-array length does not read elements", Prefix
+         & "f: (s: [2]i32) -> (r: usize) =" & LF
          & "_ = consume(s[0]) r = lenof s end f" & LF,
          Accepted => True);
    end Nested_Calls_Retain_Flow_Effects;
@@ -12565,6 +12592,195 @@ package body Landin.Tests.Checking_Suite is
          & "flag do complete p = addr v end while _ = p end f" & LF);
    end Loops_Preserve_The_Assignment_Boundary;
 
+   procedure Sinks_Commit_At_Call_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Sinks_Commit_At_Call_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      Take : constant String :=
+        "take: (sink value: i32, other: i32) -> none = end take ";
+      Drop : constant String :=
+        "drop: (sink value: i32) -> none = end drop ";
+      Pair : constant String :=
+        "pair: type = struct count: i32 more: i32 end pair ";
+      Both : constant String :=
+        "both: (sink first: i32, sink second: i32) -> none = end both ";
+      procedure Check (Label, Text : String; Codes : String := "");
+
+      procedure Check (Label, Text : String; Codes : String := "") is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "sink-entry.ldn", Text);
+         Ran : Natural;
+         Got : US.Unbounded_String;
+         pragma Unreferenced (Src);
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
+               if Position > 1 then
+                  US.Append (Got, " ");
+               end if;
+               US.Append
+                 (Got, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Reports, Position)));
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, Label & " reaches checking");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) = (Codes /= "")
+              and then US.To_String (Got) = Codes,
+            Label & " retains the exact result verdict: "
+            & Landin.Stages.Rendered_Report (Work));
+      end Check;
+   begin
+      Check
+        ("later scalar read", Take
+         & "f: (value: i32) -> none = take(value, value) end f");
+      Check
+        ("later field read", Pair
+         & "take: (sink value: pair, other: i32) -> none = end take "
+         & "f: (value: pair) -> none = take(value, value.count) end f");
+      Check
+        ("early return keeps inout live", Take
+         & "f: (inout value: i32) -> none = "
+         & "take(value, begin return end) end f");
+      Check
+        ("guarded return keeps inout live", Take
+         & "f: (inout value: i32, flag: bool) -> none = "
+         & "take(value, begin return when flag 1 end) value = 2 end f");
+      Check
+        ("named arguments keep written order", Take
+         & "f: (inout value: i32) -> none = "
+         & "take(other: begin return end, value: value) end f");
+      Check
+        ("named later read", Take
+         & "f: (value: i32) -> none = "
+         & "take(value: value, other: value) end f");
+      Check
+        ("indirect signature", Take
+         & "f: (inout value: i32) -> none = apply := take "
+         & "apply(value, begin return end) end f");
+      Check
+        ("generic signature",
+         "take: (t: type, sink value: t, other: t) -> none = end take "
+         & "f: (value: i32) -> none = "
+         & "take(t: i32, value: value, other: value) end f");
+      Check
+        ("entered call consumes", Take
+         & "f: (value: i32) -> none = take(value, value) _ = value end f",
+         "L0302");
+      Check
+        ("entered call requires restoration", Take
+         & "f: (inout value: i32) -> none = take(value, value) end f",
+         "L0302");
+      Check
+        ("repeated sink", Both
+         & "f: (value: i32) -> none = both(value, value) end f", "L0302");
+      Check
+        ("overlapping sinks", Pair
+         & "both: (sink first: pair, sink second: i32) -> none = end both "
+         & "f: (value: pair) -> none = both(value, value.count) end f",
+         "L0302");
+      Check
+        ("disjoint sinks", Pair & Both
+         & "f: (value: pair) -> none = both(value.count, value.more) end f");
+      Check
+        ("sink before inout",
+         "both: (sink first: i32, inout second: i32) -> none = end both "
+         & "f: (value: i32) -> none = "
+         & "mut copy: i32 = value both(copy, copy) end f", "L0302");
+      Check
+        ("inout before sink",
+         "both: (inout first: i32, sink second: i32) -> none = end both "
+         & "f: (value: i32) -> none = "
+         & "mut copy: i32 = value both(copy, copy) end f", "L0302");
+      Check
+        ("nested call consumes pending sink", Take & Drop
+         & "f: (value: i32) -> none = "
+         & "take(value, begin drop(value) 1 end) end f", "L0302");
+      Check
+        ("later assignment restores pending sink", Take & Drop
+         & "f: () -> none = mut value: i32 = 1 "
+         & "take(value, begin drop(value) value = 2 1 end) end f");
+      Check
+        ("later assignment is consumed at entry", Take
+         & "f: () -> none = mut value: i32 = 1 "
+         & "take(value, begin value = 2 1 end) _ = value end f", "L0302");
+      Check
+        ("recovery observes consumed sink",
+         "bad: atom take: (sink value: i32, other: i32) -> none "
+         & "! bad = fail bad end take f: (value: i32) -> none = "
+         & "take(value, value) else begin _ = value end end f", "L0302");
+      Check
+        ("defer reads sink on argument exit", Take
+         & "observe: (value: i32) -> none = end observe "
+         & "f: (inout value: i32) -> none = defer observe(value) "
+         & "take(value, begin return end) end f");
+      Check
+        ("defer restores entered sink", Take
+         & "observe: (value: i32) -> none = end observe "
+         & "f: (inout value: i32) -> none = "
+         & "defer observe(begin value = 2 0 end) "
+         & "take(value, value) end f");
+      Check
+        ("computed inout index is evaluated once",
+         "drop: (sink value: usize) -> none = end drop "
+         & "both: (inout first: i32, second: i32) -> none = end both "
+         & "f: () -> none = mut items: [1]i32 = [1] index: usize = 0 "
+         & "both(items[index], begin drop(index) 1 end) end f");
+      Check
+        ("argument failure keeps pending handle live", Take
+         & "bad: atom leaf: () -> (r: i32) ! bad = fail bad end leaf "
+         & "observe: (value: i32) -> none = end observe "
+         & "f: (inout value: i32) -> none ! bad = undo observe(value) "
+         & "take(value, try leaf()) value = 2 end f");
+      Check
+        ("callee failure requires restoration",
+         "bad: atom take: (sink value: i32, other: i32) -> none "
+         & "! bad = fail bad end take f: (inout value: i32) "
+         & "-> none ! bad = try take(value, value) value = 2 end f",
+         "L0302");
+      Check
+        ("undo restores on callee failure",
+         "bad: atom take: (sink value: i32, other: i32) -> none "
+         & "! bad = fail bad end take "
+         & "observe: (value: i32) -> none = end observe "
+         & "f: (inout value: i32) -> none ! bad = "
+         & "undo observe(begin value = 2 0 end) "
+         & "try take(value, value) value = 2 end f");
+      Check
+        ("nested consumption survives argument exit", Take & Drop
+         & "f: (inout value: i32) -> none = "
+         & "take(value, begin drop(value) return end) end f", "L0302");
+      Check
+        ("argument exit cancels overlapping pending sinks",
+         "both: (sink first: i32, sink second: i32, third: i32) "
+         & "-> none = end both f: (inout value: i32) -> none = "
+         & "both(value, value, begin return end) end f");
+      Check
+        ("field before whole sink", Pair
+         & "both: (sink first: i32, sink second: pair) -> none = end both "
+         & "f: (value: pair) -> none = both(value.count, value) end f",
+         "L0302");
+      Check
+        ("nested call consumes pending inout", Drop
+         & "both: (inout first: i32, second: i32) -> none = end both "
+         & "f: () -> none = mut value: i32 = 1 "
+         & "both(value, begin drop(value) 1 end) end f", "L0302");
+   end Sinks_Commit_At_Call_Entry;
+
    procedure Sink_Paths_Stay_In_Their_Binding
      (Item : in out Landin.Testing.Context);
 
@@ -13143,6 +13359,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "sink paths stay in their binding",
          Sink_Paths_Stay_In_Their_Binding'Access);
+      Landin.Testing.Register
+        (Into, "checking", "sinks commit at call entry",
+         Sinks_Commit_At_Call_Entry'Access);
       Landin.Testing.Register
         (Into, "checking", "static entries have one declaration",
          Static_Entries_Have_One_Declaration'Access);

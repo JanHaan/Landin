@@ -1,0 +1,5 @@
+class: positive
+summary: D223 captures sink arguments before committing consumption at call entry
+program: program.ldn
+constructs: 0410, 0510, 0520, 0670, 0900, 0910, 1030, 1100, 1110, 1310, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
