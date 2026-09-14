@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: static concept selection uses the declared receiver label even when only the provider receiver is renamed
+program: main.ldn
+status: 42
+constructs: 0980, 1290, 1300
+targets: linux-x86-64

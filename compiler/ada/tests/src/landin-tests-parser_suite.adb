@@ -3375,7 +3375,31 @@ package body Landin.Tests.Parser_Suite is
            (Text, "call() end f g: () -> (r: i32) = call(0) end g");
          return Unbounded.To_String (Text);
       end Recovered;
+      function Binary_Chain (Count : Positive; Operator : String)
+        return String;
+
+      function Binary_Chain (Count : Positive; Operator : String)
+        return String
+      is
+         Text : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String ("f: () -> (r: i32) = 1");
+      begin
+         for Position in 1 .. Count loop
+            pragma Unreferenced (Position);
+            Unbounded.Append (Text, " " & Operator & " 1");
+         end loop;
+         Unbounded.Append (Text, " end f g: () -> (r: i32) = 2 end g");
+         return Unbounded.To_String (Text);
+      end Binary_Chain;
    begin
+      Check ("last permitted sum chain",
+         Binary_Chain (Landin.Syntax.Parser.Nesting_Limit, "+"), "", "f,g");
+      Check ("first refused sum chain",
+         Binary_Chain (Landin.Syntax.Parser.Nesting_Limit + 1, "+"),
+         "L0111", "f,g");
+      Check ("long logical chain recovers once",
+         Binary_Chain (Landin.Syntax.Parser.Nesting_Limit * 4, "and"),
+         "L0111", "f,g");
       Check ("last permitted call",
          Nested (Landin.Syntax.Parser.Nesting_Limit), "", "f,g");
       Check ("first refused call",

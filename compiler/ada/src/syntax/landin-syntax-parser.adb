@@ -6393,6 +6393,8 @@ package body Landin.Syntax.Parser is
                Min  : Pre.Level := Pre.Level_Expression) return Node_Id
             is
                Left    : Node_Id := Seed;
+               Chain : Natural := 0;
+               Truncated : Boolean := False;
                Chained : Boolean := False;
                First   : Landin.Source.Span := Landin.Source.Empty_Span;
             begin
@@ -6448,10 +6450,27 @@ package body Landin.Syntax.Parser is
                               Because => "the operator");
                            Right := Add (Error_Expression, Point);
                         end if;
-                        Left := Add
-                          (Of_Kind  => Pre.Binary_Node (Op),
-                           At_Token => At_Op,
-                           Children => [Left, Right]);
+                        Chain := Chain + 1;
+                        if Chain > Nesting_Limit then
+                           if not Truncated then
+                              Truncated := True;
+                              Complain
+                                (Item => Syn.Nesting_Too_Deep,
+                                 Where => At_Op,
+                                 Message => "this binary operator chain is"
+                                            & " longer than the compiler"
+                                            & " reads",
+                                 Note => "an implementation limit, not a"
+                                         & " rule of the language",
+                                 Related => Anchor (Result, Seed),
+                                 Because => "the chain begins here");
+                           end if;
+                        else
+                           Left := Add
+                             (Of_Kind  => Pre.Binary_Node (Op),
+                              At_Token => At_Op,
+                              Children => [Left, Right]);
+                        end if;
 
                         if Pre.Fold (Rank) = Pre.Non_Associative then
                            Chained := True;

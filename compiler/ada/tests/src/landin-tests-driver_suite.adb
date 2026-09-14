@@ -6,6 +6,7 @@ with Ada.Strings.Unbounded;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
+with Landin.Syntax.Parser;
 
 package body Landin.Tests.Driver_Suite is
 
@@ -2444,6 +2445,29 @@ package body Landin.Tests.Driver_Suite is
       end Check;
    begin
       for Executable in Boolean loop
+         for Tried in Boolean loop
+            Check
+              ("bad: atom problem: type = bad" & LF
+               & "handler: type = (value: i32) -> (result: i32)" & LF
+               & "identity: (value: i32) -> (result: i32) = value end identity"
+               & LF & "handlers: [1]handler = [identity]" & LF
+               & "pick: () -> (index: usize) ! problem = fail bad end pick"
+               & LF & "caller: () -> (result: i32) = handlers["
+               & (if Tried then "try " else "") & "pick()](1) end caller",
+               "L0301", 1, Executable);
+         end loop;
+         declare
+            Source : Unbounded.Unbounded_String :=
+              Unbounded.To_Unbounded_String ("f: () -> (r: i32) = 1");
+         begin
+            for Position in 1 .. Landin.Syntax.Parser.Nesting_Limit + 1 loop
+               pragma Unreferenced (Position);
+               Unbounded.Append (Source, " + 1");
+            end loop;
+            Unbounded.Append (Source, " end f");
+            Check (Unbounded.To_String (Source), "L0111", 1, Executable);
+         end;
+
          Check
            ("level: type = u8 range 5 .. 10 f: () -> (r: level) = 3 end f",
             "L0300", 1, Executable);

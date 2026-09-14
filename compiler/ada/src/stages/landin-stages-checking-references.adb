@@ -115,25 +115,6 @@ package body Landin.Stages.Checking.References is
       Exposed : Declaration_Bits := [others => False];
       type Origin_Table is
         array (Res.Declaration_Id range <>) of Origin_Fact;
-      Origins : Origin_Table
-        (Res.Declaration_Id'(1)
-         .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))) :=
-           [others => No_Origin];
-      --  Match and collection bindings keep their captured backing apart
-      --  from origins carried by the value. Runtime address aliases retain
-      --  that backing beneath computed selectors; copied subjects do not.
-      Alias_Storage : array (Origins'Range) of Reference_Fact :=
-        [others => No_Reference];
-      Runtime_Alias : array (Origins'Range) of Boolean := [others => False];
-      Pattern_Subject : array (Origins'Range) of Syn.Node_Id :=
-        [others => Syn.No_Node];
-      Pattern_Block : array (Origins'Range) of Syn.Node_Id :=
-        [others => Syn.No_Node];
-      Falls_Through : Boolean := True;
-      Parameter_Of : array (Origins'Range) of Natural := [others => 0];
-      Parameter_Escapes : array (1 .. Parameters) of Boolean :=
-        [others => False];
-
       Signature : constant Landin.Checking.Signature_Id :=
         Landin.Checking.Signature_Of
           (Types.all, Of_Tree, Function_Node);
@@ -145,7 +126,9 @@ package body Landin.Stages.Checking.References is
       Sink : not null access Landin.Diagnostics.Diagnostic_List :=
         Into'Unchecked_Access;
 
-      subtype Function_Table is Origin_Table (Origins'Range);
+      subtype Function_Table is Origin_Table
+        (Res.Declaration_Id'(1)
+         .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all)));
       type Function_Table_Access is access Function_Table;
 
       procedure Free is new Ada.Unchecked_Deallocation
@@ -183,6 +166,43 @@ package body Landin.Stages.Checking.References is
             end return;
          end Saved;
       end Snapshots;
+
+      type Reference_Table is array (Function_Table'Range) of Reference_Fact;
+      type Reference_Table_Access is access Reference_Table;
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Object => Reference_Table, Name => Reference_Table_Access);
+
+      package Alias_Tables is
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Data : Reference_Table_Access := new Reference_Table;
+         end record;
+         overriding procedure Finalize (Value : in out Owner);
+      end Alias_Tables;
+
+      package body Alias_Tables is
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            Free (Value.Data);
+         end Finalize;
+      end Alias_Tables;
+
+      Origin_Owner : constant Snapshots.Owner := Snapshots.Empty;
+      Origins : Function_Table renames Origin_Owner.Data.all;
+      --  Match and collection bindings keep their captured backing apart
+      --  from origins carried by the value. Runtime address aliases retain
+      --  that backing beneath computed selectors; copied subjects do not.
+      Alias_Owner : Alias_Tables.Owner;
+      Alias_Storage : Reference_Table renames Alias_Owner.Data.all;
+      Runtime_Alias : array (Origins'Range) of Boolean := [others => False];
+      Pattern_Subject : array (Origins'Range) of Syn.Node_Id :=
+        [others => Syn.No_Node];
+      Pattern_Block : array (Origins'Range) of Syn.Node_Id :=
+        [others => Syn.No_Node];
+      Falls_Through : Boolean := True;
+      Parameter_Of : array (Origins'Range) of Natural := [others => 0];
+      Parameter_Escapes : array (1 .. Parameters) of Boolean :=
+        [others => False];
+
 
       --  The lexical cleanup stack, kept the way
       --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
@@ -723,7 +743,8 @@ package body Landin.Stages.Checking.References is
                   then
                     (if Res.Role_Of (Meanings.all, Tree, Raw)
                           = Res.Runtime_Argument
-                     then Res.Position_Of (Meanings.all, Tree, Raw)
+                     then Landin.Checking.Position_Of
+                       (Types.all, Meanings.all, Tree, Raw)
                      else 0)
                   elsif Called /= Landin.Checking.No_Signature
                   then Plain_Position (Written)

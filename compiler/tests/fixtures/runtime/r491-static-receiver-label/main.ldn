@@ -1,0 +1,9 @@
+readable: type = concept (t: type)
+    read: (self: t) -> (result: i32)
+end readable
+read_value: (value: i32) -> (result: i32) = value end read_value
+i32 is readable (read: read_value)
+read: (t: type is readable, item: t) -> (result: i32) =
+    t.read(self: item)
+end read
+public main: () -> (code: i32) = read(i32(42)) end main

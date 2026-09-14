@@ -270,7 +270,9 @@ completed unit before backend use, and the current specialization and
 simplification passes verify their inputs and outputs. It checks storage
 runs and identities before dereferencing them, then block structure,
 reachability, operand order, type agreement, signatures, shapes, paths,
-evidence and static images.
+evidence and static images. Pointer-provenance dataflow keeps its
+block-by-slot input and output tables in scoped heap storage, including
+when verification exits early after finding a fault.
 
 This is structural and semantic consistency checking of a compiler data
 structure, not a proof that compilation preserves every program's behavior.

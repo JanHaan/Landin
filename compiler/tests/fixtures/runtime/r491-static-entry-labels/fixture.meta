@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: static concept labels retain declared positions across provider and instantiation order
+program: main.ldn
+status: 42
+constructs: 0980, 1290, 1300
+targets: linux-x86-64

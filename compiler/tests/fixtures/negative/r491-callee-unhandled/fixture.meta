@@ -1,0 +1,6 @@
+class: negative
+summary: calls evaluated inside an indirect callee retain their error obligations
+program: program.ldn
+codes: L0301
+constructs: 0940, 0960, 1030
+targets: linux-x86-64, synthetic-32

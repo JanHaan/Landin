@@ -112,6 +112,43 @@ package body Landin.Tests.Checking_Suite is
    --  Ada.Containers.Vectors.  The production reproducer had 1,217 resolved
    --  declarations; these module bindings cross that same boundary without
    --  carrying the container workload into this narrow checker regression.
+   procedure Flat_Alias_Chains_Use_Bounded_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Flat_Alias_Chains_Use_Bounded_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Text : US.Unbounded_String;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      for Index in 1 .. 4_000 loop
+         US.Append
+           (Text, "alias_" & Image (Index) & ": type = alias_"
+            & Image (Index + 1) & LF);
+      end loop;
+      US.Append
+        (Text, "alias_4001: type = i32" & LF
+         & "use: (value: alias_1) -> (result: i32) = value end use" & LF);
+      Src := Landin.Stages.Add_Source
+        (Work, "flat-aliases.ldn", US.To_String (Text));
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Src /= Landin.Source.No_Source and then Ran = 4
+         and then not Landin.Stages.Failed (Work),
+         "four thousand flat aliases preserve the final scalar type");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 0,
+         "the finite alias chain has no diagnostic");
+   end Flat_Alias_Chains_Use_Bounded_Stack;
+
    procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
      (Item : in out Landin.Testing.Context);
 
@@ -12384,6 +12421,122 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Owed_Checks_Belong_To_Routine_Views;
 
+   procedure Call_Matches_Belong_To_Routine_Views
+     (Item : in out Landin.Testing.Context);
+
+   procedure Call_Matches_Belong_To_Routine_Views
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Syn renames Landin.Syntax;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "call-views.ldn",
+         "identity: (t: type, value: t) -> (result: t) =" & LF
+         & "result = helper(left: value, right: value) end identity" & LF
+         & "helper: (left: i32, right: i32) -> (result: i32) =" & LF
+         & "left end helper" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "the two small declarations reach the table seam");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Syn.Tree :=
+           Syn.Forest.Tree_Of (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Meanings : Landin.Resolution.Table renames
+           Landin.Stages.Meanings (Work).all;
+         Node : constant Syn.Node_Id := Syn.Nth_Declaration (Tree.all, 1);
+         Call : Syn.Node_Id := Syn.No_Node;
+         Argument : Syn.Node_Id := Syn.No_Node;
+         Template : Landin.Provenance.Declaration_Id :=
+           Landin.Provenance.No_Declaration;
+         Actuals : C.Actual_Tuple := C.Empty_Actuals;
+         First, Second, Previous, Nested : C.Routine_Instance_Id;
+         procedure Expect (Position : Positive;
+                           Matched : Landin.Resolution.Call_Match_State;
+                           Message : String);
+
+         procedure Expect (Position : Positive;
+                           Matched : Landin.Resolution.Call_Match_State;
+                           Message : String) is
+         begin
+            Landin.Testing.Check
+              (Item, C.Position_Of (Types.all, Meanings, Tree.all, Argument)
+                 = Position and then C.Match_Of
+                   (Types.all, Meanings, Tree.all, Call) = Matched,
+               Message);
+         end Expect;
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all, Meanings,
+            Landin.Stages.Identities (Work).all);
+         for Id in Landin.Provenance.Declaration_Id'(1)
+           .. Landin.Provenance.Declaration_Id
+             (Landin.Resolution.Declaration_Count (Meanings))
+         loop
+            if Landin.Resolution.Node_Of (Meanings, Id) = Node then
+               Template := Id;
+               exit;
+            end if;
+         end loop;
+         C.Append_Actual (Actuals, C.Scalar_Type_Actual (Landin.Types.U8));
+         First := C.Intern_Routine_Instance (Types.all, Template, Actuals);
+         Actuals := C.Empty_Actuals;
+         C.Append_Actual (Actuals, C.Scalar_Type_Actual (Landin.Types.I32));
+         Second := C.Intern_Routine_Instance (Types.all, Template, Actuals);
+         for Candidate in Syn.Node_Id'(1) .. Syn.Last_Node (Tree.all) loop
+            if Syn.Kind (Tree.all, Candidate) = Syn.Labeled_Application then
+               Call := Candidate;
+               exit;
+            end if;
+         end loop;
+         Argument := Syn.Nth_Argument (Tree.all, Call, 1);
+         C.Match_Runtime_Argument (Types.all, Meanings, Tree.all, Argument, 1);
+         C.Finish_Call_Match (Types.all, Meanings, Tree.all, Call, True);
+         C.Activate_Routine_View (Types.all, First, Previous);
+         Expect (1, Landin.Resolution.Call_Matched, "source-fixed fallback");
+         C.Match_Runtime_Argument (Types.all, Meanings, Tree.all, Argument, 2);
+         C.Finish_Call_Match (Types.all, Meanings, Tree.all, Call, False);
+         C.Activate_Routine_View (Types.all, Second, Nested);
+         Expect (1, Landin.Resolution.Call_Matched,
+                 "a sibling view does not inherit another instance");
+         C.Match_Runtime_Argument (Types.all, Meanings, Tree.all, Argument, 1);
+         C.Finish_Call_Match (Types.all, Meanings, Tree.all, Call, True);
+         C.Restore_Routine_View (Types.all, Nested);
+         Expect (2, Landin.Resolution.Call_Rejected,
+                 "restoring a view recovers both its match and position");
+         begin
+            C.Match_Runtime_Argument
+              (Types.all, Meanings, Tree.all, Argument, 1);
+            Landin.Testing.Fail (Item, "a conflicting position overwrote");
+         exception
+            when Landin.Compiler_Defect =>
+               Expect (2, Landin.Resolution.Call_Rejected,
+                       "a refused rewrite preserves its instance facts");
+         end;
+         C.Restore_Routine_View (Types.all, Previous);
+         Expect (1, Landin.Resolution.Call_Matched,
+                 "instance writes never change source-fixed facts");
+         C.Activate_Routine_View (Types.all, Second, Previous);
+         Expect (1, Landin.Resolution.Call_Matched,
+                 "reactivation retains the second instance facts");
+         C.Restore_Routine_View (Types.all, Previous);
+      end;
+   end Call_Matches_Belong_To_Routine_Views;
+
    procedure Loop_Results_Require_A_Consumer
      (Item : in out Landin.Testing.Context);
 
@@ -13396,6 +13549,9 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "owed checks belong to routine views",
          Owed_Checks_Belong_To_Routine_Views'Access);
       Landin.Testing.Register
+        (Into, "checking", "call matches belong to routine views",
+         Call_Matches_Belong_To_Routine_Views'Access);
+      Landin.Testing.Register
         (Into, "checking", "generic body reports coalesce across instances",
          Generic_Body_Reports_Coalesce_Across_Instances'Access);
       Landin.Testing.Register
@@ -13428,6 +13584,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "union aliases keep exact instance keys",
          Union_Aliases_Keep_Exact_Instance_Keys'Access);
+      Landin.Testing.Register
+        (Into, "checking", "flat alias chains use bounded stack",
+         Flat_Alias_Chains_Use_Bounded_Stack'Access);
       Landin.Testing.Register
         (Into, "checking", "large loop frames stay off the host stack",
          Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);

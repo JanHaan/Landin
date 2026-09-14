@@ -1,0 +1,7 @@
+bad: atom
+problem: type = bad
+handler: type = (value: i32) -> (result: i32)
+identity: (value: i32) -> (result: i32) = value end identity
+handlers: [1]handler = [identity]
+pick: () -> (index: usize) ! problem = fail bad end pick
+caller: () -> (result: i32) = handlers[pick()](1) end caller

@@ -1,0 +1,27 @@
+bad: atom
+problem: type = bad
+handler: type = (value: i32) -> (result: i32) ! problem
+identity: (value: i32) -> (result: i32) ! problem = value end identity
+handlers: [1]handler = [identity]
+pick: (fails: bool) -> (index: usize) ! problem =
+    fail bad when fails
+    0
+end pick
+copy: (t: type, value: t) -> (result: t) = value end copy
+inferred: (fails: bool) -> (result: i32) ! ... =
+    try handlers[try pick(fails)](42)
+end inferred
+declared: () -> (result: i32) ! problem =
+    try handlers[try pick(false)](42)
+end declared
+public main: () -> (code: i32) =
+    first := inferred(true) else 42
+    second := declared() else 1
+    third := handlers[pick(true) else 0](42) else 1
+    fourth := handlers[copy(usize(0))](42) else 1
+    if first == 42 and second == 42 and third == 42 and fourth == 42 then
+        42
+    else
+        1
+    end if
+end main

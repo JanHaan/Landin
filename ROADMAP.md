@@ -1414,9 +1414,11 @@ program in silence: a cycle longer than the limit, and — worse, because it
 is legal source — an honest chain longer than it, whose fold was then never
 checked against its type. A chain of three hundred `u8` bindings each one
 more than the last was accepted entire; it now reports the forty-five links
-whose answer no `u8` holds. Nothing bounds the walk now except the cycle
-guard and the parser's own nesting limit, which is where a bound on how deep
-a program may be written belongs.
+whose answer no `u8` holds. The arbitrary sixty-four-link cutoff was removed.
+The cycle guard prevents dependency cycles; the parser bounds syntax nesting
+only. Dependencies across separate declarations still consume host resources
+and are not bounded by that syntax limit. R4.91's readiness intake below
+records the measured repairs and remaining resource limitations.
 
 It has no home in the negative corpus, which is worth recording because the
 next backend-only refusal will meet the same wall. A negative fixture is run
@@ -5609,8 +5611,9 @@ and later slots; ordinary stores retain the origin check.
 The origin/payload group completes this batch's confirmed repairs. The third
 batch also repairs contextual constructor arguments and variant-array
 initialization, alongside the follow-up parser recovery/lookahead group.
-Final-body values are now repaired as well. Remaining work includes parser
-depth, native failures and bounded inference storage.
+Final-body values completed that batch. Parser depth, native failures and
+bounded inference storage were subsequent batches, recorded below; this
+historical sequence is not the current remaining-work list.
 
 Development evidence for the preceding output/consume group: Linux debug and release pass the driver
 (46 cases), checking (85), lowering (93), complete recorded-diagnostic case
@@ -5713,7 +5716,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
 | M14: harness contracts | Stream repair implemented: recorded, runtime and ABI oracles honor the selected stream and require empty stderr for output-only expectations, using separately captured native stderr. Fake wrong-stream/additional-stderr controls and tiny native captures pass. Suite inventory is repaired too: startup checks missing and unlisted suite names, while check.py compares every suite source with its registration and expected name. Corpus accounting now compares Ada discovery with the independently generated target inventory, then checks attempted programs, recorded outputs and runtime/ABI profiles against metadata obligations. Named nonempty categories remain required. Validation is metadata-only; complete corpus execution and exact acceptance remain open. | Fourth batch implementation |
 | M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
-| A8, M18: publication and CI | Guarded publication replaces the obsolete automatic compiler manifest and checks approved canonical main before private-font access and again before upload. The audit confirms that uploads from independent jobs still lack a shared lock; a recheck cannot prevent an older in-flight upload from finishing last, and domain uploads are separate. No stale upload was performed or observed. SourceHut publication serialization is implemented through a canonical Git lease; live activation and write-permission verification remain delivery work. Font subset and shared highlighter checks are present; M5 separately owns history. Guide resolution is repaired to use each source directory, avoid repeated README basename collisions and route unrendered repository guides to their source view. Documentation states the selected guide inventory and the participating-job publication guarantee and activation requirements accurately. | Fourth batch; live activation open |
+| A8, M18: publication and CI | Guarded publication replaces the obsolete automatic compiler manifest and checks approved canonical main before private-font access and again before upload. The audit confirms that uploads from independent jobs still lack a shared lock; a recheck cannot prevent an older in-flight upload from finishing last, and domain uploads are separate. No stale upload was performed or observed. SourceHut publication serialization is implemented through a canonical Git lease; write-permission verification subsequently passed in job 1888216; the first approved publication remains delivery work. Font subset and shared highlighter checks are present; M5 separately owns history. Guide resolution is repaired to use each source directory, avoid repeated README basename collisions and route unrendered repository guides to their source view. Documentation states the selected guide inventory and the participating-job publication guarantee and activation requirements accurately. | Fourth batch; permission verified, publication pending |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
 | A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. The shared renderer now quotes a whole-name dot as well as leading dollar names. Fourteen selected checks pass on each host; bounded pinned-GNU object inspection confirms exact dot/dollar identities, function sizes and direct/runtime/static relocations. No linking or execution was used. Exact-revision acceptance remains open. | Third batch |
 | A9, m18: third-party inventory | Implemented: the root inventory names the existing Lucide, SourceHut and Nunito Sans notices, and the Tree-sitter support headers now carry their pinned upstream MIT notice. All three headers match v0.26.9 upstream bytes. Optional private MonoLisa remains separately documented. Project and upstream license terms are unchanged; M5 still owns any historical font disposition. | Fourth batch documentation repair |
@@ -7675,10 +7678,10 @@ boundaries. Both single-worker builds and the inventories pass. The positive
 fixture emits assembly text only; no native assembly, generated executable,
 debugger or giant image ran. Evidence is in
 `.scratch/r491-contextual-names/` and `.scratch/r491-final-values/`.
-The primary-expression facet remains open: an ordinary read such as a named
-result assigned from a parameter named `match` is still intercepted as a
-control expression. Continue that boundary review without reserving words or
-introducing newline semantics. Exact-revision acceptance remains open.
+At that batch boundary, an ordinary read of a parameter named `match` was
+still intercepted as a control expression. J104/D225 subsequently repaired
+that primary-expression facet without reserving words or introducing newline
+semantics. Exact-revision acceptance remains the phase closure requirement.
 
 M15/N17/J20 development evidence: five exact metadata/discovery selectors
 pass 124 checks in each of macOS debug and Linux release. Fake fixtures
@@ -8592,6 +8595,56 @@ the identity-permission and other-publisher prerequisites. Approval, canonical
 promotion and the resulting two-domain publication still require successful
 exact-revision acceptance and normal delivery.
 
+R5-readiness intake (review base `bd69b2a1`, reproduction base `258d734b`):
+the inherited review used older macOS binaries for its resource probes.
+Fresh pinned Linux debug builds reproduce the named-argument order bug,
+callee-expression internal defects and binary-chain resource exhaustion.
+This intake is the durable disposition of that review, including merged and
+refuted observations; the scratch report is supporting material only.
+
+| Finding | Disposition and owner |
+| --- | --- |
+| CHK-A-1 | R4.91-F5 repairs concept-facing labels, including the explicitly supplied receiver, and stores runtime match/position facts per routine instance. Checking, flow, references and lowering read the active view. Both instantiation orders have six-profile runtime fixtures; a table seam checks nested view restoration and conflicting writes. |
+| CHK-15600-1 | R4.91-F6 scans the callee before arguments in ordinary and tried calls. Two negative fixtures and a six-profile runtime fixture cover undeclared/unhandled errors, inferred and declared propagation, local recovery and generic calls inside a callee. Discover_Generic_Calls already walks the callee through child slots. Include_Expression computes the atom value being failed, not evaluation effects; recursively unioning a callee's atoms there would be incorrect. Driver controls require ordinary diagnostics and no writes/tools. |
+| CHK-FE-1, LOW-2 | R4.91-F7 bounds binary spines at the existing 128-operator implementation limit, continues reading the tail and preserves following declarations. Parser controls cover the last accepted sum, first refused sum and a longer logical chain; driver controls pin L0111 before any emission effect. |
+| CHK-R491-2, CHK-REF-2, CHK-A-2, LOW-4 | R4.91-F8 heap-owns the references checker's base origin and alias tables, removes Type_At's declaration-sized stack bitmap, settles ordinary alias runs iteratively, and heap-owns the IR pointer-provenance input/output tables. The existing 1,220-declaration/four-loop control remains unchanged. A 4,000-link alias regression and a 12-guarded-cleanup runtime regression cover the new failures. These repairs do not claim every compiler scratch table is heap-owned. |
+| LOW-1 | Confirmed expansion cost; the bounded verifier failure it exposed is repaired by F8. Assembly-only probes with 4, 8 and 12 guarded cleanups produced 5,192, 83,232 and 1,383,035 bytes after repair. R5.20 owns sharing equivalent cleanup continuations without changing pop-before-run semantics. This optimization is deferred; no arbitrary small cleanup-count refusal is introduced. |
+| CHK-FLOW-1, CHK-FE-2, CHK-FE-3 | Retain as resource limitations, not a claim of unlimited input or reliably recoverable host-stack overflow. Syntax bounds do not bound declaration dependencies. The reviewed macOS raw traceback/exit thresholds are not current Linux evidence. R5.10 owns native-host exhaustion characterization; R5.20 owns remaining flow snapshots, folding dependency walks and IR scratch storage. No host stack limit is raised to supply R4 evidence. |
+| CHK-REF-3 | Retain exceptional-exit leakage of raw loop-transfer states as a known limitation. Normal-path release and controlled snapshot/base-table ownership remain covered. R5.20 owns controlled transfer-state cleanup; the R4 closure claim is limited to the repaired owners, not every allocation in the checker. |
+| CHK-H-1 | Add exact output expectations to hosted-io-reads-parser-input (merged OK newline) and derived-containers (empty stdout and stderr). Status-only fixtures remain legitimate where status is their stated oracle. |
+| CHK-H-2 | BUSY (75) leaves peers running and prevents finalization/export without creating cancellation. A controller test resumes the same initialized request; real failed jobs still cancel peers. |
+| CHK-H-3 | Add negative/r440-native-renamed-entry to the normative entry.point evidence row and regenerate its reading copy. |
+| CHK-R491-3 | Reconcile superseded parser, primary-expression and publication-permission sentences with their later evidence. |
+| R520-1, R520-4, R520-6, R520-7, BE-2 | Explicit R5.20 inputs: ABI capability contracts, a second 64-bit target description, driver backend dispatch and shared hosted helper identities. Current SysV guards are retained until another ABI is actually implemented. |
+| R520-2, R520-3 | R5.20 owns the target-fact/specification boundary; R5.30 owns Darwin core/c, binding-generator ABI support and native linker arguments. R5.40 owns the Mach-O debug identity counterpart. The current Linux-only guard is intentional. |
+| CHK-R491-4, R520-5, CHK-15600-2 | One duplicated wording finding: R5.20 owns replacing ELF-specific link-name prose and settling Darwin symbol-prefix mapping with fixtures. |
+| BE-1 | Retain the inferred large-data/RIP-relative placement limitation under R5.20's backend preflight audit. No multi-GiB object was assembled or linked to validate it. Large-image acceptance is not claimed by this closure. |
+| LOW-3, BE-3 | Retain unmeasured simplification, atom-code and symbol-allocation scaling observations under R5.20. Correct baseline code generation remains the R4 gate; competitive optimization is outside it. |
+| CHK-A-3 | Refuted by the original adversarial verification; no implementation change. |
+| CHK-R491-1 | Duplicate of the existing exact-revision acceptance gate below. Neither the review nor filtered development tests close it. |
+
+F5-F8 Linux debug development checks pass: all 110 checking cases (2,158
+checks), all 52 driver cases (1,822 checks), both named-argument orders and
+the separate receiver-label control in six profiles, the two callee refusals,
+and six-profile callee propagation/recovery. The 12-cleanup runtime passes
+all four standard profiles. The parser suite passes 42 cases and 6,387 checks;
+its focused call/binary-depth control passes 18 checks. Fresh assembly-only
+resource probes accept both 1,000- and 4,000-link alias chains and the 4/8/12
+cleanup sources; no probe assembly was assembled. Full document checks pass,
+and the 73 CI Python tests complete with two explicit host-specific skips.
+Linux release passes the same 110 checking and 52 driver cases, the 18-check
+parser boundary control, the two six-profile named-argument order fixtures,
+the callee refusal and six-profile runtime controls, and the four-profile
+cleanup regression. Hosted I/O passes its exact output oracle in four profiles;
+the complete container derivative passes its empty-output oracle in all six.
+The independent receiver-label fixture is also checked in both modes.
+Verified local site rendering preserves every source word. This is development
+evidence; the unchanged acceptance policy must pass on the committed repair
+candidate before approval or promotion.
+The original coverage gaps are not represented as completed review: fixes
+trace their semantic consumers, while the complete suites, IR verifier,
+quality and native debugger jobs supply the existing mechanical backstops.
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the
@@ -8637,7 +8690,12 @@ Depends on: R4.91, R0.60
 
 Refine target descriptions, ABI queries, assembly emission and debug emission
 so Darwin support does not enter parsing, checking or target-neutral IR
-semantics.
+semantics. The R4.91 readiness intake above owns the explicit handoff: backend
+dispatch, C ABI capability distinctions and a second 64-bit description,
+shared hosted helper identities, link-symbol spelling, and the core/c and
+binding-generator fact boundary. Its retained resource and scaling findings
+are assessed here with bounded controls; any deferred repair keeps an explicit
+disposition rather than turning into an unstated cross-target guarantee.
 
 Exit evidence: target-independent stage fixtures are byte-for-byte or
 canonically equal across hosts where specified; target differences are
@@ -8649,7 +8707,9 @@ Status: planned
 Depends on: R5.10, R5.20, R2.30
 
 Implement the arm64 data layout, Darwin calling conventions, native assembly,
-object/link integration, hosted entry and minimal platform runtime.
+object/link integration, hosted entry and minimal platform runtime. Revise
+core/c and bindings/generate.py alongside the declared Darwin C ABI, and
+select Darwin linker arguments instead of GNU-only library/build-id flags.
 
 Natively, and that word is load-bearing rather than incidental. R1.80
 declined cross-linking Mach-O from the Linux gate and recorded why; the
@@ -8668,6 +8728,7 @@ Depends on: R5.30, R4.60
 
 Emit and validate line, frame and selected local/type information through the
 Apple debugger/toolchain while preserving the always-present frame pointer.
+Own the Mach-O debug identity corresponding to the Linux build-id contract.
 
 Exit evidence: scripted native debugger sessions provide the same selected
 source experience as Linux where platform facilities permit.
