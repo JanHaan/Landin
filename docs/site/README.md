@@ -1,7 +1,8 @@
 # The reading copies
 
-`render_html.py` renders every document in the repository as a
-self-contained HTML page and packages them for pages.sr.ht. The text files
+`render_html.py` renders the language documents and the guides selected in
+its `DOCS` and `GUIDES` lists as self-contained HTML pages. `scripts/site.sh`
+packages them for pages.sr.ht. The text files
 are the specification; these pages are a reading of them.
 
 ## What it renders
@@ -17,6 +18,12 @@ from [`highlight/landin_highlight.py`](../../highlight/README.md), the one
 scanner the Pygments lexer reads as well, so the pages cannot colour the
 language differently from every other tool that highlights it; this file
 turns the classes it emits into spans and links the citations in comments.
+
+Source links resolve relative to the document that contains them, so different
+files named `README.md` keep their own destinations. A selected document links
+to its rendered page; other repository files, including editor-specific and
+binding-generator guides, link to their canonical source view. URL queries,
+fragments, external links and page-local anchors retain their meaning.
 
 The faces are not chosen here. They come from
 [`assets/fonts.py`](../../assets/fonts/README.md), which is every rendering
@@ -60,6 +67,11 @@ The Pages job receives a `pages.sr.ht/PAGES:RW` token for that job. Native
 acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.
+The approval check runs again before uploading, but uploads from separate
+jobs are not serialized. A newer publication can finish while an older upload
+is still in flight, and the two domain uploads are separate operations. The
+guard therefore refuses known-stale input; it does not provide an atomic
+latest-revision publication guarantee. R4.91 owns this remaining delivery gap.
 Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
 with a token that has the `PAGES:RW` scope. The site goes to
 `www.701.dev` and then to `701.dev`: pages.sr.ht serves one site per domain
@@ -79,6 +91,10 @@ history. `docs/site/site/` and the tarball are ignored.
 anything that comes out short, counting link targets as well as visible text.
 A page that quietly lost a paragraph fails the build rather than going up.
 `scripts/site.sh` always passes it.
+Rewritten links retain their written source target in `data-source-href`.
+Verification counts that target once in place of its rendered destination;
+link-resolution tests independently check the destination. Missing visible
+link text still fails the word check.
 
 It reads the document's own region — `<main>` without the navigation, the bar
 or the footer. Over the whole page it counted the furniture as content: the

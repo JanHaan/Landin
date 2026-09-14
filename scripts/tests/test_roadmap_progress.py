@@ -216,5 +216,51 @@ class DebuggerWorkloads(unittest.TestCase):
             ("size-all", "size", "all"))))
 
 
+class GuideLinks(unittest.TestCase):
+    def target(self, source, href):
+        targets = RENDER.guide_targets(RENDER.DOCS + RENDER.GUIDES, source)
+        return targets.resolve(href)
+
+    def test_repeated_readme_names_resolve_in_their_source_directory(self):
+        self.assertEqual(self.target("README.md", "README.md"), "readme.html")
+        self.assertEqual(self.target("compiler/ada/README.md", "README.md"),
+                         "compiler.html")
+        self.assertEqual(self.target("compiler/ada/README.md", "../tests/README.md"),
+                         "fixtures.html")
+        self.assertEqual(self.target("docs/environments.md", "../compiler/ada/README.md#build"),
+                         "compiler.html#build")
+        self.assertEqual(self.target("compiler/ada/README.md", "../../spec.md#1770"),
+                         "spec.html#1770")
+
+    def test_unrendered_files_link_to_the_repository(self):
+        self.assertEqual(self.target("compiler/ada/README.md", "../../bindings/README.md"),
+                         RENDER.REPO + "/tree/main/item/bindings/README.md")
+        self.assertEqual(self.target("highlight/README.md", "vim/README.md"),
+                         RENDER.REPO + "/tree/main/item/highlight/vim/README.md")
+        self.assertEqual(self.target("README.md", "a%20b.md?q=1#section"),
+                         RENDER.REPO + "/tree/main/item/a%20b.md?q=1#section")
+
+    def test_external_and_page_local_links_keep_their_identity(self):
+        for href in ("https://example.org/README.md", "mailto:me@example.org",
+                     "//example.org/a", "#section", "/index.html", "?q=1"):
+            with self.subTest(href=href):
+                self.assertEqual(self.target("compiler/ada/README.md", href), href)
+
+    def test_verification_retains_source_targets_but_still_detects_lost_words(self):
+        written = "[read the fixture guide](../tests/README.md)"
+        targets = RENDER.guide_targets(RENDER.DOCS + RENDER.GUIDES,
+                                       "compiler/ada/README.md")
+        rendered = RENDER.inline(written, lambda _: None, targets)
+        self.assertIn('href="fixtures.html"', rendered)
+        self.assertIn('data-source-href="../tests/README.md"', rendered)
+        with tempfile.TemporaryDirectory() as directory:
+            source, page = Path(directory) / "README.md", Path(directory) / "page.html"
+            source.write_text(written)
+            page.write_text("<main>" + rendered + "</main>")
+            self.assertTrue(RENDER.verify(source, page))
+            page.write_text("<main>" + rendered.replace("fixture guide", "") + "</main>")
+            self.assertFalse(RENDER.verify(source, page))
+
+
 if __name__ == "__main__":
     unittest.main()
