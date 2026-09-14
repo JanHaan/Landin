@@ -947,7 +947,38 @@ package body Landin.Syntax.Parser is
                Related : Landin.Source.Span := Landin.Source.Empty_Span;
                Because : String := "";
                Refused : Syn.Refused_Construct := Syn.Declared_Type;
-               Gate    : Boolean := True) is
+               Gate    : Boolean := True)
+            is
+               function Inequality_Typo return Boolean;
+
+               function Inequality_Typo return Boolean is
+                  Low : Tok.Token_Index := 1;
+                  High : Tok.Token_Index := Last;
+               begin
+                  --  Recovery may already have advanced past this report's
+                  --  primary span. Find its first token without rescanning
+                  --  the recovered run or depending on the live cursor.
+                  while Low < High loop
+                     declare
+                        Middle : constant Tok.Token_Index :=
+                          Low + (High - Low) / 2;
+                     begin
+                        if Tok.Where (From, Middle).Last <= Where.First then
+                           Low := Middle + 1;
+                        else
+                           High := Middle;
+                        end if;
+                     end;
+                  end loop;
+                  if Tok.Kind (From, Low) = Tok.Equal and then Low > 1 then
+                     Low := Low - 1;
+                  end if;
+                  return Low < Last
+                    and then Tok.Kind (From, Low) = Tok.Bang
+                    and then Tok.Kind (From, Low + 1) = Tok.Equal
+                    and then Tok.Where (From, Low + 1).First
+                      = Tok.Where (From, Low).Last;
+               end Inequality_Typo;
             begin
                --  Unclosed_Construct is the one exemption from P3: it is
                --  identified by the construct it could not close and not
@@ -964,7 +995,11 @@ package body Landin.Syntax.Parser is
                   Source  => Origin_Of,
                   Where   => Where,
                   Message => Message,
-                  Note    => Note,
+                  Note    =>
+                    (if Inequality_Typo
+                     then Note & " [0350]: write `<>` for inequality;"
+                       & " `!=` is not an operator."
+                     else Note),
                   Related => Related,
                   Because => Because,
                   Refused => Refused,

@@ -3709,8 +3709,83 @@ package body Landin.Tests.Parser_Suite is
          & "g: () -> none = end g" & ASCII.LF, False);
    end Fixed_Inputs_Keep_Canonical_Trees_And_Reports;
 
+   procedure Inequality_Typos_Name_The_Operator
+     (Item : in out Landin.Testing.Context);
+
+   procedure Inequality_Typos_Name_The_Operator
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Label, Text : String; Hint, Valid : Boolean; Declarations : Positive);
+
+      procedure Check
+        (Label, Text : String; Hint, Valid : Boolean; Declarations : Positive)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("inequality.ldn", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Stream), 0,
+            Label & " retains the existing token rules");
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Rendered : constant String :=
+              Landin.Diagnostics.Text.Render (Found, Sources);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Declaration_Count (Parsed), Declarations,
+               Label & " preserves the declaration boundary: " & Rendered);
+            Landin.Testing.Check
+              (Item, (Landin.Diagnostics.Count (Found) = 0) = Valid
+               and then (not Valid or else Landin.Syntax.Is_Sound (Parsed)),
+               Label & " keeps its diagnostic verdict");
+            Landin.Testing.Check
+              (Item, (Ada.Strings.Fixed.Index
+                 (Rendered, "[0350]: write `<>` for inequality;") > 0) = Hint,
+               Label & " has exactly the applicable guidance: " & Rendered);
+         end;
+      end Check;
+   begin
+      Check
+        ("comparison typo",
+         "f: (a: i32, b: i32) -> (r: bool) = r = a != b end f" & ASCII.LF,
+         True, False, 1);
+      Check
+        ("condition typo",
+         "f: (a: i32, b: i32) -> none = if a != b then return end "
+         & "if end f" & ASCII.LF,
+         True, False, 1);
+      Check
+        ("correct comparison",
+         "f: (a: i32, b: i32) -> (r: bool) = r = a <> b end f" & ASCII.LF,
+         False, True, 1);
+      Check
+        ("ordinary error clause",
+         "failed: atom f: () -> none ! failed = fail failed end f" & ASCII.LF,
+         False, True, 2);
+      Check
+        ("spaced error punctuation",
+         "f: () -> none ! = end f" & ASCII.LF,
+         False, False, 1);
+      Check
+        ("literal and comment text",
+         "text: utf8 = ""!=""" & ASCII.LF
+         & "-- != remains comment text" & ASCII.LF,
+         False, True, 1);
+   end Inequality_Typos_Name_The_Operator;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "inequality typos name the operator",
+         Inequality_Typos_Name_The_Operator'Access);
       Landin.Testing.Register
         (Into, "parser", "fixed inputs keep canonical trees and reports",
          Fixed_Inputs_Keep_Canonical_Trees_And_Reports'Access);
