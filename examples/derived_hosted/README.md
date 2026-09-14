@@ -49,6 +49,9 @@ prefix. These policies claim neither transactional files nor durable delivery.
 
 The root supplies a heap capability to ordinary `core/region`; every run
 allocation, including region bookkeeping, uses that supplied authority.
+A new region carries an explicit empty ledger; the list is initialized when
+the first payload is recorded, keeping the constructor's `from parent`
+contract free of an independent list-return origin.
 `defer region.release_region` returns every recorded payload and ledger to the
 parent on normal and failure exits. Region free is monotonic until release,
 and a monotonic parent still retains its consumed backing after release.

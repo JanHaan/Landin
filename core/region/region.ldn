@@ -8,15 +8,17 @@ end allocation
 
 region_value: type (provider: type) = struct
     parent: ptr mut provider
-    allocations: vec.list(allocation)
+    allocations: variant
+        empty |
+        recorded: (values: vec.list(allocation))
+    end allocations
 end region_value
 
 public region: type (provider: type) = region_value(provider)
 
 public new_region: (provider: type is mem.allocator, parent: ptr mut provider)
                    -> (value: region(provider) from parent) =
-    records := vec.new_list(item: allocation)
-    value = (parent: parent, allocations: records)
+    value = (parent: parent, allocations: empty)
 end new_region
 
 region_alloc: (provider: type is mem.allocator,
@@ -24,11 +26,28 @@ region_alloc: (provider: type is mem.allocator,
               -> (block: ptr mut u8) ! mem.out_of_memory =
     block = try mem.allocate(state.parent.val, size, alignment)
     record: allocation = (address: usize(block), extent: size)
-    vec.push(state.allocations, state.parent.val, record) else (problem)
+    record_allocation(state, record) else (problem)
         mem.free(state.parent.val, block, size)
         fail problem
     end
 end region_alloc
+
+--  The constructor has no independent ledger destination to hide behind its
+--  `from parent` contract. Materialize the list only when recording a payload.
+record_allocation: (provider: type is mem.allocator,
+                    inout state: region(provider), record: allocation)
+                   -> none ! mem.out_of_memory =
+    match state.allocations
+        empty: begin
+            mut records := vec.new_list(item: allocation)
+            try vec.push(records, state.parent.val, record)
+            state.allocations = recorded(values: records)
+        end
+        recorded(inout records): begin
+            try vec.push(records, state.parent.val, record)
+        end
+    end match
+end record_allocation
 
 region_free: (provider: type is mem.allocator, inout state: region(provider),
               block: ptr mut u8, size: usize) -> none =
@@ -45,15 +64,26 @@ end region_free
 --  monotonic parent keeps consumed backing until its own explicit reset.
 public release_region: (provider: type is mem.allocator,
                         inout state: region(provider)) -> none =
-    mut remaining: usize = vec.length(state.allocations)
+    match state.allocations
+        empty: return
+        recorded(inout records): release_records(state.parent, records)
+    end match
+    state.allocations = empty
+end release_region
+
+--  Keep the ledger view and parent capability as separate parameters while
+--  freeing payloads; the payload alias does not expose the whole region.
+release_records: (provider: type is mem.allocator, parent: ptr mut provider,
+                   inout records: vec.list(allocation)) -> none =
+    mut remaining: usize = vec.length(records)
     while remaining > 0 do
         dec remaining
-        record: allocation = record_at(state.allocations, remaining)
+        record: allocation = record_at(records, remaining)
         block: ptr mut u8 = ptr(record.address)
-        mem.free(state.parent.val, block, record.extent)
+        mem.free(parent.val, block, record.extent)
     end while
-    vec.release(state.allocations, state.parent.val)
-end release_region
+    vec.release(records, parent.val)
+end release_records
 
 --  The extent-bearing record is reference-free. Read it within the helper's
 --  view scope before calling the parent, then dispose the ledger as a whole.

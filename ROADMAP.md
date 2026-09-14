@@ -8509,6 +8509,22 @@ assembly regression and transcript control pin the distinction. Cancellation
 again stopped every peer; peak memory was 16.18 GiB with zero limit/OOM events.
 This failed attempt remains retained and supplies no acceptance.
 
+
+Attempt `20260914T141532Z-fb7466f7d5e5` on `e18f8175` passed bindings and
+documents, then correctly rejected `core.region.new_region` under D222 when
+release debugging reached the hosted workload. A call to `vec.new_list` has an
+independent result under its written no-`from` signature, even when its body
+creates an empty descriptor. The region constructor now carries an explicit
+empty ledger variant; the first recorded payload materializes the list using
+the same parent allocator. This preserves the public constructor and origin
+rule without body inference or an untracked cast. Release handles both ledger
+arms and resets the ledger to empty. The existing hosted-memory cases cover
+first-allocation/ledger failure, nested finite regions and release accounting.
+Peak cgroup memory was 17.62 GiB with zero limit/OOM events. Cancelled runtime
+harnesses left `compiler/ada/GNAT-TEMP-001361.TMP`, explaining their source
+inventory failures; no tracked source changed, and the archive rules are not
+broadened to hide arbitrary temporary files. The failed attempt is retained.
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the

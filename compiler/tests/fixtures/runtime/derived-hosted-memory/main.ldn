@@ -428,6 +428,9 @@ metadata_exhaustion: () -> (ok: bool) =
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     mut arena := mem.arena_over(base, usize(8))
     mut program := region.new_region(addr arena)
+    --  An empty region releases without allocating and remains reusable.
+    region.release_region(program)
+    return when arena.used <> 0
     mut refused: bool = false
     _ = mem.allocate(program, usize(1), usize(1)) else (problem)
         refused = problem == mem.out_of_memory
