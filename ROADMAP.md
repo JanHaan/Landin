@@ -5731,7 +5731,8 @@ being silently promoted to bugs or discarded:
 | m12 | The written digit productions still derive trailing separators that the scanner refuses. The grammar checker also exempts lexical names from undefined-rule checking, leaving unicode_scalar without its own production. Both require agreement at the lexical grammar boundary; no tokenization change is authorized by the heuristic recognizer alone. |
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
 | m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Invalid source bytes in comments and empty raw-delimiter ambiguity still need separate rule/case comparison. |
-| m14--m17, m21 | Sampled dead helpers, ownership documentation, historical register names/counts and fixture summaries need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m14, m16--m17, m21 | Sampled dead helpers, historical register names/counts and fixture summaries still need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m15 | Implemented: the compiler guide now covers all 71 package specifications, including the 18 formerly missing packages for allocation, machine evidence, IR transforms, reports and layout policy. Directory descriptions name the current responsibilities; parent and child package boundaries are explicitly distinct. A mechanical check compares the ownership rows with private, generic and ordinary package specs and rejects missing, repeated or obsolete rows. |
 | m23 | Source attachment is contractually dense and ordered: Attach_Source requires the next Source_Id and guarantees its module mapping; its sole caller passes the identity just appended to the compilation source set. Ignoring the argument in the append implementation therefore does not lose an admissible identity. Imported_Module still performs a linear source/node lookup; this is a maintenance cost observation, with no established wrong result or new stress run. |
 | m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. J77/J78 repair manifest/image-tag failure propagation with bounded fake-command controls on both hosts. Container pin duplication remains a source-level observation. |
 | m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
@@ -6068,6 +6069,13 @@ range-check witness, storage-derived load metadata and the simplifier's
 pointer/address-slot exclusion; its proposed forwarded raw Load cannot be a
 valid incoming witness. No optimizer or verifier change or broad replay was
 needed for those dispositions.
+
+For m15, eight disposable-tree controls check ordinary, private and generic
+package specifications, missing/repeated/obsolete rows, unreadable declaration
+syntax and a missing guide. The live 71-package inventory and full
+`python3 check.py` pass. Logs and controls are under
+`.scratch/r491-package-guide/`. This is a documentation/invariant repair;
+no Ada source changed and no compiler build or fixture run was needed.
 
 For m22's integer guidance, both single-worker builds pass. The ten-input
 lexical case has 24 assertions, covering missing digits, wrong-base digits,

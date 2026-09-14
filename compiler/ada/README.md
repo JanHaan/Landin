@@ -15,7 +15,7 @@ compiler/ada/
   landin_tests.gpr      the repository's own test program
   TOOLCHAIN.md          the pinned toolchain and warning policy
   src/
-    base/               the root package and the exceptions
+    base/               exceptions, policies, byte encoding and build reports
     source/             source snapshots, spans, line maps, provenance
     diagnostics/        diagnostic transport and text rendering
     platform/           host adapters and their native implementations
@@ -23,9 +23,9 @@ compiler/ada/
     stages/             target facts, fixed-configuration activity and seams
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
-    checking/           the language's types, what each node has, and the IR
+    checking/           types, node facts, IR and verified transformations
     backend/            the frame, and the assembly emitted against it
-    driver/             the request/result boundary
+    driver/             request/results, source maps and report provenance
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
 ```
@@ -36,9 +36,19 @@ replaced.
 
 ## Package ownership
 
+Every compiler package specification has one row here. `check.py` compares
+the table with the source inventory, including private and generic packages.
+The boundary in each row applies to that package, not automatically to all
+its children; target-neutral `Landin.Backend` and its x86-64 allocator have
+different responsibilities.
+
 | package | owns | must not |
 | --- | --- | --- |
 | `Landin` | the namespace and the three exceptions | contain any logic |
+| `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
+| `Landin.Layouts` | source representation policy names | place fields or derive target widths |
+| `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
+| `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |
@@ -60,16 +70,27 @@ replaced.
 | `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance register, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "The four long rows, in full" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
 | `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
+| `Landin.IR.Control_Flow` | linear-space adjacency and entry reachability of structurally checked IR | assume reachability or store represented object bytes |
+| `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
+| `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
+| `Landin.IR.Shape_Measurement` | memoized represented extents under target facts and an explicit size limit | choose machine placement or allocate work per represented array element |
+| `Landin.IR.Simplification` | verified local simplification under the selected objective | reassociate floating arithmetic, create cross-block values or infer unchecked alias facts |
+| `Landin.IR.Specialization` | whole-program static-evidence devirtualization with retained instance entries and indirect fallbacks | create semantic instances or specialize exposed or unknown entries without proof |
+| `Landin.IR.Specialization_Policy` | bounded benefit and profitability estimates | claim assembled-byte costs or depend on host word width |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
+| `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
+| `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
+| `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.X86_64.Dwarf` | DWARF record encoding, assembler path quoting and debug sections derived from source metadata, immutable IR and backend placement plans | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
+| `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |
 | `Landin.Diagnostics.Text` | deterministic rendering, sharing a primary snippet with its first related label only when source and complete span agree | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
@@ -80,6 +101,7 @@ replaced.
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
+| `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
 | `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
@@ -92,6 +114,8 @@ replaced.
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, R3.10's private ordered-root graph discovery through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
+| `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
+| `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
 
 D201 keeps aliases and selected imports in the source file's import scope.
