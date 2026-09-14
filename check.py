@@ -1268,6 +1268,7 @@ def check_roadmap(path):
     work_lines = sorted((locations[0], work_id)
                         for work_id, locations in works.items() if locations)
     dependencies = {}
+    work_statuses = {}
     for index, (start, work_id) in enumerate(work_lines):
         end = len(lines) + 1
         for n in range(start + 1, len(lines) + 1):
@@ -1283,6 +1284,16 @@ def check_roadmap(path):
             out.append((start, "%s has %d Status lines" % (work_id, len(statuses))))
         elif not ROADMAP_STATUS.match(statuses[0][1]):
             out.append((statuses[0][0], "%s has an invalid status" % work_id))
+        else:
+            status = ROADMAP_STATUS.fullmatch(statuses[0][1]).group(1)
+            work_statuses[work_id] = status
+            if status == "blocked":
+                reasons = [line[len("Blocked because:"):].strip()
+                           for line in chunk
+                           if line.startswith("Blocked because:")]
+                if len(reasons) != 1 or not reasons[0]:
+                    out.append((start, "%s needs one nonempty Blocked because"
+                                " line" % work_id))
         if len(depends) != 1:
             out.append((start, "%s has %d Depends on lines" % (work_id, len(depends))))
             continue
@@ -1300,6 +1311,15 @@ def check_roadmap(path):
             elif name not in works:
                 out.append((depends[0][0], "%s depends on unknown %s"
                             % (work_id, name)))
+
+    for work_id, names in dependencies.items():
+        if work_statuses.get(work_id) != "complete":
+            continue
+        for name in names:
+            if name in work_statuses and work_statuses[name] != "complete":
+                out.append((works[work_id][0], "%s is complete but dependency"
+                            " %s is %s" %
+                            (work_id, name, work_statuses[name])))
 
     #  References in prose and matrices should be well formed and resolve too.
     text = "\n".join(lines)
