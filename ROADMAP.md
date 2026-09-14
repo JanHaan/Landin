@@ -6053,7 +6053,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Implemented with J95: scalar stores refuse struct and array slots before Type_Of, with tiny valid scalar/field/element controls passing in debug and release. This is a malformed-IR backstop, not a source miscompilation claim; exact acceptance remains open. |
 | K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Implemented with J91: every instruction, including a no-operand Leave, must agree with its block run before consumers use it. Small direct seam tests cover both target widths. |
 | K22 | E6: final run cursors allow trailing orphan entries | Implemented with J91: the final slot, parameter, block, value, field and operand cursors must consume their complete vectors. Three-instruction controls append one unclaimed entry at a time; exact acceptance remains open. |
-| K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
+| K23 | F1: repeated module references cause exponential folding | Implemented a per-query map of completed module-binding values in the shared checker/lowering folder. Recursive references reuse known, non-overflowing results; unknown/overflowed folds retain cycle/diagnostic behavior, and a later query gets a fresh map for current semantic facts. Four exact cases pass 89 checks on each of macOS debug and Linux release, and four bounded compile-only probes retain their complete diagnostic transcripts on both hosts. The historical long timing chain was not replayed; exact acceptance remains open. |
 | K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Implemented a memo shared by recursive calls within one public measurement query, keyed by complete shape. Unit, target and maximum are fixed for that query; no result survives return or failure. Small shared graphs cover layout policy, target width, size limits, unit identity, arrays and variants. Four exact cases pass 111 checks on each host, including one small cycle guard. Scalar queries avoid memo allocation. No long timing runs or giant images; exact acceptance remains open. |
 | K25 | F3: devirtualization leaves a typed function-address projection live | Repaired: backward demand may remove a verified pure Function_Address despite its signature metadata. Live users still retain the instruction and its signature; numeric folding remains restricted to plain values. Small dead/live/no-optimization controls cover both target widths. Three exact cases pass 39 checks on each of macOS debug and Linux release; exact acceptance open. |
 | K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Implemented a shared retained-reference traversal for specialization and final-body sharing. Consumers mark their existing pass-local arrays once; explicit/imported roots, scalar and aggregate images, evidence entries and runtime function addresses share one policy with the single-routine query. Seven exact callback-count and decision/identity cases pass 134 checks on each host; no timing sweep or persistent cache. Exact acceptance remains open. |
@@ -7444,6 +7444,28 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K23 memoizes completed scalar module-binding values within one shared-folder
+query. Recursive references reuse known, non-overflowing values, while unknown
+and overflowing results retain the existing cycle and diagnostic paths. A new
+public request starts with an empty map, preserving current semantic-table and
+instance facts. The historical long timing chain is not repeated.
+
+Four exact cases pass 89 checks in each of macOS debug and Linux release.
+An eight-element image covers a small shared dependency graph, reordered
+bindings, both target widths, wrapping arithmetic and omitted zero values.
+Cycle, overflow, runtime-initializer and zero-divisor refusals retain their
+ordered diagnostic categories and counts; four separate compile-only probes
+also retain their complete before/after transcripts and status on both hosts.
+An initial test assumed arithmetic datums had already become single literal
+instructions; the corrected image test checks the actual folding boundary.
+A test index-type error required clean single-worker builds on both hosts,
+which passed. The Linux transcript helper then needed its scratch parent
+created; only the missing comparisons were rerun. Selected cases have limits
+of at most 30 seconds and direct probes ten seconds. Logs remain under
+`.scratch/r491-fold-memo/` and `.scratch/r491-final-values/`.
+No Landin assembler, linker, executable or giant image ran in this batch.
+Exact-revision acceptance remains open.
 
 K24 memoizes completed compound-shape extents within each public measurement
 request. Recursive fields, arrays, aggregates and variant payloads share that

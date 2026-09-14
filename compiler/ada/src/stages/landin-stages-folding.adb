@@ -1,3 +1,5 @@
+with Ada.Containers.Ordered_Maps;
+
 package body Landin.Stages.Folding is
 
    package Res renames Landin.Resolution;
@@ -7,11 +9,24 @@ package body Landin.Stages.Folding is
    use type Landin.Targets.Bit_Width;
    use type Landin.Checking.Nominal_Type_Id;
    use type Res.Declaration_Sort;
+   use type Res.Declaration_Id;
    use type Res.Verdict;
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
    use type Ty.Folded;
    use type Ty.Type_Kind;
+
+   package Known_Values is new Ada.Containers.Ordered_Maps
+     (Key_Type => Res.Declaration_Id, Element_Type => Ty.Folded);
+
+   procedure Fold
+     (Cache      : in out Known_Values.Map;
+      Of_Tree    : Syn.Tree;
+      Node       : Syn.Node_Id;
+      Depth      : Natural;
+      Value      : out Ty.Folded;
+      Known      : out Boolean;
+      Overflowed : out Boolean);
 
    --  [0300]'s wrapping arithmetic, [0330]'s bit operators and [0320]'s
    --  shifts answer at the operand type's own width, as two's-complement
@@ -113,7 +128,8 @@ package body Landin.Stages.Folding is
    end Combine;
 
    procedure Fold
-     (Of_Tree    : Syn.Tree;
+     (Cache      : in out Known_Values.Map;
+      Of_Tree    : Syn.Tree;
       Node       : Syn.Node_Id;
       Depth      : Natural;
       Value      : out Ty.Folded;
@@ -131,7 +147,7 @@ package body Landin.Stages.Folding is
       is
          Blew : Boolean;
       begin
-         Fold (Of_Tree, Item, Depth + 1, Got, Sure, Blew);
+         Fold (Cache, Of_Tree, Item, Depth + 1, Got, Sure, Blew);
          if Blew then
             Overflowed := True;
             Sure := False;
@@ -329,24 +345,34 @@ package body Landin.Stages.Folding is
                      Known := True;
                   elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
                   then
-                     declare
-                        Their_Tree : constant
-                          not null access constant Syn.Tree :=
-                            Tree_For (Res.Source_Of (Meanings.all, Means));
-                        Theirs : constant Syn.Node_Id :=
-                          Res.Node_Of (Meanings.all, Means);
-                        Their_Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Their_Tree.all, Theirs);
-                     begin
-                        if Their_Value = Syn.No_Node then
-                           Value := 0;
-                           Known := True;
-                        elsif Enter (Means) then
-                           Fold (Their_Tree.all, Their_Value, Depth + 1,
-                                 Value, Known, Overflowed);
-                           Leave (Means);
-                        end if;
-                     end;
+                     if Cache.Contains (Means) then
+                        Value := Cache.Element (Means);
+                        Known := True;
+                     else
+                        declare
+                           Their_Tree : constant
+                             not null access constant Syn.Tree :=
+                               Tree_For (Res.Source_Of (Meanings.all, Means));
+                           Theirs : constant Syn.Node_Id :=
+                             Res.Node_Of (Meanings.all, Means);
+                           Their_Value : constant Syn.Node_Id :=
+                             Syn.Value_Of (Their_Tree.all, Theirs);
+                        begin
+                           if Their_Value = Syn.No_Node then
+                              Value := 0;
+                              Known := True;
+                           elsif Enter (Means) then
+                              Fold (Cache, Their_Tree.all, Their_Value,
+                                    Depth + 1, Value, Known, Overflowed);
+                              Leave (Means);
+                           end if;
+                           --  Unknown and overflowing folds retain the
+                           --  stage's ordinary cycle/diagnostic behavior.
+                           if Known and then not Overflowed then
+                              Cache.Include (Means, Value);
+                           end if;
+                        end;
+                     end if;
                   end if;
                end;
             end if;
@@ -656,6 +682,21 @@ package body Landin.Stages.Folding is
          when others =>
             null;
       end case;
+   end Fold;
+
+   procedure Fold
+     (Of_Tree    : Syn.Tree;
+      Node       : Syn.Node_Id;
+      Depth      : Natural;
+      Value      : out Ty.Folded;
+      Known      : out Boolean;
+      Overflowed : out Boolean)
+   is
+      --  Semantic tables can gain facts between top-level queries. Only
+      --  recursive references within this request share completed values.
+      Cache : Known_Values.Map;
+   begin
+      Fold (Cache, Of_Tree, Node, Depth, Value, Known, Overflowed);
    end Fold;
 
 end Landin.Stages.Folding;

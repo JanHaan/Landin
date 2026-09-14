@@ -62,6 +62,9 @@ private generic
    with procedure Leave (Means : Landin.Resolution.Declaration_Id);
 package Landin.Stages.Folding is
 
+   --  Completed module-binding values are shared only within this query.
+   --  Unknown/overflowed results are not cached, and no fact survives to a
+   --  later query after the stage's semantic tables may have changed.
    procedure Fold
      (Of_Tree    : Landin.Syntax.Tree;
       Node       : Landin.Syntax.Node_Id;
