@@ -219,7 +219,9 @@ zero := 1 / 2         -- 0, integer division
 
 ### [0220] Bases, separators, exponents
 
-Bases, separators, exponents.
+Bases, separators, exponents. An integer starts and ends its digit run
+with a digit of that base. Underscores may repeat between digits, as in
+`1__000`; a base prefix alone and a trailing underscore are refused.
 
 ```landin
 hex_value := 0xDEAD_BEEF

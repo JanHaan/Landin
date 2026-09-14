@@ -5729,7 +5729,7 @@ being silently promoted to bugs or discarded:
 | m9 | Intermediate constant overflow still needs a precise comparison with [1940]; final-value folding versus each typed intermediate is a semantic question, not an approved change. |
 | m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
 | m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
-| m12 | The written digit productions still derive trailing separators that the scanner refuses. The grammar checker also exempts lexical names from undefined-rule checking, leaving unicode_scalar without its own production. Both require agreement at the lexical grammar boundary; no tokenization change is authorized by the heuristic recognizer alone. |
+| m12 | Integer productions now require a final base digit while preserving repeated internal underscores, matching the existing scanner. The character grammar defines unicode_scalar through an explicit shortest-form UTF-8 scalar primitive; used lexical names no longer bypass undefined-rule checking. Independent grammar controls pin valid/invalid separators and scalar boundaries. Float-component separator placement remains a separate comparison: this correction leaves decimal_digits and hex_digits unchanged and does not silently alter tokenization. |
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
 | m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Comment encoding is repaired under [1750]: the scanner uses the literal decoder's shortest-form UTF-8 check, reports the first invalid byte per comment with L0012, and retains delimiter/token recovery. Empty raw-delimiter ambiguity still needs separate rule/case comparison. |
 | m14 | Sampled unused helpers and the unused Needs_Source catalogue facet remain maintenance observations; exception routing is reconciled separately with J109. |
@@ -6174,6 +6174,19 @@ Both single-worker builds and full `python3 check.py` pass. Evidence is in
 `.scratch/r491-sink-entry/` and matching final-values logs. No assembler,
 linker, generated program, debugger or broad campaign ran. Exact-revision
 acceptance remains open.
+
+For m12, the normative integer productions now match the scanner's existing
+start/end-digit boundary. Internal repeated underscores remain legal. The
+previously undefined `unicode_scalar` now has an explicit scalar primitive,
+including delimiter exclusions and shortest-form UTF-8 interpretation. The
+grammar checker requires every used name to be defined, including lexical
+names it treats atomically when recognizing tokens. Twenty small invariant
+examples pin integer and scalar boundaries. Six disposable grammar defects
+(undefined scalar/digit/raw rules, trailing decimal/hex separators and a
+permissive scalar) are caught; six character derivations check the new primitive
+and existing escapes. Compiler tokenization is unchanged, including the separate
+float-component separator question. The existing m22 scanner evidence remains
+applicable; no compiler suite, assembler or runtime work was replayed.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175

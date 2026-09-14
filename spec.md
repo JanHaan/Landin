@@ -27,8 +27,9 @@ transcription are named as decisions in the register at the end.
 The notation is ordinary: a name in lower case is a rule, a quoted word is
 itself, '?' is optional, '*' is none or more, '+' is one or more, '...'
 between two quoted bytes is every byte from one to the other, 'any byte' is
-exactly that, and parentheses group. Nothing here is a parser generator's
-input. The parser is hand written, and this is the agreement it is written
+exactly that, and parentheses group. 'any Unicode scalar' denotes the
+shortest-form UTF-8 encoding of one scalar value, subject to its stated
+exclusions. Nothing here is a parser generator's input. The parser is hand written, and this is the agreement it is written
 against.
 
 The rules come in two layers, and the difference matters. The lexical layer
@@ -148,7 +149,9 @@ The kernel's literals are integers, floats, characters, quoted text,
 the two booleans, and contextual `zeroed`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
-and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
+and the separator are [0220]'s. Each integer digit run starts and ends in
+a digit of its base; any internal run of underscores separates digits.
+`zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
@@ -174,6 +177,7 @@ type `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 literal     ::= integer | float | character | text | raw
               | "true" | "false" | "zeroed"
 character   ::= "'" (character_escape | unicode_scalar) "'"
+unicode_scalar ::= any Unicode scalar except apostrophe, backslash or line_end
 character_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
                   | "u" "{" hex_digit+ "}")
 text        ::= "\"" (text_escape | text_byte)* "\""
@@ -193,10 +197,10 @@ hex_fraction ::= "0x" hex_digits "." hex_digits
 binary_exponent ::= ("p" | "P") ("+" | "-")? decimal_digits
 decimal_digits ::= digit (digit | "_")*
 hex_digits  ::= hex_digit (hex_digit | "_")*
-decimal     ::= digit (digit | "_")*
-hex         ::= "0x" hex_digit (hex_digit | "_")*
-octal       ::= "0o" octal_digit (octal_digit | "_")*
-binary      ::= "0b" binary_digit (binary_digit | "_")*
+decimal     ::= digit ((digit | "_")* digit)?
+hex         ::= "0x" hex_digit ((hex_digit | "_")* hex_digit)?
+octal       ::= "0o" octal_digit ((octal_digit | "_")* octal_digit)?
+binary      ::= "0b" binary_digit ((binary_digit | "_")* binary_digit)?
 hex_digit   ::= digit | "a" ... "f" | "A" ... "F"
 octal_digit ::= "0" ... "7"
 binary_digit ::= "0" | "1"
