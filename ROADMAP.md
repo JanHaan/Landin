@@ -8412,7 +8412,7 @@ M5 is disposed by the separate instruction to leave the font files for now.
 M6's missing historical evidence remains distinct and open.
 
 The acceptance runner now runs eight isolated jobs concurrently, explicitly
-builds with four workers per job and holds one of eight host-wide slots
+builds with eight workers per job and holds one of eight host-wide slots
 across each job. The policy requires an aggregate cgroup v2 memory cap of at
 most 100 GiB with no swap,
 following the maintainer's explicit choice of that cap for the Docker host.
@@ -8475,10 +8475,26 @@ previous serial run `20260914T133931Z-28587a11fed4` on `16897158` was
 intentionally interrupted to change policy: its explicit debug build passed,
 but its suite had not completed. It supplies neither a compiler failure nor
 acceptance, and no OOM was observed. Its retained attempt remains intact.
-The parallel policy uses eight jobs and four workers per compiler build,
+The parallel policy uses eight jobs and eight workers per compiler build,
 with host-wide slots and durable peer cancellation on failure. Giant-image
 assembly remains forbidden. New exact acceptance must use the newly
 committed policy; it cannot resume the superseded serial run.
+
+
+The first parallel attempt, `20260914T140244Z-bd1a2e2785e4` on `59d4fea2`,
+failed its existing binding keyword agreement test: thirteen newly reserved
+words were missing from the generator's keyword table. The generator now
+matches the normative production, and the ordinary document checker enforces
+that agreement without Clang. Cancellation stopped all seven peer jobs;
+post-run inspection found no surviving compiler/tool processes. Peak cgroup
+memory was 10.25 GiB with zero limit hits or OOM events. The cancelled builds
+also exposed a source-inventory defect: generated `compiler/ada/.build-locks`
+files were counted as source changes. That exact generated directory is now
+excluded from live source identity and refused in committed input archives;
+a regression still detects edits to actual source. At the maintainer's request,
+build concurrency rises from four to eight workers per job (at most 48 across
+the six compiler jobs). The aggregate 100 GiB cap and failure cancellation stay
+in force. This failed attempt is retained and cannot supply acceptance.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler

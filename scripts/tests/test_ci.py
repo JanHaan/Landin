@@ -69,12 +69,29 @@ class ArchiveTests(unittest.TestCase):
 
     def test_reject_unsafe_paths_before_extracting(self):
         for name in ("../escape", "/absolute", "a/../../escape", "a//b", "a/./b", ".git/config",
-                     ".acceptance/request.json", "compiler/ada/build/injected", "x/__pycache__/cache"):
+                     ".acceptance/request.json", "compiler/ada/build/injected",
+                     "compiler/ada/.build-locks/all", "x/__pycache__/cache"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 destination = Path(tmp) / "source"
                 with self.assertRaises(common.Invalid):
                     common.archive_inventory(self.archive([(name, "file", b"bad")]), destination)
                 self.assertFalse(destination.exists())
+
+    def test_generated_locks_do_not_change_source_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "compiler/ada/src/example.adb"
+            source.parent.mkdir(parents=True)
+            source.write_text("source")
+            expected = common.working_inventory(root)
+            locks = root / "compiler/ada/.build-locks"
+            locks.mkdir()
+            (locks / "all").touch()
+            (locks / "native-ci-debug").touch()
+            (locks / "native-ci-debug.cgpr").write_text("generated configuration")
+            self.assertEqual(common.working_inventory(root), expected)
+            source.write_text("changed")
+            self.assertNotEqual(common.working_inventory(root), expected)
 
     def test_duplicate_and_special_files(self):
         for entries in ([('x', 'file', b'1'), ('x', 'file', b'2')],

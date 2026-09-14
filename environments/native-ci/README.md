@@ -48,7 +48,7 @@ licensed fonts. The native runner need not hold those private files.
 ## Resource containment
 
 Acceptance runs on the native Linux host. Its policy allows eight concurrent jobs,
-with explicit `-j4` bootstrap builds, and at most 100 GiB of memory with no swap
+with explicit `-j8` bootstrap builds, and at most 100 GiB of memory with no swap
 for the execution cgroup and its descendants. These are aggregate kernel
 limits, not estimates from process RSS or per-process virtual-memory limits.
 A failed job writes a durable run-local cancellation marker; peer command
@@ -57,7 +57,7 @@ controller also requests cancellation on a failed SSH job. Eight host-wide
 slots bound acceptance concurrency across controllers. Children inherit the
 slot, individual job lock and shared compatibility lock; an older exclusive
 serial runner cannot overlap these jobs. The six compiler build jobs use at
-most 24 build workers in total, leaving headroom on the 96-CPU host.
+most 48 build workers in total, leaving headroom on the 96-CPU host.
 
 Before probing tools, initialization verifies the current unified cgroup v2
 membership and reads that cgroup's `memory.max` and `memory.swap.max`.
