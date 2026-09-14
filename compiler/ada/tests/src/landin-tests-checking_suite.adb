@@ -7975,6 +7975,21 @@ package body Landin.Tests.Checking_Suite is
          & "    result = local" & LF
          & "end f" & LF,
          Accepted => False);
+      Check_Source
+        ("problem: atom leaf: () -> (r: i32) ! problem = "
+         & "fail problem end leaf "
+         & "f: () -> none = leaf() else (error) _ = error end end f",
+         Accepted => True);
+      Check_Source
+        ("problem: atom leaf: () -> (r: i32) ! problem = "
+         & "fail problem end leaf "
+         & "f: () -> none = _ = leaf() else (error) _ = error end end f",
+         Accepted => True);
+      Check_Source
+        ("problem: atom leaf: () -> (r: i32) ! problem = "
+         & "fail problem end leaf f: () -> (r: i32) = "
+         & "r = leaf() else (error) _ = error end end f",
+         Accepted => False);
    end Control_Edges_Merge_Only_Fallthrough;
 
    --  R4.91: runtime calls carry consumption and failure edges through

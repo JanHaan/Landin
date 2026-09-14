@@ -77,6 +77,7 @@ package body Landin.Stages.Checking.References is
 
       type Reference_Fact is record
          Frame      : Boolean := False;
+         Frame_Witness : Res.Declaration_Id := Res.No_Declaration;
          External   : Boolean := False;
          Untracked  : Boolean := False;
          --  A refused value supplies no proof for a return-origin check.
@@ -340,6 +341,12 @@ package body Landin.Stages.Checking.References is
          Into_Fact.Presence :=
            Value_Fact'Max (Into_Fact.Presence, Other.Presence);
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
+         if Other.Frame_Witness /= Res.No_Declaration
+           and then (Into_Fact.Frame_Witness = Res.No_Declaration
+             or else Other.Frame_Witness < Into_Fact.Frame_Witness)
+         then
+            Into_Fact.Frame_Witness := Other.Frame_Witness;
+         end if;
          Into_Fact.External := Into_Fact.External or Other.External;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
          Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
@@ -750,6 +757,9 @@ package body Landin.Stages.Checking.References is
         return Res.Declaration_Id
       is
       begin
+         if Fact.Frame and then Fact.Frame_Witness /= Res.No_Declaration then
+            return Fact.Frame_Witness;
+         end if;
          if Fact.Frame then
             for Id in Origins'Range loop
                if Fact.Derives (Positive (Id))
@@ -1603,6 +1613,7 @@ package body Landin.Stages.Checking.References is
                      Result.Derives (Positive (Id)) := True;
                   else
                      Result.Frame := True;
+                     Result.Frame_Witness := Id;
                   end if;
                when Res.Module_Binding =>
                   Result.External := True;
@@ -1622,6 +1633,7 @@ package body Landin.Stages.Checking.References is
                         Result.From (Parameter_Of (Id)) := True;
                      else
                         Result.Frame := True;
+                        Result.Frame_Witness := Id;
                      end if;
                   end;
                when Res.Pattern_Binding =>
@@ -2706,9 +2718,10 @@ package body Landin.Stages.Checking.References is
                   end Fact_Width;
 
                   --  Each source bit grows once; the presence chain has two
-                  --  upward steps.  Include every tracked result position.
+                  --  upward steps.  The frame witness can descend through
+                  --  the declarations.  Include every result position.
                   Pass_Limit : constant Positive := Origins'Length
-                    * Fact_Width * (4 + Parameters + Declarations) + 2;
+                    * Fact_Width * (4 + Parameters + 2 * Declarations) + 2;
 
                   procedure Pass (Reporting : Boolean);
 

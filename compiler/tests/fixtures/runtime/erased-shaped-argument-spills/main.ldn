@@ -60,8 +60,8 @@ mark_source: (source: any reader) -> (value: any reader from source) =
     value = source
 end mark_source
 
-finish: (inout view: []i32, replacement_view: []i32,
-         inout source: any reader, replacement_source: any reader)
+finish: (inout view: []i32, escaping replacement_view: []i32,
+         inout source: any reader, escaping replacement_source: any reader)
         -> (value: i32) =
     trace = trace * 10 + 6
     original_packet.value = 100
@@ -71,16 +71,18 @@ finish: (inout view: []i32, replacement_view: []i32,
     value = 2
 end finish
 
+--  Replacement backing may be retained by the transport helpers.
+second: state = (value: 99)
+replacement_bytes: [2]i32 = [90, 91]
+
 public main: () -> (code: i32) =
     concrete: state = (value: 0)
     target: any collector = any(addr concrete)
     receivers: [1]any collector = [target]
     first: state = (value: 12)
-    second: state = (value: 99)
     mut source: any reader = any(addr first)
     replacement_source: any reader = any(addr second)
     bytes: [2]i32 = [5, 6]
-    replacement_bytes: [2]i32 = [90, 91]
     mut view: []i32 = bytes[0..<2]
     replacement_view: []i32 = replacement_bytes[0..<2]
 

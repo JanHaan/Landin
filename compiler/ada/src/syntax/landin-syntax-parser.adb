@@ -2202,6 +2202,20 @@ package body Landin.Syntax.Parser is
                            Note => "[1580]: the variadic tail is final",
                            Related => Opened,
                            Because => "this parameter list");
+                        --  A comma still belongs to this parameter list.
+                        --  Parse the rejected tail to its own closer so its
+                        --  names do not become phantom outer declarations.
+                        while Peek = Tok.Comma loop
+                           Advance;
+                           declare
+                              Before : constant Tok.Token_Index := Index;
+                              Ignored : constant Node_Id :=
+                                Parse_Parameter (Allow_Static);
+                              pragma Unreferenced (Ignored);
+                           begin
+                              exit when Index = Before;
+                           end;
+                        end loop;
                      end if;
                      exit;
                   end if;

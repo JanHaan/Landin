@@ -463,7 +463,8 @@ package body Landin.Stages.Checking.Flow is
          Result  : Res.Declaration_Id;
          State   : in out Assigned_Set;
          Edges   : out Edge_Facts;
-         Whole_As : Whole_Array_Read := Assignment_Source);
+         Whole_As : Whole_Array_Read := Assignment_Source;
+         Discarded : Boolean := False);
       function Contains_Flow_Effects
         (Of_Tree : Syn.Tree; Root : Syn.Node_Id) return Boolean;
       procedure Flow_Block
@@ -1904,10 +1905,11 @@ package body Landin.Stages.Checking.Flow is
          Result  : Res.Declaration_Id;
          State   : in out Assigned_Set;
          Edges   : out Edge_Facts;
-         Whole_As : Whole_Array_Read := Assignment_Source)
+         Whole_As : Whole_Array_Read := Assignment_Source;
+         Discarded : Boolean := False)
       is
          Needs_Value : constant Boolean :=
-           Node /= Syn.No_Node
+           not Discarded and then Node /= Syn.No_Node
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
                 | Ty.Function_Value | Ty.Atom_Value | Ty.Pointer_Value
@@ -1921,6 +1923,11 @@ package body Landin.Stages.Checking.Flow is
          Edges := No_Edges;
 
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Discard =>
+               Flow_Expression
+                 (Of_Tree, Syn.Value_Of (Of_Tree, Node), Result,
+                  State, Edges, Whole_As, Discarded => True);
+
             when Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of =>
                Edges := Fallthrough_Edge;
 
@@ -2614,7 +2621,7 @@ package body Landin.Stages.Checking.Flow is
                      else
                         Flow_Expression
                           (Of_Tree, Recovery_Body, Result, Recovered,
-                           Recovery_Edges, Whole_As);
+                           Recovery_Edges, Whole_As, Discarded);
                      end if;
                      Edges.Returns :=
                        Edges.Returns or Recovery_Edges.Returns;
@@ -2631,7 +2638,7 @@ package body Landin.Stages.Checking.Flow is
             when Syn.Try_Expression =>
                Flow_Expression
                  (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Result,
-                  State, Edges, Whole_As);
+                  State, Edges, Whole_As, Discarded);
                --  The call may fail after evaluating its arguments.  Run
                --  every active failure-applicable cleanup on that edge; the
                --  success edge keeps this state and continues.
@@ -3271,7 +3278,7 @@ package body Landin.Stages.Checking.Flow is
                      | Syn.Bare_Block | Syn.Loop_Statement
                      | Syn.While_Statement | Syn.For_Statement =>
                      Flow_Expression
-                       (Of_Tree, Item, Result, State, Step);
+                       (Of_Tree, Item, Result, State, Step, Discarded => True);
 
                   when Syn.Break_Statement | Syn.Continue_Statement =>
                      Flow_Expression
@@ -3463,7 +3470,8 @@ package body Landin.Stages.Checking.Flow is
             begin
                Flow_Expression
                  (Of_Tree, Syn.Block_Value (Of_Tree, Block), Result,
-                  State, Value_Edges);
+                  State, Value_Edges,
+                  Discarded => not Needs_Value and then Block /= Body_Node);
                Edges.Returns := Edges.Returns or Value_Edges.Returns;
                Edges.Falls_Through := Value_Edges.Falls_Through;
                if Edges.Falls_Through and then Block = Body_Node
