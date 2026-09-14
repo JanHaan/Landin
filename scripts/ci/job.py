@@ -32,14 +32,35 @@ def now():
 
 
 @contextlib.contextmanager
-def lock(path):
+def lock(path, shared=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as stream:
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(stream, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise Invalid("BUSY: " + str(path)) from exc
         yield stream.fileno()
+
+
+@contextlib.contextmanager
+def execution_slot(limit):
+    # Keep the original exclusive lock meaningful for older serial runners.
+    with lock(WORK / ".execution.lock", shared=True) as host_lock:
+        for index in range(limit):
+            with contextlib.ExitStack() as stack:
+                try:
+                    slot_lock = stack.enter_context(lock(WORK / f".execution-{index}.lock"))
+                except Invalid:
+                    continue
+                yield host_lock, slot_lock
+                return
+        raise Invalid("BUSY: native acceptance capacity exhausted")
+
+
+def cancel(root):
+    # Durable and idempotent: every worker observes the same run-local marker.
+    require((root / "request.json").is_file(), "unknown acceptance run")
+    (root / "cancelled").touch(exist_ok=True)
 
 
 def run_path(run_id):
@@ -165,7 +186,8 @@ def run_job(root, job_id, source):
     jobs = [job for job in request["policy"]["jobs"] if job["id"] == job_id]
     require(len(jobs) == 1, "unknown job")
     job = jobs[0]
-    with lock(WORK / ".execution.lock") as host_lock, lock(root / "locks" / job_id) as job_lock:
+    with execution_slot(request["policy"]["limits"]["parallel_jobs"]) as host_locks, \
+            lock(root / "locks" / job_id) as job_lock:
         environment = provenance(source, request["policy"])
         require(environment == read_json(root / "environment.json"), "environment changed; new run required")
         require(identity(working_inventory(source)) == request["source_sha256"], "slot source mismatch")
@@ -181,6 +203,7 @@ def run_job(root, job_id, source):
         if attempts.exists():
             for old in attempts.glob("*/result.json"):
                 require(read_json(old)["status"] == "passed", "failed job requires a new acceptance run")
+        require(not (root / "cancelled").exists(), "acceptance run cancelled; new run required")
         attempt = attempts / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:12])
         attempt.mkdir(parents=True)
         started = now()
@@ -207,19 +230,22 @@ def run_job(root, job_id, source):
                 stamp, tick = now(), time.monotonic()
                 progress(f"[{job_id}] start {argv!r}")
                 with log.open("wb") as out:
-                    exit_code = command(argv, cwd=source, env=env, pass_fds=(host_lock, job_lock),
+                    exit_code = command(argv, cwd=source, env=env, pass_fds=(*host_locks, job_lock),
                                         output=out, live=live_output,
-                                        seconds=request["policy"]["limits"]["step_seconds"])
+                                        seconds=request["policy"]["limits"]["step_seconds"],
+                                        cancelled=lambda: (root / "cancelled").exists())
                 record["steps"].append({"argv": argv, "environment": env, "started": stamp,
                                         "finished": now(), "duration": time.monotonic() - tick,
                                         "exit": exit_code, "log": log.relative_to(root).as_posix()})
                 progress(f"[{job_id}] exit {exit_code}")
                 if exit_code:
+                    cancel(root)
                     break
             final_oom = oom_events(environment["resource_limits"])
             write_new(attempt / "oom-after.json", final_oom)
             if final_oom != initial_oom:
                 exit_code = 1
+                cancel(root)
                 progress("native cgroup OOM accounting changed; acceptance failed")
             after = identity(working_inventory(source))
             record["source_after"] = after
@@ -244,6 +270,8 @@ def run_job(root, job_id, source):
         except Exception as exc:
             (attempt / "exception.log").write_text(str(exc) + "\n")
             exit_code = 1
+        if exit_code:
+            cancel(root)
         record["finished"] = now()
         record["duration"] = time.monotonic() - start_clock
         record["files"] = [evidence_entry(root, path) for path in sorted(attempt.rglob("*")) if path.is_file()]
@@ -256,6 +284,7 @@ def run_job(root, job_id, source):
 
 def finalize(root):
     with lock(root / "finalize.lock"):
+        require(not (root / "cancelled").exists(), "cancelled acceptance cannot finalize")
         if (root / "record.json").exists():
             validate_bundle(root)
             return
@@ -310,7 +339,7 @@ def export(root):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("init", "run", "finalize", "status", "export"))
+    parser.add_argument("action", choices=("init", "run", "finalize", "status", "export", "cancel"))
     parser.add_argument("run_id")
     parser.add_argument("argument", nargs="?")
     args = parser.parse_args(argv)
@@ -324,6 +353,8 @@ def main(argv=None):
             return run_job(root, args.argument, Path.cwd())
         elif args.action == "finalize":
             finalize(root)
+        elif args.action == "cancel":
+            cancel(root)
         elif args.action == "status":
             status(root)
         else:

@@ -80,8 +80,11 @@ def oom_events(limits, mount=Path("/sys/fs/cgroup")):
     return {key: int(events.get(key, "0")) for key in ("oom_kill", "oom_group_kill")}
 
 
-def command(argv, *, cwd, env, pass_fds, output, live, seconds):
+def command(argv, *, cwd, env, pass_fds, output, live, seconds, cancelled=lambda: False):
     """Stream output without allowing a silent process or inherited pipe to hang."""
+    if cancelled():
+        output.write(b"landin-ci: acceptance cancelled before command\n")
+        return 125
     process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, pass_fds=pass_fds,
                                start_new_session=True)
@@ -89,28 +92,37 @@ def command(argv, *, cwd, env, pass_fds, output, live, seconds):
     expired = threading.Event()
     killed = threading.Event()
 
-    def expire():
-        expired.set()
-        kill_owned_groups(process.pid)
-        killed.set()
+    stopped = threading.Event()
+    aborted = threading.Event()
 
-    # Observational SSH output or a slow log sink must not extend the child's
-    # running time. The timer enforces the deadline independently of streaming.
-    timer = threading.Timer(seconds, expire)
-    timer.daemon = True
+    def supervise():
+        while not stopped.wait(min(0.1, max(0, deadline - time.monotonic()))):
+            if cancelled():
+                aborted.set()
+            elif time.monotonic() >= deadline:
+                expired.set()
+            else:
+                continue
+            kill_owned_groups(process.pid)
+            killed.set()
+            return
+
+    # Enforce cancellation and deadlines even if observational output stalls.
+    timer = threading.Thread(target=supervise, daemon=True)
     timer.start()
 
     def timed_out():
-        output.write(b"\nlandin-ci: command process group timed out\n")
+        output.write(b"\nlandin-ci: acceptance cancelled\n" if aborted.is_set() else
+                     b"\nlandin-ci: command process group timed out\n")
         output.flush()
-        return 124
+        return 125 if aborted.is_set() else 124
 
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
             while selector.get_map() or process.poll() is None:
                 remaining = deadline - time.monotonic()
-                if remaining <= 0:
+                if remaining <= 0 or aborted.is_set():
                     return timed_out()
                 for key, _ in selector.select(min(remaining, 0.1)):
                     chunk = os.read(key.fd, 8192)
@@ -121,10 +133,10 @@ def command(argv, *, cwd, env, pass_fds, output, live, seconds):
                     else:
                         selector.unregister(key.fileobj)
             code = process.wait()
-            return timed_out() if expired.is_set() else code
+            return timed_out() if expired.is_set() or aborted.is_set() else code
     finally:
         # Also covers exceptions in the log sink or observational callback.
-        timer.cancel()
+        stopped.set()
         timer.join()
         try:
             if killed.is_set():

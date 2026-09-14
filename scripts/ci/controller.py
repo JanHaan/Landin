@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import io
 import os
@@ -136,13 +137,27 @@ def accept(root, revision, host, state, resume=None):
     initialize(host, archive, request)
     print("ACCEPTANCE " + run_id + " commit=" + source["commit"], flush=True)
     results = {}
-    for job in request["policy"]["jobs"]:
-        name = job["id"]
-        log = local / (name + "-" + uuid.uuid4().hex[:8] + ".log")
-        results[name] = slot_run(host, "accept-" + run_id + "-" + name,
-                                ["python3", "scripts/ci/job.py", "run", run_id, name], archive, log, name)
-        if results[name]:
-            break
+    with ThreadPoolExecutor(max_workers=request["policy"]["limits"]["parallel_jobs"]) as pool:
+        futures = {}
+        for job in request["policy"]["jobs"]:
+            name = job["id"]
+            log = local / (name + "-" + uuid.uuid4().hex[:8] + ".log")
+            future = pool.submit(slot_run, host, "accept-" + run_id + "-" + name,
+                                 ["python3", "scripts/ci/job.py", "run", run_id, name], archive, log, name)
+            futures[future] = name
+        cancelled = False
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception as exc:
+                print("[" + name + "] controller error: " + str(exc), flush=True)
+                results[name] = 1
+            if results[name] and not cancelled:
+                # Remote workers also cancel locally on command failure, even
+                # when the controller or its SSH observation is disconnected.
+                remote_job(host, run_id, "cancel")
+                cancelled = True
     require(all(code == 0 for code in results.values()),
             "acceptance incomplete/failed; records retained: " + str(results))
     remote_job(host, run_id, "finalize")
