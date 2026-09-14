@@ -6265,6 +6265,51 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Dollar_Link_Names_Are_Assembler_Symbols;
 
+   procedure Dot_Link_Name_Is_An_Assembler_Symbol
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dot_Link_Name_Is_An_Assembler_Symbol
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "callback: type = extern(c) () -> (r: i32)" & LF
+         & "public extern(c) link(symbol: ""."") exported: ()"
+         & " -> (r: i32) = r = 1 end exported" & LF
+         & "saved: callback = exported" & LF
+         & "public extern(c) caller: () -> (r: i32) =" & LF
+         & "    local: callback = exported" & LF
+         & "    r = exported() + saved() + local()" & LF
+         & "end caller" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a single dot remains an accepted ELF identity");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "call "".""" & LF)
+            and then Contains (Text, HT & "leaq "".""(%rip), %rax")
+            and then Contains (Text, HT & ".quad "".""" & LF)
+            and then not Contains (Text, HT & "call ." & LF),
+            "calls and both address forms refer to the symbol");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".globl "".""" & LF)
+            and then Contains (Text, HT & ".type ""."", @function")
+            and then Contains (Text, LF & """."":" & LF)
+            and then Contains (Text, HT & ".size ""."", .-""."""),
+            "only the size expression's location counter stays unquoted");
+      end;
+   end Dot_Link_Name_Is_An_Assembler_Symbol;
+
    procedure Forced_Link_Names_Reserve_The_Whole_Namespace
      (Item : in out Landin.Testing.Context);
 
@@ -6628,6 +6673,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "dollar link names are assembler symbols",
          Dollar_Link_Names_Are_Assembler_Symbols'Access);
+      Landin.Testing.Register
+        (Into, "backend", "dot link names are assembler symbols",
+         Dot_Link_Name_Is_An_Assembler_Symbol'Access);
       Landin.Testing.Register
         (Into, "backend", "forced link names reserve the whole namespace",
          Forced_Link_Names_Reserve_The_Whole_Namespace'Access);
