@@ -22,6 +22,7 @@ from common import (Invalid, archive_inventory, canonical, decode, digest, file_
                     identity, read_json, require, validate_policy, validate_request,
                     working_inventory, write_new)
 from records import commands_for, validate_bundle, validate_job
+from resources import command, containment, oom_events
 
 WORK = Path("/home/landin/work/.acceptance")
 
@@ -51,19 +52,20 @@ def run_path(run_id):
 
 def capture(argv, env):
     return subprocess.run(argv, env=env, check=True, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT).stdout.decode(errors="replace")
+                          stderr=subprocess.STDOUT, timeout=30).stdout.decode(errors="replace")
 
 
 def provenance(source, policy):
     require(platform.system() == "Linux" and platform.machine() == "x86_64",
             "acceptance requires native Linux x86-64")
+    limits = containment(policy)
     # A fixed environment prevents developer selectors, QEMU and alternate tools
     # leaking from the controller or SSH account into acceptance commands.
     env = {"HOME": str(Path.home()), "PATH": "/usr/local/bin:/usr/bin:/bin",
            "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TZ": "UTC",
            "PYTHONDONTWRITEBYTECODE": "1", "LANDIN_BUILD_INCREMENTAL": "no",
            "LANDIN_BUILD_TAG": policy["build_tag"], "CLANG": policy["clang"]}
-    user_tools = Path.home() / ".local/share/landin-ci-tools"
+    user_tools = Path.home() / "work/.ci-tools"
     if (user_tools / "usr/bin/git").is_file():
         env["PATH"] = str(user_tools / "usr/bin") + ":" + env["PATH"]
         env["GIT_EXEC_PATH"] = str(user_tools / "usr/lib/git-core")
@@ -95,7 +97,8 @@ def provenance(source, policy):
             "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
             "packages": packages, "binaries": binaries,
             "slot_runner_sha256": file_hash("/usr/local/bin/landin-ci"),
-            "pins_sha256": file_hash(source / policy["pins"]), "execution_environment": env}
+            "pins_sha256": file_hash(source / policy["pins"]), "execution_environment": env,
+            "resource_limits": limits}
 
 
 def initialize(request, archive_path):
@@ -147,8 +150,12 @@ def progress(message):
 
 def live_output(chunk):
     try:
-        sys.stdout.buffer.write(chunk)
-        sys.stdout.buffer.flush()
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+        else:
+            sys.stdout.write(chunk.decode(errors="replace"))
+            sys.stdout.flush()
     except (BrokenPipeError, OSError):
         pass
 
@@ -158,7 +165,7 @@ def run_job(root, job_id, source):
     jobs = [job for job in request["policy"]["jobs"] if job["id"] == job_id]
     require(len(jobs) == 1, "unknown job")
     job = jobs[0]
-    with lock(root / "locks" / job_id) as job_lock:
+    with lock(WORK / ".execution.lock") as host_lock, lock(root / "locks" / job_id) as job_lock:
         environment = provenance(source, request["policy"])
         require(environment == read_json(root / "environment.json"), "environment changed; new run required")
         require(identity(working_inventory(source)) == request["source_sha256"], "slot source mismatch")
@@ -186,36 +193,34 @@ def run_job(root, job_id, source):
                   "source_after": "", "policy_sha256": request["policy_sha256"],
                   "status": "failed", "started": started, "finished": started, "duration": 0,
                   "steps": [], "files": [], "fonts": "unavailable"}
-        font_result = subprocess.run(["python3", "assets/fonts.py", "--require"], cwd=source,
-                                     env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        record["fonts"] = "available" if font_result.returncode == 0 else "unavailable"
-        (attempt / "fonts.log").write_bytes(font_result.stdout)
-        progress("private font availability: " + record["fonts"])
         exit_code = 0
         try:
+            initial_oom = oom_events(environment["resource_limits"])
+            write_new(attempt / "oom-before.json", initial_oom)
+            font_result = subprocess.run(["python3", "assets/fonts.py", "--require"], cwd=source,
+                                         env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+            record["fonts"] = "available" if font_result.returncode == 0 else "unavailable"
+            (attempt / "fonts.log").write_bytes(font_result.stdout)
+            progress("private font availability: " + record["fonts"])
             for index, argv in enumerate(commands_for(request, job)):
                 log = attempt / f"step-{index:02d}.log"
                 stamp, tick = now(), time.monotonic()
                 progress(f"[{job_id}] start {argv!r}")
                 with log.open("wb") as out:
-                    process = subprocess.Popen(argv, cwd=source, env=env, stdout=subprocess.PIPE,
-                                               stderr=subprocess.STDOUT, pass_fds=(job_lock,))
-                    # This deliberately streams partial lines too: a quiet long
-                    # compile remains observable via status and its retained log.
-                    while True:
-                        chunk = process.stdout.read1(8192)
-                        if not chunk:
-                            break
-                        out.write(chunk)
-                        out.flush()
-                        live_output(chunk)
-                    exit_code = process.wait()
+                    exit_code = command(argv, cwd=source, env=env, pass_fds=(host_lock, job_lock),
+                                        output=out, live=live_output,
+                                        seconds=request["policy"]["limits"]["step_seconds"])
                 record["steps"].append({"argv": argv, "environment": env, "started": stamp,
                                         "finished": now(), "duration": time.monotonic() - tick,
                                         "exit": exit_code, "log": log.relative_to(root).as_posix()})
                 progress(f"[{job_id}] exit {exit_code}")
                 if exit_code:
                     break
+            final_oom = oom_events(environment["resource_limits"])
+            write_new(attempt / "oom-after.json", final_oom)
+            if final_oom != initial_oom:
+                exit_code = 1
+                progress("native cgroup OOM accounting changed; acceptance failed")
             after = identity(working_inventory(source))
             record["source_after"] = after
             if after != request["source_sha256"]:
@@ -324,7 +329,7 @@ def main(argv=None):
         else:
             export(root)
         return 0
-    except (Invalid, OSError, subprocess.CalledProcessError) as exc:
+    except (Invalid, OSError, subprocess.SubprocessError) as exc:
         print("landin-ci: " + str(exc), file=sys.stderr)
         return 75 if str(exc).startswith("BUSY:") else 1
 

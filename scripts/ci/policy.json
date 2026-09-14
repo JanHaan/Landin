@@ -14,7 +14,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/test.sh"
@@ -40,7 +41,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/test.sh"
@@ -66,7 +68,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/quality.sh"
@@ -82,7 +85,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/quality.sh"
@@ -98,7 +102,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/debug.sh"
@@ -114,7 +119,8 @@
           "--all"
         ],
         [
-          "./scripts/build.sh"
+          "./scripts/build.sh",
+          "-j1"
         ],
         [
           "./scripts/debug.sh"
@@ -172,5 +178,11 @@
         ]
       ]
     }
-  ]
+  ],
+  "limits": {
+    "memory_bytes": 34359738368,
+    "swap_bytes": 0,
+    "parallel_jobs": 1,
+    "step_seconds": 1800
+  }
 }

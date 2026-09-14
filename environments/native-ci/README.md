@@ -45,6 +45,78 @@ harnesses. There is no filtered, recording-mode or incremental acceptance.
 Private font absence is recorded explicitly; publication still requires the
 licensed fonts. The native runner need not hold those private files.
 
+## Resource containment
+
+Acceptance runs on the native Linux host. Its policy requires one job at a
+time, explicit `-j1` bootstrap builds, and at most 32 GiB of memory with no swap
+for the execution cgroup and its descendants. These are aggregate kernel
+limits, not estimates from process RSS or per-process virtual-memory limits.
+The controller stops submitting jobs after a failure. A host-wide acceptance
+lock also prevents two controllers from running acceptance commands together;
+children inherit both that lock and the individual job lock.
+
+Before probing tools, initialization verifies the current unified cgroup v2
+membership and reads that cgroup's `memory.max` and `memory.swap.max`.
+Missing, unlimited or excessive values refuse acceptance. For this supported
+deployment, both limits must be explicit on the execution cgroup; an unseen
+ancestor limit is not accepted as evidence. The actual limits become part of
+the environment record and must remain unchanged on resume. The runner reads
+the configuration and never changes host cgroups itself.
+
+The host administrator must provide a dedicated runner container or execution
+cgroup with `memory.max` no greater than `34359738368` and
+`memory.swap.max` equal to `0`. Check that no existing work is active before
+changing its limits; do not lower a shared container's cap beneath unrelated
+live workloads. The aggregate cap is enforced by the
+[Linux memory controller](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html).
+Initial deployment inspection found unlimited memory and swap and no cgroup
+write access for the runner account. After the maintainer redeployed the
+Docker runner with the 32 GiB settings, a direct kernel read confirmed
+`memory.max=34359738368`, `memory.swap.max=0` and zero OOM events. This supplies
+configuration evidence; no deliberate OOM workload is needed to verify it.
+
+The existing deployment uses Docker Compose. Its local deployment notes live
+in the main worktree's `.scratch/ci-hosts/`; its `runner` and `tailscale`
+services share networking but keep separate containers. The tracked
+`environments/native-ci/compose.resources.yaml` overrides only the runner's
+memory settings. Docker's `memswap_limit` counts memory plus swap, so setting
+it equal to `mem_limit` disables swap; see the
+[Compose service reference](https://docs.docker.com/reference/compose-file/services/#memswap_limit).
+
+Once all runner work is idle, copy that override beside the deployed
+`compose.yaml` on the Docker host and apply it there:
+
+```sh
+docker compose -f compose.yaml -f compose.resources.yaml \
+    up -d --no-deps --no-build --pull never runner
+docker compose -f compose.yaml -f compose.resources.yaml \
+    exec -T runner sh -c \
+    'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.swap.max'
+```
+
+The expected kernel values are `34359738368` and `0`, respectively; Docker
+configuration alone is not sufficient evidence. The first command may
+recreate the runner and disconnect its SSH sessions, which is why it requires
+idle work. It preserves the existing work and SSH host-key volumes and leaves
+the Tailscale service running. Retain both Compose files in future deployment
+commands so recreation does not remove the limits. Do not use `down -v`.
+
+Each policy command has a 30-minute outer deadline, covering descendants and
+inherited output pipes. Timeout terminates the process group and records a
+failure. On Linux, supervision also stops the separate tool process groups
+that the compiler creates inside the command's session. Existing finer-grained
+harness deadlines remain applicable. Cgroup
+OOM kill counters are retained before and after each job; a change fails the
+job even if its commands returned zero. Smaller limits may cause a legitimate
+workload to fail: retain that failure and diagnose it rather than silently
+raising the limit or approving incomplete evidence.
+
+Containment does not authorize giant-image assembly or replace an input audit.
+R4.91 retains its forbidden giant fixtures as source/IR evidence, and the
+remaining native execution plan must be reviewed before launching the gate.
+No assembler sweep is run to validate these controls. They are tested using
+fake cgroup files and tiny supervised Python processes.
+
 ## Host protocol and deployment
 
 The supported host is native Linux x86-64, with Python 3, SSH, `flock`, rsync,
@@ -82,11 +154,14 @@ Debian package installation, leaving the installed runner and toolchain intact:
 ssh landin@landin-ci-x86-64 sh -s < environments/native-ci/setup-user-tools.sh
 ```
 
-It downloads Debian's Git package into the account's tools directory and
+It downloads Debian's Git package into `~/work/.ci-tools` on the persistent
+work volume and
 records the package version and download hash. The acceptance environment
 selects that Git, its helper programs and templates explicitly; provenance
 records the actual Git binary path, version and hash. Refresh this installation
 deliberately between runs. A tool or environment change requires new acceptance.
+The earlier `~/.local/share/landin-ci-tools` location lived in the container's
+writable layer and disappeared on recreation; it is no longer selected.
 The shell uses a private package-list directory and does not update system
 packages. Account credentials and tailnet/SSH key management remain host
 administration; this repository contains no secrets or signing service.

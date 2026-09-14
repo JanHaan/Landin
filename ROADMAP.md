@@ -5702,7 +5702,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Named facets reconciled after reading all four complete prototypes: live formals and conformance labels use lowercase names without colliding with runtime parameters; tour allocations use initialized object/byte-buffer APIs; explicit legacy prototype calls supply every static formal; retired worklist links name this roadmap; the reader consumes one file handle with the whole reader. Historical findings remain byte-identical and deliberately retained raw-storage sketches stay labelled historical. The prototypes remain specification sketches, not newly enabled programs. | Fourth batch |
-| M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
+| M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. The maintainer chose to leave the font files for now. R4.91 therefore makes no font deletion or history rewrite; this disposition does not change license terms or erase the retained finding. | Disposed by maintainer: retain for now |
 | M6: historical closure anchors | Source provenance reconciled: R1/R2/R3 gate sections now name retained source witnesses, and the R4.20/R4.21/R4.30 records explicitly identify pre-rewrite inputs. Nine old/rewritten pairs differ only by three removed agent-guidance documents; the R4.30 tested tree differs from its committed successor only in three closure documents. Original R1/R2/R3 run bundles have not been recovered; that historical evidence gap remains open and is not filled by current development checks. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
 | M8: stale decisions/citations | Implemented for the named findings: D203–D207 distinguish completed historical R4.40 evidence from current R4.91 acceptance; D14/D31 retain admitted slice length; D74/D75/D89/D102 cite the actual variant, selection and matching rules, and the current unassigned variant-return pin remains with D106. check.py rejects evidence paragraphs calling a non-active roadmap owner active. No semantic rule or historical acceptance input changes. | Fourth batch |
@@ -6347,7 +6347,7 @@ implemented atom lists. D225 implements J104's user-selected reservation of
 control words in every identifier position.
 N12 retains the existing adjacent-token contract. K28/M12 remain scoped maintenance
 observations, and M6's original historical native bundles remain unrecovered.
-M5's font-history decision does not authorize rewriting history. The intake
+M5 is disposed by the maintainer's decision to leave the font files for now; no history rewrite is authorized. The intake
 rows retain each other disposition and any outstanding evidence. Complete
 fixture accounting, diagnostic/document agreement and focused IR review
 before seeking exact acceptance. Passing filtered checks cannot close an
@@ -7776,7 +7776,7 @@ byte-identical to the pinned v0.26.9 upstream template/library files; the
 upstream MIT license is copied unchanged and linked from the parser guide.
 `check.py` requires the named notices and their attribution markers. No
 project, font or upstream license terms changed, and no history was rewritten;
-M5's historical font question remains a separate maintainer disposition.
+M5 now records the maintainer's decision to leave the historical font files for now.
 Source URLs, byte comparisons and hashes are retained in
 `.scratch/r491-third-party-inventory/tree-sitter-provenance.json`.
 This is a source/notice audit; no compiler, assembler or generated program ran.
@@ -8365,16 +8365,21 @@ positive and refusal controls. Confirmed defects and unresolved dispositions
 above remain owned here until repaired or explicitly transferred with reasons.
 
 Retained acceptance of `66927e93` is historical evidence and does not approve
-these repairs. The user's constraint excludes new mutation-based probing and
-debugger sessions. Normal builds and repository regressions remain authorized.
-Required debugger acceptance is not waived: R4.91 remains active until its full
-acceptance can be performed within the user's authorized scope.
+these repairs. Earlier review constraints excluded new mutation-based probing
+and debugger sessions. The maintainer now explicitly authorizes the eight
+existing acceptance jobs, including runtime/ABI and GDB checks, sequentially
+on the capped Linux runner and stopping on failure. This adds no new fuzz or
+assembler campaign and never authorizes assembling the giant-image fixtures.
+Required debugger acceptance is not waived; it is included in that authorized
+gate. If the 32 GiB cap is insufficient, report the affected job and memory
+evidence before changing the limit.
 
 The remaining closure work is live activation of the SourceHut publisher,
 the expanded runtime/profile and exact-revision acceptance evidence (including
-required debugger coverage), and maintainer disposition of M5/M6's font-history
-and missing historical-bundle records. Broader mutation coverage remains absent
-under the user's constraint; generator-only checks do not supply it. The
+required debugger coverage), and maintainer disposition of M6's missing
+historical-bundle records. M5 is disposed: leave the font files for now.
+Broader mutation coverage remains absent under the user's constraint;
+generator-only checks do not supply it. The
 retained maintenance and cost observations (M12/K28, m14, m23, m28/m29) do not
 establish additional wrong-code repairs and authorize no stress or giant-image
 replay. Every review row keeps its individual disposition and evidence limits.
@@ -8393,9 +8398,64 @@ The remaining delivery sequence is concrete:
 
 | Step | Required result | Current boundary |
 | --- | --- | --- |
-| Reconcile acceptance execution | Review the eight-job policy against the standing exclusions before starting a run. Preserve giant-image cases as source/seam evidence; any altered gate must explicitly state its coverage and cannot reuse an existing policy identity. | The unchanged policy invokes complete suites, quality workloads and debugger jobs. It cannot be launched under the current execution constraints. No exclusion, debugger permission or acceptance waiver is inferred from a request to continue. |
-| Settle historical dispositions | Record the maintainer's M5 font-history decision and M6 treatment of unrecovered original bundles, preserving the difference between source witnesses and exact run evidence. | No history rewrite or retrospective acceptance claim is authorized. New acceptance cannot recover a historical run. |
+| Reconcile acceptance execution | Preserve giant-image cases as source/seam evidence while running the eight existing jobs sequentially under aggregate memory containment. The changed policy cannot reuse an existing policy identity. | The maintainer activated the Docker cap, verified at the kernel boundary, and explicitly authorized the existing capped acceptance jobs. The positive-fixture path emits assembly text only; the native execution path selects runtime and ABI classes. No acceptance waiver is inferred. |
+| Settle historical dispositions | M5 is disposed by the maintainer's choice to retain the font files for now. Record M6's treatment of unrecovered original bundles, preserving the difference between source witnesses and exact run evidence. | No history rewrite or retrospective acceptance claim is authorized. New acceptance cannot recover a historical run. |
 | Accept and deliver the candidate | Complete the agreed exact-revision native gate, verify its export, and bind approval and canonical promotion to that revision. Verify the SourceHut identity's canonical lock-write permission and retire older publishers before live activation; inspect both domain outcomes. | Branch push and mirror success do not supply acceptance. Live permission verification, approval, promotion and publication remain unperformed. |
+
+The maintainer clarified that the resource restrictions address the incident
+in which session-launched work consumed over 60 GB and crashed the Mac, and
+allows adjusting execution limits to prevent a recurrence. This is permission
+to prepare contained validation, not to launch the unchanged parallel gate.
+M5 is disposed by the separate instruction to leave the font files for now.
+M6's missing historical evidence remains distinct and open.
+
+The acceptance runner now serializes its eight jobs, explicitly builds with
+one worker and holds a host-wide acceptance lock across each job. The policy
+requires an aggregate cgroup v2 memory cap of at most 32 GiB with no swap,
+following the maintainer's explicit choice of that cap for the Docker host.
+Initialization refuses missing/unlimited/excessive limits before native tool
+probes; verified limits are bound into environment provenance. Each command
+has a 30-minute outer process-group deadline; narrower assembler and harness
+limits are still required where applicable. OOM kill accounting changes fail
+the job even if a command reports success. No required job is removed, and
+the changed policy identity cannot reuse acceptance of an older revision.
+
+Read-only host inspection found no running clang/cc1as, but the runner's
+current cgroup has `memory.max=max`, `memory.swap.max=max` and is not writable
+by its account. A host administrator must provide a dedicated capped runner
+container/cgroup before the new preflight can pass. Do not lower an unrelated
+shared workload's limit or substitute a per-process limit for aggregate
+containment. Tiny Python controls exercise refusal, timeout, inherited-pipe
+cleanup, serialization and OOM-accounting failure; no giant allocation,
+compiler corpus, assembler sweep or debugger session validates these controls.
+Source/IR-only treatment of the giant fixtures remains mandatory. The exact
+native execution and remaining coverage decisions still precede acceptance.
+The maintainer identified the existing Docker deployment notes at the main
+worktree's `.scratch/ci-hosts/`. A tracked Compose override now supplies the
+runner-only memory and memory-plus-swap settings, preserving the existing
+services, image and named volumes. Its documented application recreates only
+an idle runner and verifies the kernel values afterward. The maintainer set
+up Docker manually and then redeployed with the requested 32 GiB limit. A
+follow-up kernel read confirms `memory.max=34359738368`, `memory.swap.max=0`
+and zero OOM events. The work volume and retained acceptance directory remain
+present. Git installed in the earlier home-directory location disappeared on
+recreation, so user-tool provisioning and provenance now select the persistent
+`~/work/.ci-tools` directory. Debian Git 2.47.3 is restored there through the
+bounded user-tool setup script; its package identity and hash are retained.
+No retained acceptance evidence is moved or rewritten.
+
+Containment development evidence: all 66 CI tooling cases pass on Linux;
+the Mac controls pass with two Linux-only cases skipped. Focused
+controls also cover a slow observational output sink, font-probe timeout
+retention, compiler-style separate process-group cleanup, and approval refusal
+for altered memory provenance. The controller
+streams fixed-size output chunks instead of accumulating an unbounded line
+on the Mac. `check.py` holds the Compose override to the policy's exact memory
+and swap values. The real host preflight first refused its uncapped cgroup
+before any compiler tool probe, then passed containment after the maintainer's
+redeployment. Logs are retained in
+`.scratch/r491-resource-containment/`. These checks establish runner behavior,
+not kernel OOM experiments, compiler acceptance or live deployment.
 
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler

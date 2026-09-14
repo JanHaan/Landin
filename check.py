@@ -5357,6 +5357,16 @@ def check_native_ci(full_run):
         contract = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(contract)
         contract.validate_policy(contract.read_json(os.path.join(ROOT, "scripts/ci/policy.json")))
+        override = "environments/native-ci/compose.resources.yaml"
+        with io.open(os.path.join(ROOT, override), encoding="utf-8") as stream:
+            lines = [line for line in stream.read().splitlines()
+                     if line.strip() and not line.lstrip().startswith("#")]
+        limits = contract.required_limits()
+        expected = ["services:", "  runner:",
+                    "    mem_limit: " + str(limits["memory_bytes"]),
+                    "    memswap_limit: " + str(limits["memory_bytes"] + limits["swap_bytes"])]
+        if lines != expected:
+            out.append((override, 1, "Docker runner limits must match native acceptance policy"))
     except (OSError, ValueError, TypeError, KeyError) as exc:
         out.append((path, 1, "native acceptance policy: " + str(exc)))
     manifests = {".build.yml"}

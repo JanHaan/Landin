@@ -23,6 +23,7 @@ import approval
 import controller
 import job
 import publish
+import resources
 
 
 class ArchiveTests(unittest.TestCase):
@@ -153,6 +154,8 @@ class GitFixture(unittest.TestCase):
                 "hostname": "fixture", "os_release": "ID=debian", "boot_id": "12345678-1234-1234-1234-123456789abc",
                 "packages": "".join(name + "=fixture-version\n" for name in sorted(records.NATIVE_PACKAGES)),
                 "binaries": tools, "slot_runner_sha256": "2" * 64,
+                "resource_limits": {"cgroup": "/acceptance", "memory_bytes": 32 * 1024 ** 3,
+                                    "swap_bytes": 0},
                 "pins_sha256": common.file_hash(self.root / "environments/pins.sh")}
 
     def bundle(self):
@@ -228,6 +231,9 @@ class GitTests(GitFixture):
             changed = copy.deepcopy(original); changed[field] = value; variants.append(changed)
         changed = copy.deepcopy(original); changed["execution_environment"]["LANDIN_QEMU"] = "qemu"; variants.append(changed)
         changed = copy.deepcopy(original); changed["execution_environment"]["PATH"] += ":/unapproved"; variants.append(changed)
+        for key, value in (("memory_bytes", 64 * 1024 ** 3), ("swap_bytes", 1),
+                           ("memory_bytes", "max"), ("cgroup", "/../elsewhere")):
+            changed = copy.deepcopy(original); changed["resource_limits"][key] = value; variants.append(changed)
         for environment in variants:
             with self.assertRaises(common.Invalid):
                 records.validate_environment(environment, self.request, root)
@@ -239,6 +245,20 @@ class GitTests(GitFixture):
         with self.assertRaisesRegex(common.Invalid, 'differs from committed tree'):
             common.commit_source(self.root, 'HEAD')
 
+    def test_user_git_helpers_belong_to_the_persistent_work_volume(self):
+        root = self.bundle()
+        environment = self.native_environment()
+        env = environment["execution_environment"]
+        tools = Path(env["HOME"]) / "work/.ci-tools"
+        env["GIT_EXEC_PATH"] = str(tools / "usr/lib/git-core")
+        env["GIT_TEMPLATE_DIR"] = str(tools / "usr/share/git-core/templates")
+        env["PATH"] = env["PATH"].replace("/usr/local/bin:", str(tools / "usr/bin") + ":/usr/local/bin:")
+        records.validate_environment(environment, self.request, root)
+        for key in ("PATH", "GIT_EXEC_PATH", "GIT_TEMPLATE_DIR"):
+            env[key] = env[key].replace("work/.ci-tools", ".local/share/landin-ci-tools")
+        with self.assertRaisesRegex(common.Invalid, "unexpected Git helpers"):
+            records.validate_environment(environment, self.request, root)
+
     def test_policy_omission_mode_and_developer_selector(self):
         policy = self.source['policy']
         mutations = []
@@ -246,6 +266,10 @@ class GitTests(GitFixture):
         changed = copy.deepcopy(policy); changed['jobs'][0]['mode'] = 'release'; mutations.append(changed)
         changed = copy.deepcopy(policy); changed['jobs'][0]['commands'][2].append('--case=fast'); mutations.append(changed)
         changed = copy.deepcopy(policy); changed['jobs'][0]['commands'].pop(0); mutations.append(changed)
+        changed = copy.deepcopy(policy); changed['limits']['parallel_jobs'] = 8; mutations.append(changed)
+        changed = copy.deepcopy(policy); changed['limits']['memory_bytes'] *= 2; mutations.append(changed)
+        changed = copy.deepcopy(policy); changed['limits']['swap_bytes'] = 1; mutations.append(changed)
+        changed = copy.deepcopy(policy); changed['limits']['step_seconds'] = 0; mutations.append(changed)
         for value in mutations:
             with self.assertRaises(common.Invalid):
                 common.validate_policy(value)
@@ -402,6 +426,130 @@ class GitTests(GitFixture):
         self.assertEqual(shlex.split(argv[-1]), words)
 
 
+class AcceptanceSchedulingTests(GitFixture):
+    def test_jobs_run_in_order_and_stop_after_failure(self):
+        calls = []
+        def slot(*args):
+            calls.append(args[-1])
+            return 9 if len(calls) == 2 else 0
+        with patch.object(controller, "initialize"), patch.object(controller, "slot_run", side_effect=slot), \
+                patch.object(controller, "remote_job") as remote, patch.object(controller, "export") as export:
+            with self.assertRaisesRegex(common.Invalid, "incomplete/failed"):
+                controller.accept(self.root, "HEAD", "fixture", Path(self.tmp.name) / "state")
+        self.assertEqual(calls, ["suite-debug", "suite-release"])
+        remote.assert_not_called()
+        export.assert_not_called()
+
+
+class ResourceControlTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="landin-resource-test-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.proc = self.root / "membership"
+        self.proc.write_text("0::/acceptance\n")
+        self.group = self.root / "acceptance"
+        self.group.mkdir()
+        (self.group / "memory.max").write_text(str(32 * 1024 ** 3))
+        (self.group / "memory.swap.max").write_text("0")
+        self.policy = common.read_json(ROOT / "scripts/ci/policy.json")
+
+    def inspect(self):
+        return resources.containment(self.policy, self.proc, self.root)
+
+    def test_finite_cgroup_limits_and_namespace_root(self):
+        expected = {"cgroup": "/acceptance", "memory_bytes": 32 * 1024 ** 3, "swap_bytes": 0}
+        self.assertEqual(self.inspect(), expected)
+        self.proc.write_text("0::/\n")
+        self.assertEqual(resources.containment(self.policy, self.proc, self.group),
+                         dict(expected, cgroup="/"))
+
+    def test_unlimited_missing_and_excessive_limits_refuse(self):
+        for name, value in (("memory.max", "max"), ("memory.max", str(64 * 1024 ** 3)),
+                            ("memory.max", "0"), ("memory.max", "-1"),
+                            ("memory.swap.max", "max"), ("memory.swap.max", "1")):
+            with self.subTest(name=name, value=value):
+                path = self.group / name
+                original = path.read_text()
+                path.write_text(value)
+                with self.assertRaises(common.Invalid):
+                    self.inspect()
+                path.write_text(original)
+        (self.group / "memory.max").unlink()
+        with self.assertRaisesRegex(common.Invalid, "cannot verify"):
+            self.inspect()
+
+    def test_unsupported_or_escaping_membership_refuses(self):
+        for membership in ("1:memory:/acceptance\n", "0::/../acceptance\n", "0::/acceptance\n1:cpu:/\n"):
+            self.proc.write_text(membership)
+            with self.assertRaises(common.Invalid):
+                self.inspect()
+
+    def test_oom_accounting_reads_kills_without_reclaim_events(self):
+        (self.group / "memory.events").write_text("max 200\noom 3\noom_kill 2\noom_group_kill 1\n")
+        self.assertEqual(resources.oom_events(self.inspect(), self.root),
+                         {"oom_kill": 2, "oom_group_kill": 1})
+
+    def execute(self, script, seconds=2, live=lambda chunk: None):
+        output = io.BytesIO()
+        code = resources.command([sys.executable, "-c", script], cwd=self.root,
+                                 env=os.environ.copy(), pass_fds=(), output=output,
+                                 live=live, seconds=seconds)
+        return code, output.getvalue()
+
+    def test_small_command_streams_output_and_preserves_exit(self):
+        observed = []
+        code, output = self.execute("import sys; print('result'); sys.exit(7)", live=observed.append)
+        self.assertEqual(code, 7)
+        self.assertEqual(output, b"result\n")
+        self.assertEqual(b"".join(observed), output)
+
+    def test_silent_command_times_out_even_after_closing_output(self):
+        code, output = self.execute("import os,time; os.close(1); os.close(2); time.sleep(3)", seconds=0.1)
+        self.assertEqual(code, 124)
+        self.assertIn(b"timed out", output)
+
+    def test_exited_leader_cannot_leave_a_child_holding_output(self):
+        import time
+        child = "import time,pathlib; time.sleep(0.6); pathlib.Path('survivor').write_text('alive')"
+        script = "import subprocess,sys; subprocess.Popen([sys.executable,'-c'," + repr(child) + "])"
+        code, output = self.execute(script, seconds=0.2)
+        self.assertEqual(code, 124)
+        self.assertIn(b"timed out", output)
+        time.sleep(0.7)
+        self.assertFalse((self.root / "survivor").exists())
+
+    def test_slow_observational_output_cannot_extend_child_deadline(self):
+        import time
+        script = ("import time,pathlib; print('ready',flush=True); time.sleep(0.5); "
+                  "pathlib.Path('survivor').write_text('alive')")
+        code, output = self.execute(script, seconds=0.2, live=lambda chunk: time.sleep(0.7))
+        self.assertEqual(code, 124)
+        self.assertIn(b"timed out", output)
+        self.assertFalse((self.root / "survivor").exists())
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'native session inspection requires Linux')
+    def test_compiler_style_child_process_group_is_stopped(self):
+        import time
+        child = "import time,pathlib; time.sleep(0.6); pathlib.Path('survivor').write_text('alive')"
+        script = ("import subprocess,sys,time; subprocess.Popen([sys.executable,'-c'," + repr(child)
+                  + "],process_group=0); time.sleep(3)")
+        code, output = self.execute(script, seconds=0.2)
+        self.assertEqual(code, 124)
+        self.assertIn(b"timed out", output)
+        time.sleep(0.7)
+        self.assertFalse((self.root / "survivor").exists())
+
+    def test_preflight_refuses_before_any_native_tool_probe(self):
+        with patch.object(job.platform, "system", return_value="Linux"), \
+                patch.object(job.platform, "machine", return_value="x86_64"), \
+                patch.object(job, "containment", side_effect=common.Invalid("uncapped host")), \
+                patch.object(job, "capture") as capture:
+            with self.assertRaisesRegex(common.Invalid, "uncapped"):
+                job.provenance(self.root, self.policy)
+        capture.assert_not_called()
+
+
 class RunnerControlTests(GitFixture):
     def native_setup(self):
         self.work = Path(self.tmp.name) / "work"
@@ -410,6 +558,8 @@ class RunnerControlTests(GitFixture):
         self.provenance = self.native_environment()
         self.provenance_patch = patch.object(job, "provenance", return_value=self.provenance)
         self.provenance_patch.start(); self.addCleanup(self.provenance_patch.stop)
+        self.oom_patch = patch.object(job, "oom_events", return_value={"oom_kill": 0, "oom_group_kill": 0})
+        self.oom_patch.start(); self.addCleanup(self.oom_patch.stop)
         archive = Path(self.tmp.name) / "source.tar.gz"; archive.write_bytes(self.archive)
         job.initialize(self.request, archive)
         self.run = self.work / self.request["run_id"]
@@ -417,15 +567,14 @@ class RunnerControlTests(GitFixture):
         return archive
 
     def fake_run(self, name, code=0):
-        class Process:
-            def __init__(self, *args, **kwargs):
-                self.stdout = io.BytesIO(b"fixture command result\n")
-                self.returncode = code
-                if not kwargs.get("pass_fds"):
-                    raise AssertionError("child must retain job lock after runner interruption")
-            def wait(self):
-                return self.returncode
-        with patch.object(job.subprocess, "Popen", Process), patch.object(job.subprocess, "run", return_value=
+        def command(*args, **kwargs):
+            self.assertEqual(len(kwargs["pass_fds"]), 2, "child must retain host and job locks")
+            self.assertEqual(kwargs["seconds"], self.request["policy"]["limits"]["step_seconds"])
+            chunk = b"fixture command result\n"
+            kwargs["output"].write(chunk)
+            kwargs["live"](chunk)
+            return code
+        with patch.object(job, "command", command), patch.object(job.subprocess, "run", return_value=
                 subprocess.CompletedProcess([], 1, stdout=b"fonts unavailable\n")):
             return job.run_job(self.run, name, self.native_source)
 
@@ -479,6 +628,30 @@ class RunnerControlTests(GitFixture):
         self.assertFalse((self.run / "jobs/suite-debug.json").exists())
         with self.assertRaisesRegex(common.Invalid, "failed job requires"):
             self.fake_run("suite-debug")
+
+    def test_oom_cannot_be_hidden_by_successful_command_exit(self):
+        self.native_setup()
+        with patch.object(job, "oom_events", side_effect=[{"oom_kill": 0}, {"oom_kill": 1}]):
+            self.assertEqual(self.fake_run("suite-debug"), 1)
+        self.assertFalse((self.run / "jobs/suite-debug.json").exists())
+
+    def test_font_probe_timeout_is_a_retained_failed_attempt(self):
+        self.native_setup()
+        with patch.object(job.subprocess, "run", side_effect=subprocess.TimeoutExpired("font probe", 30)), \
+                patch.object(job, "command") as command:
+            self.assertEqual(job.run_job(self.run, "suite-debug", self.native_source), 1)
+        command.assert_not_called()
+        result = next(self.run.glob("attempts/suite-debug/*/result.json"))
+        self.assertEqual(common.read_json(result)["status"], "failed")
+        with self.assertRaisesRegex(common.Invalid, "failed job requires"):
+            self.fake_run("suite-debug")
+
+    def test_another_run_cannot_overlap_native_execution(self):
+        self.native_setup()
+        with job.lock(self.work / ".execution.lock"):
+            with self.assertRaisesRegex(common.Invalid, "BUSY"):
+                self.fake_run("suite-debug")
+        self.assertFalse((self.run / "attempts").exists())
 
     def test_interrupted_attempt_resumes_without_replacing_history(self):
         self.native_setup()
@@ -711,11 +884,17 @@ class PublicationWiringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for name in ("scripts/ci/common.py", "scripts/ci/policy.json", "scripts/site.sh",
-                         ".build.yml", ".builds/github-mirror.yml"):
+                         ".build.yml", ".builds/github-mirror.yml",
+                         "environments/native-ci/compose.resources.yaml"):
                 target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / name, target)
             with patch.object(checker, "ROOT", str(root)):
                 self.assertEqual(checker.check_native_ci(True), [])
+                override = root / "environments/native-ci/compose.resources.yaml"
+                limits = override.read_text()
+                override.write_text(limits.replace("34359738368", "68719476736"))
+                self.assertTrue(checker.check_native_ci(True))
+                override.write_text(limits)
                 pages = root / ".build.yml"
                 original = pages.read_text()
                 pages.write_text(original.replace("python3 scripts/ci/approval.py", "true"))

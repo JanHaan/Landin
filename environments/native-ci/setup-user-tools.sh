@@ -2,7 +2,7 @@
 # Install Debian's Git package into the runner account, without sudo or
 # changing its image. Re-running verifies the existing installation.
 set -eu
-Tools="$HOME/.local/share/landin-ci-tools"
+Tools="$HOME/work/.ci-tools"
 if [ -x "$Tools/usr/bin/git" ]; then
     "$Tools/usr/bin/git" --version
     exit 0

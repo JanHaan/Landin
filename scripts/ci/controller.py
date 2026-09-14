@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import io
 import os
@@ -45,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix="landin-ci-init-") as d:
  if hashlib.sha256((p/"source.tar.gz").read_bytes()).hexdigest()!=request["archive_sha256"]:
   raise SystemExit("archive transfer hash mismatch")
  with tarfile.open(p/"source.tar.gz") as tar:
-  for name in ("common.py","records.py","job.py"):
+  for name in ("common.py","records.py","resources.py","job.py"):
    members=[m for m in tar.getmembers() if m.name=="scripts/ci/"+name]
    if len(members)!=1 or not members[0].isfile(): raise SystemExit("missing bootstrap module")
    (p/name).write_bytes(tar.extractfile(members[0]).read())
@@ -105,11 +104,13 @@ def slot_run(host, slot, argv, archive, log=None, prefix="development"):
                                    stdin=incoming, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         output = log.open("wb") if log else None
         try:
-            for line in iter(process.stdout.readline, b""):
+            # Do not accumulate an unbounded line on the controller's host.
+            # Compiler output may contain long generated lines without newlines.
+            for chunk in iter(lambda: process.stdout.read1(8192), b""):
                 if output:
-                    output.write(line)
+                    output.write(chunk)
                     output.flush()
-                print("[" + prefix + "] " + line.decode(errors="replace").rstrip(), flush=True)
+                print("[" + prefix + "] " + chunk.decode(errors="replace").rstrip(), flush=True)
         finally:
             if output:
                 output.close()
@@ -135,16 +136,13 @@ def accept(root, revision, host, state, resume=None):
     initialize(host, archive, request)
     print("ACCEPTANCE " + run_id + " commit=" + source["commit"], flush=True)
     results = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        pending = {}
-        for job in request["policy"]["jobs"]:
-            name = job["id"]
-            log = local / (name + "-" + uuid.uuid4().hex[:8] + ".log")
-            future = pool.submit(slot_run, host, "accept-" + run_id + "-" + name,
-                                 ["python3", "scripts/ci/job.py", "run", run_id, name], archive, log, name)
-            pending[future] = name
-        for future in as_completed(pending):
-            results[pending[future]] = future.result()
+    for job in request["policy"]["jobs"]:
+        name = job["id"]
+        log = local / (name + "-" + uuid.uuid4().hex[:8] + ".log")
+        results[name] = slot_run(host, "accept-" + run_id + "-" + name,
+                                ["python3", "scripts/ci/job.py", "run", run_id, name], archive, log, name)
+        if results[name]:
+            break
     require(all(code == 0 for code in results.values()),
             "acceptance incomplete/failed; records retained: " + str(results))
     remote_job(host, run_id, "finalize")
