@@ -27,15 +27,28 @@ package body Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments) return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
+
+      function File_Operand (Path : String) return String;
+
+      function File_Operand (Path : String) return String is
+      begin
+         --  A driver interprets leading '-' as an option and leading '@'
+         --  as a response file, even for a separately passed argv entry.
+         --  './' keeps the same relative file identity on the native host.
+         if Path'Length > 0 and then Path (Path'First) in '-' | '@' then
+            return "./" & Path;
+         end if;
+         return Path;
+      end File_Operand;
    begin
-      Landin.Platform.Add (List, Assembly);
+      Landin.Platform.Add (List, File_Operand (Assembly));
       --  [1590] selects archives, while the hosted driver retains control
       --  of libc and startup linkage. Repeats matter to archive resolution.
       for Library of Libraries loop
          Landin.Platform.Add (List, "-l:lib" & Library & ".a");
       end loop;
       Landin.Platform.Add (List, "-o");
-      Landin.Platform.Add (List, Output);
+      Landin.Platform.Add (List, File_Operand (Output));
 
       if Linker /= "" then
          Landin.Platform.Add (List, "-fuse-ld=" & Linker);

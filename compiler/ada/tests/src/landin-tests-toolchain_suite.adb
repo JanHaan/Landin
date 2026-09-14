@@ -233,8 +233,53 @@ package body Landin.Tests.Toolchain_Suite is
          False, "[1970]'s entry takes no arguments");
    end The_Hosted_Entry_Is_One_Shape;
 
+   --  Pure argv construction: these path spellings are never executed or
+   --  created. Filesystem identity is unchanged by the native './' prefix.
+   procedure File_Operands_Keep_Their_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure File_Operands_Keep_Their_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Libraries : Landin.Platform.Path_List;
+
+      procedure Check
+        (Assembly, Output, Expected_Assembly, Expected_Output : String);
+
+      procedure Check
+        (Assembly, Output, Expected_Assembly, Expected_Output : String)
+      is
+         Args : constant Landin.Platform.Path_List :=
+           Landin.Backend.Toolchain.Link_Arguments
+             (Assembly, Output, "mold", "a1b2", Libraries);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Natural (Args.Length), 7,
+            "file spelling adds no argument or response-file expansion");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined (Args),
+            Expected_Assembly & LF & "-l:libsupport.a" & LF
+            & "-l:libsupport.a" & LF & "-o" & LF & Expected_Output & LF
+            & "-fuse-ld=mold" & LF & "-Wl,--build-id=0xa1b2" & LF,
+            "literal paths preserve ordered libraries and driver options");
+      end Check;
+   begin
+      Landin.Platform.Add (Libraries, "support");
+      Landin.Platform.Add (Libraries, "support");
+      Check ("-notes.s", "-notes", "./-notes.s", "./-notes");
+      Check ("@notes.s", "@notes", "./@notes.s", "./@notes");
+      Check ("./-notes.s", "./@notes", "./-notes.s", "./@notes");
+      Check ("/tmp/-notes.s", "/tmp/@notes", "/tmp/-notes.s", "/tmp/@notes");
+      Check ("sub dir/-notes.s", "sub dir/@notes",
+             "sub dir/-notes.s", "sub dir/@notes");
+      Check ("notes.s", "notes", "notes.s", "notes");
+   end File_Operands_Keep_Their_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "toolchain", "file operands keep their identity",
+         File_Operands_Keep_Their_Identity'Access);
       Landin.Testing.Register
         (Into, "toolchain", "a target names its toolchain",
          A_Target_Names_Its_Toolchain'Access);
