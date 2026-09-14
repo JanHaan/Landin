@@ -1631,6 +1631,7 @@ runtime/r491-consumed-place-restoration | linux-x86-64
 runtime/r491-function-final-values | linux-x86-64
 runtime/r491-generic-array-fields | linux-x86-64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64
+runtime/r491-overlapping-result-destination | linux-x86-64
 runtime/r491-payload-alias-last-use | linux-x86-64
 runtime/r491-reference-store-origins | linux-x86-64
 runtime/r491-variant-array-construction | linux-x86-64

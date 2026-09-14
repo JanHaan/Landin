@@ -4913,6 +4913,127 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Sink_Arguments_Keep_Their_Evaluated_Value;
 
+   --  [0410] selects the assignment place before entering its RHS call.
+   --  D106's named result remains local until the callee returns; the
+   --  caller-owned destination may overlap one ordinary inout argument.
+   procedure Aggregate_Results_May_Overlap_Inout_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Aggregate_Results_May_Overlap_Inout_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct x: i32 y: i32 end pair "
+         & "outer: type = struct p: pair q: i32 end outer "
+         & "shrink: (inout value: outer) -> (result: pair) = "
+         & "value.p.x = 1 value.p.y = 2 value.q = 3 "
+         & "result = (x: 4, y: 5) end shrink "
+         & "operate: () -> none = "
+         & "mut value: outer = (p: (x: 0, y: 0), q: 0) "
+         & "value.p = shrink(value) end operate", Ran);
+      Landin.Testing.Check
+        (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+         "overlapping result and inout storage lower: "
+         & Landin.Stages.Rendered_Report (Work));
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Callee : constant IR.Item_Id := Named_Item (Work, "shrink");
+         Caller : constant IR.Item_Id := Named_Item (Work, "operate");
+         Result : constant IR.Slot_Id := IR.Result_Slot (Unit, Callee);
+         Call, Last_Inout, First_Result : IR.Value_Id := IR.No_Value;
+         Calls, Inout_Writes, Result_Writes : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Caller) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, Caller, Value) = IR.Call then
+                  Call := Value;
+                  Calls := Calls + 1;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Calls = 1 and then Call /= IR.No_Value
+            and then IR.Callee_Of (Unit, Caller, Call) = Callee
+            and then IR.Operand_Count (Unit, Caller, Call) = 2,
+            "one call carries a hidden destination and one inout address");
+         if Call /= IR.No_Value
+           and then IR.Operand_Count (Unit, Caller, Call) = 2
+         then
+            declare
+               To_Result : constant IR.Value_Id :=
+                 IR.Nth_Operand (Unit, Caller, Call, 1);
+               To_Inout : constant IR.Value_Id :=
+                 IR.Nth_Operand (Unit, Caller, Call, 2);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, Caller, To_Result)
+                           = IR.Storage_Address
+                  and then IR.Op_Of (Unit, Caller, To_Inout)
+                             = IR.Place_Address
+                  and then IR.Destination_Of
+                    (Unit, Caller, To_Result).Kind = IR.Frame_Slot
+                  and then IR.Destination_Of
+                    (Unit, Caller, To_Inout).Kind = IR.Frame_Slot
+                  and then IR.Destination_Of
+                    (Unit, Caller, To_Result).Slot = IR.Destination_Of
+                      (Unit, Caller, To_Inout).Slot
+                  and then IR.Element_Field_Of
+                    (Unit, Caller, To_Result) = 1
+                  and then IR.Element_Field_Of
+                    (Unit, Caller, To_Inout) = 0,
+                  "the result selects p inside the same inout frame object"
+                  & LF & IR.Dump.Text
+                    (Unit, Landin.Stages.Meanings (Work).all,
+                     Landin.Stages.Identities (Work).all));
+            end;
+         end if;
+         Landin.Testing.Check
+           (Item, Result /= IR.No_Slot
+            and then IR.Is_Aggregate (Unit, Callee, Result)
+            and then IR.Slot_Field_Count (Unit, Callee, Result) = 2
+            and then IR.Parameter_Count (Unit, Callee) = 2
+            and then Result /= IR.Nth_Parameter (Unit, Callee, 1)
+            and then Result /= IR.Nth_Parameter (Unit, Callee, 2),
+            "the callee's pair result has separate named storage");
+         for Position in 1 .. IR.Value_Count (Unit, Callee) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, Callee, Value) = IR.Store_Indirect then
+                  Last_Inout := Value;
+                  Inout_Writes := Inout_Writes + 1;
+               elsif IR.Op_Of (Unit, Callee, Value) = IR.Store_Field
+                 and then IR.Reaches_A_Slot (Unit, Callee, Value)
+                 and then IR.Slot_Of (Unit, Callee, Value) = Result
+               then
+                  if First_Result = IR.No_Value then
+                     First_Result := Value;
+                  end if;
+                  Result_Writes := Result_Writes + 1;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Inout_Writes = 3 and then Result_Writes = 2
+            and then Last_Inout < First_Result,
+            "all inout writes precede filling the separate returned pair");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the existing result and inout carrier contract is verified");
+      end;
+   end Aggregate_Results_May_Overlap_Inout_Storage;
+
    procedure Aggregate_Arguments_Carry_Storage_Identity
      (Item : in out Landin.Testing.Context);
 
@@ -12793,6 +12914,9 @@ package body Landin.Tests.Lowering_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "aggregate results may overlap inout storage",
+         Aggregate_Results_May_Overlap_Inout_Storage'Access);
       Landin.Testing.Register
         (Into, "lowering", "module folds use their own integer range",
          Module_Folds_Use_Their_Own_Integer_Range'Access);

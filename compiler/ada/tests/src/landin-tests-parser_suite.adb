@@ -1164,6 +1164,77 @@ package body Landin.Tests.Parser_Suite is
          "every truncation yielded a tree whose invariants hold");
    end Survives_Every_Truncation;
 
+   --  The source campaign and this arithmetic-only control share one
+   --  deterministic generator. Mix bits before reducing to a byte or a
+   --  position: the former LCG's low byte repeated every 256 draws.
+   type Mutation_Word is mod 2 ** 32;
+   Mutation_Seed : constant Mutation_Word := 16#7011_7501#;
+
+   function Pick_Mutation_Value
+     (State : in out Mutation_Word; Limit : Positive) return Positive;
+
+   function Pick_Mutation_Value
+     (State : in out Mutation_Word; Limit : Positive) return Positive
+   is
+   begin
+      State := State xor (State * 2 ** 13);
+      State := State xor (State / 2 ** 17);
+      State := State xor (State * 2 ** 5);
+      return Positive (Natural (State mod Mutation_Word (Limit)) + 1);
+   end Pick_Mutation_Value;
+
+   --  Only 288 integer draws: no generated text enters the compiler.
+   procedure Mutation_Bytes_Avoid_The_Old_Short_Cycle
+     (Item : in out Landin.Testing.Context);
+
+   procedure Mutation_Bytes_Avoid_The_Old_Short_Cycle
+     (Item : in out Landin.Testing.Context)
+   is
+      State : Mutation_Word := Mutation_Seed;
+      First, After_Cycle, Replay : String (1 .. 16) := [others => ' '];
+      Seen : array (Character) of Boolean := [others => False];
+      Distinct : Natural := 0;
+      Previous : Natural := 0;
+      Same_Parity : Boolean := False;
+   begin
+      for Index in 1 .. 272 loop
+         declare
+            Value : constant Natural := Pick_Mutation_Value (State, 256) - 1;
+            Byte : constant Character := Character'Val (Value);
+         begin
+            if Index <= First'Length then
+               First (Index) := Byte;
+            elsif Index > 256 then
+               After_Cycle (Index - 256) := Byte;
+            end if;
+            if Index <= 256 and then not Seen (Byte) then
+               Seen (Byte) := True;
+               Distinct := Distinct + 1;
+            end if;
+            if Index > 1 and then Value mod 2 = Previous mod 2 then
+               Same_Parity := True;
+            end if;
+            Previous := Value;
+         end;
+      end loop;
+      State := Mutation_Seed;
+      for Index in Replay'Range loop
+         Replay (Index) :=
+           Character'Val (Pick_Mutation_Value (State, 256) - 1);
+      end loop;
+      Landin.Testing.Check
+        (Item, First /= After_Cycle,
+         "the byte stream is not the former 256-byte ring");
+      Landin.Testing.Check
+        (Item, Same_Parity,
+         "successive byte parity is not forced to alternate");
+      Landin.Testing.Check
+        (Item, Distinct > 128,
+         "the first 256 draws cover more than half the byte values");
+      Landin.Testing.Check
+        (Item, First = Replay, "the fixed seed reproduces the same bytes");
+   end Mutation_Bytes_Avoid_The_Old_Short_Cycle;
+
    --  Truncation exercises one shape of damage at every byte and no other.
    --  A recovering parser also has to survive bytes inserted, deleted or
    --  replaced inside otherwise real programs, and input with no program
@@ -1175,9 +1246,7 @@ package body Landin.Tests.Parser_Suite is
    procedure Survives_Deterministic_Mutations
      (Item : in out Landin.Testing.Context)
    is
-      type Random_Word is mod 2 ** 32;
-
-      State : Random_Word := 16#7011_7501#;
+      State : Mutation_Word := Mutation_Seed;
 
       Mutations_Per_Program : constant Positive := 3;
       Random_Streams        : constant Positive := 512;
@@ -1196,8 +1265,7 @@ package body Landin.Tests.Parser_Suite is
 
       function Pick (Limit : Positive) return Positive is
       begin
-         State := State * 1_664_525 + 1_013_904_223;
-         return Positive (Natural (State mod Random_Word (Limit)) + 1);
+         return Pick_Mutation_Value (State, Limit);
       end Pick;
 
       function Byte return Character
@@ -3783,6 +3851,9 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "mutation bytes avoid the old short cycle",
+         Mutation_Bytes_Avoid_The_Old_Short_Cycle'Access);
       Landin.Testing.Register
         (Into, "parser", "inequality typos name the operator",
          Inequality_Typos_Name_The_Operator'Access);
