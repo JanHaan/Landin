@@ -181,6 +181,9 @@ package body Landin.Syntax.Parser is
             Noreturn_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "noreturn");
 
+            Volatile_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "volatile");
+
             Distinct_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "distinct");
 
@@ -1755,6 +1758,24 @@ package body Landin.Syntax.Parser is
                return At_Name;
             end Parse_Declared_Name;
 
+            procedure Refuse_Shared_Names (First : Landin.Source.Span);
+
+            procedure Refuse_Shared_Names (First : Landin.Source.Span) is
+            begin
+               if Peek /= Tok.Comma or else Ahead (1) /= Tok.Identifier then
+                  return;
+               end if;
+               Refuse
+                 (Syn.Shared_Declaration, First,
+                  "multiple names in this declaration are not enabled");
+               --  Consume each additional name once. There is no suffix
+               --  lookahead to repeat on a damaged comma-separated run.
+               while Peek = Tok.Comma and then Ahead (1) = Tok.Identifier loop
+                  Advance;
+                  Advance;
+               end loop;
+            end Refuse_Shared_Names;
+
             --  A module qualifier is the same left-to-right selection node
             --  in value, type and concept positions.  Resolution decides
             --  whether the leading name is this file's imported namespace;
@@ -2249,6 +2270,31 @@ package body Landin.Syntax.Parser is
                Type_Refused := False;
                if C_ABI then
                   Parse_C_Convention;
+               end if;
+
+               --  [0850]'s qualifier is identified by its pointer shape.
+               --  A type or ordinary name spelled volatile stays legal.
+               if not C_ABI and then Peek = Tok.Identifier
+                 and then Named_Here = Volatile_Id
+                 and then Ahead (1) = Tok.Kw_Ptr
+               then
+                  Refuse
+                    (Syn.Volatile_Reference, At_Type,
+                     "volatile pointer access is not enabled");
+                  Advance;
+                  declare
+                     --  Consume the pointer for recovery; Error_Type has
+                     --  no children and does not retain a usable type.
+                     Target : constant Node_Id :=
+                       Parse_Type (In_Parameter, Declared_At);
+                     pragma Unreferenced (Target);
+                  begin
+                     --  Keep the target's recovery state. The qualifier is
+                     --  consumed, so a complete pointer needs no resync.
+                     return Add
+                       (Error_Type, At_Type,
+                        Extent => Join (At_Type, After_Previous));
+                  end;
                end if;
 
                --  [1795] makes `type` a keyword, so a type position that
@@ -3598,6 +3644,7 @@ package body Landin.Syntax.Parser is
                      Of_Type     : Node_Id := No_Node;
                      Is_Variant_Part : Boolean := False;
                   begin
+                     Refuse_Shared_Names (At_Field);
                      if Expect
                           (Wanted  => Tok.Colon,
                            Message => "a field names its type after `:`",
@@ -3754,6 +3801,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                At_Name := Parse_Declared_Name (Named);
+               Refuse_Shared_Names (At_Name);
 
                if Peek = Tok.Colon_Equal then
                   Advance;
@@ -3816,7 +3864,10 @@ package body Landin.Syntax.Parser is
                  Peek = Tok.Kw_Mut
                  or else
                    (Peek = Tok.Identifier
-                    and then Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                    and then
+                      (Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else (Ahead (1) = Tok.Comma
+                                and then Ahead (2) = Tok.Identifier))
                     and then not Is_Label);
             begin
                if not Declares then
@@ -4029,6 +4080,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                At_Name := Parse_Declared_Name (Named);
+               Refuse_Shared_Names (At_Name);
 
                if Expect
                     (Wanted  => Tok.Colon,
@@ -4143,7 +4195,13 @@ package body Landin.Syntax.Parser is
                      Named     : Landin.Source.Names.Name_Id;
                      At_Name   : constant Landin.Source.Span :=
                        Parse_Declared_Name (Named);
-                     Kept : constant Boolean := Expect
+                     Kept : Boolean;
+                     Type_Node : Node_Id;
+                     Sources   : Slot_Vectors.Vector;
+                  begin
+                     pragma Unreferenced (Kept);
+                     Refuse_Shared_Names (At_Name);
+                     Kept := Expect
                        (Wanted  => Tok.Colon,
                         Message => "a named return names its type after"
                                    & " `:`",
@@ -4151,10 +4209,6 @@ package body Landin.Syntax.Parser is
                                    & " `:` type",
                         Related => At_Name,
                         Because => "the return");
-                     Type_Node : Node_Id;
-                     Sources   : Slot_Vectors.Vector;
-                  begin
-                     pragma Unreferenced (Kept);
                      Type_Node := Parse_Type (False, At_Name);
 
                      if Peek = Tok.Kw_From then
@@ -5289,7 +5343,10 @@ package body Landin.Syntax.Parser is
                         end;
                      --  Binding/assignment punctuation keeps this token an
                      --  identifier even when its word can open a control form.
-                     elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal then
+                     elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else (Ahead (1) = Tok.Comma
+                                and then Ahead (2) = Tok.Identifier)
+                     then
                         return Parse_Binding
                           (False, Landin.Source.Empty_Span);
                      elsif After_Selectors in Tok.Equal | Tok.Compound_Assign

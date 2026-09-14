@@ -3674,6 +3674,161 @@ package body Landin.Tests.Parser_Suite is
       Check ("extern (c) f: () -> noreturn");
    end Noreturn_Has_A_Named_Refusal;
 
+   procedure Shared_Declarations_Have_A_Named_Refusal
+     (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Declarations_Have_A_Named_Refusal
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String);
+
+      procedure Check (Text : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Reports : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("shared.ldn", Text & ASCII.LF & "sentinel: i32 = 1");
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Reports);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Reports);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Reports), 1,
+               "shared names have one refusal: " & Text);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
+               "the shared declaration preserves the next declaration");
+            if Landin.Syntax.Declaration_Count (Parsed) = 2 then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Source.Names.Spelling
+                    (Names, Landin.Syntax.Name
+                       (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))),
+                  "sentinel", "recovery retains the following name");
+            end if;
+         end;
+         if Landin.Diagnostics.Count (Reports) = 1 then
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Reports, 1);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Message
+                    (Landin.Diagnostics.Primary (Report)),
+                  "multiple names in this declaration are not enabled",
+                  "the primary diagnostic identifies the refused shape");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Code (Report), "L0010",
+                  "the deferred construct owns the diagnostic code");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Note_Count (Report), 2,
+                  "the refusal names both the construct and its work");
+               if Landin.Diagnostics.Note_Count (Report) = 2 then
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 1), "[0100]"),
+                     "the first note names the shared declaration rule");
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 2), "R7.20"),
+                     "the second note names the existing enabling work");
+               end if;
+            end;
+         end if;
+      end Check;
+   begin
+      Check ("mut first, second: i32");
+      Check ("public first, second, third: u32");
+      Check ("first, second: i32 = 1");
+      Check ("f: () -> none = mut first, second: i32 = 1 end f");
+      Check ("f: () -> none = first, second: i32 = 1 end f");
+      Check ("holder: type = struct first, second: i32 end holder");
+      Check ("f: () -> none = if mut first, second: bool = true "
+             & "then end if end f");
+      Check ("f: () -> none = if first, second: bool = true "
+             & "then end if end f");
+      Check ("f: (first, second: i32) -> none = end f");
+      Check ("f: () -> (first, second: i32) = end f");
+   end Shared_Declarations_Have_A_Named_Refusal;
+
+   procedure Volatile_Pointers_Have_A_Named_Refusal
+     (Item : in out Landin.Testing.Context);
+
+   procedure Volatile_Pointers_Have_A_Named_Refusal
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String);
+
+      procedure Check (Text : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Reports : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("volatile.ldn", Text & ASCII.LF & "sentinel: i32 = 1");
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Reports);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Reports);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Reports), 1,
+               "volatile has one named refusal: " & Text);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
+               "the refused pointer preserves the next declaration: "
+               & Text);
+            if Landin.Syntax.Declaration_Count (Parsed) = 2 then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Source.Names.Spelling
+                    (Names, Landin.Syntax.Name
+                       (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))),
+                  "sentinel", "recovery retains the following name");
+            end if;
+         end;
+         if Landin.Diagnostics.Count (Reports) = 1 then
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Reports, 1);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Message
+                    (Landin.Diagnostics.Primary (Report)),
+                  "volatile pointer access is not enabled",
+                  "the primary diagnostic identifies the refused shape");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Code (Report), "L0010",
+                  "the deferred construct owns the diagnostic code");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Note_Count (Report), 2,
+                  "the refusal names both the construct and its work");
+               if Landin.Diagnostics.Note_Count (Report) = 2 then
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 1), "[0850]"),
+                     "the first note names the tour's volatile access rule");
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 2), "R6.80"),
+                     "the second note names the existing enabling work");
+               end if;
+            end;
+         end if;
+      end Check;
+   begin
+      Check ("port: volatile ptr mut u32");
+      Check ("f: (port: volatile ptr u32) -> none = end f");
+      Check ("holder: type = struct port: volatile ptr mut u32 end holder");
+      Check ("f: () -> (port: volatile ptr u32) = end f");
+      Check ("outer: ptr volatile ptr u32");
+      Check ("port: volatile ptr mut u32 = ptr(0)");
+   end Volatile_Pointers_Have_A_Named_Refusal;
+
    procedure Fixed_Inputs_Keep_Canonical_Trees_And_Reports
      (Item : in out Landin.Testing.Context);
 
@@ -3851,6 +4006,12 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "shared declarations have a named refusal",
+         Shared_Declarations_Have_A_Named_Refusal'Access);
+      Landin.Testing.Register
+        (Into, "parser", "volatile pointers have a named refusal",
+         Volatile_Pointers_Have_A_Named_Refusal'Access);
       Landin.Testing.Register
         (Into, "parser", "mutation bytes avoid the old short cycle",
          Mutation_Bytes_Avoid_The_Old_Short_Cycle'Access);

@@ -805,11 +805,13 @@ negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-range-context-overflow | linux-x86-64, macos-arm64
 negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-shared-declaration | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sink-entry-overlap | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sink-slice-storage | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-static-entry-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-symbolic-c-layout | linux-x86-64
+negative/r491-volatile-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-writable-return-hidden-storage | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
@@ -1214,6 +1216,7 @@ positive/r491-sink-contained-places | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-static-entry-diamond | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-symbolic-c-layout | linux-x86-64
 positive/r491-tour-allocator-examples | linux-x86-64
+positive/r491-volatile-name | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-writable-return-explicit-sources | linux-x86-64, macos-arm64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64

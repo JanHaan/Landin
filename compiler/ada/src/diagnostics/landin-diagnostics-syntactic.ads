@@ -103,6 +103,8 @@ package Landin.Diagnostics.Syntactic is
       --  enabled expression grammar.
       Struct_All_Of,
       Nonreturning_Function,
+      Volatile_Reference,
+      Shared_Declaration,
       --  D212 withdraws [0820]'s lexical arena block by its shape.  The
       --  word is not reserved and names a library type today, so only a
       --  statement-position `arena name do` is this construct.
@@ -114,6 +116,7 @@ package Landin.Diagnostics.Syntactic is
    function Construct (Item : Refused_Construct)
      return Landin.Tokens.Construct_Reference
      is (case Item is
+            when Shared_Declaration   => "[0100]",
             when Declared_Type        => "[0120]",
             when Struct_Type          => "[0670]",
             when Type_Parameter       => "[1290]",
@@ -121,6 +124,7 @@ package Landin.Diagnostics.Syntactic is
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
             when Arena_Block           => "[0820]",
+            when Volatile_Reference    => "[0850]",
             when Nonreturning_Function => "[0890]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -164,6 +168,8 @@ private
             when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter => "R2.40",
-            when Nonreturning_Function => "R6.70");
+            when Nonreturning_Function => "R6.70",
+            when Volatile_Reference    => "R6.80",
+            when Shared_Declaration    => "R7.20");
 
 end Landin.Diagnostics.Syntactic;

@@ -1,0 +1,5 @@
+class: positive
+summary: volatile remains an ordinary type and parameter name
+program: program.ldn
+constructs: 0120, 1760, 1790, 1830
+targets: linux-x86-64, macos-arm64, synthetic-32

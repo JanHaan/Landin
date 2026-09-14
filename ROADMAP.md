@@ -2795,7 +2795,7 @@ that has no implementation owner.
 | `[0070]` | hosted-now | R2.50 | matrix evidence |
 | `[0080]` | hosted-now | R1.50 | matrix evidence |
 | `[0090]` | hosted-now | R3.10 | matrix evidence |
-| `[0100]` | hosted-now | R1.50 | matrix evidence |
+| `[0100]` | hosted-now | R1.50 | matrix evidence for atom name lists; shared ordinary declaration names remain named refusals owned by R7.20 |
 | `[0110]` | hosted-now | R1.50 | matrix evidence |
 | `[0120]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0130]` | hosted-now | R1.50 | matrix evidence |
@@ -5864,7 +5864,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Rendering growth repaired with M10: line excerpts use bounded slices and the complete text defaults to a 1 MiB budget with an explicit truncation notice. Full structured reports remain intact. The old exhaustion/exit-70 magnitude claim remains unmeasured; no stress case was replayed. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Already repaired with J5: block structs consume their immediate `end`, optionally consume a repeated name, and preserve following declarations. The retained J5 bare-closer/parser and source-to-IR controls cover this duplicate finding; no separate feature or stress run is needed. |
-| J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Partially implemented: `noreturn` signatures now receive one named L0010 refusal citing [0890] and R6.70, with body/declaration recovery and ordinary-name controls. The `volatile` and multi-name binding forms still need refusal/document agreement; preserve contextual identifier uses. Labelled bare blocks remain the separate J40 item. |
+| J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Implemented: noreturn retains its [0890]/R6.70 refusal. The type-position volatile ptr shape now receives one [0850]/R6.80 L0010 while ordinary volatile names remain legal. Shared bindings, fields, parameters and returns receive a [0100]/R7.20 L0010; additional names are consumed once for recovery. Atom declaration lists retain their existing implementation. Focused cases retain following declarations and pin primary wording, code and ownership notes. Labelled bare blocks remain the separate J40 item. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
 | J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
@@ -6279,9 +6279,9 @@ planning ranges, not acceptance evidence or measured historical work hours;
 missing original run bundles and new validation failures can extend closure.
 
 D222's approved J2 contract and bounded controls are implemented.
-D223 implements K12's user-selected call-entry sink timing. The remaining
-semantic/refusal boundaries include J15's contextual volatile/multi-name
-refusals and J104's contextual-word reads.
+D223 implements K12's user-selected call-entry sink timing. J15's named
+refusals now distinguish deferred source shapes from ordinary identifiers and
+implemented atom lists. J104's contextual-word reads remain open.
 N12 still needs lexical diagnostic agreement; K28/M12 remain scoped maintenance
 observations, and M6's original historical native bundles remain unrecovered.
 M5's font-history decision does not authorize rewriting history. The intake
@@ -8238,8 +8238,25 @@ release; both single-worker builds and the three fixture inventories pass.
 The positive fixture emits assembly text only. No native assembly, generated
 executable, debugger or giant image ran. Evidence is retained in
 `.scratch/r491-noreturn/` and `.scratch/r491-final-values/`. This does not
-enable nonreturning functions. J15's volatile and multi-name binding facets
-and exact-revision acceptance remain open.
+enable nonreturning functions. The subsequent J15 work below completes its
+volatile and shared-name refusal facets; exact-revision acceptance remains open.
+
+J15's final batch recognizes only the type-position volatile ptr shape, leaving
+ordinary volatile aliases and parameters legal. Fully read pointer types do
+not trigger generic refusal resynchronization: fields, initializers and the
+next declaration remain in hand. Shared bindings, fields, parameters and
+returns consume their additional names once before parsing the remaining
+annotation or initializer for recovery. Atom declaration lists stay enabled.
+The applicability register and R7.20 now distinguish those two [0100] facets.
+
+Ten shared-declaration and six volatile contexts pin one L0010, its primary
+wording, construct/work notes and the following declaration. With existing
+noreturn, atom-list and contextual-name controls plus both new negative fixtures
+and the ordinary-volatile positive fixture, eight selectors pass 220 assertions
+on each of macOS debug and pinned Linux release. Both single-worker builds
+pass. Evidence is in `.scratch/r491-named-refusals/` and matching final-values
+logs. The positive cases emit text only; no assembler, generated program,
+debugger or broad parser campaign ran.
 
 J45, J105 and J116 are disposed against the current source and retained
 review evidence. The driver guarantees a reported failure for invalid
@@ -8253,9 +8270,9 @@ violation of the current known-index rule and does not change acceptance,
 runtime checks, or unchecked semantics. These are source-backed dispositions;
 no new runtime, assembler or stress reproduction was needed.
 
-J48 still requires an explicit
-static-selection collision rule: D146's existing uniqueness sentence is
-about erased dispatch, while D144 currently specifies table traversal order.
+J48's static-selection collision question was resolved by D221: distinct
+declaring concepts make a selected name ambiguous, while a diamond visits its
+shared ancestor once. The focused implementation and evidence are recorded above.
 J2 and K12 were semantic questions at intake; D222 and D223 now record their
 approved contracts and implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
@@ -8555,6 +8572,12 @@ decides how the check composes. D189 leaves `[0480]`'s multi-atom form here: a
 union of two or more atoms and a pointer needs the tag-plus-pointer carrier
 [1870] describes, which is an IR pair, storage, an ABI position and a backend
 of its own, and is refused by name until this item supplies them.
+
+[0100]'s atom declaration lists already work. This item owns the remaining
+shared-name binding, field, parameter and return forms, including any
+initializer-evaluation and parameter-convention decisions their implementation
+needs. R4.91 gives those omitted grammar shapes a named refusal; parsing their
+remaining type or initializer for recovery does not enable their semantics.
 
 D190 leaves `[0150]`'s u128 and i128 and `[0170]`'s f16 here, refused by name
 with the enumerated cost this item inherits. `Landin.Types.Magnitude` and
