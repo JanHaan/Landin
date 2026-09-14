@@ -1,6 +1,21 @@
+with Ada.Unchecked_Deallocation;
+
 package body Landin.Testing.Fakes is
 
    use type Landin.Platform.Read_Status;
+
+   overriding procedure Finalize (Owner : in out Store_Owner) is
+      procedure Free is new Ada.Unchecked_Deallocation (Store, Store_Access);
+   begin
+      Free (Owner.Data);
+   end Finalize;
+
+   overriding procedure Finalize (Owner : in out Recorder_Owner) is
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Recorder, Recorder_Access);
+   begin
+      Free (Owner.Data);
+   end Finalize;
 
    function Directory_Path (Path : String) return String;
 
@@ -20,9 +35,10 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Filesystem; Path : String) return Natural
    is
    begin
-      for Index in 1 .. Natural (Host.Items.Length) loop
+      for Index in 1 .. Natural (Host.Writes.Data.Files.Length) loop
          declare
-            Item : constant File_Entry := Host.Items.Element (Index);
+            Item : constant File_Entry :=
+              Host.Writes.Data.Files.Element (Index);
             Stored : constant String := Unbounded.To_String (Item.Path);
          begin
             if Stored = Path
@@ -55,9 +71,9 @@ package body Landin.Testing.Fakes is
          Kind    => Kind);
    begin
       if Existing = 0 then
-         Host.Items.Append (Item);
+         Host.Writes.Data.Files.Append (Item);
       else
-         Host.Items.Replace_Element (Existing, Item);
+         Host.Writes.Data.Files.Replace_Element (Existing, Item);
       end if;
    end Add;
 
@@ -80,7 +96,7 @@ package body Landin.Testing.Fakes is
 
    function Written (Host : Fake_Filesystem; Path : String) return String is
    begin
-      for Item of Host.Writes.Items loop
+      for Item of Host.Writes.Data.Items loop
          if Unbounded.To_String (Item.Path) = Path then
             return Unbounded.To_String (Item.Content);
          end if;
@@ -89,7 +105,7 @@ package body Landin.Testing.Fakes is
    end Written;
 
    function Write_Count (Host : Fake_Filesystem) return Natural
-     is (Host.Writes.Write_Attempts);
+     is (Host.Writes.Data.Write_Attempts);
 
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean
@@ -135,15 +151,15 @@ package body Landin.Testing.Fakes is
       Index : constant Natural := Find (Host, Path);
    begin
       return Index /= 0
-        and then Host.Items.Element (Index).Kind = A_Directory;
+        and then Host.Writes.Data.Files.Element (Index).Kind = A_Directory;
    end Is_Directory;
 
    procedure Raise_On_Read
      (Host : in out Fake_Filesystem;
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
    begin
-      Host.Writes.Raises := True;
-      Host.Writes.Read_Exception := Reason;
+      Host.Writes.Data.Raises := True;
+      Host.Writes.Data.Read_Exception := Reason;
    end Raise_On_Read;
 
    overriding procedure Read_File
@@ -156,10 +172,11 @@ package body Landin.Testing.Fakes is
    begin
       Content := Unbounded.Null_Unbounded_String;
 
-      if Host.Writes.Raises then
-         Host.Writes.Raises := False;
+      if Host.Writes.Data.Raises then
+         Host.Writes.Data.Raises := False;
          Ada.Exceptions.Raise_Exception
-           (Host.Writes.Read_Exception, "a fake read injected an exception");
+           (Host.Writes.Data.Read_Exception,
+            "a fake read injected an exception");
       end if;
 
       if Index = 0 then
@@ -167,9 +184,9 @@ package body Landin.Testing.Fakes is
          return;
       end if;
 
-      case Host.Items.Element (Index).Kind is
+      case Host.Writes.Data.Files.Element (Index).Kind is
          when A_File =>
-            Content := Host.Items.Element (Index).Content;
+            Content := Host.Writes.Data.Files.Element (Index).Content;
             Status := Landin.Platform.Read_Ok;
          when A_Directory | An_Unreadable_File =>
             Status := Landin.Platform.Not_Readable;
@@ -178,7 +195,7 @@ package body Landin.Testing.Fakes is
 
    procedure Refuse_Writes (Host : in out Fake_Filesystem) is
    begin
-      Host.Writes.Refuses_Write := True;
+      Host.Writes.Data.Refuses_Write := True;
    end Refuse_Writes;
 
    overriding procedure Write_File
@@ -187,20 +204,60 @@ package body Landin.Testing.Fakes is
       Content : String;
       Status  : out Landin.Platform.Write_Status)
    is
+      Existing : constant Natural := Find (Host, Path);
+      Entry_Value : constant File_Entry :=
+        (Path    => Unbounded.To_Unbounded_String (Path),
+         Content => Unbounded.To_Unbounded_String (Content),
+         Kind    => A_File);
    begin
-      Host.Writes.Write_Attempts := Host.Writes.Write_Attempts + 1;
-      if Host.Writes.Refuses_Write then
+      Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
+      if Host.Writes.Data.Refuses_Write
+        or else (Existing /= 0
+                 and then Host.Writes.Data.Files (Existing).Kind = A_Directory)
+      then
          Status := Landin.Platform.Not_Writable;
          return;
       end if;
 
-      Host.Writes.Items.Append
-        (File_Entry'
-           (Path    => Unbounded.To_Unbounded_String (Path),
-            Content => Unbounded.To_Unbounded_String (Content),
-            Kind    => A_File));
+      if Existing = 0 then
+         Host.Writes.Data.Files.Append (Entry_Value);
+      else
+         Host.Writes.Data.Files.Replace_Element (Existing, Entry_Value);
+      end if;
       Status := Landin.Platform.Write_Ok;
+      for Index in 1 .. Natural (Host.Writes.Data.Items.Length) loop
+         if Unbounded.To_String (Host.Writes.Data.Items (Index).Path) = Path
+         then
+            Host.Writes.Data.Items.Replace_Element (Index, Entry_Value);
+            return;
+         end if;
+      end loop;
+      Host.Writes.Data.Items.Append (Entry_Value);
    end Write_File;
+
+   procedure Refuse_Removals (Host : in out Fake_Filesystem) is
+   begin
+      Host.Writes.Data.Refuses_Removal := True;
+   end Refuse_Removals;
+
+   overriding procedure Remove_File
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Remove_Status)
+   is
+      Existing : constant Natural := Find (Host, Path);
+   begin
+      if Host.Writes.Data.Refuses_Removal then
+         Status := Landin.Platform.Not_Removable;
+      elsif Existing = 0 then
+         Status := Landin.Platform.Already_Absent;
+      elsif Host.Writes.Data.Files (Existing).Kind = A_Directory then
+         Status := Landin.Platform.Not_Removable;
+      else
+         Host.Writes.Data.Files.Delete (Existing);
+         Status := Landin.Platform.Removed;
+      end if;
+   end Remove_File;
 
    ---------------------------------------------------------------------
    --  List_Directory
@@ -232,12 +289,12 @@ package body Landin.Testing.Fakes is
          return;
       end if;
 
-      if Host.Items.Element (Index).Kind /= A_Directory then
+      if Host.Writes.Data.Files.Element (Index).Kind /= A_Directory then
          Status := Landin.Platform.Not_A_Directory;
          return;
       end if;
 
-      for Item of Host.Items loop
+      for Item of Host.Writes.Data.Files loop
          declare
             Full : constant String := Unbounded.To_String (Item.Path);
          begin
@@ -295,14 +352,14 @@ package body Landin.Testing.Fakes is
       Error_Output : String := "")
    is
    begin
-      Host.State.Mode := Repeating;
-      Host.State.Repeat :=
+      Host.State.Data.Mode := Repeating;
+      Host.State.Data.Repeat :=
         (Ended     => Ended,
          Exit_Code => Exit_Code,
          Output    => Unbounded.To_Unbounded_String (Output),
          Error_Output => Unbounded.To_Unbounded_String (Error_Output));
-      Host.State.Script.Clear;
-      Host.State.Next_Result := 1;
+      Host.State.Data.Script.Clear;
+      Host.State.Data.Next_Result := 1;
    end Set_Result;
 
    procedure Add_Result
@@ -313,13 +370,13 @@ package body Landin.Testing.Fakes is
       Error_Output : String := "")
    is
    begin
-      if Host.State.Mode /= Ordered then
-         Host.State.Mode := Ordered;
-         Host.State.Script.Clear;
-         Host.State.Next_Result := 1;
+      if Host.State.Data.Mode /= Ordered then
+         Host.State.Data.Mode := Ordered;
+         Host.State.Data.Script.Clear;
+         Host.State.Data.Next_Result := 1;
       end if;
 
-      Host.State.Script.Append
+      Host.State.Data.Script.Append
         (Landin.Platform.Tool_Result'
            (Ended     => Ended,
             Exit_Code => Exit_Code,
@@ -331,21 +388,21 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Tool_Runner; Index : Positive) return Tool_Call
    is
    begin
-      if Index > Natural (Host.State.Calls.Length) then
+      if Index > Natural (Host.State.Data.Calls.Length) then
          raise Compiler_Defect with "fake tool call index is out of range";
       end if;
 
-      return Host.State.Calls.Element (Index);
+      return Host.State.Data.Calls.Element (Index);
    end Call_At;
 
    function Last_Command (Host : Fake_Tool_Runner) return String is
    begin
-      if Host.State.Calls.Is_Empty then
+      if Host.State.Data.Calls.Is_Empty then
          return "";
       end if;
 
       declare
-         Call : constant Tool_Call := Host.State.Calls.Last_Element;
+         Call : constant Tool_Call := Host.State.Data.Calls.Last_Element;
       begin
          return Formatted_Command
            (Unbounded.To_String (Call.Program), Call.Arguments);
@@ -353,22 +410,29 @@ package body Landin.Testing.Fakes is
    end Last_Command;
 
    function Run_Count (Host : Fake_Tool_Runner) return Natural
-     is (Natural (Host.State.Calls.Length));
+     is (Natural (Host.State.Data.Calls.Length));
 
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode
    is
    begin
-      if Host.State.Calls.Is_Empty then
+      if Host.State.Data.Calls.Is_Empty then
          return Landin.Platform.Merged;
       end if;
 
-      return Host.State.Calls.Last_Element.Capture;
+      return Host.State.Data.Calls.Last_Element.Capture;
    end Last_Capture;
 
-   procedure Raise_On_Run (Host : in out Fake_Tool_Runner) is
+   procedure Raise_On_Run
+     (Host : in out Fake_Tool_Runner;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;
+      Message : String :=
+        "a fake tool was asked to stand in for a compiler defect")
+   is
    begin
-      Host.State.Raises := True;
+      Host.State.Data.Raises := True;
+      Host.State.Data.Run_Exception := Reason;
+      Host.State.Data.Run_Message := Unbounded.To_Unbounded_String (Message);
    end Raise_On_Run;
 
    overriding procedure Run
@@ -379,26 +443,30 @@ package body Landin.Testing.Fakes is
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
    is
    begin
-      if Host.State.Raises then
-         Host.State.Raises := False;
-         raise Compiler_Defect
-           with "a fake tool was asked to stand in for a compiler defect";
+      if Host.State.Data.Raises then
+         Host.State.Data.Raises := False;
+         Ada.Exceptions.Raise_Exception
+           (Host.State.Data.Run_Exception,
+            Unbounded.To_String (Host.State.Data.Run_Message));
       end if;
 
-      if Host.State.Mode = Ordered then
-         if Host.State.Next_Result > Natural (Host.State.Script.Length) then
+      if Host.State.Data.Mode = Ordered then
+         if Host.State.Data.Next_Result >
+           Natural (Host.State.Data.Script.Length)
+         then
             raise Compiler_Defect
               with "fake tool script exhausted before: "
                    & Formatted_Command (Program, Arguments);
          end if;
 
-         Result := Host.State.Script.Element (Host.State.Next_Result);
-         Host.State.Next_Result := Host.State.Next_Result + 1;
+         Result :=
+           Host.State.Data.Script.Element (Host.State.Data.Next_Result);
+         Host.State.Data.Next_Result := Host.State.Data.Next_Result + 1;
       else
-         Result := Host.State.Repeat;
+         Result := Host.State.Data.Repeat;
       end if;
 
-      Host.State.Calls.Append
+      Host.State.Data.Calls.Append
         (Tool_Call'
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,

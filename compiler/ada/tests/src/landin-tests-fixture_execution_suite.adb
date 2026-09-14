@@ -30,6 +30,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    use Landin.Testing.Fixtures;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Remove_Status;
+   use type Landin.Platform.Write_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Capture_Mode;
 
@@ -130,6 +132,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Runner      : Landin.Testing.Fakes.Fake_Tool_Runner;
       Overdue     : Landin.Platform.Tool_Result;
       Trap_Result : Landin.Platform.Tool_Result;
+      Cleanup_Exit : Landin.Platform.Tool_Result;
    begin
       --  Deliberately identical text: the typed outcome, not stderr prose,
       --  must decide whether the fixture produced its promised trap.
@@ -165,6 +168,19 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Satisfies_Termination_Expectation
            (Trap_Result.Ended, Traps => True),
          "signal termination can satisfy a trap fixture");
+
+      --  The no-unwind fixtures call exit(99) if cleanup is reached.
+      --  That ordinary exit must fail their trap oracle, even after a fault.
+      Runner.Add_Result (Exit_Code => 99, Output => "");
+      Runner.Run ("cleanup", Landin.Platform.No_Arguments, Cleanup_Exit);
+      Landin.Testing.Check
+        (Item, Cleanup_Exit.Ended = Landin.Platform.Exited
+         and then Cleanup_Exit.Exit_Code = 99,
+         "the fake retains the cleanup observer's ordinary exit");
+      Landin.Testing.Check
+        (Item, not Satisfies_Termination_Expectation
+           (Cleanup_Exit.Ended, Traps => True),
+         "cleanup reaching exit cannot satisfy a no-unwind trap fixture");
    end A_Timeout_Cannot_Satisfy_A_Trap;
 
    function Codes_In (Text : String) return String;
@@ -307,6 +323,59 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Recorded;
 
+   --  A compiler success can only satisfy this attempt with a new file.
+   --  Removal is a host operation, so fake runners can pin stale-output
+   --  refusal without starting a compiler, assembler or generated program.
+   procedure Produce_Output
+     (Host    : Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program, Label, Path : String;
+      Args    : Landin.Platform.Path_List;
+      Item    : in out Landin.Testing.Context;
+      Ready   : out Boolean);
+
+   procedure Produce_Output
+     (Host    : Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program, Label, Path : String;
+      Args    : Landin.Platform.Path_List;
+      Item    : in out Landin.Testing.Context;
+      Ready   : out Boolean)
+   is
+      Removed : Landin.Platform.Remove_Status;
+      Outcome : Landin.Platform.Tool_Result;
+   begin
+      Ready := False;
+      Host.Remove_File (Path, Removed);
+      if Removed = Landin.Platform.Not_Removable or else Host.Exists (Path)
+      then
+         Landin.Testing.Fail
+           (Item, Label & ": could not clear the previous output at " & Path);
+         return;
+      end if;
+
+      Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+      if Outcome.Ended /= Landin.Platform.Exited then
+         Landin.Testing.Fail
+           (Item, Label & ": producer was stopped before completing output"
+            & ASCII.LF & Unbounded.To_String (Outcome.Output));
+      elsif Outcome.Exit_Code /= 0 then
+         Landin.Testing.Fail
+           (Item, Label & ": producer failed to complete output"
+            & ASCII.LF & Unbounded.To_String (Outcome.Output));
+      elsif not Host.Exists (Path) or else Host.Is_Directory (Path) then
+         Landin.Testing.Fail
+           (Item, Label & ": producer reported success and wrote no file at "
+            & Path);
+      else
+         Ready := True;
+      end if;
+   exception
+      when Landin.External_Tool_Failed =>
+         Landin.Testing.Fail
+           (Item, Label & ": producer could not be run: " & Program);
+   end Produce_Output;
+
    procedure Emit_Positive
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
@@ -323,7 +392,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Written : constant String :=
         Output_Directory & "positive-" & Name (Case_Item) & ".s";
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
-      Outcome : Landin.Platform.Tool_Result;
+      Ready   : Boolean;
       Args    : Landin.Platform.Path_List;
    begin
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
@@ -331,21 +400,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Written);
 
-      Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
-
-      if Outcome.Ended /= Landin.Platform.Exited then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine was stopped before it could emit" & ASCII.LF
-            & Unbounded.To_String (Outcome.Output));
-      elsif Outcome.Exit_Code /= 0 then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": accepted but not emitted" & ASCII.LF
-            & Unbounded.To_String (Outcome.Output));
-      else
+      Produce_Output
+        (Host, Runner, Program, Label, Written, Args, Item, Ready);
+      if Ready then
          Landin.Testing.Check
-           (Item, Host.Exists (Written), Label & ": the assembly was written");
+           (Item, True, Label & ": this attempt produced fresh assembly");
       end if;
    end Emit_Positive;
 
@@ -580,7 +639,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
         Output_Directory & "runtime-" & Name (Case_Item)
         & "-" & Profile_Name (Profile);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
-      Compile : Landin.Platform.Tool_Result;
+      Ready   : Boolean;
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
       Runtime_Arguments : Landin.Platform.Path_List;
@@ -594,25 +653,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
 
-      Runner.Run (Program, Args, Compile, Landin.Platform.Merged);
-
-      if Compile.Ended /= Landin.Platform.Exited then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine was stopped before it could produce an"
-            & " executable" & ASCII.LF
-            & Unbounded.To_String (Compile.Output));
-      elsif Compile.Exit_Code /= 0 then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine could not produce an executable" & ASCII.LF
-            & Unbounded.To_String (Compile.Output));
-      elsif not Host.Exists (Built) then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine reported success and wrote no executable at "
-            & Built);
-      else
+      Produce_Output (Host, Runner, Program, Label, Built, Args, Item, Ready);
+      if Ready then
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
@@ -691,8 +733,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Driver    : constant String :=
         Landin.Backend.Toolchain.Driver_For (Facts, "");
       Runner    : Landin.Platform.Native.Tools.Native_Tool_Runner;
-      Emit      : Landin.Platform.Tool_Result;
-      Compile   : Landin.Platform.Tool_Result;
+      Ready     : Boolean;
       Outcome   : Landin.Platform.Tool_Result;
       Refine_Arguments : Landin.Platform.Path_List;
       Driver_Arguments : Landin.Platform.Path_List;
@@ -710,26 +751,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Refine_Arguments, "-o");
       Landin.Platform.Add (Refine_Arguments, Assembly);
 
-      Runner.Run
-        (Program, Refine_Arguments, Emit, Landin.Platform.Merged);
-
-      if Emit.Ended /= Landin.Platform.Exited then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine was stopped before it could emit assembly"
-            & ASCII.LF & Unbounded.To_String (Emit.Output));
-         return;
-      elsif Emit.Exit_Code /= 0 then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine could not emit assembly" & ASCII.LF
-            & Unbounded.To_String (Emit.Output));
-         return;
-      elsif not Host.Exists (Assembly) then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": refine reported success and wrote no assembly at "
-            & Assembly);
+      Produce_Output
+        (Host, Runner, Program, Label & " assembly", Assembly,
+         Refine_Arguments, Item, Ready);
+      if not Ready then
          return;
       end if;
 
@@ -784,33 +809,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      begin
-         Runner.Run
-           (Driver, Driver_Arguments, Compile, Landin.Platform.Merged);
-      exception
-         when Landin.External_Tool_Failed =>
-            Landin.Testing.Fail
-              (Item, Label & ": C toolchain driver could not be run: "
-               & Driver);
-            return;
-      end;
-
-      if Compile.Ended /= Landin.Platform.Exited then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": the C toolchain was stopped before it could link"
-            & ASCII.LF & Unbounded.To_String (Compile.Output));
-      elsif Compile.Exit_Code /= 0 then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": the C toolchain could not link the ABI fixture"
-            & ASCII.LF & Unbounded.To_String (Compile.Output));
-      elsif not Host.Exists (Built) then
-         Landin.Testing.Fail
-           (Item,
-            Label & ": the C toolchain reported success and wrote no"
-            & " executable at " & Built);
-      else
+      Produce_Output
+        (Host, Runner, Driver, Label & " C link", Built,
+         Driver_Arguments, Item, Ready);
+      if Ready then
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
@@ -984,6 +986,106 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    --  Exercise the shared verdict against fake metadata and outcomes.
    --  No fixture program, compiler or host tool is started by this case.
+   procedure Outputs_Belong_To_Their_Producing_Attempt
+     (Item : in out Landin.Testing.Context);
+
+   procedure Outputs_Belong_To_Their_Producing_Attempt
+     (Item : in out Landin.Testing.Context)
+   is
+      package Fakes renames Landin.Testing.Fakes;
+      type Writer (Files : not null access Fakes.Fake_Filesystem) is
+        new Fakes.Fake_Tool_Runner with record
+         Creates : Boolean := False;
+         Directory : Boolean := False;
+      end record;
+
+      overriding procedure Run
+        (Host : Writer; Program : String;
+         Arguments : Landin.Platform.Path_List;
+         Result : out Landin.Platform.Tool_Result;
+         Capture : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+
+      overriding procedure Run
+        (Host : Writer; Program : String;
+         Arguments : Landin.Platform.Path_List;
+         Result : out Landin.Platform.Tool_Result;
+         Capture : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
+      is
+         Written : Landin.Platform.Write_Status;
+      begin
+         Fakes.Run
+           (Fakes.Fake_Tool_Runner (Host), Program, Arguments,
+            Result, Capture);
+         if Host.Directory then
+            Host.Files.Add_Directory ("output");
+         elsif Host.Creates then
+            Host.Files.Write_File ("output", "fresh", Written);
+            pragma Assert (Written = Landin.Platform.Write_Ok);
+         end if;
+      end Run;
+
+      type Scenario is
+        (Missing_Output, Stale_Output, Fresh_Output, Repeated_Attempt,
+         Blocked_Removal, Existing_Directory, Produced_Directory,
+         Failed_Producer, Timed_Out_Producer, Missing_Producer);
+   begin
+      for Case_Kind in Scenario loop
+         declare
+            Files : aliased Fakes.Fake_Filesystem;
+            Runner : Writer (Files'Access);
+            Probe : Landin.Testing.Context;
+            Ready : Boolean;
+            Expected_Runs : constant Natural :=
+              (if Case_Kind in Blocked_Removal | Existing_Directory
+                                | Missing_Producer
+               then 0 elsif Case_Kind = Repeated_Attempt then 2 else 1);
+         begin
+            if Case_Kind = Existing_Directory then
+               Files.Add_Directory ("output");
+            elsif Case_Kind /= Missing_Output then
+               Files.Add_File ("output", "stale");
+            end if;
+            Runner.Set_Result
+              ((if Case_Kind = Failed_Producer then 1 else 0), "",
+               (if Case_Kind = Timed_Out_Producer
+                then Landin.Platform.Timed_Out else Landin.Platform.Exited));
+            Runner.Creates := Case_Kind in Fresh_Output | Repeated_Attempt
+                                          | Failed_Producer;
+            Runner.Directory := Case_Kind = Produced_Directory;
+            if Case_Kind = Blocked_Removal then
+               Files.Refuse_Removals;
+            elsif Case_Kind = Missing_Producer then
+               Runner.Raise_On_Run
+                 (Landin.External_Tool_Failed'Identity,
+                  "tool not found: fake");
+            end if;
+            Produce_Output
+              (Files, Runner, "fake", Scenario'Image (Case_Kind), "output",
+               Landin.Platform.No_Arguments, Probe, Ready);
+            if Case_Kind = Repeated_Attempt then
+               Landin.Testing.Check
+                 (Item, Ready and then Files.Exists ("output"),
+                  "the first attempt really creates its output");
+               Runner.Creates := False;
+               Produce_Output
+                 (Files, Runner, "fake", "second attempt", "output",
+                  Landin.Platform.No_Arguments, Probe, Ready);
+            end if;
+            Landin.Testing.Check
+              (Item, Ready = (Case_Kind = Fresh_Output),
+               Scenario'Image (Case_Kind) & " retains the freshness verdict");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Testing.Failures (Probe),
+               (if Case_Kind = Fresh_Output then 0 else 1),
+               Scenario'Image (Case_Kind) & ": "
+               & Landin.Testing.Failure_Text (Probe));
+            Landin.Testing.Check_Equal
+              (Item, Runner.Run_Count, Expected_Runs,
+               "a removal refusal cannot reach the producing tool");
+         end;
+      end loop;
+   end Outputs_Belong_To_Their_Producing_Attempt;
+
    procedure Negative_Metadata_Decides_The_Verdict
      (Item : in out Landin.Testing.Context);
 
@@ -1170,6 +1272,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixture execution",
+         "outputs belong to their producing attempt",
+         Outputs_Belong_To_Their_Producing_Attempt'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "stream metadata decides the oracle",
          Stream_Metadata_Decides_The_Oracle'Access);

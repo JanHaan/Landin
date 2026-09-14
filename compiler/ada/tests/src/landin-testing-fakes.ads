@@ -6,6 +6,7 @@
 
 with Ada.Containers.Vectors;
 with Ada.Exceptions;
+with Ada.Finalization;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform;
@@ -62,6 +63,13 @@ package Landin.Testing.Fakes is
    --  filesystem permissions.
    procedure Refuse_Writes (Host : in out Fake_Filesystem);
 
+   procedure Refuse_Removals (Host : in out Fake_Filesystem);
+
+   overriding procedure Remove_File
+     (Host   : Fake_Filesystem;
+      Path   : String;
+      Status : out Landin.Platform.Remove_Status);
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -110,16 +118,21 @@ package Landin.Testing.Fakes is
       Ended     : Landin.Platform.Termination := Landin.Platform.Exited;
       Error_Output : String := "");
 
-   --  Make the next run raise a compiler defect instead of answering,
-   --  and only the next: a case that arms this and then keeps using the
-   --  runner is asking about what happens after one, not about two.
+   --  Make the next run raise a chosen exception instead of answering,
+   --  defaulting to a compiler defect, and only the next. A case that arms
+   --  this and then keeps using the runner asks about what happens after
+   --  one failure, not about two.
    --
    --  A defect is what a compiler does when it finds itself wrong, so no
    --  source can be relied on to cause one -- every one that could is a
    --  bug to be fixed rather than a case to keep.  Injecting it is how
    --  the driver's promise about a defect is held to: the report a run
    --  had already decided survives it.
-   procedure Raise_On_Run (Host : in out Fake_Tool_Runner);
+   procedure Raise_On_Run
+     (Host : in out Fake_Tool_Runner;
+      Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;
+      Message : String :=
+        "a fake tool was asked to stand in for a compiler defect");
 
    type Tool_Call is record
       Program   : Ada.Strings.Unbounded.Unbounded_String;
@@ -161,6 +174,8 @@ private
      (Index_Type => Positive, Element_Type => File_Entry);
 
    type Store is record
+      Files : File_Vectors.Vector;
+      --  Latest successful write per path, separate from the live namespace.
       Items : File_Vectors.Vector;
       --  Armed by Raise_On_Read and cleared by the read it fires on, so
       --  one arming is one exception.  It lives here rather than in the
@@ -170,16 +185,23 @@ private
       Read_Exception : Ada.Exceptions.Exception_Id :=
         Compiler_Defect'Identity;
       Refuses_Write : Boolean := False;
+      Refuses_Removal : Boolean := False;
       Write_Attempts : Natural := 0;
    end record;
 
    type Store_Access is access Store;
 
+   --  The constant-view interface needs indirection, with lexical ownership.
+   type Store_Owner is new Ada.Finalization.Limited_Controlled with record
+      Data : Store_Access := new Store;
+   end record;
+
+   overriding procedure Finalize (Owner : in out Store_Owner);
+
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
-      Items  : File_Vectors.Vector;
       Aliases : Landin.Platform.Path_List;
-      Writes : Store_Access := new Store;
+      Writes : Store_Owner;
    end record;
 
    use type Landin.Platform.Tool_Result;
@@ -200,15 +222,23 @@ private
       Repeat      : Landin.Platform.Tool_Result;
       Script      : Result_Vectors.Vector;
       Raises      : Boolean := False;
+      Run_Exception : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;
+      Run_Message : Unbounded.Unbounded_String;
       Next_Result : Positive := 1;
       Calls       : Call_Vectors.Vector;
    end record;
 
    type Recorder_Access is access Recorder;
 
+   type Recorder_Owner is new Ada.Finalization.Limited_Controlled with record
+      Data : Recorder_Access := new Recorder;
+   end record;
+
+   overriding procedure Finalize (Owner : in out Recorder_Owner);
+
    type Fake_Tool_Runner is limited new Landin.Platform.Tool_Runner
    with record
-      State : Recorder_Access := new Recorder;
+      State : Recorder_Owner;
    end record;
 
 end Landin.Testing.Fakes;

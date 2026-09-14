@@ -5724,7 +5724,13 @@ being silently promoted to bugs or discarded:
 
 | Older minor identifiers | Disposition |
 | --- | --- |
-| m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
+| m1 | Code-only negative fixtures prove ordered diagnostic identity, not full report wording, span or causal fidelity. Exact reports and focused source/IR assertions remain necessary where a repair depends on those distinctions. The historical inventory is not a current coverage count; no blanket negative-fixture replay or bulk oracle regeneration is authorized. |
+| m2 | Oracle repaired: the defer/undo no-unwind fixtures now register exit(99), so reaching cleanup before or after a fault produces an ordinary exit and fails the trap expectation. A fake outcome pins that distinction. The tiny fixtures compile to assembly text only; their revised runtime/profile evidence remains outstanding. The operating-system signal remains deliberately unspecified under [1960], and timeout remains refused as trap evidence. |
+| m3 | Implemented: each positive assembly, runtime executable and ABI assembly/link attempt removes its expected output before the producer runs. Removal refusal, missing output, directories, abnormal termination and nonzero exit cannot satisfy the attempt. Fake producer cases pin stale and repeated attempts without executing tools. Type-only or external-only positive modules may legitimately emit no function; emitted coverage does not claim instruction semantics. |
+| m4 | Reconciled: lex metadata belongs to check.py's independent grammar scanner. The Ada reader accepts it but never treats Python complaint wording as its diagnostic oracle. The fixture guide now states that boundary and points to ordered codes, optional exact reports and lexer span/token cases. No claim of full Ada wording coverage follows from lex metadata. |
+| m5 | Implemented: successful fake writes replace visible bytes and their latest-write record; reads, existence checks and shallow listings see them. Refused writes preserve previous bytes. Single-file removal has native and fake adapters with directory preservation and injected refusal. Fake filesystem and tool state have controlled owners, releasing vectors and captured bytes on normal or exceptional scope exit. Fake tools can raise a chosen one-shot host failure; driver cases distinguish missing-tool advice from capture failures while preserving the original cause. N13 retains the earlier directory-identity repair. |
+| m6 | The parser mutation generator's low-byte period is a confirmed coverage limitation, not 512 independent random streams. A generator repair remains separate from executing its campaign; no new mutation campaign is authorized. |
+| m7 | Broader driver mutation coverage remains absent. Targeted checker/lowering/driver regressions cover confirmed repairs but do not establish fuzz coverage. No unbounded or broad campaign is authorized. |
 | m8 | Implemented under the existing [1930] explicit-discard rule: a valued break targeting a statement loop is refused with L0301. Ordinary, guarded, completion, range and labelled transfers keep their selected target; `_ =` explicitly consumes an unwanted loop result. Small checker controls cover both accepted and refused forms without assembling or executing a program. |
 | m9 | Reconciled with the explicit R1.70 decision: ordinary module folds use the kernel’s wider signed range, then check the final destination width. D224/[1940] now state that existing contract; the u8 intermediate-300 example remains accepted, while runtime u8 arithmetic remains checked. Exact image and positive/negative fold-limit controls cover both target widths. No new folding behavior or unbounded integer type was adopted. |
 | m11 | Refuted against D138: a saturated explicit static tuple performs the same exact recursive validation as deduction. An independently synthesized singleton atom therefore does not equal a wider explicit atom-set actual. First assigning the atom to a binding of that set type is accepted. Paired tiny compile-only probes retain this existing contract; no generic conversion rule changed. |
@@ -6222,6 +6228,25 @@ Linux release builds pass. Evidence is in `.scratch/r491-float-digit-runs/`
 and matching final-values logs. Eleven independent float grammar examples and
 the empty-raw-content check supplement the previous scalar/integer invariants.
 No assembler, linker, generated program or broad parser campaign ran.
+
+For m2--m5, the shared production helper requires a fresh output for each
+attempt. Ten fake producer scenarios exercise stale, repeated, missing,
+directory, removal-refused, unsuccessful, timed-out and unavailable production.
+The fake filesystem now exposes replacement writes consistently and both fake
+host implementations release their indirect storage through controlled owners.
+Two one-shot tool failures retain the driver's missing-tool/capture distinction.
+The fixture guide separates stage emission, ordered codes, exact reports and
+the independent Python scanner's lex metadata.
+
+The final bounded selection passes 94 assertions on each of macOS debug and
+pinned Linux release. Both single-worker builds pass. The no-unwind fixtures
+now register exit(99); a fake ordinary exit is refused by the trap oracle.
+Both revised fixtures emit small assembly text on both hosts. They were not
+assembled or executed, so revised runtime/profile evidence remains outstanding.
+Evidence is in `.scratch/r491-fresh-artifacts/`,
+`.scratch/r491-trap-oracles/` and the matching final-values logs. No assembler,
+linker, generated program, debugger or mutation campaign ran for this group;
+exact-revision acceptance remains open.
 
 Planning estimate at `4e6fcad9`: 137 commits since the review baseline and
 64 new fixture records are committed. The assessed J/K intake contains 175

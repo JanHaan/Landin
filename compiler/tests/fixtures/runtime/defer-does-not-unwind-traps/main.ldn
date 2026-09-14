@@ -1,10 +1,8 @@
+extern(c) exit: (status: i32) -> none
+
 mut divisor: i32 = 0
 
-make_safe: () -> none =
-    divisor = 1
-end make_safe
-
 public main: () -> (code: i32) =
-    defer make_safe()
+    defer exit(99)
     code = 42 / divisor
 end main
