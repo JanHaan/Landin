@@ -7619,7 +7619,10 @@ package body Landin.Stages.Checking is
                            Node : constant Syn.Node_Id :=
                              Res.Node_Of (Meanings.all, Current);
                            Written : constant Syn.Node_Id :=
-                             Syn.Declared_Type (Tree.all, Node);
+                             (if Res.Sort_Of (Meanings.all, Current)
+                                   = Res.Module_Type
+                              then Syn.Declared_Type (Tree.all, Node)
+                              else Syn.No_Node);
                            Next : Res.Declaration_Id;
                         begin
                            exit when Res.Sort_Of (Meanings.all, Current)

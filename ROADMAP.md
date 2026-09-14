@@ -5572,7 +5572,7 @@ record, approval tag and guarded publication records establish delivery.
 
 ### R4.91 — Resolve post-R4 review findings
 
-Status: active
+Status: complete
 Depends on: R4.90
 
 Review of accepted revision `66927e93` reproduced four defects in implemented
@@ -5667,7 +5667,7 @@ inspected before one bounded pinned GNU-toolchain invocation; the only size
 directives were `.zero 8` and `.zero 4`. This is one runtime profile, not a
 complete profile gate. Generated fixture tables and full `check.py` pass.
 No giant fixture, assembler sweep, debugger session or exact acceptance was
-run for this repair group. R4.91 remains active.
+run for this repair group. R4.91 remained active at that batch boundary.
 
 Final-body validation uses nine selected cases in macOS debug and Linux
 release: two parser controls, three lowering controls, the R4.91 no-effects
@@ -5679,7 +5679,8 @@ inspected before one foreground pinned GNU-toolchain invocation capped at
 The fixture also checks that cleanup may read a just-filled result and that a
 final local value is captured before cleanup changes that local. Full
 `check.py` and regenerated fixture tables pass. This is bounded development
-evidence, not all-profile or exact-revision acceptance; R4.91 stays active.
+evidence, not all-profile or exact-revision acceptance; R4.91 stayed active
+at that batch boundary.
 
 #### Older review reconciliation
 
@@ -5742,7 +5743,7 @@ being silently promoted to bugs or discarded:
 | m13 | Wording repaired: [1790] distinguishes thirteen scalar and three text-view predeclared names; [1900] and the tour explicitly describe addr retaining place writability. The old D124 permission note is superseded by the current complete type/shape/permission diagnostic, as pinned by derived-address-readonly. Reference permissions and their one-way relaxation are unchanged. |
 | m22 | Integer guidance repaired: L0011 now describes required digits, allowed underscores and valid start/end digits, covering empty prefixes and trailing separators as well as out-of-base digits. Tiny lexical controls retain codes and full-run spans; repeated internal underscores and the current 12z token split remain accepted by the lexer. Comment encoding is repaired under [1750]: the scanner uses the literal decoder's shortest-form UTF-8 check, reports the first invalid byte per comment with L0012, and retains delimiter/token recovery. D164 already chooses the maximal opening quote run: six adjacent quotes are an unterminated six-quote opener, not empty raw text. The grammar now requires content; the tour and tiny lexer/decoder controls pin later closers, shorter runs, retained line endings and ordinary empty quoted text. |
 | m14 | Sampled unused helpers and the unused Needs_Source catalogue facet remain maintenance observations; exception routing is reconciled separately with J109. |
-| m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative gate accounts are reconciled: historical source witnesses and missing original bundles are distinguished under M6; current R4 and R4.91 remain active, both project status pointers name R4.91, and R5 depends on it. No development transcript supplies a new acceptance tag or closes a phase. |
+| m16 | The inherited D-label namespace and F2's roadmap-wide process ownership are explicit. C6 now assigns hosted parity to R5.50 and freestanding evidence to R6.100. Mechanical checks reject a completed item with an incomplete dependency and require one nonempty Blocked because line for a blocked item. The alleged global D-number resolution is refuted: the specification lookup is confined to conformance-register Rules cells, not inherited roadmap labels. Narrative gate accounts are reconciled: historical source witnesses and missing original bundles are distinguished under M6; R4 and R4.91 remained active at that batch boundary, with both project status pointers naming R4.91 and R5 depending on it. The closure record below supersedes those status pointers. No development transcript supplies a new acceptance tag or closes a phase. |
 | m17 | Implemented: README and handoff include R2.10, R4.21, R4.30 and R4.40, with the selected C ABI and separate binding generator explicitly described. The zeroable account names settled D143 behavior. Four aggregate fixture summaries now cite the decisions that actually pin them, without changing any source or expected compiler verdict. |
 | m21 | D190 and R7.20 retain the actual carrier ranges without stale source-reference counts. A new tiny negative fixture pins D202's L0305 refusal when an option reuses the compiler-owned debug atom, including its full diagnostic. |
 | m15 | Implemented: the compiler guide now covers all 71 package specifications, including the 18 formerly missing packages for allocation, machine evidence, IR transforms, reports and layout policy. Directory descriptions name the current responsibilities; parent and child package boundaries are explicitly distinct. A mechanical check compares the ownership rows with private, generic and ordinary package specs and rejects missing, repeated or obsolete rows. |
@@ -8382,9 +8383,10 @@ Required debugger acceptance is not waived; it is included in that authorized
 gate. If the 100 GiB cap is insufficient, report the affected job and memory
 evidence before changing the limit.
 
-The remaining closure work is live activation of the SourceHut publisher,
-the expanded runtime/profile and exact-revision acceptance evidence (including
-required debugger coverage). M6 is closed by maintainer disposition with the
+At that batch boundary, closure still required live activation of the
+SourceHut publisher and expanded runtime/profile and exact-revision acceptance
+evidence, including required debugger coverage. The containing revision's
+closure and delivery binding below supersedes that remaining-work account. M6 is closed by maintainer disposition with the
 historical evidence gap explicitly retained. M5 is disposed: leave the font
 files for now.
 Broader mutation coverage remains absent under the user's constraint;
@@ -8645,6 +8647,33 @@ The original coverage gaps are not represented as completed review: fixes
 trace their semantic consumers, while the complete suites, IR verifier,
 quality and native debugger jobs supply the existing mechanical backstops.
 
+Attempt `20260914T203309Z-d391071bcd34` on `5dba96b3` failed debug
+quality validation before the complete derived-parser workload emitted IR.
+The new iterative settlement path queried type-declaration syntax while
+settling a forward atom. Debug's existing syntax precondition caught that
+invalid query; the repair restricts it to actual type declarations. The
+4,000-alias checker control now includes a generic field reaching a forward
+atom alias, preserving that distinction in both modes. Peer jobs were
+cancelled, and the failed attempt remains retained. It supplies no acceptance.
+
+Closure candidate and delivery binding: all readiness findings above have
+an explicit repair, retained limitation, refutation or R5 owner. The forward
+atom follow-up passes its expanded checker control and the complete derived
+parser's six runtime profiles in both debug and release compiler builds.
+Earlier statements that exact acceptance was open describe their individual
+development batches and are superseded only by this containing revision's
+completed acceptance record, never by a filtered transcript.
+
+As for R4.90, the completion status is prepared in the candidate so the gate
+validates the final documents with the compiler. At candidate preparation,
+canonical eight-job native acceptance, verified durable export, administrative
+approval, canonical promotion and guarded publication verification are pending
+delivery steps. The exact containing revision's annotated
+`ci/accepted/FULL_COMMIT` tag and native bundle bind its source/tree/policy,
+all eight successful jobs and retained artifacts. Canonical Git and guarded
+Pages job records establish delivery. No later bookkeeping commit substitutes
+for that evidence. R5 remains planned until this closure is delivered.
+
 Exit evidence: focused regressions pass in both compiler build modes, including
 no output/tool invocation for rejected source; full document checks and compiler
 suites pass; every older finding above has a recorded disposition; and the
@@ -8653,12 +8682,15 @@ verified export and normal delivery binding. Filtered runs do not close it.
 
 ### R4 gate
 
-Status: active
+Status: complete
 
-R4.90's accepted closure remains recorded above. R4.91 reopens the current
-phase gate for the review repairs and their exact-revision acceptance.
-R5.10 and R5.20 remain planned and depend on those repairs. This gate closes
-again only after R4.91 meets its exit evidence.
+R4.90's accepted closure remains recorded above. R4.91 completes the reviewed
+repairs with the containing revision's exact native acceptance and delivery
+binding. The completion status in this candidate becomes authoritative only
+with that revision's annotated approval and canonical promotion; development
+runs cannot close the phase. R5.10 and R5.20 are dependency-ready and remain
+planned. Retained resource limits and explicitly transferred R5 work are
+recorded in the readiness intake, not claimed repaired by this gate.
 
 - Every applicable hosted construct under the current normative specification
   is implemented on Linux x86-64.

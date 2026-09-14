@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1, R2 and R3 are complete; R4.91 is repairing reviewed R4 gaps. `refine`
+R1, R2, R3 and R4 are complete through the exact-revision approval and
+delivery binding in ROADMAP.md; R5 remains planned. `refine`
 scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
@@ -198,8 +199,9 @@ and first Linux x86-64 path, R2 settled the semantic and representation core
 from executable cases, and R3 delivered the first major compiler milestone: a
 complete derived parser program with useful diagnostics, evidence-table
 dispatch, and `any` but without specialization. R4 delivered the hosted
-Linux x86-64 path and its applicable parity audit; R4.91 repairs reviewed
-compiler, tooling and documentation gaps. R5 remains planned;
+Linux x86-64 path and its applicable parity audit; R4.91 closes the reviewed
+compiler, tooling and documentation repairs with explicit retained limits
+and R5 handoffs. R5 remains planned;
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 
