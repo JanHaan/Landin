@@ -6056,7 +6056,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
 | K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
 | K25 | F3: devirtualization leaves a typed function-address projection live | Repaired: backward demand may remove a verified pure Function_Address despite its signature metadata. Live users still retain the instruction and its signature; numeric folding remains restricted to plain values. Small dead/live/no-optimization controls cover both target widths. Three exact cases pass 39 checks on each of macOS debug and Linux release; exact acceptance open. |
-| K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Source confirms the per-routine query precedes the off decision. Compute shared exposure facts at the appropriate pass boundary or avoid unneeded work, preserving callback identity and observability; use small operation-count controls, not timing sweeps. |
+| K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Implemented a shared retained-reference traversal for specialization and final-body sharing. Consumers mark their existing pass-local arrays once; explicit/imported roots, scalar and aggregate images, evidence entries and runtime function addresses share one policy with the single-routine query. Seven exact callback-count and decision/identity cases pass 134 checks on each host; no timing sweep or persistent cache. Exact acceptance remains open. |
 | K27 | F5: profitability recounts eligible instances for every instance | Implemented a pass-local ordered count per normalized template before profitability selection. This removes the nested recount while preserving the same proven/non-exposed/static-entry predicate and decision order. A three-instance, two-template test covers exposed-root exclusion and independent single-instance selection on both target widths. Three exact cases pass 70 checks on each host; no timing or stress campaign. Exact acceptance remains open. |
 | K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
 | K29 | G1: wide slice stride uses an unencodable immediate multiply | Implemented with A7/M19/N6/J61. Bounded scalar and emitted-text evidence covers the shared encoding decision; no giant extent or image reproduction. |
@@ -7444,6 +7444,27 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K26 replaces per-routine retained-reference scans with one shared traversal.
+Specialization marks its existing exposure array once before the incoming-proof
+analysis, and final-body sharing excludes exposed routines with one traversal
+of the immutable emission unit. The single-routine query delegates to the same
+policy. Explicit/imported roots, scalar and aggregate function images, evidence
+entries and runtime function addresses all remain observable; duplicate retained
+references may visit the same routine repeatedly. Consumers own their marks and
+refresh them after IR changes, so no persistent cache needs invalidation.
+
+Seven exact cases pass 134 checks in each of macOS debug and Linux release.
+The new small callback-count case covers both target widths and a later explicit
+marker; existing evidence, all-mode costs and seven final-body exposure channels
+preserve their decisions and code identities. Its first Mac run revealed two
+test assumptions, corrected before the final run: C signatures require the
+supported Linux target, and scalar function images retain two references to the
+same routine. Both single-worker builds and the full document check pass.
+Logs are under `.scratch/r491-exposure-traversal/` and
+`.scratch/r491-final-values/`. No timing sweep, assembler, generated executable
+or giant image is used. These are filtered development checks, not exact-revision
+acceptance.
 
 K27 replaces the per-instance nested eligibility recount with a pass-local
 ordered map keyed by normalized template identity. One traversal accumulates

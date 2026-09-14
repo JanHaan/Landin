@@ -33,6 +33,13 @@ package body Landin.IR.Specialization is
         [others => No_Value];
       Changed : Boolean;
 
+      procedure Expose (Item : Item_Id);
+
+      procedure Expose (Item : Item_Id) is
+      begin
+         Exposed (Positive (Item)) := True;
+      end Expose;
+
       function Code_At (Item : Item_Id; Value : Value_Id) return Instruction
         is (Into.Code (Into.Items (Positive (Item)).Values.First
                       + Positive (Value)));
@@ -114,6 +121,7 @@ package body Landin.IR.Specialization is
       end Pin;
    begin
       Verifier.Verify (Into, Facts);
+      Visit_Address_Exposures (Into, Expose'Access);
       --  Allocate every decision before inspecting recursive calls. Proof
       --  is a greatest fixed point: each surviving incoming edge is either
       --  a literal table address or an immutable parameter of a surviving
@@ -123,8 +131,6 @@ package body Landin.IR.Specialization is
          declare
             Item : constant Item_Id := Item_Id (I);
          begin
-            Exposed (I) := Kind_Of (Into, Item) = Routine
-              and then Has_Address_Exposure (Into, Item);
             Proven (I) := Generic_Template_Of (Into, Item) /= No_Declaration
               and then not Exposed (I) and then not Is_External (Into, Item)
               and then Evidence_Binding_Count (Into, Item) > 0;

@@ -1315,41 +1315,62 @@ package body Landin.IR is
       Into.Items (Positive (Item)).Address_Exposed := True;
    end Mark_Address_Exposed;
 
+   procedure Visit_Address_Exposures
+     (Of_Unit : Unit;
+      Process : not null access procedure (Item : Item_Id))
+   is
+      procedure Note (Item : Item_Id);
+
+      procedure Note (Item : Item_Id) is
+      begin
+         if Holds (Of_Unit, Item) and then Kind_Of (Of_Unit, Item) = Routine
+         then
+            Process (Item);
+         end if;
+      end Note;
+   begin
+      --  Query actual retained references rather than trusting a lowering
+      --  hint.  Transformations that build images directly remain covered.
+      for Index in 1 .. Item_Count (Of_Unit) loop
+         declare
+            Entry_Item : constant Item_Record := Of_Unit.Items (Index);
+         begin
+            if Entry_Item.Address_Exposed or else Entry_Item.External then
+               Note (Item_Id (Index));
+            end if;
+            Note (Entry_Item.Function_Image);
+         end;
+      end loop;
+      for Image of Of_Unit.Aggregate_Images loop
+         Note (Image.Target);
+      end loop;
+      for Entry_Item of Of_Unit.Evidence_Entries loop
+         Note (Entry_Item.Target);
+      end loop;
+      for Value of Of_Unit.Code loop
+         if Value.Op = Function_Address then
+            Note (Value.Named);
+         end if;
+      end loop;
+   end Visit_Address_Exposures;
+
    function Has_Address_Exposure
-     (Of_Unit : Unit; Item : Item_Id) return Boolean is
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+   is
+      Found : Boolean := False;
+      procedure Note (Target : Item_Id);
+
+      procedure Note (Target : Item_Id) is
+      begin
+         Found := Found or else Target = Item;
+      end Note;
    begin
       if not Holds (Of_Unit, Item) or else Kind_Of (Of_Unit, Item) /= Routine
       then
          raise Landin.Compiler_Defect with "invalid routine exposure query";
       end if;
-      if Element (Of_Unit, Item).Address_Exposed
-        or else Is_External (Of_Unit, Item)
-      then
-         return True;
-      end if;
-      --  Query actual retained references rather than trusting a lowering
-      --  hint.  Transformations that build images directly remain covered.
-      for Entry_Item of Of_Unit.Items loop
-         if Entry_Item.Function_Image = Item then
-            return True;
-         end if;
-      end loop;
-      for Image of Of_Unit.Aggregate_Images loop
-         if Image.Target = Item then
-            return True;
-         end if;
-      end loop;
-      for Entry_Item of Of_Unit.Evidence_Entries loop
-         if Entry_Item.Target = Item then
-            return True;
-         end if;
-      end loop;
-      for Value of Of_Unit.Code loop
-         if Value.Op = Function_Address and then Value.Named = Item then
-            return True;
-         end if;
-      end loop;
-      return False;
+      Visit_Address_Exposures (Of_Unit, Note'Access);
+      return Found;
    end Has_Address_Exposure;
 
    procedure Set_Loop_Depth
