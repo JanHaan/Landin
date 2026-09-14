@@ -153,7 +153,7 @@ package body Landin.Stages.Checking is
          return Seed;
       end Hash_Report;
 
-      function Hash_Report_Index (Index : Positive)
+      function Hash_Index (Index : Positive)
         return Ada.Containers.Hash_Type
         is (Ada.Containers.Hash_Type (Index));
 
@@ -162,13 +162,13 @@ package body Landin.Stages.Checking is
          Element_Type    => Landin.Checking.Routine_Instance_Id,
          Hash            => Hash_Report,
          Equivalent_Keys => "=");
-      package Report_Index_Sets is new Ada.Containers.Hashed_Sets
+      package Index_Sets is new Ada.Containers.Hashed_Sets
         (Element_Type        => Positive,
-         Hash                => Hash_Report_Index,
+         Hash                => Hash_Index,
          Equivalent_Elements => "=");
 
       Generic_Reports : Generic_Report_Maps.Map;
-      Repeated_Reports : Report_Index_Sets.Set;
+      Repeated_Reports : Index_Sets.Set;
       Attributed_Reports : Natural := 0;
 
       procedure Close_Report_View;
@@ -12847,29 +12847,36 @@ package body Landin.Stages.Checking is
                Function_Node : constant Syn.Node_Id :=
                  Res.Node_Of (Meanings.all, Template);
                Formal_Position : Natural := 0;
+               Seen : Index_Sets.Set;
+               Declaring : Landin.Checking.Concept_Id :=
+                 Landin.Checking.No_Concept;
+               Direct_Entry : Natural := 0;
+               Ambiguous : Boolean := False;
 
                procedure Locate_Entry
-                 (Concept : Landin.Checking.Concept_Id;
-                  Limit   : Natural;
-                  Found   : out Landin.Checking.Concept_Id;
-                  Entry_Position : out Natural);
+                 (Concept : Landin.Checking.Concept_Id);
 
                procedure Locate_Entry
-                 (Concept : Landin.Checking.Concept_Id;
-                  Limit   : Natural;
-                  Found   : out Landin.Checking.Concept_Id;
-                  Entry_Position : out Natural)
+                 (Concept : Landin.Checking.Concept_Id)
                is
                begin
-                  Found := Landin.Checking.No_Concept;
-                  Entry_Position := 0;
-                  if Limit = 0
+                  if Ambiguous
                     or else Concept = Landin.Checking.No_Concept
                     or else Landin.Checking.Is_Compiler_Concept
                       (Types.all, Concept)
                   then
                      return;
                   end if;
+                  declare
+                     Position : constant Positive :=
+                       Landin.Checking.Concept_Identities.Position
+                         (Types.all, Concept);
+                  begin
+                     if Seen.Contains (Position) then
+                        return;
+                     end if;
+                     Seen.Include (Position);
+                  end;
                   declare
                      Declaration : constant Res.Declaration_Id :=
                        Landin.Checking.Concept_Declaration
@@ -12890,9 +12897,12 @@ package body Landin.Stages.Checking is
                              (Concept_Tree.all, Concept_Node, Position))
                           = Syn.Name (Of_Tree, Selection)
                         then
-                           Found := Concept;
-                           Entry_Position := Position;
-                           return;
+                           if Declaring /= Landin.Checking.No_Concept then
+                              Ambiguous := True;
+                              return;
+                           end if;
+                           Declaring := Concept;
+                           Direct_Entry := Position;
                         end if;
                      end loop;
 
@@ -12906,11 +12916,7 @@ package body Landin.Stages.Checking is
                      begin
                         if Required /= Syn.No_Node then
                            Locate_Entry
-                             (Concept_For (Concept_Tree.all, Required),
-                              Limit - 1, Found, Entry_Position);
-                           if Found /= Landin.Checking.No_Concept then
-                              return;
-                           end if;
+                             (Concept_For (Concept_Tree.all, Required));
                         end if;
                      end;
                      for Parent in 1 .. Syn.Concept_Parent_Count
@@ -12920,11 +12926,8 @@ package body Landin.Stages.Checking is
                           (Concept_For
                              (Concept_Tree.all,
                               Syn.Nth_Concept_Parent
-                                (Concept_Tree.all, Concept_Node, Parent)),
-                           Limit - 1, Found, Entry_Position);
-                        if Found /= Landin.Checking.No_Concept then
-                           return;
-                        end if;
+                                (Concept_Tree.all, Concept_Node, Parent)));
+                        exit when Ambiguous;
                      end loop;
                   end;
                end Locate_Entry;
@@ -12960,16 +12963,27 @@ package body Landin.Stages.Checking is
                     (if Constraint = Syn.No_Node
                      then Landin.Checking.No_Concept
                      else Concept_For (Template_Tree.all, Constraint));
-                  Concept : Landin.Checking.Concept_Id;
-                  Requirement_Position : Natural;
                   Evidence : Landin.Checking.Conformance_Id :=
                     Landin.Checking.No_Conformance;
                begin
-                  Locate_Entry
-                    (Root, Landin.Checking.Concept_Count (Types.all) + 1,
-                     Concept, Requirement_Position);
-                  if Concept = Landin.Checking.No_Concept
-                    or else Requirement_Position = 0
+                  Locate_Entry (Root);
+                  if Ambiguous then
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Anchor (Of_Tree, Selection),
+                        Message => "this static entry name is declared more"
+                                   & " than once in its concept closure",
+                        Note => "D221: a selected entry name is unique across"
+                                & " the distinct concept closure",
+                        Related => Syn.Origin (Of_Tree, From),
+                        Because => "the constrained type formal",
+                        Into => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+                     return Landin.Checking.No_Signature;
+                  end if;
+                  if Declaring = Landin.Checking.No_Concept
+                    or else Direct_Entry = 0
                   then
                      return Landin.Checking.No_Signature;
                   end if;
@@ -12984,7 +12998,7 @@ package body Landin.Stages.Checking is
                         if Landin.Checking.Nth_Routine_Evidence_Formal
                              (Types.all, Current, Position) = Formal_Position
                           and then Landin.Checking.Conformance_Concept
-                            (Types.all, Candidate) = Concept
+                            (Types.all, Candidate) = Declaring
                         then
                            Evidence := Candidate;
                            exit;
@@ -13000,11 +13014,11 @@ package body Landin.Stages.Checking is
                        Landin.Checking.Routine_Instance_Id :=
                          Landin.Checking.Conformance_Provider_Instance
                            (Types.all, Evidence,
-                            Positive (Requirement_Position));
+                            Positive (Direct_Entry));
                      Provider : constant Res.Declaration_Id :=
                        Landin.Checking.Conformance_Provider_Declaration
                          (Types.all, Evidence,
-                          Positive (Requirement_Position));
+                          Positive (Direct_Entry));
                      Signature : constant Landin.Checking.Signature_Id :=
                        (if Provider_Instance
                               /= Landin.Checking.No_Routine_Instance
@@ -13018,7 +13032,7 @@ package body Landin.Stages.Checking is
                      if Signature /= Landin.Checking.No_Signature then
                         Landin.Checking.Note_Evidence_Selection
                           (Types.all, Of_Tree, Selection, Evidence,
-                           Positive (Requirement_Position));
+                           Positive (Direct_Entry));
                         Landin.Checking.Note_Signature
                           (Types.all, Of_Tree, Selection, Signature);
                      end if;
@@ -18076,6 +18090,8 @@ package body Landin.Stages.Checking is
                   Any_Signature : constant Landin.Checking.Signature_Id :=
                     (if Evidence_Signature
                            /= Landin.Checking.No_Signature
+                       or else Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Node) = Ty.Ill_Typed
                      then Landin.Checking.No_Signature
                      else Any_Selection_Signature (Of_Tree, Node));
                   Held : constant Ty.Type_Kind :=
@@ -18084,6 +18100,9 @@ package body Landin.Stages.Checking is
                        or else Any_Signature
                           /= Landin.Checking.No_Signature
                      then Ty.Function_Value
+                     elsif Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Node) = Ty.Ill_Typed
+                     then Ty.Ill_Typed
                      else Selected_From (Of_Tree, From));
                begin
                   if Evidence_Signature

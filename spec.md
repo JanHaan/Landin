@@ -1176,6 +1176,13 @@ must likewise supply a valid non-null static image.
 ### [1920] What a call means
 
 What a call means.
+A static `T.entry` selection requires one declaration of that entry name across
+T's direct concept, represented-formal constraint and parent closure. Each
+concept is visited once: a shared ancestor reached along two paths contributes
+one declaration, while different declaring concepts remain ambiguous even when
+their providers agree. Parent order and a direct child declaration grant no
+precedence. D221 records this selection rule; an unused colliding closure may
+still be declared and conformed to.
 [0980] gives no source-written parameter a default value, so a call names every
 non-`caller` runtime parameter exactly once. A `caller` position is instead
 filled by the compiler with D192's three source coordinates, unless a named argument forwards
@@ -8843,8 +8850,10 @@ aggregate result address remains first, evidence pointers follow, and written
 runtime parameters remain after them in source signature order.
 Static type and fixed formals still create no runtime position. Inside the
 active routine view, `T.entry(...)` loads the declaration-order function word
-from that hidden table and makes the ordinary verified indirect call. Size and
-alignment remain table members even where the current concrete view answers
+from that hidden table and makes the ordinary verified indirect call. D221
+requires that selected name to identify one declaration across the distinct
+closure; the table traversal order grants no name-resolution precedence.
+Size and alignment remain table members even where the current concrete view answers
 `sizeof T` or `alignof T` directly by resolving the formal through that routine
 instance's type actual. The node's complete concrete descriptor lives only in
 the active instance overlay. Later shared and `any` consumers therefore use the
@@ -9151,7 +9160,7 @@ operation can travel through several physical mechanisms:
 | `collision` | D142 | `negative/conformance-collision`, `negative/parameterized-conformance-collision` |
 | `constraint-refusal` | D142, D143 | `negative/constraint-not-satisfied`, `negative/nonzeroable-zero-length-constraint` |
 | `generic-direct-table` | D144 | `runtime/generic-evidence-indirect`, `negative/parameterized-conformance-entry-signature-mismatch` |
-| `generic-parent-tables` | D144 | `runtime/generic-composed-evidence` |
+| `generic-parent-tables` | D144, D221 | `runtime/generic-composed-evidence`, `negative/r491-static-entry-collision`, `positive/r491-static-entry-diamond` |
 | `erased-direct-table` | D145--D147, D154, D155 | `runtime/any-heterogeneous-dispatch`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser`, `negative/any-concept-identity-mismatch` |
 | `erased-parent-flattening` | D147 | `runtime/any-composed-dispatch` |
 | `erased-parameterized-provider` | D145--D147, D154, D155 | `runtime/any-parameterized-provider`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -13312,3 +13321,36 @@ container-field idiom the prototypes require. All are declined.
 `negative/sunk-inout-not-restored` and the small generic/concrete checker
 controls. The existing copy-before-sink and consumed-place runtime fixtures
 retain their separate language obligations.
+
+### D221 — A static concept entry has one declaring concept
+
+**The tour said** that composed concepts retain separate evidence tables and
+that static selection reaches their entries [1310]. D144 specified table order;
+D146 required unique selected names for erased dispatch. Neither stated whether
+static selection used that same uniqueness rule. The checker chose the first
+matching parent, so reordering parents could change the selected provider.
+
+**Chosen:** [1920] requires a selected static entry name to have one declaration
+in the direct concept's distinct represented-formal-constraint/parent closure.
+A direct child entry does not override an inherited entry. Two distinct concepts
+remain distinct declarations even if their signatures or providers agree. A
+shared ancestor reached through a diamond is one declaring concept and remains
+unambiguous. The collision matters when the entry is selected; declaring or
+conforming to a closure whose colliding entry is unused remains legal.
+
+This is a lookup rule. It changes neither D144's separate parent tables and
+physical entry order nor D146/D147's erased receiver and flattened-table rules.
+Prototype 3's allocator and composed map concepts retain their uniquely named
+entries, as do prototype 2's diagnostic and prototype 4's world capabilities.
+
+**The alternatives:** declaration-order precedence would make a parent reorder
+select a different operation. Treating a direct entry as an override would add
+an unstated override mechanism. Rejecting the entire concept closure would
+forbid programs that never select its colliding name. All are declined; the
+selection reports L0301 instead of choosing a provider.
+
+**Pinned by** `negative/r491-static-entry-collision`,
+`positive/r491-static-entry-diamond` and small checker controls for parent order,
+represented constraints, direct/inherited collisions, distinct names and unused
+colliding closures. `runtime/generic-composed-evidence` retains the independent
+execution obligation for the unchanged parent-table ABI.

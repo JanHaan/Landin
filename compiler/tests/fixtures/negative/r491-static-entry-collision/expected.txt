@@ -1,0 +1,10 @@
+error[L0301]: this static entry name is declared more than once in its concept closure
+  --> ../tests/fixtures/negative/r491-static-entry-collision/program.ldn:14:53
+   |
+14 | select: (t: type is both, x: t) -> (r: i32) = r = t.value(x) end select
+   |                                                     ^^^^^
+  --> ../tests/fixtures/negative/r491-static-entry-collision/program.ldn:14:51
+   |
+14 | select: (t: type is both, x: t) -> (r: i32) = r = t.value(x) end select
+   |                                                   ^ the constrained type formal
+  = note: D221: a selected entry name is unique across the distinct concept closure

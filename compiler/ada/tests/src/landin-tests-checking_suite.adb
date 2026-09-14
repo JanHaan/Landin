@@ -12564,11 +12564,154 @@ package body Landin.Tests.Checking_Suite is
       end loop;
    end Sink_Paths_Stay_In_Their_Binding;
 
+   procedure Static_Entries_Have_One_Declaration
+     (Item : in out Landin.Testing.Context);
+
+   procedure Static_Entries_Have_One_Declaration
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Facts : Landin.Targets.Target_Facts)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "static-entry.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Stages.Run (Order, Work), 4,
+            Label & " reaches checking");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+               and then
+                 (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0301"),
+               Label & ": " & Landin.Stages.Rendered_Report (Work));
+         end;
+      end Check_Source;
+   begin
+      for Wide in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Wide then Landin.Targets.Linux_X86_64
+               else Landin.Targets.Synthetic_32);
+         begin
+            Check_Source
+              ("two parents",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) value: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type) is "
+               & "left, right end both left_value: (x: i32) -> (r: i32) = "
+               & "r = x end left_value right_value: (x: i32) -> (r: i32) = "
+               & "r = x + 1 end right_value i32 is left (value: "
+               & "left_value) i32 is right (value: right_value) i32 is "
+               & "both () select: (t: type is both, x: t) -> (r: i32) = r "
+               & "= t.value(x) end select f: (x: i32) -> (r: i32) = r = "
+               & "select(x) end f",
+               False, Facts);
+            Check_Source
+              ("reversed parents",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) value: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type) is "
+               & "right, left end both left_value: (x: i32) -> (r: i32) = "
+               & "r = x end left_value right_value: (x: i32) -> (r: i32) = "
+               & "r = x + 1 end right_value i32 is left (value: "
+               & "left_value) i32 is right (value: right_value) i32 is "
+               & "both () select: (t: type is both, x: t) -> (r: i32) = r "
+               & "= t.value(x) end select f: (x: i32) -> (r: i32) = r = "
+               & "select(x) end f",
+               False, Facts);
+            Check_Source
+              ("formal constraint and parent",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) value: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type is "
+               & "left) is right end both left_value: (x: i32) -> (r: i32) "
+               & "= r = x end left_value right_value: (x: i32) -> (r: i32) "
+               & "= r = x + 1 end right_value i32 is left (value: "
+               & "left_value) i32 is right (value: right_value) i32 is "
+               & "both () select: (t: type is both, x: t) -> (r: i32) = r "
+               & "= t.value(x) end select f: (x: i32) -> (r: i32) = r = "
+               & "select(x) end f",
+               False, Facts);
+            Check_Source
+              ("direct and inherited entry",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) value: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type) is "
+               & "left value: (x: t) -> (r: i32) end both left_value: (x: "
+               & "i32) -> (r: i32) = r = x end left_value right_value: (x: "
+               & "i32) -> (r: i32) = r = x + 1 end right_value i32 is left "
+               & "(value: left_value) i32 is right (value: right_value) "
+               & "i32 is both (value: left_value) select: (t: type is "
+               & "both, x: t) -> (r: i32) = r = t.value(x) end select f: "
+               & "(x: i32) -> (r: i32) = r = select(x) end f",
+               False, Facts);
+            Check_Source
+              ("distinct names",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) other: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type) is "
+               & "left, right end both left_value: (x: i32) -> (r: i32) = "
+               & "r = x end left_value right_value: (x: i32) -> (r: i32) = "
+               & "r = x + 1 end right_value i32 is left (value: "
+               & "left_value) i32 is right (other: right_value) i32 is "
+               & "both () select: (t: type is both, x: t) -> (r: i32) = r "
+               & "= t.value(x) end select f: (x: i32) -> (r: i32) = r = "
+               & "select(x) end f",
+               True, Facts);
+            Check_Source
+              ("unused colliding closure",
+               "left: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end left right: type = concept (t: type) value: (x: t) "
+               & "-> (r: i32) end right both: type = concept (t: type) is "
+               & "left, right end both left_value: (x: i32) -> (r: i32) = "
+               & "r = x end left_value right_value: (x: i32) -> (r: i32) = "
+               & "r = x + 1 end right_value i32 is left (value: "
+               & "left_value) i32 is right (value: right_value) i32 is "
+               & "both ()",
+               True, Facts);
+            Check_Source
+              ("shared ancestor",
+               "root: type = concept (t: type) value: (x: t) -> (r: i32) "
+               & "end root left: type = concept (t: type) is root end left "
+               & "right: type = concept (t: type) is root end right both: "
+               & "type = concept (t: type) is left, right end both "
+               & "identity: (x: i32) -> (r: i32) = r = x end identity i32 "
+               & "is root (value: identity) i32 is left () i32 is right () "
+               & "i32 is both () select: (t: type is both, x: t) -> (r: "
+               & "i32) = r = t.value(x) end select f: (x: i32) -> (r: i32) "
+               & "= r = select(x) end f",
+               True, Facts);
+         end;
+      end loop;
+   end Static_Entries_Have_One_Declaration;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "checking", "sink paths stay in their binding",
          Sink_Paths_Stay_In_Their_Binding'Access);
+      Landin.Testing.Register
+        (Into, "checking", "static entries have one declaration",
+         Static_Entries_Have_One_Declaration'Access);
       Landin.Testing.Register
         (Into, "checking", "loops preserve the assignment boundary",
          Loops_Preserve_The_Assignment_Boundary'Access);
