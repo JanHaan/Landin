@@ -67,11 +67,20 @@ The Pages job receives a `pages.sr.ht/PAGES:RW` token for that job. Native
 acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.
-The approval check runs again before uploading, but uploads from separate
-jobs are not serialized. A newer publication can finish while an older upload
-is still in flight, and the two domain uploads are separate operations. The
-guard therefore refuses known-stale input; it does not provide an atomic
-latest-revision publication guarantee. R4.91 owns this remaining delivery gap.
+Publication stays on SourceHut. `scripts/ci/publish.py` acquires the canonical
+`refs/tags/ci/publication-lock` tag with an atomic create-only Git lease.
+Every automatic and manual publisher uses that same lock, retaining it through
+the final approval check and both domain uploads. A waiting older job rechecks
+canonical main before rendering or uploading and refuses a stale revision.
+The two domain operations remain separate: serialization prevents an older
+participating job from overwriting a newer completed publication, but does not
+make both domains change atomically or prevent main advancing during an upload.
+
+Each publication renders and packages into its own temporary directory. The
+renderer accepts `--to DIR` for isolated output; ordinary previews keep their
+usual directory. The final guard must still return the exact revision approved
+before lock acquisition, so changing HEAD while rendering cannot approve an
+archive made from a different revision.
 Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
 with a token that has the `PAGES:RW` scope. The site goes to
 `www.701.dev` and then to `701.dev`: pages.sr.ht serves one site per domain
@@ -80,6 +89,41 @@ them going stale. `LANDIN_PAGES_DOMAIN` and `LANDIN_PAGES_ALIAS` override
 each, and an empty `LANDIN_PAGES_ALIAS` publishes only the first.
 `hut pages publish -s //some/path` moves the site into a subdirectory if
 the root is wanted for something else.
+
+The Pages job's existing SSH identity must be allowed to write the lock tag in
+canonical `git.sr.ht`; read access to private fonts and write access to the
+GitHub mirror do not by themselves establish that permission. Manual publishers
+need the same canonical write permission and their configured Pages token.
+The lock carries a unique owner object, candidate commit and job identifier; it
+is operational coordination, never an acceptance tag or release designation.
+A busy job waits up to five minutes plus bounded Git calls, then refuses.
+Git calls, rendering and uploads have explicit timeouts.
+
+Before activating this protocol, finish or cancel every older Pages job and
+switch manual publishers to the new wrapper. Older scripts do not participate
+in the lock. R4.91 records activation separately from local protocol tests.
+
+A render or pre-upload approval failure releases its own lock with an exact
+Git lease. An upload failure or timeout retains it: the client cannot prove
+that the server stopped processing the request. A killed worker also leaves
+its lock in place. Do not remove a lock merely because it is old. Inspect the
+owning job and establish that no upload can still complete before recovering.
+Fetch the current lock to inspect its owner and copy its full object identity:
+
+```sh
+git fetch git@git.sr.ht:~sinnfrei/landin refs/tags/ci/publication-lock
+git cat-file tag FETCH_HEAD
+```
+
+After resolving that job and any uncertain server outcome, replace
+`EXPECTED_LOCK_OBJECT` below with the inspected object's identity. The exact
+lease prevents removal of a different worker's replacement lock. Then rerun
+publication from current approved canonical main, repairing both domains.
+
+```sh
+git push --force-with-lease=refs/tags/ci/publication-lock:EXPECTED_LOCK_OBJECT \
+    git@git.sr.ht:~sinnfrei/landin :refs/tags/ci/publication-lock
+```
 
 The rendered pages and the tarball are not committed: they are generated,
 and a generated file in the history is a file that goes stale in the

@@ -22,6 +22,7 @@ import records
 import approval
 import controller
 import job
+import publish
 
 
 class ArchiveTests(unittest.TestCase):
@@ -523,6 +524,166 @@ class RunnerControlTests(GitFixture):
         records.validate_bundle(exported)
 
 
+class PublicationLockTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="landin-publication-test-")
+        self.addCleanup(self.temporary.cleanup)
+        base = Path(self.temporary.name)
+        self.root, self.remote = base / "source", base / "remote.git"
+        self.root.mkdir()
+        publish.git(self.root, "init", "-b", "main")
+        publish.git(self.root, "config", "user.name", "Publication test")
+        publish.git(self.root, "config", "user.email", "test@invalid")
+        (self.root / "README").write_text("source")
+        publish.git(self.root, "add", "README")
+        publish.git(self.root, "commit", "-m", "source")
+        self.commit = publish.git(self.root, "rev-parse", "HEAD").decode().strip()
+        publish.git(self.root, "init", "--bare", str(self.remote))
+        publish.git(self.root, "push", str(self.remote), "main")
+
+    def lock(self):
+        return publish.PublicationLock(self.root, self.commit, str(self.remote))
+
+    def test_two_publishers_cannot_hold_the_same_lock(self):
+        first, second = self.lock(), self.lock()
+        self.assertNotEqual(first.oid, second.oid)
+        first.acquire(wait_seconds=0)
+        with self.assertRaisesRegex(common.Invalid, "publication busy"):
+            second.acquire(wait_seconds=0)
+        self.assertEqual(second.current(), first.oid)
+        first.release()
+        second.acquire(wait_seconds=0)
+        second.release()
+        self.assertIsNone(first.current())
+
+    def test_an_old_owner_cannot_release_a_replacement_lock(self):
+        first, second = self.lock(), self.lock()
+        first.acquire(wait_seconds=0)
+        publish.git(self.root, "push", "--force-with-lease=" + publish.LOCK_REF + ":" + first.oid,
+                    str(self.remote), second.oid + ":" + publish.LOCK_REF)
+        with self.assertRaises(subprocess.CalledProcessError):
+            first.release()
+        self.assertEqual(first.current(), second.oid)
+        second.release()
+
+    def test_racing_create_cannot_replace_the_winner(self):
+        first, second = self.lock(), self.lock()
+        observed = first.current
+        initial = True
+        def race():
+            nonlocal initial
+            if initial:
+                initial = False
+                second.acquire(wait_seconds=0)
+                return None
+            return observed()
+        with patch.object(first, "current", side_effect=race):
+            with self.assertRaisesRegex(common.Invalid, "publication busy"):
+                first.acquire(wait_seconds=0)
+        self.assertEqual(first.current(), second.oid)
+        second.release()
+
+    def test_lost_acquisition_response_is_reconciled_by_unique_identity(self):
+        owner = self.lock()
+        real_git = publish.git
+        def lost(root, *args, **kwargs):
+            result = real_git(root, *args, **kwargs)
+            if args[0] == "push":
+                raise subprocess.TimeoutExpired(["git", "push"], 30)
+            return result
+        with patch.object(publish, "git", side_effect=lost):
+            owner.acquire(wait_seconds=0)
+        self.assertEqual(owner.current(), owner.oid)
+        owner.release()
+
+    def workflow(self, *, approval_results=None, upload_failure=None, render_failure=False):
+        events = []
+        commit = "a" * 40
+        class Lock:
+            oid = "b" * 40
+            def __init__(self, root, candidate):
+                events.append(("lock", candidate))
+            def acquire(self):
+                events.append("acquire")
+            def release(self):
+                events.append("release")
+        def prepare(root, directory):
+            events.append("render")
+            self.assertNotEqual(directory.parent, self.root)
+            if render_failure:
+                raise common.Invalid("render failed")
+            archive = directory / "site.tar.gz"
+            archive.write_bytes(b"rendered archive")
+            return archive
+        def upload(argv, **kwargs):
+            self.assertEqual(argv[:3], ["hut", "pages", "publish"])
+            self.assertEqual(Path(argv[-1]).read_bytes(), b"rendered archive")
+            events.append(("upload", argv[4]))
+            if argv[4] == upload_failure:
+                raise subprocess.TimeoutExpired(argv, 120)
+        results = iter(approval_results or [commit] * 3)
+        def approved(root):
+            result = next(results)
+            events.append(("approved", result))
+            return result
+        with patch.object(publish, "PublicationLock", Lock), \
+                patch.object(publish, "approved", side_effect=approved), \
+                patch.object(publish, "prepare_archive", side_effect=prepare), \
+                patch.object(publish, "run", side_effect=upload):
+            try:
+                publish.publish(self.root, "first.example", "second.example")
+            except (common.Invalid, subprocess.SubprocessError) as error:
+                return events, error
+        return events, None
+
+    def test_final_guard_and_both_uploads_are_inside_the_lock(self):
+        events, error = self.workflow()
+        self.assertIsNone(error)
+        self.assertEqual([e for e in events if isinstance(e, str)],
+                         ["acquire", "render", "release"])
+        acquire, release = events.index("acquire"), events.index("release")
+        self.assertEqual([e for e in events[acquire + 1:release] if isinstance(e, tuple)],
+                         [("approved", "a" * 40), ("approved", "a" * 40),
+                          ("upload", "first.example"), ("upload", "second.example")])
+
+    def test_changed_candidate_never_uploads_the_old_archive(self):
+        for results in (["a" * 40, "b" * 40], ["a" * 40, "a" * 40, "b" * 40]):
+            with self.subTest(results=results):
+                events, error = self.workflow(approval_results=results)
+                self.assertIsInstance(error, common.Invalid)
+                self.assertEqual(events[-1], "release")
+                self.assertFalse(any(isinstance(e, tuple) and e[0] == "upload" for e in events))
+
+    def test_uncertain_upload_never_releases_the_lock(self):
+        for failed in ("first.example", "second.example"):
+            with self.subTest(failed=failed):
+                events, error = self.workflow(upload_failure=failed)
+                self.assertIsInstance(error, subprocess.TimeoutExpired)
+                self.assertNotIn("release", events)
+
+    def test_render_failure_releases_before_any_upload(self):
+        events, error = self.workflow(render_failure=True)
+        self.assertIsInstance(error, common.Invalid)
+        self.assertEqual(events[-1], "release")
+        self.assertFalse(any(isinstance(e, tuple) and e[0] == "upload" for e in events))
+
+    def test_archive_is_isolated_and_normalizes_publisher_modes(self):
+        def render(argv, **kwargs):
+            if "--to" in argv:
+                site = Path(argv[argv.index("--to") + 1])
+                site.mkdir()
+                (site / "index.html").write_text("rendered")
+                (site / "index.html").chmod(0o600)
+                (site / "fonts").mkdir()
+                (site / "fonts/font.woff2").write_bytes(b"font")
+        with tempfile.TemporaryDirectory() as temporary, patch.object(publish, "run", side_effect=render):
+            archive = publish.prepare_archive(self.root, Path(temporary))
+            with tarfile.open(archive) as contents:
+                self.assertEqual({m.name: m.mode for m in contents.getmembers()},
+                                 {"index.html": 0o644, "fonts": 0o755, "fonts/font.woff2": 0o644})
+                self.assertTrue(all(m.uid == m.gid == 0 for m in contents.getmembers()))
+
+
 class PublicationWiringTests(unittest.TestCase):
     def test_guard_failure_precedes_render_fonts_and_upload(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -560,6 +721,11 @@ class PublicationWiringTests(unittest.TestCase):
                 pages.write_text(original.replace("python3 scripts/ci/approval.py", "true"))
                 self.assertTrue(checker.check_native_ci(True))
                 pages.write_text(original)
+                site = root / "scripts/site.sh"
+                script = site.read_text()
+                site.write_text(script.replace("exec python3", "python3"))
+                self.assertTrue(checker.check_native_ci(True))
+                site.write_text(script)
                 (root / ".builds/nix.yml").write_text("tasks: []\n")
                 self.assertTrue(checker.check_native_ci(True))
 
