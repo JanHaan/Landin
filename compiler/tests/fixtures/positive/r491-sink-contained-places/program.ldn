@@ -1,0 +1,26 @@
+-- Prototype 3 consumes a descriptor field; prototype 4 restores a reader
+-- field consumed from inout storage. A fixed array also contains its elements.
+consume: (sink value: i32) -> none =
+end consume
+
+drop: (sink value: []mut i32) -> none =
+end drop
+
+box: type = struct
+    items: []mut i32
+end box
+
+fixed_element: (inout values: [1]i32) -> none =
+    consume(values[0])
+    values[0] = 7
+end fixed_element
+
+descriptor_field: (inout value: box) -> none =
+    drop(value.items)
+    value.items = []
+end descriptor_field
+
+descriptor_element: (inout values: [1][]mut i32) -> none =
+    drop(values[0])
+    values[0] = []
+end descriptor_element

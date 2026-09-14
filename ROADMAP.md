@@ -5850,7 +5850,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Repaired: the existing finite concept-graph walk includes type-formal constraint edges as well as named parents. Tiny self, mutual, mixed and unused cycles report L0301 before lookup; an acyclic constrained-formal control passes. The exhaustion witness was not executed before the guard. |
 | J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Repaired: parameterized provider selection skips declarations refused during collection. A missing entry retains L0301 and its consumer reports the ordinary L0318 unsatisfied constraint, without creating incomplete evidence or raising a compiler defect. Valid generic providers and signature refusals retain their contracts. |
 | J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Repaired: iterable family matching requires an actual nominal identity before reading its template. A multi-result aggregate now reports the existing L0301 missing-iterable diagnostic; a real nominal family retains traversal selection. |
-| J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
+| J53 | Restoration after sinking through a slice view of an inout array | P | D220 resolves the place-form question through the existing no-dereference boundary: slice indexes reach referenced backing and are refused, including literal indexes through local views. Whole descriptor fields and fixed-array elements remain eligible and retain inout restoration. The broad alias-safety rationale remains refuted; no alias-remapping or ownership rule is added. Six exact selectors pass 63 checks on each host, including instantiated generic controls, paired descriptor/array acceptance and reference-boundary refusals. Exact-revision acceptance remains open. |
 | J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Repaired: checking admits atom and function measurements; lowering uses their U32 and target-word carriers. Static image folding also covers these carriers and pointer/slice/any measurements, with two words only for slice/any size. Existing target-independent array-bound and C-ABI restrictions remain in force. |
 | J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
 | J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Implemented: check literal control results and matching loop transfers without broadening the known-value rule; preserve one owed store check. Scalar implicit routine results now meet their declared range too. Selected controls pass in both modes; J116 is separately disposed against its narrower normative contract; exact acceptance remains open. |
@@ -7444,6 +7444,24 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+J53/D220 makes the existing no-dereference sink boundary explicit for slices.
+A literal slice index follows backing storage and is refused; literal fixed-array
+indexes and whole descriptors still name contained places. Ten small checker
+sources cover slice parameters, local views, restored fields, instantiated
+generics, explicit pointer dereferences, computed indexes and paired descriptor/
+fixed-array restoration. They pass 40 checks across both target widths. Five
+exact fixture selectors add 23 checks, including the two new paired fixtures.
+All 63 checks pass in macOS debug and Linux release after single-worker builds.
+
+The initial generic refusal control did not instantiate its generic body and
+therefore did not exercise the sink check. Both generic controls now include
+concrete callers; this is evidence for instantiated bodies, not unused-template
+checking. The four fixture inventories were regenerated, and prototype 3/4's
+historical finding tails remain byte-identical. Positive fixtures emit assembly
+text only; no Landin assembler, linker, generated executable or giant image ran.
+Logs remain in `.scratch/r491-sink-storage/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
 
 K35 records the C compiler selected by the native GPR configuration rather
 than assuming the bare `gcc` banner identifies it. A bounded helper creates

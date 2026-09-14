@@ -1086,6 +1086,11 @@ its taken edge returns and its untaken edge continues with the incoming
 assignment state. The unevaluated side of `and` or `or` is likewise a
 fallthrough edge: a return from the right operand cannot erase that skip edge,
 and assignments made only on the right do not survive their join.
+A `sink` argument follows one binding-rooted path of ordinary fields and
+literal fixed-array indexes. Pointer dereferences and slice indexes cross a
+reference boundary and are refused, including a literal slice index. A slice
+binding, field or fixed-array element still names its own descriptor storage
+and may be consumed as a whole. D220 makes this place-form boundary explicit.
 A place passed to `sink` becomes unassigned at that exact binding-rooted path.
 Every read requires a later assignment on every arriving path, and a part sunk
 out of an `inout` parameter must be assigned again on every return edge [0910].
@@ -9097,7 +9102,7 @@ classified failure boundary before the repository gate can pass.
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
-| `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
+| `consume.local` | static | 0910 | L0301 for a sink path crossing a reference boundary or using a computed index; L0302 or L0315 for consumed-place and restoration checks | `negative/use-after-sink`, `negative/sunk-inout-not-restored`, `negative/r491-sink-slice-storage`, `positive/r491-sink-contained-places` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
 | `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred`, `runtime/r490-generic-recovery-frontier`, `runtime/r490-generic-recovery-alias-chains`, `negative/r490-generic-error-key-cycle` |
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
@@ -13274,3 +13279,36 @@ prefix loops in all four prototypes and the tour's sort header,
 `negative/r491-range-context-overflow`, `negative/for-range-endpoints-disagree`
 and `negative/for-range-needs-integer`. D159's existing runtime traversal
 fixture retains the independent evaluation and terminal-bound evidence.
+
+### D220 — A sink path stops at referenced backing storage
+
+**The tour said** that a sink path has a binding root, no dereference and no
+computed index [0910]. D127 made a known fixed-array index an identity step.
+The implementation also admitted literal slice indexes, even though they reach
+storage through the descriptor's backing reference. Consuming through a local
+view could then hide an inout array's restoration obligation.
+
+**Chosen:** [1910]'s sink-place check stops at every slice index, just as it
+stops at a pointer dereference. A literal index into a fixed array still names
+one contained place. A slice-valued binding, ordinary field or fixed-array
+element names descriptor storage and remains an eligible sink argument. The
+existing inout restoration rule applies to those admitted places on every exit.
+The same boundary applies after generic type substitution.
+
+This distinguishes prototype 3's descriptor field `l.items` from an element
+reached through that descriptor. It also preserves prototype 4's consumed
+reader-field restoration. Copies and reference-origin checks keep their own
+rules; this does not add ownership or interprocedural alias analysis.
+
+**The alternatives:** transferring restoration obligations through every slice
+view would require mapping aliases and view indexes back onto other bindings,
+beyond the chosen one-place model. Admitting a literal slice index solely
+because its spelling starts at a local leaves the no-dereference boundary
+unstated. Refusing whole slice descriptors would instead remove the consuming
+container-field idiom the prototypes require. All are declined.
+
+**Pinned by** `negative/r491-sink-slice-storage`,
+`positive/r491-sink-contained-places`, `negative/sink-through-dereference`,
+`negative/sunk-inout-not-restored` and the small generic/concrete checker
+controls. The existing copy-before-sink and consumed-place runtime fixtures
+retain their separate language obligations.

@@ -16789,10 +16789,14 @@ package body Landin.Stages.Checking is
          while Syn.Kind (Of_Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
          loop
+            --  Even a literal slice index follows referenced backing rather
+            --  than naming a part of the binding's own descriptor storage.
             if Syn.Kind (Of_Tree, Where) = Syn.Element_Index
-              and then Syn.Kind
-                (Of_Tree, Syn.Index_Of (Of_Tree, Where))
-                  /= Syn.Integer_Literal
+              and then
+                (Syn.Kind (Of_Tree, Syn.Index_Of (Of_Tree, Where))
+                   /= Syn.Integer_Literal
+                 or else Selected_From
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Where)) = Ty.Slice_Value)
             then
                return False;
             elsif Syn.Kind (Of_Tree, Where) = Syn.Member_Selection

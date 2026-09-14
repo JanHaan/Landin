@@ -1,0 +1,11 @@
+consume: (sink value: i32) -> none =
+end consume
+
+bad_parameter: (values: []mut i32) -> none =
+    consume(values[0])
+end bad_parameter
+
+bad_view: (inout values: [1]i32) -> none =
+    view: []mut i32 = values[0..1]
+    consume(view[0])
+end bad_view
