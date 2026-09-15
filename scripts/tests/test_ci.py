@@ -27,6 +27,7 @@ import publish
 import resources
 sys.path.insert(0, str(ROOT / "scripts/tests"))
 from test_darwin import DarwinEvidenceTests
+from test_macho_identity import MachOIdentityTests
 
 
 class ArchiveTests(unittest.TestCase):

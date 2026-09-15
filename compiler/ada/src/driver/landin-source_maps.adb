@@ -3,6 +3,7 @@ with GNAT.SHA256;
 with Landin.Byte_Encoding;
 with Landin.IR;
 with Landin.Source;
+with Landin.Backend.Toolchain;
 
 package body Landin.Source_Maps is
    package US renames Ada.Strings.Unbounded;
@@ -49,6 +50,8 @@ package body Landin.Source_Maps is
       --  the assembly artifacts. This comment allocates no runtime bytes.
       Result.Assembly := US.To_Unbounded_String
         (Assembly & "# Landin caller files " & Result.Build_Id & LF);
+      US.Append (Result.Assembly, Landin.Backend.Toolchain.Identity_Section
+        (Result.Build_Id, Landin.Stages.Target (Context)));
       Result.JSON := US.To_Unbounded_String
         ("{" & LF & "  ""build_id"":""" & Result.Build_Id & """," & LF
          & "  ""assembly_sha256"":"""

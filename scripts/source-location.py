@@ -25,6 +25,8 @@ def main():
     identity = parser.add_mutually_exclusive_group(required=True)
     identity.add_argument("--build-id", help="ELF build ID of the diagnosed build")
     identity.add_argument("--assembly", type=Path, help="assembly from that build")
+    identity.add_argument("--macho", type=Path, help="native arm64 executable")
+    parser.add_argument("--dsym", type=Path, help="matching dSYM DWARF file (with --macho)")
     args = parser.parse_args()
     try:
         if min(args.file_id, args.line, args.column) < 1:
@@ -36,6 +38,11 @@ def main():
             digest = hashlib.sha256(args.assembly.read_bytes()).hexdigest()
             if digest != table["assembly_sha256"]:
                 raise ValueError("assembly does not match the source table")
+        if args.dsym is not None and args.macho is None:
+            raise ValueError("--dsym requires --macho")
+        if args.macho is not None:
+            from macho_identity import match
+            match(table, args.macho, args.dsym)
         path = resolve(table, args.file_id)
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.error(str(error))

@@ -9026,7 +9026,7 @@ cannot approve this revision; no later bookkeeping revision replaces it.
 
 ### R5.40 — Implement macOS arm64 source debugging
 
-Status: active
+Status: complete
 Depends on: R5.30, R4.60
 
 Emit and validate line, frame and selected local/type information through the
@@ -9036,9 +9036,103 @@ Own the Mach-O debug identity corresponding to the Linux build-id contract.
 Exit evidence: scripted native debugger sessions provide the same selected
 source experience as Linux where platform facilities permit.
 
+Implementation and native source experience:
+
+- `Landin.Backend.Dwarf` serializes the shared source/type/scope and location
+  facts. Its placement parameters consume each backend's actual frame and slot
+  plans. The x86 adapter retains saved-register/indirection behavior; Darwin
+  consumes R5.30's stack homes. Source identities, provenance,
+  `Debug_Locations` availability and caller-coordinate generation remain
+  target-neutral. Parsing, checking, IR semantics and all golden records are
+  unchanged; no language or release/version decision is introduced.
+- Darwin emits DWARF 4 types, line and location/range information in Mach-O
+  debug sections. The frame base is register 29; CFI records x29/x30 saves,
+  CFA=x29+16 and each epilogue, including hosted helpers. Frames remain present
+  with debug disabled. A relocatable compilation-unit low address supports
+  dsymutil's range relocation. Empty represented payloads now use an explicit
+  childless structure description in the shared encoder, preserving their
+  actual size and eliminating the native object-verifier warning.
+- `--debug=full` is supported through target capability queries. Apple Clang
+  receives explicit assembler input, DWARF 4 and retained intermediates; it
+  links and invokes its native dsymutil. Explicit assembler selection prevents
+  preprocessing from replacing the exact assembly bytes. The driver checks
+  object and bundle destinations, including source ancestors and existing
+  linked debug leaves, before effects. Output includes assembly, object,
+  executable, dSYM and the complete optional source map.
+- The full SHA-256 source/assembly digest is retained without filenames in
+  `__TEXT,__landin_id`, contributing to the native `LC_UUID`. UUID equality
+  binds the executable and dSYM; the full digest binds the executable and
+  caller/source map. `source-location.py --macho ... --dsym ...` refuses
+  mismatches. The native Mach-O reader validates bounded load commands and
+  the implemented thin arm64 format. R5.30's sidecars alone did not establish
+  this identity. Linux's GNU build ID and three-u32 caller ABI are preserved.
+
+Native development evidence is retained under `.scratch/r540/`. The selected
+R4.60 fixture passes 168 LLDB assertions in each of none/off, size/auto and
+size/all, plus inspection of all thirteen scalar types in each profile.
+Sessions require the packaged dSYM, exact source breakpoint/step lines, nested
+inner/outer/main stacks, suspended caller values and coordinates, pointers,
+optimal-layout records, fixed arrays, tagged variants, generic instances,
+match/destructuring/loop aliases and unavailable locals before initialization.
+Each debugged program exits 42. Native object and dSYM verification, CFI dumps,
+UUIDs, source inventories, tools and sessions are retained alongside artifacts.
+
+The same selected profiles execute stripped copies alone in fresh deployment
+directories. They retain UUID/digest identity and runtime behavior, omit source
+filenames and cannot resolve source breakpoints with external symbol lookup
+disabled. Caller lookup still succeeds with separately retained matching maps.
+Default/explicit none emission is identical; none emits only caller-needed
+maps. A comment-only source change at the same path changes both identities;
+wrong maps and wrong dSYMs are refused, including LLDB's own symbol-file check.
+No debugger oracle is relaxed to supply a passing session.
+
+The pinned native environment checks Apple Clang 21 (`clang-2100.1.1.101`),
+SDK 26.5 build 25F70, ld 1267, LLDB `lldb-2100.0.17.203`, and Apple LLVM 21
+for dsymutil/dwarfdump, retaining binary paths, versions and hashes.
+`docs/targets.md` links Apple's artifact/UUID documentation, dsymutil, Arm's
+DWARF register assignments and LLDB's scripting documentation. Initial native
+checks exposed and repaired dsymutil's missing CU base, Clang's preprocessing
+of saved assembly, and the child flag on empty variant payload descriptions.
+The failed development transcripts remain retained; they are not acceptance.
+
+Focused compiler feedback passes the debugging suite (17 cases/197 checks),
+target suite (12/160) and driver suite (53/1871), including the new output
+collision controls. Native environment failure-path tests pass all nine cases;
+Darwin acceptance controls pass all eight cases. The CI controls also cover
+malformed Mach-O input, missing/filtered/failed LLDB profiles, source/compiler
+substitution, incomplete sessions, mismatched maps/dSYMs and archive/artifact
+identity. Exact acceptance below owns the complete compiler-host and Linux
+regression evidence, rather than repeating those broad suites locally.
+
+Retained dispositions and limits:
+
+| input | R5.40 disposition |
+|---|---|
+| R4.60 selected debugger contract | Native LLDB demonstrates the selected source experience under all three profiles. DWARF remains an output encoding; C display rules are debugger presentation, not Landin expression evaluation. |
+| R520-2/R520-3 and R5.30 identity handoff | Mach-O full digest plus native executable/dSYM UUID matching implemented; source-only changes and stripping tested. Identities are build matching, not signed or tamper-proof attestations. |
+| debugger presentation | LLDB uses C scalar spellings and tag/payload overlays. It does not evaluate Landin expressions or automatically choose a variant's active arm. Baseline Darwin variables use stack homes; x86 register allocation is not claimed for Darwin. |
+| source deployment | Source maps, dSYMs and source text remain optional runtime deployment artifacts. Source listing needs retained text or LLDB source-path remapping. Universal Mach-O binaries are outside the implemented thin-arm64 target. |
+| R5.20 resource/scaling and scheduler/cache | All recorded limits and successor dispositions remain. No stack-limit increase, giant-image probe, scheduler/cache implementation or Nix CI is introduced. |
+| R5.50 | Full shared hosted and complete derived-prototype parity, including its milestone debugger matrix, remains open. The selected R5.40 sessions do not close that scope. |
+
+Closure candidate and acceptance binding: these completion and next-item
+pointers become authoritative only when the containing revision passes the
+committed routine Linux policy **with release GDB**, plus the schema-2 native
+macOS policy in `environments/macos-arm64/acceptance.json`. GDB is required
+because DWARF serialization and empty-type descriptions are shared; this is
+substantial debugger regression risk. No full milestone matrix is selected.
+The Mac policy retains exact source archive/inventory, compiler configuration
+and manifest, OS/tool/SDK identities, compiler, assembly, objects, executables,
+dSYMs, source maps, identity checks and native LLDB transcripts. Verification
+refuses incomplete scope or mismatched artifacts, and an independent export
+retains the evidence. Both bundles must match commit/tree/archive/source
+identities before annotated `ci/accepted/FULL_COMMIT` approval. Atomic canonical
+promotion and guarded publication bind delivery of this exact revision;
+Linux alone or a later bookkeeping revision cannot close the item.
+
 ### R5.50 — Close hosted target parity
 
-Status: planned
+Status: active
 Depends on: R5.30, R5.40, R4.70, R4.80
 
 Run all shared hosted conformance cases and complete derived prototypes 2, 3

@@ -3145,11 +3145,13 @@ package body Landin.Tests.Driver_Suite is
    is
       procedure Check
         (Output, Left, Right : String; Executable : Boolean := False;
-         Debug : Boolean := False; Refused : Boolean := True);
+         Debug : Boolean := False; Refused : Boolean := True;
+         Darwin : Boolean := False);
 
       procedure Check
         (Output, Left, Right : String; Executable : Boolean := False;
-         Debug : Boolean := False; Refused : Boolean := True)
+         Debug : Boolean := False; Refused : Boolean := True;
+         Darwin : Boolean := False)
       is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -3167,6 +3169,9 @@ package body Landin.Tests.Driver_Suite is
             "public answer: () -> (value: i32) = 42 end answer");
          if Left /= "" then
             Host.Add_Alias (Left, Right);
+            if Darwin and then Contains (Left, ".dSYM/") then
+               Host.Add_File (Left, "existing debug artifact");
+            end if;
          end if;
          if Refused then
             Host.Refuse_Writes;
@@ -3174,7 +3179,8 @@ package body Landin.Tests.Driver_Suite is
          end if;
          Args.Append ("entry");
          Args.Append ("--root=root");
-         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Darwin then "--target=darwin-arm64"
+                      else "--target=linux-x86-64");
          Args.Append (if Executable then "--emit=exe" else "--emit=asm");
          if Debug then
             Args.Append ("--debug=full");
@@ -3228,6 +3234,14 @@ package body Landin.Tests.Driver_Suite is
       Check ("out", "out.s", "out", Executable => True);
       Check ("out", "out.s", "out.sources.json",
              Executable => True, Debug => True);
+      Check ("out", "out.o", "entry/main.ldn",
+             Executable => True, Debug => True, Darwin => True);
+      Check ("out", "out.dSYM", "entry",
+             Executable => True, Debug => True, Darwin => True);
+      Check ("out", "out.dSYM/Contents/Resources/DWARF/out", "entry/main.ldn",
+             Executable => True, Debug => True, Darwin => True);
+      Check ("out", "", "", Executable => True,
+             Debug => True, Refused => False, Darwin => True);
    end R491_Artifacts_Preserve_Inputs;
 
    procedure Darwin_Contracts (Item : in out Landin.Testing.Context);
@@ -3271,6 +3285,28 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Tools.Run_Count,
                   (if Action = "--emit=exe" then 1 else 0),
                   "only executable output invokes Apple tooling");
+               if Full_Debug then
+                  declare
+                     Text : constant String := Host.Written
+                       (if Action = "--emit=exe" then "a.out.s" else "a.s");
+                  begin
+                     Landin.Testing.Check
+                       (Item, Contains (Text, "__DWARF,__debug_info")
+                        and then Contains (Text, ".cfi_def_cfa_register w29")
+                        and then Contains (Text, "__TEXT,__landin_id"),
+                        "Darwin full debug emits metadata and exact identity");
+                  end;
+                  if Action = "--emit=exe" then
+                     Landin.Testing.Check
+                       (Item, Tools.Call_At (1).Arguments.Contains
+                          ("-gdwarf-4")
+                        and then Tools.Call_At (1).Arguments.Contains
+                          ("-save-temps=obj")
+                        and then Tools.Call_At (1).Arguments.Contains
+                          ("assembler"),
+                        "Apple retains objects and packages the dSYM");
+                  end if;
+               end if;
             else
                Landin.Testing.Check
                  (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
@@ -3282,7 +3318,8 @@ package body Landin.Tests.Driver_Suite is
       Check (Entry_Program, "", "");
       Check (Entry_Program, "--emit=asm", "");
       Check (Entry_Program, "--emit=exe", "");
-      Check (Entry_Program, "--emit=asm", "L0500", Full_Debug => True);
+      Check (Entry_Program, "--emit=asm", "", Full_Debug => True);
+      Check (Entry_Program, "--emit=exe", "", Full_Debug => True);
       Check ("link(symbol: ""bad name"") f: () -> none = end f" & LF,
              "", "supported external name");
       Check ("extern(c) f: (x: i32) -> (r: i32)" & LF,

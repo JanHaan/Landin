@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/ci'))
 import common
 import darwin
+from test_macho_identity import binary
 
 spec = importlib.util.spec_from_file_location('darwin_cases', ROOT / 'compiler/tests/darwin/check.py')
 cases = importlib.util.module_from_spec(spec)
@@ -33,6 +34,8 @@ class DarwinEvidenceTests(unittest.TestCase):
         contents = {darwin.MARKER: common.canonical(policy),
                     'compiler/tests/darwin/cases.json': common.canonical(manifest),
                     'environments/macos-arm64/policy.json': common.canonical(environment)}
+        for name in ('main.ldn', 'caller"\\path.ldn', 'darwin-scalars.ldn'):
+            contents['compiler/tests/debugging/' + name] = b'source snapshot'
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode='w:gz') as archive:
             for name, data in contents.items():
@@ -51,11 +54,12 @@ class DarwinEvidenceTests(unittest.TestCase):
         for path in ('refine', 'source-manifest.txt', 'configuration.cgpr'):
             (self.root / path).write_text('retained build identity')
         paths = {'source': '/archive/source', '{refine}': '/archive/refine',
-                 '{executions}': '/archive/executions', '{bindings}': '/archive/bindings'}
+                 '{executions}': '/archive/executions', '{bindings}': '/archive/bindings',
+                 '{debugging}': '/archive/debugging'}
         commands = [{'name': f'step-{i}', 'argv': [paths.get(a, a) for a in argv],
                      'cwd': paths['source'], 'returncode': 0, 'timeout': False}
                     for i, argv in enumerate(policy['commands'])]
-        for path in ('evidence', 'executions', 'bindings'):
+        for path in ('evidence', 'executions', 'bindings', 'debugging'):
             (self.root / path).mkdir()
         self.write('evidence/commands.json', commands)
         (self.root / 'evidence/step-1.stdout').write_text(
@@ -67,11 +71,56 @@ class DarwinEvidenceTests(unittest.TestCase):
                    'results': [{'case': 'example', 'optimize': 'none', 'specialize': 'off', 'status': 'passed'}]})
         self.write('bindings/summary.json', {'status': 'passed', 'refine_sha256': compiler_hash,
                                            'archive_selection': 'passed'})
-        self.record = {'schema': 1, 'status': 'passed', 'scope': 'R5.30 native lowering',
+        self.record = {'schema': 1, 'status': 'passed', 'scope': policy['scope'],
                        'run_id': '20260915T000000Z-123456789abc', 'source': self.source,
-                       'environment': {'platform': 'Darwin-arm64', 'translated': False, 'policy': environment},
+                       'environment': {'platform': 'Darwin-arm64', 'translated': False, 'policy': environment,
+                                       'tools': {'debugger': {'path': '/lldb', 'sha256': 'a' * 64},
+                                                 'clang': {'path': '/clang', 'sha256': 'a' * 64},
+                                                 'dsymutil': {'path': '/dsymutil', 'sha256': 'a' * 64},
+                                                 'dwarfdump': {'path': '/dwarfdump', 'sha256': 'a' * 64}}},
                        'policy': policy, 'paths': paths}
+        results = []
+        for opt, spec in [('none', 'off'), ('size', 'auto'), ('size', 'all')]:
+            key = opt + '-' + spec
+            results.append({'optimize': opt, 'specialize': spec, 'status': 'passed', 'checks': 168,
+                            'identity': {'uuid': (b'u' * 16).hex(), 'build_id': 'a' * 64, 'kind': 2}})
+            self.write('debugging/' + key + '-session.json', {'status': 'passed', 'checks': list(range(168))})
+            self.write('debugging/' + key + '-scalars-session.json', {'status': 'passed', 'scalar_types': 13})
+            for suffix in ('', '.s', '.o', '.sources.json', '.lldb', '-lldb.stdout',
+                           '-verify.stdout', '-object-verify.stdout', '-unwind.stdout', '-uuid.stdout',
+                           '-debug-map.stdout', '-stripped', '.dSYM/Contents/Resources/DWARF/' + key):
+                path = self.root / ('debugging/' + key + suffix)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('LANDIN LLDB ACCEPTANCE PASSED')
+            for suffix in ('', '-stripped'):
+                (self.root / ('debugging/' + key + suffix)).write_bytes(binary())
+            (self.root / ('debugging/' + key + '.dSYM/Contents/Resources/DWARF/' + key)).write_bytes(binary(kind=10))
+            self.write('debugging/' + key + '.sources.json', {'build_id': 'a' * 64,
+                       'assembly_sha256': common.file_hash(self.root / ('debugging/' + key + '.s'))})
+        self.write('debugging/summary.json', {'status': 'passed', 'scope': 'R5.40', 'filtered': False,
+                   'refine_sha256': compiler_hash, 'results': results,
+                   'tools': {name: {'path': '/' + name, 'sha256': 'a' * 64}
+                             for name in ('lldb', 'clang', 'dwarfdump', 'dsymutil', 'strip', 'otool')},
+                   'sources': {name: common.digest(data) for name, data in contents.items()
+                               if name.startswith('compiler/tests/debugging/')}})
+        self.write('debugging/identity-checks.json', {name: 'passed' for name in (
+            'default_none', 'caller_only', 'optional_filenames', 'comment_mismatch', 'dsym_mismatch')})
         self.seal()
+
+    def test_lldb_missing_filtered_failed_and_substituted(self):
+        original = common.read_json(self.root / 'debugging/summary.json')
+        for key, value in (('filtered', True), ('status', 'failed'), ('results', []),
+                           ('refine_sha256', 'b' * 64), ('sources', {}), ('tools', {})):
+            with self.subTest(key=key):
+                self.write('debugging/summary.json', dict(original, **{key: value}))
+                self.seal()
+                with self.assertRaises((common.Invalid, KeyError)):
+                    darwin.validate(self.root, self.source)
+        self.write('debugging/summary.json', original)
+        self.write('debugging/none-off-session.json', {'status': 'passed', 'checks': []})
+        self.seal()
+        with self.assertRaises(common.Invalid):
+            darwin.validate(self.root, self.source)
 
     def write(self, path, value):
         (self.root / path).write_bytes(common.canonical(value))

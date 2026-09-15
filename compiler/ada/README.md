@@ -120,7 +120,8 @@ different responsibilities.
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
-| `Landin.Backend.X86_64.Dwarf` | DWARF record encoding, assembler path quoting and debug sections derived from source metadata, immutable IR and backend placement plans | change language types, choose variable storage, read the host or write files |
+| `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
+| `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
@@ -305,7 +306,7 @@ tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md` and ROADMAP.md, not inferred from the
 existence of these packages.
 
-`--debug=full` requests Linux source-debugger metadata; `--debug=none` is the
+`--debug=full` requests Linux or Darwin source-debugger metadata; `--debug=none` is the
 default. This control is independent of `--build-mode`, `--optimize` and
 `--specialize`. Full debugging writes line information using the compilation's
 source IDs and expands the existing `.sources.json` table to every source.
@@ -379,7 +380,7 @@ alignment, sixteen-byte stack/scalar maximum alignment and little-endian
 storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.
 A described ABI does not enable C signatures, C records, variadic calls,
 assembly or debugging: each capability is explicit. R5.30 enables Darwin
-C transport and assembly; source debugging remains disabled through R5.40.
+C transport and assembly; R5.40 adds Mach-O DWARF and native LLDB acceptance.
 The checker asks capability queries; only the backend classifies ABI carriers.
 `Landin.Backend.Dispatch` selects frame preflight and assembly emission, passing
 neutral debug information to the concrete emitter. Toolchain arguments also
@@ -974,3 +975,10 @@ See `TOOLCHAIN.md`. From the repository root:
 and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
 selector. Filtered runs identify themselves and do not replace the complete
 no-argument suite.
+
+Darwin uses the shared DWARF encoder with x29-relative stack locations and
+Apple section/CFI conventions. Full executable output retains its object and
+packages a dSYM through the selected Apple driver. The native UUID and full
+Landin source/assembly digest bind the executable, dSYM and optional source map.
+See [target contracts](../../docs/targets.md#native-source-debugging) for native
+commands, identity matching and the demonstrated debugger presentation limits.

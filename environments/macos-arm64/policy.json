@@ -6,5 +6,7 @@
   "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
   "assembler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
   "linker": "1267",
-  "debugger": "lldb-2100.0.17.203"
+  "debugger": "lldb-2100.0.17.203",
+  "dsymutil": "Apple LLVM version 21.0.0",
+  "dwarfdump": "Apple LLVM version 21.0.0"
 }

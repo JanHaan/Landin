@@ -866,6 +866,13 @@ package body Landin.Driver is
             Destinations.Append (Assembly_Path);
             if Emit = Emit_Executable then
                Destinations.Append (Product_Path);
+               if Full_Debug then
+                  for Path of Landin.Backend.Toolchain.Debug_Artifacts
+                    (Product_Path, Facts, Host)
+                  loop
+                     Destinations.Append (Path);
+                  end loop;
+               end if;
             end if;
             if Emit_Map then
                Destinations.Append (Map_Path);
@@ -920,6 +927,12 @@ package body Landin.Driver is
                        (Landin.Stages.Source
                           (Context,
                            Landin.Stages.Nth_Source (Context, Source))))
+                    or else (Emit = Emit_Executable and then Full_Debug
+                      and then Landin.Backend.Toolchain.Debug_Overwrites
+                        (Product_Path, Landin.Source.Name
+                           (Landin.Stages.Source (Context,
+                             Landin.Stages.Nth_Source (Context, Source))),
+                         Facts, Host))
                   then
                      Bad_Use := True;
                      Note_Failure
@@ -1171,6 +1184,7 @@ package body Landin.Driver is
                           Output   => Target_Path,
                           Linker   => Unbounded.To_String (Linker),
                           Build_Id => Unbounded.To_String (Map_Id),
+                          Full_Debug => Full_Debug,
                           Libraries => Libraries, Facts => Facts),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);

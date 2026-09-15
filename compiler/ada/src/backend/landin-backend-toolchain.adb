@@ -1,9 +1,82 @@
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Targets.Capabilities;
 
 package body Landin.Backend.Toolchain is
 
    use type Landin.Targets.Capabilities.Backend_Kind;
+
+   function Identity_Section
+     (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String
+   is
+      LF : constant Character := Character'Val (10);
+   begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         --  A non-filename section contributing to Apple's linked UUID,
+         --  retained even when optional debugger information is stripped.
+         return ".section __TEXT,__landin_id,regular,no_dead_strip" & LF
+           & ".ascii """ & Build_Id & """" & LF;
+      end if;
+      return "";
+   end Identity_Section;
+
+   function Debug_Artifacts
+     (Output : String; Facts : Landin.Targets.Target_Facts;
+      Host : Landin.Platform.Filesystem'Class)
+      return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+      Slash : constant Natural := Ada.Strings.Fixed.Index
+        (Output, "/", Ada.Strings.Backward);
+      Name : constant String := Output
+        ((if Slash = 0 then Output'First else Slash + 1) .. Output'Last);
+      procedure Existing (Path : String);
+      procedure Existing (Path : String) is
+      begin
+         if Host.Exists (Path) then
+            Result.Append (Path);
+         end if;
+      end Existing;
+   begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         Result.Append (Output & ".o");
+         Result.Append (Output & ".dSYM");
+         --  Existing leaves may be hard links to source outside the bundle.
+         --  Missing nested parents have no file identity; source ancestors
+         --  are checked separately before any output effect.
+         Existing (Output & ".dSYM/Contents/Info.plist");
+         Existing (Output & ".dSYM/Contents/Resources/DWARF/" & Name);
+         Existing (Output & ".dSYM/Contents/Resources/Relocations/aarch64/"
+                   & Name & ".yml");
+      end if;
+      return Result;
+   end Debug_Artifacts;
+
+   function Debug_Overwrites
+     (Output, Source : String; Facts : Landin.Targets.Target_Facts;
+      Host : Landin.Platform.Filesystem'Class) return Boolean
+   is
+   begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         --  dsymutil owns the whole directory. Compare source ancestors
+         --  through the host namespace, including symlink aliases.
+         for Slash in Source'Range loop
+            if Source (Slash) = '/' and then Slash > Source'First
+              and then Host.Paths_Overlap
+                (Output & ".dSYM", Source (Source'First .. Slash - 1))
+            then
+               return True;
+            end if;
+         end loop;
+      end if;
+      return False;
+   end Debug_Overwrites;
 
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
@@ -88,7 +161,8 @@ package body Landin.Backend.Toolchain is
       Build_Id : String := "";
       Libraries : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
-      Facts : Landin.Targets.Target_Facts)
+      Facts : Landin.Targets.Target_Facts;
+      Full_Debug : Boolean := False)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -116,8 +190,23 @@ package body Landin.Backend.Toolchain is
       then
          Landin.Platform.Add (List, "-arch");
          Landin.Platform.Add (List, "arm64");
+         if Full_Debug then
+            --  Apple Clang retains the object and invokes dsymutil after
+            --  linking. The resulting dSYM carries the executable's UUID.
+            Landin.Platform.Add (List, "-gdwarf-4");
+            Landin.Platform.Add (List, "-x");
+            Landin.Platform.Add (List, "assembler");
+            Landin.Platform.Add (List, "-save-temps=obj");
+         end if;
       end if;
       Landin.Platform.Add (List, File_Operand (Assembly));
+      if Full_Debug and then
+        Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         Landin.Platform.Add (List, "-x");
+         Landin.Platform.Add (List, "none");
+      end if;
       --  [1590] selects archives, while the hosted driver retains control
       --  of libc and startup linkage. Repeats matter to archive resolution.
       for Library of Libraries loop

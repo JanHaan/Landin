@@ -1,3 +1,4 @@
+with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Hosted;
 with Landin.Targets.Capabilities;
@@ -143,6 +144,57 @@ package body Landin.Backend.Arm64 is
          then Landin.Types.Width (Landin.Types.Integer_Name (Kind), Facts)
          else 8);
 
+   function Debug_Plan
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Frame;
+
+   function Debug_Plan
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Frame
+   is
+      pragma Unreferenced (Options);
+   begin
+      return Laid_Out (Of_Unit, Item, Facts, 16#7fff_ffff#);
+   end Debug_Plan;
+
+   function Debug_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts; Plan : Frame;
+      Options : Landin.Optimization.Options) return Frame;
+
+   function Debug_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts; Plan : Frame;
+      Options : Landin.Optimization.Options) return Frame
+   is
+      pragma Unreferenced (Of_Unit, Item, Facts, Options);
+   begin
+      return Plan;
+   end Debug_Frame;
+
+   function Debug_Slot
+     (Plan : Frame; Layout : Frame; Slot : Landin.IR.Slot_Id;
+      Indirect, Address_Only : Boolean) return String;
+
+   function Debug_Slot
+     (Plan : Frame; Layout : Frame; Slot : Landin.IR.Slot_Id;
+      Indirect, Address_Only : Boolean) return String
+   is
+      pragma Unreferenced (Plan, Address_Only);
+      HT : constant Character := Character'Val (9);
+      LF : constant Character := Character'Val (10);
+   begin
+      return HT & ".byte 0x91" & LF & HT & ".sleb128 -"
+        & Trimmed (Landin.Targets.Byte_Count'Image
+            (Slot_Offset (Layout, Slot))) & LF
+        & (if Indirect then HT & ".byte 0x06" & LF else "");
+   end Debug_Slot;
+
+   function Debug_Sections is new Landin.Backend.Dwarf.Sections
+     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
+
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
@@ -234,7 +286,6 @@ package body Landin.Backend.Arm64 is
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null)
    is
-      pragma Unreferenced (Options);
       Out_Text : Unbounded.Unbounded_String;
       Serial : Natural := 0;
 
@@ -855,6 +906,7 @@ package body Landin.Backend.Arm64 is
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Trap : constant String := Label (Item, 1) & "_trap";
+         Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
 
          function Kind (Value : Landin.IR.Value_Id)
            return Landin.Types.Scalar_Name
@@ -939,9 +991,22 @@ package body Landin.Backend.Arm64 is
 
          procedure Epilogue is
          begin
+            if Debug /= null then
+               Put (Dwarf.Label_Name (Local_Prefix, "epilogue", Item,
+                 Natural (Current_Value)) & ":");
+               Emit (".cfi_remember_state");
+            end if;
             Emit ("mov sp, x29");
             Emit ("ldp x29, x30, [sp], #16");
+            if Debug /= null then
+               Emit (".cfi_def_cfa sp, 0");
+               Emit (".cfi_restore w29");
+               Emit (".cfi_restore w30");
+            end if;
             Emit ("ret");
+            if Debug /= null then
+               Emit (".cfi_restore_state");
+            end if;
          end Epilogue;
 
          function Array_Length_Of
@@ -2349,8 +2414,22 @@ package body Landin.Backend.Arm64 is
          end if;
          Emit (".p2align 2");
          Put (Symbol (Item) & ":");
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Local_Prefix, "begin", Item) & ":");
+            Put (Dwarf.Source_Line
+              (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            Emit (".cfi_startproc");
+         end if;
          Emit ("stp x29, x30, [sp, #-16]!");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            Emit (".cfi_offset w29, -16");
+            Emit (".cfi_offset w30, -8");
+         end if;
          Emit ("mov x29, sp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_register w29");
+         end if;
          if Item = Hosted_Entry then
             Emit ("bl " & Bridge_Symbol (Initialize_Arguments));
          end if;
@@ -2389,12 +2468,27 @@ package body Landin.Backend.Arm64 is
             Put (Label (Item, Landin.IR.Block_Id (Block)) & ":");
             for Position in 1 .. Landin.IR.Length (Of_Unit, Item,
               Landin.IR.Block_Id (Block)) loop
-               Instruction (Landin.IR.Nth_Value (Of_Unit, Item,
-                 Landin.IR.Block_Id (Block), Position));
+               Current_Value := Landin.IR.Nth_Value (Of_Unit, Item,
+                 Landin.IR.Block_Id (Block), Position);
+               if Debug /= null then
+                  Put (Dwarf.Label_Name (Local_Prefix, "value", Item,
+                    Natural (Current_Value)) & ":");
+                  Put (Dwarf.Source_Line (Debug.all,
+                    Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)));
+               end if;
+               Instruction (Current_Value);
+               if Debug /= null then
+                  Put (Dwarf.Label_Name (Local_Prefix, "after", Item,
+                    Natural (Current_Value)) & ":");
+               end if;
             end loop;
          end loop;
          Put (Trap & ":");
          Emit ("brk #1");
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
+            Emit (".cfi_endproc");
+         end if;
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Extent (Layout), others => <>));
@@ -3560,25 +3654,53 @@ package body Landin.Backend.Arm64 is
          Argv : constant String := Local_Prefix & "host_argv";
          Argc : constant String := Local_Prefix & "host_argc";
          Invalid : constant String := Local_Prefix & "host_invalid";
+         Open_Frame : Boolean := False;
          procedure Start (Helper : Host_Helper);
          procedure Finish;
          procedure Tail (Name : String);
 
          procedure Start (Helper : Host_Helper) is
          begin
+            if Debug /= null and then Open_Frame then
+               Emit (".cfi_endproc");
+            end if;
             Emit (".p2align 2");
             Emit (".globl " & Bridge_Symbol (Helper));
             Emit (".private_extern " & Bridge_Symbol (Helper));
             Put (Bridge_Symbol (Helper) & ":");
+            if Debug /= null then
+               Emit (".loc 1 0 0 is_stmt 0");
+               Emit (".cfi_startproc");
+               Open_Frame := True;
+            end if;
             Emit ("stp x29, x30, [sp, #-16]!");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 16");
+               Emit (".cfi_offset w29, -16");
+               Emit (".cfi_offset w30, -8");
+            end if;
             Emit ("mov x29, sp");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_register w29");
+            end if;
          end Start;
 
          procedure Finish is
          begin
+            if Debug /= null then
+               Emit (".cfi_remember_state");
+            end if;
             Emit ("mov sp, x29");
             Emit ("ldp x29, x30, [sp], #16");
+            if Debug /= null then
+               Emit (".cfi_def_cfa sp, 0");
+               Emit (".cfi_restore w29");
+               Emit (".cfi_restore w30");
+            end if;
             Emit ("ret");
+            if Debug /= null then
+               Emit (".cfi_restore_state");
+            end if;
          end Finish;
 
          procedure Tail (Name : String) is
@@ -3693,6 +3815,9 @@ package body Landin.Backend.Arm64 is
          Start (Heap_Release);
          Emit ("ldur x0, [x0, #-8]");
          Tail ("free");
+         if Debug /= null then
+            Emit (".cfi_endproc");
+         end if;
          Emit (".data");
          Emit (".balign 8");
          Put (Argv & ":");
@@ -3702,9 +3827,9 @@ package body Landin.Backend.Arm64 is
       end Runtime;
 
    begin
-      if Facts /= Landin.Targets.Darwin_Arm64 or else Debug /= null then
+      if Facts /= Landin.Targets.Darwin_Arm64 then
          raise Compiler_Defect with
-           "arm64 emission needs Darwin without debug";
+           "arm64 emission needs Darwin";
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          if Landin.IR.Is_External (Of_Unit, Landin.IR.Item_Id (Index))
@@ -3717,6 +3842,10 @@ package body Landin.Backend.Arm64 is
       Validate_Linkage;
       Allocate_Symbols;
       Emit (".text");
+      if Debug /= null then
+         Unbounded.Append (Out_Text, Dwarf.Preamble
+           (Debug.all, Local_Prefix, Mach_O => True));
+      end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
@@ -3802,6 +3931,11 @@ package body Landin.Backend.Arm64 is
       end if;
       if Host_Bridge_Needed then
          Runtime;
+      end if;
+      if Debug /= null then
+         Unbounded.Append (Out_Text, Debug_Sections
+           (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
+            Local_Prefix, Symbol'Access));
       end if;
       Emit (".subsections_via_symbols");
       Assembly := Out_Text;

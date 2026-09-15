@@ -84,6 +84,23 @@
       ]
     },
     {
+      "id": "debugger-release",
+      "mode": "release",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh",
+          "-j8"
+        ],
+        [
+          "./scripts/debug.sh"
+        ]
+      ]
+    },
+    {
       "id": "bindings",
       "mode": "debug",
       "commands": [
@@ -140,5 +157,5 @@
     }
   ],
   "scope": "routine",
-  "debugger": false
+  "debugger": true
 }

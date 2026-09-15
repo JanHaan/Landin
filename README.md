@@ -249,7 +249,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.40 — Implement macOS arm64 source debugging.**
+**Current roadmap work: R5.50 — Close hosted target parity.**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -257,11 +257,14 @@ and canonical delivery recorded in ROADMAP.md. R5.10 has established the native
 macOS compiler environment; R5.20 isolates target contracts. R5.30 implements
 native Darwin arm64 lowering, C transport, hosted runtime and linking, with
 matching-revision native Mac acceptance required alongside Linux approval.
-Source debugging and complete hosted parity remain R5.40 and R5.50.
+R5.40 implements native LLDB source debugging, dSYM packaging and exact Mach-O
+source identity. Complete hosted parity remains R5.50.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of
-the program's optimization and source build-mode settings.
+the program's optimization and source build-mode settings. Add
+`--target=darwin-arm64` for native macOS output, then open `lldb ./program`.
+See [source debugging and identity](docs/targets.md#native-source-debugging).
 
 D209--D211 specify compact numeric-array arithmetic, explicit optimal field
 placement and optional evidence-proved specialization. The driver selects

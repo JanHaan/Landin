@@ -2,8 +2,8 @@
 
 `ROADMAP.md` R5.10 owns this environment. It validates the Ada bootstrap on
 native Apple Silicon. Linux acceptance remains in `environments/native-ci/`;
-R5.30 adds exact-revision native lowering acceptance here; source debugging
-remains R5.40.
+R5.30 adds exact-revision native lowering acceptance here; R5.40 adds required
+native LLDB source debugging.
 
 ## Reproduce
 
@@ -127,13 +127,14 @@ recovery for other exhausted programs. `ROADMAP.md` R5.20 owns the remaining
 resource work and the broader target-contract audit.
 
 
-## R5.30 exact-revision acceptance
+## Native exact-revision acceptance
 
 The environment loop above is development evidence. The committed
 `acceptance.json` promotes native release compiler-host checks, the Darwin
 lowering/ABI profile matrix and generated-binding/archive execution to required
 acceptance. It uses the same pinned GNAT, GPRbuild, Apple tools and SDK policy.
-It does not run Linux workloads, full hosted parity or source-debugger checks.
+R5.40 additionally requires native LLDB, object/dSYM DWARF verification and
+Mach-O debug identity checks. Full hosted parity remains R5.50.
 
 From a clean checkout with the pinned homes exported:
 
@@ -161,5 +162,13 @@ matching Darwin bundle in addition to the Linux routine bundle. Commit, tree,
 archive and source hashes must agree. The annotated approval carries the Darwin
 record and policy hashes; promotion and Pages validate that binding. Linux-only
 approvals cannot close or publish such a revision. Historical approvals retain
-their original scope. R5.40 will own Mach-O debug identity; these retained hashes
-identify acceptance artifacts without claiming a source-debugging contract.
+their original scope. Schema-2 acceptance adds R5.40 source debugging; the
+original schema-1 lowering bundles keep their historical meaning.
+
+The debugger command retains the shared selected R4.60 source fixture and all
+thirteen scalar representations under none/off, size/auto and size/all. It
+keeps assembly, objects, executables, dSYMs, maps, UUID/identity results, unwind
+dumps and complete native LLDB sessions. Source inventories and compiler/tool
+identities are checked against the containing archive and native environment.
+Filtered or missing profiles, failed sessions and substituted artifacts refuse
+acceptance. See [target debugging contracts](../../docs/targets.md#native-source-debugging).
