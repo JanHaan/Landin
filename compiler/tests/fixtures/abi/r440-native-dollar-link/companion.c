@@ -1,5 +1,13 @@
-extern int landin_export(int value) __asm__("\"$r440_export\"");
-int foreign(int value) __asm__("\"$r440_foreign\"");
+#if defined(__APPLE__)
+#define OBJECT_NAME(name) "_" name
+#define QUOTED_NAME(name) OBJECT_NAME(name)
+#else
+#define OBJECT_NAME(name) name
+#define QUOTED_NAME(name) "\"" name "\""
+#endif
+
+extern int landin_export(int value) __asm__(QUOTED_NAME("$r440_export"));
+int foreign(int value) __asm__(QUOTED_NAME("$r440_foreign"));
 
 int foreign(int value) { return value + 1; }
 

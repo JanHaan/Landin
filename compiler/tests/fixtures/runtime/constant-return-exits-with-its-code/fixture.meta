@@ -4,4 +4,4 @@ summary: a hosted entry's named return reaches the host as the program's status
 constructs: 1660, 1770, 1800, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

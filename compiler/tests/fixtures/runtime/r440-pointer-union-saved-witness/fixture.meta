@@ -4,4 +4,4 @@ summary: Pointer-union dispatch preserves scalar and recursive pointee witnesses
 program: main.ldn
 status: 42
 constructs: 0390, 0480, 0900
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

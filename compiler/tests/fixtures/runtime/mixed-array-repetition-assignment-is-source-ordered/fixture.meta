@@ -4,4 +4,4 @@ summary: mixed-repetition assignment stores prefixes in order and evaluates each
 constructs: 0040, 0080, 0190, 0340, 0350, 0410, 0520, 0560, 1760, 1770, 1810, 1900
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

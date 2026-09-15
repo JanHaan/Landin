@@ -4,4 +4,4 @@ summary: addresses behind slice and pointer descriptors preserve their source th
 program: main.ldn
 constructs: 0430, 0520, 0770, 0790, 0800, 0830, 1910
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

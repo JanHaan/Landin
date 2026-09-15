@@ -4,4 +4,4 @@ summary: [0300] a checked overflow the compiler could not read traps, and [1960]
 constructs: 0300, 1770, 1800, 1920, 1960
 program: main.ldn
 traps: yes
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

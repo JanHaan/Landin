@@ -4,4 +4,4 @@ summary: shifts fill with zeros beyond the width, and a signed right shift is no
 constructs: 0320, 1770, 1800, 1880, 1890
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

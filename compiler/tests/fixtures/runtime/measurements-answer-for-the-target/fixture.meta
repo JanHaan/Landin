@@ -4,4 +4,4 @@ summary: [0370] scalar, fixed-array and scalar/array-field struct measurements a
 constructs: 0160, 0370, 0520, 0670, 0710, 0750, 1770, 1795, 1800, 1940, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

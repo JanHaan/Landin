@@ -4,4 +4,4 @@ summary: explicit integer-to-bool conversion accepts exactly zero and one across
 constructs: 0150, 0180, 0190, 0200, 0310, 0350, 0700, 1880, 1940, 1960
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

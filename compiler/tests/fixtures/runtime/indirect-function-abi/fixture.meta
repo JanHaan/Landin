@@ -4,4 +4,4 @@ summary: indirect calls share aggregate results and stack arguments with direct 
 constructs: 0670, 0870, 1000, 1800, 1920
 program: main.ldn
 status: 84
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

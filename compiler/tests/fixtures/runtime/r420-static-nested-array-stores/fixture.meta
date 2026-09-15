@@ -4,4 +4,4 @@ summary: constant-index nested arrays retain every dimension for literal repetit
 program: main.ldn
 status: 42
 constructs: 0410, 0520, 0540, 0560, 0750, 1810, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

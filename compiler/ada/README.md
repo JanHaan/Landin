@@ -381,6 +381,11 @@ storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.
 A described ABI does not enable C signatures, C records, variadic calls,
 assembly or debugging: each capability is explicit. R5.30 enables Darwin
 C transport and assembly; R5.40 adds Mach-O DWARF and native LLDB acceptance.
+R5.50 runs full shared hosted and derived-program parity on both targets.
+Darwin scalar part addressing retains `IR.Element_Total` through target-byte
+placement, including a field position beyond the Ada host `Natural` range.
+The bounded emission regression preserves the existing physical-layout seam;
+no semantic stage or source-debugging placement plan changes.
 The checker asks capability queries; only the backend classifies ABI carriers.
 `Landin.Backend.Dispatch` selects frame preflight and assembly emission, passing
 neutral debug information to the concrete emitter. Toolchain arguments also

@@ -4,4 +4,4 @@ summary: labelled fields nested initializers arguments and assignments retain co
 program: main.ldn
 constructs: 0590, 0710, 0900, 0930, 0970, 1050, 1080, 1880, 1910
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

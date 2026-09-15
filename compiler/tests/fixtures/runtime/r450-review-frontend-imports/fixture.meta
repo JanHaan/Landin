@@ -5,4 +5,4 @@ program: main.ldn
 root: root
 constructs: 0300, 0370, 0590, 1430, 1440, 1450, 1850
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

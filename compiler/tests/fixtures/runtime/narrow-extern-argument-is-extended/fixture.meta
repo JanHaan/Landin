@@ -4,4 +4,4 @@ summary: [1975] a narrow integer argument to a fixed scalar C routine is extende
 program: main.ldn
 status: 42
 constructs: 0430, 1580, 1975
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

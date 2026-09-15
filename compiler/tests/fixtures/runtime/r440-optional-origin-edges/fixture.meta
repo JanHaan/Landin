@@ -5,4 +5,4 @@ constructs: 0480, 0770, 0790, 0990, 1050, 1150, 1210
 program: main.ldn
 with: ../../positive/r440-optional-origin-edges/program.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

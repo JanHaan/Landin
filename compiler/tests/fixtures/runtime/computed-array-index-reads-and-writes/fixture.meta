@@ -4,4 +4,4 @@ summary: [1950] checks a computed usize index before reading and writing its arr
 constructs: 0160, 0410, 0520, 0570, 0580, 1800, 1950
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

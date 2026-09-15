@@ -4,4 +4,4 @@ summary: named direct selected and generic call statements preserve argument ord
 program: main.ldn
 constructs: 0410, 0980, 1000, 1020, 1320, 1810, 1820
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

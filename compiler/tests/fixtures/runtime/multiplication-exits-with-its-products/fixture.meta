@@ -4,4 +4,4 @@ summary: checked multiplication keeps representable signed and unsigned products
 constructs: 0290, 0300, 1770, 1800, 1880
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

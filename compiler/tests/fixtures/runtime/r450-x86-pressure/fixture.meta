@@ -4,4 +4,4 @@ summary: GP pressure retains narrow carriers and values across direct indirect a
 program: main.ldn
 status: 0
 constructs: 0320, 1890, 1950
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

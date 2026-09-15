@@ -4,4 +4,4 @@ summary: a fixed array inside a depth-one ordinary child accepts contextual lite
 constructs: 0420, 0520, 0540, 0670, 0750, 1810, 1820, 1970
 program: main.ldn
 status: 18
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

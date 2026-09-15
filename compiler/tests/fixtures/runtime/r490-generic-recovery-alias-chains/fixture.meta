@@ -4,4 +4,4 @@ summary: chained recovery aliases preserve exact failed sets across generic view
 program: main.ldn
 status: 42
 constructs: 0940, 0960, 1030, 1290, 1300
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

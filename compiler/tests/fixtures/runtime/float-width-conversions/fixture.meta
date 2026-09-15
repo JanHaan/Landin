@@ -4,4 +4,4 @@ summary: explicit float conversions widen exactly and narrow to nearest even acr
 constructs: 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1960
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

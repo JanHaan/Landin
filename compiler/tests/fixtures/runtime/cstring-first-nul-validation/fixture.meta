@@ -6,4 +6,4 @@ program: main.ldn
 root: ../../../../..
 run_args: abcd
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

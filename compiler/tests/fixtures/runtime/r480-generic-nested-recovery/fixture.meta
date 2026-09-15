@@ -4,4 +4,4 @@ summary: cached generic allocation results retain checked nested erased recovery
 program: main.ldn
 status: 42
 constructs: 0940, 1030, 1290, 1300, 1310, 1380, 1390
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

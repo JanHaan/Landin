@@ -1,4 +1,4 @@
-fixed if compiler.arch == x86_64 then
+fixed if (compiler.arch == x86_64 or compiler.arch == arm64) then
     copy: (t: type, value: t) -> (result: t) = value end copy
 else
     wrong: (t: type, value: t) -> (result: t) =

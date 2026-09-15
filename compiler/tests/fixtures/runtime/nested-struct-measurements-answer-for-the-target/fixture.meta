@@ -4,4 +4,4 @@ summary: D86 nested-struct measurements replay the Linux x86-64 child layout rat
 constructs: 0160, 0370, 0520, 0670, 0750, 1795, 1800, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -4,4 +4,4 @@ summary: character literals are u32 Unicode scalar values through raw UTF-8, esc
 constructs: 0250, 0270, 0290, 1770, 1880, 1890, 1940
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

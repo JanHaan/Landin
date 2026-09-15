@@ -57,7 +57,8 @@ linking, execution and an LLDB stop/resume before building and running
 `SDKROOT` to the builds. These are host validation tools, not new bootstrap
 libraries. See `environments/macos-arm64/README.md` for the commands, expected
 Linux runtime-case failure and bounded resource probes. A Linux container
-cannot supply this evidence; emitted Darwin source debugging remains R5.40.
+cannot supply this evidence. R5.40 supplies emitted Darwin source debugging;
+R5.50 requires matching full hosted parity acceptance in both compiler modes.
 
 ## External source debugger
 

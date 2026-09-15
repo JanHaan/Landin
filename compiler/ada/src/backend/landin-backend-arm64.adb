@@ -1039,6 +1039,14 @@ package body Landin.Backend.Arm64 is
             Payload_Field : Natural := 0;
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count;
+         procedure Part_Address
+           (Place         : Landin.IR.Storage;
+            Field         : Landin.IR.Element_Total;
+            Register      : String;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps);
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -1233,9 +1241,9 @@ package body Landin.Backend.Arm64 is
             return Size;
          end Element_Bytes_Of;
 
-         procedure Storage_Address
+         procedure Part_Address
            (Place         : Landin.IR.Storage;
-            Field         : Natural;
+            Field         : Landin.IR.Element_Total;
             Register      : String;
             Which         : Natural := 0;
             Payload_Field : Natural := 0;
@@ -1243,6 +1251,9 @@ package body Landin.Backend.Arm64 is
               Landin.IR.No_Path_Steps)
          is
             Offset : Landin.Targets.Byte_Count := 0;
+            function Shape return Landin.IR.Field_Shape is
+              (if Field = 0 then Root_Shape_Of (Place, 0)
+               else Part_Shape_Of (Place, Landin.IR.Part_Position (Field)));
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
@@ -1272,14 +1283,28 @@ package body Landin.Backend.Arm64 is
             end case;
             if Nested'Length > 0 then
                Offset := Offset
-                 + Path_Offset (Root_Shape_Of (Place, Field), Nested);
+                 + Path_Offset (Shape, Nested);
             end if;
             if Payload_Field > 0 then
                Offset := Offset + Landin.Backend.Variant_Payload_Field_Offset
-                 (Of_Unit, Reached_Shape (Place, Field, Nested),
+                 (Of_Unit, Landin.IR.Shape_At (Of_Unit, Shape, Nested),
                   Positive (Which), Positive (Payload_Field), Facts);
             end if;
             Add_Offset (Register, Offset);
+         end Part_Address;
+
+         procedure Storage_Address
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Register      : String;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) is
+         begin
+            Part_Address
+              (Place, Landin.IR.Element_Total (Field), Register,
+               Which, Payload_Field, Nested);
          end Storage_Address;
 
          function Whole_Clear_Extent
@@ -1778,9 +1803,9 @@ package body Landin.Backend.Arm64 is
                      Memory (True, Size_Of_Value (Operand (1)), "x9", "x10");
                   end if;
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
-                  Storage_Address
-                    (Place, Natural (Landin.IR.Field_Of (Of_Unit, Item,
-                      Value)),
+                  Part_Address
+                    (Place, Landin.IR.Element_Total
+                       (Landin.IR.Field_Of (Of_Unit, Item, Value)),
                      "x10", Nested => Landin.IR.Path_Of (Of_Unit, Item,
                        Value));
                   if Op = Landin.IR.Load_Field then

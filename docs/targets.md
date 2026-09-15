@@ -1,7 +1,7 @@
 # Target contracts
 
 `spec.md` [1975] owns the language-facing C and link-name rules. ROADMAP.md
-R5.20/R5.30/R5.40 record implementation evidence and dispositions; this page explains
+R5.20/R5.30/R5.40/R5.50 record implementation evidence and dispositions; this page explains
 the package boundaries, not a second work list.
 
 | fact or operation | owner |
@@ -119,7 +119,8 @@ matches, named-result destructuring and loops remain inspectable in their
 live scopes. The native backend currently uses stack homes under baseline
 optimization; it does not claim x86's saved-register allocation. Uninitialized
 or unavailable variables have no valid location, and ranges end before frame
-restoration. Full derived-program debugging parity remains R5.50's gate.
+restoration. R5.50 adds the complete parser, containers and hosted application to the
+native LLDB matrix, using the existing Linux source/value oracles.
 
 ### Exact identity and optional deployment
 
@@ -156,3 +157,28 @@ Platform references, checked against the pinned Apple tools:
 [dsymutil](https://www.llvm.org/docs/CommandGuide/dsymutil.html),
 [Arm DWARF register assignments](https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst),
 and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging.html).
+
+## Hosted parity and physical limits
+
+The shared [target applicability matrix](../compiler/tests/targets.matrix)
+and [native parity path](../compiler/tests/darwin/README.md) distinguish
+language behavior from platform transport and packaging. The two hosted
+backends run the same runtime profiles and complete prototype derivatives.
+Architecture-selecting source, C register rules, symbol prefixes, archive
+availability and native trap delivery have explicit executable counterparts.
+The fault-endpoint adapter changes only fixture host services, never parsing,
+checking, neutral IR or the Landin program's expected failure behavior.
+
+The existing 2 GiB zero-reserved-global regression exposes a limitation of the
+pinned Darwin default executable layout: dyld aborts before `main` when the
+image reaches the shared-cache region. The native Clang control has the same
+failure. Apple's [shared-region constants](https://raw.githubusercontent.com/apple-oss-distributions/xnu/main/osfmk/mach/shared_region.h)
+place the arm64 shared region at `0x180000000`; the default executable starts
+at `0x100000000`. These observed layout limits do not define different array
+semantics. Darwin now emits the complete wide element address, and all four
+profiles retain successful assembly/linking followed by the original failed
+status-42 execution and matching control. The result is explicitly
+`platform-limited`; no passing runtime verdict or general large-image support
+is claimed. R5.20's deferred large-image placement/preflight work remains with
+its scale and self-hosting successor. No giant materialized object sweep or
+new exhaustion guarantee is introduced.

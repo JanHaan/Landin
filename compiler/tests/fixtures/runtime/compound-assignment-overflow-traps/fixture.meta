@@ -4,4 +4,4 @@ summary: checked compound arithmetic traps at the updating operation
 constructs: 0290, 0390, 1900, 1960
 program: main.ldn
 traps: yes
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

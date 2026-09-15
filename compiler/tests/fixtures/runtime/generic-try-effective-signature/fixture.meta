@@ -4,4 +4,4 @@ summary: nested generic try uses per-view fallible targets through deduced and r
 constructs: 0940, 0960, 0980, 1030, 1290, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

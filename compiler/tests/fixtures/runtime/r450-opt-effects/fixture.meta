@@ -4,4 +4,4 @@ summary: local scalar forwarding and constant branches preserve snapshots effect
 program: main.ldn
 status: 0
 constructs: 0290, 0410, 0430, 1050, 1100, 1120, 1550
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

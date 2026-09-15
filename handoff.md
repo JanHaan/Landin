@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.50 — Close hosted target parity.**
+**Next roadmap item: R6.10 — Select the Cortex-M execution profile (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -295,13 +295,13 @@ R5.10 has established the native macOS compiler environment; R5.20 isolates
 target contracts and records every inherited resource disposition. R5.30 adds
 native Darwin arm64 lowering and matching-revision native acceptance.
 R5.40 adds native LLDB source debugging and exact Mach-O/dSYM identity;
-full hosted parity remains R5.50.
+R5.50 closes hosted parity through the dual-native milestone binding in
+ROADMAP.md, with its explicit large-image loader limitation.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and
 can assemble and link hosted executables checked by each native target gate.
-Darwin source debugging and full hosted parity, the Cortex-M backend and the
-broader standard library remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
+The Cortex-M backend and broader standard library remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end
 barrier.

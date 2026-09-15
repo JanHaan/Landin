@@ -3,7 +3,8 @@
 `ROADMAP.md` R5.10 owns this environment. It validates the Ada bootstrap on
 native Apple Silicon. Linux acceptance remains in `environments/native-ci/`;
 R5.30 adds exact-revision native lowering acceptance here; R5.40 adds required
-native LLDB source debugging.
+native LLDB source debugging. R5.50 extends the committed path to full hosted
+parity in both compiler modes.
 
 ## Reproduce
 
@@ -130,11 +131,13 @@ resource work and the broader target-contract audit.
 ## Native exact-revision acceptance
 
 The environment loop above is development evidence. The committed
-`acceptance.json` promotes native release compiler-host checks, the Darwin
-lowering/ABI profile matrix and generated-binding/archive execution to required
-acceptance. It uses the same pinned GNAT, GPRbuild, Apple tools and SDK policy.
-R5.40 additionally requires native LLDB, object/dSYM DWARF verification and
-Mach-O debug identity checks. Full hosted parity remains R5.50.
+`acceptance.json` schema 3 requires both debug and release compiler-host
+checks, all applicable shared source verdicts, the full hosted runtime/ABI
+profile matrix, generated bindings/archive execution and complete derived
+programs under native LLDB. It also retains every R5.40 object/dSYM, DWARF and
+Mach-O identity check. It uses the same pinned GNAT, GPRbuild, Apple tools and
+SDK policy. [The parity guide](../../compiler/tests/darwin/README.md) lists
+coverage, native adapters and the explicitly retained large-image loader limit.
 
 From a clean checkout with the pinned homes exported:
 
@@ -158,12 +161,15 @@ Timeouts terminate the owned process session, including compiler-created tool
 groups. R5.20's broader resource and scheduler/cache dispositions remain intact.
 
 An approval for a source inventory containing `acceptance.json` requires a
-matching Darwin bundle in addition to the Linux routine bundle. Commit, tree,
+matching Darwin bundle in addition to the Linux acceptance bundle. R5.50
+requires the committed eight-job Linux milestone matrix. Commit, tree,
 archive and source hashes must agree. The annotated approval carries the Darwin
 record and policy hashes; promotion and Pages validate that binding. Linux-only
 approvals cannot close or publish such a revision. Historical approvals retain
 their original scope. Schema-2 acceptance adds R5.40 source debugging; the
-original schema-1 lowering bundles keep their historical meaning.
+original schema-1 lowering bundles keep their historical meaning. Schema 3
+requires both compiler modes and full coverage; old scopes cannot be relabelled
+as parity evidence.
 
 The debugger command retains the shared selected R4.60 source fixture and all
 thirteen scalar representations under none/off, size/auto and size/all. It

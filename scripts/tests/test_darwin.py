@@ -22,13 +22,13 @@ spec.loader.exec_module(cases)
 
 class DarwinEvidenceTests(unittest.TestCase):
     def test_committed_policy_contains_the_required_commands(self):
-        self.assertEqual(json.loads((ROOT / darwin.MARKER).read_text()), darwin.required_policy())
+        self.assertEqual(json.loads((ROOT / darwin.MARKER).read_text()), darwin.required_policy(parity=True))
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        policy = json.loads((ROOT / darwin.MARKER).read_text())
+        policy = darwin.required_policy()
         manifest = {'fixtures': ['example'], 'darwin': [], 'profiles': [['none', 'off']]}
         environment = json.loads((ROOT / 'environments/macos-arm64/policy.json').read_text())
         contents = {darwin.MARKER: common.canonical(policy),

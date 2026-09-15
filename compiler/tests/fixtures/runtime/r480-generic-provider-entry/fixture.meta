@@ -4,4 +4,4 @@ summary: constrained provider entries bind transitive evidence through direct an
 program: main.ldn
 status: 42
 constructs: 0900, 0940, 1030, 1230, 1240, 1250, 1290, 1300, 1310, 1350, 1380, 1390
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

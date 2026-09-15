@@ -4,4 +4,4 @@ summary: struct and any sources traverse through ordered iterable evidence with 
 program: main.ldn
 status: 42
 constructs: 1100, 1150, 1160, 1170, 1180, 1190, 1320, 1370, 1390
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

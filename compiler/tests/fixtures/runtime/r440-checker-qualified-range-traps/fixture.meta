@@ -5,4 +5,4 @@ program: main.ldn
 root: .
 traps: yes
 constructs: 0660, 0700, 1420
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64
