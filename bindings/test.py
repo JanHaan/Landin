@@ -164,6 +164,18 @@ def policy() -> dict[str, Any]:
     }
 
 
+class TargetContractTests(unittest.TestCase):
+    def test_second_lp64_abi_is_refused_before_macro_or_header_work(self) -> None:
+        module = runpy.run_path(str(GENERATOR))
+        driver = object.__new__(module["ClangDriver"])
+        with mock.patch.object(driver, "run", return_value=subprocess.CompletedProcess(
+                [], 0, b"arm64-apple-macosx26.0.0\n")) as run:
+            with self.assertRaisesRegex(module["BindingError"], "required"):
+                driver.verify_target()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], ("-print-target-triple",))
+
+
 class GeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

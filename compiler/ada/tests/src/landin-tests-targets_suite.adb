@@ -3,6 +3,10 @@ with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Evidence;
+with Landin.Hosted;
+with Landin.Backend.C_ABI;
+with Landin.Backend.Toolchain;
+with Landin.IR;
 with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
@@ -87,6 +91,12 @@ package body Landin.Tests.Targets_Suite is
          Widest        => 16,
          Pointer_Bytes => 8);
 
+      Check_Description
+        (Item, Darwin_Arm64, "darwin-arm64", 64, 8, 16, 16, 8);
+      Landin.Testing.Check
+        (Item, Architecture_Of (Darwin_Arm64) = Arm64
+         and then C_ABI_Of (Darwin_Arm64) = Darwin_AAPCS64_LP64,
+         "Darwin is a distinct architecture and ABI despite equal widths");
       Check_Description
         (Item, Synthetic_32, "synthetic-32",
          Pointer_Bits  => 32,
@@ -854,6 +864,92 @@ package body Landin.Tests.Targets_Suite is
       end;
    end Evidence_Ordering_And_Layout;
 
+   procedure Target_Contracts (Item : in out Landin.Testing.Context);
+
+   procedure Target_Contracts (Item : in out Landin.Testing.Context) is
+      package C renames Landin.Targets.Capabilities;
+      use type C.Object_Format;
+      use type C.Debug_Format;
+      use type Landin.Hosted.Host_Helper;
+      Unit : Landin.IR.Unit;
+   begin
+      Landin.Testing.Check
+        (Item, C.C_Signatures (Linux_X86_64)
+         and then C.C_Records (Linux_X86_64)
+         and then C.C_Variadic_Calls (Linux_X86_64),
+         "Linux explicitly implements the selected C subset");
+      Landin.Testing.Check
+        (Item, not C.C_Signatures (Darwin_Arm64)
+         and then not C.C_Records (Darwin_Arm64)
+         and then not C.C_Variadic_Calls (Darwin_Arm64)
+         and then C.Backend_For (Darwin_Arm64) = C.No_Backend
+         and then C.Debug_Format_Of (Darwin_Arm64) = C.No_Debug_Format
+         and then C.Triplet (Darwin_Arm64) = "",
+         "describing Darwin enables no C, code, tools or debug emitter");
+      Landin.Testing.Check
+        (Item, C.Object_Format_Of (Darwin_Arm64) = C.Mach_O
+         and then C.Object_Format_Of (Linux_X86_64) = C.ELF
+         and then C.Debug_Format_Of (Linux_X86_64) = C.ELF_DWARF,
+         "object identity and implemented debug format are separate");
+      for Size in Scalar_Size loop
+         Landin.Testing.Check
+           (Item, Alignment_Of (Darwin_Arm64, Size)
+            = Alignment_Of (Linux_X86_64, Size),
+            "Darwin scalar alignment agrees with its 64-bit description");
+      end loop;
+      Landin.Testing.Check_Equal
+        (Item, C.Link_Symbol (Darwin_Arm64, "_entry"), "__entry",
+         "a logical leading underscore is preserved after the target prefix");
+      Landin.Testing.Check_Equal
+        (Item, C.Link_Symbol (Darwin_Arm64, "$entry.name"), "_$entry.name",
+         "target prefix precedes punctuation without assembler quoting");
+      Landin.Testing.Check_Equal
+        (Item, C.Link_Symbol (Linux_X86_64, "$entry.name"), "$entry.name",
+         "ELF keeps the logical identity");
+      for Helper in Landin.Hosted.Initialize_Arguments
+        .. Landin.Hosted.Heap_Release
+      loop
+         declare
+            Name : constant String := Landin.Hosted.Helper_Name (Helper);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Hosted.Helper_Of (Name) = Helper,
+               "every reserved helper has one shared identity");
+            Landin.Testing.Check_Equal
+              (Item, C.Link_Symbol (Darwin_Arm64, Name), "_" & Name,
+               "hosted identities acquire the platform prefix once");
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, Landin.Hosted.Helper_Of ("_landin_host_unknown")
+           = Landin.Hosted.No_Host_Helper,
+         "helper membership is exact, not a prefix namespace");
+      declare
+         Ignored : Landin.Backend.C_ABI.Classification;
+      begin
+         Ignored := Landin.Backend.C_ABI.Classify
+             (Unit, (Kind => Landin.Types.I32, others => <>),
+              Darwin_Arm64);
+         Landin.Testing.Fail (Item, "SysV classification accepted Darwin");
+         pragma Unreferenced (Ignored);
+      exception
+         when Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "SysV rejects a second LP64 ABI");
+      end;
+      declare
+         Ignored : Landin.Platform.Path_List;
+      begin
+         Ignored := Landin.Backend.Toolchain.Link_Arguments
+             ("a.s", "a", "", Facts => Darwin_Arm64);
+         Landin.Testing.Fail (Item, "Darwin received GNU linker arguments");
+         pragma Unreferenced (Ignored);
+      exception
+         when Compiler_Defect =>
+            Landin.Testing.Check (Item, True, "linker policy refuses Darwin");
+      end;
+   end Target_Contracts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -886,6 +982,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "odd alignment is refused",
          Odd_Alignment_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "targets", "ABI and symbol contracts are explicit",
+         Target_Contracts'Access);
    end Register;
 
 end Landin.Tests.Targets_Suite;

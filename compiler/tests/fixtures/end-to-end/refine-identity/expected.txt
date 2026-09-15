@@ -4,4 +4,4 @@ language frontend: scanner, parser, names, types, definite assignment
 target-neutral IR: lowered and verified
 backend: linux-x86-64 assembly
 executable output: assembled and linked by a GNU-triplet-selected toolchain
-targets described: linux-x86-64, synthetic-32
+targets described: linux-x86-64, darwin-arm64, synthetic-32

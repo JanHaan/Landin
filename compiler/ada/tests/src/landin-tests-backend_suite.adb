@@ -16,6 +16,7 @@
 
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Backend.C_ABI;
@@ -6647,6 +6648,52 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Imported_Function_Addresses_Use_The_GOT;
 
+   procedure Helper_Membership_Is_Exact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Helper_Membership_Is_Exact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work, "extern(c) _landin_host_unknown: () -> (r: i32)" & LF
+         & "public f: () -> (r: i32) = _landin_host_unknown() end f" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "ordinary import is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "call _landin_host_unknown")
+            and then not Contains
+              (Text, ".globl _landin_host_initialize_arguments"),
+            "an unknown helper prefix does not enable the hosted bridge");
+      end;
+      declare
+         Text : Ada.Strings.Unbounded.Unbounded_String;
+      begin
+         Text := Ada.Strings.Unbounded.To_Unbounded_String
+           (Landin.Backend.X86_64.Text
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all,
+               Landin.Targets.Darwin_Arm64));
+         Landin.Testing.Fail
+           (Item, "a second 64-bit ABI reached x86 emission");
+         pragma Unreferenced (Text);
+      exception
+         when Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "the concrete emitter refuses Darwin facts");
+      end;
+   end Helper_Membership_Is_Exact;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -6957,6 +7004,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a frame follows the target and not the host",
          A_Frame_Follows_The_Target_And_Not_The_Host'Access);
+      Landin.Testing.Register
+        (Into, "backend", "helper membership is exact",
+         Helper_Membership_Is_Exact'Access);
    end Register;
 
 end Landin.Tests.Backend_Suite;

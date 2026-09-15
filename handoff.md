@@ -287,12 +287,13 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.20 — Isolate target contracts.**
+**Next roadmap item: R5.30 — Implement Darwin arm64 lowering (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
-R5.10 has established the native macOS compiler environment; retained resource
-limitations have explicit R5 owners.
+R5.10 has established the native macOS compiler environment; R5.20 isolates
+target contracts and records every inherited resource disposition. Darwin
+code generation remains planned.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

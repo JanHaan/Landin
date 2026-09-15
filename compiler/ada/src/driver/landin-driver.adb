@@ -4,7 +4,7 @@ with Ada.Strings.Fixed;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Toolchain;
-with Landin.Backend.X86_64;
+with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Sources;
 with Landin.Checking;
@@ -101,7 +101,7 @@ package body Landin.Driver is
       & "backend: linux-x86-64 assembly" & LF
       & "executable output: assembled and linked by a"
       & " GNU-triplet-selected toolchain" & LF
-      & "targets described: linux-x86-64, synthetic-32" & LF);
+      & "targets described: linux-x86-64, darwin-arm64, synthetic-32" & LF);
 
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
@@ -344,6 +344,8 @@ package body Landin.Driver is
       for Name of Targets loop
          if Name = "linux-x86-64" then
             Facts := Landin.Targets.Linux_X86_64;
+         elsif Name = "darwin-arm64" then
+            Facts := Landin.Targets.Darwin_Arm64;
          elsif Name = "synthetic-32" then
             Facts := Landin.Targets.Synthetic_32;
          else
@@ -933,7 +935,7 @@ package body Landin.Driver is
             --  64-bit host and has no backend, which is what
             --  Landin.Targets.Capabilities already says.
             if Landin.Targets.Capabilities.Backend_For (Facts)
-               /= Landin.Targets.Capabilities.Linux_X86_64_ELF
+               = Landin.Targets.Capabilities.No_Backend
             then
                Note_No_Toolchain
                  ("no backend emits for target "
@@ -1000,7 +1002,8 @@ package body Landin.Driver is
                        Landin.IR.Item_Id (Index);
                   begin
                      if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
-                       and then not Landin.Backend.X86_64.Frame_Is_Addressable
+                       and then not
+                         Landin.Backend.Dispatch.Frame_Is_Addressable
                                       (Unit, Item, Facts, Optimization)
                      then
                         Note_Failure
@@ -1011,8 +1014,8 @@ package body Landin.Driver is
                                 Landin.Resolution.Name_Of
                                   (Known,
                                    Landin.IR.Declares (Unit, Item)))
-                           & "` needs a frame outside the signed 32-bit"
-                           & " offsets this backend addresses");
+                           & "` needs a frame outside the "
+                           & Landin.Backend.Dispatch.Frame_Limit (Facts));
                         Refused := True;
                      end if;
                   end;
@@ -1062,7 +1065,7 @@ package body Landin.Driver is
                      end;
                   end loop;
                end if;
-               Landin.Backend.X86_64.Emit
+               Landin.Backend.Dispatch.Emit
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
                   Landin.Stages.Identities (Context).all,
@@ -1147,7 +1150,7 @@ package body Landin.Driver is
                           Output   => Target_Path,
                           Linker   => Unbounded.To_String (Linker),
                           Build_Id => Unbounded.To_String (Map_Id),
-                          Libraries => Libraries),
+                          Libraries => Libraries, Facts => Facts),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception

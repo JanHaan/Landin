@@ -2,8 +2,8 @@
 --
 --  [1550] says Landin "emits deterministic assembly text and relies on the
 --  assembler and linker of the platform", so what is spelled here is a
---  command line and never an object format.  Nothing in this package knows
---  what ELF is.
+--  command line selected by target policy. ELF build IDs and GNU archive
+--  flags belong to the Linux policy; other targets must supply their own.
 --
 --  A driver is named, not a linker.  The three things a hosted program
 --  needs beyond its own instructions -- the C runtime's startup objects,
@@ -68,6 +68,8 @@ package Landin.Backend.Toolchain is
       Linker   : String;
       Build_Id : String := "";
       Libraries : Landin.Platform.Path_List :=
-        Landin.Platform.No_Arguments) return Landin.Platform.Path_List;
+        Landin.Platform.No_Arguments;
+      Facts : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List;
 
 end Landin.Backend.Toolchain;

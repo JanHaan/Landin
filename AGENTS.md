@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Landin is a language specification with a working Ada bootstrap compiler. R0,
 R1, R2, R3 and R4 are complete through the exact-revision approval and
 delivery binding in ROADMAP.md; R5.10 has established the native macOS compiler
-environment. `refine`
+environment and R5.20 isolates target contracts with a Darwin arm64 description. `refine`
 scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
@@ -211,7 +211,8 @@ complete derived parser program with useful diagnostics, evidence-table
 dispatch, and `any` but without specialization. R4 delivered the hosted
 Linux x86-64 path and its applicable parity audit; R4.91 closes the reviewed
 compiler, tooling and documentation repairs with explicit retained limits
-and R5 handoffs. R5.10 has established the native macOS compiler environment;
+and R5 handoffs. R5.10 has established the native macOS compiler environment; R5.20 isolates
+target contracts and records retained resource dispositions.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

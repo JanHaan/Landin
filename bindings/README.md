@@ -4,7 +4,13 @@
 for R4.40. It asks an external Clang for a JSON AST; it does not parse C header
 text and it does not make `refine` a header parser. Its one supported ABI is
 Linux x86-64 ELF System V AMD64 LP64 with signed plain `char` and ordinary
-(non-short) C11 enums.
+(non-short) C11 enums. A second 64-bit compiler target description does not
+extend this matrix. `verify_target` checks Clang's explicit triple, architecture,
+object format, data model, widths, signed-char policy and byte order before
+publishing outputs; `core/c` independently asserts `compiler.c_sysv_lp64`.
+These are corresponding facts at separate tool boundaries, not host inference.
+[Target contracts](../docs/targets.md) describes their relationship. Darwin
+header generation and C aliases remain with ROADMAP.md R5.30.
 
 The generator writes exactly four files:
 

@@ -248,12 +248,13 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.20 — Isolate target contracts.**
+**Next roadmap item: R5.30 — Implement Darwin arm64 lowering (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
 and canonical delivery recorded in ROADMAP.md. R5.10 has established the native
-macOS compiler environment; Darwin code generation remains planned.
+macOS compiler environment; R5.20 isolates target contracts and describes
+Darwin arm64 without enabling code generation.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

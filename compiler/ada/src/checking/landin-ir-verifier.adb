@@ -3,10 +3,10 @@ with Ada.Unchecked_Deallocation;
 
 with Landin.IR.Control_Flow;
 with Landin.Types;
+with Landin.Targets.Capabilities;
 
 package body Landin.IR.Verifier is
 
-   use type Landin.Targets.C_ABI_Kind;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Types.Magnitude;
 
@@ -3174,7 +3174,9 @@ package body Landin.IR.Verifier is
          begin
             if Has_Nominal_Shape (Of_Unit, Nominal) then
                if Has_C_Layout (Of_Unit, Nominal)
-                 and then Nominal_Field_Count (Of_Unit, Nominal) = 0
+                 and then (Nominal_Field_Count (Of_Unit, Nominal) = 0
+                   or else (Check_Image and then not
+                     Landin.Targets.Capabilities.C_Records (Facts)))
                then
                   return (Kind => Nominal_Metadata_Malformed, others => <>);
                end if;
@@ -3231,8 +3233,11 @@ package body Landin.IR.Verifier is
                  or else (Signature_Is_Variadic (Of_Unit, Signature)
                    and then Signature_Parameter_Count
                      (Of_Unit, Signature) = 0)
-                 or else (Check_Image and then Landin.Targets.C_ABI_Of
-                   (Facts) /= Landin.Targets.SysV_AMD64_LP64)
+                 or else (Check_Image and then
+                   (not Landin.Targets.Capabilities.C_Signatures (Facts)
+                    or else (Signature_Is_Variadic (Of_Unit, Signature)
+                      and then not
+                        Landin.Targets.Capabilities.C_Variadic_Calls (Facts))))
                then
                   return (Kind => Signature_Part_Malformed, others => <>);
                end if;

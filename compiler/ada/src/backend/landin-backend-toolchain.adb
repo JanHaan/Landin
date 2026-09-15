@@ -2,6 +2,8 @@ with Landin.Targets.Capabilities;
 
 package body Landin.Backend.Toolchain is
 
+   use type Landin.Targets.Capabilities.Backend_Kind;
+
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
       Named : String) return String
@@ -24,7 +26,9 @@ package body Landin.Backend.Toolchain is
       Linker   : String;
       Build_Id : String := "";
       Libraries : Landin.Platform.Path_List :=
-        Landin.Platform.No_Arguments) return Landin.Platform.Path_List
+        Landin.Platform.No_Arguments;
+      Facts : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
 
@@ -41,6 +45,11 @@ package body Landin.Backend.Toolchain is
          return Path;
       end File_Operand;
    begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        /= Landin.Targets.Capabilities.Linux_X86_64_ELF
+      then
+         raise Compiler_Defect with "target has no linker argument policy";
+      end if;
       Landin.Platform.Add (List, File_Operand (Assembly));
       --  [1590] selects archives, while the hosted driver retains control
       --  of libc and startup linkage. Repeats matter to archive resolution.

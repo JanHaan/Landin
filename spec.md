@@ -1486,9 +1486,13 @@ form keeps the native Landin convention and still requires the ordinary
 ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its first byte is a letter,
 underscore, dot or dollar, and only a later byte may additionally be a digit.
 Whitespace, `@` suffixes and arbitrary assembler expressions are outside this
-form. The backend quotes the identity where target assembly operand syntax
-requires it; that rendering is not part of the link name and does not change the
-linker identity. Compatible bodyless C declarations may share a symbol with each
+form. The name is a logical external identity, before the platform's symbol
+prefix: ELF uses it unchanged; Darwin prepends one underscore, including when
+the logical name already begins with an underscore. Thus `foreign_name` maps
+to `_foreign_name` and `_foreign_name` maps to `__foreign_name` on Darwin.
+This applies equally to explicit native and C link names and default external
+names. It does not select a calling convention or enable a backend. Assembly
+quoting follows that mapping and does not change the resulting object symbol. Compatible bodyless C declarations may share a symbol with each
 other or with one definition; incompatible signatures and
 multiple definitions are refused. C imports and public C definitions default to
 their declared spelling. A private C definition without an override uses
@@ -1508,7 +1512,10 @@ that fact before exposing `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
 `usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
-C `char` is numeric `i8`, not a Unicode scalar.
+C `char` is numeric `i8`, not a Unicode scalar. A described target's ABI identity
+and widths do not imply that its C boundary is implemented. C signature,
+record-layout and variadic-call capabilities are selected explicitly; neither
+`core/c` nor generated bindings may infer them from LP64 alone.
 
 A C signature is nongeneric and infallible, takes only `in` runtime
 parameters, and returns at most one value. Its admitted values are the enabled
@@ -12600,10 +12607,11 @@ definitions use `extern(c)`; C function types carry that prefix too. Only a
 final ellipsis after fixed parameters marks varargs. A symbol literal follows
 the C convention when one is written, or stands alone before a native function
 name; the standalone form retains the native convention and ordinary body
-requirement. The decoded link name is a linker identity with the safe ASCII
+requirement. The decoded link name is a logical external identity with the safe ASCII
 shape `[A-Za-z_.$][A-Za-z0-9_.$]*`. Whitespace, `@` suffixes and arbitrary
-assembler expressions are excluded; target-assembly quoting is only a rendering
-of the same identity. C signatures cannot declare Landin failures. Agreement
+assembler expressions are excluded. [1975] maps that identity through the
+platform prefix before target-assembly quoting; no source spelling bypasses
+that mapping. ELF preserves it and Darwin adds exactly one underscore. C signatures cannot declare Landin failures. Agreement
 recursively includes convention and variadicness, independently of labels and
 symbol names.
 Variadic calls are positional-only and limit the unnamed tail to scalars,
@@ -12620,7 +12628,10 @@ both are declined.
 **Pinned by** `positive/external-scalar-c-boundary` for the retained bodyless
 import form, `positive/r440-c-signatures` for C types, definitions and the
 standalone native link form, and `negative/r440-link-does-not-change-convention`
-for the independence of linkage and convention. ROADMAP.md's completed
+for the independence of linkage and convention. The target-contract suite pins
+ELF/Darwin spelling, leading underscores and punctuation; the lowering seam
+keeps an explicit native `_entry` identity equal across both 64-bit targets.
+ROADMAP.md's completed
 R4.40 entry records the compiler and ABI differential evidence for its exact
 historical gate input; R4.91 records subsequent repairs and acceptance.
 

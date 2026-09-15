@@ -84,10 +84,12 @@ host run passed 711 cases and 192905 checks; its transcript timestamps span
 about 280 seconds including incremental rebuilding. These local measurements
 describe this checkout and host, not fixed performance bounds.
 
-The old release-job timings suggest a routine gate near 20 minutes rather
-than 91; this is a projection, not a new measured guarantee. New acceptance
-records retain actual per-command times. Measure those before increasing
-parallelism or expanding cache machinery.
+The first routine run, `20260915T082011Z-70a07a37aea3`, measured 1208.5
+seconds for its slowest job. Release suite and quality commands took 1094.9
+and 1081.5 seconds; their separate bootstrap builds took 111.6 and 113.8.
+Debug host checks took 437.3 seconds after a 46.1-second build. Documents
+and bindings jobs took 84.1 and 60.6 seconds. These are measured results,
+not fixed performance bounds.
 
 ## Parallel work and build reuse
 
@@ -102,11 +104,31 @@ identities, not mutable output paths. Use one aggregate CPU/memory budget;
 nested unrestricted worker pools would oversubscribe the runner. Keep
 GPRbuild's existing Ada dependency and checksum handling.
 
-This graph and bounded workload parallelism remain R5.20 work, not an
-implemented cache or scheduler. First remove unnecessary scope, then measure
-the remaining work and preserve the existing failure/timeout/evidence oracles
-when introducing sharing. Cache hits must be labelled as reuse; they are not
-fresh native executions.
+R5.20 evaluated one versus two workers on native Linux using the same
+immutable release compiler and fresh outputs for the parser/container
+programs under none/off and size/auto. The four compilations took 111.15
+seconds sequentially and 55.55 with two workers; every assembly hash matched.
+Individual peak RSS was at most 50372 KiB. These samples justify two-worker
+experimentation; they do not bound memory for the whole fixture matrix.
+
+The evaluated dependency graph keys a compiler artifact by complete source,
+project/pin inventory, host/tool identities, mode, flags and path mapping.
+A workload artifact additionally keys reached source/roots, configuration,
+profile, debug settings, compiler identity, adapter inputs and target tools.
+Execution, quality and debugger consumers retain independent run records.
+The two existing release compiler artifacts have different binary hashes and
+sizes in their different build contexts; they cannot simply be exchanged
+under today's acceptance identity records. Their builds already overlap, so
+sharing would save CPU but is not a measured 112-second wall-time improvement.
+
+The production scheduler/cache remains deferred to the scale and self-hosting
+successor under ROADMAP.md's R5.20 disposition. Integrating bounded workers
+requires shared cancellation, timeout ownership and aggregate resource tests;
+artifact sharing requires an acceptance-schema change for producer identities.
+The quality command's second compilation deliberately checks determinism and
+must stay fresh. Cache hits must be labelled as reuse, and native execution
+must still run. This closes the evaluation without weakening those oracles or
+introducing nested worker pools into the routine gate.
 
 ## Nix later
 

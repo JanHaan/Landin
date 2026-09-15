@@ -3557,10 +3557,12 @@ native Landin convention: `link` never implies C, bodylessness or export. In
 either form it changes neither lookup nor signature nor visibility. The decoded
 link name has the precise safe ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its
 first byte is a letter, underscore, dot or dollar, and only a later byte may
-additionally be a digit. It identifies a linker symbol; it is not assembler
-operand text. Whitespace, `@` suffixes and arbitrary assembler expressions are
+additionally be a digit. It is the logical external name before the platform's
+prefix, not assembler operand text. ELF keeps it unchanged; Darwin prepends
+one underscore, so `foreign_add` becomes `_foreign_add` and `_entry` becomes
+`__entry`. The same rule applies to native and C link names [1975]. Whitespace, `@` suffixes and arbitrary assembler expressions are
 excluded. The backend quotes the identity where target assembly syntax requires
-it without changing the link name. Compatible bodyless C declarations may share
+it after applying that prefix. Compatible bodyless C declarations may share
 one spelling and one definition, but incompatible signatures and multiple
 definitions are refused.
 C imports and public C definitions default to their declared name; private C

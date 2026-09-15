@@ -961,6 +961,10 @@ GUIDES = [
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "
                "and why it takes this form. A derived implementation guide."),
+    dict(key="targets", src="docs/targets.md", out="targets.html",
+         nav="target contracts", group="the implementation",
+         blurb="Target descriptions, ABI capabilities, symbol spelling "
+               "and backend boundaries."),
     dict(key="toolchain", src="compiler/ada/TOOLCHAIN.md", out="toolchain.html",
          nav="the pinned toolchain", group="the implementation",
          blurb="One compiler, recorded exactly, with the warning policy and "

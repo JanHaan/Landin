@@ -59,6 +59,7 @@ FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/environments.md",
                      "docs/ir.md",
+                     "docs/targets.md",
                      "compiler/ada/README.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
@@ -3075,6 +3076,15 @@ def compiler_package_inventory():
     for name in sorted(counts.keys() - packages.keys()):
         out.append((where, 1, "package ownership row has no specification: "
                     + name))
+    # Shared logical helper names must not drift between checking and emission.
+    for relative in ("stages/landin-stages-checking.adb",
+                     "backend/landin-backend-x86_64.adb"):
+        path = os.path.join(directory, relative)
+        with io.open(path, encoding="utf-8") as stream:
+            for number, line in enumerate(stream, 1):
+                if re.search(r'"_landin_host_[a-z_]+"', line):
+                    out.append((os.path.relpath(path, ROOT), number,
+                                "hosted identity must come from Landin.Hosted"))
     return out
 
 
