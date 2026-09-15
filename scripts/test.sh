@@ -6,6 +6,8 @@
 #  and compiler/tests/layout.targets and runs no case.  --record-and-run does
 #  both invocations after one build.  --suite, --case and --fixture select a
 #  visibly FILTERED developer run; none replaces the no-argument gate.
+#  --host explicitly excludes native target workload emission/execution and reports
+#  HOST-ONLY scope. Routine acceptance uses it only for the debug compiler.
 
 . "$(dirname -- "$0")/env.sh"
 

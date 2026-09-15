@@ -295,7 +295,7 @@ def commit_source(root, revision):
                      "policy_sha256": identity(policy), "policy": policy}
 
 
-def required_jobs():
+def required_jobs(scope=None, debugger=False):
     result = []
     for purpose in ("suite", "quality", "debugger"):
         for mode in ("debug", "release"):
@@ -318,6 +318,26 @@ def required_jobs():
                    ["python3", "scripts/tests/test_ci.py"],
                    ["python3", "compiler/tests/debugging/test_check.py"],
                    ["python3", "check.py"], ["./scripts/site.sh"]]}]
+    if scope == "routine":
+        result = [job for job in result
+                  if job["id"] not in ("quality-debug", "debugger-debug")]
+        result[0]["commands"][2] = ["./scripts/test.sh", "--host"]
+        if not debugger:
+            result = [job for job in result if job["id"] != "debugger-release"]
+    if scope is not None:
+        result[-1]["commands"].insert(-2, ["python3", "scripts/tests/test_check_caching.py"])
+    return result
+
+
+def required_policy(scope=None, debugger=False):
+    require(scope in (None, "routine", "milestone"), "unknown acceptance scope")
+    result = {"schema": 1 if scope is None else 2,
+              "platform": "Linux-x86_64", "pins": "environments/pins.sh",
+              "build_tag": "native-ci", "clang": "clang-19",
+              "limits": required_limits(), "jobs": required_jobs(scope, debugger)}
+    if scope is not None:
+        result["scope"] = scope
+        result["debugger"] = True if scope == "milestone" else debugger
     return result
 
 
@@ -339,9 +359,14 @@ def validate_limits(limits, policy):
 
 
 def validate_policy(policy):
-    expected = {"schema": 1, "platform": "Linux-x86_64", "pins": "environments/pins.sh",
-                "build_tag": "native-ci", "clang": "clang-19", "limits": required_limits(),
-                "jobs": required_jobs()}
+    require(isinstance(policy, dict) and type(policy.get("schema")) is int
+            and policy["schema"] in (1, 2), "unsupported acceptance policy schema")
+    scope = policy.get("scope") if policy["schema"] == 2 else None
+    require(policy["schema"] != 2 or scope in ("routine", "milestone"),
+            "missing acceptance scope")
+    debugger = policy.get("debugger", False)
+    require(type(debugger) is bool, "invalid debugger coverage")
+    expected = required_policy(scope, debugger)
     require(policy == expected, "acceptance policy omits or changes required native checks")
     return policy
 

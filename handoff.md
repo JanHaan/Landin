@@ -287,11 +287,12 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
+**Current roadmap work: R5.20 — Isolate target contracts.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
-R5 has not begun; retained resource limitations have explicit R5 owners.
+R5.10 has established the native macOS compiler environment; retained resource
+limitations have explicit R5 owners.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

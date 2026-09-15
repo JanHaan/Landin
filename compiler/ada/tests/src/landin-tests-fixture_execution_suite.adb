@@ -1270,7 +1270,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Check_Class (Abi, Merged);
    end Stream_Metadata_Decides_The_Oracle;
 
-   procedure Register (Into : in out Landin.Testing.Registry) is
+   procedure Register
+     (Into : in out Landin.Testing.Registry;
+      Include_Target_Workloads : Boolean := True) is
    begin
       Landin.Testing.Register
         (Into, "fixture execution",
@@ -1288,12 +1290,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "recorded expectations hold",
          Recorded_Expectations_Hold'Access);
-      Landin.Testing.Register
-        (Into, "fixture execution", "every positive fixture is emitted",
-         Every_Positive_Fixture_Is_Emitted'Access);
-      Landin.Testing.Register
-        (Into, "fixture execution", "runtime fixtures execute",
-         Runtime_Fixtures_Execute'Access);
+      if Include_Target_Workloads then
+         Landin.Testing.Register
+           (Into, "fixture execution", "every positive fixture is emitted",
+            Every_Positive_Fixture_Is_Emitted'Access);
+         Landin.Testing.Register
+           (Into, "fixture execution", "runtime fixtures execute",
+            Runtime_Fixtures_Execute'Access);
+      end if;
 
       if Unbounded.Length (Selected) > 0 then
          Landin.Testing.Register

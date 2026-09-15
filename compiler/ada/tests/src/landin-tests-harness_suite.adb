@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Landin.Tests.Fixture_Execution_Suite;
 
 package body Landin.Tests.Harness_Suite is
 
@@ -267,11 +268,41 @@ package body Landin.Tests.Harness_Suite is
          "the exception name is in the transcript");
    end Raising_Cases_Fail_Alone;
 
+   procedure Host_Scope_Is_Explicit (Item : in out Landin.Testing.Context);
+
+   procedure Host_Scope_Is_Explicit (Item : in out Landin.Testing.Context) is
+      Complete : Landin.Testing.Registry;
+      Host     : Landin.Testing.Registry;
+   begin
+      Landin.Tests.Fixture_Execution_Suite.Register (Complete);
+      Landin.Tests.Fixture_Execution_Suite.Register
+        (Host, Include_Target_Workloads => False);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Testing.Case_Count (Complete),
+         Landin.Testing.Case_Count (Host) + 2,
+         "host scope excludes the two target workload cases");
+      Landin.Testing.Check
+        (Item, Landin.Testing.Is_Registered
+           (Complete, "fixture execution", "runtime fixtures execute")
+         and then not Landin.Testing.Is_Registered
+           (Host, "fixture execution", "runtime fixtures execute"),
+         "the default retains runtime and ABI execution");
+      Landin.Testing.Check
+        (Item, not Landin.Testing.Is_Registered
+           (Host, "fixture execution", "every positive fixture is emitted")
+         and then Landin.Testing.Is_Registered
+           (Host, "fixture execution", "recorded expectations hold"),
+         "host scope retains diagnostics without target workload emission");
+   end Host_Scope_Is_Explicit;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "harness", "suite inventory counts names",
          Suite_Inventory_Counts_Names'Access);
+      Landin.Testing.Register
+        (Into, "harness", "host scope is explicit",
+         Host_Scope_Is_Explicit'Access);
       Landin.Testing.Register
         (Into, "harness", "duplicate names are refused",
          Duplicate_Names_Are_Refused'Access);

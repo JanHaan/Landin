@@ -36,6 +36,29 @@ Linux ABI, so use `scripts/linux-loop.sh` there.  No independent Clang archive
 is downloaded and no new checksum authority is introduced; each environment
 uses its existing package-set provenance.
 
+## Native macOS environment
+
+R5.10's `scripts/macos.sh` validates the native arm64 bootstrap in both modes.
+GNAT and GPRbuild retain the canonical pins above. The Apple environment is
+recorded in `environments/macos-arm64/policy.json`:
+
+| part | tested pin or bound |
+|---|---|
+| macOS major | `26` |
+| macOS SDK | `26.5` (build `25F70`) |
+| Apple Clang | `Apple clang version 21.0.0 (clang-2100.1.1.101)` |
+| Apple assembler (`as --version`) | `Apple clang version 21.0.0 (clang-2100.1.1.101)` |
+| Apple linker (`ld -version_details`) | `1267` |
+| LLDB | `lldb-2100.0.17.203` |
+
+The command records exact host/tool identities and checks native assembly,
+linking, execution and an LLDB stop/resume before building and running
+`refine`. The SDK is selected through `xcrun --sdk macosx` and passed as
+`SDKROOT` to the builds. These are host validation tools, not new bootstrap
+libraries. See `environments/macos-arm64/README.md` for the commands, expected
+Linux runtime-case failure and bounded resource probes. A Linux container
+cannot supply this evidence; emitted Darwin source debugging remains R5.40.
+
 ## External source debugger
 
 R4.60's `scripts/debug.sh` uses GDB and GNU binutils to inspect and run the

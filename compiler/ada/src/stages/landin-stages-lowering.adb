@@ -9435,11 +9435,16 @@ package body Landin.Stages.Lowering is
                        (Place => (Kind => IR.Frame_Slot, Slot => Source_Slot),
                         Base => 0,
                         Steps => Stored_Path_Vectors.Empty_Vector);
+                     --  Both calls emit IR. Elaborate them separately so
+                     --  every host retains the recorded destination/source
+                     --  address order, independent of Ada argument order.
+                     Into_Address : constant IR.Storage :=
+                       Addressed_Storage (Into, Shape, Site);
+                     From_Address : constant IR.Storage :=
+                       Addressed_Storage (From, Shape, Site);
                   begin
                      IR.Emit_Array_Copy
-                       (Unit.all, Filling,
-                        Addressed_Storage (From, Shape, Site),
-                        Addressed_Storage (Into, Shape, Site), Site);
+                       (Unit.all, Filling, From_Address, Into_Address, Site);
                   end;
                else
                   Lower_Stored_Expression

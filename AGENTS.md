@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
 R1, R2, R3 and R4 are complete through the exact-revision approval and
-delivery binding in ROADMAP.md; R5 remains planned. `refine`
+delivery binding in ROADMAP.md; R5.10 has established the native macOS compiler
+environment. `refine`
 scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
@@ -63,7 +64,7 @@ nix develop
 ```
 
 Explicit exact-revision native acceptance is authoritative for Linux x86-64.
-`python3 scripts/ci/controller.py accept COMMIT` runs the canonical eight-job
+`python3 scripts/ci/controller.py accept COMMIT` runs the committed routine or milestone
 policy against one committed archive, retains host evidence and exports a
 verified local copy. Development runs are incremental/filtered feedback and
 cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
@@ -78,6 +79,15 @@ Nix validation when shell inputs change; the former automatic Nix manifest is re
 Historical SourceHut gate links remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
+
+During R5/R6, use `scripts/dev-test.sh --host` on the Mac and native Linux
+development slots for Linux execution. Do not run Linux containers, Linux
+workload emission or repeated complete suites on the Mac as routine feedback.
+Run changed-component tests while editing, one routine acceptance for the
+final promotion candidate, and full matrices only at major milestones. GDB
+is required only for substantial debugging regression risk or milestones.
+Nix CI is deferred. `docs/process.md` explains the workflow; ROADMAP.md owns
+its decisions and remaining work.
 
 On a Mac the no-argument `test.sh` always ends with the fixture-execution
 case failing, by design: runtime fixtures are Linux x86-64 evidence, there is
@@ -201,7 +211,7 @@ complete derived parser program with useful diagnostics, evidence-table
 dispatch, and `any` but without specialization. R4 delivered the hosted
 Linux x86-64 path and its applicable parity audit; R4.91 closes the reviewed
 compiler, tooling and documentation repairs with explicit retained limits
-and R5 handoffs. R5 remains planned;
+and R5 handoffs. R5.10 has established the native macOS compiler environment;
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

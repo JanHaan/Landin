@@ -71,6 +71,15 @@ transcript begins with `FILTERED`, and an unknown selection fails: focused
 feedback cannot look like the complete suite by accident. Run
 `./scripts/test.sh` with no selector for the complete local gate.
 
+`./scripts/dev-test.sh --host` runs every compiler case except the two
+native target-workload emission/execution cases. Its `HOST-ONLY` banner
+identifies the scope; compiler units, diagnostics and the complete IR golden
+remain included.
+The routine native acceptance policy uses this scope for the debug compiler
+and runs the complete runtime/ABI matrix with the release compiler. Milestone
+acceptance runs the complete suite in both modes. See
+[`docs/process.md`](../../docs/process.md).
+
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
 opaque identity, no inherited operators or conformances, ordinary identifiers,
 generic/fixed identity keys, erased dispatch, origins and module image cycles.

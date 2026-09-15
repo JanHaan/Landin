@@ -5,6 +5,7 @@ Temporary Git remotes and fake native processes; never invokes a publisher.
 """
 import copy
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -291,6 +292,47 @@ class GitTests(GitFixture):
             with self.assertRaises(common.Invalid):
                 common.validate_policy(value)
 
+    def test_scopes_are_bound_and_cannot_be_downgraded(self):
+        for scope in (None, "routine", "milestone"):
+            policy = common.required_policy(scope)
+            common.validate_policy(policy)
+            jobs = {item["id"]: item for item in policy["jobs"]}
+            self.assertEqual(len(jobs), 5 if scope == "routine" else 8)
+            self.assertEqual(jobs["suite-debug"]["commands"][2],
+                             ["./scripts/test.sh", "--host"] if scope == "routine"
+                             else ["./scripts/test.sh"])
+            self.assertEqual(jobs["suite-release"]["commands"][2], ["./scripts/test.sh"])
+            for job in policy["jobs"]:
+                changed = copy.deepcopy(policy)
+                changed["jobs"].remove(job)
+                with self.assertRaises(common.Invalid):
+                    common.validate_policy(changed)
+        root = self.bundle()
+        annotation = records.approval_for(root)
+        self.assertEqual(annotation["scope"], "routine")
+        annotation["scope"] = "milestone"
+        with self.assertRaisesRegex(common.Invalid, "scope mismatch"):
+            records.validate_approval(annotation, self.source)
+        risk = common.required_policy("routine", debugger=True)
+        common.validate_policy(risk)
+        self.assertIn("debugger-release", {item["id"] for item in risk["jobs"]})
+        risk["debugger"] = False
+        with self.assertRaises(common.Invalid):
+            common.validate_policy(risk)
+
+    def test_legacy_full_approval_still_validates(self):
+        (self.root / "scripts/ci/policy.json").write_text(
+            json.dumps(common.required_policy(), indent=2) + "\n")
+        common.git(self.root, "add", "scripts/ci/policy.json")
+        common.git(self.root, "commit", "-m", "Legacy full policy fixture")
+        self.commit = common.git(self.root, "rev-parse", "HEAD").decode().strip()
+        self.archive, self.source = common.commit_source(self.root, self.commit)
+        self.request = {"schema": 1, "run_id": "legacy-run", **self.source}
+        annotation = records.approval_for(self.bundle())
+        self.assertEqual(annotation["schema"], 1)
+        self.assertNotIn("scope", annotation)
+        records.validate_approval(annotation, self.source)
+
     def test_bundle_and_approval_roundtrip(self):
         root = self.bundle()
         annotation = records.approval_for(root)
@@ -446,7 +488,7 @@ class GitTests(GitFixture):
 class AcceptanceSchedulingTests(GitFixture):
     def test_parallel_jobs_cancel_peers_after_failure(self):
         import threading
-        barrier = threading.Barrier(8, timeout=5)
+        barrier = threading.Barrier(len(self.source["policy"]["jobs"]), timeout=5)
         cancelled = threading.Event()
         calls = []
         def slot(*args):
@@ -465,7 +507,7 @@ class AcceptanceSchedulingTests(GitFixture):
                 patch.object(controller, "export") as export:
             with self.assertRaisesRegex(common.Invalid, "incomplete/failed"):
                 controller.accept(self.root, "HEAD", "fixture", Path(self.tmp.name) / "state")
-        self.assertEqual(set(calls), {item["id"] for item in common.required_jobs()})
+        self.assertEqual(set(calls), {item["id"] for item in self.source["policy"]["jobs"]})
         remote_call.assert_called_once()
         export.assert_not_called()
 
@@ -494,7 +536,7 @@ class AcceptanceSchedulingTests(GitFixture):
         with patch.object(controller, "initialize"), patch.object(controller, "slot_run", return_value=0) as slot, \
                 patch.object(controller, "remote_job") as remote, patch.object(controller, "export") as export:
             controller.accept(self.root, "HEAD", "fixture", Path(self.tmp.name) / "state")
-        self.assertEqual(slot.call_count, 8)
+        self.assertEqual(slot.call_count, len(self.source["policy"]["jobs"]))
         self.assertEqual(remote.call_args.args[2], "finalize")
         export.assert_called_once()
 

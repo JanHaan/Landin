@@ -2,7 +2,7 @@
 
 `ROADMAP.md` R0.70 owns this environment. `scripts/ci/policy.json` is the
 canonical acceptance job list; `scripts/ci/common.py` independently requires
-every job and command. SourceHut runs only approved-main Pages publication
+every job and command for the committed scope. SourceHut runs only approved-main Pages publication
 and GitHub mirroring. A development run cannot authorize publication.
 
 ## Commands
@@ -32,18 +32,46 @@ Acceptance resolves the full commit and tree, creates one Git archive, and
 compares its content inventory with the Git objects, including filename bytes,
 executable bits and symlinks. Export attributes cannot silently change the
 source under test. The controller rejects unsafe paths, special files,
-symlink escapes and reserved cache/evidence paths before transfer. All eight
+symlink escapes and reserved cache/evidence paths before transfer. All selected
 jobs receive the same archive. Each slot recomputes the inventory before and
 after its commands and checks the initialized policy and environment.
 
-The policy runs clean debug/release complete suites and native report identity,
-clean debug/release quality, clean debug/release native GDB, Clang-19 bindings,
-and document/tooling regressions plus full `check.py` and verified rendering.
-`refine --identify` is recorded in both suite jobs. Native GDB has no QEMU
-fallback. Runtime, ABI and workload profiles remain owned by their existing
-harnesses. There is no filtered, recording-mode or incremental acceptance.
-Private font absence is recorded explicitly; publication still requires the
-licensed fonts. The native runner need not hold those private files.
+The committed policy has two scopes. Routine R5/R6 promotion runs five jobs:
+clean debug compiler-host checks (`test.sh --host`), the complete release
+suite and native report identity, release object quality, Clang-19 bindings,
+and documents/tooling with full `check.py` and verified rendering. A routine
+change with substantial source-debugging regression risk adds release GDB.
+Full milestone acceptance runs the complete suite, quality and native GDB in
+both compiler modes, plus bindings and documents: eight jobs.
+
+Select the scope **before committing**; acceptance has no unrecorded scope
+switch. The policy, commands and scope are bound into the archive, request,
+evidence and annotated approval:
+
+```sh
+python3 scripts/ci/policy.py routine
+python3 scripts/ci/policy.py routine --debugger  # substantial debugging risk
+python3 scripts/ci/policy.py milestone          # major phase/parity milestone
+```
+
+A debugger risk includes changed debug metadata, source/variable location
+tracking, unwind or frame conventions, debugger transport, or debugger tests.
+An ordinary documentation, scanner or unrelated tooling change does not
+trigger GDB. Record the decision in the change's review/roadmap evidence.
+Major phase/parity closure, including R5.50 and R6.100, requires milestone
+scope; routine approval is not evidence of full milestone coverage. Return
+to routine scope in the next development commit after milestone delivery.
+
+Schema-1 policies and approvals retain their historical eight-job meaning.
+Schema-2 policies explicitly name `routine` or `milestone` and the debugger
+choice; new approvals expose the scope and required job hashes. Missing jobs,
+substituted commands or relabelled scope are refused. There is no recording-mode
+or incremental acceptance. `HOST-ONLY` is allowed only in routine debug scope;
+release runtime/ABI execution remains complete. Private font absence is
+recorded explicitly; publication still requires the licensed fonts.
+
+See [the validation workflow](../../docs/process.md) for the measured costs,
+development cadence, parallelism and deferred Nix CI work.
 
 ## Resource containment
 
@@ -56,8 +84,9 @@ supervisors terminate their owned sessions even if live output stalls. The
 controller also requests cancellation on a failed SSH job. Eight host-wide
 slots bound acceptance concurrency across controllers. Children inherit the
 slot, individual job lock and shared compatibility lock; an older exclusive
-serial runner cannot overlap these jobs. The six compiler build jobs use at
-most 48 build workers in total, leaving headroom on the 96-CPU host.
+serial runner cannot overlap these jobs. Milestone acceptance has six compiler build jobs and at most 48 build workers;
+routine acceptance has three, or four when GDB is required. All remain within
+the same aggregate limits on the 96-CPU host.
 
 Before probing tools, initialization verifies the current unified cgroup v2
 membership and reads that cgroup's `memory.max` and `memory.swap.max`.

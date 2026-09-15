@@ -8688,9 +8688,10 @@ R4.90's accepted closure remains recorded above. R4.91 completes the reviewed
 repairs with the containing revision's exact native acceptance and delivery
 binding. The completion status in this candidate becomes authoritative only
 with that revision's annotated approval and canonical promotion; development
-runs cannot close the phase. R5.10 and R5.20 are dependency-ready and remain
-planned. Retained resource limits and explicitly transferred R5 work are
-recorded in the readiness intake, not claimed repaired by this gate.
+runs cannot close the phase. R5.10 and R5.20 became dependency-ready at this
+closure; their current status is recorded below. Retained resource limits and
+explicitly transferred R5 work are recorded in the readiness intake, not
+claimed repaired by this gate.
 
 - Every applicable hosted construct under the current normative specification
   is implemented on Linux x86-64.
@@ -8705,7 +8706,7 @@ freestanding backend begins.
 
 ### R5.10 — Establish the native macOS compiler environment
 
-Status: planned
+Status: complete
 Depends on: R0.70, R4.91
 
 Pin or bound the macOS arm64 GNAT/GPRbuild, Apple SDK, assembler, linker and
@@ -8715,9 +8716,61 @@ not accepted as Darwin evidence.
 Exit evidence: provider-neutral commands build `refine` and run its harness on
 native macOS arm64 with captured tool versions.
 
+`scripts/macos.sh --output DIRECTORY` establishes the native host through
+`environments/macos-arm64/policy.json`: the existing Ada pins, a bounded macOS
+major, and exact Apple SDK, Clang/assembler, linker and LLDB identities.
+It assembles, links and executes a native arm64 smoke program, stops and
+resumes it with LLDB, and builds `refine` and runs the unfiltered harness in
+both compiler modes. The absent Linux driver remains the harness's explicit
+runtime-case failure; every other case must pass and every runtime failure
+must identify that missing driver. This does not close Darwin code generation
+or source debugging. Commands, versions, source/tool/artifact hashes, build
+configuration, probe inputs and both output streams are retained per run.
+
+The readiness intake's CHK-FLOW-1, CHK-FE-2 and CHK-FE-3 are characterized by
+bounded native probes for type aliases, module-value dependencies and nested
+flow states at chain lengths or local counts of 8, 256, 1024 and 4096. Flow
+has a scalar control and a 64-field record variant to exercise both dimensions
+of its declaration-by-field matrix. The inherited host stack
+limit is recorded and never raised; CPU and wall limits distinguish stopped
+work from reported exhaustion, raw exceptions and language diagnostics.
+The small controls must pass. Larger results describe only those samples;
+remaining storage and dependency-walk repairs remain R5.20 work.
+
+The first native debug harness run exposed a host-dependent IR ordering in
+concrete evidence traversal capture: two `Addressed_Storage` calls in one Ada
+argument list emitted address instructions in different orders on Darwin and
+Linux. Both native compiler modes reproduced the four golden differences.
+The calls now elaborate separately in the existing recorded destination/source
+address order; source-place evaluation and the copy's operands are unchanged.
+The existing complete IR corpus comparison pins this repair without changing
+the golden. The wider target-contract audit remains R5.20.
+
+Exit evidence: clean native debug and release builds pass the environment
+command, including Apple assembly/link/execution and LLDB stop/resume. Each
+unfiltered harness run reports 712 cases, 711 passed and 195410 checks, with
+only the expected Linux runtime-driver refusal. Every message in that failed
+case is checked; the complete IR golden now matches on both hosts and in both
+compiler modes. Supplemental Linux IR checks and all four profiles of
+`runtime/for-iterable-evidence-traversal` pass in both modes, with executable
+outputs on the guest filesystem under the existing virtiofs identity limit.
+The eight environment-oracle tests and full document checks pass.
+
+The final native probes accept the alias chains, module-value chains and
+scalar flow cases through 4096 in both modes. The 64-field flow variant accepts
+8, 256 and 1024 locals, then reports host exhaustion with exit 71 at 4096 in
+both modes. The inherited stack limits are 8372224 bytes soft and 67092480
+bytes hard; neither was raised. These are bounded observations, not maximum
+input sizes or a general promise of recoverable exhaustion. R5.20 retains the
+storage and dependency-walk work. `environments/macos-arm64/validation.json`
+records the native tool identities, verified evidence hashes, matching tested
+input inventory and per-mode results; its evidence paths retain the full logs
+and probe sources. This closes the compiler environment item, not R5 parity
+or a new exact-revision Linux approval.
+
 ### R5.20 — Isolate target contracts
 
-Status: planned
+Status: active
 Depends on: R4.91, R0.60
 
 Refine target descriptions, ABI queries, assembly emission and debug emission
@@ -8732,6 +8785,27 @@ disposition rather than turning into an unstated cross-target guarantee.
 Exit evidence: target-independent stage fixtures are byte-for-byte or
 canonically equal across hosts where specified; target differences are
 localized and reviewed.
+
+Validation/process agreement for R5/R6: use native Mac compiler-host checks
+and focused native Linux development slots. Routine promotion uses the
+committed five-job policy: debug host checks, the complete release suite and
+native identity, release quality, bindings, and documents/tooling. Add release
+GDB only for substantial debugging regression risk. Full matrices in both
+compiler modes are reserved for major milestones, including R5.50 and R6.100;
+select and commit milestone scope before their closure candidates. Policy and
+approval schemas bind the scope and every required job; historical full
+approvals retain their meaning. No Linux containers or Linux workload matrices
+belong in the Mac development loop. Do not repeat broad local gates before a
+final promotion candidate when focused evidence already resolves the change.
+
+The host selector omits native target workload emission/execution, retaining
+compiler units, diagnostics and the complete IR golden. The Python lexical
+check reuses spelling membership within one file, with no persistent answers
+across grammar edits and no removed corpus coverage. `docs/process.md` records
+the measured costs and operating workflow. This item also owns evaluation of
+bounded per-workload parallelism and a dependency graph for immutable compiler
+and workload artifacts, preserving failure, identity and resource controls.
+Nix CI is deferred by the maintainer; the existing shell remains supplemental.
 
 ### R5.30 — Implement Darwin arm64 lowering
 
