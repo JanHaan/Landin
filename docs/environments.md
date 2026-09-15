@@ -9,20 +9,21 @@ their original meaning.
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | bootstrap development loop | working |
+| native macOS arm64 | bootstrap development and R5.10 environment validation | working |
 | Apple Container, `linux/amd64` under Rosetta | supplemental local Linux loop | working |
 | native Linux x86-64 runner | explicit exact-revision acceptance | working |
 | builds.sr.ht | approved-main Pages publication and GitHub mirror | working |
 
-The acceptance controller runs `scripts/ci/policy.json`'s eight isolated jobs
-against one committed archive. Clean debug/release suites, native report
-identity, quality and native GDB retain their existing oracles; Clang-19
-bindings and complete document/tooling checks also remain required. Actual
-tool versions, binary hashes, environment, commands, logs and artifacts are
-retained outside mutable slots. A verified durable export precedes the ordinary
-annotated administrative approval tag and atomic main promotion. See
+The acceptance controller runs the committed `scripts/ci/policy.json` scope
+against one committed archive. Routine promotion runs debug compiler-host
+checks, the complete release suite and native identity, release quality,
+bindings, and document/tooling checks. GDB runs only for substantial debugging
+regression risk or a major milestone. Milestones restore the full matrix in
+both compiler modes. Actual versions, binary hashes, commands, logs and
+artifacts are retained; verified export, annotated approval and atomic main
+promotion remain required. See
 [`environments/native-ci/README.md`](../environments/native-ci/README.md) for
-commands, deployment, trust boundaries, retention and interrupted-run recovery.
+operations and [`docs/process.md`](process.md) for the workflow.
 
 SourceHut's `.build.yml` publishes only current canonical main with its exact
 validated approval tag, before accessing the licensed font checkout. Manual
@@ -35,6 +36,15 @@ Native macOS arm64 is a *development* loop at R0. It becomes a validated
 target of its own at R5, with its own compiler build, platform tools and
 debugger gate; a result produced here is not Linux evidence, and a Linux
 container is never Darwin evidence.
+
+R5.10 adds `./scripts/macos.sh --output .scratch/macos-validation-1` to capture
+the native environment, assemble/link/run an arm64 smoke program, exercise
+LLDB, build and run compiler-host checks in both modes, and sample
+the inherited resource limits. The Apple tool policy, reproduction commands
+and the historical full-harness option are documented in
+[`environments/macos-arm64/README.md`](../environments/macos-arm64/README.md).
+This establishes the compiler host; Darwin lowering and emitted-program source
+debugging remain later R5 items.
 
 QEMU full-system x86 is supplemental. It is not the daily loop and it is not
 the Linux gate.
@@ -58,12 +68,23 @@ design: runtime fixtures are Linux x86-64 evidence and the harness fails
 rather than skips on a host that cannot finish the target. Only that case
 red is the expected Mac result.
 
-The local Linux loop runs the very same scripts inside the pinned image:
+Linux work during R5/R6 runs on the native Linux runner, using focused
+development slots or committed acceptance. The container commands below are
+retained for explicit environment troubleshooting; they are not part of the
+Mac development or delivery loop:
 
 ```sh
 ./scripts/linux-loop.sh              # build and run the suite in linux/amd64
 ./scripts/linux-loop.sh sh -c '...'  # anything else, in the same environment
 ```
+
+Artifact-writing checks need a guest filesystem with known name rules. The
+shared virtiofs mount cannot prove the host volume's rules for absent output
+names, so the collision guard can refuse distinct-looking output paths there.
+For runtime and quality checks, copy the sources and place the executable and
+its output directory on the container's own `/tmp` filesystem. R4.50's local
+evidence in `ROADMAP.md` records the same requirement. Building the bootstrap
+and comparing its recorded IR can still use the shared mount.
 
 For the edit/test loop, two developer wrappers retain checksum-safe staleness
 checking while avoiding a clean rebuild for every Ada edit:

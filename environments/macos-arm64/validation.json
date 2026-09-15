@@ -1,0 +1,296 @@
+{
+  "schema": 1,
+  "scope": "R5.10 native bootstrap observations; ROADMAP.md owns completion",
+  "compiler_base_revision": "4f74a45c1eedef4ce79382cda23a1b159c340416",
+  "tested_input_files": 4221,
+  "tested_input_inventory_sha256": "b268448b6e4f39140779b79a86dbe2dbfd1f369469251a4e17e309241820bf31",
+  "lowering_source_sha256": "2efe4f06d429f624bf8bc75b5a4b0317c03956171f8b5a28216ff6c875268570",
+  "unchanged_ir_golden_sha256": "8b743eed92e7a65d1242cbc82dc9df5b7de30756ff21810b389a33dc12ce0b21",
+  "host": {
+    "system": "Darwin",
+    "architecture": "arm64",
+    "macos_version": "26.6.2",
+    "macos_build": "25G83",
+    "kernel_release": "25.6.0",
+    "translated": false
+  },
+  "policy": {
+    "schema": 1,
+    "macos_major": "26",
+    "sdk_version": "26.5",
+    "sdk_build": "25F70",
+    "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "assembler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "linker": "1267",
+    "debugger": "lldb-2100.0.17.203"
+  },
+  "ada_tools": {
+    "gnatls": "GNATLS 16.1.0",
+    "gprbuild": "GPRBUILD 26.0.0 (2026-04-15) (aarch64-apple-darwin24.6.0)",
+    "gcc": "16.1.0"
+  },
+  "tool_sha256": {
+    "clang": "f30550eab15fdf5ab8c0dc54c52679711241e5d4b636b027e18c09fef531775d",
+    "assembler": "06770364632b454317238e79d670c094e27301c7322c3a488323bd42e4d0bcbc",
+    "linker": "28d85b9af18c923db12e0b4ce70b80ee217f2b7cade0e872baa9e8ddc396c08d",
+    "debugger": "b840ad7fc5fd2304a4d8d55a3946bab7c321a01c1938a37245722d9bb1449dcf",
+    "gnatls": "ef9eebdb8ecb0d7639c3244af76d5b0c703a37b77bcd44fe08bc5e601ed07882",
+    "gprbuild": "62b9d330a64cf222cf7b3adea488a5f37c15ab968063454a2a7e410692458273",
+    "gcc": "bef9103e216ecdb36b9f6aba896ced832857ad59aa83cdfb10fd1911ab4785c7"
+  },
+  "native_smoke": "Apple assembly, link, execution, and LLDB breakpoint/continue passed in both runs",
+  "probe_limits": {
+    "cpu_seconds": 20,
+    "wall_seconds": 30,
+    "core_bytes": 0,
+    "stack": "inherited unchanged"
+  },
+  "runs": {
+    "debug": {
+      "started_utc": "2026-09-15T06:43:35.519968+00:00",
+      "evidence_directory": ".scratch/r510-verified-debug",
+      "summary_sha256": "4e6403786b453d9bfa499b5f9ea03fab722c0d7b9ca43d8ac6b684453cf845bb",
+      "commands_sha256": "8112e9ed22c8d41d97e0d3fdef5960c9a1843584a1e5eaf3b59b99fd42e9e2b3",
+      "artifact_count": 118,
+      "stack_limit_bytes": {
+        "soft": 8372224,
+        "hard": 67092480
+      },
+      "harness": {
+        "cases": 712,
+        "passed": 711,
+        "failed": 1,
+        "checks": 195410,
+        "expected_failure": "runtime fixtures execute",
+        "refine_sha256": "f6f768b00263b37af1c9500fcb87d9c41fd56ae82fa93a1ac517ded51ab3dffc"
+      },
+      "probes": [
+        {
+          "kind": "aliases",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 4096,
+          "outcome": "reported-exhaustion",
+          "returncode": 71
+        }
+      ]
+    },
+    "release": {
+      "started_utc": "2026-09-15T06:43:35.517690+00:00",
+      "evidence_directory": ".scratch/r510-verified-release",
+      "summary_sha256": "fce4b504655396f860273158dc62c4898b0fa672e893f1acd125858665e7b003",
+      "commands_sha256": "5f7e9fce47cf0e8157e297509a402d6837434747ba737e37b975caa41c8e4537",
+      "artifact_count": 118,
+      "stack_limit_bytes": {
+        "soft": 8372224,
+        "hard": 67092480
+      },
+      "harness": {
+        "cases": 712,
+        "passed": 711,
+        "failed": 1,
+        "checks": 195410,
+        "expected_failure": "runtime fixtures execute",
+        "refine_sha256": "5eaa977e51fc372ef977644b2dc07f6be02d645413245a911fc9e767e1ffd043"
+      },
+      "probes": [
+        {
+          "kind": "aliases",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "aliases",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "values",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow",
+          "count": 4096,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 8,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 256,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 1024,
+          "outcome": "accepted",
+          "returncode": 0
+        },
+        {
+          "kind": "flow-wide",
+          "count": 4096,
+          "outcome": "reported-exhaustion",
+          "returncode": 71
+        }
+      ]
+    }
+  },
+  "linux_regressions": {
+    "scope": "supplemental pinned Linux amd64 container under Rosetta",
+    "ir_corpus": "unchanged golden passes in debug and release",
+    "iterable_fixture": "runtime/for-iterable-evidence-traversal passes all four profiles in debug and release",
+    "filesystem": "execution uses guest /tmp; the shared virtiofs mount is refused under the existing absent-name identity guard",
+    "logs": {
+      ".scratch/r510-golden-fix-linux.log": "b4bd3c7126e85222419b02508ab1793006aef335dc0c14648e6196d0b7c69914",
+      ".scratch/r510-traversal-linux-release.log": "6bc44d95fcddb72e0c88a8a5764fbd208ea9432a87509609793c70f9186c72d4",
+      ".scratch/r510-traversal-linux-guest-debug.log": "ef048b66deb3c055260cffeb33e9043f161cc61f19375eebc56c05adcd243025",
+      ".scratch/r510-traversal-linux-guest-release.log": "822ab43486bd4d27bcb2c10dbdb6899d6010996575ba55e249c0ce8124317ea0"
+    }
+  }
+}

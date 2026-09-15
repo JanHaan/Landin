@@ -1,0 +1,128 @@
+# Development, acceptance and publication
+
+`ROADMAP.md` owns this process and its remaining work. R5.20 records the
+maintainer's decision: full gates only at major milestones, Linux work on
+native Linux, debugger checks only for substantial regression risk, and Nix
+CI deferred.
+
+## Choose checks for their consequence
+
+| stage | work | evidence |
+|---|---|---|
+| edit/test loop | checksum-based build and exact affected case/suite/fixture selectors; affected Python tests | development feedback |
+| Mac compiler host | `scripts/dev-test.sh --host`; diagnostics, compiler units and complete IR golden | explicit host scope; no Linux workload emission/execution |
+| Linux development | `scripts/ci/controller.py dev --slot NAME -- COMMAND...` on the native runner | focused native feedback; no approval |
+| routine main promotion | five committed jobs: debug host suite, full release suite/runtime/ABI and native report identity, release object quality, bindings, documents/tooling | exact-commit routine approval |
+| substantial debugging risk | routine coverage plus native release GDB | exact-commit routine approval that includes the debugger job |
+| major phase/parity milestone | full suite, quality and native GDB in both compiler modes, bindings and documents/tooling | exact-commit milestone approval |
+| publication | verified export, annotated approval, atomic main/tag promotion, guarded Pages rendering | delivery of the approved revision |
+
+Do not run Linux containers or Linux workload matrices on the Mac during R5/R6
+development. In-process compiler units may still inspect target-specific data;
+that is host-compiler coverage, not Linux execution. `--host` excludes the two
+native target-workload cases and requires every remaining case to pass. The
+IR comparison that exposed R5.10's Ada argument-order defect remains included.
+
+Choose the smallest test that can expose the changed behavior first. When it
+passes, broaden only for another affected subsystem or a remaining concern.
+Run routine acceptance once for the final committed promotion candidate;
+resume verified successful jobs after interruption. A failed job or changed
+source requires a new acceptance run. Do not repeat full local matrices before
+that gate. Documentation changes still receive full `check.py`; the checker
+retains every invariant and fixture.
+
+Debugger risk means changed debug metadata, source/variable locations,
+unwind/frame conventions, debugger transport or debugger checks. Record the
+reason for enabling it. A status-page edit or an unrelated tool change is not
+a reason to run GDB. The R5.10 ordering repair preserves the existing Linux IR
+and copy behavior, changes no debug encoding/location/unwind code, and passed
+the unchanged IR golden and traversal execution checks in both compiler modes;
+this delivery therefore uses routine scope without GDB.
+
+Before a major milestone such as R5.50 or R6.100, select and commit milestone
+scope with the closure candidate. A routine approval cannot be cited as a full
+milestone result. Subsequent development returns to routine scope.
+
+```sh
+python3 scripts/ci/policy.py routine
+python3 scripts/ci/policy.py routine --debugger
+python3 scripts/ci/policy.py milestone
+```
+
+These commands edit the committed policy; they do not run or approve anything.
+Approval validates the exact job list and command set for the selected scope.
+Historical schema-1 approvals remain full eight-job evidence. The native
+operations guide documents acceptance, export, approval and promotion.
+
+## What the measurements say
+
+The retained full Linux run `20260914T204024Z-147ccbe20b60` ran its eight jobs
+concurrently. Its slowest job determined about 91 minutes of wall time:
+
+| component | debug compiler, seconds | release compiler, seconds |
+|---|---:|---:|
+| complete suite command | 4738.5 | 1096.4 |
+| object-quality command | 5438.8 | 1070.2 |
+| native debugger command | 2823.9 | 555.8 |
+
+The document/tooling job took 111.0 seconds, including 88.2 in `check.py`,
+10.5 in CI failure-path tests and 2.1 in rendering. The complete R5.10 Mac
+harness took 2522.2 seconds in debug and 911.3 in release, largely compiling
+Linux workloads before the inevitable missing-tool refusal. Those runs remain
+historical evidence, not the future development cadence.
+
+A local Python profile put 99.9 of 106.5 instrumented seconds in the grammar
+corpus check: 50.9 in recognition and 44.7 in lexical membership. The lexical
+matcher was called 952266 times. It now reuses repeated spellings within one
+file with a bounded cache. Grammar edits cannot reuse answers from a previous
+invocation, and token offsets/refusals remain checked. No corpus is skipped
+and no persistent cache supplies acceptance evidence.
+
+The subsequent same-host profile took 72.6 seconds, about 32% less. Lexical
+membership fell to 101568 calls and 8.2 instrumented seconds. The new debug
+host run passed 711 cases and 192905 checks; its transcript timestamps span
+about 280 seconds including incremental rebuilding. These local measurements
+describe this checkout and host, not fixed performance bounds.
+
+The old release-job timings suggest a routine gate near 20 minutes rather
+than 91; this is a projection, not a new measured guarantee. New acceptance
+records retain actual per-command times. Measure those before increasing
+parallelism or expanding cache machinery.
+
+## Parallel work and build reuse
+
+The outer jobs already run in parallel. The remaining opportunity is inside
+long jobs: independent workload/profile compilations run sequentially, and
+the same compiler mode or workload is built for several consumers.
+
+The proposed build graph is: one compiler build per mode, independent program
+builds keyed by their complete inputs and flags, then separate execution,
+quality and debugger consumers. Share immutable artifacts with verified
+identities, not mutable output paths. Use one aggregate CPU/memory budget;
+nested unrestricted worker pools would oversubscribe the runner. Keep
+GPRbuild's existing Ada dependency and checksum handling.
+
+This graph and bounded workload parallelism remain R5.20 work, not an
+implemented cache or scheduler. First remove unnecessary scope, then measure
+the remaining work and preserve the existing failure/timeout/evidence oracles
+when introducing sharing. Cache hits must be labelled as reuse; they are not
+fresh native executions.
+
+## Nix later
+
+The current `flake.nix` supplies development shells. It does not define a
+cached `refine` package or the project's test derivations. More `nix develop`
+invocations alone would not remove repeated compilation.
+
+Nix could later own compiler packages and suitable `checks` with narrow,
+complete inputs, and schedule them on the correct native builders. Its flake
+checks build the declared check derivations; distributed builds and separate
+job/core controls provide the scheduling mechanisms.
+[Flake checks](https://nix.dev/manual/nix/2.35/command-ref/new-cli/nix3-flake-check.html),
+[distributed builds](https://nix.dev/tutorials/nixos/distributed-builds-setup.html),
+[job/core controls](https://nix.dev/manual/nix/2.32/advanced-topics/cores-vs-jobs).
+
+Nix CI is explicitly deferred. A later evaluation must account for the pinned
+Apple SDK, native debugger permissions, input selection, cache provenance and
+the existing native acceptance record. Build reuse cannot replace the native
+Darwin, Linux or freestanding executions required at a milestone.

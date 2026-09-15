@@ -1,9 +1,15 @@
 {
-  "schema": 1,
+  "schema": 2,
   "platform": "Linux-x86_64",
   "pins": "environments/pins.sh",
   "build_tag": "native-ci",
   "clang": "clang-19",
+  "limits": {
+    "memory_bytes": 107374182400,
+    "swap_bytes": 0,
+    "parallel_jobs": 8,
+    "step_seconds": 7200
+  },
   "jobs": [
     {
       "id": "suite-debug",
@@ -18,7 +24,8 @@
           "-j8"
         ],
         [
-          "./scripts/test.sh"
+          "./scripts/test.sh",
+          "--host"
         ],
         [
           "python3",
@@ -60,23 +67,6 @@
       ]
     },
     {
-      "id": "quality-debug",
-      "mode": "debug",
-      "commands": [
-        [
-          "./scripts/clean.sh",
-          "--all"
-        ],
-        [
-          "./scripts/build.sh",
-          "-j8"
-        ],
-        [
-          "./scripts/quality.sh"
-        ]
-      ]
-    },
-    {
       "id": "quality-release",
       "mode": "release",
       "commands": [
@@ -90,40 +80,6 @@
         ],
         [
           "./scripts/quality.sh"
-        ]
-      ]
-    },
-    {
-      "id": "debugger-debug",
-      "mode": "debug",
-      "commands": [
-        [
-          "./scripts/clean.sh",
-          "--all"
-        ],
-        [
-          "./scripts/build.sh",
-          "-j8"
-        ],
-        [
-          "./scripts/debug.sh"
-        ]
-      ]
-    },
-    {
-      "id": "debugger-release",
-      "mode": "release",
-      "commands": [
-        [
-          "./scripts/clean.sh",
-          "--all"
-        ],
-        [
-          "./scripts/build.sh",
-          "-j8"
-        ],
-        [
-          "./scripts/debug.sh"
         ]
       ]
     },
@@ -171,6 +127,10 @@
         ],
         [
           "python3",
+          "scripts/tests/test_check_caching.py"
+        ],
+        [
+          "python3",
           "check.py"
         ],
         [
@@ -179,10 +139,6 @@
       ]
     }
   ],
-  "limits": {
-    "memory_bytes": 107374182400,
-    "swap_bytes": 0,
-    "parallel_jobs": 8,
-    "step_seconds": 7200
-  }
+  "scope": "routine",
+  "debugger": false
 }

@@ -51,7 +51,8 @@ procedure Landin_Tests is
    Result     : Landin.Testing.Summary;
 
    type Requested_Mode is
-     (Run_All, Record_Artefacts, Run_Suite, Run_Case, Run_Fixture, Misuse);
+     (Run_All, Run_Host, Record_Artefacts, Run_Suite, Run_Case,
+      Run_Fixture, Misuse);
 
    Mode         : Requested_Mode := Run_All;
    Suite_Filter : Unbounded.Unbounded_String;
@@ -126,7 +127,7 @@ procedure Landin_Tests is
    begin
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "usage: landin_tests [--record | --suite=NAME |"
+         "usage: landin_tests [--host | --record | --suite=NAME |"
          & " --case=SUITE/NAME | --fixture=CLASS/NAME]");
    end Print_Usage;
 
@@ -144,6 +145,8 @@ procedure Landin_Tests is
       begin
          if Argument = "--record" then
             Mode := Record_Artefacts;
+         elsif Argument = "--host" then
+            Mode := Run_Host;
          elsif Starts_With (Argument, "--suite=")
            and then Argument'Length > 8
          then
@@ -262,7 +265,8 @@ begin
    Landin.Tests.Debugging_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
-   Landin.Tests.Fixture_Execution_Suite.Register (Cases);
+   Landin.Tests.Fixture_Execution_Suite.Register
+     (Cases, Include_Target_Workloads => Mode /= Run_Host);
    Landin.Tests.Fixture_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
    Landin.Tests.IR_Suite.Register (Cases);
@@ -293,7 +297,7 @@ begin
    end if;
 
    case Mode is
-      when Run_All =>
+      when Run_All | Run_Host =>
          Landin.Testing.Run (Cases, Transcript, Result);
       when Run_Suite =>
          Landin.Testing.Run
@@ -313,6 +317,12 @@ begin
          raise Landin.Compiler_Defect with "test mode reached the runner";
    end case;
 
+   if Mode = Run_Host then
+      Text_IO.Put_Line
+        ("HOST-ONLY compiler checks; target workload"
+         & " emission/execution excluded");
+      Text_IO.New_Line;
+   end if;
    Text_IO.Put (Unbounded.To_String (Transcript));
 
    if Result.Failed > 0 or else Result.Cases = 0 then

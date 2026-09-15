@@ -248,11 +248,12 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
+**Current roadmap work: R5.20 — Isolate target contracts.**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
-completion is bound to this revision's exact native acceptance, approval and
-canonical delivery recorded in ROADMAP.md. R5 has not begun.
+completion is bound to its closure revision's exact native acceptance, approval
+and canonical delivery recorded in ROADMAP.md. R5.10 has established the native
+macOS compiler environment; Darwin code generation remains planned.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

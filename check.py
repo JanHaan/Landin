@@ -11,6 +11,7 @@ to itself, so it works from anywhere.
     python3 check.py FILE...    # only these
 """
 import collections
+from functools import lru_cache
 import hashlib
 import io
 import os
@@ -735,14 +736,21 @@ def landin_tokens(source, signs, trees=None):
     out, i, n = [], 0, len(source)
     ordered = sorted(signs, key=len, reverse=True)
 
+    # Membership depends on spelling and this invocation's grammar, not on
+    # the token offset. Keep the cache local so edited grammars cannot reuse
+    # old answers, and bounded so generated identifiers do not accumulate.
+    @lru_cache(maxsize=4096)
+    def matches(rule, text):
+        return lexical_matches(trees, rule, text)
+
     while i < n:
         char = source[i]
 
         #  Whitespace is whatever the space rule spells, so dropping a
         #  byte from that rule is a change a fixture can notice.
         if char in " \t\r\n":
-            if trees and not lexical_matches(trees, "space", char) \
-                    and not lexical_matches(trees, "line_end", char):
+            if trees and not matches("space", char) \
+                    and not matches("line_end", char):
                 return None, "no rule spells the whitespace byte %r" % char
             i += 1
             continue
@@ -801,7 +809,7 @@ def landin_tokens(source, signs, trees=None):
                     if exponent == i:
                         return None, "a float exponent has no digit run"
                     run = source[start:i]
-                    if trees and not lexical_matches(trees, "float", run):
+                    if trees and not matches("float", run):
                         return None, "%r is not a float the rules spell" % run
                     out.append(("float", run, start))
                     continue
@@ -819,7 +827,7 @@ def landin_tokens(source, signs, trees=None):
                     if exponent == i:
                         return None, "a float exponent has no digit run"
                 run = source[start:i]
-                if trees and not lexical_matches(trees, "float", run):
+                if trees and not matches("float", run):
                     return None, "%r is not a float the rules spell" % run
                 out.append(("float", run, start))
                 continue
@@ -830,7 +838,7 @@ def landin_tokens(source, signs, trees=None):
                     i += 1
             run = source[start:i]
 
-            if trees and not lexical_matches(trees, "integer", run):
+            if trees and not matches("integer", run):
                 return None, "%r is not an integer the rules spell" % run
             out.append(("integer", run, start))
             continue
@@ -847,8 +855,8 @@ def landin_tokens(source, signs, trees=None):
             if run == "_":
                 out.append(("sign", "_", start))
                 continue
-            if trees and not lexical_matches(trees, "keyword", run) \
-                    and not lexical_matches(trees, "identifier", run):
+            if trees and not matches("keyword", run) \
+                    and not matches("identifier", run):
                 return None, "%r is neither a keyword nor a name" % run
             out.append(("word", run, start))
             continue
@@ -1116,7 +1124,8 @@ def grammar_recognises(rules, trees, tokens, start="program"):
 
 def read_grammar(path):
     """(rules, trees, problems) for one tour file."""
-    text = io.open(path, encoding="utf-8").read()
+    with io.open(path, encoding="utf-8") as stream:
+        text = stream.read()
     offset, section = grammar_section(text)
     if section is None:
         return {}, {}, []
@@ -3083,7 +3092,7 @@ def test_suite_inventory():
                 re.findall(r'"([^"\n]+)"', expected_block.group(1))]
     if len(expected) != len(set(expected)):
         out.append((where, 1, "expected suite inventory repeats a name"))
-    calls = re.findall(r"(Landin\.Tests\.\w+_Suite)\.Register\s*\(Cases\)",
+    calls = re.findall(r"(Landin\.Tests\.\w+_Suite)\.Register\s*\(Cases(?:\)|,)",
                        main, re.I)
     packages = set()
     names = set()
@@ -5418,6 +5427,42 @@ def check_native_ci(full_run):
     return out
 
 
+def check_macos_environment(full_run):
+    """Keep the native Apple tool record and its refusal oracle executable."""
+    if not full_run:
+        return []
+    import json
+    import subprocess
+    out = []
+    policy_path = "environments/macos-arm64/policy.json"
+    runner = "scripts/tests/test_macos_environment.py"
+    required = [policy_path, runner, "scripts/macos.sh",
+                "scripts/macos_environment.py", "environments/macos-arm64/README.md"]
+    out += absent(required)
+    if out:
+        return out
+    try:
+        policy = json.loads(io.open(policy_path, encoding="utf-8").read())
+        record = io.open("compiler/ada/TOOLCHAIN.md", encoding="utf-8").read()
+        keys = {"schema", "macos_major", "sdk_version", "sdk_build", "clang",
+                "assembler", "linker", "debugger"}
+        if set(policy) != keys or policy["schema"] != 1:
+            out.append((policy_path, 1, "unexpected native macOS policy schema"))
+        for key in keys - {"schema"}:
+            if not isinstance(policy.get(key), str) or not policy.get(key):
+                out.append((policy_path, 1, "missing tool identity: " + key))
+            elif "`" + policy[key] + "`" not in record:
+                out.append((policy_path, 1, key + " differs from TOOLCHAIN.md"))
+        result = subprocess.run([sys.executable, runner], capture_output=True,
+                                text=True, timeout=30)
+        if result.returncode:
+            out.append((runner, 1, "native environment oracle failed: "
+                        + result.stdout + result.stderr))
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        out.append((policy_path, 1, str(error)))
+    return out
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -5499,6 +5544,7 @@ def main(argv):
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_project_status(full_run)
     extra += check_pinned_toolchain(full_run)
+    extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)
     extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)

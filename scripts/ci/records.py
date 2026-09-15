@@ -169,22 +169,32 @@ def validate_bundle(root):
 
 def approval_for(root):
     request, environment, record = validate_bundle(root)
-    return {"schema": 1, "kind": "landin-native-acceptance", "commit": request["commit"],
+    approval = {"schema": 1, "kind": "landin-native-acceptance", "commit": request["commit"],
             "tree": request["tree"], "run_id": request["run_id"],
             "archive_sha256": request["archive_sha256"], "source_sha256": request["source_sha256"],
             "policy_sha256": request["policy_sha256"], "request_sha256": identity(request),
             "environment_sha256": identity(environment), "record_sha256": identity(record),
             "jobs": {name: {"status": "passed", "sha256": value["sha256"]}
                      for name, value in record["jobs"].items()}}
+    if request["policy"]["schema"] == 2:
+        approval.update(schema=2, scope=request["policy"]["scope"])
+    return approval
 
 
 def validate_approval(approval, source):
-    require(set(approval) == {"schema", "kind", "commit", "tree", "run_id", "archive_sha256",
+    scoped = source["policy"]["schema"] == 2
+    fields = {"schema", "kind", "commit", "tree", "run_id", "archive_sha256",
                               "source_sha256", "policy_sha256", "request_sha256",
-                              "environment_sha256", "record_sha256", "jobs"},
+                              "environment_sha256", "record_sha256", "jobs"}
+    if scoped:
+        fields.add("scope")
+    require(set(approval) == fields,
             "invalid approval annotation fields")
-    require(approval["schema"] == 1 and approval["kind"] == "landin-native-acceptance",
+    require(approval["schema"] == (2 if scoped else 1)
+            and approval["kind"] == "landin-native-acceptance",
             "not a native acceptance approval")
+    if scoped:
+        require(approval["scope"] == source["policy"]["scope"], "approval scope mismatch")
     for field in ("commit", "tree", "archive_sha256", "source_sha256", "policy_sha256"):
         require(approval[field] == source[field], "approval " + field + " mismatch")
     request = {"schema": 1, "run_id": approval["run_id"], **source}

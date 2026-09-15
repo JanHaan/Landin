@@ -973,6 +973,10 @@ GUIDES = [
     dict(key="native-ci", src="environments/native-ci/README.md",
          out="native-ci.html", nav="native acceptance", group="the implementation", blurb="Committed native acceptance, retained evidence, "
          "approval and publication operations."),
+    dict(key="process", src="docs/process.md", out="process.html",
+         nav="the validation workflow", group="the implementation",
+         blurb="Focused development, routine acceptance, major milestones "
+               "and measured validation costs."),
     dict(key="editors", src="highlight/README.md", out="editors.html",
          nav="editor and IDE support", group="the implementation",
          blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "

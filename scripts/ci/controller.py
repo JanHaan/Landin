@@ -135,7 +135,9 @@ def accept(root, revision, host, state, resume=None):
         require(not resume, "resume requires the original local request")
         write_new(local / "request.json", request)
     initialize(host, archive, request)
-    print("ACCEPTANCE " + run_id + " commit=" + source["commit"], flush=True)
+    print("ACCEPTANCE " + run_id + " commit=" + source["commit"]
+          + " scope=" + request["policy"].get("scope", "milestone")
+          + " jobs=" + str(len(request["policy"]["jobs"])), flush=True)
     results = {}
     with ThreadPoolExecutor(max_workers=request["policy"]["limits"]["parallel_jobs"]) as pool:
         futures = {}

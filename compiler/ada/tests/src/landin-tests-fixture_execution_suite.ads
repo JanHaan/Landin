@@ -5,5 +5,9 @@ package Landin.Tests.Fixture_Execution_Suite is
    --  developer run.  The ordinary complete suite never calls this.
    procedure Select_Fixture (Path : String);
 
-   procedure Register (Into : in out Landin.Testing.Registry);
+   --  Host scope retains recorded diagnostics but omits native target
+   --  workload emission and execution. The ordinary suite includes both.
+   procedure Register
+     (Into : in out Landin.Testing.Registry;
+      Include_Target_Workloads : Boolean := True);
 end Landin.Tests.Fixture_Execution_Suite;
