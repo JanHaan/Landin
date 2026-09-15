@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R5.30 — Implement Darwin arm64 lowering (planned).**
+**Current roadmap work: R5.30 — Implement Darwin arm64 lowering.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
