@@ -808,3 +808,22 @@ refusal sources promoted to enabled grammar remain byte-for-byte positive
 fixtures, and all unchanged R4.80 recovery and provider oracles remain required.
 D212's
 ordinary allocator authority and all existing workload profiles remain required.
+
+
+## Native Darwin lowering
+
+`compiler/tests/darwin/cases.json` selects the R5.30 lowering and ABI corpus,
+run by `compiler/tests/darwin/check.py` with none/off, size/auto and speed/all
+profiles. It reuses shared source/verdicts and has separate Apple varargs,
+packed-stack/HFA/indirect-result and errno probes. Each run retains command
+arguments, outputs, hashes, assembly and native artifacts. Every emitted
+routine's frame record and reserved-register exclusion are checked; a C peer
+also checks a live Landin parent frame. `--case`/`--profile` are visibly filtered
+development feedback. The binding runner regenerates and executes the complete
+adapter-category corpus with the pinned Apple target and tests exact archives.
+
+These scripts require native arm64 macOS. They do not reinterpret shared Linux
+fixture metadata or replace Linux golden records. R5.50 owns the complete
+shared hosted corpus and derived-prototype parity matrix. Native acceptance
+and matching-revision approval are documented in
+[the Mac guide](../../environments/macos-arm64/README.md).

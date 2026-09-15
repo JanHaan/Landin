@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "scope": "R5.30 native lowering",
+  "mode": "release",
+  "commands": [
+    ["./scripts/build.sh", "-j8"],
+    ["./scripts/test.sh", "--host"],
+    ["python3", "compiler/tests/darwin/check.py", "--refine", "{refine}", "--output", "{executions}"],
+    ["python3", "compiler/tests/darwin/bindings.py", "--refine", "{refine}", "--output", "{bindings}"]
+  ]
+}

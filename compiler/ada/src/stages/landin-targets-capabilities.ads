@@ -29,7 +29,7 @@ package Landin.Targets.Capabilities is
    --  Compiler-local labels and assembler quoting are separate concerns.
    function Link_Symbol (Facts : Target_Facts; Name : String) return String;
 
-   type Backend_Kind is (No_Backend, Linux_X86_64_ELF);
+   type Backend_Kind is (No_Backend, Linux_X86_64_ELF, Darwin_Arm64_Mach_O);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 

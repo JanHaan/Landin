@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "profiles": [
+    [
+      "none",
+      "off"
+    ],
+    [
+      "size",
+      "auto"
+    ],
+    [
+      "speed",
+      "all"
+    ]
+  ],
+  "fixtures": [
+    "abi/r440-native-aggregates",
+    "abi/r440-native-callback-array-fields",
+    "runtime/any-aggregate-storage",
+    "runtime/any-argument-save",
+    "runtime/shifts-fill-with-zeros-beyond-the-width",
+    "runtime/signed-division-overflow-traps",
+    "runtime/checked-overflow-traps",
+    "runtime/compound-assignment-overflow-traps",
+    "runtime/integer-conversions",
+    "runtime/integer-conversion-signed-overflow-traps",
+    "runtime/integer-conversion-unsigned-overflow-traps",
+    "runtime/integer-to-bool-conversions",
+    "runtime/bool-to-integer-conversions",
+    "runtime/integer-to-float-conversions",
+    "runtime/bool-to-float-conversions",
+    "runtime/float-to-bool-conversions",
+    "runtime/float-to-bool-invalid-traps",
+    "runtime/float-to-integer-conversions",
+    "runtime/float-to-integer-nan-traps",
+    "runtime/float-to-integer-out-of-range-traps",
+    "runtime/float-width-conversions",
+    "runtime/float-width-conversion-overflow-traps",
+    "runtime/float-decimal-runtime",
+    "runtime/float-hexadecimal-runtime",
+    "runtime/float-named-specials",
+    "runtime/module-float-arithmetic",
+    "runtime/range-subtype-conversion-traps",
+    "runtime/unchecked-integer-conversion-truncates",
+    "runtime/unchecked-keeps-bool-conversion-traps",
+    "runtime/unchecked-keeps-float-conversion-traps",
+    "runtime/slice-index-read-traps",
+    "runtime/slice-index-write-traps",
+    "runtime/slice-inclusive-upper-traps",
+    "runtime/slice-half-open-upper-traps",
+    "runtime/slice-lower-after-upper-traps",
+    "runtime/nested-variant-parts",
+    "runtime/variant-inside-an-element",
+    "runtime/variant-struct-arguments",
+    "runtime/variant-returns-cross-calls",
+    "runtime/variant-module-array-payload-image-copy-is-distinct",
+    "runtime/variant-case-construction-runs-in-source-order",
+    "runtime/defer-cleanups-follow-control-edges",
+    "runtime/undo-cleanups-follow-failure-edges",
+    "runtime/defer-call-shapes",
+    "runtime/defer-does-not-unwind-traps",
+    "runtime/r491-cleanup-verifier-storage",
+    "runtime/r491-callee-errors",
+    "runtime/r491-overlapping-result-destination",
+    "runtime/r420-argument-text-worlds",
+    "runtime/r440-c-aliases",
+    "runtime/hosted-heap-provider",
+    "runtime/hosted-io-reads-parser-input",
+    "runtime/caller-parameters",
+    "runtime/null-pointer-dynamic-traps",
+    "runtime/pointer-unions",
+    "runtime/unchecked-arithmetic-wraps",
+    "runtime/struct-returns-cross-calls",
+    "runtime/multiple-named-returns",
+    "runtime/stack-arguments-cross-calls",
+    "runtime/array-arguments-cross-calls",
+    "runtime/array-returns-cross-calls",
+    "runtime/nested-storage-arguments",
+    "runtime/array-repetition-evaluates-once",
+    "runtime/r450-array-float-order",
+    "runtime/r450-array-arithmetic-composition",
+    "runtime/r450-array-wrapping-unchecked",
+    "runtime/r480-recovery-loop-transfer"
+  ],
+  "darwin": [
+    {
+      "name": "varargs",
+      "program": "varargs.ldn",
+      "c": "varargs.c",
+      "status": 42,
+      "stdout": "native varargs ok\n"
+    },
+    {
+      "name": "transport",
+      "program": "transport.ldn",
+      "c": "transport.c",
+      "status": 42,
+      "stdout": "Darwin transport ok\n"
+    },
+    {
+      "name": "platform",
+      "class": "runtime",
+      "program": "platform/main.ldn",
+      "root": "../../..",
+      "status": 42
+    }
+  ]
+}

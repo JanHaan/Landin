@@ -51,6 +51,18 @@ package Landin.Backend.Toolchain is
      (Facts : Landin.Targets.Target_Facts;
       Named : String) return String;
 
+   --  Apple ld has no GNU exact-archive -l form. Ask the selected
+   --  compiler driver to resolve each archive through its own search path.
+   --  Linux names pass through unchanged. An unresolved archive fails here.
+   procedure Resolve_Libraries
+     (Facts : Landin.Targets.Target_Facts;
+      Driver : String;
+      Host : Landin.Platform.Filesystem'Class;
+      Tools : Landin.Platform.Tool_Runner'Class;
+      Libraries : in out Landin.Platform.Path_List;
+      Result : out Landin.Platform.Tool_Result;
+      Ready : out Boolean);
+
    --  The whole command line, in the order a reader would write it.
    --  Relative file operands beginning with '-' or '@' gain './' so the
    --  driver reads the named file rather than an option or response file.

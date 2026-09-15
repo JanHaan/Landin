@@ -287,19 +287,19 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.30 — Implement Darwin arm64 lowering.**
+**Current roadmap work: R5.40 — Implement macOS arm64 source debugging.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
 R5.10 has established the native macOS compiler environment; R5.20 isolates
-target contracts and records every inherited resource disposition. Darwin
-code generation remains planned.
+target contracts and records every inherited resource disposition. R5.30 adds
+native Darwin arm64 lowering and matching-revision native acceptance.
 
 `refine` runs the frontend, lowers and
-verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
-link a hosted executable whose runtime behaviour the native x86-64 gate
-checks. macOS arm64 and Cortex-M backends and the broader standard library
-remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
+verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and
+can assemble and link hosted executables checked by each native target gate.
+Darwin source debugging and full hosted parity, the Cortex-M backend and the
+broader standard library remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end
 barrier.

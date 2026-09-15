@@ -7,20 +7,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Landin is a language specification with a working Ada bootstrap compiler. R0,
 R1, R2, R3 and R4 are complete through the exact-revision approval and
 delivery binding in ROADMAP.md; R5.10 has established the native macOS compiler
-environment and R5.20 isolates target contracts with a Darwin arm64 description. `refine`
+environment, R5.20 isolates target contracts, and R5.30 implements Darwin arm64 lowering. `refine`
 scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
-target-neutral IR, emits Linux x86-64 assembly, and can invoke a
-triplet-selected toolchain to assemble and link a hosted executable. Runtime
+target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and can invoke a
+target-selected native toolchain to assemble and link a hosted executable. Runtime
 fixtures execute those binaries on the native Linux x86-64 gate. A small
 repository-owned `core` library and complete derived prototypes 2, 3 and 4
-execute through that path with native source-debugging coverage. There is no native macOS arm64 or Cortex-M backend,
+execute through that path with native source-debugging coverage. Darwin arm64 has native lowering and ABI acceptance; source debugging and
+full hosted parity remain R5.40/R5.50. There is no Cortex-M backend,
 and the broader standard library remains future work. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
 the scanner, parser, syntax table, name resolver, type checker, verified IR,
-Linux x86-64 backend, toolchain adapter and repository-owned test harness;
+Linux x86-64 and Darwin arm64 backends, toolchain adapter and repository-owned test harness;
 shared fixtures live under `compiler/tests/`. The four prototype files remain
 specification stress tests written as code sketches; they contain omissions
 such as `...` and are not standalone programs.
@@ -69,6 +70,8 @@ policy against one committed archive, retains host evidence and exports a
 verified local copy. Development runs are incremental/filtered feedback and
 cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
 status, resume, export, administrative approval tags and atomic promotion.
+R5.30 additionally requires `scripts/ci/darwin.py accept COMMIT` and matching
+Darwin evidence at approval; see `environments/macos-arm64/README.md`.
 
 A push submits only `.build.yml` (Pages) and `.builds/github-mirror.yml`.
 Pages publishes from canonical main only after validating its exact annotated
@@ -212,7 +215,8 @@ dispatch, and `any` but without specialization. R4 delivered the hosted
 Linux x86-64 path and its applicable parity audit; R4.91 closes the reviewed
 compiler, tooling and documentation repairs with explicit retained limits
 and R5 handoffs. R5.10 has established the native macOS compiler environment; R5.20 isolates
-target contracts and records retained resource dispositions.
+target contracts and records retained resource dispositions. R5.30 implements
+native Darwin lowering; R5.40 is the next dependency-ready item.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

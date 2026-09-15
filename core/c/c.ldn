@@ -1,4 +1,4 @@
---  The selected Linux x86-64 SysV LP64 C scalar spelling layer. These are
+--  The selected SysV or Darwin arm64 LP64 C scalar spelling layer. These are
 --  ordinary aliases, not distinct scalar kinds: an extern(c) signature keeps
 --  the same Landin scalar identity that its C spelling names.
 --
@@ -7,7 +7,7 @@
 
 --  landin/compiler is implicit. The ABI fact, not pointer width or
 --  architecture alone, keeps LP64 aliases from crossing data models.
-compiler.assert(compiler.c_sysv_lp64)
+compiler.assert(compiler.c_sysv_lp64 or compiler.c_darwin_lp64)
 
 public c_char: type = i8
 public c_schar: type = i8

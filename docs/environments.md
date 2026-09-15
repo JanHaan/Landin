@@ -5,6 +5,13 @@ GitHub is an automated mirror. Explicit committed-revision native acceptance
 is the current Linux authority. Historical SourceHut gate results below keep
 their original meaning.
 
+
+R5.30 native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
+from the Mac with its pinned tool homes. Its verified bundle must match the
+Linux routine bundle at approval (`--darwin DARWIN_BUNDLE`). Both source and
+execution identities are retained; Linux acceptance alone cannot close the
+Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
+
 ## Environments
 
 | environment | role | status |

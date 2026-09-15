@@ -8922,7 +8922,7 @@ debugging remain R5.30/R5.40; R5 parity remains open.
 
 ### R5.30 — Implement Darwin arm64 lowering
 
-Status: active
+Status: complete
 Depends on: R5.10, R5.20, R2.30
 
 Implement the arm64 data layout, Darwin calling conventions, native assembly,
@@ -8940,9 +8940,93 @@ evidence.
 Exit evidence: ABI differential and end-to-end cases execute natively on macOS
 arm64.
 
+Implementation and native contract evidence:
+
+- `Landin.Backend.Arm64` lowers the enabled verified IR with always-present
+  x29/x30 frame records, stack value homes, native scalar/aggregate/value
+  transport, branches, checked arithmetic/conversions, declared-error w8
+  carriers and already-verified cleanup edges. x18 is reserved. Frame and call
+  preflight includes caller copies; conditional branches use nearby inversions
+  to avoid short-branch overflow in expanded cleanup routines.
+- `Landin.Backend.Darwin_ABI` owns Apple's independent GP/FP banks, HFA records,
+  partial integer chunks, narrow extension, packed fixed stack arguments,
+  promoted variadic stack tails and x8 indirect results. [1975]/D226 and the
+  tour describe the platform contract. No target register or ABI transport was
+  introduced into parsing, checking or neutral IR. The existing neutral
+  specialization/simplification pipeline precedes the emitter.
+- Mach-O symbols receive the existing target prefix exactly once. Native
+  assembly/data/relocations, hosted main, argument initialization, aligned
+  malloc-backed allocation, I/O and immediate `__error` capture use the shared
+  helper identities. Apple open flags and relevant errno values are checked
+  against the pinned SDK. `/usr/bin/clang -arch arm64` is the native default;
+  explicit driver/linker overrides remain available. Linux GNU arguments and
+  instruction selection are unchanged. Darwin resolves exact static archives;
+  missing archives fail even when a same-named dylib exists.
+- `core/c` admits the two explicitly supported ABI facts. The binding generator
+  supports the pinned Apple deployment triple and independently checks Clang
+  macros, data model and layouts. Native regenerated bindings exercise enums,
+  records, opaque unions/bitfields, globals/TLS, nullable callbacks, origins and
+  schema-defined incoming varargs. Existing Linux generated goldens remain
+  unchanged. The tool identity golden reports both backends; the generated
+  construct matrix follows [1975]’s updated heading.
+
+The authoritative platform references are Apple's ARM64 platform ABI and Arm's
+AAPCS64, linked from `docs/targets.md`. Differential programs run against the
+Apple Clang, SDK and linker pinned by `environments/macos-arm64/policy.json`:
+Apple Clang 21 (`clang-2100.1.1.101`), SDK 26.5 build 25F70 and ld 1267.
+The selected generator triple is `arm64-apple-macos26.0.0`. SDK nullability
+annotation warnings require one documented Darwin-only adapter-validation
+exception; other C warnings and the pinned GNAT warning policy remain intact.
+
+Focused development evidence under `.scratch/r530/`: the Mac compiler-host
+suite passed all 715 existing cases and 192994 checks, retaining the complete
+IR golden. Added target transport checks pass 12 cases/160 checks; the driver
+suite passes 53/1849. Native differential and workload checks cover the selected
+70 cases, with focused none/off runs followed by affected speed/all frame
+validation. Linux's native development slot passed all 42 binding tests with
+Clang 19 and unchanged generated files. Failure-path tests cover missing or
+mismatched Darwin approval evidence, source/artifact substitution, failed or
+substituted commands, incomplete matrices and symlinks. The acceptance policy
+runs all three native profiles (210 executions), native generated bindings and
+archive selection, plus release compiler-host checks from the exact archive.
+
+The development tests exposed and repaired three arm64-specific defects:
+Copy_Variant used an array-only IR accessor, ARM `.word` emitted four bytes for
+16-bit data, and direct conditional branches exceeded reach after twelve
+cleanup expansions. A focused LLDB breakpoint located the first defect; a
+native C frame-chain probe and assembly frame checks validate the new frame
+convention. The driver also refuses Darwin `--debug=full` before effects.
+Linux DWARF, source locations, frame/unwind layout and instruction selection
+remain unchanged, so routine Linux acceptance has no GDB job. Nix CI remains
+deferred; no local Linux containers or full milestone matrices are used.
+
+Readiness intake and retained dispositions:
+
+| input or limit | R5.30 disposition |
+|---|---|
+| R520-2/R520-3 | Darwin C aliases, binding-generator ABI support and native link arguments implemented and tested; Mach-O debug identity remains R5.40. |
+| R1.80 native linking rationale | Exact committed source builds and executes on the native Mac; no Linux cross-link substitute. |
+| R5.20 resource/scaling dispositions | Retained, including source allocation, recursive walks and symbol/atom scaling. Stack preflight is bounded, not general exhaustion recovery; direct branches retain the architecture's 128-MiB reach limit. |
+| R5.20 scheduler/cache dispositions | Linux routine/milestone policy unchanged; no new cache or scheduler project. Mac acceptance uses a fresh archived tree and retains failures; no resume mechanism is claimed. |
+| baseline backend quality | Darwin uses stack homes without the x86 register allocator/body folding. Neutral optimizations execute; competitive optimization is outside the roadmap. |
+| R5.40/R5.50 | Source debugging/Mach-O debug identity and full shared hosted/derived-prototype parity remain separately open. |
+
+Closure candidate and acceptance binding: completion and next-item pointers
+are prepared together so acceptance tests these final documents. They become
+authoritative only when this containing revision passes both the committed
+five-job routine Linux policy and `environments/macos-arm64/acceptance.json` on
+native arm64 macOS. `scripts/ci/darwin.py` retains exact source inventory,
+archive, OS/tool/SDK identities, build configuration/manifest, compiler and
+native assembly/object/executable artifacts, command transcripts and execution
+results, then verifies an independent export. Approval requires identical
+commit/tree/archive/source identities in both bundles; its annotated
+`ci/accepted/FULL_COMMIT` tag includes the Darwin policy and record hashes.
+Canonical atomic promotion and guarded publication bind delivery. Linux alone
+cannot approve this revision; no later bookkeeping revision replaces it.
+
 ### R5.40 — Implement macOS arm64 source debugging
 
-Status: planned
+Status: active
 Depends on: R5.30, R4.60
 
 Emit and validate line, frame and selected local/type information through the

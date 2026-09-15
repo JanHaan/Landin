@@ -188,6 +188,11 @@ def validate_approval(approval, source):
                               "environment_sha256", "record_sha256", "jobs"}
     if scoped:
         fields.add("scope")
+    from darwin import required, validate_annotation
+    if required(source):
+        fields.add("darwin")
+        require("darwin" in approval, "native Darwin acceptance is required")
+        validate_annotation(approval["darwin"], source)
     require(set(approval) == fields,
             "invalid approval annotation fields")
     require(approval["schema"] == (2 if scoped else 1)

@@ -34,7 +34,7 @@ library is still to come.**
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
-| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 backend and toolchain path, and its own test harness. |
+| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 and Darwin arm64 backends and native toolchain paths, and its own test harness. |
 | `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
@@ -147,7 +147,8 @@ On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 `refine --identify` will tell you what it is. Giving it one or more `.ldn`
 files runs the frontend, lowering and verification over them as one module.
 Without `--emit` an accepted program deliberately writes no output file;
-`--emit=asm -o program.s` writes Linux x86-64 assembly, and `--emit=exe -o
+`--emit=asm -o program.s` writes assembly for the selected target (Linux by
+default; `--target=darwin-arm64` selects native Mac output), and `--emit=exe -o
 program` assembles and links a hosted executable when the target toolchain and
 [1970]'s entry point are present. A program it refuses gets a report with a
 span, a caret and a note. If what you wrote is a construct the tour describes
@@ -159,8 +160,8 @@ roadmap item that enables it.
 Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete. The compiler builds
-on macOS arm64 for development; exact-revision runtime acceptance runs on
-native Linux x86-64. The pinned `linux/amd64` container provides a separate
+on macOS arm64; exact-revision runtime acceptance runs natively on
+Linux x86-64 and Darwin arm64 for their respective target contracts. The pinned `linux/amd64` container provides a separate
 local Linux loop. R2.10 establishes target-derived sizes, alignments and checked
 layout arithmetic, including synthetic 32-bit evidence. R2.20's
 target-parametric aggregate and variant representation and
@@ -248,13 +249,15 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.30 — Implement Darwin arm64 lowering.**
+**Current roadmap work: R5.40 — Implement macOS arm64 source debugging.**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
 and canonical delivery recorded in ROADMAP.md. R5.10 has established the native
-macOS compiler environment; R5.20 isolates target contracts and describes
-Darwin arm64 without enabling code generation.
+macOS compiler environment; R5.20 isolates target contracts. R5.30 implements
+native Darwin arm64 lowering, C transport, hosted runtime and linking, with
+matching-revision native Mac acceptance required alongside Linux approval.
+Source debugging and complete hosted parity remain R5.40 and R5.50.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

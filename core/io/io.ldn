@@ -1,4 +1,4 @@
---  R4.40's Linux hosted service layer.  The foreign declarations are the
+--  Linux/Darwin hosted service layer.  The foreign declarations are the
 --  compiler/runtime seam.  Files and streams above it remain ordinary values
 --  reached through a world capability.  The system provider captures errno
 --  before making another host call, retries only interruptible open/read/write
@@ -20,7 +20,7 @@ extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
 extern(c) _landin_host_close: (descriptor: i32) -> (status: i32)
 extern(c) _landin_host_errno: () -> (number: i32)
 
---  Values from the selected Linux ABI.  They are kept here, at the only
+--  Values shared by Linux and Darwin (historical names). Kept at the only
 --  provider that interprets libc errno, rather than leaking into world users.
 linux_eperm: i32 = 1
 linux_enoent: i32 = 2

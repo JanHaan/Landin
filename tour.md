@@ -3291,8 +3291,8 @@ end if
 The compiler exposes `compiler.arch`, whose compiler-owned values are
 `x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
-(`debug` or `release`), plus `compiler.c_sysv_lp64`, a bool identifying the
-selected C ABI rather than inferring it from pointer width. Build mode is an
+(`debug` or `release`), plus `compiler.c_sysv_lp64` and
+`compiler.c_darwin_lp64`, bools identifying the selected C ABI rather than inferring it from pointer width. Build mode is an
 explicit request value, defaulting
 to debug; it does not change runtime checks or optimization policy.
 Conditions also see the program's declared options [1530]. They use a closed
@@ -3471,8 +3471,8 @@ allocator backing uses a named union, not a fake `ptr(1)` allocation.
 
 The ordinary `core/c` aliases name C's signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
-`compiler.c_sysv_lp64` prevents using the LP64 spelling layer with another
-selected ABI. Plain `c_char` is signed numeric i8, not a Unicode scalar.
+`compiler.c_sysv_lp64 or compiler.c_darwin_lp64` admits the two explicitly
+supported hosted ABIs. Equal pointer widths alone do not admit another ABI. Plain `c_char` is signed numeric i8, not a Unicode scalar.
 
 C-compatible values include integers, bool, pointers, f32/f64, C function
 values and recursive nonempty `layout(c)` structs, including nested struct,
@@ -3514,8 +3514,11 @@ ASCII letters, digits, underscore, hyphen and dot, are nonempty, do not begin
 with a hyphen, and cannot consist only of dots. Active directives reach the
 platform driver after the program assembly in canonical source/declaration
 order, including repetitions. The Linux adapter selects archives for these
-libraries while leaving the hosted runtime's linkage to the driver. An
-inactive directive adds nothing.
+libraries while leaving the hosted runtime's linkage to the driver. Darwin
+asks the selected driver to resolve `libNAME.a` and passes that existing file;
+a missing archive fails even when a dylib exists. With Apple's default driver,
+a returned bare filename must exist in the invocation directory. An inactive
+directive adds nothing.
 
 ### [1600] Exporting to C
 

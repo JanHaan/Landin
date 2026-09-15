@@ -2,7 +2,8 @@
 
 `ROADMAP.md` R5.10 owns this environment. It validates the Ada bootstrap on
 native Apple Silicon. Linux acceptance remains in `environments/native-ci/`;
-Darwin Landin lowering and source debugging belong to R5.30 and R5.40.
+R5.30 adds exact-revision native lowering acceptance here; source debugging
+remains R5.40.
 
 ## Reproduce
 
@@ -124,3 +125,41 @@ bytes and a hard limit of 67092480 bytes. The CPU/wall caps bound the experiment
 these observations do not define a maximum supported input or guarantee
 recovery for other exhausted programs. `ROADMAP.md` R5.20 owns the remaining
 resource work and the broader target-contract audit.
+
+
+## R5.30 exact-revision acceptance
+
+The environment loop above is development evidence. The committed
+`acceptance.json` promotes native release compiler-host checks, the Darwin
+lowering/ABI profile matrix and generated-binding/archive execution to required
+acceptance. It uses the same pinned GNAT, GPRbuild, Apple tools and SDK policy.
+It does not run Linux workloads, full hosted parity or source-debugger checks.
+
+From a clean checkout with the pinned homes exported:
+
+```sh
+python3 scripts/ci/darwin.py accept HEAD
+python3 scripts/ci/darwin.py verify ~/.local/state/landin/darwin/exports/RUN_ID
+python3 scripts/ci/controller.py accept HEAD
+python3 scripts/ci/controller.py approve LINUX_BUNDLE --darwin DARWIN_BUNDLE
+python3 scripts/ci/controller.py promote FULL_COMMIT
+```
+
+The Mac worker runs from the exact committed archive in a fresh source tree.
+It retains source archive/inventory, tool paths/hashes/versions, OS/SDK identity,
+selected GPR configuration and build manifest, the actual compiler binary,
+commands, assembly, Mach-O objects/executables, generated bindings and execution
+results. Source inventory is checked before and after; tool hashes are checked
+again after execution. A separate verified export omits only the unpacked build
+cache, retaining the complete source archive. Failed runs remain failed and
+require a new run; this initial Mac path has no resume/cache mechanism.
+Timeouts terminate the owned process session, including compiler-created tool
+groups. R5.20's broader resource and scheduler/cache dispositions remain intact.
+
+An approval for a source inventory containing `acceptance.json` requires a
+matching Darwin bundle in addition to the Linux routine bundle. Commit, tree,
+archive and source hashes must agree. The annotated approval carries the Darwin
+record and policy hashes; promotion and Pages validate that binding. Linux-only
+approvals cannot close or publish such a revision. Historical approvals retain
+their original scope. R5.40 will own Mach-O debug identity; these retained hashes
+identify acceptance artifacts without claiming a source-debugging contract.

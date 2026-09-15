@@ -168,6 +168,7 @@ class TargetContractTests(unittest.TestCase):
     def test_second_lp64_abi_is_refused_before_macro_or_header_work(self) -> None:
         module = runpy.run_path(str(GENERATOR))
         driver = object.__new__(module["ClangDriver"])
+        driver.inputs = mock.Mock(target=module["SUPPORTED_TARGET"])
         with mock.patch.object(driver, "run", return_value=subprocess.CompletedProcess(
                 [], 0, b"arm64-apple-macosx26.0.0\n")) as run:
             with self.assertRaisesRegex(module["BindingError"], "required"):
