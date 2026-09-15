@@ -114,7 +114,7 @@ def validate_runtime(directory, source, compiler_hash, source_path, original_dir
         # Evidence labels alone never authorize another source or executable.
         worker_base = source_path / base.relative_to(source)
         worker_source = worker_base / meta['program']
-        inputs = (['--root=' + str((source_path / (base / meta['root']).resolve().relative_to(source)).resolve()),
+        inputs = (['--root=' + os.path.normpath(worker_base / meta['root']),
                    str(worker_source.parent)] if 'root' in meta else [str(worker_source)])
         inputs += [str(worker_base / n.strip()) for n in meta.get('with', '').split(',') if n.strip()]
         prefix = [str(compiler_path), '--target=darwin-arm64', '--optimize=' + opt,

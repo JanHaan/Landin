@@ -65,6 +65,17 @@ class DarwinParityTests(unittest.TestCase):
     def test_complete_native_producer_chain(self):
         self.validate()
 
+    def test_rooted_program_verifies_through_a_temporary_directory_alias(self):
+        alias = self.root / 'archive-alias'
+        alias.symlink_to(self.source, target_is_directory=True)
+        self.source = alias
+        self.base = alias / 'compiler/tests/fixtures/runtime/probe'
+        self.meta['root'] = '../../../../..'
+        self.schedule = [('runtime/probe', 'none', 'off', self.meta, self.base)]
+        self.commands[0]['argv'][4:5] = ['--root=' + str(self.worker),
+            str(self.worker / 'compiler/tests/fixtures/runtime/probe')]
+        self.validate()
+
     def test_missing_profile_or_relabelled_scope(self):
         for field, value in (('results', []), ('scope', 'filtered'), ('refine_sha256', 'another')):
             original = copy.deepcopy(self.summary)

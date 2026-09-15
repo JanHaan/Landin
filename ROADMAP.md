@@ -9237,6 +9237,23 @@ scope-binding tooling test assumed routine policy; it now checks the committed
 scope and proves that the opposite scope is refused. These development runs
 are not exact-revision acceptance.
 
+The first candidate, `0ca1abd36213e2a1baa524c35ed5db8ea84c5195`, was
+stopped before approval after a portable regression reproduced a verifier
+path defect: macOS's `/var` temporary path resolves through `/private/var`,
+so resolving an extracted root and comparing it with its lexical archive path
+would reject valid rooted-program evidence. Native programs had not failed.
+The verifier now reconstructs the recorded worker argument lexically, without
+consulting the verification host's symlinks. An explicit directory-alias
+regression passes; retained source verdicts, 482 completed native profiles,
+bindings and a full container LLDB session also verify against a temporary
+extracted archive. These focused verifier checks do not relabel the stopped
+runs as acceptance. Linux run `20260915T143133Z-d99dcef62237` retains passed
+release suite/quality/GDB, bindings and documents, plus three cancelled debug
+jobs. Darwin run `20260915T143133Z-e620c27693ea` retains the passed 717-case
+host suite, 1108 source verdicts, completed native profiles and an operator
+stop record. Both remain unapproved. The corrected containing revision must
+complete fresh native acceptance on both targets.
+
 Phase/acceptance closure binding:
 
 | R5 exit requirement | required evidence for this containing revision |
