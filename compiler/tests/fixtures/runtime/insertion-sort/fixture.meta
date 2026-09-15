@@ -4,4 +4,4 @@ summary: nested-loop insertion sort orders a caller-owned fixed array through an
 constructs: 0040, 0290, 0400, 0520, 0570, 0900, 1130, 1150, 1800, 1810, 1820, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -4,4 +4,4 @@ summary: hosted text views retain distinct encodings, static storage, and uncoun
 constructs: 0260, 0270, 0280, 0370, 0430, 0570, 0600, 0710, 1050, 1080, 1290, 1800, 1810, 1820
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

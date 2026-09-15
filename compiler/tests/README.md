@@ -250,7 +250,8 @@ changes, default/explicit none equivalence and stripped deployment without
 filenames or source breakpoint locations. Malformed identity controls run
 without a native debugger in `scripts/tests/test_macho_identity.py`.
 The committed Mac acceptance requires all profiles and verifies their artifact
-identities. Full shared hosted/derived-program parity remains R5.50.
+identities. R5.50 adds `--parity`, which runs the complete P2/P3/P4 LLDB
+workloads before these selected checks; see [the native parity guide](darwin/README.md).
 
 The complete `derived-parser` program runs in the same runner using none/off,
 size/auto and size/all. It receives the fixture's original input path and must
@@ -840,8 +841,12 @@ also checks a live Landin parent frame. `--case`/`--profile` are visibly filtere
 development feedback. The binding runner regenerates and executes the complete
 adapter-category corpus with the pinned Apple target and tests exact archives.
 
-These scripts require native arm64 macOS. They do not reinterpret shared Linux
-fixture metadata or replace Linux golden records. R5.50 owns the complete
-shared hosted corpus and derived-prototype parity matrix. Native acceptance
+These scripts require native arm64 macOS. `check.py --parity` selects every
+shared runtime/ABI fixture and its four/six profiles; `diagnostics.py` checks
+every applicable Darwin source verdict. Explicit native differences and
+replacements are recorded in `darwin/parity.json`, with strict executable
+evidence. Linux golden records remain unchanged. The complete derived parser
+now also uses all six runtime profiles. The [parity guide](darwin/README.md)
+describes full coverage, debugger oracles and retained platform limitations. Native acceptance
 and matching-revision approval are documented in
 [the Mac guide](../../environments/macos-arm64/README.md).

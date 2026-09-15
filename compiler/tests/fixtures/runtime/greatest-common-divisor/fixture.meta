@@ -4,4 +4,4 @@ summary: Euclid's iterative algorithm computes greatest common divisors through 
 constructs: 0290, 1140, 1800, 1810, 1820, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

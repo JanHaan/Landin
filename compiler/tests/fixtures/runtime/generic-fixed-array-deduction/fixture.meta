@@ -4,4 +4,4 @@ summary: an exact runtime array shape deduces fixed n and direct element type t 
 constructs: 0520, 1290, 1800, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

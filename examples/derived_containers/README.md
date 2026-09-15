@@ -15,3 +15,9 @@ The hosted entry and status oracle are in
 the running evidence to every prototype section and finding Z1-Z19, including
 the current representations that deliberately supersede raw historical
 sketches.
+
+The complete derivative and its failure/recovery oracles also run on native
+Darwin arm64 in R5.50's shared six-profile runtime matrix. Native GDB and LLDB
+inspect the same complete sources at none/off, size/auto and size/all; see the
+[hosted parity guide](../../compiler/tests/darwin/README.md). Native acceptance
+requires the same committed source archive on both hosted targets.

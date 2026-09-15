@@ -5,4 +5,4 @@ constructs: 0130, 1840, 1920, 1940, 1970
 program: main.ldn
 with: second.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

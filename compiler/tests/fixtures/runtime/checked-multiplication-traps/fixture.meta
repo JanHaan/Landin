@@ -4,4 +4,4 @@ summary: a dynamic checked multiplication that overflows traps
 program: main.ldn
 traps: yes
 constructs: 0290, 0300, 1950, 1960
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

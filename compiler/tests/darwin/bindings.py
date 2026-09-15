@@ -15,6 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--parity", action="store_true")
     args = parser.parse_args()
     require(platform.system() == "Darwin" and platform.machine() == "arm64",
             "native Darwin arm64 required")
@@ -46,15 +47,30 @@ def main():
         require("compiler.assert(compiler.c_darwin_lp64)" in
                 (generated / "bindings.ldn").read_text(), "missing Darwin guard")
         shutil.copyfile(inputs / "program.ldn", generated / "program.ldn")
-        assembly = output / "bindings.s"
-        executable = output / "bindings-native"
-        run.command([refine, "--target=darwin-arm64", "--root=" + str(ROOT),
-                     "--emit=asm", "-o", assembly, generated], "emit", ROOT)
-        run.command(["/usr/bin/clang", "-arch", "arm64", "-std=c11", "-O2",
-                     "-Wall", "-Wextra", "-Werror", "-pthread", "-I", generated,
-                     "-I", inputs, assembly, generated / "adapters.c", inputs / "peer.c",
-                     "-o", executable], "link", ROOT)
-        run.command([executable], "execute", ROOT, expected=42, timeout=30)
+        profiles = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')] if args.parity else [('none', 'off')]
+        summary['scope'] = 'R5.50' if args.parity else 'R5.30'
+        summary['profiles'] = []
+        for optimize, specialize in profiles:
+            label = 'bindings-' + optimize + '-' + specialize if args.parity else 'bindings'
+            assembly = output / (label + '.s')
+            executable = output / (label + '-native')
+            run.command([refine, "--target=darwin-arm64", "--root=" + str(ROOT),
+                         "--optimize=" + optimize, "--specialize=" + specialize,
+                         "--emit=asm", "-o", assembly, generated], label + '-emit', ROOT)
+            objects = []
+            for index, source in enumerate((assembly, generated / 'adapters.c', inputs / 'peer.c')):
+                obj = output / (label + '-' + str(index) + '.o')
+                run.command(["/usr/bin/clang", "-arch", "arm64", "-std=c11", "-O2",
+                             "-Wall", "-Wextra", "-Werror", "-pthread", "-I", generated,
+                             "-I", inputs, '-c', source, '-o', obj], label + '-object-' + str(index), ROOT)
+                objects.append(obj)
+            run.command(["/usr/bin/clang", "-arch", "arm64", '-pthread', *objects,
+                         "-o", executable], label + '-link', ROOT)
+            _, stdout, stderr = run.command([executable], label + '-execute', ROOT, expected=42, timeout=30)
+            require(not stdout and not stderr, 'unexpected binding output')
+            summary['profiles'].append(dict(optimize=optimize, specialize=specialize,
+                assembly=hash_file(assembly), objects=[hash_file(o) for o in objects],
+                executable=hash_file(executable)))
         # Apple -l searches can prefer a dylib. The language requests an
         # archive, so prove the native driver passes the exact .a operand.
         peer = output / "archive.c"
@@ -72,8 +88,12 @@ def main():
                           'extern(c) r530_probe: () -> (r: i32)\n'
                           'public main: () -> (code: i32) =\n'
                           '    code = r530_probe()\nend main\n')
+        retention = output / 'archive-driver'
+        retention.write_text('#!/bin/sh\nexec /usr/bin/clang -save-temps=obj "$@"\n')
+        retention.chmod(0o755)
+        driver_args = ['--toolchain=' + str(retention)] if args.parity else []
         linked = output / "archive-native"
-        run.command([refine, "--target=darwin-arm64", "--emit=exe", source,
+        run.command([refine, "--target=darwin-arm64", "--emit=exe", source, *driver_args,
                      "-o", linked], "archive-link", output)
         run.command([linked], "archive-execute", output, expected=42)
         archive.rename(output / "retained-probe.a")
@@ -88,7 +108,7 @@ def main():
         driver.write_text('#!/bin/sh\ncase "$1" in\n'
                           '-print-file-name=libr530_probe.a) printf \'%s\\n\' '
                           + shlex.quote(str(selected)) + ' ;;\n'
-                          '*) exec /usr/bin/clang "$@" ;;\nesac\n')
+                          '*) exec /usr/bin/clang -save-temps=obj "$@" ;;\nesac\n')
         driver.chmod(0o755)
         overridden = output / "selected-native"
         run.command([refine, "--target=darwin-arm64", "--emit=exe", source,

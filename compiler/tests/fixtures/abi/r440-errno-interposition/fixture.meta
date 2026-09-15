@@ -8,4 +8,4 @@ c-args: -Wl,--wrap=open -Wl,--wrap=read -Wl,--wrap=write -Wl,--wrap=close
 run_expect: expected.txt
 status: 42
 constructs: 0940, 1570, 1580, 1660, 1975
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

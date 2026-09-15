@@ -4,4 +4,4 @@ summary: heterogeneous mutable any values retain data and evidence through nomin
 program: main.ldn
 status: 42
 constructs: 0430, 0750, 0790, 1290, 1370, 1380, 1390, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

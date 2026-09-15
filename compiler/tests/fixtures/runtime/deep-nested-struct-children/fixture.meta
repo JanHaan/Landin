@@ -4,4 +4,4 @@ summary: whole ordinary children two levels down are zeroed, constructed, copied
 constructs: 0420, 0520, 0530, 0540, 0670, 0700, 0710, 0750, 1810, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

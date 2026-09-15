@@ -14,14 +14,14 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.1.0. The compiler can build and run Landin programs
-for 64-bit Linux. It handles functions, user-defined data types, generic
+for Linux x86-64 and native macOS arm64. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
 `any`. Hosted containers, allocators, text and I/O in `core`, a complete
 recovering configuration parser and a hosted log filter now run alongside the
 automatically tested FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
-FASTA workloads. Support for macOS, microcontrollers and the broader standard
-library is still to come.**
+FASTA workloads. Microcontroller support and the broader standard library
+are still to come.**
 
 ## What is here
 
@@ -30,7 +30,7 @@ library is still to come.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | ten complete programs the compiler emits and the Linux gate runs today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
+| `examples.md` | ten complete programs the compiler emits and the native hosted gates run today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
@@ -249,7 +249,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.50 — Close hosted target parity.**
+**Next roadmap item: R6.10 — Select the Cortex-M execution profile (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -258,7 +258,8 @@ macOS compiler environment; R5.20 isolates target contracts. R5.30 implements
 native Darwin arm64 lowering, C transport, hosted runtime and linking, with
 matching-revision native Mac acceptance required alongside Linux approval.
 R5.40 implements native LLDB source debugging, dSYM packaging and exact Mach-O
-source identity. Complete hosted parity remains R5.50.
+source identity. R5.50 closes complete hosted parity through the dual-native milestone binding
+in ROADMAP.md, retaining its explicit large-image loader limitation.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

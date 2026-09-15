@@ -27,6 +27,7 @@ import publish
 import resources
 sys.path.insert(0, str(ROOT / "scripts/tests"))
 from test_darwin import DarwinEvidenceTests
+from test_darwin_parity import DarwinParityTests
 from test_macho_identity import MachOIdentityTests
 
 
@@ -312,8 +313,8 @@ class GitTests(GitFixture):
                     common.validate_policy(changed)
         root = self.bundle()
         annotation = records.approval_for(root)
-        self.assertEqual(annotation["scope"], "routine")
-        annotation["scope"] = "milestone"
+        self.assertEqual(annotation["scope"], self.source["policy"]["scope"])
+        annotation["scope"] = ("routine" if annotation["scope"] == "milestone" else "milestone")
         with self.assertRaisesRegex(common.Invalid, "scope mismatch"):
             records.validate_approval(annotation, self.source)
         risk = common.required_policy("routine", debugger=True)

@@ -4,4 +4,4 @@ summary: D64 commits named struct fields in source order and fills omitted field
 constructs: 0080, 0190, 0410, 0520, 0540, 0670, 0710, 0720, 0750, 1810, 1900, 1910
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

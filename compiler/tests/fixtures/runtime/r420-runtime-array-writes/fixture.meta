@@ -4,4 +4,4 @@ summary: whole array literals and mixed repetitions write pointer and computed d
 program: main.ldn
 status: 42
 constructs: 0410, 0430, 0520, 0530, 0540, 0570, 1810, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -4,4 +4,4 @@ summary: a doubly recursive function computes Fibonacci and returns its own answ
 constructs: 0950, 1770, 1800, 1820, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

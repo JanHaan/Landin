@@ -4,4 +4,4 @@ summary: D23 lowers local array literal elements in order into one compact frame
 constructs: 0040, 0080, 0190, 0410, 0520, 1810
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

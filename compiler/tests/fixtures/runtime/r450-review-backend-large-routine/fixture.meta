@@ -4,4 +4,4 @@ summary: 24000 straight-line wrapping increments retain reference homes without 
 program: main.ldn
 status: 0
 constructs: 0320, 1890
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

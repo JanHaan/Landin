@@ -4,4 +4,4 @@ summary: [0410] arguments evaluate left to right and D95 passes an in fixed arra
 program: main.ldn
 status: 42
 constructs: 0410, 0520, 0900, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

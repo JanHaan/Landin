@@ -4,4 +4,4 @@ summary: collection traversal aliases fixed-array and slice elements with one so
 program: main.ldn
 status: 42
 constructs: 0520, 0570, 1100, 1150, 1160, 1170, 1180, 1190, 1810
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

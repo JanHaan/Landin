@@ -4,4 +4,4 @@ summary: scalar and storage-shaped loop expressions receive guarded, completion,
 program: main.ldn
 status: 42
 constructs: 0110, 0290, 0350, 0520, 0570, 0670, 0710, 1130, 1140, 1170, 1180, 1190, 1810
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -4,4 +4,4 @@ summary: scalar arguments after the six-register prefix cross an ordinary call i
 constructs: 0190, 0410, 1650, 1800, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

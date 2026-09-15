@@ -8,4 +8,4 @@ c-args: -O2
 run_expect: expected.txt
 status: 42
 constructs: 0470, 1570, 1580, 1650, 1660, 1975
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

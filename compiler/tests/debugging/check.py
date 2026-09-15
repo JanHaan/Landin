@@ -964,12 +964,12 @@ def has_concrete_specialization(build: dict) -> bool:
 
 
 def check_specialization(report_path: Path, optimize: str,
-                         specialize: str) -> dict:
+                         specialize: str, target: str = "linux-x86-64") -> dict:
     report = json.loads(report_path.read_text())
     build = report["build"]
     require((build["optimize"], build["specialize"]) ==
             (optimize, specialize), "build report profile differs from request")
-    require(build["target"] == "linux-x86-64", "build report has wrong target")
+    require(build["target"] == target, "build report has wrong target")
     decisions = build["specializations"]
     require(len(decisions) >= 2,
             "constrained two-instance generic produced no specialization evidence")
@@ -1129,6 +1129,12 @@ CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
                      if "code = debug_outer(" in line)
 
 
+def check_workload_sources(workload, source_args):
+    expected = json.loads((HERE / 'workload-sources.json').read_text())[workload]
+    require(sorted(str(Path(name)) for name in source_args) == expected,
+            'complete workload source inventory differs from its committed closure')
+
+
 def measure(refine: Path, tools: dict[str, str], gdb: str,
             runner: str, qemu: str | None, retained: Path, scratch: Path,
             profile: tuple[str, str, str], containers: bool = False,
@@ -1172,6 +1178,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         inventory = json.loads(report.read_text())["sources"]
         source_args = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
                             for entry in inventory)
+        check_workload_sources('parser' if parser_workload else 'hosted' if hosted else 'containers', source_args)
         sources = tuple((ROOT / path).resolve() for path in source_args)
         workload_source = (PARSER_SOURCE if parser_workload else
                            HOSTED_SOURCE if hosted else CONTAINER_SOURCE)

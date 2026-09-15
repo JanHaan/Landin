@@ -7,4 +7,4 @@ root: ../../../../..
 run_expect: output.pbm
 status: 42
 stream: output
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

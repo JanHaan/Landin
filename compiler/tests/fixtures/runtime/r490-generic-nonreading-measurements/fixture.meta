@@ -4,4 +4,4 @@ summary: generic and ordinary array type measurements preserve nonreading shape 
 program: main.ldn
 status: 42
 constructs: 0340, 0350, 0370, 0520, 0650, 1290, 1795
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

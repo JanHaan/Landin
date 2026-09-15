@@ -4,4 +4,4 @@ summary: consumed container paths preserve siblings copies and restoration inclu
 program: main.ldn
 status: 42
 constructs: 0420, 0520, 0900, 0910, 1060, 1110, 1120, 1130, 1910
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

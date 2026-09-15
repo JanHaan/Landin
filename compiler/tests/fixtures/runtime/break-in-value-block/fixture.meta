@@ -4,4 +4,4 @@ summary: a break hidden in a value-position block still gives its enclosing loop
 program: main.ldn
 status: 42
 constructs: 1090, 1130, 1170, 1810
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

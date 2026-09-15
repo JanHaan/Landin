@@ -159,7 +159,7 @@ execution evidence. Approval uses `approve LINUX_BUNDLE --darwin DARWIN_BUNDLE`;
 the two bundles must describe exactly the same archive. The annotated approval
 binds both. R5.40 adds native LLDB source-debugger acceptance and selects the sixth Linux
 routine job, release GDB, because DWARF serialization is now shared. Full
-hosted parity remains R5.50.
+hosted parity is the separate R5.50 milestone scope.
 
 R5.30 used a focused LLDB session to locate an Ada precondition failure in
 variant emission and a native C frame-chain probe for the newly implemented
@@ -172,3 +172,13 @@ are checked against the Mac policy, with binary hashes retained. Source maps,
 Mach-O UUIDs, dSYM identities and stripped behavior are required evidence.
 The production scheduler/cache and broader resource dispositions remain as
 recorded in R5.20; Nix CI stays deferred.
+
+R5.50 selects and commits `policy.py milestone` before its closure candidate.
+Its Linux gate runs complete suite, quality and native GDB in both compiler
+modes, plus bindings and documents/tooling. Matching Mac schema-3 acceptance
+runs compiler-host checks, the complete shared source/runtime/ABI corpus and
+all three derived programs with native LLDB in both compiler modes. The
+[parity guide](../compiler/tests/darwin/README.md) records exact coverage and
+platform limits. The accepted revision keeps its milestone policy; routine
+scope returns only in subsequent development. No local Linux containers,
+production scheduler/cache changes or Nix CI are added.

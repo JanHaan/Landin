@@ -1,3 +1,9 @@
+#if defined(__APPLE__)
+#define OBJECT_NAME(name) "_" name
+#else
+#define OBJECT_NAME(name) name
+#endif
+
 #include <stddef.h>
 
 extern void _landin_host_initialize_arguments(int argc, char **argv);
@@ -7,12 +13,23 @@ extern int r440_call_renamed(void);
 
 /* An explicit foreign identity cannot alias the compiler's private argv
    storage, even though its spelling used to be that generated data label. */
-int r440_foreign_state(void) __asm__(".Llandin_host_argv");
+int r440_foreign_state(void) __asm__(OBJECT_NAME(".Llandin_host_argv"));
 int r440_foreign_state(void) { return 42; }
 
 /* This ordinary SysV wrapper gives the no-argument callback deliberately
    invalid argc/argv carriers. It is not an inline-asm call hidden from the
    compiler's stack alignment or register allocation. */
+#if defined(__APPLE__)
+__asm__(".text\n"
+        "_r440_call_renamed:\n"
+        "stp x29, x30, [sp, #-16]!\n"
+        "mov x29, sp\n"
+        "mov w0, #-1\n"
+        "mov x1, #0\n"
+        "bl _r440_renamed_main\n"
+        "ldp x29, x30, [sp], #16\n"
+        "ret\n");
+#else
 __asm__(".text\n"
         ".type r440_call_renamed, @function\n"
         "r440_call_renamed:\n"
@@ -23,6 +40,8 @@ __asm__(".text\n"
         "addq $8, %rsp\n"
         "ret\n"
         ".size r440_call_renamed, .-r440_call_renamed\n");
+
+#endif
 
 int main(int argc, char **argv)
 {

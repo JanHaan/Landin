@@ -4,4 +4,4 @@ summary: wrapping and unchecked lifting use each ordinary integer scalar operati
 constructs: 0300, 0370, 0520, 0590, 0760, 1890
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

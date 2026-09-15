@@ -1,37 +1,116 @@
 {
-  "schema": 2,
-  "scope": "R5.40 native source debugging",
-  "mode": "release",
+  "schema": 3,
+  "scope": "R5.50 hosted parity",
+  "modes": [
+    "debug",
+    "release"
+  ],
   "commands": [
     [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
       "./scripts/build.sh",
       "-j8"
     ],
     [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
       "./scripts/test.sh",
       "--host"
     ],
     [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
+      "python3",
+      "compiler/tests/darwin/diagnostics.py",
+      "--refine",
+      "{refine-debug}",
+      "--output",
+      "{diagnostics-debug}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
       "python3",
       "compiler/tests/darwin/check.py",
+      "--parity",
       "--refine",
-      "{refine}",
+      "{refine-debug}",
       "--output",
-      "{executions}"
+      "{executions-debug}"
     ],
     [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
       "python3",
       "compiler/tests/darwin/bindings.py",
+      "--parity",
       "--refine",
-      "{refine}",
+      "{refine-debug}",
       "--output",
-      "{bindings}"
+      "{bindings-debug}"
     ],
     [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
       "./scripts/debug.sh",
       "--target=darwin-arm64",
+      "--parity",
       "--output",
-      "{debugging}"
+      "{debugging-debug}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "./scripts/build.sh",
+      "-j8"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "./scripts/test.sh",
+      "--host"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "python3",
+      "compiler/tests/darwin/diagnostics.py",
+      "--refine",
+      "{refine-release}",
+      "--output",
+      "{diagnostics-release}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "python3",
+      "compiler/tests/darwin/check.py",
+      "--parity",
+      "--refine",
+      "{refine-release}",
+      "--output",
+      "{executions-release}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "python3",
+      "compiler/tests/darwin/bindings.py",
+      "--parity",
+      "--refine",
+      "{refine-release}",
+      "--output",
+      "{bindings-release}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "./scripts/debug.sh",
+      "--target=darwin-arm64",
+      "--parity",
+      "--output",
+      "{debugging-release}"
     ]
   ]
 }

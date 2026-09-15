@@ -4,4 +4,4 @@ summary: D53 fills module and local fields once and preserves ordered prefixes a
 constructs: 0080, 0190, 0340, 0350, 0410, 0520, 0560, 0670, 0750, 1740, 1760, 1770, 1810, 1900
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

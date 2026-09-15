@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "differences": {
+    "runtime/fixed-conditional-runtime": {
+      "reason": "The unchanged source explicitly selects status 1 in its arm64 branch.",
+      "status": "1"
+    },
+    "runtime/r430-static-library": {
+      "reason": "The pinned Apple SDK supplies libSystem, not libm.a. Exact archive selection and missing-archive refusal run in the native binding/archive command.",
+      "replacement": "bindings/archive-selection"
+    },
+    "abi/r440-bindings-generated": {
+      "reason": "Generated Linux ABI guards must remain unchanged. The native binding command regenerates and executes the same header, policy categories and C peer for Darwin.",
+      "replacement": "bindings/generated"
+    },
+    "abi/r440-native-varargs": {
+      "reason": "SysV al is not an arm64 register. The Darwin counterpart retains the shared promoted-tail values, direct/indirect calls and C va_arg oracle.",
+      "replacement": "varargs"
+    },
+    "abi/r440-sret-pointer-observation": {
+      "reason": "SysV requires the hidden destination returned in rax; Darwin receives the destination in x8 and has no returned-pointer obligation. Native transport checks indirect result storage and both call directions.",
+      "replacement": "transport"
+    },
+    "runtime/core-io-erased-system": {
+      "reason": "Darwin has neither Linux /sys nor /dev/full. The native C fixture adapter scripts only these fault endpoints; all other operations reach libSystem. The original Landin failure, errno and output oracles remain unchanged.",
+      "c-sources": "../../../darwin/io_endpoints.c",
+      "c-args": "-Wl,-alias,_r550_open,_open -Wl,-alias,_r550_write,_write -Wl,-alias,_r550_close,_close"
+    },
+    "runtime/r440-errno-detail": {
+      "reason": "Darwin has neither Linux /sys nor /dev/full. The native C fixture adapter scripts only these fault endpoints; all other operations reach libSystem. The original Landin failure, errno and output oracles remain unchanged.",
+      "c-sources": "../../../darwin/io_endpoints.c",
+      "c-args": "-Wl,-alias,_r550_open,_open -Wl,-alias,_r550_write,_write -Wl,-alias,_r550_close,_close"
+    },
+    "runtime/large-array-offset-is-addressed": {
+      "reason": "The pinned Darwin loader cannot map the 2 GiB static reservation beside its shared cache; the matching native Clang control also aborts before main. Retain the original status-42 failure, native control and loader evidence as a platform limit, never a passing runtime verdict. General large-image placement remains the R5.20 successor disposition.",
+      "limit": "darwin-shared-region"
+    }
+  },
+  "diagnostics": {
+    "negative/fixed-conditional-active-duplicate": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "0",
+      "codes": ""
+    },
+    "negative/fixed-conditional-active-reference-inactive": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "0",
+      "codes": ""
+    },
+    "negative/fixed-conditional-active-generic-error": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "0",
+      "codes": ""
+    },
+    "positive/fixed-conditional-selects-declarations": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "1",
+      "codes": "L0201"
+    },
+    "positive/fixed-conditional-generic-activity": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "1",
+      "codes": "L0306"
+    },
+    "positive/fixed-conditional-nested-inactive": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "1",
+      "codes": "L0305"
+    },
+    "positive/fixed-conditional-cross-file-forward": {
+      "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
+      "status": "1",
+      "codes": "L0201, L0201"
+    }
+  }
+}

@@ -4,4 +4,4 @@ summary: an erased result carries its source origin and two-word return ABI
 program: main.ldn
 status: 42
 constructs: 0430, 0770, 0790, 0840, 1230, 1240, 1370, 1380, 1390
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -376,3 +376,9 @@ parity claim. R5.40 consumes these same stack placement plans for DWARF location
 The shared `Backend.Dwarf` encoder uses neutral source identities and
 `Backend.Debug_Locations` availability; Mach-O sections, x29 CFI and dSYM
 packaging stay at the backend/toolchain boundary.
+
+R5.50's full hosted audit preserves these boundaries. Scalar part addressing
+on Darwin carries wide IR element positions through target-byte placement,
+rather than narrowing them through the Ada host index type. Complete derived
+programs share the same source/provenance and location facts across GDB and
+LLDB acceptance; physical encodings and packaging remain backend-owned.

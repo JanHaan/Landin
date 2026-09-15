@@ -4,4 +4,4 @@ summary: an explicit runtime integer conversion traps when its source is outside
 constructs: 0150, 0310, 0700, 1670, 1950, 1960
 program: main.ldn
 traps: yes
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

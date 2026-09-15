@@ -9132,7 +9132,7 @@ Linux alone or a later bookkeeping revision cannot close the item.
 
 ### R5.50 — Close hosted target parity
 
-Status: active
+Status: complete
 Depends on: R5.30, R5.40, R4.70, R4.80
 
 Run all shared hosted conformance cases and complete derived prototypes 2, 3
@@ -9140,6 +9140,125 @@ and 4 on macOS arm64, comparing semantics and diagnostics with Linux.
 
 Exit evidence: differences are either eliminated or explicitly target-defined;
 no target-specific logic leaked into semantic stages.
+
+Coverage audit at accepted R5.40 `618abcacf09379aa7610fa0662de7a4fcca3dade`:
+canonical main and its annotated dual-native approval match; Pages job 1888837
+successfully published that revision. The shared tree contains 475 runtime and
+26 ABI fixtures, with metadata selecting four or six profiles. Darwin's selected
+R5.30 schedule contains 70 cases in three profiles; R5.40 debugs the selected
+source fixture and scalars, but no complete derivative. Neither schedule is
+full parity. Linux's existing complete host, runtime, quality and GDB oracles
+remain the comparison authority, including complete parser diagnostics,
+container rollback and all fourteen result flags, and hosted I/O failure paths.
+
+Implementation and comparison:
+
+- Shared metadata now declares Darwin applicability for ordinary runtime/ABI
+  cases; the generated target, conformance and prototype matrices follow it.
+  Native acceptance derives four standard or six specialization profiles from
+  that metadata. The complete parser joins the six runtime profiles already
+  required by the container/hosted derivatives and parser quality checks.
+- Schema-3 Mac acceptance requires both debug and release compiler builds,
+  compiler-host checks with `--host`, 1108 Darwin source verdicts (882 negative,
+  226 positive), 2246 native runtime/ABI outcomes, four regenerated binding
+  profiles and archive controls, and all nine complete derivative LLDB sessions
+  per compiler mode. Its R5.40 selected/scalar, source identity, dSYM mismatch,
+  optional filename and stripped-deployment checks remain mandatory. Historical
+  schema-1 lowering and schema-2 debugger bundles keep their original meaning.
+- The source-selected arm64 verdicts are enumerated in
+  `compiler/tests/darwin/parity.json`. Two generic/tool runtime fixtures now
+  select their common successful branch on either hosted architecture. No
+  grammar, language rule, diagnostic catalogue or IR golden changed.
+- Shared C peers apply the Mach-O symbol prefix and native register conventions.
+  GNU-wrap probes use native linker aliases; native variadic and indirect-result
+  counterparts retain Apple's stack-tail/x8 obligations instead of SysV's
+  `al`/returned-`rax` observations. Generated bindings use the same header,
+  policy categories and peer with the pinned Darwin ABI guard. Exact archives,
+  a competing dylib, missing archives and a driver-selected path with spaces
+  have executable controls. Linux generated bindings remain unchanged.
+- The explicit fixture-only I/O adapter supplies the two Linux fault endpoints
+  absent on Darwin. All other operations delegate to libSystem. The original
+  Landin errno, declared-error, recovery, cleanup and output oracles remain;
+  these are injected endpoint failures, not a claim that Darwin has `/sys` or
+  `/dev/full`. Merged output uses one pipe and preserves diagnostic order.
+- Full coverage exposed a Darwin backend range error: scalar field addressing
+  narrowed a target element position through the Ada host `Natural` type.
+  `Part_Address` now retains `IR.Element_Total` until target-byte placement.
+  The bounded backend seam tests both wide read and write without native
+  assembly or large allocation. Parsing, checking, neutral IR semantics,
+  source identities/provenance and physical debug placement plans are unchanged.
+  Frame pointers, calling conventions and the three-u32 caller ABI remain.
+- Complete native LLDB sessions use the Linux derivative source/value oracles:
+  parser recursion, suspended callers, recovery and failure flags; container
+  sorted values, all fourteen completion flags and signed/unsigned evidence
+  dispatch with step-in/out/over; mutable erased hosted filter/destination
+  state through the full stack. All finish the original runtime oracle.
+  `workload-sources.json` pins the complete source closures for GDB and LLDB.
+  Each derivative also retains DWARF verification, unwind/UUID evidence,
+  specialization report, stripped execution/source-breakpoint refusal and
+  source-map mismatch refusal.
+- Verification reconstructs the full schedules and source/compiler/assembler/
+  linker/execution commands, checks artifacts and exact output, and checks LLDB
+  assertions against committed source-derived expectations. Failure-path tests
+  reject omitted profiles, altered commands, changed objects, failed/time-out
+  sessions, missing assertions and weakened expected values. Existing approval
+  tests now exercise whichever committed scope is selected and still refuse
+  scope substitution.
+
+Demonstrated platform limitation, not a passing runtime result:
+
+The existing `runtime/large-array-offset-is-addressed` reserves 2 GiB of zero
+storage while producing a small object. Its original status-42 execution
+passes on Linux. After the Darwin range repair it emits, assembles and links,
+but the pinned default executable layout overlaps dyld's shared-cache region
+and aborts before `main`. A native Clang control with the same volatile zero
+reservation reproduces the exact SIGABRT and loader diagnostic. All four
+profiles retain both programs, successful artifact production and actual
+failed executions as `platform-limited`; thus the Darwin runtime schedule has
+2242 passing executions and four corroborated loader limitations per compiler
+mode. A missing control, other signal or unexplained output fails acceptance.
+The source/golden oracle is still 42. This does not define different array
+semantics or assert that every possible large macOS image is impossible.
+`docs/targets.md` cites Apple's shared-region constants and describes the
+observed default layout. General large-image placement/preflight remains the
+explicit R5.20 scale and self-hosting successor disposition. No multi-GiB
+materialized object sweep, raised stack/resource limit or failure-to-skip rule
+is introduced.
+
+Development evidence is retained under `.scratch/r550/`: native source-verdict
+and shared runtime/ABI audits, original failed range/loader runs, native Clang
+control, repaired wide-address seam, generated bindings and native LLDB
+transcripts. Focused native Linux callee-save execution passes. The Mac debug
+and release compiler builds pass; the full document checker and regenerated
+coverage records are clean. Initial parser/count output ordering, unsigned
+LLDB value presentation and target-specific report validation exposed runner
+assumptions; their repairs preserve the shared byte/value oracles. The first
+scope-binding tooling test assumed routine policy; it now checks the committed
+scope and proves that the opposite scope is refused. These development runs
+are not exact-revision acceptance.
+
+Phase/acceptance closure binding:
+
+| R5 exit requirement | required evidence for this containing revision |
+|---|---|
+| Native macOS compiler | Pinned schema-3 debug/release builds, arm64 identity, configuration/manifests and host-only compiler suites. |
+| Shared hosted semantics and diagnostics | Complete Linux milestone suites plus every Darwin source verdict and shared runtime profile; exact status/output and explicit source-selected configuration differences. |
+| ABI and complete prototypes 2/3/4 | Shared native peers/counterparts, regenerated bindings and exact archives; complete six-profile derivatives and their successful, diagnostic, recovery and failure oracles on both targets. |
+| Usable source debugging | Linux native GDB in both compiler modes and matching native LLDB in both modes, including complete derivatives and every applicable R4.60/R5.40 identity, caller and deployment oracle. |
+| Intentional physical/platform differences | Committed comparison manifest and native evidence above; the inherited large-image placement limitation remains explicitly outside a successful runtime claim. No target-specific semantic-stage changes. |
+| Exact revision and delivery | Identical source archive/inventory in both accepted bundles, verified exports, annotated `ci/accepted/FULL_COMMIT` dual-native binding, atomic canonical promotion and successful guarded Pages publication. |
+
+Milestone scope was selected with `scripts/ci/policy.py milestone` and committed
+as `b8360318` before this closure candidate. The Linux policy requires complete
+suite, quality and native GDB in both modes, plus bindings and documents/tooling:
+eight jobs. Linux alone, the selected R5.30/R5.40 schedules or filtered feedback
+cannot close R5.50. The completion status and next-item pointers are prepared
+with the implementation and become authoritative only when this containing
+revision completes both committed native policies, verified export, annotated
+approval, promotion and publication. The accepted revision keeps milestone
+policy; routine scope returns in subsequent development. All R5.20 resource,
+scaling and scheduler/cache dispositions remain; Nix CI stays deferred, and
+no release designation or Cortex-M implementation changes here.
 
 ### R5 gate
 

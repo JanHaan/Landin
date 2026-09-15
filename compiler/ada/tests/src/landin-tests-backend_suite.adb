@@ -19,10 +19,13 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Backend;
+with Landin.Backend.Arm64;
+with Landin.Build_Reports;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.X86_64;
 with Landin.IR;
+with Landin.Optimization;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -6694,8 +6697,54 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Helper_Membership_Is_Exact;
 
+   procedure Darwin_Wide_Parts_Keep_Target_Offsets
+     (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Wide_Parts_Keep_Target_Offsets
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      --  Only bounded source/IR and assembly text: no large object is built.
+      Lower
+        (Work, "mut far: [2147483648]u8" & LF
+         & "public probe: () -> (code: i32) =" & LF
+         & "    far[2147483647] = 42" & LF
+         & "    code = i32(far[2147483647])" & LF
+         & "end probe" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "wide source lowers");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "wide parts are legal IR");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Text'Length < 10_000, "reservation stays bounded text");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "movk x16, #32767, lsl #16"), 2,
+            "read and write preserve the complete target byte offset");
+      end;
+   end Darwin_Wide_Parts_Keep_Target_Offsets;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "Darwin wide parts keep target offsets",
+         Darwin_Wide_Parts_Keep_Target_Offsets'Access);
       Landin.Testing.Register
         (Into, "backend", "imported function addresses use the GOT",
          Imported_Function_Addresses_Use_The_GOT'Access);

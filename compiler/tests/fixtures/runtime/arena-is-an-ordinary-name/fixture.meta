@@ -4,4 +4,4 @@ summary: D212 withdrawal preserves arena as an ordinary user-declared type, para
 constructs: 0820, 1130, 1760, 1800
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

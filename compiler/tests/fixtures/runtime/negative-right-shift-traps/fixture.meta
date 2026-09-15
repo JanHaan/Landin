@@ -4,4 +4,4 @@ summary: a dynamic negative right shift amount traps
 program: main.ldn
 traps: yes
 constructs: 0320, 1950, 1960
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

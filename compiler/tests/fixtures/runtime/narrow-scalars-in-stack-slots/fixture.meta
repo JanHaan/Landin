@@ -4,4 +4,4 @@ summary: [1920] narrow scalars in the seventh and later positions cross the call
 program: main.ldn
 status: 42
 constructs: 0430, 0900, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

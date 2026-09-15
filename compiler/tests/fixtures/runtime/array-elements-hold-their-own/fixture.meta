@@ -4,4 +4,4 @@ summary: each element of module array state is written and read at its own offse
 constructs: 0520, 0570, 1740, 1820
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

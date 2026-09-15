@@ -4,4 +4,4 @@ summary: explicit float-to-bool conversion accepts signed zero and exactly posit
 constructs: 0150, 0170, 0180, 0190, 0210, 0310, 0350, 0700, 1880, 1940, 1960
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

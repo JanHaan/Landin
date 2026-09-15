@@ -30,6 +30,8 @@ def main():
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--profile', choices=('none-off', 'size-auto', 'size-all'))
+    parser.add_argument('--parity', action='store_true')
+    parser.add_argument('--workload', choices=linux.WORKLOADS, help='development only')
     args = parser.parse_args()
     assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'native arm64 Mac required'
     output = args.output.resolve()
@@ -61,6 +63,13 @@ def main():
     for source in all_sources:
         shutil.copyfile(source, sources / source.name)
     results = []
+    if args.parity or args.workload:
+        import darwin_workloads
+        workloads = darwin_workloads.measure(args.refine, output, capture, tools, args.workload, args.profile)
+        (output / 'workloads.json').write_text(json.dumps(workloads, indent=2) + '\n')
+        if args.workload:
+            print('FILTERED derived debugger development passed')
+            return
     for opt, spec in PROFILES:
         key = opt + '-' + spec
         if args.profile and args.profile != key:

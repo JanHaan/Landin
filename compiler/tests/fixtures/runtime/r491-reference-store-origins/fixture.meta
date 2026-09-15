@@ -4,4 +4,4 @@ summary: declared retention same-origin updates and local alias writes retain co
 program: main.ldn
 status: 42
 constructs: 0430, 0520, 0770, 0780, 0790, 0900, 1220, 1910
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -4,4 +4,4 @@ summary: D162 a decimal literal rounds once to its target width: binary32 and bi
 program: main.ldn
 status: 42
 constructs: 0170, 0210, 0220, 1880
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

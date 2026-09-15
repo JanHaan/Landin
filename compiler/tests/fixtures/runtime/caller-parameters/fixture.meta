@@ -5,4 +5,4 @@ program: main.ldn
 with: other.ldn
 status: 42
 constructs: 0370, 0410, 0670, 1000, 1040, 1290, 1800, 1920
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

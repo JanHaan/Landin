@@ -4,4 +4,4 @@ summary: a computed read beyond a slice length traps
 program: main.ldn
 traps: yes
 constructs: 0570, 1950, 1960
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

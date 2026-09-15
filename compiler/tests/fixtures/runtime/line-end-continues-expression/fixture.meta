@@ -4,4 +4,4 @@ summary: [1750] line ends remain space when an operator or selector continues th
 constructs: 1750, 1810, 1820
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

@@ -16,7 +16,8 @@ target-selected native toolchain to assemble and link a hosted executable. Runti
 fixtures execute those binaries on the native Linux x86-64 gate. A small
 repository-owned `core` library and complete derived prototypes 2, 3 and 4
 execute through that path with native source-debugging coverage. Darwin arm64 has native lowering, ABI and LLDB source-debugging acceptance;
-full hosted parity remains R5.50. There is no Cortex-M backend,
+R5.50 adds complete shared hosted and derived-program parity on both targets,
+with the explicit physical-image limits recorded in ROADMAP.md. There is no Cortex-M backend,
 and the broader standard library remains future work. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
@@ -70,7 +71,7 @@ policy against one committed archive, retains host evidence and exports a
 verified local copy. Development runs are incremental/filtered feedback and
 cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
 status, resume, export, administrative approval tags and atomic promotion.
-R5.30/R5.40 additionally require `scripts/ci/darwin.py accept COMMIT` and matching
+R5.30/R5.40/R5.50 additionally require `scripts/ci/darwin.py accept COMMIT` and matching
 Darwin evidence at approval; see `environments/macos-arm64/README.md`.
 
 A push submits only `.build.yml` (Pages) and `.builds/github-mirror.yml`.
@@ -217,7 +218,8 @@ compiler, tooling and documentation repairs with explicit retained limits
 and R5 handoffs. R5.10 has established the native macOS compiler environment; R5.20 isolates
 target contracts and records retained resource dispositions. R5.30 implements
 native Darwin lowering; R5.40 adds native LLDB and Mach-O debug identity.
-R5.50 is the next dependency-ready item.
+R5.50 closes hosted parity through its dual-native milestone binding;
+R6.10 is the next dependency-ready item.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

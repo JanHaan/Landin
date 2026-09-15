@@ -1,10 +1,16 @@
+#if defined(__APPLE__)
+#define OBJECT_NAME(name) "_" name
+#else
+#define OBJECT_NAME(name) name
+#endif
+
 extern int r440_link_identity(void);
 
 int foo(void) { return 40; }
 int landin_1_foo(void) { return 100; }
 int payload(void) { return 300; }
-int block_foreign(void) __asm__(".L1_1");
-int retry_foreign(void) __asm__(".L_1_1");
+int block_foreign(void) __asm__(OBJECT_NAME(".L1_1"));
+int retry_foreign(void) __asm__(OBJECT_NAME(".L_1_1"));
 int block_foreign(void) { return 11; }
 int retry_foreign(void) { return 13; }
 

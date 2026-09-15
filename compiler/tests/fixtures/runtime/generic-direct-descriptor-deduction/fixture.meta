@@ -4,4 +4,4 @@ summary: direct generic formals deduce unequal atom-set, function-signature and 
 constructs: 0630, 0640, 0710, 1000, 1290, 1920, 1970
 program: main.ldn
 status: 42
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

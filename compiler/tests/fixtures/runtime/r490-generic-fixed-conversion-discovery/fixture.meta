@@ -4,4 +4,4 @@ summary: conversion discovery preserves fixed-formal values through match bodies
 program: main.ldn
 status: 42
 constructs: 0310, 0650, 0690, 1210, 1290, 1300, 1490
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64

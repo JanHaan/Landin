@@ -4,4 +4,4 @@ summary: inferred try results retain nominal identity through generic address ar
 program: main.ldn
 status: 42
 constructs: 0430, 0670, 0750, 0790, 0940, 0960, 1290
-targets: linux-x86-64
+targets: linux-x86-64, macos-arm64
