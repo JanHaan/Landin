@@ -8922,7 +8922,7 @@ debugging remain R5.30/R5.40; R5 parity remains open.
 
 ### R5.30 — Implement Darwin arm64 lowering
 
-Status: planned
+Status: active
 Depends on: R5.10, R5.20, R2.30
 
 Implement the arm64 data layout, Darwin calling conventions, native assembly,
