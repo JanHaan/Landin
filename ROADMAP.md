@@ -8770,7 +8770,7 @@ or a new exact-revision Linux approval.
 
 ### R5.20 — Isolate target contracts
 
-Status: active
+Status: complete
 Depends on: R4.91, R0.60
 
 Refine target descriptions, ABI queries, assembly emission and debug emission
@@ -8806,6 +8806,104 @@ the measured costs and operating workflow. This item also owns evaluation of
 bounded per-workload parallelism and a dependency graph for immutable compiler
 and workload artifacts, preserving failure, identity and resource controls.
 Nix CI is deferred by the maintainer; the existing shell remains supplemental.
+
+Implementation and reviewed boundaries:
+
+- `Landin.Targets.Darwin_Arm64` describes little-endian 64-bit pointers,
+  pointer alignment 8, stack/scalar maximum alignment 16, `arm64` architecture
+  and a distinct Darwin AAPCS64 LP64 identity. The synthetic 32-bit description
+  remains unchanged. Native Apple Clang static assertions corroborate these
+  layout facts; its assembly spells `external_name` as `_external_name` and
+  `_entry` as `__entry`. This is a bounded target-fact probe, not Darwin lowering.
+- `Targets.Capabilities` separates C signatures, records and variadic calls
+  from ABI identity, and states object format, implemented debug format,
+  backend and triplet independently of pointer width. Darwin has no implemented
+  C, assembly, debugger or toolchain capability. Checking and target-aware IR
+  verification ask those queries; the structural IR has no new target branch,
+  opcode or serialized field. The SysV physical classifier remains guarded.
+- `Backend.Dispatch` owns frame preflight, its encoding-limit description and
+  concrete assembly/debug selection. The driver no longer calls x86 emission
+  or names its frame encoding. The linker argument seam now requires explicit
+  target facts and refuses GNU arguments for Darwin, including with named tools.
+  The concrete x86 renderer retains the established synthetic-width text-test
+  seam; this does not give synthetic-32 a driver backend. Other real target
+  facts are refused there.
+- `Landin.Hosted` owns exact logical helper identities shared by checking and
+  emission. Linux libc dependencies and physical signature checks remain in
+  their respective consumers. An unknown `_landin_host_` prefix is an ordinary
+  import and no longer activates runtime bridge emission. All actual helper
+  symbols still use the unchanged ELF spelling.
+- [1975], D203 and tour [1610] now distinguish logical external names from
+  target-prefixed object symbols and assembly quoting. Darwin prepends exactly
+  one underscore, including before an existing underscore; native and C names
+  share that rule. The invalid-name diagnostic no longer says ELF. Prototype
+  1's section-placement sketch and prototype 4's C callback finding require no
+  syntax change. The sole changed golden is `end-to-end/refine-identity`, adding
+  `darwin-arm64`; IR, layout, token and diagnostic records remain unchanged.
+- `core/c` continues to assert the specific `compiler.c_sysv_lp64` identity.
+  The generator independently verifies the explicit Clang triple, macros,
+  widths, byte order and signed-char policy before producing bindings. A new
+  isolated generator control rejects a Darwin LP64 triple before macro/header
+  work. No inferred LP64 compatibility, new scalar or new configuration fact
+  is introduced. `docs/targets.md`, `docs/ir.md` and the package guide describe
+  these boundaries. `check.py` rejects duplicated literal hosted identities.
+
+Readiness intake disposition (all R5.20 inputs):
+
+| Finding | Evidence and final disposition |
+|---|---|
+| R520-1, R520-4, R520-6, R520-7, BE-2 | Implemented by explicit ABI capabilities, second 64-bit facts, backend dispatch and shared helpers above. Target tests distinguish described facts from implemented facilities; Darwin source checking, emission/debug refusal and no-write/no-tool controls pass. |
+| R520-2, R520-3 | Fact/specification boundary settled above. Darwin core/c aliases, binding-generator ABI support and native linker arguments remain explicitly with R5.30; Mach-O debug identity remains R5.40. These are not enabled by this item. |
+| CHK-R491-4, R520-5, CHK-15600-2 | One merged repair: logical link names, explicit prefix mapping and neutral diagnostic wording. Tests cover punctuation, a leading underscore, helper symbols and canonical IR equality. Native Apple assembly corroborates the prefix. |
+| CHK-FLOW-1, CHK-FE-2, CHK-FE-3 | Assessed with current native Mac debug probes at 8, 1024 and 4096. Alias and module-value chains and scalar flow accept all samples; 64-field flow accepts 8/1024 and reports exhaustion at 4096 (exit 71). The inherited 8372224-byte soft stack limit is unchanged. Declaration-by-field flow snapshots, folding dependency walks and remaining IR scratch arrays are retained resource limits, explicitly deferred to the scale and self-hosting successor. Syntax-depth bounds do not bound these tables; no universal recoverable-exhaustion or cross-host threshold claim is made. |
+| CHK-REF-3 | Inspection confirms raw loop-transfer states still have normal-path release but no owner covering every exceptional exit. Existing loop/reference cases remain valid; no allocation-failure injection ran. Controlled transfer-state ownership is explicitly deferred to the scale and self-hosting successor, retaining the exceptional-exit leak limitation of this short-lived compiler. This item does not claim that all checker allocations are controlled. |
+| LOW-1 | Fresh native Linux release none/off probes of the existing cleanup regression, retaining 4/8/12 guarded defers, emit 13694/116177/1839142 bytes in 0.008/0.064/1.217 seconds. These are different complete probe programs from the intake's original snippets. The unchanged 12-cleanup runtime passes four profiles. Equivalent-continuation sharing is explicitly deferred to competitive optimization: it requires preserving pop-before-run, return/failure selectors and cleanup side effects. No arbitrary cleanup-count refusal or changed evaluation order is introduced. |
+| BE-1 | Preflight audit retains signed-displacement checks for frames/outgoing arguments, but cannot infer final RIP-relative reach across linker-placed text/data from one object extent. No multi-GiB object was assembled or linked. Large-image placement/preflight remains an explicit scale and self-hosting successor limitation; this item supplies no large-image acceptance. |
+| LOW-3, BE-3 | The simplifier still has instruction/slot-sized scratch arrays; atom-code lookup and symbol collision allocation retain repeated identity scans. Bounded parser/container compilation controls below accept with stable assembly hashes, but do not establish asymptotic bounds. Scratch ownership/scaling is retained with the scale and self-hosting successor; faster atom/symbol algorithms and simplification are retained with competitive optimization. Correct baseline emission, not competitive scaling, remains the gate. |
+
+Process evaluation is complete. The first routine acceptance measurements are
+recorded in `docs/process.md`: the slowest job took 1208.5 seconds, with
+111.6/113.8-second release builds already overlapping. On native Linux, four
+fresh parser/container compilations (none/off and size/auto) using one unchanged
+release compiler took 111.15 seconds with one worker and 55.55 with two. All
+assembly hashes match; individual peak RSS is at most 50372 KiB. These samples
+support bounded two-worker experimentation, not unrestricted nesting or a
+whole-matrix memory bound. The compiler hash for this development measurement
+is `aafc51578e47511101721ec52704165da0630e6d8d9b56af0cca9d68e12efc7b`.
+
+The evaluated artifact graph is compiler inputs/tools/mode/path mapping ->
+immutable compiler -> reached workload inputs/configuration/profile/target
+and adapter tools -> immutable program -> independent execution, quality and
+debugger consumers. The existing release-job compiler binaries have different
+hashes/sizes in their different build contexts; blind cross-job reuse would
+misstate provenance. Production scheduling and cache integration are explicitly
+deferred to the scale and self-hosting successor, requiring shared cancellation,
+timeout ownership, aggregate resource tests and producer-identity evidence.
+The deliberate second quality compilation stays fresh to test determinism.
+No acceptance schema, concurrency limit, failure oracle or Nix policy changes.
+
+Development evidence is retained under `.scratch/r520/`: native host scope,
+focused target/driver/backend/verifier/lowering/toolchain and identity checks,
+Linux release fixture and parallelism transcripts, Apple C/assembly facts and
+bounded resource inputs/results. The Mac resource result digest is
+`eba2102c9bebe5f77f18c6b984046d03341e628efe8cd9939bc95ab33c94230d`.
+The first Mac host run found the synthetic-emitter guard and identity-record
+mismatches; focused corrected backend and identity checks resolve those failures.
+The unchanged complete IR golden passed on that host; native Linux acceptance
+checks it independently. The new equal-width lowering case compares the entire
+canonical IR of generic, aggregate, control and explicit-link source.
+
+Closure candidate and acceptance binding: the completion status and next-item
+pointers are prepared together so acceptance tests the final documents with
+the implementation. They become authoritative only when this containing
+revision completes the committed five-job routine native policy, verified
+export and annotated `ci/accepted/FULL_COMMIT` approval. Canonical promotion
+binds delivery; no later bookkeeping revision substitutes for the accepted
+source. Development transcripts alone cannot close this item. Routine scope
+has no GDB job: debug encoding, source/variable locations, unwind/frame
+conventions and debugger transport are unchanged, and shared ELF helper/symbol
+spelling preserves existing emitted identities. Darwin lowering and source
+debugging remain R5.30/R5.40; R5 parity remains open.
 
 ### R5.30 — Implement Darwin arm64 lowering
 

@@ -13,6 +13,22 @@
 
 package Landin.Targets.Capabilities is
 
+   --  An ABI identity describes the intended boundary. Each implemented
+   --  capability must be enabled explicitly; equal LP64 widths prove none.
+   function C_Signatures (Facts : Target_Facts) return Boolean;
+   function C_Records (Facts : Target_Facts) return Boolean;
+   function C_Variadic_Calls (Facts : Target_Facts) return Boolean;
+
+   type Object_Format is (No_Object_Format, ELF, Mach_O);
+   function Object_Format_Of (Facts : Target_Facts) return Object_Format;
+
+   type Debug_Format is (No_Debug_Format, ELF_DWARF);
+   function Debug_Format_Of (Facts : Target_Facts) return Debug_Format;
+
+   --  Logical external names acquire the platform prefix exactly once.
+   --  Compiler-local labels and assembler quoting are separate concerns.
+   function Link_Symbol (Facts : Target_Facts; Name : String) return String;
+
    type Backend_Kind is (No_Backend, Linux_X86_64_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;

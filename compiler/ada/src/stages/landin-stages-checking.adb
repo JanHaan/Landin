@@ -23,6 +23,8 @@ with Landin.Syntax.Forest;
 with Landin.Syntax;
 with Landin.Tokens.Text;
 with Landin.Targets;
+with Landin.Targets.Capabilities;
+with Landin.Hosted;
 with Landin.Types;
 
 package body Landin.Stages.Checking is
@@ -40,7 +42,7 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Text.Problem;
    use type Landin.Tokens.Assignment_Operator;
-   use type Landin.Targets.C_ABI_Kind;
+   use Landin.Hosted;
    use type Landin.Source.Span;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Reference_View;
@@ -816,11 +818,13 @@ package body Landin.Stages.Checking is
          Valid : in out Boolean)
       is
          Supported : Boolean :=
-           Landin.Targets.C_ABI_Of (Facts) /= Landin.Targets.No_C_ABI
+           Landin.Targets.Capabilities.C_Signatures (Facts)
            and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
            and then Results'Length <= 1
            and then (not Syn.Is_Variadic (Of_Tree, Node)
-                     or else Parameters'Length > 0);
+                     or else (Parameters'Length > 0
+                       and then Landin.Targets.Capabilities.C_Variadic_Calls
+                         (Facts)));
       begin
          if not Syn.Uses_C_ABI (Of_Tree, Node) then
             return;
@@ -864,7 +868,7 @@ package body Landin.Stages.Checking is
          Fields : Landin.Checking.Field_Shape_Array) is
       begin
          if Syn.Has_C_Layout (Of_Tree, Node)
-           and then (Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.No_C_ABI
+           and then (not Landin.Targets.Capabilities.C_Records (Facts)
                      or else Fields'Length = 0
                      or else (for some Field of Fields =>
                        not C_Field_Allowed (Field)))
@@ -4492,7 +4496,7 @@ package body Landin.Stages.Checking is
          if Valid and then Instance = Landin.Checking.No_Nominal_Type
            and then Syn.Has_C_Layout (Of_Tree, Struct_Node)
            and then (C_Impossible or else Fields'Length = 0
-             or else Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.No_C_ABI)
+             or else not Landin.Targets.Capabilities.C_Records (Facts))
          then
             Reject_C_Layout (Of_Tree, Struct_Node);
             Valid := False;
@@ -30164,44 +30168,6 @@ package body Landin.Stages.Checking is
 
       end Check_Routine_Body;
 
-      --  These are exactly the compiler-owned bridge identities, not a
-      --  prefix namespace and not the libc functions a bridge itself calls.
-      type Host_Helper is
-        (No_Host_Helper, Initialize_Arguments, Argument_Count, Argument_Table,
-         Argument_At, Argument_At_From, Text_Length, Open_Read, Open_Write,
-         Read_Bytes, Write_Bytes, Close_File, Errno, Heap_Allocate,
-         Heap_Release);
-
-      function Helper_Name (Helper : Host_Helper) return String
-        is (case Helper is
-              when No_Host_Helper => "",
-              when Initialize_Arguments => "_landin_host_initialize_arguments",
-              when Argument_Count => "_landin_host_argument_count",
-              when Argument_Table => "_landin_host_argument_table",
-              when Argument_At => "_landin_host_argument_at",
-              when Argument_At_From => "_landin_host_argument_at_from",
-              when Text_Length => "_landin_host_text_length",
-              when Open_Read => "_landin_host_open_read",
-              when Open_Write => "_landin_host_open_write",
-              when Read_Bytes => "_landin_host_read",
-              when Write_Bytes => "_landin_host_write",
-              when Close_File => "_landin_host_close",
-              when Errno => "_landin_host_errno",
-              when Heap_Allocate => "_landin_host_heap_allocate",
-              when Heap_Release => "_landin_host_heap_release");
-
-      function Helper_Of (Symbol : String) return Host_Helper;
-
-      function Helper_Of (Symbol : String) return Host_Helper is
-      begin
-         for Helper in Initialize_Arguments .. Heap_Release loop
-            if Symbol = Helper_Name (Helper) then
-               return Helper;
-            end if;
-         end loop;
-         return No_Host_Helper;
-      end Helper_Of;
-
       --  Check before lowering: neutral pointer carriers erase referent,
       --  permission, nullability and retention information.
       procedure Check_External_Declaration
@@ -30431,7 +30397,7 @@ package body Landin.Stages.Checking is
                     ([Signed_Count, Byte_Pointer, Size_Value], Size_Value);
                when Close_File =>
                   Valid := Check_Contract ([Signed_Count], Signed_Count);
-               when Errno =>
+               when Errno_Value =>
                   Valid := Check_Contract ([], Signed_Count);
                when Heap_Allocate =>
                   Valid := Check_Contract
@@ -30503,7 +30469,7 @@ package body Landin.Stages.Checking is
                    C not in 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9'
                           | '_' | '.' | '$')
                then
-                  Reject ("this link symbol is not a supported ELF spelling");
+                  Reject ("this link symbol is not a supported external name");
                   return;
                end if;
                Symbol := Landin.Source.Names.Intern

@@ -347,3 +347,14 @@ pipeline should update this account alongside the implementation. Examples
 should continue to follow checked fixtures, and claims about behavior should
 be traced to code and tests. A disagreement is a reason to investigate and
 correct this derived explanation, never to elevate it into a source of rules.
+
+## Target capability checks
+
+The verifier's target-aware entry checks C signature, record and variadic-call
+capabilities through `Landin.Targets.Capabilities`. A second LP64 description
+therefore cannot inherit SysV support from its pointer width. The structural
+IR still carries logical conventions, source link names and neutral shapes;
+ABI carrier assignment, object symbol prefixes and debug format selection stay
+in target/backend packages. The Linux and Darwin description seam compares
+canonical IR for native generic, aggregate and control-flow source. R5.20 adds
+no opcode or serialized IR field; the existing complete IR golden is unchanged.

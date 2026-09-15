@@ -1940,10 +1940,11 @@ package body Landin.Tests.Driver_Suite is
          & "compiler.assert(sizeof usize == 8)" & LF
          & "compiler.assert(alignof usize == 8)" & LF
          & "end if" & LF);
-      for Target in 1 .. 2 loop
+      for Target in 1 .. 3 loop
          declare
             Args : constant Landin.Platform.Path_List := Both
               ((if Target = 1 then "--target=linux-x86-64"
+                elsif Target = 2 then "--target=darwin-arm64"
                 else "--target=synthetic-32"), "facts.ldn");
             Result : constant Landin.Driver.Outcome :=
               Landin.Driver.Execute (Args, Host, Tools);
@@ -3229,6 +3230,61 @@ package body Landin.Tests.Driver_Suite is
              Executable => True, Debug => True);
    end R491_Artifacts_Preserve_Inputs;
 
+   procedure Darwin_Contracts (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Contracts (Item : in out Landin.Testing.Context) is
+      procedure Check
+        (Source, Action, Expected : String; Full_Debug : Boolean := False);
+      procedure Check
+        (Source, Action, Expected : String; Full_Debug : Boolean := False) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("main.ldn");
+         Args.Append ("--target=darwin-arm64");
+         if Action /= "" then
+            Args.Append (Action);
+         end if;
+         if Full_Debug then
+            Args.Append ("--debug=full");
+         end if;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Expected = "" then Landin.Driver.Status_Success
+                else Landin.Driver.Status_Reported),
+               "Darwin contract: " & Unbounded.To_String (Result.Report));
+            Landin.Testing.Check
+              (Item, Expected = "" or else Contains
+                 (Unbounded.To_String (Result.Report), Expected),
+               "the stated target boundary supplies the refusal");
+            Landin.Testing.Check
+              (Item, not Host.Exists ("main.s")
+               and then not Host.Exists ("main")
+               and then Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "checking and unsupported emission have no output effects");
+         end;
+      end Check;
+   begin
+      Check (Entry_Program, "", "");
+      Check (Entry_Program, "--emit=asm", "L0500");
+      Check (Entry_Program, "--emit=exe", "L0500");
+      Check (Entry_Program, "--emit=asm", "L0500", Full_Debug => True);
+      Check ("link(symbol: ""bad name"") f: () -> none = end f" & LF,
+             "", "supported external name");
+      Check ("extern(c) f: (x: i32) -> (r: i32)" & LF,
+             "", "native C ABI");
+      Check ("r: type = layout(c) struct x: i32 end r" & LF,
+             "", "non-C representation");
+      Check ("compiler.assert(compiler.c_sysv_lp64)" & LF,
+             "", "assertion is false");
+   end Darwin_Contracts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3386,6 +3442,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an unwritable output is reported",
          An_Unwritable_Output_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "Darwin description does not enable emission or C",
+         Darwin_Contracts'Access);
    end Register;
 
 end Landin.Tests.Driver_Suite;

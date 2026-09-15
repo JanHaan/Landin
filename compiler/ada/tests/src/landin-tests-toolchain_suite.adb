@@ -121,8 +121,8 @@ package body Landin.Tests.Toolchain_Suite is
          "x86_64-linux-gnu-gcc",
          "a named toolchain wins over the triplet");
 
-      --  Even a target that names none can be finished if the caller
-      --  knows a tool that can do it.
+      --  A named tool remains a request spelling. It does not enable a
+      --  backend or its linker argument policy for an unsupported target.
       Landin.Testing.Check_Equal
         (Item,
          Landin.Backend.Toolchain.Driver_For
@@ -147,9 +147,11 @@ package body Landin.Tests.Toolchain_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Plain : constant Landin.Platform.Path_List :=
-        Landin.Backend.Toolchain.Link_Arguments ("main.s", "main", "");
+        Landin.Backend.Toolchain.Link_Arguments
+          ("main.s", "main", "", Facts => Landin.Targets.Linux_X86_64);
       Molded : constant Landin.Platform.Path_List :=
-        Landin.Backend.Toolchain.Link_Arguments ("main.s", "main", "mold");
+        Landin.Backend.Toolchain.Link_Arguments
+          ("main.s", "main", "mold", Facts => Landin.Targets.Linux_X86_64);
    begin
       --  Joined terminates every element, so the expectation does too.
       Landin.Testing.Check_Equal
@@ -251,7 +253,8 @@ package body Landin.Tests.Toolchain_Suite is
       is
          Args : constant Landin.Platform.Path_List :=
            Landin.Backend.Toolchain.Link_Arguments
-             (Assembly, Output, "mold", "a1b2", Libraries);
+             (Assembly, Output, "mold", "a1b2", Libraries,
+              Landin.Targets.Linux_X86_64);
       begin
          Landin.Testing.Check_Equal
            (Item, Natural (Args.Length), 7,

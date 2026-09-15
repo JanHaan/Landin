@@ -1,5 +1,8 @@
 with Ada.Strings.Fixed;
 
+with Landin.Hosted;
+with Landin.Targets.Capabilities;
+
 with Landin.Backend.C_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.Backend.X86_64.Allocation;
@@ -9,6 +12,8 @@ with Landin.Targets.Layouts;
 with Landin.Types;
 
 package body Landin.Backend.X86_64 is
+
+   use type Landin.Targets.Target_Facts;
 
    package Unbounded renames Ada.Strings.Unbounded;
 
@@ -441,30 +446,15 @@ package body Landin.Backend.X86_64 is
             and then Landin.IR.Signature_Uses_C_ABI
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
 
-      type Hosted_Bridge is
-        (Not_A_Bridge, Initialize_Arguments, Argument_Count, Argument_Table,
-         Argument_At, Argument_At_From, Text_Length, Open_Read, Open_Write,
-         Read_Bytes, Write_Bytes, Close_File, Errno_Value,
-         Heap_Allocate, Heap_Release);
-
+      use Landin.Hosted;
+      subtype Hosted_Bridge is Host_Helper;
+      Not_A_Bridge : constant Hosted_Bridge := No_Host_Helper;
       function Bridge_Of (Spelling : String) return Hosted_Bridge
-        is (if Spelling = "_landin_host_initialize_arguments"
-            then Initialize_Arguments
-            elsif Spelling = "_landin_host_argument_count" then Argument_Count
-            elsif Spelling = "_landin_host_argument_table" then Argument_Table
-            elsif Spelling = "_landin_host_argument_at" then Argument_At
-            elsif Spelling = "_landin_host_argument_at_from"
-            then Argument_At_From
-            elsif Spelling = "_landin_host_text_length" then Text_Length
-            elsif Spelling = "_landin_host_open_read" then Open_Read
-            elsif Spelling = "_landin_host_open_write" then Open_Write
-            elsif Spelling = "_landin_host_read" then Read_Bytes
-            elsif Spelling = "_landin_host_write" then Write_Bytes
-            elsif Spelling = "_landin_host_close" then Close_File
-            elsif Spelling = "_landin_host_errno" then Errno_Value
-            elsif Spelling = "_landin_host_heap_allocate" then Heap_Allocate
-            elsif Spelling = "_landin_host_heap_release" then Heap_Release
-            else Not_A_Bridge);
+        renames Helper_Of;
+
+      function Bridge_Symbol (Helper : Host_Helper) return String
+        is (Landin.Targets.Capabilities.Link_Symbol
+              (Landin.Targets.Linux_X86_64, Helper_Name (Helper)));
 
       function Is_Hosted_Dependency (Spelling : String) return Boolean
         is (Bridge_Of (Spelling) /= Not_A_Bridge
@@ -763,7 +753,9 @@ package body Landin.Backend.X86_64 is
       --  spelling, while namespace comparisons keep the unquoted identity.
       function Symbol (Item : Landin.IR.Item_Id) return String is
          Spelling : constant String :=
-           Unbounded.To_String (Allocated_Symbols (Positive (Item)));
+           Landin.Targets.Capabilities.Link_Symbol
+             (Landin.Targets.Linux_X86_64, Unbounded.To_String
+                (Allocated_Symbols (Positive (Item))));
       begin
          if Spelling'Length = 0 then
             raise Landin.Compiler_Defect with
@@ -4544,7 +4536,7 @@ package body Landin.Backend.X86_64 is
          --  body code can clobber argc/argv.  C-owned startup calls the same
          --  initializer explicitly; ordinary exports and callbacks never do.
          if Item = Hosted_Entry then
-            Emit ("call _landin_host_initialize_arguments");
+            Emit ("call " & Bridge_Symbol (Initialize_Arguments));
          end if;
 
          Reserve_Stack (Extent (Layout), "frame");
@@ -5929,6 +5921,14 @@ package body Landin.Backend.X86_64 is
       Any_Read_Only : Boolean := False;
 
    begin
+      --  Synthetic widths remain an assembly-text layout probe. This
+      --  renderer always spells ELF symbols; dispatch never emits that probe
+      --  as a program, nor admits another real target through this seam.
+      if Facts /= Landin.Targets.Linux_X86_64
+        and then Facts /= Landin.Targets.Synthetic_32
+      then
+         raise Compiler_Defect with "x86-64 emission needs Linux ELF facts";
+      end if;
       --  A C-owned main can drive Landin exports without asking refine to
       --  synthesize a hosted entry.  Those exports still need the library's
       --  fixed runtime bridges.  Discover them before choosing private names,
@@ -5940,12 +5940,8 @@ package body Landin.Backend.X86_64 is
             if Landin.IR.Is_External (Of_Unit, Item) then
                declare
                   Name : constant String := Source_Symbol (Item);
-                  Prefix : constant String := "_landin_host_";
                begin
-                  if Name'Length >= Prefix'Length
-                    and then Name
-                      (Name'First .. Name'First + Prefix'Length - 1) = Prefix
-                  then
+                  if Helper_Of (Name) /= No_Host_Helper then
                      Host_Bridge_Needed := True;
                   end if;
                end;
@@ -6182,7 +6178,7 @@ package body Landin.Backend.X86_64 is
 
       if Host_Bridge_Needed then
          Put (Character'Val (9) & ".text");
-         --  Compiler-owned C ABI: void _landin_host_initialize_arguments
+         --  Compiler-owned C ABI: void initialize_arguments
          --  (int argc, char **argv).  Startup supplies the real C vector and
          --  retains its backing for every world derived from it.  Initialize
          --  before publishing capabilities or starting threads.  Identical
@@ -6190,12 +6186,13 @@ package body Landin.Backend.X86_64 is
          --  The nonzero argv cell is also the initialized-state guard: zero
          --  is private absence, never a published Landin pointer or fake argv.
          Put (Character'Val (9)
-              & ".globl _landin_host_initialize_arguments");
+              & ".globl " & Bridge_Symbol (Initialize_Arguments));
          Put (Character'Val (9)
-              & ".hidden _landin_host_initialize_arguments");
+              & ".hidden " & Bridge_Symbol (Initialize_Arguments));
          Put (Character'Val (9)
-              & ".type _landin_host_initialize_arguments, @function");
-         Put ("_landin_host_initialize_arguments:");
+              & ".type " & Bridge_Symbol (Initialize_Arguments)
+              & ", @function");
+         Put (Bridge_Symbol (Initialize_Arguments) & ":");
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("jne " & Local_Prefix & "landin_host_arguments_initialized");
          Emit ("testl %edi, %edi");
@@ -6214,12 +6211,12 @@ package body Landin.Backend.X86_64 is
          Put (Local_Prefix & "landin_host_arguments_invalid:");
          Emit ("ud2");
          Put (Character'Val (9)
-              & ".size _landin_host_initialize_arguments, "
-              & ".-_landin_host_initialize_arguments");
+              & ".size " & Bridge_Symbol (Initialize_Arguments) & ", "
+              & ".-" & Bridge_Symbol (Initialize_Arguments));
 
          Put (Character'Val (9)
-              & ".type _landin_host_argument_count, @function");
-         Put ("_landin_host_argument_count:");
+              & ".type " & Bridge_Symbol (Argument_Count) & ", @function");
+         Put (Bridge_Symbol (Argument_Count) & ":");
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -6229,28 +6226,28 @@ package body Landin.Backend.X86_64 is
          Put (Local_Prefix & "landin_host_count_ready:");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_argument_count, "
-              & ".-_landin_host_argument_count");
+              & ".size " & Bridge_Symbol (Argument_Count) & ", "
+              & ".-" & Bridge_Symbol (Argument_Count));
 
          --  Publish the user-argument table itself so core/io can retain the
          --  real backing capability in its system value.  Indexed results
          --  then derive from that stored table instead of from hidden global
          --  state; argv[0] remains outside the published table.
          Put (Character'Val (9)
-              & ".type _landin_host_argument_table, @function");
-         Put ("_landin_host_argument_table:");
+              & ".type " & Bridge_Symbol (Argument_Table) & ", @function");
+         Put (Bridge_Symbol (Argument_Table) & ":");
          Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
          Emit ("testq %rax, %rax");
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("addq $8, %rax");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_argument_table, "
-              & ".-_landin_host_argument_table");
+              & ".size " & Bridge_Symbol (Argument_Table) & ", "
+              & ".-" & Bridge_Symbol (Argument_Table));
 
          Put (Character'Val (9)
-              & ".type _landin_host_argument_at, @function");
-         Put ("_landin_host_argument_at:");
+              & ".type " & Bridge_Symbol (Argument_At) & ", @function");
+         Put (Bridge_Symbol (Argument_At) & ":");
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -6264,80 +6261,88 @@ package body Landin.Backend.X86_64 is
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_argument_at, "
-              & ".-_landin_host_argument_at");
+              & ".size " & Bridge_Symbol (Argument_At) & ", "
+              & ".-" & Bridge_Symbol (Argument_At));
 
          --  Keep the established one-index helper above for the existing
          --  foreign-C boundary fixtures.  The capability-aware variant has a
          --  distinct symbol and derives its result from the explicit table.
          Put (Character'Val (9)
-              & ".type _landin_host_argument_at_from, @function");
-         Put ("_landin_host_argument_at_from:");
+              & ".type " & Bridge_Symbol (Argument_At_From) & ", @function");
+         Put (Bridge_Symbol (Argument_At_From) & ":");
          Emit ("movq (%rdi,%rsi,8), %rax");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_argument_at_from, "
-              & ".-_landin_host_argument_at_from");
+              & ".size " & Bridge_Symbol (Argument_At_From) & ", "
+              & ".-" & Bridge_Symbol (Argument_At_From));
 
          Put (Character'Val (9)
-              & ".type _landin_host_text_length, @function");
-         Put ("_landin_host_text_length:");
+              & ".type " & Bridge_Symbol (Text_Length) & ", @function");
+         Put (Bridge_Symbol (Text_Length) & ":");
          Emit ("jmp strlen");
          Put (Character'Val (9)
-              & ".size _landin_host_text_length, "
-              & ".-_landin_host_text_length");
+              & ".size " & Bridge_Symbol (Text_Length) & ", "
+              & ".-" & Bridge_Symbol (Text_Length));
 
          Put (Character'Val (9)
-              & ".type _landin_host_open_read, @function");
-         Put ("_landin_host_open_read:");
+              & ".type " & Bridge_Symbol (Open_Read) & ", @function");
+         Put (Bridge_Symbol (Open_Read) & ":");
          Emit ("xorl %esi, %esi");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
          Put (Character'Val (9)
-              & ".size _landin_host_open_read, "
-              & ".-_landin_host_open_read");
+              & ".size " & Bridge_Symbol (Open_Read) & ", "
+              & ".-" & Bridge_Symbol (Open_Read));
 
          --  A fixed Landin signature fronts libc's variadic open.  Linux
          --  O_WRONLY | O_CREAT | O_TRUNC is 577; 0666 is filtered by the
          --  process umask.  Clearing eax satisfies the SysV variadic ABI.
          Put (Character'Val (9)
-              & ".type _landin_host_open_write, @function");
-         Put ("_landin_host_open_write:");
+              & ".type " & Bridge_Symbol (Open_Write) & ", @function");
+         Put (Bridge_Symbol (Open_Write) & ":");
          Emit ("movl $577, %esi");
          Emit ("movl $438, %edx");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
          Put (Character'Val (9)
-              & ".size _landin_host_open_write, "
-              & ".-_landin_host_open_write");
+              & ".size " & Bridge_Symbol (Open_Write) & ", "
+              & ".-" & Bridge_Symbol (Open_Write));
 
-         Put (Character'Val (9) & ".type _landin_host_read, @function");
-         Put ("_landin_host_read:");
+         Put (Character'Val (9) & ".type " & Bridge_Symbol (Read_Bytes)
+              & ", @function");
+         Put (Bridge_Symbol (Read_Bytes) & ":");
          Emit ("jmp read");
          Put (Character'Val (9)
-              & ".size _landin_host_read, .-_landin_host_read");
+              & ".size " & Bridge_Symbol (Read_Bytes) & ", .-"
+              & Bridge_Symbol (Read_Bytes));
 
-         Put (Character'Val (9) & ".type _landin_host_write, @function");
-         Put ("_landin_host_write:");
+         Put (Character'Val (9) & ".type " & Bridge_Symbol (Write_Bytes)
+              & ", @function");
+         Put (Bridge_Symbol (Write_Bytes) & ":");
          Emit ("jmp write");
          Put (Character'Val (9)
-              & ".size _landin_host_write, .-_landin_host_write");
+              & ".size " & Bridge_Symbol (Write_Bytes) & ", .-"
+              & Bridge_Symbol (Write_Bytes));
 
-         Put (Character'Val (9) & ".type _landin_host_close, @function");
-         Put ("_landin_host_close:");
+         Put (Character'Val (9) & ".type " & Bridge_Symbol (Close_File)
+              & ", @function");
+         Put (Bridge_Symbol (Close_File) & ":");
          Emit ("jmp close");
          Put (Character'Val (9)
-              & ".size _landin_host_close, .-_landin_host_close");
+              & ".size " & Bridge_Symbol (Close_File) & ", .-"
+              & Bridge_Symbol (Close_File));
 
-         Put (Character'Val (9) & ".type _landin_host_errno, @function");
-         Put ("_landin_host_errno:");
+         Put (Character'Val (9) & ".type " & Bridge_Symbol (Errno_Value)
+              & ", @function");
+         Put (Bridge_Symbol (Errno_Value) & ":");
          Emit ("subq $8, %rsp");
          Emit ("call __errno_location");
          Emit ("movl (%rax), %eax");
          Emit ("addq $8, %rsp");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_errno, .-_landin_host_errno");
+              & ".size " & Bridge_Symbol (Errno_Value) & ", .-"
+              & Bridge_Symbol (Errno_Value));
 
          --  core/heap keeps allocation behind the same fixed scalar/pointer
          --  bridge as hosted I/O.  Over-allocation leaves one pointer word
@@ -6345,8 +6350,8 @@ package body Landin.Backend.X86_64 is
          --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks
          --  are host-width work here, never constants in target-neutral IR.
          Put (Character'Val (9)
-              & ".type _landin_host_heap_allocate, @function");
-         Put ("_landin_host_heap_allocate:");
+              & ".type " & Bridge_Symbol (Heap_Allocate) & ", @function");
+         Put (Bridge_Symbol (Heap_Allocate) & ":");
          Emit ("cmpq $1, %rsi");
          Emit ("ja " & Local_Prefix & "landin_host_heap_alignment_ready");
          Emit ("movl $1, %esi");
@@ -6387,17 +6392,17 @@ package body Landin.Backend.X86_64 is
          Emit ("xorl %eax, %eax");
          Emit ("ret");
          Put (Character'Val (9)
-              & ".size _landin_host_heap_allocate, "
-              & ".-_landin_host_heap_allocate");
+              & ".size " & Bridge_Symbol (Heap_Allocate) & ", "
+              & ".-" & Bridge_Symbol (Heap_Allocate));
 
          Put (Character'Val (9)
-              & ".type _landin_host_heap_release, @function");
-         Put ("_landin_host_heap_release:");
+              & ".type " & Bridge_Symbol (Heap_Release) & ", @function");
+         Put (Bridge_Symbol (Heap_Release) & ":");
          Emit ("movq -8(%rdi), %rdi");
          Emit ("jmp free");
          Put (Character'Val (9)
-              & ".size _landin_host_heap_release, "
-              & ".-_landin_host_heap_release");
+              & ".size " & Bridge_Symbol (Heap_Release) & ", "
+              & ".-" & Bridge_Symbol (Heap_Release));
       end if;
 
       if Host_Bridge_Needed then

@@ -46,6 +46,9 @@ package Landin.Targets is
    --  The first target the roadmap requires to execute.
    function Linux_X86_64 return Target_Facts;
 
+   --  Description only; R5.30 supplies native emission and C support.
+   function Darwin_Arm64 return Target_Facts;
+
    --  A synthetic 32-bit little-endian description, used to keep layout and
    --  ABI code target-parametric long before a real 32-bit backend exists.
    function Synthetic_32 return Target_Facts;
@@ -54,7 +57,8 @@ package Landin.Targets is
 
    function Architecture_Of (Facts : Target_Facts) return Architecture;
 
-   type C_ABI_Kind is (No_C_ABI, SysV_AMD64_LP64);
+   type C_ABI_Kind is
+     (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64);
 
    function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
 

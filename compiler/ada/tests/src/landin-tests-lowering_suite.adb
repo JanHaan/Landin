@@ -12987,6 +12987,49 @@ package body Landin.Tests.Lowering_Suite is
          & "end for end f" & LF);
    end Text_Operands_Have_Explicit_Order;
 
+   procedure Equal_Width_Targets_Keep_Neutral_IR
+     (Item : in out Landin.Testing.Context);
+
+   procedure Equal_Width_Targets_Keep_Neutral_IR
+     (Item : in out Landin.Testing.Context)
+   is
+      Linux_Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Darwin_Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Source : constant String :=
+        "box: type = struct value: usize end box" & LF
+        & "copy: (t: type, x: t) -> (r: t) = x end copy" & LF
+        & "public link(symbol: ""_entry"") run: (x: usize)"
+        & " -> (r: usize) =" & LF
+        & "  b: box = box(value: copy(x))" & LF
+        & "  if b.value > 0 then r = b.value else r = sizeof box end if" & LF
+        & "end run" & LF;
+   begin
+      Lower (Linux_Work, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "Linux stages accept source");
+      Lower (Darwin_Work, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "Darwin stages accept source");
+      if Landin.Stages.Failed (Linux_Work)
+        or else Landin.Stages.Failed (Darwin_Work)
+      then
+         Landin.Testing.Fail (Item, "equal-width source was refused");
+         return;
+      end if;
+      Landin.Testing.Check_Equal
+        (Item,
+         IR.Dump.Text
+           (Landin.Stages.Code (Linux_Work).all,
+            Landin.Stages.Meanings (Linux_Work).all,
+            Landin.Stages.Identities (Linux_Work).all),
+         IR.Dump.Text
+           (Landin.Stages.Code (Darwin_Work).all,
+            Landin.Stages.Meanings (Darwin_Work).all,
+            Landin.Stages.Identities (Darwin_Work).all),
+         "generic, aggregate, control and logical link identities match");
+   end Equal_Width_Targets_Keep_Neutral_IR;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -13424,6 +13467,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "equal-width targets keep neutral IR",
+         Equal_Width_Targets_Keep_Neutral_IR'Access);
    end Register;
 
 end Landin.Tests.Lowering_Suite;

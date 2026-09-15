@@ -76,6 +76,7 @@ different responsibilities.
 | --- | --- | --- |
 | `Landin` | the namespace and the three exceptions | contain any logic |
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
+| `Landin.Hosted` | exact logical compiler-owned hosted helper identities shared by checking and emission | encode target prefixes, libc names or machine signatures |
 | `Landin.Layouts` | source representation policy names | place fields or derive target widths |
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
@@ -112,12 +113,13 @@ different responsibilities.
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
+| `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.X86_64.Dwarf` | DWARF record encoding, assembler path quoting and debug sections derived from source metadata, immutable IR and backend placement plans | change language types, choose variable storage, read the host or write files |
-| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |
@@ -132,7 +134,7 @@ different responsibilities.
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
-| `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
+| `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
@@ -369,6 +371,23 @@ caller could otherwise assemble a value the package would not have produced:
 a named target, not from a record literal that happens to describe the
 development host. Where a type is limited, that is deliberate too: a
 compilation cannot be copied out from under its stages.
+
+The `darwin-arm64` description has 64-bit pointers, eight-byte pointer
+alignment, sixteen-byte stack/scalar maximum alignment and little-endian
+storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.
+A described ABI does not enable C signatures, C records, variadic calls,
+assembly or debugging: each capability is explicit and Darwin's remain off.
+The checker asks capability queries; only the backend classifies ABI carriers.
+`Landin.Backend.Dispatch` selects frame preflight and assembly emission, passing
+neutral debug information to the concrete emitter. Toolchain arguments also
+require the selected target, so a named tool cannot enable GNU arguments for
+Darwin. The existing SysV classifier retains its runtime target guard.
+
+Logical link names stay in checking and IR. `Targets.Capabilities.Link_Symbol`
+adds Darwin's underscore before assembly quoting; ELF leaves the name intact.
+Compiler-local labels are separate. `Landin.Hosted` supplies the exact helper
+names to both checking and emission; each backend owns its libc dependencies
+and physical signatures. See [target contracts](../../docs/targets.md).
 
 A snapshot's bytes and line map are allocated once and not freed. A
 compilation owns its sources for as long as it exists, the process is short,
