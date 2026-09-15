@@ -3173,10 +3173,10 @@ package body Landin.IR.Verifier is
             Bad : Fault_Kind;
          begin
             if Has_Nominal_Shape (Of_Unit, Nominal) then
+               --  Distinct scalar storage also carries this layout marker.
+               --  It describes shape, not an implemented C ABI boundary.
                if Has_C_Layout (Of_Unit, Nominal)
-                 and then (Nominal_Field_Count (Of_Unit, Nominal) = 0
-                   or else (Check_Image and then not
-                     Landin.Targets.Capabilities.C_Records (Facts)))
+                 and then Nominal_Field_Count (Of_Unit, Nominal) = 0
                then
                   return (Kind => Nominal_Metadata_Malformed, others => <>);
                end if;

@@ -8819,7 +8819,9 @@ Implementation and reviewed boundaries:
   from ABI identity, and states object format, implemented debug format,
   backend and triplet independently of pointer width. Darwin has no implemented
   C, assembly, debugger or toolchain capability. Checking and target-aware IR
-  verification ask those queries; the structural IR has no new target branch,
+  verification ask the relevant queries. C record eligibility is source-checked;
+  nominal C-layout metadata also describes distinct scalar storage, independently
+  of an implemented C boundary. The structural IR has no new target branch,
   opcode or serialized field. The SysV physical classifier remains guarded.
 - `Backend.Dispatch` owns frame preflight, its encoding-limit description and
   concrete assembly/debug selection. The driver no longer calls x86 emission
@@ -8892,6 +8894,19 @@ mismatches; focused corrected backend and identity checks resolve those failures
 The unchanged complete IR golden passed on that host; native Linux acceptance
 checks it independently. The new equal-width lowering case compares the entire
 canonical IR of generic, aggregate, control and explicit-link source.
+
+The first routine candidate, `3ed7eb5e5e66c1fafe5de9a4bcbebd5be128a683`,
+failed in retained run `20260915T091332Z-fd37b9bda06b`: the debug host suite
+passed 713 of 715 cases, while two existing lowering cases exposed an overly
+broad C-record capability guard on distinct scalar metadata for synthetic-32.
+Removing that guard preserves structural validation and keeps capability
+checks at actual C boundaries. The corrected native Mac lowering suite passes
+all 134 cases and 2991 checks, including both failures; no golden changes.
+Bindings and documents had passed; peer compiler jobs were cancelled. The
+cancelled release suite also left an empty `compiler/ada/GNAT-TEMP-001384.TMP`,
+which its source-inventory guard correctly refused. No source fixture changed,
+and the inventory guard remains unchanged. This failed run supplies no approval;
+the corrected committed archive must complete a fresh routine acceptance.
 
 Closure candidate and acceptance binding: the completion status and next-item
 pointers are prepared together so acceptance tests the final documents with
