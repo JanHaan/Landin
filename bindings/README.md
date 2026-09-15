@@ -2,15 +2,15 @@
 
 `generate.py` is the repository-owned, standard-library-only binding generator
 for R4.40. It asks an external Clang for a JSON AST; it does not parse C header
-text and it does not make `refine` a header parser. Its one supported ABI is
-Linux x86-64 ELF System V AMD64 LP64 with signed plain `char` and ordinary
-(non-short) C11 enums. A second 64-bit compiler target description does not
-extend this matrix. `verify_target` checks Clang's explicit triple, architecture,
-object format, data model, widths, signed-char policy and byte order before
-publishing outputs; `core/c` independently asserts `compiler.c_sysv_lp64`.
-These are corresponding facts at separate tool boundaries, not host inference.
-[Target contracts](../docs/targets.md) describes their relationship. Darwin
-header generation and C aliases remain with ROADMAP.md R5.30.
+text and it does not make `refine` a header parser. Its supported ABIs are
+Linux x86-64 ELF System V AMD64 LP64 and Darwin arm64 with Apple's AAPCS64
+platform differences, both with signed plain `char` and ordinary (non-short)
+C11 enums. `verify_target` checks the explicit triple, architecture, object
+format macros, data model and byte order. Generated code asserts the selected
+`compiler.c_sysv_lp64` or `compiler.c_darwin_lp64` fact. The exact Apple
+binding target is `arm64-apple-macos26.0.0`; native tools and SDK are pinned in
+`environments/macos-arm64/policy.json`. [Target contracts](../docs/targets.md)
+explains the separate compiler and generator guards.
 
 The generator writes exactly four files:
 
@@ -452,3 +452,19 @@ An environment that elects to run generator tests must provision Clang and, for
 real system headers, the explicit target sysroot/include roots. Generated files
 are ordinary build inputs; package/root arrangement and invoking this tool from
 a future build design remain outside `refine`.
+
+
+## Native Darwin validation
+
+`compiler/tests/darwin/bindings.py --refine PATH --output NEW_DIRECTORY`
+regenerates the shared binding corpus with Apple Clang and SDK include roots,
+then compiles and executes its Landin/C differential program. It covers all
+supported adapter categories and retains the generated outputs and command
+logs. Linux golden files are not replaced by Darwin output. The runner also
+checks exact static-archive selection in the presence of a same-named dylib.
+
+SDK 26.5 mixes annotated and unannotated pointers in `_stdlib.h`. For Darwin
+adapter validation only, `-Wno-nullability-completeness` suppresses those SDK
+annotation warnings exposed by `-Wsystem-headers`; explicit adapter ownership,
+nullability and origin policy is still required. Other warnings remain errors.
+This exception does not change GNAT's warning policy.

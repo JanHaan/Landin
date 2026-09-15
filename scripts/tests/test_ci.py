@@ -25,6 +25,8 @@ import controller
 import job
 import publish
 import resources
+sys.path.insert(0, str(ROOT / "scripts/tests"))
+from test_darwin import DarwinEvidenceTests
 
 
 class ArchiveTests(unittest.TestCase):
@@ -341,6 +343,15 @@ class GitTests(GitFixture):
         self.assertEqual(approval.read_approval(self.root, self.commit), annotation)
         with self.assertRaises(subprocess.CalledProcessError):
             controller.approve(self.root, root)
+
+    def test_linux_approval_cannot_omit_required_darwin_evidence(self):
+        annotation = records.approval_for(self.bundle())
+        source = copy.deepcopy(self.source)
+        source["inventory"].append({
+            "name": common.encoded_name("environments/macos-arm64/acceptance.json"),
+            "sha256": "0" * 64})
+        with self.assertRaisesRegex(common.Invalid, "native Darwin acceptance"):
+            records.validate_approval(annotation, source)
 
     def test_bundle_log_corruption(self):
         root = self.bundle()

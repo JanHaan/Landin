@@ -113,6 +113,8 @@ different responsibilities.
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
+| `Landin.Backend.Darwin_ABI` | Apple arm64 C classification and argument/result placement from neutral shapes and target facts | infer layout from the host, reuse SysV transport or change source semantics |
+| `Landin.Backend.Arm64` | Darwin assembly, stack homes, frame records, native/C calls, hosted runtime and Mach-O data/symbol rendering | parse/check source, put physical transport in IR, write files or run tools |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes and the five available SysV callee-save GP registers | allocate selection-owned scratch, argument, failure or SSE registers |
@@ -376,7 +378,8 @@ The `darwin-arm64` description has 64-bit pointers, eight-byte pointer
 alignment, sixteen-byte stack/scalar maximum alignment and little-endian
 storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.
 A described ABI does not enable C signatures, C records, variadic calls,
-assembly or debugging: each capability is explicit and Darwin's remain off.
+assembly or debugging: each capability is explicit. R5.30 enables Darwin
+C transport and assembly; source debugging remains disabled through R5.40.
 The checker asks capability queries; only the backend classifies ABI carriers.
 `Landin.Backend.Dispatch` selects frame preflight and assembly emission, passing
 neutral debug information to the concrete emitter. Toolchain arguments also

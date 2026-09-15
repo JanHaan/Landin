@@ -212,5 +212,5 @@
 1950   spec        accepted emitted executed refused  An operand an operation cannot take
 1960   spec        accepted emitted executed          A trap stops at the operation
 1970   spec        accepted emitted executed refused  The first hosted path has one entry shape
-1975   spec        accepted emitted executed refused  The selected C boundary is SysV AMD64 LP64
+1975   spec        accepted emitted executed refused  The selected hosted C boundaries
 1980   spec        accepted emitted executed          Declared errors are an orthogonal payload-free atom outcome

@@ -1472,7 +1472,7 @@ In a rooted R3.10 program, only a declaration in the designated entry module
 can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
 
-### [1975] The selected C boundary is SysV AMD64 LP64
+### [1975] The selected hosted C boundaries
 
 `extern(c)` selects a function convention, not an import or a visibility.
 Without a body the declaration imports a linked C routine; with `= body end`
@@ -1504,10 +1504,12 @@ actuals, static images and indirect calls. Neither matching machine widths nor
 `layout(c)` makes a Landin function a C callback. Function values are code
 addresses; `ptr handler` instead addresses a stored function value.
 
-The selected ABI is Linux x86-64 SysV AMD64 LP64, with signed plain C `char`.
-`compiler.c_sysv_lp64` is its fixed bool configuration fact, not a guess from
-pointer width or architecture spelling. The ordinary `core/c` aliases assert
-that fact before exposing `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`,
+The selected hosted ABIs are Linux x86-64 SysV AMD64 LP64 and Darwin arm64
+AAPCS64 with Apple's platform differences, both with signed plain C `char`.
+`compiler.c_sysv_lp64` and `compiler.c_darwin_lp64` are their respective fixed
+bool configuration facts, not guesses from pointer width or architecture
+spelling. The ordinary `core/c` aliases assert either supported fact before
+exposing `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`,
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
@@ -1533,7 +1535,7 @@ not by-value C array parameters or results. Pointer permission, `escaping`
 and written `from` contracts remain Landin checks; a header alone establishes
 none of their ownership or retention promises.
 
-The C transport classifies actual target-byte eightbytes as INTEGER or SSE,
+The SysV C transport classifies actual target-byte eightbytes as INTEGER or SSE,
 recursively merging fields at their offsets. In this non-vector subset an
 aggregate above sixteen bytes uses MEMORY. Integer/pointer and SSE argument
 register banks are independent. A register aggregate is assigned wholly or
@@ -1544,6 +1546,20 @@ result pointer, returned again by the callee. Copies and partial eightbyte
 loads/stores stay inside the actual object extent. None of this changes
 Landin's internal convention or [1980]'s separate failure carrier.
 
+Darwin uses independent x0–x7 integer/pointer and v0–v7 floating argument banks.
+A homogeneous aggregate of one through four f32 or one through four f64 leaves
+(including nested C records and arrays) uses consecutive floating registers.
+Other aggregates through sixteen bytes use integer chunks; larger aggregates
+use a pointer to a caller-owned copy. A register aggregate that cannot fit its
+bank goes wholly to the stack, exhausting that bank. Fixed stack arguments
+have their natural size and alignment rather than a mandatory eight-byte slot.
+The caller extends narrow integer arguments to at least 32 bits. Results use
+x0–x1 or v0–v3; an indirect result uses caller storage addressed by x8 without
+consuming an ordinary argument register. Copies stay within the object extent.
+Every Landin routine preserves a frame record through x29; x18 is reserved.
+These physical rules do not enter target-neutral IR or change source cleanup.
+
+
 A final `, ...` after at least one fixed parameter marks a variadic C
 signature. It is not [0960]'s `! ...`. Variadic calls use only positional
 arguments, including their fixed prefix, evaluated in written order. Their
@@ -1551,8 +1567,9 @@ unnamed tail admits scalars, pointers (including named optional unions) and
 fixed C callbacks, not aggregates, arrays, slices, atoms or erased values.
 Outgoing direct and indirect calls promote unnamed f32 to f64 and bool/narrow
 integers to C int; untyped integer and floating literals take i32 and f64
-respectively. Other admitted tail identities remain unchanged, and calls
-supply the ABI's SSE-register count. Fixed arguments retain their declared
+respectively. Other admitted tail identities remain unchanged. SysV calls
+supply the ABI's SSE-register count; Darwin places every promoted unnamed
+argument in an eight-byte stack slot. Fixed arguments retain their declared
 types. Variadic C function values may be stored and called in Landin, but a C
 callback parameter, result or record field must have a fixed signature.
 A native Landin definition that
@@ -1597,9 +1614,9 @@ read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a process-global Landin variable.
 
-On the first Linux x86-64 hosted path, the compiler-owned bridge emits the
-global hidden ELF entry
-`void _landin_host_initialize_arguments(int argc, char **argv);` whenever
+On both hosted paths, the compiler-owned bridge emits the hidden external entry
+`void _landin_host_initialize_arguments(int argc, char **argv);` (with the
+platform symbol prefix) whenever
 hosted bridge support is retained. An executable's selected no-argument Landin
 entry calls it with the actual incoming C carriers before its source body runs.
 A C-owned startup that drives public C-convention Landin routines calls it
@@ -12565,7 +12582,13 @@ with a hyphen and cannot consist only of dots. Active library directives
 produce separate tool arguments after the program assembly in canonical
 source/declaration order. Repeated requests are preserved: archive resolution
 may need a library more than once. The Linux adapter selects archives for
-this run while leaving hosted runtime linkage to the platform driver.
+this run while leaving hosted runtime linkage to the platform driver. Darwin
+resolves each `libNAME.a` through the selected driver's `-print-file-name`
+query and passes the resulting existing file directly. Missing archives fail;
+a same-named dynamic library is never a substitute. Apple's driver can return
+the bare filename, which must then exist in the invocation directory; a custom
+driver may provide a different archive search policy. Neither target changes
+the source order or repetition of archive operands.
 Inactive directives add no arguments. Atomic operations retain R6.30 and
 inline assembly, sections and machine entry retain R6.60 as named refusals.
 
@@ -12643,7 +12666,7 @@ model, recursive aggregate classes or target guard on C scalar aliases.
 
 **Chosen:** [1975]'s Linux SysV AMD64 LP64 matrix, signed C char, recursive
 nonempty C structs and separate INTEGER/SSE banks define this boundary.
-`compiler.c_sysv_lp64` is a fixed bool supplied by the selected ABI;
+`compiler.c_sysv_lp64` (and D226’s `compiler.c_darwin_lp64`) is a fixed bool supplied by the selected ABI;
 `core/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
 Register exhaustion rolls an aggregate wholly onto the stack; MEMORY results
 use the C hidden destination. The internal Landin convention is unchanged.
@@ -13562,3 +13585,26 @@ thirteen tokens, longer identifiers and forbidden declaration, parameter,
 result, field, label, member and parenthesized-name positions. The derived
 parser, container and hosted prototype controls retain their control-flow
 and cleanup contracts; reservation adds no execution or aliasing rule.
+
+
+### D226 — Darwin C transport is a separate platform contract
+
+**Chosen in R5.30:** [1975] enables Apple's arm64 C subset with its own
+`compiler.c_darwin_lp64` fact, aggregate/HFA transport, x8 indirect results,
+packed fixed stack arguments and stack-only variadic tails. The scalar alias
+layer admits either supported LP64 ABI explicitly. The binding generator
+verifies the selected Apple triple, macros, sysroot and C layouts. Logical
+link names keep the R5.20 platform-prefix rule. Static archive directives
+resolve exact files through the selected driver before Darwin linking.
+
+**The alternatives:** treating LP64 as SysV would misplace floats, aggregates,
+results and variadic arguments. Passing ordinary `-lNAME` could select a dylib.
+Cross-linking Mach-O on Linux would not establish native execution evidence.
+None is adopted. C boundary eligibility, origins, errors and cleanup semantics
+remain unchanged; source debugging and full hosted parity have separate gates.
+
+**Pinned by** `compiler/tests/darwin/transport.ldn`, `varargs.ldn`, the native
+platform program and the generated-binding/archive execution runner, together
+with the shared native aggregate and callback differential cases. ROADMAP.md
+R5.30 owns exact-revision native acceptance; R5.40 owns source debugging and
+Mach-O debug identity, and R5.50 owns full hosted parity.

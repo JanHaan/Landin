@@ -33,9 +33,8 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-Only the Linux x86-64 backend currently emits executable programs. The IR is
-nevertheless expressed without x86 registers, stack offsets or instruction
-encodings. The backend translates its operations into machine instructions
+Linux x86-64 and Darwin arm64 backends emit executable programs. The IR is
+expressed without machine registers, stack offsets or instruction encodings. The backend translates its operations into machine instructions
 and supplies the calling convention and object-format details.
 
 There is a reason for having a representation between syntax and assembly.
@@ -362,3 +361,15 @@ ABI carrier assignment, object symbol prefixes and debug format selection stay
 in target/backend packages. The Linux and Darwin description seam compares
 canonical IR for native generic, aggregate and control-flow source. R5.20 adds
 no opcode or serialized IR field; the existing complete IR golden is unchanged.
+
+
+The Darwin backend gives every routine an x29/x30 frame record and every value
+a stack home. Native Landin calls use integer bit carriers, address-based
+aggregate copies and a separate w8 failure carrier. The Darwin C planner maps
+the same verified signatures onto Apple's independent register banks, HFA
+rules, indirect results and packed/variadic stack rules. These choices belong
+to the emitter; error propagation and cleanup edges arrive already verified.
+Neutral specialization and simplification run before either emitter. Darwin
+currently uses baseline stack homes without the x86 register allocator or body
+folding. Its reports record frame size; backend quality optimization is not a
+parity claim. Darwin source debugging remains the R5.40 boundary.

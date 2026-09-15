@@ -4086,8 +4086,9 @@ package body Landin.Tests.Verifier_Suite is
                   "C permits only in, preserving escaping/from promises");
                Expect
                  (Item, V.Check (Unit, Landin.Targets.Darwin_Arm64),
-                  V.Signature_Part_Malformed,
-                  "a second LP64 ABI does not enable C verification");
+                  (if Convention = IR.In_Value then V.Nothing_Wrong
+                   else V.Signature_Part_Malformed),
+                  "Darwin preserves the same C signature subset");
             end;
          end loop;
 

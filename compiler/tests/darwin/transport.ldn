@@ -1,0 +1,103 @@
+hfa: type = layout(c) struct
+    values: [4]f64
+end hfa
+
+extern(c) c_frame: () -> (r: i32)
+extern(c) link(symbol: "_r530_double") double_prefix: () -> (r: i32)
+extern(c) link(symbol: ".$r530") punctuation: () -> (r: i32)
+public extern(c) l_frame: () -> (r: i32) =
+    r = c_frame()
+    if double_prefix() <> 42 or punctuation() <> 42 then
+        r = 1
+    end if
+end l_frame
+
+pair: type = layout(c) struct
+    a: u64
+    b: u64
+end pair
+
+large: type = layout(c) struct
+    a: u64
+    b: u64
+    c: u64
+end large
+
+extern(c) c_narrow: (i0: i8, i1: i8, i2: i8, i3: i8, i4: i8, i5: i8, i6: i8, i7: i8, i8: i8, i9: i8, tail: i16) -> (r: i32)
+
+public extern(c) l_narrow: (i0: i8, i1: i8, i2: i8, i3: i8, i4: i8, i5: i8, i6: i8, i7: i8, i8: i8, i9: i8, tail: i16) -> (r: i32) =
+    r = 1
+    if i0 == -1 and
+       i1 == -2 and
+       i2 == -3 and
+       i3 == -4 and
+       i4 == -5 and
+       i5 == -6 and
+       i6 == -7 and
+       i7 == -8 and
+       i8 == -9 and
+       i9 == -10 and
+       tail == -1234 then
+        r = 42
+    end if
+end l_narrow
+
+extern(c) c_gp: (i0: u64, i1: u64, i2: u64, i3: u64, i4: u64, i5: u64, i6: u64, p: pair, tail: i8) -> (r: i32)
+
+public extern(c) l_gp: (i0: u64, i1: u64, i2: u64, i3: u64, i4: u64, i5: u64, i6: u64, p: pair, tail: i8) -> (r: i32) =
+    r = 1
+    if i0 == 1 and
+       i1 == 2 and
+       i2 == 3 and
+       i3 == 4 and
+       i4 == 5 and
+       i5 == 6 and
+       i6 == 7 and
+       p.a == 20 and
+       p.b == 21 and
+       tail == -12 then
+        r = 42
+    end if
+end l_gp
+
+extern(c) c_fp: (f0: f64, f1: f64, f2: f64, f3: f64, f4: f64, f5: f64, h: hfa, tail: f32) -> (r: i32)
+
+public extern(c) l_fp: (f0: f64, f1: f64, f2: f64, f3: f64, f4: f64, f5: f64, h: hfa, tail: f32) -> (r: i32) =
+    r = 1
+    if f0 == 1.0 and
+       f1 == 2.0 and
+       f2 == 3.0 and
+       f3 == 4.0 and
+       f4 == 5.0 and
+       f5 == 6.0 and
+       h.values[0] == 10.0 and
+       h.values[1] == 11.0 and
+       h.values[2] == 12.0 and
+       h.values[3] == 13.0 and
+       tail == 14.0 then
+        r = 42
+    end if
+end l_fp
+
+public extern(c) l_large: (a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64) -> (r: large) =
+    r = (a: a + b + c, b: d + e + f, c: g + h)
+end l_large
+
+extern(c) c_large: (a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64) -> (r: large)
+
+public extern(c) l_check: () -> (r: i32) =
+    r = 1
+
+    return when c_narrow(-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -1234) <> 42
+
+    p: pair = (a: 20, b: 21)
+    return when c_gp(1, 2, 3, 4, 5, 6, 7, p, -12) <> 42
+
+    h: hfa = (values: [10.0, 11.0, 12.0, 13.0])
+    return when c_fp(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, h, 14.0) <> 42
+
+    value := c_large(1, 2, 3, 4, 5, 6, 7, 8)
+    if value.a == 6 and value.b == 15 and value.c == 15 then
+        r = 42
+    end if
+end l_check

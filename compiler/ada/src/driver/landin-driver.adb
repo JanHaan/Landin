@@ -56,6 +56,7 @@ package body Landin.Driver is
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Capabilities.Debug_Format;
 
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
@@ -98,9 +99,9 @@ package body Landin.Driver is
       & "language frontend: scanner, parser, names, types, definite assignment"
       & LF
       & "target-neutral IR: lowered and verified" & LF
-      & "backend: linux-x86-64 assembly" & LF
+      & "backends: linux-x86-64 and darwin-arm64 assembly" & LF
       & "executable output: assembled and linked by a"
-      & " GNU-triplet-selected toolchain" & LF
+      & " target-selected native toolchain" & LF
       & "targets described: linux-x86-64, darwin-arm64, synthetic-32" & LF);
 
    function Usage return String is
@@ -930,6 +931,16 @@ package body Landin.Driver is
                end loop;
             end loop;
 
+            if Full_Debug and then
+              Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                = Landin.Targets.Capabilities.No_Debug_Format
+            then
+               Note_No_Toolchain
+                 ("no source debugger emission for target "
+                  & Landin.Targets.Name (Facts), "drop --debug=full");
+               return;
+            end if;
+
             --  A target nothing emits for cannot be asked for a file.
             --  `synthetic-32` exists to keep layout arithmetic honest on a
             --  64-bit host and has no backend, which is what
@@ -1119,6 +1130,7 @@ package body Landin.Driver is
                   else Default_Executable);
                Ran : Landin.Platform.Tool_Result;
                Libraries : Landin.Platform.Path_List;
+               Libraries_Ready : Boolean;
             begin
                if Driver = "" then
                   Note_No_Toolchain
@@ -1142,6 +1154,15 @@ package body Landin.Driver is
                --  rather than an unhandled exception at the top of
                --  `refine`.
                begin
+                  Landin.Backend.Toolchain.Resolve_Libraries
+                    (Facts, Driver, Host, Tools, Libraries, Ran,
+                     Libraries_Ready);
+                  if not Libraries_Ready then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        Unbounded.To_String (Ran.Output));
+                     return;
+                  end if;
                   Tools.Run
                     (Program   => Driver,
                      Arguments =>

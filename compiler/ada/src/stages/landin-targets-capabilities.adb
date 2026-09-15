@@ -2,18 +2,18 @@ package body Landin.Targets.Capabilities is
 
    function C_Signatures (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
-         when SysV_AMD64_LP64 => True,
-         when No_C_ABI | Darwin_AAPCS64_LP64 => False);
+         when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
+         when No_C_ABI => False);
 
    function C_Records (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
-         when SysV_AMD64_LP64 => True,
-         when No_C_ABI | Darwin_AAPCS64_LP64 => False);
+         when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
+         when No_C_ABI => False);
 
    function C_Variadic_Calls (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
-         when SysV_AMD64_LP64 => True,
-         when No_C_ABI | Darwin_AAPCS64_LP64 => False);
+         when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
+         when No_C_ABI => False);
 
    function Object_Format_Of (Facts : Target_Facts) return Object_Format is
    begin
@@ -31,7 +31,7 @@ package body Landin.Targets.Capabilities is
    function Debug_Format_Of (Facts : Target_Facts) return Debug_Format is
      (case Backend_For (Facts) is
          when Linux_X86_64_ELF => ELF_DWARF,
-         when No_Backend => No_Debug_Format);
+         when No_Backend | Darwin_Arm64_Mach_O => No_Debug_Format);
 
    function Link_Symbol (Facts : Target_Facts; Name : String) return String is
    begin
@@ -50,7 +50,9 @@ package body Landin.Targets.Capabilities is
    begin
       if Facts = Linux_X86_64 then
          return Linux_X86_64_ELF;
-      elsif Facts = Synthetic_32 or else Facts = Darwin_Arm64 then
+      elsif Facts = Darwin_Arm64 then
+         return Darwin_Arm64_Mach_O;
+      elsif Facts = Synthetic_32 then
          return No_Backend;
       else
          raise Compiler_Defect
@@ -62,7 +64,9 @@ package body Landin.Targets.Capabilities is
    begin
       if Facts = Linux_X86_64 then
          return "x86_64-pc-linux-gnu";
-      elsif Facts = Synthetic_32 or else Facts = Darwin_Arm64 then
+      elsif Facts = Darwin_Arm64 then
+         return "arm64-apple-darwin";
+      elsif Facts = Synthetic_32 then
          return "";
       else
          raise Compiler_Defect

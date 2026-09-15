@@ -5,6 +5,7 @@ with Landin.Backend;
 with Landin.Evidence;
 with Landin.Hosted;
 with Landin.Backend.C_ABI;
+with Landin.Backend.Darwin_ABI;
 with Landin.Backend.Toolchain;
 with Landin.IR;
 with Landin.Platform.Native;
@@ -879,13 +880,13 @@ package body Landin.Tests.Targets_Suite is
          and then C.C_Variadic_Calls (Linux_X86_64),
          "Linux explicitly implements the selected C subset");
       Landin.Testing.Check
-        (Item, not C.C_Signatures (Darwin_Arm64)
-         and then not C.C_Records (Darwin_Arm64)
-         and then not C.C_Variadic_Calls (Darwin_Arm64)
-         and then C.Backend_For (Darwin_Arm64) = C.No_Backend
+        (Item, C.C_Signatures (Darwin_Arm64)
+         and then C.C_Records (Darwin_Arm64)
+         and then C.C_Variadic_Calls (Darwin_Arm64)
+         and then C.Backend_For (Darwin_Arm64) = C.Darwin_Arm64_Mach_O
          and then C.Debug_Format_Of (Darwin_Arm64) = C.No_Debug_Format
-         and then C.Triplet (Darwin_Arm64) = "",
-         "describing Darwin enables no C, code, tools or debug emitter");
+         and then C.Triplet (Darwin_Arm64) = "arm64-apple-darwin",
+         "Darwin implements C and code; source debugging remains separate");
       Landin.Testing.Check
         (Item, C.Object_Format_Of (Darwin_Arm64) = C.Mach_O
          and then C.Object_Format_Of (Linux_X86_64) = C.ELF
@@ -938,17 +939,68 @@ package body Landin.Tests.Targets_Suite is
               (Item, True, "SysV rejects a second LP64 ABI");
       end;
       declare
-         Ignored : Landin.Platform.Path_List;
-      begin
-         Ignored := Landin.Backend.Toolchain.Link_Arguments
+         Arguments : constant Landin.Platform.Path_List :=
+           Landin.Backend.Toolchain.Link_Arguments
              ("a.s", "a", "", Facts => Darwin_Arm64);
-         Landin.Testing.Fail (Item, "Darwin received GNU linker arguments");
-         pragma Unreferenced (Ignored);
-      exception
-         when Compiler_Defect =>
-            Landin.Testing.Check (Item, True, "linker policy refuses Darwin");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Arguments.Element (1), "-arch",
+            "Darwin selects architecture");
+         Landin.Testing.Check_Equal
+           (Item, Arguments.Element (2), "arm64", "Darwin selects arm64");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Backend.Toolchain.Driver_For (Darwin_Arm64, ""),
+            "/usr/bin/clang", "Darwin selects the native Apple driver");
       end;
    end Target_Contracts;
+
+   procedure Darwin_Transport (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Transport (Item : in out Landin.Testing.Context) is
+      package ABI renames Landin.Backend.Darwin_ABI;
+      Unit : Landin.IR.Unit;
+      Parameters : Landin.IR.Signature_Part_Array (1 .. 11) :=
+        [others => (Kind => Landin.Types.I8, others => <>)];
+   begin
+      Parameters (10).Kind := Landin.Types.I16;
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, Parameters, (others => <>), Darwin_Arm64);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.GP_Used = 8 and then Plan.Stack_Bytes = 16
+            and then Plan.Arguments (9).Stack_At = 0
+            and then Plan.Arguments (10).Stack_At = 2
+            and then Plan.Arguments (11).Stack_At = 4,
+            "Apple narrow stack arguments use natural packed offsets");
+      end;
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [(Kind => Landin.Types.F64, others => <>),
+                   (Kind => Landin.Types.F64, others => <>),
+                   (Kind => Landin.Types.I32, others => <>)],
+            (Kind => Landin.Types.I32, others => <>), Darwin_Arm64,
+            Fixed_Count => 1);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.FP_Used = 1 and then Plan.GP_Used = 0
+            and then Plan.Arguments (2).On_Stack
+            and then Plan.Arguments (2).Stack_At = 0
+            and then Plan.Arguments (3).Stack_At = 8,
+            "Apple variadic tails consume eight-byte stack slots");
+      end;
+      declare
+         Ignored : ABI.Plan (11);
+         pragma Unreferenced (Ignored);
+      begin
+         Ignored := ABI.Assign
+           (Unit, Parameters, (others => <>), Darwin_Arm64, Maximum => 8);
+         Landin.Testing.Fail (Item, "Darwin call exceeded stack budget");
+      exception
+         when Landin.Backend.Stack_Limit_Exceeded =>
+            Landin.Testing.Check (Item, True, "Darwin stack budget enforced");
+      end;
+   end Darwin_Transport;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -985,6 +1037,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "ABI and symbol contracts are explicit",
          Target_Contracts'Access);
+      Landin.Testing.Register
+        (Into, "targets", "Darwin stack and variadic transport",
+         Darwin_Transport'Access);
    end Register;
 
 end Landin.Tests.Targets_Suite;

@@ -189,11 +189,15 @@ def export(host, run_id, state):
     return destination
 
 
-def approve(root, bundle):
+def approve(root, bundle, darwin_bundle=None):
     clean_checkout(root)
     approval = approval_for(bundle)
     _, source = commit_source(root, approval["commit"])
     from records import validate_approval
+    from darwin import required, validate
+    if required(source):
+        require(darwin_bundle is not None, "approval requires --darwin BUNDLE")
+        approval["darwin"] = validate(darwin_bundle, source)
     validate_approval(approval, source)
     name = tag_name(approval["commit"])
     # No --force, no identity overrides and no commit trailers.
@@ -242,7 +246,9 @@ def main(argv=None):
     accept_parser.add_argument("--resume")
     for name in ("status", "export"):
         sub.add_parser(name).add_argument("run_id")
-    sub.add_parser("approve").add_argument("bundle", type=Path)
+    approve_parser = sub.add_parser("approve")
+    approve_parser.add_argument("bundle", type=Path)
+    approve_parser.add_argument("--darwin", type=Path)
     sub.add_parser("promote").add_argument("commit")
     development = sub.add_parser("dev")
     development.add_argument("--slot", default="development")
@@ -256,7 +262,7 @@ def main(argv=None):
         elif args.action == "export":
             export(args.host, args.run_id, args.state)
         elif args.action == "approve":
-            approve(args.root, args.bundle)
+            approve(args.root, args.bundle, args.darwin)
         elif args.action == "promote":
             promote(args.root, args.commit)
         else:

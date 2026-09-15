@@ -108,14 +108,14 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item,
          Contains
-           (Text, "backend: linux-x86-64 assembly"),
+           (Text, "backends: linux-x86-64 and darwin-arm64 assembly"),
          "identity names the assembly backend it has");
       Landin.Testing.Check
         (Item,
          Contains
            (Text,
             "executable output: assembled and linked by a"
-            & " GNU-triplet-selected toolchain"),
+            & " target-selected native toolchain"),
          "identity explains how executable output is produced");
       Landin.Testing.Check
         (Item, not Contains (Text, "0."),
@@ -3263,24 +3263,32 @@ package body Landin.Tests.Driver_Suite is
               (Item, Expected = "" or else Contains
                  (Unbounded.To_String (Result.Report), Expected),
                "the stated target boundary supplies the refusal");
-            Landin.Testing.Check
-              (Item, not Host.Exists ("main.s")
-               and then not Host.Exists ("main")
-               and then Host.Write_Count = 0 and then Tools.Run_Count = 0,
-               "checking and unsupported emission have no output effects");
+            if Expected = "" and then Action /= "" then
+               Landin.Testing.Check
+                 (Item, Host.Write_Count > 0,
+                  "Darwin emission writes assembly");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count,
+                  (if Action = "--emit=exe" then 1 else 0),
+                  "only executable output invokes Apple tooling");
+            else
+               Landin.Testing.Check
+                 (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+                  "checking and debug refusal have no output effects");
+            end if;
          end;
       end Check;
    begin
       Check (Entry_Program, "", "");
-      Check (Entry_Program, "--emit=asm", "L0500");
-      Check (Entry_Program, "--emit=exe", "L0500");
+      Check (Entry_Program, "--emit=asm", "");
+      Check (Entry_Program, "--emit=exe", "");
       Check (Entry_Program, "--emit=asm", "L0500", Full_Debug => True);
       Check ("link(symbol: ""bad name"") f: () -> none = end f" & LF,
              "", "supported external name");
       Check ("extern(c) f: (x: i32) -> (r: i32)" & LF,
-             "", "native C ABI");
+             "", "");
       Check ("r: type = layout(c) struct x: i32 end r" & LF,
-             "", "non-C representation");
+             "", "");
       Check ("compiler.assert(compiler.c_sysv_lp64)" & LF,
              "", "assertion is false");
    end Darwin_Contracts;
@@ -3443,7 +3451,7 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "an unwritable output is reported",
          An_Unwritable_Output_Is_Reported'Access);
       Landin.Testing.Register
-        (Into, "driver", "Darwin description does not enable emission or C",
+        (Into, "driver", "Darwin emits native code and keeps debug refusal",
          Darwin_Contracts'Access);
    end Register;
 

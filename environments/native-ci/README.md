@@ -277,3 +277,20 @@ nix develop --command sh -eu -c './scripts/toolchain.sh; ./scripts/test.sh'
 This checks the Nix environment and is supplemental. It is neither an automatic
 SourceHut job nor a required job in the native acceptance policy. Historical
 Nix and SourceHut results remain in `docs/environments.md` and `ROADMAP.md`.
+
+
+## Matching Darwin evidence
+
+For source revisions carrying `environments/macos-arm64/acceptance.json`,
+Linux acceptance alone cannot authorize approval. Run the native Mac policy
+with `scripts/ci/darwin.py accept COMMIT`, then supply its verified export:
+
+```sh
+python3 scripts/ci/controller.py approve LINUX_BUNDLE --darwin DARWIN_BUNDLE
+```
+
+Both bundles must have identical commit, tree, archive and source inventories.
+The approval annotation binds the Mac policy and retained record; ordinary
+promotion and publication validate this additional identity. The Linux job
+matrix and routine/milestone distinction are unchanged. See the
+[native Mac operations guide](../macos-arm64/README.md).
