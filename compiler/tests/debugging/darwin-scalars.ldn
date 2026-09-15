@@ -1,0 +1,23 @@
+public main: () -> (code: i32) =
+    signed_byte: i8 = -7
+    signed_half: i16 = -1234
+    signed_word: i32 = -123456
+    signed_long: i64 = -7000000000
+    unsigned_byte: u8 = 250
+    unsigned_half: u16 = 60000
+    unsigned_word: u32 = 4000000000
+    unsigned_long: u64 = 9000000000
+    signed_size: isize = -41
+    unsigned_size: usize = 42
+    real_single: f32 = 1.5
+    real_double: f64 = -2.25
+    truth: bool = true
+    code = 1
+    if signed_byte == -7 and signed_half == -1234
+      and signed_word == -123456 and signed_long == -7000000000
+      and unsigned_byte == 250 and unsigned_half == 60000
+      and unsigned_word == 4000000000 and unsigned_long == 9000000000
+      and signed_size == -41 and unsigned_size == 42
+      and real_single == 1.5 and real_double == -2.25 and truth
+    then code = 42 end if
+end main

@@ -171,3 +171,7 @@ A newer GNAT may be used locally while the canonical one stays green. It is
 not evidence: a result that only reproduces on an unpinned compiler is not a
 result. Changing the pin is a recorded decision, not a side effect of an
 upgrade.
+
+R5.40 additionally pins dsymutil and dwarfdump to `Apple LLVM version 21.0.0`
+in the native Mac policy. Their actual paths and binary hashes are retained
+with LLDB sessions and Mach-O debug artifacts.

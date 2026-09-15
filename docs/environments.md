@@ -6,7 +6,7 @@ is the current Linux authority. Historical SourceHut gate results below keep
 their original meaning.
 
 
-R5.30 native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
+R5.30/R5.40 native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
 from the Mac with its pinned tool homes. Its verified bundle must match the
 Linux routine bundle at approval (`--darwin DARWIN_BUNDLE`). Both source and
 execution identities are retained; Linux acceptance alone cannot close the
@@ -304,3 +304,9 @@ explicit native acceptance now preserves that requirement.
 Hosting remains canonical git.sr.ht. SourceHut handles Pages and mirroring;
 `scripts/ci/` owns explicit native acceptance and canonical approval validation.
 The underlying compiler and test commands remain ordinary repository scripts.
+
+R5.40 adds native LLDB acceptance through `scripts/debug.sh --target=darwin-arm64`
+and the committed Mac policy. It validates emitted Landin programs with the
+pinned Apple debugger, dsymutil and dwarfdump, retaining dSYM/UUID and source-map
+matching evidence. The shared DWARF change selects routine Linux release GDB;
+full hosted parity and its milestone matrix remain R5.50.

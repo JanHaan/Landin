@@ -884,9 +884,9 @@ package body Landin.Tests.Targets_Suite is
          and then C.C_Records (Darwin_Arm64)
          and then C.C_Variadic_Calls (Darwin_Arm64)
          and then C.Backend_For (Darwin_Arm64) = C.Darwin_Arm64_Mach_O
-         and then C.Debug_Format_Of (Darwin_Arm64) = C.No_Debug_Format
+         and then C.Debug_Format_Of (Darwin_Arm64) = C.Mach_O_DWARF
          and then C.Triplet (Darwin_Arm64) = "arm64-apple-darwin",
-         "Darwin implements C and code; source debugging remains separate");
+         "Darwin implements C, code and Mach-O DWARF");
       Landin.Testing.Check
         (Item, C.Object_Format_Of (Darwin_Arm64) = C.Mach_O
          and then C.Object_Format_Of (Linux_X86_64) = C.ELF

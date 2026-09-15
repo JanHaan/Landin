@@ -5455,7 +5455,7 @@ def check_macos_environment(full_run):
         policy = json.loads(io.open(policy_path, encoding="utf-8").read())
         record = io.open("compiler/ada/TOOLCHAIN.md", encoding="utf-8").read()
         keys = {"schema", "macos_major", "sdk_version", "sdk_build", "clang",
-                "assembler", "linker", "debugger"}
+                "assembler", "linker", "debugger", "dsymutil", "dwarfdump"}
         if set(policy) != keys or policy["schema"] != 1:
             out.append((policy_path, 1, "unexpected native macOS policy schema"))
         for key in keys - {"schema"}:

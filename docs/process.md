@@ -12,7 +12,7 @@ CI deferred.
 | edit/test loop | checksum-based build and exact affected case/suite/fixture selectors; affected Python tests | development feedback |
 | Mac compiler host | `scripts/dev-test.sh --host`; diagnostics, compiler units and complete IR golden | explicit host scope; no Linux workload emission/execution |
 | Linux development | `scripts/ci/controller.py dev --slot NAME -- COMMAND...` on the native runner | focused native feedback; no approval |
-| native Darwin candidate | exact archived release host checks, Darwin ABI/lowering matrix and generated bindings | required matching Darwin evidence for R5.30 and later |
+| native Darwin candidate | exact archived release host checks, Darwin ABI/lowering matrix, generated bindings and native LLDB | required matching Darwin evidence for R5.30 and later |
 | routine main promotion | five committed jobs: debug host suite, full release suite/runtime/ABI and native report identity, release object quality, bindings, documents/tooling | exact-commit routine approval |
 | substantial debugging risk | routine coverage plus native release GDB | exact-commit routine approval that includes the debugger job |
 | major phase/parity milestone | full suite, quality and native GDB in both compiler modes, bindings and documents/tooling | exact-commit milestone approval |
@@ -157,10 +157,18 @@ R5.30 adds `scripts/ci/darwin.py accept COMMIT` to ordinary promotion. It runs
 the committed native Mac policy and exports source, tools, artifacts and
 execution evidence. Approval uses `approve LINUX_BUNDLE --darwin DARWIN_BUNDLE`;
 the two bundles must describe exactly the same archive. The annotated approval
-binds both. Linux routine scope remains five jobs. Full hosted parity and
-source debugging remain R5.50 and R5.40 respectively.
+binds both. R5.40 adds native LLDB source-debugger acceptance and selects the sixth Linux
+routine job, release GDB, because DWARF serialization is now shared. Full
+hosted parity remains R5.50.
 
 R5.30 used a focused LLDB session to locate an Ada precondition failure in
 variant emission and a native C frame-chain probe for the newly implemented
 arm64 frame convention. No Linux GDB matrix is selected: Linux frame layout,
 DWARF and instruction selection are unchanged. Nix CI remains deferred.
+
+R5.40 uses the exact same archived source for the native LLDB policy and Linux
+routine acceptance with GDB. Native debugger, dsymutil and dwarfdump versions
+are checked against the Mac policy, with binary hashes retained. Source maps,
+Mach-O UUIDs, dSYM identities and stripped behavior are required evidence.
+The production scheduler/cache and broader resource dispositions remain as
+recorded in R5.20; Nix CI stays deferred.

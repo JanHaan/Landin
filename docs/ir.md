@@ -372,4 +372,7 @@ to the emitter; error propagation and cleanup edges arrive already verified.
 Neutral specialization and simplification run before either emitter. Darwin
 currently uses baseline stack homes without the x86 register allocator or body
 folding. Its reports record frame size; backend quality optimization is not a
-parity claim. Darwin source debugging remains the R5.40 boundary.
+parity claim. R5.40 consumes these same stack placement plans for DWARF locations.
+The shared `Backend.Dwarf` encoder uses neutral source identities and
+`Backend.Debug_Locations` availability; Mach-O sections, x29 CFI and dSYM
+packaging stay at the backend/toolchain boundary.

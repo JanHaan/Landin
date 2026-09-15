@@ -63,7 +63,7 @@ class MacOSEnvironment(unittest.TestCase):
                    "gnatls-version": "GNATLS " + pins["LANDIN_GNAT_VERSION"].rsplit("-", 1)[0],
                    "gprbuild-version": "GPRBUILD " + pins["LANDIN_GPRBUILD_VERSION"].rsplit("-", 1)[0],
                    "gcc-version": pins["LANDIN_GNAT_VERSION"].rsplit("-", 1)[0]}
-        for label in ("clang", "assembler", "linker", "debugger"):
+        for label in ("clang", "assembler", "linker", "debugger", "dsymutil", "dwarfdump"):
             replies[label + "-version"] = (json.dumps({"version": policy[label]})
                                            if label == "linker" else policy[label])
 

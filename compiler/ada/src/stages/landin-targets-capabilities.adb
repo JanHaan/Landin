@@ -31,7 +31,8 @@ package body Landin.Targets.Capabilities is
    function Debug_Format_Of (Facts : Target_Facts) return Debug_Format is
      (case Backend_For (Facts) is
          when Linux_X86_64_ELF => ELF_DWARF,
-         when No_Backend | Darwin_Arm64_Mach_O => No_Debug_Format);
+         when Darwin_Arm64_Mach_O => Mach_O_DWARF,
+         when No_Backend => No_Debug_Format);
 
    function Link_Symbol (Facts : Target_Facts; Name : String) return String is
    begin

@@ -287,13 +287,15 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R5.40 — Implement macOS arm64 source debugging.**
+**Current roadmap work: R5.50 — Close hosted target parity.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
 R5.10 has established the native macOS compiler environment; R5.20 isolates
 target contracts and records every inherited resource disposition. R5.30 adds
 native Darwin arm64 lowering and matching-revision native acceptance.
+R5.40 adds native LLDB source debugging and exact Mach-O/dSYM identity;
+full hosted parity remains R5.50.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and

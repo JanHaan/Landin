@@ -47,6 +47,21 @@ package Landin.Backend.Toolchain is
    --  asks for the convention.  An empty result means the target names no
    --  toolchain and none was given, which is the one case that cannot be
    --  attempted rather than merely failing.
+   --  Darwin retains the full source/assembly digest without filenames.
+   --  ELF supplies the same digest through the GNU linker build-id option.
+   function Identity_Section
+     (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String;
+
+   --  Auxiliary native-debug outputs and bundle containment, so the driver
+   --  can protect source inputs without knowing a platform's packaging.
+   function Debug_Artifacts
+     (Output : String; Facts : Landin.Targets.Target_Facts;
+      Host : Landin.Platform.Filesystem'Class)
+      return Landin.Platform.Path_List;
+   function Debug_Overwrites
+     (Output, Source : String; Facts : Landin.Targets.Target_Facts;
+      Host : Landin.Platform.Filesystem'Class) return Boolean;
+
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
       Named : String) return String;
@@ -81,7 +96,8 @@ package Landin.Backend.Toolchain is
       Build_Id : String := "";
       Libraries : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
-      Facts : Landin.Targets.Target_Facts)
+      Facts : Landin.Targets.Target_Facts;
+      Full_Debug : Boolean := False)
       return Landin.Platform.Path_List;
 
 end Landin.Backend.Toolchain;

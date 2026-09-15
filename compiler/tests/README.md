@@ -234,6 +234,24 @@ selected parameters and locals. The native gate runs it separately with debug
 and release builds of the Ada compiler. The script fails if its tools or
 debugger operations are unavailable; missing debugger evidence is not a pass.
 
+On native macOS arm64, use `./scripts/debug.sh --target=darwin-arm64 --output DIR`
+with a fresh output directory. `debugging/darwin.py` checks the shared selected
+R4.60 fixture under none/off, size/auto and size/all, plus all thirteen scalar
+types in `darwin-scalars.ldn`. LLDB's SB API asserts source lines, stepping,
+nested caller values, represented aggregate/variant members, generic instances,
+source aliases and unavailable locals. It requires the packaged dSYM and a
+normal status-42 inferior exit; missing assertions or transport is a failure.
+`--profile` selects development feedback and cannot satisfy acceptance.
+
+The runner retains source bytes, compiler/tool hashes, commands and exits,
+assembly, objects, executables, dSYMs, maps, DWARF verification/unwind dumps,
+UUIDs and LLDB transcripts. It checks mismatch refusal, comment-only identity
+changes, default/explicit none equivalence and stripped deployment without
+filenames or source breakpoint locations. Malformed identity controls run
+without a native debugger in `scripts/tests/test_macho_identity.py`.
+The committed Mac acceptance requires all profiles and verifies their artifact
+identities. Full shared hosted/derived-program parity remains R5.50.
+
 The complete `derived-parser` program runs in the same runner using none/off,
 size/auto and size/all. It receives the fixture's original input path and must
 produce its exact ordered diagnostics and status 42, including after stripping.

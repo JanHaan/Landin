@@ -203,6 +203,8 @@ def validate(capture):
         ("assembler", "as", ["--version"]),
         ("linker", "ld", ["-version_details"]),
         ("debugger", "lldb", ["--version"]),
+        ("dsymutil", "dsymutil", ["--version"]),
+        ("dwarfdump", "dwarfdump", ["--version"]),
     ):
         path = capture.text(f"{label}-path", ["xcrun", "--sdk", "macosx", "--find", tool])
         response = capture.text(f"{label}-version", [path, *args])

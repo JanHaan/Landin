@@ -17,11 +17,16 @@ from common import (archive_inventory, canonical, checkout_inventory, clean_chec
 MARKER = "environments/macos-arm64/acceptance.json"
 
 
-def required_policy():
-    return {"schema": 1, "scope": "R5.30 native lowering", "mode": "release", "commands": [
+def required_policy(debugging=True):
+    policy = {"schema": 1, "scope": "R5.30 native lowering", "mode": "release", "commands": [
         ["./scripts/build.sh", "-j8"], ["./scripts/test.sh", "--host"],
         ["python3", "compiler/tests/darwin/check.py", "--refine", "{refine}", "--output", "{executions}"],
         ["python3", "compiler/tests/darwin/bindings.py", "--refine", "{refine}", "--output", "{bindings}"]]}
+    if debugging:
+        policy.update(schema=2, scope="R5.40 native source debugging")
+        policy["commands"].append(["./scripts/debug.sh", "--target=darwin-arm64",
+                                   "--output", "{debugging}"])
+    return policy
 
 
 def required(source):
@@ -45,7 +50,7 @@ def files_under(root):
 def validate(bundle, source):
     bundle = Path(bundle)
     record = read_json(bundle / "record.json")
-    require(record["status"] == "passed" and record["scope"] == "R5.30 native lowering",
+    require(record["status"] == "passed" and record["scope"] == record["policy"]["scope"],
             "Darwin acceptance did not pass")
     require(record["source"] == source, "Darwin source differs from Linux acceptance")
     require(file_hash(bundle / "source.tar.gz") == source["archive_sha256"], "Darwin archive mismatch")
@@ -57,7 +62,7 @@ def validate(bundle, source):
     for path in record["files"]:
         require(not (bundle / safe_path(path, source=False)).is_symlink(), "symlink in Darwin evidence")
     policy = record["policy"]
-    require(policy == required_policy(), "invalid Darwin policy")
+    require(policy == required_policy(policy.get("schema") == 2), "invalid Darwin policy")
     from common import encoded_name
     marker = next(row for row in source["inventory"] if row["name"] == encoded_name(MARKER))
     require(file_hash(bundle / "policy.json") == marker["sha256"]
@@ -96,10 +101,67 @@ def validate(bundle, source):
     require(bindings["status"] == "passed" and bindings["archive_selection"] == "passed"
             and bindings["refine_sha256"] == file_hash(bundle / "refine"),
             "Darwin bindings incomplete")
+    if policy["schema"] == 2:
+        validate_debugging(bundle, record)
     return {"status": "passed", "run_id": record["run_id"],
             "commit": source["commit"], "tree": source["tree"],
             "archive_sha256": source["archive_sha256"], "source_sha256": source["source_sha256"],
             "policy_sha256": marker["sha256"], "record_sha256": file_hash(bundle / "record.json")}
+
+
+def validate_debugging(bundle, record):
+    debug = bundle / "debugging"
+    summary = read_json(debug / "summary.json")
+    require(summary["status"] == "passed" and summary["scope"] == "R5.40"
+            and summary["filtered"] is False, "incomplete native LLDB scope")
+    require(summary["refine_sha256"] == file_hash(bundle / "refine"), "LLDB compiler identity differs")
+    profiles = [("none", "off"), ("size", "auto"), ("size", "all")]
+    require([(r["optimize"], r["specialize"]) for r in summary["results"]] == profiles,
+            "incomplete native LLDB profiles")
+    from common import encoded_name
+    inventory = {r["name"]: r["sha256"] for r in record["source"]["inventory"]}
+    expected_sources = ["compiler/tests/debugging/main.ldn",
+                        'compiler/tests/debugging/caller"\\path.ldn',
+                        "compiler/tests/debugging/darwin-scalars.ldn"]
+    require(set(summary["sources"]) == set(expected_sources), "LLDB source set differs")
+    for name in expected_sources:
+        require(summary["sources"][name] == inventory[encoded_name(name)], "LLDB source identity differs")
+    tools = summary["tools"]
+    require(set(tools) == {"clang", "lldb", "dwarfdump", "dsymutil", "strip", "otool"},
+            "missing native debugger tool identities")
+    require(tools["lldb"] == record["environment"]["tools"]["debugger"]
+            and tools["clang"] == record["environment"]["tools"]["clang"]
+            and tools["dsymutil"] == record["environment"]["tools"]["dsymutil"]
+            and tools["dwarfdump"] == record["environment"]["tools"]["dwarfdump"],
+            "LLDB tools differ from native policy")
+    import macho_identity
+    for row in summary["results"]:
+        key = row["optimize"] + "-" + row["specialize"]
+        require(row["status"] == "passed", "native LLDB profile failed")
+        session = read_json(debug / (key + "-session.json"))
+        require(session["status"] == "passed" and len(session["checks"]) >= 168
+                and len(session["checks"]) == row["checks"], "incomplete native LLDB assertions")
+        require(read_json(debug / (key + "-scalars-session.json")) ==
+                {"status": "passed", "scalar_types": 13}, "native scalar debugger checks missing")
+        for suffix in ("", ".s", ".o", ".sources.json", ".lldb", "-lldb.stdout",
+                       "-verify.stdout", "-object-verify.stdout", "-unwind.stdout", "-uuid.stdout",
+                       "-debug-map.stdout", "-stripped", ".dSYM/Contents/Resources/DWARF/" + key):
+            require("debugging/" + key + suffix in record["files"], "missing native debug artifact: " + suffix)
+        table = read_json(debug / (key + ".sources.json"))
+        require(table["assembly_sha256"] == file_hash(debug / (key + ".s")),
+                "native debug assembly identity differs")
+        try:
+            linked = macho_identity.match(table, debug / key,
+                debug / (key + ".dSYM/Contents/Resources/DWARF/" + key))
+            stripped = macho_identity.match(table, debug / (key + "-stripped"))
+        except ValueError as error:
+            raise ValueError("native debug identity mismatch: " + str(error)) from error
+        require(linked == row["identity"] and stripped == linked, "native debug artifact identities differ")
+        require("LANDIN LLDB ACCEPTANCE PASSED" in (debug / (key + "-lldb.stdout")).read_text(),
+                "native LLDB session did not finish")
+    require(read_json(debug / "identity-checks.json") == {name: "passed" for name in (
+        "default_none", "caller_only", "optional_filenames", "comment_mismatch", "dsym_mismatch")},
+        "native debug identity checks incomplete")
 
 
 def validate_annotation(annotation, source):
@@ -146,7 +208,8 @@ def worker(bundle):
         env.pop("LANDIN_TEST_FILTER", None)
         refine = source_root / "compiler/ada/build/darwin-acceptance/release/bin/refine"
         mapping = {"{refine}": str(refine), "{executions}": str(bundle / "executions"),
-                   "{bindings}": str(bundle / "bindings"), "source": str(source_root)}
+                   "{bindings}": str(bundle / "bindings"),
+                   "{debugging}": str(bundle / "debugging"), "source": str(source_root)}
         record["paths"] = mapping
         for index, command in enumerate(policy["commands"]):
             capture.run(f"step-{index}", [mapping.get(arg, arg) for arg in command],

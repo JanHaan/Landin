@@ -1,7 +1,7 @@
 --  D192's optional, off-target file-name table. Numbers in a caller value
 --  are compilation source identities; this artifact resolves those names.
 --  The digest binds the table to the emitted assembly and is also supplied
---  as the ELF build ID when the driver links an executable.
+--  to the target toolchain for an ELF build ID or Mach-O identity section.
 
 with Ada.Strings.Unbounded;
 with Landin.Stages;
