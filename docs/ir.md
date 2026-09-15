@@ -350,10 +350,14 @@ correct this derived explanation, never to elevate it into a source of rules.
 
 ## Target capability checks
 
-The verifier's target-aware entry checks C signature, record and variadic-call
-capabilities through `Landin.Targets.Capabilities`. A second LP64 description
-therefore cannot inherit SysV support from its pointer width. The structural
-IR still carries logical conventions, source link names and neutral shapes;
+The verifier's target-aware entry checks C signature and variadic-call
+capabilities through `Landin.Targets.Capabilities`; the source checker also
+checks C record eligibility. A second LP64 description therefore cannot inherit
+SysV support from its pointer width. Nominal C-layout metadata describes
+structural compatibility and also occurs on distinct scalar storage, even
+without an implemented C ABI. Its structural verification remains independent
+of that capability. The IR carries logical conventions, source link names and
+neutral shapes;
 ABI carrier assignment, object symbol prefixes and debug format selection stay
 in target/backend packages. The Linux and Darwin description seam compares
 canonical IR for native generic, aggregate and control-flow source. R5.20 adds
