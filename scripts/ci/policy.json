@@ -24,8 +24,7 @@
           "-j8"
         ],
         [
-          "./scripts/test.sh",
-          "--host"
+          "./scripts/test.sh"
         ],
         [
           "python3",
@@ -67,6 +66,23 @@
       ]
     },
     {
+      "id": "quality-debug",
+      "mode": "debug",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh",
+          "-j8"
+        ],
+        [
+          "./scripts/quality.sh"
+        ]
+      ]
+    },
+    {
       "id": "quality-release",
       "mode": "release",
       "commands": [
@@ -80,6 +96,23 @@
         ],
         [
           "./scripts/quality.sh"
+        ]
+      ]
+    },
+    {
+      "id": "debugger-debug",
+      "mode": "debug",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh",
+          "-j8"
+        ],
+        [
+          "./scripts/debug.sh"
         ]
       ]
     },
@@ -156,6 +189,6 @@
       ]
     }
   ],
-  "scope": "routine",
+  "scope": "milestone",
   "debugger": true
 }
