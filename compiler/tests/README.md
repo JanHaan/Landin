@@ -866,3 +866,20 @@ compare every original synthetic-32 golden with GCC measurements and run
 C/assembly ABI controls in QEMU on the supported native Linux host. The native
 acceptance documents job retains their evidence. These are executable ABI
 contract controls; no Cortex-M Landin fixture is relabelled as executed.
+
+R6.30's `r630-memory-scalars` runs all supported widths, old-value and
+compare-exchange outcomes, wrapping addition, volatile access and barriers.
+`abi/r630-native-memory` runs Landin-generated operations under independent
+pthread scheduling and compares increments with a C atomic control; publication
+and mixed-width aliases have exact value assertions. Alignment fixtures require
+traps even inside unchecked regions. Negative fixtures pin ordered diagnostic
+codes for illegal types, permissions, orderings, arity and target operations.
+The `ir opt/memory events` case checks event preservation under every policy and
+malformed memory metadata refusals. Embedded controls and abstract cache models
+are separate evidence described in the Cortex-M guide.
+
+The R6.30 ABI counter passes through a concept provider and inferred generic
+call, so specialization profiles exercise real evidence dispatch. Its bounded
+SC-fence store-buffer litmus rejects 0/0, but the absence of that observation
+is not proof of a memory model. Every new negative pins exact diagnostic text;
+M0 RMW and eight-byte load requests retain their explicit target selection.

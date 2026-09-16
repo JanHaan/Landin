@@ -3743,6 +3743,41 @@ package body Landin.IR is
                          Element_Shape => Element,
                          others => <>)));
 
+   function Emit_Memory
+     (Into : in out Unit; Item : Item_Id; Op : Landin.Memory.Operation;
+      Scalar : Landin.Types.Scalar_Name;
+      Success, Failure : Landin.Memory.Ordering;
+      Arguments : Value_Id_Array;
+      Site : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        (Op => Memory_Access, Memory_Op => Op, Memory_Type => Scalar,
+         Success_Order => Success, Failure_Order => Failure, Site => Site,
+         Result => (if Landin.Memory.Returns_Value (Op) then Scalar
+                    else Landin.Types.Not_Typed), others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := Arguments'Length;
+      for Arg of Arguments loop
+         Into.Operands.Append (Arg);
+      end loop;
+      return Append (Into, Item, Made);
+   end Emit_Memory;
+
+   function Memory_Operation
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Memory.Operation
+     is (Held (Of_Unit, Item, Value).Memory_Op);
+   function Memory_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Scalar_Name
+     is (Held (Of_Unit, Item, Value).Memory_Type);
+   function Memory_Order
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id;
+      Failure : Boolean := False) return Landin.Memory.Ordering
+     is (if Failure then Held (Of_Unit, Item, Value).Failure_Order
+         else Held (Of_Unit, Item, Value).Success_Order);
+
    function Emit_Load_Indirect
      (Into    : in out Unit;
       Item    : Item_Id;

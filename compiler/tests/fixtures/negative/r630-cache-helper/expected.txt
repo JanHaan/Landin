@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.cache_clean
+  --> ../tests/fixtures/negative/r630-cache-helper/program.ldn:2:14
+  |
+2 |     compiler.cache_clean()
+  |              ^^^^^^^^^^^
+  = note: [1560]: unknown builtin member compiler.cache_clean

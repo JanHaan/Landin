@@ -1,0 +1,3 @@
+f: () -> none =
+    compiler.cache_clean()
+end f

@@ -319,6 +319,20 @@ package body Landin.IR.Testing_Support is
       Into.Code (Position).Atom_Set := Atoms;
    end Overwrite_Value_Atoms;
 
+   procedure Overwrite_Memory
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Op : Landin.Memory.Operation; Scalar : Landin.Types.Scalar_Name;
+      Success, Failure : Landin.Memory.Ordering)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+   begin
+      Into.Code (Position).Memory_Op := Op;
+      Into.Code (Position).Memory_Type := Scalar;
+      Into.Code (Position).Success_Order := Success;
+      Into.Code (Position).Failure_Order := Failure;
+   end Overwrite_Memory;
+
    procedure Overwrite_Value_Type
      (Into : in out Unit; Item : Item_Id; Value : Value_Id;
       Result : Landin.Types.Type_Kind)

@@ -1,0 +1,6 @@
+f: (order: u32) -> none =
+    mut a: u32 = 0
+    mut s: i32 = 0
+    immutable: u32 = 0
+    compiler.thread_fence(compiler.relaxed)
+end f

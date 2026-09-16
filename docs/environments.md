@@ -331,3 +331,10 @@ and C/assembly ABI witnesses, compared with the compiler's Cortex-M planner
 and original synthetic-32 goldens. The existing verified export retains all
 new artifacts beside R6.10's CPU and peripheral evidence. No embedded tools
 run on the Mac; both native hosted acceptance policies retain their own work.
+
+R6.30 adds M0 scalar atomic, barrier and nested interrupt controls and bounded
+memory/cache models to this same Linux path. Native hosted fixtures execute
+Landin atomics, generic evidence calls, SC fences and an escaping ordinary DMA
+slice on each real host. Cacheless emulator results never stand in for cached
+DMA maintenance. The containing dual-native archive binds all three evidence
+classes; the memory [probe guide](../environments/cortex-m/README.md) records limits.

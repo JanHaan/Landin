@@ -3834,6 +3834,8 @@ def check_coverage_registers(full_run):
             "conversion.bool-to-float",
             "conversion.integer-to-bool",
             "conversion.float-to-bool",
+            "memory.eligibility", "memory.alignment",
+            "memory.external-writers",
             "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",
@@ -3975,7 +3977,7 @@ def check_coverage_registers(full_run):
                 out.append((ROADMAP, line,
                             "prototype derivation names missing fixture %s"
                             % fixture))
-            elif fixture.split("/", 1)[0] not in ("runtime", "negative"):
+            elif fixture.split("/", 1)[0] not in ("runtime", "abi", "negative"):
                 out.append((ROADMAP, line,
                             "%s is not a complete or negative derivation"
                             % fixture))

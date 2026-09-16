@@ -1,0 +1,8 @@
+extern(c) arm: (escaping p: ptr mut u8) -> none
+open: (escaping buf: []mut u8) -> none =
+    arm(addr buf[0])
+end open
+f: () -> none =
+    mut local: [4]u8 = zeroed
+    open(local[0..<4])
+end f

@@ -1,0 +1,9 @@
+class: abi
+profiles: specialization
+summary: Native threads execute Landin atomics and release/acquire publication against independent C controls
+program: program.ldn
+c-sources: peer.c
+c-args: -O2 -pthread
+status: 42
+constructs: 0430, 0850, 1620, 1975
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,6 @@
+f: (order: u32) -> none =
+    mut a: u32 = 0
+    mut s: i32 = 0
+    immutable: u32 = 0
+    _ = compiler.atomic_compare_exchange(addr a, 0, 1, compiler.release, compiler.acquire)
+end f

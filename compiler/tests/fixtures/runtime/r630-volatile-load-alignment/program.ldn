@@ -1,0 +1,9 @@
+public main: () -> (code: i32) =
+    mut bytes: [16]u8 = zeroed
+    address := usize(addr bytes[0]) | 1
+    p: ptr u32 = ptr(address)
+    unchecked begin
+        _ = compiler.volatile_load(p)
+    end unchecked
+    code = 99
+end main

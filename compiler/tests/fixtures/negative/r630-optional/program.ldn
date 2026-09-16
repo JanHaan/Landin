@@ -1,0 +1,5 @@
+absent: atom
+maybe: type = absent | ptr u32
+f: (p: maybe) -> none =
+    _ = compiler.atomic_load(p, compiler.relaxed)
+end f

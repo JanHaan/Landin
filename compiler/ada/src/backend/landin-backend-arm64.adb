@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Hosted;
@@ -1784,6 +1785,83 @@ package body Landin.Backend.Arm64 is
                when Landin.IR.Store =>
                   Load_Value (Operand (1));
                   Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+               when Landin.IR.Memory_Access =>
+                  declare
+                     use all type Landin.Memory.Operation;
+                     M : constant Landin.Memory.Operation :=
+                       Landin.IR.Memory_Operation (Of_Unit, Item, Value);
+                     Size : constant Landin.Targets.Scalar_Size :=
+                       Landin.Types.Storage_Size
+                         (Landin.IR.Memory_Scalar (Of_Unit, Item, Value),
+                          Facts);
+                     Bytes : constant Positive := Landin.Targets.Bytes (Size);
+                     R9 : constant String :=
+                       (if Bytes = 8 then "x9" else "w9");
+                     R11 : constant String :=
+                       (if Bytes = 8 then "x11" else "w11");
+                     R12 : constant String :=
+                       (if Bytes = 8 then "x12" else "w12");
+                     Suffix : constant String :=
+                       (if Bytes = 1 then "b" elsif Bytes = 2 then "h"
+                        else "");
+                     Loop_Name : constant String := Fresh;
+                  begin
+                     if Landin.Memory.Operands (M) = 0 then
+                        case M is
+                           when Compiler_Barrier => null;
+                           when Completion_Barrier => Emit ("dsb sy");
+                           when Device_Barrier => Emit ("dmb sy");
+                           when others => Emit ("dmb ish");
+                        end case;
+                     else
+                        Load_Value (Operand (1), "x10");
+                        if Bytes > 1 then
+                           Emit ("tst x10, #"
+                             & Trimmed (Natural'Image (Bytes - 1)));
+                           Emit ("b.ne " & Trap);
+                        end if;
+                        if M not in Volatile_Load | Volatile_Store then
+                           Emit ("dmb ish");
+                        end if;
+                        if M in Atomic_Load | Volatile_Load then
+                           Memory (False, Size, "x9", "x10");
+                        elsif M in Atomic_Store | Volatile_Store then
+                           Load_Value (Operand (2));
+                           Memory (True, Size, "x9", "x10");
+                        else
+                           Load_Value (Operand (2), "x11");
+                           if M = Atomic_Compare_Exchange then
+                              Load_Value (Operand (3), "x12");
+                           end if;
+                           Put (Loop_Name & ":");
+                           Emit ("ldxr" & Suffix & " " & R9 & ", [x10]");
+                           if M = Atomic_Compare_Exchange then
+                              Emit ("cmp " & R9 & ", " & R11);
+                              Emit ("b.ne " & Loop_Name & "_mismatch");
+                           elsif M = Atomic_Add then
+                              Emit ("add " & R12 & ", " & R9 & ", " & R11);
+                           else
+                              Emit ("mov " & R12 & ", " & R11);
+                           end if;
+                           Emit ("stxr" & Suffix & " w13, " & R12
+                                 & ", [x10]");
+                           Emit ("cbnz w13, " & Loop_Name);
+                           if M = Atomic_Compare_Exchange then
+                              Emit ("b " & Loop_Name & "_done");
+                              Put (Loop_Name & "_mismatch:");
+                              Emit ("clrex");
+                              Put (Loop_Name & "_done:");
+                           end if;
+                        end if;
+                        if M not in Volatile_Load | Volatile_Store then
+                           Emit ("dmb ish");
+                        end if;
+                        if Landin.Memory.Returns_Value (M) then
+                           Store_Value (Value);
+                        end if;
+                     end if;
+                  end;
+
                when Landin.IR.Load_Indirect =>
                   Load_Value (Operand (1), "x10");
                   Memory (False, Size_Of_Value (Value), "x9", "x10");
@@ -3003,6 +3081,7 @@ package body Landin.Backend.Arm64 is
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call
+                        | Landin.IR.Memory_Access
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address

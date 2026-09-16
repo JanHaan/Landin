@@ -32,6 +32,8 @@ abi/r440-varargs-pointer-callback | linux-x86-64, macos-arm64
 abi/r450-review-backend-c-entry | linux-x86-64, macos-arm64
 abi/r450-x86-callee-probes | linux-x86-64, macos-arm64
 abi/r490-distinct-c-roundtrip | linux-x86-64, macos-arm64
+abi/r630-dma-slice | linux-x86-64, macos-arm64
+abi/r630-native-memory | linux-x86-64, macos-arm64
 end-to-end/r430-option-override-range | linux-x86-64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, macos-arm64
@@ -816,6 +818,21 @@ negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-symbolic-c-layout | linux-x86-64
 negative/r491-volatile-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-writable-return-hidden-storage | linux-x86-64, macos-arm64, synthetic-32
+negative/r630-cache-helper | linux-x86-64, macos-arm64
+negative/r630-cas-failure-release | linux-x86-64, macos-arm64
+negative/r630-cas-failure-stronger | linux-x86-64, macos-arm64
+negative/r630-fence-relaxed | linux-x86-64, macos-arm64
+negative/r630-frame-dma | linux-x86-64, macos-arm64
+negative/r630-immutable | linux-x86-64, macos-arm64
+negative/r630-load-release | linux-x86-64, macos-arm64
+negative/r630-m0-rmw | linux-x86-64, macos-arm64
+negative/r630-m0-wide | linux-x86-64, macos-arm64
+negative/r630-optional | linux-x86-64, macos-arm64
+negative/r630-runtime-order | linux-x86-64, macos-arm64
+negative/r630-signed | linux-x86-64, macos-arm64
+negative/r630-store-acquire | linux-x86-64, macos-arm64
+negative/r630-wrong-arity | linux-x86-64, macos-arm64
+negative/r630-wrong-value | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1221,6 +1238,7 @@ positive/r491-symbolic-c-layout | linux-x86-64
 positive/r491-tour-allocator-examples | linux-x86-64
 positive/r491-volatile-name | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-writable-return-explicit-sources | linux-x86-64, macos-arm64, synthetic-32
+positive/r630-memory-scalars | linux-x86-64, macos-arm64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -1646,6 +1664,9 @@ runtime/r491-static-entry-labels | linux-x86-64, macos-arm64
 runtime/r491-static-entry-labels-reversed | linux-x86-64, macos-arm64
 runtime/r491-static-receiver-label | linux-x86-64, macos-arm64
 runtime/r491-variant-array-construction | linux-x86-64, macos-arm64
+runtime/r630-atomic-load-alignment | linux-x86-64, macos-arm64
+runtime/r630-memory-scalars | linux-x86-64, macos-arm64
+runtime/r630-volatile-load-alignment | linux-x86-64, macos-arm64
 runtime/range-subtype-checks | linux-x86-64, macos-arm64
 runtime/range-subtype-conversion-traps | linux-x86-64, macos-arm64
 runtime/range-subtype-store-traps | linux-x86-64, macos-arm64

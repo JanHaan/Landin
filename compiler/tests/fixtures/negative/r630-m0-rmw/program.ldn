@@ -1,0 +1,3 @@
+f: (p: ptr mut u32) -> none =
+    _ = compiler.atomic_add(p, 1, compiler.relaxed)
+end f

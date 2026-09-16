@@ -392,3 +392,19 @@ address before the signature's existing evidence/parameter run. External C
 and internal Landin transport remain separate. Independent C/assembly probes
 execute the selected contract, but the compiler still refuses Cortex-M emission.
 See [the target contract](targets.md#cortex-m0-layout-and-abi-planning).
+
+R6.30 adds `Memory_Access`, retaining operation, scalar width identity and
+success/failure orderings. Its variable operand run carries only runtime
+values; compile-time ordering atoms do not become machine arguments. The
+verifier checks operation/order combinations, arity, operand/result types,
+and selected target eligibility. Alignment checks belong to native lowering
+and remain enabled inside unchecked regions.
+
+All memory primitives conservatively carry read/write/call/trap effects, so
+simplification retains discarded accesses and invalidates forwarded slot
+values. Address-taken storage remains pinned by the existing address paths;
+x86 allocation uses its existing saved-register/scratch discipline. Argument
+spills preserve left-to-right evaluation across later control-flow expressions.
+Specialization copies the complete instruction metadata; it neither erases
+boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
+with no atomicity promise. Target instructions are described in the target guide.

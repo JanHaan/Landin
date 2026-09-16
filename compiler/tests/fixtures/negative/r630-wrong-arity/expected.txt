@@ -1,0 +1,6 @@
+error[L0301]: wrong memory intrinsic arity
+  --> ../tests/fixtures/negative/r630-wrong-arity/program.ldn:5:9
+  |
+5 |     _ = compiler.atomic_load(addr a)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

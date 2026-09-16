@@ -1,3 +1,4 @@
+with Landin.Memory;
 --  D139/D202 configuration metadata. Syntax remains complete; this table
 --  retains request overrides and mode, and records option provenance,
 --  inactive declarations and ordered library requests for one compilation.
@@ -12,6 +13,13 @@ with Landin.Provenance;
 with Landin.Syntax;
 
 package Landin.Configuration is
+
+   function Compiler_Member
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return String;
+   function Memory_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Landin.Memory.Operation;
 
    type Table is private;
 

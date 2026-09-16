@@ -1,0 +1,6 @@
+error[L0301]: invalid constant memory ordering
+  --> ../tests/fixtures/negative/r630-load-release/program.ldn:5:9
+  |
+5 |     _ = compiler.atomic_load(addr a, compiler.release)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

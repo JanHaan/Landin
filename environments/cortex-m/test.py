@@ -65,6 +65,20 @@ class ProbeFailures(unittest.TestCase):
         with self.assertRaises(ValueError):
             synthetic_agreement(rows, GOLDEN.read_text())
 
+    def test_memory_model_independent_oracles(self):
+        from memory_model import run as model, store_buffer, sc_oracle, publication
+        from unittest.mock import patch
+        result = model()
+        self.assertEqual(result['status'], 'passed')
+        self.assertNotIn((0, 0), sc_oracle())
+        self.assertIn((0, 0), store_buffer(False)[0])
+        self.assertIn(0, publication(False))
+        # Removing the drain obligation must fail the independent oracle.
+        original = store_buffer
+        with patch('memory_model.store_buffer', side_effect=lambda fence: original(False)):
+            with self.assertRaises(AssertionError):
+                model()
+
     def test_unsupported_host(self):
         from unittest.mock import patch
         from setup import supported_host

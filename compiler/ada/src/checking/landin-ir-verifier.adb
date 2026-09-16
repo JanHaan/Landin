@@ -216,6 +216,7 @@ package body Landin.IR.Verifier is
             when Empty_Slice_Base => 0,
             when Conversion | Pointer_Address => 1,
             when Range_Check   => 1,
+            when Memory_Access => 0,
             when Load_Indirect => 1,
             when Store_Indirect => 2,
             when Load_Datum    => 0,
@@ -6027,6 +6028,8 @@ package body Landin.IR.Verifier is
                         declare
                            Expect : constant Natural :=
                              (case Op is
+                                 when Memory_Access => Landin.Memory.Operands
+                                   (Memory_Operation (Of_Unit, Id, V)),
                                  when Call =>
                                     Signature_Carrier_Count
                                       (Call_Signature (Of_Unit, Id, V)),
@@ -6492,6 +6495,44 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+
+                           when Memory_Access =>
+                              declare
+                                 M : constant Landin.Memory.Operation :=
+                                   Memory_Operation (Of_Unit, Id, V);
+                                 S : constant Landin.Types.Scalar_Name :=
+                                   Memory_Scalar (Of_Unit, Id, V);
+                              begin
+                                 if not Landin.Memory.Legal
+                                   (M, Memory_Order (Of_Unit, Id, V),
+                                    Memory_Order (Of_Unit, Id, V, True))
+                                   or else S not in Landin.Types.U8
+                                     | Landin.Types.U16 | Landin.Types.U32
+                                     | Landin.Types.U64
+                                   or else Is_Unchecked (Of_Unit, Id, V)
+                                   or else (Check_Image and then not
+                                     Landin.Targets.Capabilities.Memory_Access
+                                       (Facts, M, Landin.Types.Storage_Size
+                                         (S, Facts)))
+                                   or else Result_Of (Of_Unit, Id, V) /=
+                                     (if Landin.Memory.Returns_Value (M)
+                                      then S else Landin.Types.Not_Typed)
+                                 then
+                                    return (Result_Disagrees, Id, Block, V);
+                                 end if;
+                                 for I in 1 .. Operand_Count
+                                   (Of_Unit, Id, V)
+                                 loop
+                                    if Result_Of (Of_Unit, Id,
+                                      Nth_Operand (Of_Unit, Id, V, I)) /=
+                                        (if I = 1 then Landin.Types.Usize
+                                         else S)
+                                    then
+                                       return
+                                         (Result_Disagrees, Id, Block, V);
+                                    end if;
+                                 end loop;
+                              end;
 
                            when Load_Indirect | Store_Indirect =>
                               declare

@@ -2739,6 +2739,8 @@ finding labels, so moving prose cannot stale a hand-copied location.
 
 | Fixture | Prototype | Findings | Pressure |
 | --- | --- | --- | --- |
+| `negative/r630-frame-dma` | P1 | X6, X8 | tracked frame buffer cannot escape through a DMA descriptor |
+| `abi/r630-dma-slice` | P1 | X6, X8 | escaping ordinary slice, serialized external byte writes, completion boundary and ordinary reads/copy |
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
 | `runtime/derived-parser` | P2 | Y1, Y4, Y5, Y6, Y7 | a complete recursive parser builds an arena AST, logs and recovers from syntax faults, and propagates allocation or diagnostic-delivery failure through shared erased evidence |
 | `runtime/derived-containers` | P3 | Z1, Z2, Z3, Z4, Z5, Z6, Z7, Z8, Z9, Z10, Z11, Z12, Z13, Z14, Z15, Z16, Z17, Z18, Z19 | the complete client composes initialized containers, explicit and failing providers, sorting, tree and heterogeneous evidence; its derivation manifest distinguishes executable resolutions from preserved no-gap or superseded sketches |
@@ -2955,7 +2957,7 @@ that has no implementation owner.
 | `[1590]` | hosted-now | R4.30 | D202 and runtime/r430-static-library archive execution |
 | `[1600]` | hosted-now | R4.40 | C definitions are implemented and classified by `extern.c-boundary`; native gate 1884079 passed |
 | `[1610]` | hosted-now | R4.40 | independent native/C symbol overrides are implemented and classified by `functions.linkage`; native gate 1884079 passed |
-| `[1620]` | freestanding | R6.30 | scheduled atomics work |
+| `[1620]` | freestanding | R6.30 | D227 scalar atomics/barriers implemented on hosted targets; M0 load/store contract, emission R6.50 |
 | `[1630]` | freestanding | R6.60 | scheduled inline-assembly work |
 | `[1640]` | freestanding | R6.60 | scheduled keep and placement work |
 | `[1650]` | hosted-now | R1.80 | matrix evidence |
@@ -9969,7 +9971,7 @@ general SVD tooling disposition remain unchanged.
 
 ### R6.30 — Define and implement the concurrency memory model
 
-Status: planned
+Status: active
 Depends on: R2.90, R5.20, R6.10
 
 Specify data races, atomic orderings, happens-before, volatile ordering and
@@ -9980,6 +9982,32 @@ Sources: legacy B1; `R§5`.
 
 Exit evidence: normative text and executable/model cases cover atomics,
 volatile access, barriers, interrupts, DMA and cache behavior.
+
+Implementation intake and decisions (2026-09-16):
+
+- Clean `r620-layout-abi` at accepted base
+  `73f3d41b8bb9248a05497574039e0a5cdc0dcd0d`; canonical main and GitHub
+  main/annotated dual-native approval agree. Guarded Pages jobs 1889457/1889458
+  and mirror jobs 1889456/1889459 passed. Work uses `r630-memory-model`.
+- D227 defines races without importing race undefined behavior, atomic
+  modification order and happens-before, scalar access widths, alignment,
+  volatile events, compiler versus hardware barriers, interrupt exclusion,
+  and DMA/cache obligations through the original ordinary slice. CPU masking
+  does not synchronize DMA. R6.40/R6.50/R6.60/R6.70/R6.80 keep packed, backend,
+  startup, core and generated-register responsibilities respectively.
+- Implemented scalar compiler intrinsics carry explicit neutral memory effects
+  through verification, simplification and specialization. Hosted lowering
+  strengthens atomic ordering conservatively; M0 RMW refuses with no hidden
+  lock, masking, exclusive-instruction or runtime-helper substitution.
+- Native fixtures and independent C/assembly/model controls are in development.
+  Exact-revision dual-native acceptance, approval, promotion and publication
+  remain required before completion. No model or assembly inspection closes it.
+
+The concurrency execution model below is unchanged: one blocking Io, no
+scheduler, fibres, async functions or stackless coroutines. R551-31 is discharged
+only for this memory slice at acceptance; R551-06/07/08 resource limits,
+R551-13/14 scheduling/cache/resume, R551-15 deferred Nix, R551-17/20/21/23/24
+evidence/delivery limits and R551-33 general SVD tooling retain their dispositions.
 
 ### R6.40 — Define and implement packed invalid encodings
 

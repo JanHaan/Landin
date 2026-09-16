@@ -506,6 +506,17 @@ package body Landin.IR.Dump is
                           (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
 
+            when Memory_Access =>
+               return Lead & " " & Landin.Memory.Operation'Image
+                 (Memory_Operation (Of_Unit, Item, Value)) & " "
+                 & Landin.Types.Scalar_Name'Image
+                   (Memory_Scalar (Of_Unit, Item, Value)) & " "
+                 & Landin.Memory.Ordering'Image
+                   (Memory_Order (Of_Unit, Item, Value)) & " "
+                 & Landin.Memory.Ordering'Image
+                   (Memory_Order (Of_Unit, Item, Value, True))
+                 & Operands (Item, Value);
+
             when Load_Indirect | Store_Indirect =>
                declare
                   Address : constant Slot_Id :=

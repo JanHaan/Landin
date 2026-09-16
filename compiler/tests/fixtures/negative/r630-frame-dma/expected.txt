@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/r630-frame-dma/program.ldn:7:10
+  |
+7 |     open(local[0..<4])
+  |          ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r630-frame-dma/program.ldn:6:5
+  |
+6 |     mut local: [4]u8 = zeroed
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

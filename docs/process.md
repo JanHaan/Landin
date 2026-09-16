@@ -206,3 +206,10 @@ embedded path now also runs the layout/ABI controls; the original CPU,
 peripheral and Renode-lock regression obligations remain mandatory. This is
 not R6.100 milestone acceptance. Pure target/compiler checks use the Mac host
 selector; embedded execution uses only the supported Linux runner.
+
+R6.30 retains compatible routine debugger-risk policies: new instruction
+selection, scratch use, alignment traps and verifier coverage affect the native
+code/debug boundary. Full release GDB/LLDB accompanies complete release hosted
+coverage and both Mac compiler-host modes. This is not R6.100 milestone scope.
+The existing Linux embedded evidence export also includes the memory controls
+and models, from the identical candidate archive. Nix CI remains deferred.

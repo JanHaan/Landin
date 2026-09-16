@@ -1,0 +1,7 @@
+class: runtime
+summary: r630 atomic load alignment
+program: program.ldn
+constructs: 0430, 0850, 1620
+targets: linux-x86-64, macos-arm64
+traps: yes
+profiles: specialization

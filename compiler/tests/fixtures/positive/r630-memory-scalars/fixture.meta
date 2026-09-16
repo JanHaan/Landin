@@ -1,0 +1,5 @@
+class: positive
+summary: r630 memory scalars
+program: program.ldn
+constructs: 0430, 0850, 1620
+targets: linux-x86-64, macos-arm64

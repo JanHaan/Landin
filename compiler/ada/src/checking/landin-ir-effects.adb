@@ -30,7 +30,7 @@ package body Landin.IR.Effects is
          when Evidence_Self =>
             return (Reads => True, Traps => True, Adjacency => True,
                     others => False);
-         when Call | Indirect_Call =>
+         when Call | Indirect_Call | Memory_Access =>
             return (Reads => True, Writes => True, Calls => True,
                     Traps => True, others => False);
          when Jump | Branch | Leave | Fail =>

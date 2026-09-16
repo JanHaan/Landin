@@ -77,6 +77,7 @@ different responsibilities.
 | `Landin` | the namespace and the three exceptions | contain any logic |
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
 | `Landin.Hosted` | exact logical compiler-owned hosted helper identities shared by checking and emission | encode target prefixes, libc names or machine signatures |
+| `Landin.Memory` | D227 memory operation identities and ordering legality | select instructions, infer aliases or choose a target |
 | `Landin.Layouts` | source representation policy names | place fields or derive target widths |
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
@@ -1017,3 +1018,13 @@ capability, compiler linker path or debugger is enabled.
 `--target=cortex-m0` accepts checking requests and refuses output requests.
 R6.50 retains the Landin backend; see
 [target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
+
+R6.30's `Landin.Memory` owns the neutral operation/order vocabulary.
+`Configuration` recognizes the exact compiler member syntax; resolution visits
+runtime operands and checking validates fixed orders, pointer permission,
+unsigned scalar identity and target capability. `IR.Memory_Access` retains
+that contract through verification and optimization. Native backends implement
+scalar atomics/volatile access and barriers; Cortex-M still only describes its
+admitted memory operations. The [target guide](../../docs/targets.md#explicit-memory-operations)
+records actual instruction requirements. Packed/register/volatile-pointer type
+syntax and the ordinary CPU/cache modules retain their separate R6 owners.

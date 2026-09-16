@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Landin.Stages.Folding;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Vectors;
@@ -4178,6 +4179,65 @@ package body Landin.Stages.Lowering is
               "a lowered written argument has no source parameter";
          end Nth_Written_Parameter;
       begin
+         declare
+            use type Landin.Memory.Operation;
+            Op : constant Landin.Memory.Operation :=
+              Landin.Configuration.Memory_Call
+                (Spellings.all, Of_Tree, Node);
+            Count : constant Natural := Landin.Memory.Operands (Op);
+            Args : IR.Value_Id_Array (1 .. Count);
+            Slots : array (1 .. Count) of IR.Slot_Id;
+            Scalar : Ty.Scalar_Name := Ty.U8;
+            Success : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
+            Failure : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
+         begin
+            if Op /= Landin.Memory.No_Operation then
+               --  Spill each evaluated argument before evaluating the next:
+               --  a later expression may introduce control-flow blocks.
+               for I in 1 .. Count loop
+                  declare
+                     Arg : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, I);
+                     Value : constant IR.Value_Id :=
+                       Lower_Expression (Of_Tree, Arg, Scope);
+                  begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     Slots (I) := IR.Add_Slot
+                       (Unit.all, Filling, Scalar_At (Of_Tree, Arg),
+                        Res.No_Declaration, Site);
+                     IR.Emit_Store
+                       (Unit.all, Filling, Slots (I), Value, Site);
+                  end;
+               end loop;
+               for I in Args'Range loop
+                  Args (I) := IR.Emit_Load
+                    (Unit.all, Filling, Slots (I), Site);
+               end loop;
+               if Count > 0 then
+                  Scalar := Landin.Checking.Descriptor_Of
+                    (Types.all, Landin.Checking.Reference_Of
+                      (Types.all, Of_Tree,
+                       Syn.Nth_Argument (Of_Tree, Node, 1))).Referent;
+               end if;
+               if Landin.Memory.Orders (Op) > 0 then
+                  Success := Landin.Memory.Order_Named
+                    (Landin.Configuration.Compiler_Member
+                      (Spellings.all, Of_Tree,
+                       Syn.Nth_Argument (Of_Tree, Node, Count + 1)));
+               end if;
+               if Landin.Memory.Orders (Op) = 2 then
+                  Failure := Landin.Memory.Order_Named
+                    (Landin.Configuration.Compiler_Member
+                      (Spellings.all, Of_Tree,
+                       Syn.Nth_Argument (Of_Tree, Node, Count + 2)));
+               end if;
+               return IR.Emit_Memory
+                 (Unit.all, Filling, Op, Scalar, Success, Failure,
+                  Args, Site);
+            end if;
+         end;
          if Landin.Checking.Distinct_Conversion_Of
            (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
          then

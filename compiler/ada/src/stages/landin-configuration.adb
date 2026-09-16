@@ -5,6 +5,39 @@ package body Landin.Configuration is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Source.Names.Name_Id;
 
+   function Compiler_Member
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return String
+   is
+      package Syn renames Landin.Syntax;
+   begin
+      if Node /= Syn.No_Node
+        and then Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+        and then Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+          = Syn.Name_Reference
+        and then Landin.Source.Names.Spelling
+          (Names, Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Node)))
+            = "compiler"
+      then
+         return Landin.Source.Names.Spelling
+           (Names, Syn.Name (Of_Tree, Node));
+      end if;
+      return "";
+   end Compiler_Member;
+
+   function Memory_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Landin.Memory.Operation is
+   begin
+      if Node /= Landin.Syntax.No_Node
+        and then Landin.Syntax.Kind (Of_Tree, Node) = Landin.Syntax.Call
+      then
+         return Landin.Memory.Named (Compiler_Member
+           (Names, Of_Tree, Landin.Syntax.Callee_Of (Of_Tree, Node)));
+      end if;
+      return Landin.Memory.No_Operation;
+   end Memory_Call;
+
    function Is_Builtin_Import
      (Names : Landin.Source.Names.Table;
       Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
@@ -26,7 +59,8 @@ package body Landin.Configuration is
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "atomic_"
       then
-         return "[1620]: compiler." & Member & " is enabled by R6.30";
+         return "[1620]/D227: unsupported memory intrinsic compiler."
+           & Member & " (R6.30)";
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "vector_"
       then

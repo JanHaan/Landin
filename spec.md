@@ -2889,7 +2889,7 @@ A normally completed assignment marks a local destination assigned as a whole,
 so every compiler-known and computed element may then be read. There is no
 source-order prefix like D29's literal has: the source contains no elements and
 specifies no per-element evaluation. This does not promise an atomic machine
-operation; concurrency and interruption remain outside the current kernel.
+operation; D227 defines concurrency and interruption limits.
 
 This is one contextual array assignment. It does not infer a type for
 `name := zeroed` or assign a scalar; D39 separately admits a typed module scalar
@@ -9130,6 +9130,9 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
+| `memory.eligibility` | static | 0430, 0850, 1620 | D227: L0301 for invalid arity, type, permission, fixed ordering or target capability | `negative/r630-load-release`, `negative/r630-immutable`, `negative/r630-m0-rmw`, `runtime/r630-memory-scalars`, `abi/r630-native-memory` |
+| `memory.alignment` | trap | 0430, 0850, 1120, 1620 | D227: misalignment traps before access, even unchecked | `runtime/r630-atomic-load-alignment`, `runtime/r630-volatile-load-alignment` |
+| `memory.external-writers` | outside | 0430, 0470, 0770, 0850, 1620, 1720 | D227 non-guarantee: backing validity, races, device completion and cache obligations remain caller/platform responsibilities; no race-based optimizer assumptions | `abi/r630-native-memory` |
 | `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0230, 0250, 0260, 0270, 0280, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0323 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/malformed-float-exponent`, `negative/malformed-hex-float-exponent`, `negative/malformed-integer-digit`, `negative/raw-literal-inconsistent-indentation`, `negative/text-literal-unknown-escape`, `negative/unterminated-raw-literal`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
@@ -12589,7 +12592,7 @@ a same-named dynamic library is never a substitute. Apple's driver can return
 the bare filename, which must then exist in the invocation directory; a custom
 driver may provide a different archive search policy. Neither target changes
 the source order or repetition of archive operands.
-Inactive directives add no arguments. Atomic operations retain R6.30 and
+Inactive directives add no arguments. D227 enables scalar atomic operations;
 inline assembly, sections and machine entry retain R6.60 as named refusals.
 
 **The alternatives:** conditional switch declarations make switch discovery
@@ -13608,3 +13611,229 @@ platform program and the generated-binding/archive execution runner, together
 with the shared native aggregate and callback differential cases. ROADMAP.md
 R5.30 owns exact-revision native acceptance; R5.40 owns source debugging and
 Mach-O debug identity, and R5.50 owns full hosted parity.
+
+### D227 — Explicit memory events, synchronization and external writers
+
+**Chosen in R6.30:** [1620] supplies the scalar primitives below. Their names
+are compiler members, not ordinary callable values. Each call evaluates its
+runtime arguments once, from left to right. Ordering operands are the fixed
+compiler atoms `compiler.relaxed`, `compiler.acquire`, `compiler.release`,
+`compiler.acq_rel` and `compiler.seq_cst`, usable only in these positions.
+No runtime ordering, `consume`, optional pointer, signed/float/bool carrier,
+subtype, distinct wrapper, aggregate atomic or implicit library lock is enabled.
+The pointed-to scalar must be exactly `u8`, `u16`, `u32` or `u64`; writes require
+`ptr mut T`. Initialization may use ordinary storage before publication.
+All participants subsequently use the same width and address for an atomic
+object until synchronized retirement; an overlapping ordinary or differently
+sized access is not an atomic access to that object.
+
+| Call | Result | Permitted orderings |
+|---|---|---|
+| `compiler.atomic_load(p, order)` | loaded T | relaxed, acquire, seq_cst |
+| `compiler.atomic_store(p, value, order)` | none | relaxed, release, seq_cst |
+| `compiler.atomic_exchange(p, value, order)` | previous T | all five |
+| `compiler.atomic_add(p, value, order)` | previous T; stored sum wraps at T's width | all five |
+| `compiler.atomic_compare_exchange(p, expected, desired, success, failure)` | observed T; stores desired iff observed equals expected | success: all five; failure: relaxed, acquire or seq_cst, no stronger than success |
+| `compiler.volatile_load(p)` | one loaded T | no order argument |
+| `compiler.volatile_store(p, value)` | none; one written T | no order argument |
+| `compiler.compiler_barrier()` | none | compiler ordering only |
+| `compiler.thread_fence(order)` | none | acquire, release, acq_rel, seq_cst |
+| `compiler.device_barrier()` | none | target's full system data ordering barrier |
+| `compiler.completion_barrier()` | none | target's full data completion barrier |
+
+Compare-exchange is strong: no spurious failure; its returned old value tells
+the caller whether the comparison succeeded. Failure acquire is legal only
+with success acquire, acq_rel or seq_cst; failure seq_cst only with success
+seq_cst. Atomic addition has no overflow trap even outside `unchecked`.
+All memory accesses require natural alignment equal to the scalar width.
+Misalignment traps before the access, also in `unchecked`; pointer validity,
+live writable backing and memory attributes remain caller obligations [0430].
+Static type, permission, arity, ordering and target refusals use L0301.
+There is no declared error result, recovery arm or runtime library fallback.
+
+Linux x86-64 and Darwin arm64 implement all rows through eight bytes, for
+ordinary coherent RAM. The Cortex-M0 contract admits one-, two- and four-byte
+loads/stores and barriers, and refuses exchange, add and compare-exchange:
+ARMv6-M has no exclusive instruction pair. It does not silently substitute
+interrupt masking, an unavailable `libatomic` helper, or a stronger core.
+Cortex-M emission remains R6.50. Synthetic-32 admits no memory intrinsics.
+Device addresses must use volatile accesses, never CPU atomics. Even a CPU
+instruction that is atomic in RAM says nothing about peripheral bus semantics.
+
+#### Events and happens-before
+
+A CPU execution context is a thread or interrupt handler, not a new Landin
+function type. Within a context, evaluation order establishes sequenced-before.
+Two memory actions conflict when their byte extents overlap and at least one
+writes. A data race is a conflicting pair in different CPU contexts, not
+ordered by happens-before, unless both are accesses to the same atomic object.
+Naturally aligned ordinary and volatile instructions are not atomic-language
+operations. Volatile supplies no inter-thread synchronization.
+
+Every atomic object has one total modification order, consistent with
+happens-before. A read takes its value from an actual modification, including
+initialization; it cannot read a modification that happens after it. Atomic
+write/write, write/read, read/write and read/read coherence preserve the
+order of modifications across happens-before. A read-modify-write reads the
+immediately preceding modification and inserts its successful write indivisibly.
+A failed compare-exchange is a read and creates no modification.
+
+A release write synchronizes with an acquire read that reads that write or
+its release sequence: the contiguous following read-modify-write modifications
+of that object. An intervening plain atomic store ends that sequence. A
+release fence before a write synchronizes with an acquire read of that write
+or its release sequence; a release write similarly synchronizes with an
+acquire fence after such a read. Release-fence/write/read/acquire-fence is
+also a synchronization path. A fence alone, with no such observation, does
+not synchronize contexts. Acq_rel combines acquire and release; relaxed gives
+atomicity and coherence but no synchronization edge.
+
+Happens-before is the transitive closure of sequenced-before, these
+synchronizes-with edges, and explicitly specified platform synchronization
+(such as thread creation/join or the interrupt exclusion protocol below).
+It is acyclic. Sequentially consistent operations and fences additionally
+have one total order consistent with happens-before and each object's
+modification order. For precision, A is coherence-before B on one atomic object when A precedes B
+in modification order, A supplies B's read value, or A reads a modification
+that precedes B in modification order; take the transitive closure of these
+edges. Successful RMWs have both read and write roles, without a self edge.
+For every coherence-before pair A, B, the SC total order S must satisfy:
+
+- If both A and B are SC, A precedes B in S.
+- If A is SC and B happens-before an SC fence Y, A precedes Y in S.
+- If an SC fence X happens-before A and B is SC, X precedes B in S.
+- If an SC fence X happens-before A and B happens-before an SC fence Y,
+  X precedes Y in S.
+
+Together with coherence, these rules determine the eligible SC read sources,
+including intervening non-SC modifications; fences alone do not manufacture a
+synchronizes-with edge. No read can justify its own producing write through a
+cycle of value dependencies. The implementation may strengthen orderings;
+programs cannot require that a weak outcome actually occur.
+
+A race is **outside** the deterministic-value guarantee, not C/C++ undefined
+behavior and not permission to infer race freedom. Ordinary accesses may be
+coalesced or kept in registers between synchronization boundaries; a racing
+poll without a boundary has no eventual-visibility promise. Where a racy
+machine access occurs, its bytes come from actual writes or the prior storage
+contents; tearing can combine bytes. There is no invented value or write,
+retroactive removal of earlier observable behavior, or assumption that the
+racing path is unreachable. Subsequent use of a raced invalid address remains
+[0430]'s ordinary unsafe-pointer boundary. Races supply no additional optimizer
+license, and `unchecked` still removes only D187's named checks.
+
+#### Volatile, compiler knowledge and hardware ordering
+
+A scalar volatile primitive performs exactly one access of the written width:
+no removal of a discarded load, duplication, merging, widening or splitting.
+Two such accesses are sequenced in source evaluation order at the compiler
+boundary. In the selected ordinary RAM, each admitted naturally aligned scalar load or
+store is a single-copy, nontearing CPU access at that width. This does not
+make a sequence atomic or establish happens-before. MMIO bus atomicity and
+peripheral tearing are separate device premises; no RAM instruction guarantee
+is transferred to an arbitrary bus bridge. Unsupported wider accesses refuse.
+A register image read-modify-write remains two separate events and
+can lose an intervening hardware or interrupt update. Packed field legality,
+register access modes and the `volatile ptr` surface retain R6.40/R6.80; these
+scalar primitives do not enable those deferred types.
+
+All explicit memory primitives above are full compiler memory boundaries.
+Ordinary stores before one must be materialized, and ordinary loads after
+one must use memory anew wherever external writes can reach the storage.
+This includes module data, address-taken locals, ordinary slices, escaped
+buffers, byte/integer-created aliases and aliases through calls or evidence.
+An immutable view controls writes through that view; it never proves that
+DMA, another alias or another context cannot change its backing. The compiler
+must not infer disjointness from different pointer element types. A retained
+scalar value loaded earlier remains that value, rather than changing in place.
+
+Opaque foreign/assembly calls have the same memory effect; known calls and
+specialized/evidence-dispatched bodies must preserve every such effect.
+Aggregate copies are ordinary byte transfers, not atomic snapshots. They may
+tear, but must not cross a boundary or overwrite bytes outside their destination.
+No optimizer may move, remove or merge the observable accesses or boundaries
+because a result is unused, a function was specialized, or a source region is
+unchecked. Proven private computations can still be optimized.
+
+A compiler barrier emits no required CPU instruction and orders no bus traffic.
+A thread fence orders coherent CPU memory, with the observation rules above.
+A device barrier also orders explicit accesses in the target's full system
+scope; a completion barrier waits for the target-defined completion of prior
+explicit accesses. Neither establishes that a device has finished a command,
+flushes a cache, or substitutes for a documented status/acknowledgment protocol.
+The target guide specifies the selected instructions and memory attributes.
+
+#### Interrupts and DMA through an ordinary slice
+
+On the selected single-core M0, a critical section saves PRIMASK, disables
+maskable interrupts, and restores exactly the prior PRIMASK on every exit.
+Its entry and exit are opaque compiler memory boundaries. Ordinary accesses
+shared only with those excluded handlers are serialized: a completed handler
+precedes subsequent protected CPU accesses; protected writes precede a handler
+admitted after restoration. Nested sections preserve the prior mask. This
+contract excludes NMI, HardFault, unmasked priorities, other cores and DMA.
+A handler must not spin waiting for interrupted code to release a lock. R6.60
+owns interrupt entry, and R6.70 owns the ordinary target CPU module; this item
+introduces neither a scheduler nor a second Io implementation.
+
+Prototype 1 deliberately keeps `escaping buf: []mut u8`, retained as ordinary
+`[]u8`. The origin check prevents a tracked frame buffer from escaping;
+it proves neither the physical lifetime after origin erasure nor DMA coherence.
+The driver must keep the allocation alive, the descriptor valid, and all
+conflicting CPU writes stopped while DMA owns each byte. Before enabling DMA,
+materialize initialization and descriptors, perform required cache maintenance,
+then a device barrier. A documented completion/count observation must certify
+that the corresponding device writes precede that observation; then perform a
+device barrier and any required cache maintenance before ordinary CPU reads.
+The barrier invalidates compiler knowledge of the buffer, even through the
+retained immutable slice and even when no Landin call wrote it.
+
+An interrupt notification alone is not DMA completion. Masking interrupts can
+delay the notification while DMA continues writing. The selected synthetic
+Renode model copies a byte before count/status, and is cacheless; its ordered
+count observation supplies the device premise only for that model. A circular
+counter is not a stable snapshot: the caller must ensure the consumed interval
+cannot be overwritten during the copy, and must prevent/latch overrun rather
+than confusing a full wrap with empty. A concurrently overwritten byte has the
+external-write/race limit above. R6.90 must make this protocol and its failure
+controls concrete in the complete driver. Ordinary slices are retained.
+
+For noncoherent cached RAM, receive handoff must remove dirty CPU copies
+(clean as needed to preserve unrelated data, then invalidate), complete that
+maintenance before enable, and invalidate stale or speculatively fetched
+copies after completion before reading. Transmission cleans CPU data to the
+point observed by DMA before enable. Cache-line rounding requires exclusive
+control of every affected line: invalidating unrelated dirty bytes loses CPU
+writes, while cleaning a stale line after receive can overwrite device data.
+Maintenance must cover all relevant cache levels and aliases and complete at
+the platform's DMA visibility point. CPU coherence between threads alone does
+not establish device coherence. Cacheless M0 needs no cache operations; this
+is not evidence for cached platforms. Privileged cache operations and hosted
+DMA mapping are not portable user-mode intrinsics; no cache helper is enabled
+on these targets. Platform providers must establish those obligations before
+claiming a cached device profile.
+
+**Alternatives and rationale:** importing C/C++ race undefined behavior would
+add optimization assumptions unsupported by this unsafe language. Treating
+volatile as acquire/release would confuse CPU accesses with device protocols.
+Automatically masking interrupts for atomics cannot synchronize other cores
+or DMA and would hide privilege and latency. Replacing the buffer with an
+ownership or volatile-buffer type would evade prototype 1's alias pressure.
+These alternatives are rejected. Full compiler boundaries and initially
+stronger native ordering are conservative implementation choices, not promises
+of competitive code generation or wait-free progress.
+
+**Guarantee classes:** arity/types/orders/target eligibility are `static`;
+misalignment is `trap`; integer-created pointer origin remains
+`beyond-lifetime`; races, backing lifetime, device premises, overrun and cache
+provider correctness are `outside`. Accepted calls retain their specified
+observable event semantics. Models check bounded consequences under stated
+assumptions; native executions check emitted instructions. Neither emulator
+success nor failure to observe a weak outcome proves this entire model.
+
+**Pinned by** `runtime/r630-memory-scalars`, `abi/r630-native-memory`,
+`abi/r630-dma-slice`, `negative/r630-load-release`,
+`negative/r630-cas-failure-stronger`, `negative/r630-m0-rmw`,
+`runtime/r630-atomic-load-alignment`, `runtime/r630-volatile-load-alignment`
+and `ir opt/memory events`. The mandatory Cortex-M probe path retains
+independent CPU/interrupt/DMA controls and the bounded cache/store-buffer models.
