@@ -176,3 +176,12 @@ upgrade.
 R5.40 additionally pins dsymutil and dwarfdump to `Apple LLVM version 21.0.0`
 in the native Mac policy. Their actual paths and binary hashes are retained
 with LLDB sessions and Mach-O debug artifacts.
+
+## External embedded environment tools
+
+R6.10 separately pins Arm EABI GCC, binutils, GDB, QEMU and Renode in
+`environments/cortex-m/tools.lock.json`. The
+[profile guide](../../environments/cortex-m/README.md) gives exact versions,
+options and native Debian reproduction. They compile only small environment
+controls, are not Ada bootstrap dependencies and do not enable a Landin
+Cortex-M backend.

@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.10 — Select the Cortex-M execution profile (planned).**
+**Next roadmap item: R6.20 — Instantiate the 32-bit layout and ABI (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -301,6 +301,10 @@ R5.51 repairs loop-transfer ownership and compatible dual-native routine
 acceptance, reconciles current guidance and evidence, and records every retained
 disposition with its owner and trigger before R6.10. Its completion is bound to the
 exact-revision dual-native acceptance and delivery record in ROADMAP.md.
+R6.10 establishes the pinned QEMU Cortex-M0 CPU/startup and synthetic Renode
+peripheral lanes, with live probe evidence bound into native acceptance.
+No Landin Cortex-M backend or concurrency semantics are enabled by that
+[environment selection](environments/cortex-m/README.md).
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and

@@ -536,3 +536,9 @@ convention is what the program means and keep is an instruction
 to the toolchain — two things [0760] separated on purpose.
 
 ---
+
+R6.10's [execution profile](environments/cortex-m/README.md) retains the
+M0 CPU pressure in QEMU and supplies a separately named synthetic Renode
+peripheral lane for this sketch's register/DMA behavior. It does not identify
+this combined map as a real vendor part or turn these sketches into an
+implemented Landin program. ROADMAP.md R6.20-R6.100 retain their owners.
