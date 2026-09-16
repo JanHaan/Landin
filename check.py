@@ -5292,7 +5292,7 @@ def check_optimization_contract(full_run):
                    "scripts/tests/test_build_lock.py"):
         out += absent([runner])
     out += check_native_ci(full_run)
-    out += check_retained_debt(full_run)
+    out += check_phase_handoff(full_run)
     tour = io.open(TOUR_NAME, encoding="utf-8").read()
     array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
     if "Arithmetic and comparison" in array_section or "reduce_add(" in array_section:
@@ -5381,8 +5381,8 @@ def check_hosted_derivation(full_run):
     return out
 
 
-def check_retained_debt(full_run):
-    """ROADMAP owns retained work; keep its transfer records complete."""
+def check_phase_handoff(full_run):
+    """Check roadmap-owned transfers and native policy refusal controls."""
     if not full_run:
         return []
     from scripts.roadmap_debt import validate
@@ -5390,11 +5390,13 @@ def check_retained_debt(full_run):
     try:
         with io.open(os.path.join(ROOT, "ROADMAP.md"), encoding="utf-8") as source:
             validate(source.read())
-        result = subprocess.run(
-            [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
-            capture_output=True, text=True, timeout=20)
-        if result.returncode:
-            return [("ROADMAP.md", 1, result.stdout + result.stderr)]
+        for command in (
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+                [sys.executable, "-m", "unittest", "discover", "-s",
+                 os.path.join(ROOT, "scripts/tests"), "-p", "test_darwin*.py"]):
+            result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+            if result.returncode:
+                return [("ROADMAP.md", 1, result.stdout + result.stderr)]
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         return [("ROADMAP.md", 1, str(error))]
     return []

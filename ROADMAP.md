@@ -9661,6 +9661,19 @@ weakening historical milestone evidence. No successor implementation, new
 language feature, release designation or Cortex-M backend is implied by this
 organizational closure. R6.10 becomes the next item only after this gate.
 
+The first candidate `e94ac7d1b8e260b0f9782b20994fc6112ec11eb7` failed
+Linux run `20260916T074308Z-b2dd0e7a3402` in the document job: the
+publication-wiring control's disposable repository omitted the Darwin policy
+newly required by the paired-policy check. The production check correctly
+refused that incomplete test input. The control now includes both policy inputs
+and additionally proves missing-marker and incompatible-scope refusal. Full
+`check.py` also runs the 22 Darwin policy/parity refusal controls against the
+archived source. Peer
+Linux jobs were cancelled; Darwin run `20260916T074308Z-16009c7770f8`
+was stopped during its debug host step after its clean build. Both attempts
+remain unapproved with retained records. No compiler or workload oracle was
+relaxed. The corrected containing revision requires fresh native acceptance.
+
 #### Exact-revision closure and delivery binding
 
 All five do-now repairs are implemented. The completion status and R6.10
