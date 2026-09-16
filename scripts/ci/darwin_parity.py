@@ -235,19 +235,7 @@ def validate_session(session, stops, stderr):
 
 def validate_workloads(directory, source, source_path, record, mode):
     import macho_identity
-    # Use trusted verifier code while deriving marker lines from the accepted
-    # archive, including when verifying an older schema-3 source revision.
-    shared = load_module('parity_shared_debug', ROOT / 'compiler/tests/debugging/check.py')
-    shared.ROOT = source
-    for kind, library, fixture in (
-            ('PARSER', 'examples/config_parser/parser/parser.ldn', 'derived-parser'),
-            ('CONTAINER', 'examples/derived_containers/workload/workload.ldn', 'derived-containers'),
-            ('HOSTED', 'examples/derived_hosted/app/app.ldn', 'derived-hosted-memory')):
-        setattr(shared, kind + '_SOURCE', source / library)
-        setattr(shared, kind + '_FIXTURE', source / 'compiler/tests/fixtures/runtime' / fixture)
-    sys.path.insert(0, str(ROOT / 'compiler/tests/debugging'))
-    workload_code = load_module('parity_workloads', ROOT / 'compiler/tests/debugging/darwin_workloads.py')
-    workload_code.shared = shared
+    from darwin_oracles_v3 import stops_for
     commands = {c['name']: c for c in read_json(directory / 'commands.json')}
     original = Path(record['paths']['{debugging-' + mode + '}'])
     compiler = record['paths']['{refine-' + mode + '}']
@@ -258,7 +246,7 @@ def validate_workloads(directory, source, source_path, record, mode):
     for row in rows:
         key = row['workload'] + '-' + row['optimize'] + '-' + row['specialize']
         config = read_json(directory / (key + '-config.json'))
-        expected_stops = workload_code.stops_for(row['workload'])
+        expected_stops = stops_for(row['workload'], source)
         for stop in expected_stops:
             stop['source'] = str(source_path / Path(stop['source']).relative_to(source))
         require(config['stops'] == expected_stops, 'substituted derivative debugger oracle')

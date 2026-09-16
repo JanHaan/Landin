@@ -22,7 +22,7 @@ spec.loader.exec_module(cases)
 
 class DarwinEvidenceTests(unittest.TestCase):
     def test_committed_policy_contains_the_required_commands(self):
-        self.assertEqual(json.loads((ROOT / darwin.MARKER).read_text()), darwin.required_policy(parity=True))
+        darwin.validate_policy(json.loads((ROOT / darwin.MARKER).read_text()))
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
