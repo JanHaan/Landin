@@ -13686,7 +13686,10 @@ or its release sequence; a release write similarly synchronizes with an
 acquire fence after such a read. Release-fence/write/read/acquire-fence is
 also a synchronization path. A fence alone, with no such observation, does
 not synchronize contexts. Acq_rel combines acquire and release; relaxed gives
-atomicity and coherence but no synchronization edge.
+atomicity and coherence but no synchronization edge. Seq_cst loads acquire,
+stores release, and successful read-modify-writes do both; a failed comparison
+uses only its failure read ordering. A seq_cst fence has acquire and release
+semantics in addition to the SC constraints below.
 
 Happens-before is the transitive closure of sequenced-before, these
 synchronizes-with edges, and explicitly specified platform synchronization
