@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R6.40 — Define and implement packed invalid encodings.**
+**Next roadmap item: R6.50 — Implement the Cortex-M backend (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -279,6 +279,14 @@ volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
 DMA visibility, interrupt exclusion and cache obligations have independent
 executable/model controls, bound by the same exact-revision dual-native gate.
 Cortex-M memory capabilities remain described until R6.50 supplies emission.
+
+R6.40 implements D228's packed raw images, checked encoded-field extraction,
+indexed fields and explicit register-image access policies on both hosted
+backends. Raw copies preserve unnamed patterns; extraction traps even under
+`unchecked`. Independent C controls and compiler-generated Renode execution
+retain exact access traces and reserved-bit checks. The containing revision's
+dual-native approval and guarded delivery bind closure; R6.50 now owns the
+Cortex-M instruction-selection path, while R6.80 retains generated-device fixtures.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

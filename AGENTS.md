@@ -233,10 +233,12 @@ AAPCS/internal Landin ABI planner with independent executable C/assembly
 controls. Its exact-revision dual-native binding owns closure. R6.30 defines
 D227's concurrency memory model and implements hosted scalar atomics, volatile
 accesses and barriers, with independent interrupt/DMA/cache controls. Its
-exact-revision dual-native binding owns closure. R6.40 is active: packed source,
-validated extraction, native lowering and independent peripheral controls are
-implemented, while final audits and acceptance remain open. No Cortex-M emitter, linker
-or debugger backend is implemented yet.
+exact-revision dual-native binding owns closure. R6.40 implements D228's packed
+images, validated extraction and explicit register-image policies on both native
+backends, with compiler-generated and independent peripheral controls. Its
+exact-revision dual-native binding owns closure. R6.50 is the next
+dependency-ready item; no Cortex-M emitter, linker or debugger backend is
+implemented yet.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

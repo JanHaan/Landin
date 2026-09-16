@@ -10094,7 +10094,7 @@ wait-free bounds are not claimed. All other retained debt keeps its owner.
 
 ### R6.40 — Define and implement packed invalid encodings
 
-Status: active
+Status: complete
 Depends on: R2.20, R6.20
 
 Decide the behavior of unnamed hardware bit patterns, raw register images,
@@ -10106,7 +10106,7 @@ Sources: legacy A4; `R§6`.
 Exit evidence: positive and negative encoded-value cases and reserved-bit
 read/modify/write behavior pass through the peripheral harness.
 
-Intake and implementation in progress (2026-09-16):
+Intake and implementation evidence (2026-09-16):
 
 The initial checkout was clean on `r630-memory-model` at
 `65e069affe22019be174b51a4230d0056fd4d16c`. Canonical main and GitHub main
@@ -10274,14 +10274,30 @@ Additional development evidence (not exact-revision approval):
   older unsupported constructs; it is not compiler or acceptance evidence.
   The source grammar and compiler corpus remain authoritative.
 
-The representation/generic audit now has source, native and malformed-IR pins.
-Full document checking and verified rendering pass on the implementation tree;
-matrices and the compiler-recorded IR are updated. Remaining closure work is to
-commit the compatible native policies before the closure candidate, then run
-identical-revision acceptance and verify exports, dual approval, atomic promotion,
-mirror and guarded publication. Native policies select routine debugger risk:
-new extraction/selection/verifier paths and raw-carrier DWARF justify full
-release GDB/LLDB. This is not the R6.100 milestone. No R6.40 approval exists yet.
+Acceptance scope and completion binding:
+
+Implementation commit `4f7b683d` retains compatible `policy.py routine --debugger`
+policies selected before this closure candidate. New extraction, selection,
+verification and raw-carrier DWARF justify full release GDB/LLDB; this is not
+R6.100 milestone scope. Debug compiler-host checks and complete release hosted
+coverage remain mandatory. The source corpus adds 24 runtime, three independent
+ABI, 36 negative and one positive fixture; the earlier Ada algebra and malformed
+IR controls remain separate. Generated coverage/diagnostic matrices and the
+compiler-recorded IR are updated. Full `python3 check.py` and verified
+`scripts/site.sh` rendering pass on the implementation tree and are required
+again on this containing closure tree and by its native policy.
+
+Completion becomes authoritative only after identical Linux/Darwin archive
+acceptance, verified exports, annotated dual-native `ci/accepted/FULL_COMMIT`,
+atomic canonical promotion, matching remote approval and GitHub mirror, and
+successful guarded publication. The annotation and durable bundles bind actual
+results, source, policies, tool identities and every required job to that exact
+revision; no later bookkeeping revision substitutes for it. The mandatory
+Linux documents job builds that archived compiler and retains all original
+R6.10/R6.20/R6.30 probes, the independent packed M0 C control and the six-profile
+positive/negative compiler-generated Renode executions in `artifacts/cortex-m`.
+Assertions, literal images/traces, timeouts, source and artifact hashes and
+empty-lock cleanup are part of that evidence, not an assembly-only claim.
 
 Resource and evidence limits: an image has at most 64 bits/elements. Local
 array transfers snapshot at most 64 scalar values; encoding lists remain in
@@ -10300,7 +10316,8 @@ derived driver and stable circular-buffer protocol. D227's ordinary slice,
 cache and device premises are unchanged. R551-06/07/08 resource limits,
 R551-13/14 scheduling/cache/resume, R551-15 deferred Nix and
 R551-17/20/21/23/24 evidence/delivery limits keep their existing dispositions.
-R6.40 remains active and no successor is made dependency-ready by this work.
+R6.50 is the next dependency-ready item after this exact-revision binding.
+R6.80 is also dependency-ready and retains its separate generated-device gate.
 
 ### R6.50 — Implement the Cortex-M backend
 
