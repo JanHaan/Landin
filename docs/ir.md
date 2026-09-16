@@ -382,3 +382,13 @@ on Darwin carries wide IR element positions through target-byte placement,
 rather than narrowing them through the Ada host index type. Complete derived
 programs share the same source/provenance and location facts across GDB and
 LLDB acceptance; physical encodings and packaging remain backend-owned.
+
+R6.20 adds a real Cortex-M0 description and `Backend.Arm32_ABI` planning while
+leaving this neutral representation unchanged. Eight existing source controls
+compare detailed IR, including pointer metadata, against synthetic-32 and plan
+their entry/direct/indirect signatures. The planner consumes lowered pointer,
+atom, slice/any, distinct and evidence carriers; it adds the physical result
+address before the signature's existing evidence/parameter run. External C
+and internal Landin transport remain separate. Independent C/assembly probes
+execute the selected contract, but the compiler still refuses Cortex-M emission.
+See [the target contract](targets.md#cortex-m0-layout-and-abi-planning).

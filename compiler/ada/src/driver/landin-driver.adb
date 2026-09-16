@@ -102,7 +102,8 @@ package body Landin.Driver is
       & "backends: linux-x86-64 and darwin-arm64 assembly" & LF
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF
-      & "targets described: linux-x86-64, darwin-arm64, synthetic-32" & LF);
+      & "targets described: linux-x86-64, darwin-arm64, cortex-m0, "
+      & "synthetic-32" & LF);
 
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
@@ -347,6 +348,8 @@ package body Landin.Driver is
             Facts := Landin.Targets.Linux_X86_64;
          elsif Name = "darwin-arm64" then
             Facts := Landin.Targets.Darwin_Arm64;
+         elsif Name = "cortex-m0" then
+            Facts := Landin.Targets.Cortex_M;
          elsif Name = "synthetic-32" then
             Facts := Landin.Targets.Synthetic_32;
          else

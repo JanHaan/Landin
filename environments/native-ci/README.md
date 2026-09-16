@@ -308,3 +308,9 @@ documents job. Install its pinned private tools with
 export. Missing tools fail; these are mandatory environment probes on the
 Linux host, separate from the hosted Landin workloads. The unchanged
 dual-native approval binds this job together with Darwin's native evidence.
+
+R6.20 keeps that mandatory path and adds the QEMU layout/ABI controls to
+`run.py`. The same exported `cortex-m` directory retains their contract inputs,
+measurements, assembly witnesses, ELF/maps/disassembly and GDB assertions.
+The annotated approval binds their actual execution to the accepted revision;
+a planner golden alone cannot satisfy this obligation.

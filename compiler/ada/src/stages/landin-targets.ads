@@ -49,6 +49,10 @@ package Landin.Targets is
    --  Description only; R5.30 supplies native emission and C support.
    function Darwin_Arm64 return Target_Facts;
 
+   --  ARMv6-M Thumb, base AAPCS soft-float. Layout/ABI planning only;
+   --  capability queries deliberately refuse code generation and C use.
+   function Cortex_M return Target_Facts;
+
    --  A synthetic 32-bit little-endian description, used to keep layout and
    --  ABI code target-parametric long before a real 32-bit backend exists.
    function Synthetic_32 return Target_Facts;
@@ -58,7 +62,7 @@ package Landin.Targets is
    function Architecture_Of (Facts : Target_Facts) return Architecture;
 
    type C_ABI_Kind is
-     (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64);
+     (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, Arm_AAPCS32_Soft);
 
    function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
 

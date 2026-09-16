@@ -325,3 +325,9 @@ from its exact archive. The Mac continues native compiler-host and Darwin
 workload/LLDB validation; it does not run Linux containers for embedded tests.
 QEMU owns CPU/startup evidence and Renode owns the explicit synthetic
 peripheral lane. Neither is physical hardware fidelity or Landin backend proof.
+
+R6.20 extends the mandatory QEMU lane with independently compiled C layouts
+and C/assembly ABI witnesses, compared with the compiler's Cortex-M planner
+and original synthetic-32 goldens. The existing verified export retains all
+new artifacts beside R6.10's CPU and peripheral evidence. No embedded tools
+run on the Mac; both native hosted acceptance policies retain their own work.

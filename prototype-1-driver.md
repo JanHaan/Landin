@@ -14,8 +14,9 @@ R4.40's [1975] selects Linux SysV AMD64 LP64, not this hardware ABI. Its
 `layout(c)` subset does not enable the register, packed-field or vector-table
 forms below; SVD generation remains distinct from C header adapters. Interrupt,
 naked, ordinary Landin and C function conventions are not interchangeable merely
-because a vector entry or field holds a code address. The future target must
-settle its own entry and layout rules without inferring them from host widths.
+because a vector entry or field holds a code address. R6.20 instantiates the ordinary 32-bit layout and ABI with independent
+C/assembly controls. Language interrupt/startup entry rules remain with R6.60;
+no vector table is enabled by the ordinary function-address representation.
 
 D210's explicit optimal layout likewise never reorders a register image or a
 vector table. Natural/C layouts keep their existing rules, and packed storage

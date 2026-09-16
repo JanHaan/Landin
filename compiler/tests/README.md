@@ -750,8 +750,8 @@ you either is stale.** `./scripts/test.sh` will, and so will the gate.
 
 `layout.targets` exists for an ordering reason R2.10 states: a description is
 the only thing a compiler with no such machine can be held to, and the
-synthetic 32-bit target has no backend and will not have one until a Cortex-M
-slice arrives. Recording both targets rather than that one is deliberate —
+synthetic 32-bit target has no backend. R6.20 separately instantiates its
+layout for Cortex-M0 and preserves these original goldens. Recording both targets rather than that one is deliberate —
 what a reader needs is not "the 32-bit model says four" but the two columns
 beside each other, because the defect being guarded against is a description
 quietly inheriting the development host's answers. A `usize` that read eight
@@ -856,3 +856,13 @@ now also uses all six runtime profiles. The [parity guide](darwin/README.md)
 describes full coverage, debugger oracles and retained platform limitations. Native acceptance
 and matching-revision approval are documented in
 [the Mac guide](../../environments/macos-arm64/README.md).
+
+
+R6.20's `cortex ABI` compiler-host suite compares scalar, nested/variant,
+evidence/any and call-plan results with `cortex-m.contract`; it also checks
+real lowered source and target/budget/refusal boundaries. The independent
+[Cortex-M probes](../../environments/cortex-m/README.md#r620-layout-and-abi-evidence)
+compare every original synthetic-32 golden with GCC measurements and run
+C/assembly ABI controls in QEMU on the supported native Linux host. The native
+acceptance documents job retains their evidence. These are executable ABI
+contract controls; no Cortex-M Landin fixture is relabelled as executed.

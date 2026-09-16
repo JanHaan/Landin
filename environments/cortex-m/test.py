@@ -52,6 +52,19 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 remove_renode_lock(root)
 
+    def test_abi_contract_and_synthetic_goldens(self):
+        from abi import contract, synthetic_agreement, CONTRACT, GOLDEN
+        text = CONTRACT.read_text()
+        rows = contract(text)
+        synthetic_agreement(rows, GOLDEN.read_text())
+        for bad in (text + 'u8 1 1\n', text.replace('u8 1 1\n', ''),
+                    text.replace('gap.arg1 0 1 0 0 0', 'gap.arg1 3 2 0 0 0')):
+            with self.assertRaises(ValueError):
+                contract(bad)
+        rows['usize'] = [8, 8]
+        with self.assertRaises(ValueError):
+            synthetic_agreement(rows, GOLDEN.read_text())
+
     def test_unsupported_host(self):
         from unittest.mock import patch
         from setup import supported_host

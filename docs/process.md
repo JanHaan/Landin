@@ -199,3 +199,10 @@ the accepted archive. Missing tools or failed probes refuse acceptance.
 This addition selects routine debugger-risk coverage for R6.10's debugger
 controls and acceptance command/retention changes; it does not select the
 R6.100 full milestone matrix. Darwin keeps native hosted/LLDB validation.
+
+R6.20 retains compatible routine policies with release native GDB/LLDB because
+it adds ABI/frame obligations and executable debugger assertions. The Linux
+embedded path now also runs the layout/ABI controls; the original CPU,
+peripheral and Renode-lock regression obligations remain mandatory. This is
+not R6.100 milestone acceptance. Pure target/compiler checks use the Mac host
+selector; embedded execution uses only the supported Linux runner.
