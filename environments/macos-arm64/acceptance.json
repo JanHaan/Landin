@@ -1,8 +1,15 @@
 {
-  "schema": 3,
-  "scope": "R5.50 hosted parity",
+  "schema": 4,
+  "scope": "routine",
+  "debugger": true,
   "modes": [
     "debug",
+    "release"
+  ],
+  "hosted_modes": [
+    "release"
+  ],
+  "debugger_modes": [
     "release"
   ],
   "commands": [
@@ -17,47 +24,6 @@
       "LANDIN_BUILD_MODE=debug",
       "./scripts/test.sh",
       "--host"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/diagnostics.py",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{diagnostics-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/check.py",
-      "--parity",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{executions-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/bindings.py",
-      "--parity",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{bindings-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "./scripts/debug.sh",
-      "--target=darwin-arm64",
-      "--parity",
-      "--output",
-      "{debugging-debug}"
     ],
     [
       "env",

@@ -45,6 +45,36 @@ def required_policy(debugging=True, parity=False):
     return policy
 
 
+def scoped_policy(scope, debugger=False):
+    """Schema 4: full hosted coverage with explicit compiler/debugger modes."""
+    require(scope in ("routine", "milestone"), "unknown Darwin scope")
+    require(type(debugger) is bool, "invalid Darwin debugger choice")
+    hosted = ["debug", "release"] if scope == "milestone" else ["release"]
+    debugging = hosted if debugger or scope == "milestone" else []
+    commands = []
+    historical = required_policy(parity=True)["commands"]
+    for index, mode in enumerate(("debug", "release")):
+        commands.extend(historical[index * 6:index * 6 + 2])
+        if mode in hosted:
+            commands.extend(historical[index * 6 + 2:index * 6 + 5])
+        if mode in debugging:
+            commands.append(historical[index * 6 + 5])
+    return dict(schema=4, scope=scope, debugger=bool(debugging),
+                modes=["debug", "release"], hosted_modes=hosted,
+                debugger_modes=debugging, commands=commands)
+
+
+def validate_policy(policy):
+    require(isinstance(policy, dict) and type(policy.get("schema")) is int
+            and policy["schema"] in (1, 2, 3, 4), "unsupported Darwin policy schema")
+    if policy["schema"] == 4:
+        expected = scoped_policy(policy.get("scope"), policy.get("debugger"))
+    else:
+        expected = required_policy(policy["schema"] != 1, policy["schema"] == 3)
+    require(policy == expected, "invalid Darwin policy")
+    return policy
+
+
 def required(source):
     from common import encoded_name
     return any(row["name"] == encoded_name(MARKER) for row in source["inventory"])
@@ -78,7 +108,7 @@ def validate(bundle, source):
     for path in record["files"]:
         require(not (bundle / safe_path(path, source=False)).is_symlink(), "symlink in Darwin evidence")
     policy = record["policy"]
-    require(policy == required_policy(policy.get("schema") != 1, policy.get("schema") == 3), "invalid Darwin policy")
+    validate_policy(policy)
     from common import encoded_name
     marker = next(row for row in source["inventory"] if row["name"] == encoded_name(MARKER))
     require(file_hash(bundle / "policy.json") == marker["sha256"]
@@ -89,7 +119,7 @@ def validate(bundle, source):
         require(file_hash(bundle / retained) == row["sha256"], "uncommitted Darwin input: " + original)
     require(record["environment"]["policy"] == read_json(bundle / "environment-policy.json"),
             "Darwin environment policy differs")
-    if policy["schema"] != 3:
+    if policy["schema"] < 3:
         require(all(path in record["files"] for path in
                     ("refine", "source-manifest.txt", "configuration.cgpr")), "missing Darwin build identity")
     commands = read_json(bundle / "evidence/commands.json")
@@ -103,8 +133,11 @@ def validate(bundle, source):
                 and actual["returncode"] == 0 and not actual["timeout"], "failed/substituted Darwin command")
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from macos_environment import harness_result
-    if policy["schema"] == 3:
-        from darwin_parity import validate as validate_parity
+    if policy["schema"] >= 3:
+        if policy["schema"] == 3:
+            from darwin_parity import validate as validate_parity
+        else:
+            from darwin_scoped import validate as validate_parity
         validate_parity(bundle, record)
         return {"status": "passed", "run_id": record["run_id"],
                 "commit": source["commit"], "tree": source["tree"],
@@ -217,7 +250,7 @@ def worker(bundle):
     evidence.mkdir()
     capture = mac.Capture(evidence)
     policy = read_json(source_root / MARKER)
-    require(policy == required_policy(parity=policy.get("schema") == 3), "invalid Darwin policy")
+    validate_policy(policy)
     shutil.copyfile(source_root / MARKER, bundle / "policy.json")
     shutil.copyfile(source_root / "compiler/tests/darwin/cases.json", bundle / "cases.json")
     shutil.copyfile(mac.POLICY, bundle / "environment-policy.json")
@@ -235,7 +268,7 @@ def worker(bundle):
                    "{bindings}": str(bundle / "bindings"),
                    "{debugging}": str(bundle / "debugging"), "source": str(source_root)}
         record["paths"] = mapping
-        if policy["schema"] == 3:
+        if policy["schema"] >= 3:
             for mode in policy["modes"]:
                 (bundle / mode).mkdir()
                 mapping["{refine-" + mode + "}"] = str(source_root /
@@ -254,7 +287,7 @@ def worker(bundle):
             require(file_hash(Path(tool["path"])) == tool["sha256"], "Darwin tool changed during acceptance")
         for mode in policy.get("modes", ["release"]):
             compiler = source_root / ("compiler/ada/build/darwin-acceptance/" + mode + "/bin/refine")
-            retained = bundle / mode if policy["schema"] == 3 else bundle
+            retained = bundle / mode if policy["schema"] >= 3 else bundle
             require(capture.text("refine-architecture-" + mode, ["lipo", "-archs", compiler]) == "arm64",
                     "Darwin compiler is not native arm64")
             shutil.copy2(compiler, retained / "refine")
