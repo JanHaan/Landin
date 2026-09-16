@@ -200,8 +200,9 @@ D203's C convention and variadic flags follow the complete recursive signature,
 not the bodyless import flag or a concrete callee item. Checking admits only
 [1975]'s selected C subset and lowering promotes unnamed outgoing C arguments;
 verification checks the same signature facts for direct and indirect calls.
-`compiler.c_sysv_lp64` is an early fixed configuration bool, with no runtime
-storage. Ordinary `core/c` asserts it before exporting LP64 aliases. Header
+`compiler.c_sysv_lp64` and `compiler.c_darwin_lp64` are early fixed
+configuration bools, with no runtime storage. Ordinary `core/c` accepts either
+supported LP64 contract; generated bindings assert their selected contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
 the scanner, parser, type checker or native backend. The authoritative closures
 of R4.40 and R4.50 are recorded in ROADMAP.md.
@@ -209,11 +210,11 @@ of R4.40 and R4.50 are recorded in ROADMAP.md.
 D209--D211 add independent `--optimize=none|size|speed` (default size) and
 `--specialize=off|auto|all` (default auto) controls. The driver runs verified
 specialization, then verified simplification, then option-aware frame preflight
-and x86 emission. Legacy backend `Text` callers explicitly retain none/off;
+and selected-target emission. Legacy backend `Text` callers explicitly retain none/off;
 the command-line default never inherits that reference convenience.
 `Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
 incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
-conservative neutral rewrites, and x86 allocation/selection owns registers.
+conservative neutral rewrites, and each native backend owns allocation and selection.
 Call verification checks the addressed storage shape of every aggregate or
 array argument and hidden result, for direct calls, ordinary function values
 and erased dispatch. A usize carrier alone does not establish an extent,
@@ -326,13 +327,15 @@ DWARF is an output encoding. Source identity, represented types and allocation
 facts remain usable by other emitters, including a possible future PDB path;
 neither DWARF record numbers nor ELF packaging belong in the neutral IR.
 
-For a source session, compile with `refine --debug=full --emit=exe
+For a Linux source session, compile with `refine --debug=full --emit=exe
 program.ldn -o program`, then open `gdb ./program`. Ordinary commands such as
 `break main`, `break program.ldn:12`, `run`, `next`, `step`, `bt`, `info args`
 and `info locals` use the emitted metadata. `--optimize=none --specialize=off`
 gives the reference code path; full debug also supports the default baseline
 optimization. The compilation directory is recorded so relative source paths
-can be found when GDB starts elsewhere.
+can be found when GDB starts elsewhere. On Darwin select `--target=darwin-arm64`
+and use native LLDB; [target contracts](../../docs/targets.md#native-source-debugging)
+give its commands and artifact identity checks.
 
 GDB uses its C-compatible expression and display rules for these values;
 it does not parse Landin expressions. For example, inspect a pointer with
@@ -353,7 +356,7 @@ filename enters the emitted runtime data.
 
 A caller-using `--emit=exe -o app` also writes `app.sources.json`. Keep that
 file with the build artifacts; it need not ship on the target. Read the
-executable's build ID with `readelf -n app`, then resolve recorded coordinates:
+Linux executable's build ID with `readelf -n app`, then resolve recorded coordinates:
 
 ```sh
 python3 scripts/source-location.py app.sources.json 1 42 9 --build-id HEX_ID
@@ -534,7 +537,7 @@ representation child. `Landin.Checking` retains the exact base descriptor and
 per-node conversion fact, including routine-instance overlays; the checker
 alone authorizes construction or extraction. Lowering preserves the base
 image and origins while native calls use aggregate storage. Admitted C bases
-retain their SysV classification. A scalar atom image keeps its declaration
+retain their selected-target C classification. A scalar atom image keeps its declaration
 identity, checked against the field's atom set before the backend assigns a
 runtime code.
 
@@ -649,6 +652,12 @@ a marked bare block and the required flag on every text boundary slice
 address, and refusing to run on a refused program.
 
 ## What is deliberately absent
+
+The detailed transport account below records the Linux implementation and
+its R2–R4 decisions. Darwin now covers the same enabled hosted language;
+its register, stack, C ABI and object contracts are described in
+[target contracts](../../docs/targets.md). Neither native implementation
+enables the deferred language or freestanding work owned by ROADMAP.md.
 
 `Landin.Backend` lays out a routine's frame and
 `Landin.Backend.X86_64` emits assembly for every operation in the enabled
@@ -802,9 +811,9 @@ lexical deferred and failure-only undo cleanup, declared atom errors and source
 order, register/stack and recursive calls, folded module values, fixed arrays,
 ordinary structs and their target-derived module and frame layouts on the
 hardware the backend emits for. A host without the target toolchain fails
-rather than silently skipping that evidence. The later R2 items own extensions
-to the semantic and representation core; later target
-and ABI work remains with the roadmap items that name it.
+rather than silently skipping that evidence. The completed R2 items extended
+the semantic and representation core; R5.50 establishes complete shared hosted
+coverage on both native targets, within its recorded physical-image limits.
 
 The native path sits behind the whole frontend: `refine` scans and parses every
 `.ldn` file it is given, resolves every name in them as one module, collects
@@ -980,6 +989,9 @@ See `TOOLCHAIN.md`. From the repository root:
 ./scripts/build.sh
 ./scripts/test.sh
 ```
+
+On the Mac use `./scripts/test.sh --host`; the unqualified suite includes
+Linux workload cases and is not the Mac compiler-host command.
 
 `scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
 and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
