@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R6.30 — Define and implement the concurrency memory model.**
+**Next roadmap item: R6.40 — Define and implement packed invalid encodings (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -306,8 +306,14 @@ peripheral lanes, with live probe evidence bound into native acceptance.
 R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
 ABI planning, with independent C/assembly execution evidence agreeing with
 synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
-No Landin Cortex-M emitter, linker, debugger backend or concurrency semantics
-are enabled by this [contract](environments/cortex-m/README.md).
+No Landin Cortex-M emitter, linker or debugger backend is enabled by this
+[contract](environments/cortex-m/README.md).
+
+R6.30 defines D227's concurrency memory model and implements scalar atomics,
+volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
+DMA visibility, interrupt exclusion and cache obligations have independent
+executable/model controls, bound by the same exact-revision dual-native gate.
+Cortex-M memory capabilities remain described until R6.50 supplies emission.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and

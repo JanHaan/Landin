@@ -9971,7 +9971,7 @@ general SVD tooling disposition remain unchanged.
 
 ### R6.30 — Define and implement the concurrency memory model
 
-Status: active
+Status: complete
 Depends on: R2.90, R5.20, R6.10
 
 Specify data races, atomic orderings, happens-before, volatile ordering and
@@ -9983,7 +9983,7 @@ Sources: legacy B1; `R§5`.
 Exit evidence: normative text and executable/model cases cover atomics,
 volatile access, barriers, interrupts, DMA and cache behavior.
 
-Implementation intake and decisions (2026-09-16):
+Implementation decisions and verified development evidence (2026-09-16):
 
 - Clean `r620-layout-abi` at accepted base
   `73f3d41b8bb9248a05497574039e0a5cdc0dcd0d`; canonical main and GitHub
@@ -9999,15 +9999,98 @@ Implementation intake and decisions (2026-09-16):
   through verification, simplification and specialization. Hosted lowering
   strengthens atomic ordering conservatively; M0 RMW refuses with no hidden
   lock, masking, exclusive-instruction or runtime-helper substitution.
-- Native fixtures and independent C/assembly/model controls are in development.
-  Exact-revision dual-native acceptance, approval, promotion and publication
-  remain required before completion. No model or assembly inspection closes it.
 
 The concurrency execution model below is unchanged: one blocking Io, no
 scheduler, fibres, async functions or stackless coroutines. R551-31 is discharged
 only for this memory slice at acceptance; R551-06/07/08 resource limits,
 R551-13/14 scheduling/cache/resume, R551-15 deferred Nix, R551-17/20/21/23/24
 evidence/delivery limits and R551-33 general SVD tooling retain their dispositions.
+
+Compiler and semantic evidence:
+
+D227 specifies five ordering atoms, per-object modification/coherence order,
+release sequences, fence observation paths, happens-before and the SC total
+order constraints. A race loses deterministic-value guarantees without
+importing C/C++ undefined behavior or race-free optimizer assumptions. Scalar
+volatile access is one width-matched event, not synchronization. Every explicit
+memory primitive is a compiler memory boundary, including inside unchecked.
+The [target guide](docs/targets.md#explicit-memory-operations) records actual
+instructions, alignment traps, coherent-RAM premises and device limitations.
+
+The new `Landin.Memory` contract is consumed through configuration recognition,
+resolution, checking, target capability selection and verified neutral IR.
+L0301 pins type/permission/order/arity/width refusals; L0203 pins unavailable
+cache helpers; L0314 retains tracked-frame escape refusal. Native x86 and Arm64
+lowering implements unsigned 8/16/32/64-bit loads/stores, exchange, wrapping
+fetch-add and strong compare-exchange. M0 describes 8/16/32-bit loads/stores and
+barriers; RMW and eight-byte access refuse. No Cortex instruction selector,
+libatomic dependency or implicit interrupt masking is introduced.
+
+The transformation audit follows each event through effect classification,
+slot forwarding invalidation, address pinning, scalar allocation, aggregate
+copies, direct/opaque calls, evidence dispatch and specialization's complete
+instruction copy. Discarded events survive all policies. Native byte-alias and
+ordinary-slice tests require reloaded backing after externally visible writes;
+source types and immutable views supply no disjointness or external immutability
+assumption. The DMA derivation retains the original escaping mutable input and
+ordinary read-only slice, with completion observation, compiler/hardware
+barriers and subsequent ordinary reads and aggregate copy. It makes the
+no-overwrite interval, physical lifetime and cache-provider obligations explicit.
+
+Development results (filtered feedback, not exact-revision approval):
+
+- Mac compiler-host checking: 111 cases/3238 checks; resolution: 10/87;
+  lowering: 134/2991; IR optimization: 17/254, including 29 new memory-event,
+  corruption and target-boundary checks; fixture metadata: 7/176. All pass.
+- Native Linux's pthread and ordinary-slice fixtures each pass all six
+  optimization/specialization profiles. Darwin verifies the same twelve ABI
+  outcomes, plus eighteen scalar and unchecked alignment-trap outcomes.
+  The counter uses actual generic evidence dispatch, four concurrent workers
+  and an independent C atomic counter (8000 each). Thirty-two publication and
+  thirty-two SC-fence trials per profile pass; bounded observation is not proof
+  that weak outcomes are impossible.
+- Native Linux embedded run `/home/landin/work/r630-probe/evidence-2` passes
+  all original CPU, Renode and independent layout/ABI controls, plus M0 atomic
+  widths, barriers, nested PRIMASK restoration and ordinary interrupt visibility.
+  Pinned GCC's unsupported RMW control requires `__atomic_fetch_add_4`.
+  The 536-byte text/28-byte BSS memory image is an independent C control,
+  not a Landin firmware-size claim. `memory-validation.json` indexes the retained
+  development input/tool/result hashes; the exact archive reruns every lane.
+- Bounded models explore 34 unfenced and 20 fenced FIFO store-buffer states;
+  SC permutations and independent SC-fence constraints agree, excluding 0/0
+  only in the fenced case. Twelve release-sequence cases, payload/notification
+  ordering, torn byte combinations, DMA progress under interrupt masking and
+  stale/destructive cache-maintenance cases pass. Nine supervisor/model controls
+  pass, preserving the Renode lock cleanup regression and rejecting removal
+  of the model's fence obligation. All assumptions and limits live with inputs.
+
+Acceptance scope and completion binding:
+
+Implementation commit `5c489eef` retains deliberately reselected compatible
+`policy.py routine --debugger` policies. New instruction selection, effects and
+verification justify release native GDB/LLDB scope. This is routine risk scope,
+not R6.100 milestone scope. Both compiler modes and full release hosted coverage
+remain mandatory. The Linux documents job's unchanged mandatory embedded path
+exports all original and new controls, commands, assertions, deadlines, tool
+identities and results under `cortex-m`. Nix CI remains deferred.
+
+Full `python3 check.py` and verified `scripts/site.sh` rendering are required on
+the containing closure tree and again by its native policy. Completion becomes
+authoritative only after identical Linux/Darwin archive acceptance, verified
+exports, annotated dual-native `ci/accepted/FULL_COMMIT`, atomic canonical
+promotion, matching remote approval and GitHub mirror, and successful guarded
+publication. The tag and bundles bind the actual results to that exact revision;
+no later bookkeeping revision substitutes for it.
+
+R6.40 is the next dependency-ready item: packed invalid encodings and reserved
+bits. R6.50 must lower the described M0 memory operations and barriers; R6.60
+owns interrupt/startup entry and placement; R6.70 owns CPU/cache providers for
+admitted freestanding profiles; R6.80 owns generated register surfaces; R6.90
+must establish the complete driver's stable DMA consumption/overrun protocol.
+The cache model is no physical cache-maintenance evidence, and a cached device
+profile must establish maintenance/alias/visibility-point premises. Physical
+hardware, a complete formal model proof, competitive atomic lowering and
+wait-free bounds are not claimed. All other retained debt keeps its owner.
 
 ### R6.40 — Define and implement packed invalid encodings
 
