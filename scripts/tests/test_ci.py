@@ -324,6 +324,19 @@ class GitTests(GitFixture):
         with self.assertRaises(common.Invalid):
             common.validate_policy(risk)
 
+    def test_cortex_profile_cannot_be_omitted_and_history_is_preserved(self):
+        legacy = common.required_policy("routine", True, cortex_m=False)
+        common.validate_policy(legacy)
+        common.validate_cortex_policy(legacy, self.source["inventory"])
+        entry = common.source_entry("environments/cortex-m/tools.lock.json", "100644", b"[]")
+        with self.assertRaisesRegex(common.Invalid, "omits its probes"):
+            common.validate_cortex_policy(legacy, self.source["inventory"] + [entry])
+        current = common.required_policy("routine", True)
+        common.validate_cortex_policy(current, [entry])
+        current["jobs"][-1]["commands"] = legacy["jobs"][-1]["commands"]
+        with self.assertRaises(common.Invalid):
+            common.validate_policy(current)
+
     def test_legacy_full_approval_still_validates(self):
         (self.root / "scripts/ci/policy.json").write_text(
             json.dumps(common.required_policy(), indent=2) + "\n")

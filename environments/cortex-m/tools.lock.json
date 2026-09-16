@@ -1,0 +1,170 @@
+[
+  {
+    "url": "https://deb.debian.org/debian/pool/main/b/binutils-arm-none-eabi/binutils-arm-none-eabi_2.44-3%2b23%2bb1_amd64.deb",
+    "file": "binutils-arm-none-eabi_2.44-3+23+b1_amd64.deb",
+    "sha256": "c9c4944e54de852536b4f6a238a682c38a6243cdc2843dd1c4f587e046c0615b",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/c/capstone/libcapstone5_5.0.7-1%7edeb13u1_amd64.deb",
+    "file": "libcapstone5_5.0.7-1~deb13u1_amd64.deb",
+    "sha256": "775187a7be26bb0b076d1979a02163b943dbc13eb4adb0efc503223a03c75422",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/d/device-tree-compiler/libfdt1_1.7.2-2%2bb1_amd64.deb",
+    "file": "libfdt1_1.7.2-2+b1_amd64.deb",
+    "sha256": "8e37034d7864807ae2063efcc82fc79aad59069546212e6e0908ed67f9f7e107",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/f/fuse3/libfuse3-4_3.17.2-3_amd64.deb",
+    "file": "libfuse3-4_3.17.2-3_amd64.deb",
+    "sha256": "92e2d521ff872755a13aa69dba7b24025a7dc0f0f5aa708c9a86cd3565f570da",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/g/gcc-arm-none-eabi/gcc-arm-none-eabi_14.2.rel1-1_amd64.deb",
+    "file": "gcc-arm-none-eabi_15%3a14.2.rel1-1_amd64.deb",
+    "sha256": "99252fdda02ad134e8c3c344d3c843f7aa5c0d006e92a5b3d53daf4bd935b5d3",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/g/gdb/gdb_16.3-1_amd64.deb",
+    "file": "gdb_16.3-1_amd64.deb",
+    "sha256": "f0cd9b3e7b47685cbc43ebfe3207760830cb7b570e615daee6dc91e50040c127",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/g/gdb/gdb-multiarch_16.3-1_amd64.deb",
+    "file": "gdb-multiarch_16.3-1_amd64.deb",
+    "sha256": "36f4251601833ce2f9dd3d289f4201372bc517699273ba35db87772bbe2d5463",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/i/isl/libisl23_0.27-1_amd64.deb",
+    "file": "libisl23_0.27-1_amd64.deb",
+    "sha256": "ac8518042e81c00de1effb72bba7e88ac4ecd488f7ea8b9e3ebc63159cb53b35",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/k/kmod/libkmod2_34.2-2_amd64.deb",
+    "file": "libkmod2_34.2-2_amd64.deb",
+    "sha256": "ee6c50ebac79aa9795e8bf9aa01d94c99984d09d22598c66be0f8ba917b62179",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/liba/libaio/libaio1t64_0.3.113-8%2bb1_amd64.deb",
+    "file": "libaio1t64_0.3.113-8+b1_amd64.deb",
+    "sha256": "490c8a2d116001a5f3b0a6d7a7aabf6a7b629366590dc5c3f75b078e931dd129",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libb/libbpf/libbpf1_1.5.0-3_amd64.deb",
+    "file": "libbpf1_1%3a1.5.0-3_amd64.deb",
+    "sha256": "04c96ead3024888d80d08c8d08cc8cf4589f4614627acc69519f87ffb5adc1c2",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libj/libjpeg-turbo/libjpeg62-turbo_2.1.5-4_amd64.deb",
+    "file": "libjpeg62-turbo_1%3a2.1.5-4_amd64.deb",
+    "sha256": "5504299ad0e3c0a9ca9f962a68a650a040db52f9f416a109e74df48d55601d3f",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libn/libnl3/libnl-3-200_3.7.0-2_amd64.deb",
+    "file": "libnl-3-200_3.7.0-2_amd64.deb",
+    "sha256": "ce5c153953016be42def7b105f37d55eae07a9608d1dfe6bcb03cc017fc384cb",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libn/libnl3/libnl-route-3-200_3.7.0-2_amd64.deb",
+    "file": "libnl-route-3-200_3.7.0-2_amd64.deb",
+    "sha256": "1c8c95542688996cff8e954583642b10a3bd78b69954f565fda62144c2bc3897",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libp/libpng1.6/libpng16-16t64_1.6.48-1%2bdeb13u5_amd64.deb",
+    "file": "libpng16-16t64_1.6.48-1+deb13u5_amd64.deb",
+    "sha256": "2465b4e9fa85cff54dc10a6da3e64074d8d9292c86e4a8f989b809d6b158e97e",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libs/libslirp/libslirp0_4.8.0-1%2bdeb13u1_amd64.deb",
+    "file": "libslirp0_4.8.0-1+deb13u1_amd64.deb",
+    "sha256": "6125698173f8be0d0de01ff897a0df3c5e50fb09f70238b26dd6574aaa0934e1",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/libu/liburing/liburing2_2.9-1_amd64.deb",
+    "file": "liburing2_2.9-1_amd64.deb",
+    "sha256": "4b589c00c7a51172aace2cb2fb3d3ff32daf86c644023126dcfcaa840cc941ea",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/m/mpclib3/libmpc3_1.3.1-1%2bb3_amd64.deb",
+    "file": "libmpc3_1.3.1-1+b3_amd64.deb",
+    "sha256": "2af0a5c128e03694a41c0b011bd8a958b7297436cdb3a15ddad7866dae8c300b",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/n/ndctl/libdaxctl1_81-1_amd64.deb",
+    "file": "libdaxctl1_81-1_amd64.deb",
+    "sha256": "6296eb5c976743ba0defb7a061ef081238ca072cf569c6bb96fd3f9095c58a30",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/n/ndctl/libndctl6_81-1_amd64.deb",
+    "file": "libndctl6_81-1_amd64.deb",
+    "sha256": "fe60a05d42e61cb9f49a90b872aa5ca569363b13459ee0d405243c37a7de7c93",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/n/numactl/libnuma1_2.0.19-1_amd64.deb",
+    "file": "libnuma1_2.0.19-1_amd64.deb",
+    "sha256": "e578583f73f8208564e5035b18aa729c441fc7ecb389c666923552e123f4d655",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/p/pixman/libpixman-1-0_0.44.0-3_amd64.deb",
+    "file": "libpixman-1-0_0.44.0-3_amd64.deb",
+    "sha256": "3862c87596f6b4b60fc916395fd69aa10af28a875a8e5c081a8cf30ddd120bd6",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/p/pmdk/libpmem1_1.13.1-1.1%2bb1_amd64.deb",
+    "file": "libpmem1_1.13.1-1.1+b1_amd64.deb",
+    "sha256": "7d972d6958e915ce602e4b90debc6b4b91a01dfea1fe003d0b013756e7d9d863",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/q/qemu/qemu-system-arm_10.0.13%2bds-0%2bdeb13u1_amd64.deb",
+    "file": "qemu-system-arm_1%3a10.0.13+ds-0+deb13u1_amd64.deb",
+    "sha256": "babb8ab3c9f5f045184bd8c20604237d28c1b5e6a578d7f400566b9f257b59e7",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/r/rdma-core/libibverbs1_56.1-1_amd64.deb",
+    "file": "libibverbs1_56.1-1_amd64.deb",
+    "sha256": "4c3b889607586e6328964a5f98e01ef01daa415be24334d743d6654aab4c47a4",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/r/rdma-core/librdmacm1t64_56.1-1_amd64.deb",
+    "file": "librdmacm1t64_56.1-1_amd64.deb",
+    "sha256": "5b56911725905b8e2a8389c99416ca078395c4ca8ce0d516bc758d5be0134687",
+    "kind": "deb"
+  },
+  {
+    "url": "https://deb.debian.org/debian/pool/main/v/vdeplug4/libvdeplug2t64_4.0.1-5.1%2bb1_amd64.deb",
+    "file": "libvdeplug2t64_4.0.1-5.1+b1_amd64.deb",
+    "sha256": "01291e2c8e28e91eac6b59c983a3a44e29ad0ddb8622699fbb84cbd5f26334a4",
+    "kind": "deb"
+  },
+  {
+    "url": "https://github.com/renode/renode/releases/download/v1.17.0/renode-1.17.0.linux-portable.tar.gz",
+    "file": "renode-1.17.0.linux-portable.tar.gz",
+    "sha256": "4ba7c68b59e2447f188ef4b4b112fcccd2802582c460beedceb63b84e5605a5f",
+    "kind": "tar"
+  }
+]

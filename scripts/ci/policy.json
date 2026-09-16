@@ -148,6 +148,16 @@
         ],
         [
           "python3",
+          "environments/cortex-m/test.py"
+        ],
+        [
+          "python3",
+          "environments/cortex-m/run.py",
+          "--output",
+          "compiler/ada/build/native-ci/debug/cortex-m"
+        ],
+        [
+          "python3",
           "check.py"
         ],
         [
@@ -156,6 +166,7 @@
       ]
     }
   ],
+  "cortex_m": true,
   "scope": "routine",
   "debugger": true
 }

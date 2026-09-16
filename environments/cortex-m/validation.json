@@ -1,0 +1,39 @@
+{
+  "artifacts": {
+    "cpu.elf": "37b96312e8fc894e80ec0a14dadd67e8ee03543e0a3a3e74fb378387f9fbcd35",
+    "cpu.map": "bdeef6f8367ea3ef8cd80b0c4bc92037729005c897f9f8e32ac3fa201489010c",
+    "gdb.log": "42b3e35f4e80e9d5655d65caa99ebfa97295765da67343712d3f2b9ff2b92ea4",
+    "peripheral.elf": "777cf1b839cf31535fe6462a68a0a906d7ac5e9f40d653ab0338caf89c6e3a2b",
+    "peripheral.log": "94fd4b0f2b9d343e2de8da2d78eae7137319d7422804add920aa3499c84e902e",
+    "peripheral.map": "faf40b9c3264622e4a35e028c634de96e925ab3899829630593ef23f7546ae55",
+    "stock.log": "9cca3ac4a19de6ff9476887e07917d5ad5ad2a641e3d3b391f5444bf2b09977c",
+    "uart.log": "517e6a3a7d54ef542ceb39acabccc245e83dcd5d476d6e04f8cfe5dc9f84047e"
+  },
+  "date": "2026-09-16",
+  "host": "native Debian 13 x86-64",
+  "input_inventory": {
+    "README.md": "d924381e654e72c85dfb64145ed3eb63637bb238c94112d95314af2e97a3831b",
+    "probes/PrototypePeripheral.cs": "d1ee678fdb47cbb4f91e1364b0258890d37b9459ae4ad7ae36d8d369b7ef2ab5",
+    "probes/cpu.c": "8b82d4b73bbb8d7ac64bbb85c3caa542d800085a38ef143ee1c6b378b214d388",
+    "probes/memory.ld": "9adc40628e37594124aee1e8157ee66cfec5a8611e76515bddf386d0609e2514",
+    "probes/model-checks.py": "f6c8b7e7e8797df82e86587b7eb8f39d07ee75efbcc4a83fb2b0f4a8469a09b3",
+    "probes/peripheral.c": "2c4406970fbf6ca6b3062a9d908d04e6bcd37a5ef976b603d9c6c7a69e9197ec",
+    "probes/prototype.repl": "56f3b43650268cf0318598d7ef4d03270fe4ea74db30070d5ad1e4d557e28d74",
+    "probes/start.S": "d76cb4aed088bd6f8da0b42c2e3080c46cc9e9a64014f8d1b7164fdc81832c35",
+    "probes/stock.py": "9dcd5b669ec219c23016eb83e5a75a028a139cd63fc9d54bad6d851e1a3c6709",
+    "probes/stock.repl": "f9e9cddc652da3c7cac3f79932aaf8e9aeafd94a5fa499955678b259d55abaae",
+    "run.py": "8fb4b6168edc580b09fb684e88e592bc95d05bac22046fcd9275e09700f56908",
+    "setup.py": "1ab88485c21b37bc9681a51e6db564d7924809f85a7ce1d7b080645623bd1a1a",
+    "test.py": "4b347306c9313876b180c452652b3d702d1d2b8762fd401ed651b4566cc6383f",
+    "tools.lock.json": "4f18b202e15500e0dca4c10955b3fa89723283b3caa38ec933289ffc4e33f4cc"
+  },
+  "kind": "development-only; exact-revision acceptance owns closure",
+  "result_sha256": "aababb19372badb065e82a002a209273d30ae3e4a6fabaa4e75507fd340713e0",
+  "retained_local": ".scratch/r610/full-3",
+  "retained_remote": "/home/landin/work/r610-probe/full-3",
+  "sizes": {
+    "cpu": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n    643\t      0\t     24\t    667\t    29b\tcpu.elf\n",
+    "peripheral": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n    836\t      0\t     24\t    860\t    35c\tperipheral.elf\n"
+  },
+  "status": "passed"
+}
