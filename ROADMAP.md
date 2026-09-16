@@ -9775,7 +9775,7 @@ Selected profile and measured evidence (2026-09-16):
   `environments/cortex-m/validation.json` indexes the retained successful
   development artifacts: CPU/peripheral images have 643/836 text bytes,
   zero data and 24 BSS bytes each. Native Mac target checks pass 12 cases
-  and 160 checks; embedded supervisor controls pass six cases, and native
+  and 160 checks; embedded supervisor controls pass seven cases, and native
   acceptance tooling controls pass 97 cases (two optional integration skips).
   These focused results precede the exact-revision native gate below.
 
@@ -9805,6 +9805,17 @@ resource limits, R551-13/14 scheduler/cache/resume, R551-15 deferred Nix and
 R551-17/20/21/23/24 evidence/delivery limits remain unchanged.
 
 Closure and exact-revision binding:
+
+Initial candidate `f98d310efdd98cf808eb2257fe96ae8e4664b4b1` completed all six
+Linux jobs in run `20260916T090605Z-b9f7a503c68f`, but its export correctly
+refused an omitted `renode.config.lock`: the native exporter excludes lock
+files while the new probe had inventoried Renode's empty coordination file.
+This supplies no approval. The runner now removes only that verified empty
+file after Renode exits and before evidence inventory; a regression control
+rejects nonempty or linked replacements. Matching Darwin run
+`20260916T090605Z-3015678604d8` was stopped during runtime coverage when the
+candidate became obsolete. Both records are retained; the corrected source
+requires fresh dual-native acceptance, with no reuse of their verdicts.
 
 The Linux documents job requires the live environment probes and their failure
 controls from the committed archive. Its exported `artifacts/cortex-m` retains

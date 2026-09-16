@@ -45,6 +45,16 @@ def oracle(text, marker, stock=False):
                     'unexpected model warning')
 
 
+def remove_renode_lock(output):
+    # Renode's process has exited before this is called. This empty runtime
+    # coordination file is not evidence; native export excludes *.lock files.
+    path = output / 'renode.config.lock'
+    if path.exists() or path.is_symlink():
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size == 0,
+                'unexpected Renode lock file')
+        path.unlink()
+
+
 class Run:
     def __init__(self, output, tools):
         self.out, self.tools = output, tools
@@ -77,8 +87,11 @@ class Run:
     def renode_script(self, name, lines, marker, stock=False):
         script = self.out / (name + '.resc')
         script.write_text('\n'.join(lines + ['quit']) + '\n')
-        text = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
-                                  '--config', self.out / 'renode.config', script], timeout=30)
+        try:
+            text = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
+                                      '--config', self.out / 'renode.config', script], timeout=30)
+        finally:
+            remove_renode_lock(self.out)
         oracle(text, marker, stock)
 
     def build(self, name):
