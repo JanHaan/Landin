@@ -2894,6 +2894,28 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
      is (Held (Of_Unit, Item, Value).Slot);
 
+   function Is_Failure_Status_Load
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+   is
+   begin
+      if Op_Of (Of_Unit, Item, Value) /= Load then
+         return False;
+      end if;
+      for Index in 1 .. Value_Count (Of_Unit, Item) loop
+         declare
+            Call_Value : constant Value_Id := Value_Id (Index);
+         begin
+            if Op_Of (Of_Unit, Item, Call_Value) in Call | Indirect_Call
+              and then Failure_Slot_Of (Of_Unit, Item, Call_Value)
+                = Slot_Of (Of_Unit, Item, Value)
+            then
+               return True;
+            end if;
+         end;
+      end loop;
+      return False;
+   end Is_Failure_Status_Load;
+
    function Origin_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Provenance.Origin
      is (Held (Of_Unit, Item, Value).Site);

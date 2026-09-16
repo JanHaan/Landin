@@ -4783,6 +4783,12 @@ package body Landin.Backend.X86_64 is
                   declare
                      Done : constant String := Value_Label (Value) & "_valid";
                   begin
+                     if Landin.IR.Is_Failure_Status_Load
+                       (Of_Unit, Item, Value)
+                     then
+                        Emit ("cmpl $0, " & Value_Operand (Value));
+                        Emit ("je " & Done);
+                     end if;
                      for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms)
                      loop
                         Emit ("cmpl $" & Trimmed (Natural'Image (Atom_Code

@@ -953,6 +953,11 @@ package body Landin.Backend.Arm64 is
                declare
                   Done : constant String := Fresh;
                begin
+                  if Landin.IR.Is_Failure_Status_Load
+                    (Of_Unit, Item, Value)
+                  then
+                     Emit ("cbz " & Register & ", " & Done);
+                  end if;
                   for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms) loop
                      Immediate ("x14", Pattern (Atom_Code
                        (Of_Unit, Landin.IR.Nth_Atom (Of_Unit, Atoms, Index))));

@@ -10299,6 +10299,18 @@ positive/negative compiler-generated Renode executions in `artifacts/cortex-m`.
 Assertions, literal images/traces, timeouts, source and artifact hashes and
 empty-lock cleanup are part of that evidence, not an assembly-only claim.
 
+The first candidate `2ff7131f` was not accepted or promoted. Linux run
+`20260916T185252Z-f3c8c2020f8a` found a derived-parser regression in its quality
+job; peer jobs cancelled, and Darwin run `20260916T185252Z-737864edf20f` was
+deliberately stopped with its failed record retained. Native GDB traced the
+trap to the private call-status word: successful calls use zero before the
+failure test, whereas source atoms do not admit zero. The correction recognizes
+only IR-designated call failure slots and preserves their zero-success sentinel
+on both backends. Ordinary software-enum reads still validate, including the
+zero corruption in `runtime/r640-software-hole`. Existing derived-parser and
+generic nested-recovery profiles pin both paths. This is a correction to the
+existing failure transport, not a new source atom or an unchecked exemption.
+
 Resource and evidence limits: an image has at most 64 bits/elements. Local
 array transfers snapshot at most 64 scalar values; encoding lists remain in
 bounded compiler-owned vectors and membership lowering uses explicit comparisons.
