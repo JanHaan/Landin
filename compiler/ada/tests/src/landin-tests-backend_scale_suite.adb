@@ -437,7 +437,9 @@ package body Landin.Tests.Backend_Scale_Suite is
                     others => <>);
          end Shape_Of;
       begin
-         for Policy in Landin.Layouts.Policy loop
+         --  These ordinary fields exercise the three byte layouts; packed
+         --  geometry has its own target-parametric controls.
+         for Policy in Landin.Layouts.Natural .. Landin.Layouts.Optimal loop
             declare
                Shape : constant IR.Field_Shape := Shape_Of (Fields, Policy);
                Run : constant Natural :=
@@ -590,7 +592,9 @@ package body Landin.Tests.Backend_Scale_Suite is
          end Shape_Of;
       begin
          IR.Set_Nominal_Shape (Other_Code, Other_Nominal, [Fields (1)]);
-         for Policy in Landin.Layouts.Policy loop
+         --  These ordinary fields exercise the three byte layouts; packed
+         --  geometry has its own target-parametric controls.
+         for Policy in Landin.Layouts.Natural .. Landin.Layouts.Optimal loop
             declare
                Base : constant IR.Field_Shape := Shape_Of (Fields, Policy);
                Shared : IR.Field_Shape := Base;
