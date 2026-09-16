@@ -1006,3 +1006,8 @@ packages a dSYM through the selected Apple driver. The native UUID and full
 Landin source/assembly digest bind the executable, dSYM and optional source map.
 See [target contracts](../../docs/targets.md#native-source-debugging) for native
 commands, identity matching and the demonstrated debugger presentation limits.
+
+R6.10's [Cortex-M environment probes](../../environments/cortex-m/README.md)
+are separate C/assembly controls for QEMU and a synthetic Renode device lane.
+They change none of the compiler package/capability boundaries above. R6.20
+owns the 32-bit ABI and R6.50 owns the Landin backend.

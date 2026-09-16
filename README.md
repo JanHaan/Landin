@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.10 — Select the Cortex-M execution profile (planned).**
+**Next roadmap item: R6.20 — Instantiate the 32-bit layout and ABI (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -265,7 +265,11 @@ R5.51 closes the retained-debt and acceptance-workflow follow-up through its
 exact-revision dual-native binding in ROADMAP.md. Routine policy retains full
 release hosted coverage; debugger risk adds full release GDB/LLDB. Retained
 debt has explicit owners and activation conditions; R6/R7 language work remains
-scheduled and Nix CI deferred.
+scheduled and Nix CI deferred. R6.10 establishes the pinned
+[Cortex-M execution profile](environments/cortex-m/README.md): QEMU M0
+CPU/startup probes and a deterministic Renode peripheral lane. Its completion
+has the same exact-revision dual-native binding; no Landin Cortex-M backend
+is enabled yet.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

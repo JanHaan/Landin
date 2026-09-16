@@ -225,7 +225,11 @@ native Darwin lowering; R5.40 adds native LLDB and Mach-O debug identity.
 R5.50 closes hosted parity through its dual-native milestone binding;
 R5.51 closes bounded loop-transfer ownership and compatible native routine
 acceptance, with a mechanically checked retained-debt handoff. Its exact-revision
-dual-native binding owns closure; R6.10 is the next dependency-ready item.
+dual-native binding owns closure. R6.10 establishes QEMU Cortex-M0 CPU/startup
+and synthetic Renode peripheral probes on native Debian 13 x86-64; see
+`environments/cortex-m/README.md`. Its Linux acceptance evidence is retained
+with the accepted revision. R6.20 is the next dependency-ready item; no Landin
+Cortex-M backend or 32-bit ABI is implemented yet.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

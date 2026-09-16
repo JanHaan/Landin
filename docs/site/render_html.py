@@ -974,6 +974,10 @@ GUIDES = [
          nav="the environments", group="the implementation",
          blurb="Which machine produces which kind of evidence, and which "
                "one is the authority."),
+    dict(key="cortex-m", src="environments/cortex-m/README.md",
+         out="cortex-m.html", nav="Cortex-M execution profile", group="the implementation",
+         blurb="Pinned QEMU CPU probes and a deterministic Renode peripheral lane, "
+               "with executable evidence and explicit model limits."),
     dict(key="native-ci", src="environments/native-ci/README.md",
          out="native-ci.html", nav="native acceptance", group="the implementation", blurb="Committed native acceptance, retained evidence, "
          "approval and publication operations."),

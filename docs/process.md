@@ -189,3 +189,13 @@ all three derived programs with native LLDB in both compiler modes. The
 platform limits. The accepted revision keeps its milestone policy; routine
 scope returns only in subsequent development. No local Linux containers,
 production scheduler/cache changes or Nix CI are added.
+
+## R6.10 environment acceptance
+
+The Linux documents job additionally runs the pinned
+[Cortex-M environment probes](../environments/cortex-m/README.md) and their
+failure controls. Its exported `cortex-m` artifacts bind the live result to
+the accepted archive. Missing tools or failed probes refuse acceptance.
+This addition selects routine debugger-risk coverage for R6.10's debugger
+controls and acceptance command/retention changes; it does not select the
+R6.100 full milestone matrix. Darwin keeps native hosted/LLDB validation.

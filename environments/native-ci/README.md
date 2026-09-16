@@ -298,3 +298,13 @@ Mac host checks and complete release hosted coverage; debugger risk adds full
 release LLDB, and milestones retain both modes. Historical schema 3 still
 requires Linux milestone scope. Only Linux supports resume. See the
 [native Mac operations guide](../macos-arm64/README.md).
+
+## Cortex-M environment evidence
+
+R6.10 adds the [embedded profile](../cortex-m/README.md) to the Linux
+documents job. Install its pinned private tools with
+`python3 environments/cortex-m/setup.py` before acceptance. The job runs
+`test.py` and `run.py`, and retains `artifacts/cortex-m` in the verified
+export. Missing tools fail; these are mandatory environment probes on the
+Linux host, separate from the hosted Landin workloads. The unchanged
+dual-native approval binds this job together with Darwin's native evidence.

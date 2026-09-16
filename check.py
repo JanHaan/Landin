@@ -5392,6 +5392,7 @@ def check_phase_handoff(full_run):
             validate(source.read())
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+                [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
                 [sys.executable, "-m", "unittest", "discover", "-s",
                  os.path.join(ROOT, "scripts/tests"), "-p", "test_darwin*.py"]):
             result = subprocess.run(command, capture_output=True, text=True, timeout=20)

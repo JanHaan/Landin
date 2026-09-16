@@ -183,3 +183,12 @@ status-42 execution and matching control. The result is explicitly
 is claimed. R5.51 R551-07 retains R5.20's large-image placement/preflight transfer to the
 scale and self-hosting successor, with an explicit activation condition. No giant materialized object sweep or
 new exhaustion guarantee is introduced.
+
+## Cortex-M environment boundary
+
+R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's
+Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
+probes establish the environment; they add no target constructor, C capability,
+backend, debug format or toolchain triplet to `Landin.Targets`. R6.20 owns
+32-bit layout/ABI and R6.50/R6.60 own emission and startup. The synthetic-32
+seam remains unchanged.

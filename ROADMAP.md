@@ -9720,7 +9720,7 @@ peripheral-behavior lanes; physical hardware remains supplemental.
 
 ### R6.10 — Select the Cortex-M execution profile
 
-Status: planned
+Status: complete
 Depends on: R5.51
 
 Select an exact QEMU-supported core/board, EABI toolchain and debugger at R6
@@ -9730,6 +9730,99 @@ prototype's devices.
 
 Exit evidence: the profile can test boot/vectors/traps/debugging and names a
 separate reproducible route for every required MMIO/DMA behavior.
+
+Selected profile and measured evidence (2026-09-16):
+
+- QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `microbit` / nRF51822
+  Cortex-M0, ARMv6-M Thumb, little endian, no FPU or exclusive-access
+  requirement. The 256 KiB machine flash is restricted by the probe linker
+  to 32 KiB; RAM is 16 KiB at `0x20000000`, with initial MSP `0x20004000`
+  and vectors at zero. The private Debian 13 x86-64 tools are Arm EABI GCC
+  14.2.1 20241119, binutils 2.44 and GDB 16.3. Base AAPCS/soft-float flags
+  belong to the environment controls; they do not implement R6.20.
+- Renode 1.17.0 portable, build `1.17.0+20260907gitf1dd1b4af` with bundled
+  .NET 8.0.12, supplies a separately named synthetic M0 peripheral lane.
+  `environments/cortex-m/tools.lock.json` pins archives and dependencies by
+  SHA-256. The [execution guide](environments/cortex-m/README.md) records
+  exact flags, memory/device map, current official sources, inspected model
+  revisions and one executable route for every prototype-1 pressure case.
+- QEMU remains required for CPU/startup evidence, including R6.90. Its Nordic
+  GPIO/UART are not the prototype devices and it has no prototype DMA engine.
+  Renode's stock STM32 models provide useful GPIO/UART/request-driven DMA
+  behavior, but inspection and `stock.py` prove CIRC does not reload the
+  count; half/error enables are tags. Stock board support is not accepted
+  as full peripheral fidelity. A small checked-in C# model loaded by Renode
+  is the selected bounded route: it executes real M0 loads/stores and NVIC
+  delivery without a custom QEMU build. It is expressly not a vendor model.
+- The QEMU probe passes initial vector/MSP/PC checks, source stepping,
+  breakpoints, resume, BSS clearing, reset and second boot; SVC, PendSV,
+  SysTick/WFI, masked external IRQ and UDF HardFault with IPSR 3; Nordic GPIO
+  set/clear and exact UART output on both boots. The Renode firmware probe
+  passes whole-register RMW/reserved-bit preservation, AF and set/reset,
+  disabled DMA, halfword counter accesses, five bytes into a four-byte
+  circular ordinary-RAM buffer, half/completion/error status, masked IRQ
+  delivery, three handlers, one-clears and disable-on-error. Independent
+  model controls exercise invalid descriptor/direction/count, forbidden
+  access directions/widths, unknown registers, reset and input injection.
+- Development initially exposed GDB's required Python support package, cached
+  reset-register reads (resolved by explicit register-cache flush), and a
+  too-short SysTick period under debugger control. The corrected period is
+  100000 cycles. Adding a stock UART divisor activates timed receive, so
+  the stock direct-feed control deliberately retains unclocked receive and
+  its named warning; it claims no baud/idle-line behavior. Failed runs stay
+  at `/home/landin/work/r610-probe/`, with copies under `.scratch/r610/`.
+  The final acceptance bundle, not these exploratory runs, owns closure.
+  `environments/cortex-m/validation.json` indexes the retained successful
+  development artifacts: CPU/peripheral images have 643/836 text bytes,
+  zero data and 24 BSS bytes each. Native Mac target checks pass 12 cases
+  and 160 checks; embedded supervisor controls pass six cases, and native
+  acceptance tooling controls pass 97 cases (two optional integration skips).
+  These focused results precede the exact-revision native gate below.
+
+Limits and successor handoffs:
+
+The synthetic feed copies one byte before updating count/status, at a stopped
+virtual-time boundary. Firmware resumes for fixed virtual intervals and every
+stage is asserted. This establishes ordered model interactions and observed
+CPU reloads, not hardware concurrency, tearing, cache coherence, bus timing,
+electrical pins, baud accuracy or a language memory model. UART divisor/AF
+values are stored images; GPIO B, unused streams and unspecified UART features
+are absent. The profile preserves M0/no-exclusive pressure; no change of the
+QEMU requirement or implied M3/M4 semantic expansion is made.
+
+R551-31 continues through the existing R6 owners: R6.20 implements 32-bit
+layout/ABI; R6.30 decides atomics, volatile ordering, barriers, races, DMA
+visibility and cache behavior, including models beyond this cacheless core;
+R6.40 decides invalid encodings and reserved-bit rules. R6.50/R6.60 own actual
+emission, selected-image reach, placement and language startup. R6.70 owns
+freestanding core and `noreturn`; R6.80 supplies checked-in generated device
+fixtures, while the general SVD generator remains R551-33. R6.90 must run
+the complete driver, including ring-reading and software failure/origin
+cases, through these lanes. R6.100 owns firmware sizes, bounded stack,
+Landin source debugging and milestone closure. Physical hardware remains
+supplemental for actual device/bus/interrupt/electrical behavior. R551-06/07/08
+resource limits, R551-13/14 scheduler/cache/resume, R551-15 deferred Nix and
+R551-17/20/21/23/24 evidence/delivery limits remain unchanged.
+
+Closure and exact-revision binding:
+
+The Linux documents job requires the live environment probes and their failure
+controls from the committed archive. Its exported `artifacts/cortex-m` retains
+input/tool hashes, commands, scripts, ELF/map/size data, debugger/Monitor logs,
+UART bytes and checked results, bound by the ordinary job and approval hashes.
+Missing tools, unsupported host, tool drift, failed assertions, unexpected
+model warnings and timeouts fail; a zero Renode process exit alone cannot pass.
+Full `check.py` and verified site rendering cover the final documents.
+Compatible routine policies with full release GDB/LLDB are committed before
+the candidate: added debugger controls and changed acceptance command/artifact
+retention justify debugger-risk scope; this is not R6.100 milestone evidence.
+
+This containing revision's complete status is authoritative only after matching
+Linux and Darwin exact-archive acceptance, verified exports, annotated
+`ci/accepted/FULL_COMMIT`, atomic canonical promotion, matching GitHub mirror
+and successful guarded publication. No later bookkeeping commit substitutes
+for the accepted source. R6.20 is the next dependency-ready item after that
+binding; R6.30 is also dependency-ready and retains its separate semantic gate.
 
 ### R6.20 — Instantiate the 32-bit layout and ABI
 

@@ -315,3 +315,13 @@ matching evidence. The shared DWARF change selects routine Linux release GDB;
 R5.50 adds full hosted parity and its dual-native milestone matrix in both
 compiler modes. See [the native parity guide](../compiler/tests/darwin/README.md)
 for the complete coverage and explicit physical-image limitation.
+
+## Embedded environment probes
+
+R6.10 selects native Debian 13 x86-64 for the pinned QEMU and Renode
+[execution profile](../environments/cortex-m/README.md). The native Linux
+acceptance documents job executes and retains these small C/assembly probes
+from its exact archive. The Mac continues native compiler-host and Darwin
+workload/LLDB validation; it does not run Linux containers for embedded tests.
+QEMU owns CPU/startup evidence and Renode owns the explicit synthetic
+peripheral lane. Neither is physical hardware fidelity or Landin backend proof.
