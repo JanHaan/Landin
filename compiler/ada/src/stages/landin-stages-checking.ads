@@ -40,7 +40,24 @@
 
 package Landin.Stages.Checking is
 
-   type Instance is limited new Landin.Stages.Stage with null record;
+   --  Optional bounded test seam, owned by one checker instance. No CLI or
+   --  global failure state; ordinary compilations leave Probe null.
+   type Transfer_Point is
+     (Allocating, Allocated, Growing, Published, Traversed, Moved, Released);
+   type Transfer_Counts is array (Transfer_Point) of Natural;
+   type Transfer_Probe is record
+      Fail_At     : Natural := 0;
+      Reached     : Natural := 0;
+      Allocations : Natural := 0;
+      Releases    : Natural := 0;
+      Live        : Natural := 0;
+      Peak        : Natural := 0;
+      Points      : Transfer_Counts := [others => 0];
+   end record;
+
+   type Instance is limited new Landin.Stages.Stage with record
+      Probe : access Transfer_Probe := null;
+   end record;
 
    overriding function Name (Item : Instance) return String;
 

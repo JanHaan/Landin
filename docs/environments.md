@@ -6,9 +6,9 @@ is the current Linux authority. Historical SourceHut gate results below keep
 their original meaning.
 
 
-R5.30/R5.40/R5.50 native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
+Native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
 from the Mac with its pinned tool homes. Its verified bundle must match the
-Linux routine bundle at approval (`--darwin DARWIN_BUNDLE`). Both source and
+Linux bundle with compatible committed scope at approval (`--darwin DARWIN_BUNDLE`). Both source and
 execution identities are retained; Linux acceptance alone cannot close the
 Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
 
@@ -16,8 +16,8 @@ Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | bootstrap development and R5.10 environment validation | working |
-| Apple Container, `linux/amd64` under Rosetta | supplemental local Linux loop | working |
+| native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
+| Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | working |
 | builds.sr.ht | approved-main Pages publication and GitHub mirror | working |
 
@@ -50,8 +50,10 @@ LLDB, build and run compiler-host checks in both modes, and sample
 the inherited resource limits. The Apple tool policy, reproduction commands
 and the historical full-harness option are documented in
 [`environments/macos-arm64/README.md`](../environments/macos-arm64/README.md).
-This establishes the compiler host; Darwin lowering and emitted-program source
-debugging remain later R5 items.
+This established the compiler host at R5.10; R5.30/R5.40 subsequently added
+Darwin lowering and source debugging. R5.51 selects compatible native policies
+with full release hosted coverage for routine changes and full release GDB/LLDB
+for debugger risk. Historical schema 3 remains both-mode milestone evidence.
 
 QEMU full-system x86 is supplemental. It is not the daily loop and it is not
 the Linux gate.
@@ -70,10 +72,10 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild for this host
 ./scripts/test.sh
 ```
 
-On a Mac that `test.sh` ends with the fixture-execution case failing, by
-design: runtime fixtures are Linux x86-64 evidence and the harness fails
-rather than skips on a host that cannot finish the target. Only that case
-red is the expected Mac result.
+On a Mac use `./scripts/dev-test.sh --host`, optionally with an exact
+`--suite` or `--case`. Every selected check must pass. R5.10's unfiltered
+missing-Linux-driver result is a historical environment observation, not a
+current success rule.
 
 Linux work during R5/R6 runs on the native Linux runner, using focused
 development slots or committed acceptance. The container commands below are
@@ -102,16 +104,17 @@ checking while avoiding a clean rebuild for every Ada edit:
 ./scripts/dev-test.sh --case='harness/filters select exact cases'
 ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
 
-./scripts/linux-loop.sh ./scripts/dev-test.sh \
-  --fixture=negative/variant-match-duplicate
+./scripts/dev-test.sh --host --suite=checking
+python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
 ```
 
 The selectors are exact, accept one selection at a time, and print `FILTERED`
 in the transcript. They are fast feedback, not validation evidence. The
 developer build asks the pinned GPRbuild for checksum-based Ada recompilation;
 a changed source inventory or project file still makes it clean. The ordinary
-`build.sh`, no-argument `test.sh`, and no-argument `linux-loop.sh` remain the
-canonical complete commands.
+`build.sh` and `test.sh` remain complete native Linux commands; `--host`
+selects Mac compiler checks. Exact-revision acceptance owns approval. The
+container command is retained troubleshooting, not a routine gate.
 
 `LANDIN_BUILD_MODE` accepts only `debug` or `release`, before any build path
 is used. Builds and tests hold an OS lock for their host tag and mode through

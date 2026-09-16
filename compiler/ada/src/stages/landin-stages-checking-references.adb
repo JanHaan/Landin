@@ -45,7 +45,8 @@ package body Landin.Stages.Checking.References is
       Of_Tree       : Syn.Tree;
       Function_Node : Syn.Node_Id;
       Body_Node     : Syn.Node_Id;
-      Into          : in out Landin.Diagnostics.Diagnostic_List)
+      Into          : in out Landin.Diagnostics.Diagnostic_List;
+      Probe         : access Transfer_Probe)
    is
       Trees : constant not null access Syn.Forest.Table :=
         Landin.Stages.Trees (Context);
@@ -227,29 +228,112 @@ package body Landin.Stages.Checking.References is
       --  Allocate the uncommon transfer states only when an edge needs one;
       --  embedding both in a vector element makes Append copy program-sized
       --  values on the host stack.
-      type Loop_Frame is record
+      procedure Checkpoint (Point : Transfer_Point);
+
+      procedure Checkpoint (Point : Transfer_Point) is
+      begin
+         if Probe /= null then
+            Probe.Reached := Probe.Reached + 1;
+            Probe.Points (Point) := Probe.Points (Point) + 1;
+            if Probe.Reached = Probe.Fail_At then
+               raise Storage_Error with "injected loop-transfer failure";
+            end if;
+         end if;
+      end Checkpoint;
+
+      package Transfer_States is
+         type Owner is new Ada.Finalization.Limited_Controlled with record
+            Data : Function_Table_Access := null;
+         end record;
+         overriding procedure Finalize (Value : in out Owner);
+         procedure Save (Value : in out Owner; Initial : Function_Table);
+         procedure Move (Into : in out Owner; From : in out Owner);
+      end Transfer_States;
+
+      package body Transfer_States is
+         overriding procedure Finalize (Value : in out Owner) is
+         begin
+            if Value.Data /= null then
+               Free (Value.Data);
+               if Probe /= null then
+                  Probe.Releases := Probe.Releases + 1;
+                  Probe.Live := Probe.Live - 1;
+               end if;
+            end if;
+         end Finalize;
+
+         procedure Save (Value : in out Owner; Initial : Function_Table) is
+         begin
+            if Value.Data /= null then
+               raise Landin.Compiler_Defect with "loop state already owned";
+            end if;
+            Checkpoint (Allocating);
+            Value.Data := new Function_Table'(Initial);
+            if Probe /= null then
+               Probe.Allocations := Probe.Allocations + 1;
+               Probe.Live := Probe.Live + 1;
+               Probe.Peak := Natural'Max (Probe.Peak, Probe.Live);
+            end if;
+            Checkpoint (Allocated);
+         end Save;
+
+         procedure Move (Into : in out Owner; From : in out Owner) is
+         begin
+            --  Both assignments are non-allocating. No throwing operation
+            --  may intervene while the borrowed address has two copies.
+            if Into.Data /= null or else From.Data = null then
+               raise Landin.Compiler_Defect with "invalid loop state move";
+            end if;
+            Into.Data := From.Data;
+            From.Data := null;
+            Checkpoint (Moved);
+         end Move;
+      end Transfer_States;
+
+      --  Frames have lexical, noncopyable owners. The vector borrows their
+      --  addresses only during traversal; growth copies no owned state.
+      --  Exceptions propagate out of Check_Function, finalizing every frame
+      --  and the vector, whose pointer elements need no dereference/cleanup.
+      type Loop_Frame is limited record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
          Cleanup_Base : Natural := 0;
          Exits        : Boolean := False;
-         Exit_State   : Function_Table_Access := null;
+         Exit_State   : Transfer_States.Owner;
          Continues    : Boolean := False;
-         Back_State   : Function_Table_Access := null;
+         Back_State   : Transfer_States.Owner;
          Value        : Origin_Fact := No_Value_Edge;
       end record;
+      type Loop_Frame_Access is access all Loop_Frame;
 
       package Loop_Frames is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Loop_Frame);
+        (Index_Type => Positive, Element_Type => Loop_Frame_Access);
 
       Loop_Stack : Loop_Frames.Vector;
 
       procedure Release (Frame : in out Loop_Frame);
+      procedure Push (Frame : Loop_Frame_Access; Tree : Syn.Tree;
+                      Node : Syn.Node_Id);
 
       procedure Release (Frame : in out Loop_Frame) is
       begin
-         Free (Frame.Exit_State);
-         Free (Frame.Back_State);
+         Transfer_States.Finalize (Frame.Exit_State);
+         Transfer_States.Finalize (Frame.Back_State);
+         Frame.Exits := False;
+         Frame.Continues := False;
+         Frame.Value := No_Value_Edge;
+         Checkpoint (Released);
       end Release;
+
+      procedure Push (Frame : Loop_Frame_Access; Tree : Syn.Tree;
+                      Node : Syn.Node_Id) is
+      begin
+         Frame.Label := Syn.Name (Tree, Node);
+         Frame.Cleanup_Base := Natural (Cleanup_Stack.Length);
+         Checkpoint (Growing);
+         Loop_Stack.Append (Frame);
+         Checkpoint (Published);
+      end Push;
 
       --  Where the traversal is: the block being processed, the statement
       --  within it, and the loop whose body that block is, if any.  The
@@ -2766,7 +2850,7 @@ package body Landin.Stages.Checking.References is
                   Exhausted_State : Function_Table renames
                     Exhausted_State_Owner.Data.all;
                   Can_Exhaust : Boolean := False;
-                  Frame : Loop_Frame;
+                  Frame : aliased Loop_Frame;
                   Scratch : aliased Landin.Diagnostics.Diagnostic_List;
                   Outer_Sink : constant
                     not null access Landin.Diagnostics.Diagnostic_List := Sink;
@@ -2810,11 +2894,7 @@ package body Landin.Stages.Checking.References is
                               else Scratch'Unchecked_Access);
                      Origins := Head;
                      Falls_Through := True;
-                     Loop_Stack.Append
-                       (Loop_Frame'
-                          (Label        => Syn.Name (Tree, Node),
-                           Cleanup_Base => Natural (Cleanup_Stack.Length),
-                           others       => <>));
+                     Push (Frame'Unchecked_Access, Tree, Node);
 
                      if Is_While then
                         declare
@@ -2835,14 +2915,14 @@ package body Landin.Stages.Checking.References is
                      Process_Block
                        (Tree, Syn.Loop_Body (Tree, Node), Body_Fell,
                         Of_Loop => Node);
-                     Frame := Loop_Stack.Last_Element;
+                     Checkpoint (Traversed);
                      Loop_Stack.Delete_Last;
 
                      if Body_Fell then
                         Join_Table (Next, Origins);
                      end if;
                      if Frame.Continues then
-                        Join_Table (Next, Frame.Back_State.all);
+                        Join_Table (Next, Frame.Back_State.Data.all);
                      end if;
                      Converged := Next = Head;
                      Head := Next;
@@ -2926,26 +3006,23 @@ package body Landin.Stages.Checking.References is
                   if Can_Exhaust
                     and then Syn.Complete_Body (Tree, Node) /= Syn.No_Node
                   then
-                     Loop_Stack.Append
-                       (Loop_Frame'
-                          (Label        => Syn.Name (Tree, Node),
-                           Cleanup_Base => Natural (Cleanup_Stack.Length),
-                           others       => <>));
-                     Process_Block
-                       (Tree, Syn.Complete_Body (Tree, Node), Fell);
                      declare
-                        Completion : Loop_Frame := Loop_Stack.Last_Element;
+                        Completion : aliased Loop_Frame;
                      begin
+                        Push (Completion'Unchecked_Access, Tree, Node);
+                        Process_Block
+                          (Tree, Syn.Complete_Body (Tree, Node), Fell);
+                        Checkpoint (Traversed);
                         Loop_Stack.Delete_Last;
                         Join (Frame.Value, Completion.Value);
                         if Completion.Exits then
                            if Frame.Exits then
                               Join_Table
-                                (Frame.Exit_State.all,
-                                 Completion.Exit_State.all);
+                                (Frame.Exit_State.Data.all,
+                                 Completion.Exit_State.Data.all);
                            else
-                              Frame.Exit_State := Completion.Exit_State;
-                              Completion.Exit_State := null;
+                              Transfer_States.Move
+                                (Frame.Exit_State, Completion.Exit_State);
                               Frame.Exits := True;
                            end if;
                         end if;
@@ -2954,9 +3031,9 @@ package body Landin.Stages.Checking.References is
                   end if;
                   if Frame.Exits then
                      if Falls_Through then
-                        Join_Table (Origins, Frame.Exit_State.all);
+                        Join_Table (Origins, Frame.Exit_State.Data.all);
                      else
-                        Origins := Frame.Exit_State.all;
+                        Origins := Frame.Exit_State.Data.all;
                      end if;
                      Falls_Through := True;
                   end if;
@@ -3008,7 +3085,8 @@ package body Landin.Stages.Checking.References is
                                  Landin.Cleanup.Structured_Transfer);
                               if Falls_Through then
                                  declare
-                                    Frame : Loop_Frame := Loop_Stack (Target);
+                                    Frame : Loop_Frame renames
+                                      Loop_Stack (Target).all;
                                  begin
                                     if Syn.Kind (Tree, Node)
                                       = Syn.Break_Statement
@@ -3016,21 +3094,22 @@ package body Landin.Stages.Checking.References is
                                        Join (Frame.Value, Value);
                                        if Frame.Exits then
                                           Join_Table
-                                            (Frame.Exit_State.all, Origins);
+                                            (Frame.Exit_State.Data.all,
+                                             Origins);
                                        else
-                                          Frame.Exit_State :=
-                                            new Function_Table'(Origins);
+                                          Transfer_States.Save
+                                            (Frame.Exit_State, Origins);
                                           Frame.Exits := True;
                                        end if;
                                     elsif Frame.Continues then
                                        Join_Table
-                                         (Frame.Back_State.all, Origins);
+                                         (Frame.Back_State.Data.all, Origins);
                                     else
-                                       Frame.Back_State :=
-                                         new Function_Table'(Origins);
+                                       Transfer_States.Save
+                                         (Frame.Back_State, Origins);
                                        Frame.Continues := True;
                                     end if;
-                                    Loop_Stack.Replace_Element (Target, Frame);
+                                    Checkpoint (Published);
                                  end;
                               end if;
                            end;

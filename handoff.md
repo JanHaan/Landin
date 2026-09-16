@@ -297,6 +297,10 @@ native Darwin arm64 lowering and matching-revision native acceptance.
 R5.40 adds native LLDB source debugging and exact Mach-O/dSYM identity;
 R5.50 closes hosted parity through the dual-native milestone binding in
 ROADMAP.md, with its explicit large-image loader limitation.
+R5.51 repairs loop-transfer ownership and compatible dual-native routine
+acceptance, reconciles current guidance and evidence, and records every retained
+disposition with its owner and trigger before R6.10. Its completion is bound to the
+exact-revision dual-native acceptance and delivery record in ROADMAP.md.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and

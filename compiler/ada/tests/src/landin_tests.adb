@@ -55,6 +55,7 @@ procedure Landin_Tests is
       Run_Fixture, Misuse);
 
    Mode         : Requested_Mode := Run_All;
+   Host_Only    : Boolean := False;
    Suite_Filter : Unbounded.Unbounded_String;
    Case_Filter  : Unbounded.Unbounded_String;
    Fixture      : Unbounded.Unbounded_String;
@@ -127,21 +128,33 @@ procedure Landin_Tests is
    begin
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
-         "usage: landin_tests [--host | --record | --suite=NAME |"
+         "usage: landin_tests [--record | --suite=NAME |"
          & " --case=SUITE/NAME | --fixture=CLASS/NAME]");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       landin_tests --host [--suite=NAME | --case=SUITE/NAME]");
    end Print_Usage;
 
    procedure Read_Arguments is
+      Selected : Positive := 1;
    begin
       if Ada.Command_Line.Argument_Count = 0 then
          return;
+      elsif Ada.Command_Line.Argument_Count = 2 then
+         if Ada.Command_Line.Argument (1) = "--host" then
+            Selected := 2;
+         elsif Ada.Command_Line.Argument (2) /= "--host" then
+            Mode := Misuse;
+            return;
+         end if;
+         Host_Only := True;
       elsif Ada.Command_Line.Argument_Count /= 1 then
          Mode := Misuse;
          return;
       end if;
 
       declare
-         Argument : constant String := Ada.Command_Line.Argument (1);
+         Argument : constant String := Ada.Command_Line.Argument (Selected);
       begin
          if Argument = "--record" then
             Mode := Record_Artefacts;
@@ -185,6 +198,9 @@ procedure Landin_Tests is
             Mode := Misuse;
          end if;
       end;
+      if Host_Only and then Mode not in Run_Suite | Run_Case then
+         Mode := Misuse;
+      end if;
    end Read_Arguments;
 
 begin
@@ -266,7 +282,7 @@ begin
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register
-     (Cases, Include_Target_Workloads => Mode /= Run_Host);
+     (Cases, Include_Target_Workloads => Mode /= Run_Host and not Host_Only);
    Landin.Tests.Fixture_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
    Landin.Tests.IR_Suite.Register (Cases);
@@ -317,7 +333,7 @@ begin
          raise Landin.Compiler_Defect with "test mode reached the runner";
    end case;
 
-   if Mode = Run_Host then
+   if Mode = Run_Host or else Host_Only then
       Text_IO.Put_Line
         ("HOST-ONLY compiler checks; target workload"
          & " emission/execution excluded");

@@ -151,6 +151,87 @@ package body Landin.Tests.Checking_Suite is
          "the finite alias chain has no diagnostic");
    end Flat_Alias_Chains_Use_Bounded_Stack;
 
+   procedure Loop_Transfer_Failures_Release_Exactly_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Loop_Transfer_Failures_Release_Exactly_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Stages.Checking;
+      Probe : aliased C.Transfer_Probe;
+      Tested : C.Instance;
+      Text : constant String :=
+        "f: (flag: bool, value: ptr i32) -> (r: ptr i32 from value) = "
+        & "r = value "
+        & "outer: while flag do continue outer when flag "
+        & "for i in 0..<2 do break outer when flag "
+        & "continue when flag break end for break when flag "
+        & "complete break end outer "
+        & "while flag do continue complete break end while end f" & LF;
+      Total : Natural;
+
+      procedure Compile (Fail_At : Natural);
+
+      procedure Compile (Fail_At : Natural) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "loop-ownership.ldn", Text);
+         Ran : Natural;
+         Outcome : Landin.Stages.Stage_Outcome;
+         Failed : Boolean := False;
+         pragma Unreferenced (Src);
+      begin
+         Probe := (Fail_At => Fail_At, others => <>);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 3, "source reaches checking");
+         begin
+            Tested.Run (Work, Outcome);
+         exception
+            when Storage_Error =>
+               Failed := True;
+         end;
+         Landin.Testing.Check
+           (Item, Failed = (Fail_At /= 0), "only injected checks fail");
+         Landin.Testing.Check_Equal
+           (Item, Probe.Live, 0, "every loop state leaves its owner");
+         Landin.Testing.Check_Equal
+           (Item, Probe.Allocations, Probe.Releases,
+            "each allocated loop state is released exactly once");
+         if Fail_At = 0 then
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               "repeated compiler use keeps the valid origin verdict: "
+               & Landin.Stages.Rendered_Report (Work));
+         else
+            Landin.Testing.Check_Equal
+              (Item, Probe.Reached, Fail_At, "the selected boundary raised");
+         end if;
+      end Compile;
+   begin
+      Tested.Probe := Probe'Unchecked_Access;
+      Compile (0);
+      Total := Probe.Reached;
+      Landin.Testing.Check
+        (Item, Total > 0 and then Total < 256 and then Probe.Peak >= 2,
+         "bounded traversal retains simultaneous transfer states");
+      for Point in C.Transfer_Point loop
+         Landin.Testing.Check
+           (Item, Probe.Points (Point) > 0,
+            "source reaches " & C.Transfer_Point'Image (Point));
+      end loop;
+      for Failure in 1 .. Total loop
+         Compile (Failure);
+         Compile (0);
+         Landin.Testing.Check_Equal
+           (Item, Probe.Reached, Total, "recovery repeats the same traversal");
+      end loop;
+   end Loop_Transfer_Failures_Release_Exactly_Once;
+
    procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
      (Item : in out Landin.Testing.Context);
 
@@ -13589,6 +13670,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "flat alias chains use bounded stack",
          Flat_Alias_Chains_Use_Bounded_Stack'Access);
+      Landin.Testing.Register
+        (Into, "checking", "loop transfer failures release exactly once",
+         Loop_Transfer_Failures_Release_Exactly_Once'Access);
       Landin.Testing.Register
         (Into, "checking", "large loop frames stay off the host stack",
          Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);

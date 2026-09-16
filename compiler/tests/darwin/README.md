@@ -1,9 +1,11 @@
 # Hosted parity on native Darwin
 
-`ROADMAP.md` R5.50 owns this scope. The shared fixtures, their metadata and
-prototype derivations own the language and application oracles. The committed
-Mac acceptance policy runs the following with both debug and release Ada
-compilers, using the same archived revision as Linux milestone acceptance:
+`ROADMAP.md` R5.50 owns the full parity contract; R5.51 owns current scope
+selection. Shared fixtures, metadata and prototype derivations supply the
+application oracles; spec.md owns language semantics. Schema 4 uses the same
+archived revision and scope/debugger choice as Linux. Both compiler modes run
+host checks. Routine runs complete release hosted coverage; debugger risk adds
+all release LLDB coverage. Milestones run everything below in both modes:
 
 - Compiler-host checks with `test.sh --host`.
 - Every applicable positive and negative source verdict with Darwin selected,
@@ -68,9 +70,12 @@ selected sessions additionally retain all thirteen scalars, source aliases,
 unavailable locals, the three-u32 caller ABI, optional filename deployment,
 comment-only source identity changes and mismatched dSYM refusal.
 
-Schema-3 verification reconstructs coverage and producer/consumer commands
+Schema-3/4 verification reconstructs coverage and producer/consumer commands
 from the accepted source archive, checks shared output oracles and artifact
 hashes, and checks LLDB values against the committed source-derived oracle.
 Missing profiles, altered source/compiler commands, failed or timed-out
 sessions, substituted artifacts and weakened expected values are refused.
-Schema-1/2 records retain their original lowering/debugging meaning.
+Schema-1/2 records retain their original lowering/debugging meaning. Schema 3
+retains both-mode parity and its archived Linux milestone requirement. The
+versioned derivative oracle reads marker lines from the accepted archive;
+changing live debugger helpers cannot silently reinterpret old evidence.

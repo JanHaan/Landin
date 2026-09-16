@@ -1,6 +1,9 @@
 # Native macOS compiler environment
 
-`ROADMAP.md` R5.10 owns this environment. It validates the Ada bootstrap on
+`ROADMAP.md` R5.10 records the bootstrap environment; R5.51 owns the current
+acceptance handoff. The reproduction sections below preserve R5.10
+environment validation, while the exact-revision section describes current
+acceptance. It validates the Ada bootstrap on
 native Apple Silicon. Linux acceptance remains in `environments/native-ci/`;
 R5.30 adds exact-revision native lowering acceptance here; R5.40 adds required
 native LLDB source debugging. R5.50 extends the committed path to full hosted
@@ -43,7 +46,7 @@ The native smoke test assembles arm64 source with Apple's assembler, links it
 through Apple Clang with the selected SDK, executes it, and uses LLDB to stop
 at `main` and continue to exit zero. Each built `refine` must be an arm64
 Mach-O executable and run `--identify`. This checks the platform tools;
-Landin still emits Linux x86-64 assembly at this item.
+At R5.10 Landin emitted Linux x86-64 only; R5.30 added native Darwin lowering.
 
 ## Harness oracle
 
@@ -81,7 +84,8 @@ Each probe inherits the recorded stack limit without raising it, has a
 Probe inputs and both output streams are retained, including for killed
 processes. These finite samples characterize this host and source shape;
 they do not establish a universal exhaustion threshold or recoverability
-guarantee. Remaining flow, folding and IR storage repairs stay in R5.20.
+guarantee. R5.20 assessed the remaining flow, folding and IR storage limits; R5.51
+R551-06 records their successor owner and activation condition.
 
 ## Evidence
 
@@ -131,11 +135,15 @@ resource work and the broader target-contract audit.
 ## Native exact-revision acceptance
 
 The environment loop above is development evidence. The committed
-`acceptance.json` schema 3 requires both debug and release compiler-host
-checks, all applicable shared source verdicts, the full hosted runtime/ABI
-profile matrix, generated bindings/archive execution and complete derived
-programs under native LLDB. It also retains every R5.40 object/dSYM, DWARF and
-Mach-O identity check. It uses the same pinned GNAT, GPRbuild, Apple tools and
+`acceptance.json` schema 4 records routine/milestone scope, the debugger choice
+and explicit host, hosted-workload and debugger modes. Both scopes require debug
+and release compiler-host checks. Routine runs all applicable shared source
+verdicts, the full hosted runtime/ABI profile matrix, complete derived programs
+and generated bindings/archive execution with the release compiler. Debugger
+risk adds full release LLDB, including all derivatives and every R5.40
+object/dSYM, DWARF and Mach-O identity check. Milestones run all coverage in both
+compiler modes. Select both native policies with `scripts/ci/policy.py` before
+committing; a substituted or incompatible Linux scope fails verification. It uses the same pinned GNAT, GPRbuild, Apple tools and
 SDK policy. [The parity guide](../../compiler/tests/darwin/README.md) lists
 coverage, native adapters and the explicitly retained large-image loader limit.
 
@@ -161,8 +169,9 @@ Timeouts terminate the owned process session, including compiler-created tool
 groups. R5.20's broader resource and scheduler/cache dispositions remain intact.
 
 An approval for a source inventory containing `acceptance.json` requires a
-matching Darwin bundle in addition to the Linux acceptance bundle. R5.50
-requires the committed eight-job Linux milestone matrix. Commit, tree,
+matching Darwin bundle in addition to the Linux acceptance bundle. Historical
+R5.50 schema 3 requires the committed eight-job Linux milestone matrix; schema 4
+requires matching Linux scope and debugger selection. Commit, tree,
 archive and source hashes must agree. The annotated approval carries the Darwin
 record and policy hashes; promotion and Pages validate that binding. Linux-only
 approvals cannot close or publish such a revision. Historical approvals retain
@@ -171,7 +180,7 @@ original schema-1 lowering bundles keep their historical meaning. Schema 3
 requires both compiler modes and full coverage; old scopes cannot be relabelled
 as parity evidence.
 
-The debugger command retains the shared selected R4.60 source fixture and all
+When debugging is selected, the command retains the shared selected R4.60 source fixture and all
 thirteen scalar representations under none/off, size/auto and size/all. It
 keeps assembly, objects, executables, dSYMs, maps, UUID/identity results, unwind
 dumps and complete native LLDB sessions. Source inventories and compiler/tool

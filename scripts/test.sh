@@ -7,7 +7,9 @@
 #  both invocations after one build.  --suite, --case and --fixture select a
 #  visibly FILTERED developer run; none replaces the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports
-#  HOST-ONLY scope. Routine acceptance uses it only for the debug compiler.
+#  HOST-ONLY scope; it can combine with one --suite or --case selection.
+#  Linux routine acceptance uses host scope for its debug compiler; Darwin
+#  runs both compiler hosts and selects native workloads separately.
 
 . "$(dirname -- "$0")/env.sh"
 

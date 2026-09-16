@@ -131,11 +131,12 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/test.sh
 ```
 
-On a Mac the no-argument `test.sh` always ends with the fixture-execution
-case failing, by design: runtime fixtures are Linux x86-64 evidence and the
-harness fails rather than skips on a host without `x86_64-pc-linux-gnu-gcc`.
-Only that case red is a green Mac run; `scripts/linux-loop.sh` runs the
-fixtures where they execute.
+On macOS, use `./scripts/dev-test.sh --host` for compiler checks and add an
+exact `--suite` or `--case` selector while editing. Every selected case must
+pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
+workloads and LLDB natively on the Mac. The unfiltered harness includes Linux
+execution and cannot supply a successful Mac compiler-host result.
+See [the development and acceptance workflow](docs/process.md).
 
 For checksum-safe focused feedback during an edit, use
 `./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
@@ -161,8 +162,8 @@ Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete. The compiler builds
 on macOS arm64; exact-revision runtime acceptance runs natively on
-Linux x86-64 and Darwin arm64 for their respective target contracts. The pinned `linux/amd64` container provides a separate
-local Linux loop. R2.10 establishes target-derived sizes, alignments and checked
+Linux x86-64 and Darwin arm64 for their respective target contracts. The pinned
+container remains available for explicit environment troubleshooting. R2.10 establishes target-derived sizes, alignments and checked
 layout arithmetic, including synthetic 32-bit evidence. R2.20's
 target-parametric aggregate and variant representation and
 R2.30's functions, control-flow expressions, lexical cleanup, declared errors
@@ -260,6 +261,11 @@ matching-revision native Mac acceptance required alongside Linux approval.
 R5.40 implements native LLDB source debugging, dSYM packaging and exact Mach-O
 source identity. R5.50 closes complete hosted parity through the dual-native milestone binding
 in ROADMAP.md, retaining its explicit large-image loader limitation.
+R5.51 closes the retained-debt and acceptance-workflow follow-up through its
+exact-revision dual-native binding in ROADMAP.md. Routine policy retains full
+release hosted coverage; debugger risk adds full release GDB/LLDB. Retained
+debt has explicit owners and activation conditions; R6/R7 language work remains
+scheduled and Nix CI deferred.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

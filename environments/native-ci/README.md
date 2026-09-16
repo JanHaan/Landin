@@ -55,7 +55,8 @@ python3 scripts/ci/policy.py milestone          # major phase/parity milestone
 ```
 
 A debugger risk includes changed debug metadata, source/variable location
-tracking, unwind or frame conventions, debugger transport, or debugger tests.
+tracking, unwind or frame conventions, debugger transport/tests, or acceptance
+selection/verification of debugger coverage.
 An ordinary documentation, scanner or unrelated tooling change does not
 trigger GDB. Record the decision in the change's review/roadmap evidence.
 Major phase/parity closure, including R5.50 and R6.100, requires milestone
@@ -291,6 +292,9 @@ python3 scripts/ci/controller.py approve LINUX_BUNDLE --darwin DARWIN_BUNDLE
 
 Both bundles must have identical commit, tree, archive and source inventories.
 The approval annotation binds the Mac policy and retained record; ordinary
-promotion and publication validate this additional identity. The Linux job
-matrix and routine/milestone distinction are unchanged. See the
+promotion and publication validate this additional identity. Darwin schema 4 must select the same routine/milestone and debugger choice as
+Linux. `policy.py` writes both policies together. Routine retains debug/release
+Mac host checks and complete release hosted coverage; debugger risk adds full
+release LLDB, and milestones retain both modes. Historical schema 3 still
+requires Linux milestone scope. Only Linux supports resume. See the
 [native Mac operations guide](../macos-arm64/README.md).
