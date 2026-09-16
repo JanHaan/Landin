@@ -10324,6 +10324,23 @@ geometry keeps its separate target-parametric controls. Linux run
 `20260916T190310Z-43b956d65481` had passed the full mandatory embedded/documents
 job before cancellation; its incomplete peer jobs are not acceptance evidence.
 
+Candidate `f20670e9` passed every Linux job except release fixture execution
+in run `20260916T191256Z-1197c38ca60b`; all host cases passed on both platforms.
+That complete fixture run identified three generic atom/recovery regressions
+only in unoptimized x86 profiles and two referenced-variant lowering defects.
+Native GDB traced the former to baseline body sharing: equal unsigned carriers
+no longer imply equal bodies when enum loads validate different member sets.
+Sharing now compares slot/value atom domains; optimized sharing still compares
+the actual selected machine operations. The variant correction distinguishes
+array elements from struct fields in the stored-shape query, including module,
+frame and runtime-address roots. The existing `generic-direct-descriptor-deduction`,
+`r490-generic-recovery-frontier`, `r490-generic-union-alias`,
+`variant-match-referenced-payload-places` and
+`variant-match-referenced-payload-storage` runtime fixtures pin the repairs.
+Darwin run `20260916T191256Z-d300dedcd96f` passed both 726-case host suites and
+1162 source verdicts before its hosted matrix was deliberately stopped; the
+failed/incomplete records remain retained. Neither candidate was promoted.
+
 Resource and evidence limits: an image has at most 64 bits/elements. Local
 array transfers snapshot at most 64 scalar values; encoding lists remain in
 bounded compiler-owned vectors and membership lowering uses explicit comparisons.

@@ -425,6 +425,11 @@ a direct or indirect call's failure edge. Both backends permit zero for that
 transport load before `Failure_Test`; ordinary source atom storage does not
 gain a zero value. Recovery still observes a named error on the failing branch.
 
+The x86 baseline body-sharing check compares slot and value atom domains as
+well as scalar carriers: two u32 carriers can require different validation
+branches. Optimized body sharing compares the selected machine operations,
+including those checks. Representation sharing cannot erase a validation trap.
+
 The native backends consume the same geometry and map validated atoms to or
 from each union's encoding table. Explicit register accesses reuse the volatile
 memory instruction; fixed modes are checked before lowering and reserved-bit
