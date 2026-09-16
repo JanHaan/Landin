@@ -77,6 +77,7 @@ different responsibilities.
 | `Landin` | the namespace and the three exceptions | contain any logic |
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
 | `Landin.Hosted` | exact logical compiler-owned hosted helper identities shared by checking and emission | encode target prefixes, libc names or machine signatures |
+| `Landin.Packed` | bounded raw-image masks, field/index algebra, encoding membership and explicit register access plans | access hardware, validate source values or infer optimizer facts |
 | `Landin.Memory` | D227 memory operation identities and ordering legality | select instructions, infer aliases or choose a target |
 | `Landin.Layouts` | source representation policy names | place fields or derive target widths |
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
@@ -138,6 +139,7 @@ different responsibilities.
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
+| `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
 | `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
@@ -1028,3 +1030,9 @@ scalar atomics/volatile access and barriers; Cortex-M still only describes its
 admitted memory operations. The [target guide](../../docs/targets.md#explicit-memory-operations)
 records actual instruction requirements. Packed/register/volatile-pointer type
 syntax and the ordinary CPU/cache modules retain their separate R6 owners.
+
+R6.40 currently adds independently tested image algebra in `Landin.Packed`
+and storage/capability queries in `Targets.Packed`. These are compiler library
+foundations, not yet consumers of parsed packed declarations. No new packed
+source form, IR opcode or native lowering is enabled by these packages.
+ROADMAP.md records the remaining integration and closure obligations.

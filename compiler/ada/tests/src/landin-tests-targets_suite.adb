@@ -12,6 +12,8 @@ with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
 with Landin.Types;
+with Landin.Packed;
+with Landin.Targets.Packed;
 
 package body Landin.Tests.Targets_Suite is
 
@@ -1002,8 +1004,186 @@ package body Landin.Tests.Targets_Suite is
       end;
    end Darwin_Transport;
 
+   procedure Packed_Images (Item : in out Landin.Testing.Context);
+
+   procedure Packed_Images (Item : in out Landin.Testing.Context) is
+      package P renames Landin.Packed;
+      use type P.Image;
+      use type P.Read_Mode;
+      use type P.Write_Mode;
+      use type P.Reserved_Mode;
+      use type P.Access_Form;
+      Values : constant P.Encoding_Array := [0, 1, 4];
+      Stream : constant P.Field_Array :=
+        [(0, 1, 1), (6, 2, 1), (8, 1, 1), (10, 1, 1), (1, 1, 3)];
+      All_Correct : Boolean := True;
+      Trials : Natural := 0;
+      Targets : constant array (Positive range <>) of Target_Facts :=
+        [Linux_X86_64, Darwin_Arm64, Cortex_M, Synthetic_32];
+      Widths : constant array (Positive range <>) of P.Width :=
+        [8, 16, 32, 64];
+   begin
+      --  Independent oracle: enumerate each output bit, selecting from
+      --  the input or the replacement. No production mask helper is used.
+      for First in 0 .. 7 loop
+         for Bits in 1 .. 8 - First loop
+            for Raw in 0 .. 255 loop
+               for Value in 0 .. 2 ** Bits - 1 loop
+                  declare
+                     Expected : Natural := 0;
+                     Extracted : Natural := 0;
+                     Part : constant P.Field := (First, Bits, 1);
+                     Written : constant P.Image :=
+                       P.Insert (P.Image (Raw), P.Image (Value), Part);
+                  begin
+                     for Bit in 0 .. 7 loop
+                        if Bit in First .. First + Bits - 1 then
+                           Expected := Expected +
+                             ((Value / 2 ** (Bit - First)) mod 2) * 2 ** Bit;
+                           Extracted := Extracted +
+                             ((Raw / 2 ** Bit) mod 2) * 2 ** (Bit - First);
+                        else
+                           Expected := Expected +
+                             ((Raw / 2 ** Bit) mod 2) * 2 ** Bit;
+                        end if;
+                     end loop;
+                     All_Correct := All_Correct
+                       and Written = P.Image (Expected)
+                       and P.Extract (P.Image (Raw), Part) =
+                         P.Image (Extracted);
+                     Trials := Trials + 1;
+                  end;
+               end loop;
+            end loop;
+         end loop;
+      end loop;
+      Landin.Testing.Check
+        (Item, All_Correct and Trials = 257_024,
+         "every eight-bit field, image and replacement agrees with bits");
+      for Raw in P.Image range 0 .. 7 loop
+         Landin.Testing.Check
+           (Item, P.Contains (Values, Raw) = (Raw in 0 | 1 | 4),
+            "all three-bit enum encodings, including holes");
+      end loop;
+      Landin.Testing.Check
+        (Item, P.Valid_Encodings (Values, 3)
+         and not P.Valid_Encodings (Values, 2)
+         and not P.Valid_Encodings ([1, 1], 2)
+         and not P.Valid_Encodings ([], 1),
+         "encoded domains reject empty, duplicate and oversized members");
+      Landin.Testing.Check
+        (Item, P.Claimed (Stream, 32) = 16#5CF#
+         and P.Insert (16#A5A5_A5A5#, 1, Stream (2)) = 16#A5A5_A565#,
+         "independent stream masks preserve every unselected bit");
+      for Index in 0 .. 15 loop
+         Landin.Testing.Check
+           (Item, P.Insert (0, 3, (0, 2, 16), Index) =
+             3 * P.Image (4) ** Index, "indexed two-bit pins");
+      end loop;
+      Landin.Testing.Check
+        (Item, P.Insert (P.Image'Last, 0, (63, 1, 1)) = 2 ** 63 - 1
+         and P.Insert (0, P.Image'Last, (0, 64, 1)) = P.Image'Last
+         and P.Extract (P.Image'Last, (0, 64, 1)) = P.Image'Last,
+         "top bit and complete 64-bit image do not overflow");
+      Landin.Testing.Check
+        (Item, not P.Valid ([(0, 2, 1), (1, 2, 1)], 8)
+         and not P.Valid ([(63, 2, 1)], 64)
+         and not P.Valid ([(0, 64, Positive'Last)], 64)
+         and not P.Valid ([], 8),
+         "overlap, upper boundary, huge count and empty layout refuse");
+      for Facts of Targets loop
+         declare
+            Layout : constant Landin.Targets.Packed.Layout :=
+              Landin.Targets.Packed.Measure (Facts, Stream, 32);
+         begin
+            Landin.Testing.Check
+              (Item, Layout.Fits and Layout.Size = 4
+               and Layout.Alignment = 4 and Layout.Claimed = 16#5CF#,
+               "packed image placement uses the target facts");
+            for Bits of Widths loop
+               declare
+                  Contract : constant P.Register_Contract :=
+                    (Bits => Bits, Named => P.Mask (Bits), others => <>);
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Targets.Packed.Access_Supported
+                       (Facts, Contract, P.Read_Image) =
+                         (Architecture_Of (Facts) /=
+                            Synthetic_32_Architecture
+                          and (Architecture_Of (Facts) /= Cortex_M0
+                               or Bits <= 32)),
+                     "MMIO transaction capability is distinct from storage");
+               end;
+            end loop;
+         end;
+      end loop;
+      for Read in P.Read_Mode loop
+         for Write in P.Write_Mode loop
+            for Reserved in P.Reserved_Mode loop
+               declare
+                  C : constant P.Register_Contract :=
+                    (8, Read, Write, Reserved, 16#0F#);
+                  Legal : constant Boolean :=
+                    Write /= P.One_Clears or Reserved = P.Write_Zero;
+               begin
+                  for Form in P.Access_Form loop
+                     declare
+                        Plan : constant P.Access_Plan := P.Plan (C, Form);
+                        Allowed : constant Boolean := Legal and
+                          ((Form = P.Read_Image and Read /= P.No_Read)
+                           or (Form = P.Write_Image and Write /= P.No_Write));
+                     begin
+                        Landin.Testing.Check
+                          (Item, Plan.Allowed = Allowed
+                           and Plan.Reads =
+                             (if Allowed and Form = P.Read_Image then 1 else 0)
+                           and Plan.Writes =
+                             (if Allowed and Form = P.Write_Image
+                              then 1 else 0),
+                           "all access modes retain exact event counts");
+                     end;
+                  end loop;
+                  for Raw in P.Image range 0 .. 255 loop
+                     Landin.Testing.Check
+                       (Item, P.Legal_Write (C, Raw) =
+                         (Legal and Write /= P.No_Write
+                          and (Reserved = P.Preserve
+                               or (Reserved = P.Write_Zero and Raw < 16)
+                               or (Reserved = P.Write_One and Raw >= 240))),
+                        "reserved-bit write policies over every byte image");
+                  end loop;
+               end;
+            end loop;
+         end loop;
+      end loop;
+      declare
+         Ignored : P.Image;
+         pragma Unreferenced (Ignored);
+      begin
+         Ignored := P.Insert (0, 4, (0, 2, 1));
+         Landin.Testing.Fail (Item, "oversized insertion silently truncated");
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check (Item, True, "insertion refuses truncation");
+      end;
+      declare
+         Ignored : P.Image;
+         pragma Unreferenced (Ignored);
+      begin
+         Ignored := P.Extract (0, (0, 2, 16), Natural'Last);
+         Landin.Testing.Fail (Item, "oversized index was used");
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check
+           (Item, True, "index checked before arithmetic");
+      end;
+   end Packed_Images;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "targets", "packed image algebra and access plans",
+         Packed_Images'Access);
       Landin.Testing.Register
         (Into, "targets", "evidence ordering and layout",
          Evidence_Ordering_And_Layout'Access);

@@ -271,3 +271,58 @@ hashes and `memory-model.json` are retained under the same exported `cortex-m`
 directory. Native Linux and Darwin separately execute the Landin scalar and
 pthread ABI fixtures over their selected optimization profiles. Those results
 are compiler-generated hosted execution, not embedded or model evidence.
+
+## R6.40 image and access controls in development
+
+The mandatory `run.py` path now also executes `packed.py`. It preserves every
+R6.10/R6.20/R6.30 lane and the verified empty Renode lock cleanup. The new
+`EncodingPeripheral.cs` is a separate, synthetic peripheral at `0x40030000`:
+
+| offset | access | explicit device contract |
+|---|---|---|
+| 0 | normal 32-bit read/write | initial `0xa50000f0`; bits 8..31 must retain `0xa50000` |
+| 4 | destructive 32-bit read | returns initial `0x9b`, then zero; writing refuses |
+| 8 | write-only 32-bit command | bits 8..31 must be zero; reading refuses |
+| 12 | 32-bit status and one-clears command | initial `0xf3`; ones clear, zeros preserve; written bits 8..31 must be zero |
+| 16 | normal 16-bit count | initial `0xffff`; word accesses and other widths refuse |
+
+Pinned GCC compiles `probes/packed.c` to real M0 instructions. Its ordinary
+unsigned images enumerate all byte inputs, four two-bit indexed elements and
+every three-bit encoding of the independently tabulated named set 0/1/4.
+Firmware then performs the device accesses. `packed.py` asserts a literal
+14-event oracle, including each direction, width, address and value; that
+oracle is neither generated from the C code nor derived from the C# model.
+Reading the model's final properties does not access its emulated registers.
+Seven invalid direction/width/reserved operations must raise without adding
+an event. A destructive read is consumed once locally; a second explicit read
+returns zero. Write-only and one-clears commands issue no preparatory read.
+The count is never widened to the neighboring halfword.
+
+The runner retains the generated platform, Monitor and assertion scripts,
+ELF/map/disassembly, trace, tool identities, exact commands and hashes under
+the same exported evidence directory. The existing 30-second subprocess limit,
+fixed virtual-time execution and process-group cleanup apply. The new
+firmware has 660 text bytes, zero data and 16 BSS bytes; these are control sizes,
+not Landin firmware or stack bounds. `packed-validation.json` indexes the
+successful development run and its independent local copy.
+
+This is actual peripheral-harness execution of independent C controls. The
+Ada `targets/packed image algebra and access plans` test separately checks
+compiler-library algebra with an independent bit oracle. Neither supplies
+Landin packed source support, a new IR operation, an implemented Cortex-M
+backend or R6.40 completion. ROADMAP.md owns the remaining integration.
+The original DMA lane continues to test ordinary externally written buffer
+storage under D227's explicit serialized-device premise.
+
+The current official
+[CMSIS-SVD register description](https://open-cmsis-pack.github.io/svd-spec/main/elem_registers.html)
+distinguishes access permission, modified writes, read actions and reset
+metadata. Its
+[format guide](https://open-cmsis-pack.github.io/svd-spec/main/svd_Format_pg.html)
+identifies omitted fields as reserved, without supplying one universal
+reserved-bit write policy. The
+[Arm Cortex-M0 user guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1)
+requires aligned accesses for this core. These documents were consulted on
+2026-09-16; they inform the explicit control contracts, not an assertion that
+this synthetic map describes vendor hardware. R6.80 retains generated-device
+fixture provenance, and general SVD tooling remains outside this item.

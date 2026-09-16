@@ -10094,7 +10094,7 @@ wait-free bounds are not claimed. All other retained debt keeps its owner.
 
 ### R6.40 — Define and implement packed invalid encodings
 
-Status: planned
+Status: active
 Depends on: R2.20, R6.20
 
 Decide the behavior of unnamed hardware bit patterns, raw register images,
@@ -10105,6 +10105,106 @@ Sources: legacy A4; `R§6`.
 
 Exit evidence: positive and negative encoded-value cases and reserved-bit
 read/modify/write behavior pass through the peripheral harness.
+
+Intake and implementation in progress (2026-09-16):
+
+The initial checkout was clean on `r630-memory-model` at
+`65e069affe22019be174b51a4230d0056fd4d16c`. Canonical main and GitHub main
+matched that revision and annotated approval object
+`227d6856005717c958c7b37b4d4b293a8d1a364e`; its annotation binds identical
+Linux and Darwin archives. Guarded Pages jobs 1889506/1889507 and mirror jobs
+1889505/1889508 succeeded. Work is isolated on `r640-packed-encodings`.
+No pre-existing edits were present. This intake verifies the R6.30 delivery,
+not R6.40 acceptance.
+
+The first implemented layer is a compiler-library algebra, not source support.
+`Landin.Packed` checks overlap, extent and indexed element bounds before
+arithmetic; manipulates unsigned images through 64 bits without losing unnamed
+bits; validates encoding-list uniqueness/fit and tests raw membership without
+inventing a named value. `Targets.Packed` derives rounded 1/2/4/8-byte storage
+and alignment from the selected target, separately querying volatile transaction
+capability. M0 eight-byte ordinary images do not imply eight-byte MMIO.
+Natural, C and optimal layout code is unchanged.
+
+The library's bounded access planner covers normal, unavailable and clear-on-read
+reads; normal, unavailable and one-clears writes; and explicit preserve,
+write-zero and write-one reserved policies. One-clears requires reserved zero.
+An allowed image access has exactly one read or one write; synthesized device
+field updates refuse for every combination, following [0740]. Preserve means
+that a complete supplied image carries its reserved bits: writing it performs
+no hidden read. A local field insertion keeps all other bits, including unknown
+encodings elsewhere. The prototype's contradictory fresh-constructor claim is
+removed: preserving old hardware bits requires the explicit existing-image read
+shown in its revised configuration sketch. These internal APIs do not yet settle
+or enable the complete language-facing raw/validated type surface.
+
+Independent evidence developed so far:
+
+- The native Mac debug case `targets/packed image algebra and access plans`
+  and native Linux release case each pass 7044 assertions. An independent
+  per-bit oracle checks all 257024
+  combinations of an eight-bit image, fitting field and replacement. Additional
+  cases cover all three-bit enum patterns with holes, duplicates and oversized
+  encodings, indexed two-bit pins, explicit prototype masks, maximum bit/width,
+  overlap and oversized counts, all access-mode combinations and all byte images
+  under each reserved-write policy. Four target descriptions distinguish layout
+  from device transaction eligibility. This is Ada compiler-library execution,
+  not emitted Landin code.
+- `packed.py`, `probes/packed.c` and `EncodingPeripheral.cs` add a separate
+  synthetic Renode device. Pinned GCC-generated M0 instructions execute local
+  indexed masks and raw membership, normal RMW, destructive reads, write-only
+  commands, one-clears commands and exact halfword count accesses. A literal
+  independent oracle requires all 14 address/width/direction/value events;
+  seven invalid direction/width/reserved operations refuse without an event.
+  The image uses 660 text bytes, zero data and 16 BSS bytes. This is an
+  independent C control, not compiler-generated Landin firmware or a vendor
+  peripheral model.
+- `/home/landin/work/r640-probe/evidence-2` passes the complete existing
+  embedded path plus that new lane. `.scratch/r640/evidence-2` retains an
+  independent local copy; `packed-validation.json` indexes original input,
+  tool and artifact hashes. The first run is retained as failed because the
+  Renode script used an unavailable lookup method; the corrected method is
+  the existing model-control API. Nine supervisor/model controls pass. Original
+  CPU/startup, ABI, memory-model, DMA and verified empty-lock cleanup evidence
+  remains mandatory; nothing is replaced by this new lane.
+
+Remaining R6.40 work, before any completion or promotion:
+
+- Record normative decisions in spec.md for the raw-image/validated-value
+  distinction and its complete construction, extraction, conversion, assignment,
+  matching, equality, copy and zeroed behavior. Resolve implicit versus explicit
+  storage width, enum base/field-width differences (notably prototype direction
+  at 6..7), signedness, packed scalar widths, set expansion, arrays and address
+  restrictions. Keep alternatives, rationale and executable source pins.
+- Implement source grammar, recognition, checking, target-neutral shapes and
+  effects, verifier rules and native lowering. Handle invalid constants and
+  dynamically obtained encodings from ordinary, volatile, pointer and external
+  storage; preserve D187 checks and D227 boundaries without invalid-value UB.
+  Audit folding, exhaustive matches, aggregate/field copies, calls, evidence
+  dispatch and specialization. Classify every source operation and diagnostic.
+- Supply positive, negative and boundary source fixtures and actual
+  compiler-generated native execution across required profiles, including
+  externally written ordinary-slice storage and packed completion observation.
+  The current Ada algebra and C peripheral control alone cannot close this item.
+- Finalize normative register access/reserved policies and the source surface
+  for explicit image operations, adding compiler refusals for unsafe operations.
+  Keep actual event counts/widths independently checked in the peripheral lane.
+- Update source/prototype/guarantee/diagnostic/target matrices and all affected
+  guides with the implemented boundary; run full checks and verified rendering.
+  Select compatible native policies before the closure candidate, justify
+  debugger risk from the final changes, then perform identical-revision native
+  acceptance, verified exports, dual approval, atomic promotion, mirror and
+  guarded publication verification. No R6.40 acceptance has run yet.
+
+R6.80 owns complete checked-in generated-device fixtures and their provenance;
+general SVD generation stays with R551-33. A bounded hand-authored contract
+model here discharges neither obligation. R6.50 keeps Cortex instruction
+selection; R6.60 startup/vectors; R6.70 freestanding core; R6.90 the complete
+derived driver and stable circular-buffer protocol. D227's ordinary slice,
+cache and device premises are unchanged. R551-06/07/08 resource limits,
+R551-13/14 scheduling/cache/resume, R551-15 deferred Nix and
+R551-17/20/21/23/24 evidence/delivery limits keep their existing dispositions.
+R6.40 remains active and no successor is made dependency-ready by this work.
 
 ### R6.50 — Implement the Cortex-M backend
 
