@@ -9837,7 +9837,7 @@ binding; R6.30 is also dependency-ready and retains its separate semantic gate.
 
 ### R6.20 — Instantiate the 32-bit layout and ABI
 
-Status: active
+Status: complete
 Depends on: R2.10, R5.20, R6.10
 
 Implement Cortex-M scalar, aggregate, variant, error and evidence-table layouts
@@ -9931,8 +9931,9 @@ agreement, entry/call planning, pointer-size and array-extent boundaries,
 capability/no-write/no-tool refusals and ABI budget/invalid-input tests.
 Embedded supervisor controls pass eight cases, preserving R6.10's Renode
 lock-file cleanup regression. The Mac target suite passes 12 cases/160 checks
-and the driver suite 53 cases/1871 checks. Final full document checks and verified
-rendering precede acceptance.
+and the driver suite 53 cases/1871 checks. Full `python3 check.py` passes, and
+`./scripts/site.sh` renders, verifies every source word and packages the site.
+The generated diagnostic matrix includes the new Cortex backend-refusal test.
 
 Acceptance scope and successor handoff:
 
