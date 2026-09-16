@@ -1300,6 +1300,13 @@ there: reading one whose read is 'none' is an error, and so
 is writing one whose write is 'none'. Together with the
 rule above that gives the shape of every driver — read the
 whole image, change it locally, write it back whole.
+A fresh local constructor has no access to the previous hardware image.
+Preserving reserved hardware bits therefore requires an explicit image read
+before the local update; a whole-image write cannot hide that read. This
+read/modify/write sequence is not atomic, and its normal-read/normal-write
+premise does not extend to clear-on-read or one-clears behavior. Packed
+source forms remain outside the enabled kernel; [1830] distinguishes the
+examples here from implemented constructs.
 'reset' initialises nothing. It is what the datasheet says
 the register holds after a reset, recorded so that tools
 and readers know what they are starting from. The hardware

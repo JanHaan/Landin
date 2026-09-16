@@ -205,6 +205,8 @@ class Run:
         execute(self)
         from memory import execute as memory_execute
         memory_execute(self)
+        from packed import execute as packed_execute
+        packed_execute(self)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

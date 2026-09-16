@@ -408,3 +408,8 @@ spills preserve left-to-right evaluation across later control-flow expressions.
 Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
 with no atomicity promise. Target instructions are described in the target guide.
+
+R6.40's current image-algebra and target-layout foundations do not yet change
+this representation. They are not evidence that packed source fields can be
+lowered through ordinary byte-addressed field paths. ROADMAP.md owns that
+pending integration and its required verifier and optimization evidence.

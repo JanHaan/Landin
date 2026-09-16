@@ -314,3 +314,11 @@ controls, and independently show GCC's RMW needs an unresolved helper.
 The cache model demonstrates stale reads and destructive maintenance, under an
 explicit two-byte cache-line abstraction; the cacheless emulator cannot test
 physical cache behavior. See the [probe guide](../environments/cortex-m/README.md).
+
+The R6.40 work in progress adds `Targets.Packed` measurements for explicit bit
+fields and array element widths, rounded to 1/2/4/8-byte storage with target
+alignment. Its transaction query delegates to existing volatile capabilities:
+M0 remains limited to one-, two- and four-byte transactions. The companion
+image algebra and access planner are tested library seams, not yet connected
+to packed source declarations. The [probe guide](../environments/cortex-m/README.md)
+records the independent C peripheral witness and exact width/event oracle.

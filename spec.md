@@ -13739,6 +13739,12 @@ A register image read-modify-write remains two separate events and
 can lose an intervening hardware or interrupt update. Packed field legality,
 register access modes and the `volatile ptr` surface retain R6.40/R6.80; these
 scalar primitives do not enable those deferred types.
+A fresh local image construction cannot preserve previous device bits without
+an explicit read. Whole-image stores do not imply such a read. The packed
+image algebra and independent C peripheral controls under development do not
+enable new source syntax, validate hardware enumerations, or permit an
+optimizer to treat unnamed encodings as unreachable. [0730]/[0740]'s described
+surface remains outside the grammar of the enabled kernel.
 
 All explicit memory primitives above are full compiler memory boundaries.
 Ordinary stores before one must be materialized, and ordinary loads after

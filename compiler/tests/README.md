@@ -883,3 +883,13 @@ call, so specialization profiles exercise real evidence dispatch. Its bounded
 SC-fence store-buffer litmus rejects 0/0, but the absence of that observation
 is not proof of a memory model. Every new negative pins exact diagnostic text;
 M0 RMW and eight-byte load requests retain their explicit target selection.
+
+The R6.40 development case `targets/packed image algebra and access plans`
+checks the compiler library with an independent bit-by-bit reference over
+257024 combinations, enum holes, 64-bit boundaries, indexed fields and the
+complete bounded access-mode table. It also compares four target descriptions.
+This is compiler-host evidence only; no packed source fixture is enabled by
+that case. The separate Cortex-M `packed.py` lane executes independent C
+firmware against an explicit Renode device and asserts the full access trace.
+ROADMAP.md distinguishes these foundations from the unfinished source/IR/native
+integration and exact-revision acceptance.

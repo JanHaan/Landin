@@ -285,17 +285,20 @@ public open: (port: volatile ptr mut usart.device,
     port.val.brr = divisor
 
 ```
-A whole configuration value, built locally and written once.
-Every bit not named here is reserved and stays as it was.
+An explicit configuration image read, local field updates, then one write.
+The old image supplies reserved bits. A fresh constructor cannot preserve bits
+it never read, and the final write must not synthesize a hidden read. This
+sequence is valid only for this normal-read/normal-write register and is not
+atomic against interrupt or hardware updates. A one-clears command must not
+be built by reading and writing back pending status.
 ```landin
-    mut cfg: dma.stream_config = (
-        enable:     false,
-        dir:        dma.peripheral_to_memory,
-        circular:   true,
-        mem_inc:    true,
-        interrupts: (transfer_complete: true, transfer_error: true,
-                     of false)
-    )
+    mut cfg := stream.val.config
+    cfg.enable = false
+    cfg.dir = dma.peripheral_to_memory
+    cfg.circular = true
+    cfg.mem_inc = true
+    cfg.interrupts = (transfer_complete: true, transfer_error: true,
+                      of false)
 
     stream.val.periph_ad = u32(addr port.val.dr)
     stream.val.mem_ad    = u32(addr buf[0])
