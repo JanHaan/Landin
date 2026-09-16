@@ -12,6 +12,7 @@ private package Landin.Stages.Checking.References is
       Of_Tree       : Landin.Syntax.Tree;
       Function_Node : Landin.Syntax.Node_Id;
       Body_Node     : Landin.Syntax.Node_Id;
-      Into          : in out Landin.Diagnostics.Diagnostic_List);
+      Into          : in out Landin.Diagnostics.Diagnostic_List;
+      Probe         : access Transfer_Probe);
 
 end Landin.Stages.Checking.References;

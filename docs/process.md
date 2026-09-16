@@ -12,10 +12,10 @@ CI deferred.
 | edit/test loop | checksum-based build and exact affected case/suite/fixture selectors; affected Python tests | development feedback |
 | Mac compiler host | `scripts/dev-test.sh --host`; diagnostics, compiler units and complete IR golden | explicit host scope; no Linux workload emission/execution |
 | Linux development | `scripts/ci/controller.py dev --slot NAME -- COMMAND...` on the native runner | focused native feedback; no approval |
-| native Darwin candidate | exact archived release host checks, Darwin ABI/lowering matrix, generated bindings and native LLDB | required matching Darwin evidence for R5.30 and later |
+| native Darwin candidate | schema-4 debug/release host checks and complete release source/runtime/ABI, derived programs and bindings | required matching archive and compatible Linux scope |
 | routine main promotion | five committed jobs: debug host suite, full release suite/runtime/ABI and native report identity, release object quality, bindings, documents/tooling | exact-commit routine approval |
-| substantial debugging risk | routine coverage plus native release GDB | exact-commit routine approval that includes the debugger job |
-| major phase/parity milestone | full suite, quality and native GDB in both compiler modes, bindings and documents/tooling | exact-commit milestone approval |
+| substantial debugging risk | routine coverage plus full native release GDB and LLDB | exact-commit routine approval that includes the debugger job |
+| major phase/parity milestone | full Linux suite/quality/GDB and Darwin host/source/runtime/ABI/bindings/LLDB in both compiler modes, plus documents/tooling | exact-commit milestone approval |
 | publication | verified export, annotated approval, atomic main/tag promotion, guarded Pages rendering | delivery of the approved revision |
 
 Do not run Linux containers or Linux workload matrices on the Mac during R5/R6
@@ -27,18 +27,21 @@ IR comparison that exposed R5.10's Ada argument-order defect remains included.
 Choose the smallest test that can expose the changed behavior first. When it
 passes, broaden only for another affected subsystem or a remaining concern.
 Run routine acceptance once for the final committed promotion candidate;
-resume verified successful jobs after interruption. A failed job or changed
-source requires a new acceptance run. Do not repeat full local matrices before
+Linux can resume verified successful jobs after interruption. Darwin has no
+resume path: interrupted or failed runs require a new run. Failed Linux jobs
+or changed source also require a new acceptance run. Do not repeat full local matrices before
 that gate. Documentation changes still receive full `check.py`; the checker
 retains every invariant and fixture.
 
 Debugger risk means changed debug metadata, source/variable locations,
-unwind/frame conventions, debugger transport or debugger checks. Record the
+unwind/frame conventions, debugger transport, debugger checks, or acceptance
+selection/verification of debugger evidence. Record the
 reason for enabling it. A status-page edit or an unrelated tool change is not
-a reason to run GDB. The R5.10 ordering repair preserves the existing Linux IR
+a reason to run debugger matrices. Historically, the R5.10 ordering repair preserves the existing Linux IR
 and copy behavior, changes no debug encoding/location/unwind code, and passed
 the unchanged IR golden and traversal execution checks in both compiler modes;
-this delivery therefore uses routine scope without GDB.
+that delivery used routine scope without GDB. R5.51 changes debugger selection
+and verification, so its closure uses routine scope with full release GDB/LLDB.
 
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
@@ -50,9 +53,13 @@ python3 scripts/ci/policy.py routine --debugger
 python3 scripts/ci/policy.py milestone
 ```
 
-These commands edit the committed policy; they do not run or approve anything.
-Approval validates the exact job list and command set for the selected scope.
-Historical schema-1 approvals remain full eight-job evidence. The native
+These commands edit both native policy files; commit them before acceptance.
+Darwin schema 4 records host modes, hosted modes and debugger modes explicitly.
+Routine retains complete release coverage; `--debugger` adds every release
+native debugger profile and derivative. Milestones run both modes. Approval
+validates the exact commands, selected scope and matching archive. Historical
+Linux schema-1 approvals remain full eight-job evidence; Darwin schemas 1/2/3
+retain their original contracts, including schema 3's Linux milestone rule. The native
 operations guide documents acceptance, export, approval and promotion.
 
 ## What the measurements say
@@ -151,7 +158,7 @@ the existing native acceptance record. Build reuse cannot replace the native
 Darwin, Linux or freestanding executions required at a milestone.
 
 
-## Darwin lowering acceptance
+## Historical Darwin acceptance progression
 
 R5.30 adds `scripts/ci/darwin.py accept COMMIT` to ordinary promotion. It runs
 the committed native Mac policy and exports source, tools, artifacts and

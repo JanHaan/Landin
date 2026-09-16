@@ -68,8 +68,12 @@ other discovered class whose fixture has a recorded `expect`. It invokes the
 real scanner-through-backend path appropriate to that class, including
 assembling, linking and executing a runtime or ABI fixture. Every selected
 transcript begins with `FILTERED`, and an unknown selection fails: focused
-feedback cannot look like the complete suite by accident. Run
-`./scripts/test.sh` with no selector for the complete local gate.
+feedback cannot look like the complete suite by accident. On macOS use
+`--host`, optionally with one `--suite` or `--case`; native workload cases
+remain excluded and cannot be selected through that combination. `--fixture`
+and recording cannot combine with `--host`. Run Linux workloads in native
+Linux development slots and Darwin workloads natively. Exact-revision native
+acceptance owns closure.
 
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
@@ -230,8 +234,8 @@ benchmark evidence. A non-Linux host fails rather than claiming a skip as a pass
 After building the compiler, `./scripts/debug.sh` runs the Linux x86-64
 source-debugger acceptance in `debugging/check.py`. It uses GDB to test the
 emitted program's line information, breakpoints, stepping, stack frames and
-selected parameters and locals. The native gate runs it separately with debug
-and release builds of the Ada compiler. The script fails if its tools or
+selected parameters and locals. Routine debugger risk runs the full release
+matrix; milestones run it with both debug and release Ada compilers. The script fails if its tools or
 debugger operations are unavailable; missing debugger evidence is not a pass.
 
 On native macOS arm64, use `./scripts/debug.sh --target=darwin-arm64 --output DIR`
@@ -249,8 +253,9 @@ UUIDs and LLDB transcripts. It checks mismatch refusal, comment-only identity
 changes, default/explicit none equivalence and stripped deployment without
 filenames or source breakpoint locations. Malformed identity controls run
 without a native debugger in `scripts/tests/test_macho_identity.py`.
-The committed Mac acceptance requires all profiles and verifies their artifact
-identities. R5.50 adds `--parity`, which runs the complete P2/P3/P4 LLDB
+When debugging is selected, committed Mac acceptance requires all profiles
+and verifies their artifact identities; routine uses release and milestones
+use both compiler modes. R5.50 adds `--parity`, which runs the complete P2/P3/P4 LLDB
 workloads before these selected checks; see [the native parity guide](darwin/README.md).
 
 The complete `derived-parser` program runs in the same runner using none/off,
@@ -288,9 +293,10 @@ the real hosted I/O fixtures separately assert native process behavior.
 `python3 compiler/tests/debugging/test_check.py` exercises transcript refusals
 without GDB; `scripts/debug.sh` runs those regressions before the real sessions.
 
-The default transport is native GDB. For the Mac's translated local Linux
-loop, use `./scripts/linux-loop.sh ./scripts/debug.sh --runner=qemu`;
-`--qemu=PATH` selects the emulator explicitly. This uses QEMU's GDB remote
+The current Linux transport is native GDB on the native runner. The historical
+translated troubleshooting path uses `--runner=qemu`; `--qemu=PATH` selects
+the emulator explicitly. It is outside the R5/R6 development/acceptance loop.
+This uses QEMU's GDB remote
 stub with the same assertions and reports its transport. It never turns a
 failed native session into a pass by automatically falling back to emulation.
 

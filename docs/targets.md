@@ -1,7 +1,8 @@
 # Target contracts
 
 `spec.md` [1975] owns the language-facing C and link-name rules. ROADMAP.md
-R5.20/R5.30/R5.40/R5.50 record implementation evidence and dispositions; this page explains
+R5.20/R5.30/R5.40/R5.50 record implementation evidence; R5.51 consolidates
+retained debt and current acceptance dispositions; this page explains
 the package boundaries, not a second work list.
 
 | fact or operation | owner |
@@ -148,7 +149,7 @@ attestations against a modified executable.
 `--debug=none` remains the default and emits only a caller-needed source map.
 Neither that map nor source filenames need deployment. `strip -S -x` removes
 optional source-debugging information from a copy while preserving executable
-behavior, the identity section and UUID. Acceptance runs the copy alone in a
+behavior, the identity section and UUID. When debugger acceptance is selected, it runs the copy alone in a
 fresh deployment directory, refuses source breakpoints without debug artifacts,
 and separately resolves its caller coordinates against retained matching data.
 
@@ -179,6 +180,6 @@ semantics. Darwin now emits the complete wide element address, and all four
 profiles retain successful assembly/linking followed by the original failed
 status-42 execution and matching control. The result is explicitly
 `platform-limited`; no passing runtime verdict or general large-image support
-is claimed. R5.20's deferred large-image placement/preflight work remains with
-its scale and self-hosting successor. No giant materialized object sweep or
+is claimed. R5.51 R551-07 retains R5.20's large-image placement/preflight transfer to the
+scale and self-hosting successor, with an explicit activation condition. No giant materialized object sweep or
 new exhaustion guarantee is introduced.

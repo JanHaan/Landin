@@ -914,15 +914,20 @@ call.
 
 A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence — a source, a non-empty span, how many secondary labels, how many notes — is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 
-`Landin.Tokens` also knows the lexemes the kernel grammar deliberately omits.
-A deferred band — `1.5`, `'a'`, `"""raw"""` and `+=` — is read as one token
-each so that `[1830]` can refuse a construct by name instead of reporting a
-stray byte, and so that enabling one later cannot change how a file that never
-used it was read. Every deferred kind names the tour construct it belongs to,
-and `check.py` holds it to naming one that exists and to not being a lexeme
-the grammar already spells. D161 moved ordinary quoted text out of that band:
-the scanner now validates its closed escape set through `Landin.Tokens.Text`
-and emits an enabled text token for the parser.
+The scanner's former deferred-token band is historical. Floats, characters,
+raw text and compound assignment are enabled; D164 removed its final family.
+`Landin.Tokens.Text` validates literal spelling and encoding. Named refusals
+under [1830] belong to parser/checker tables for still-deferred constructs,
+not a lexical band. L0010 is parser-only; numeric code bands do not determine
+which stage owns a diagnostic.
+
+Loop-transfer origin states have limited controlled owners in the reference
+checker. The loop vector borrows lexical frame addresses; growing it copies no
+owned state. Completion moves a state without allocation and clears its former
+owner. Exceptional exits finalize each owner. A checker-instance test probe
+injects bounded failures at ownership/traversal boundaries; ordinary compiler
+instances have no probe. This repair does not change declaration-by-field
+storage growth or claim recovery from arbitrary host exhaustion.
 
 The parser also recognises [0890]'s `noreturn` return position and gives its
 named refusal with the R6.70 owner while retaining the body and following
@@ -978,8 +983,10 @@ See `TOOLCHAIN.md`. From the repository root:
 
 `scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
 and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
-selector. Filtered runs identify themselves and do not replace the complete
-no-argument suite.
+selector. On the Mac add `--host`; run Linux workloads in native development
+slots. Filtered runs identify themselves and never replace exact-revision
+acceptance. [The process guide](../../docs/process.md) explains both native
+policies, debugger selection and Linux-only resume.
 
 Darwin uses the shared DWARF encoder with x29-relative stack locations and
 Apple section/CFI conventions. Full executable output retains its object and

@@ -149,6 +149,12 @@ a forced consequence and should have been the former.
 
 ## Successor roadmaps
 
+R5.51's consolidated intake below makes the retained debt, activation triggers
+and completion evidence explicit. Its intake labels identify dispositions,
+not additional phases or a second work list. A named successor is a destination,
+not a claim that its implementation is scheduled in R0-R7. R7.30 reconciles
+these records with the inherited register; R7.70 must preserve every transfer.
+
 - **Scale and self-hosting:** stable separate compilation and interface files,
   scale-driven caching, explicit cross-language stage transport and
   incremental replacement of tested Ada stages.
@@ -5684,6 +5690,9 @@ at that batch boundary.
 
 #### Older review reconciliation
 
+Historical batch record: R5.51's source-to-disposition crosswalk below owns
+the current handoff and reconciles subsequent accepted execution evidence.
+
 Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
 independent Codex and Claude reviews of `66b3b659`. `A1` through `A9` below refer to
 the Codex report's numbered findings; `C`, `M` and `m` refer to the Claude
@@ -8850,7 +8859,9 @@ Implementation and reviewed boundaries:
   is introduced. `docs/targets.md`, `docs/ir.md` and the package guide describe
   these boundaries. `check.py` rejects duplicated literal hosted identities.
 
-Readiness intake disposition (all R5.20 inputs):
+Readiness intake disposition (all R5.20 inputs, preserved historically):
+R5.51's crosswalk and ledger below own subsequent transfers and the bounded
+CHK-REF-3 repair; this table records the original R5.20 decisions.
 
 | Finding | Evidence and final disposition |
 |---|---|
@@ -9277,7 +9288,399 @@ policy; routine scope returns in subsequent development. All R5.20 resource,
 scaling and scheduler/cache dispositions remain; Nix CI stays deferred, and
 no release designation or Cortex-M implementation changes here.
 
+### R5.51 — Organize retained debt and repair phase handoffs
+
+Status: complete
+Depends on: R5.50
+
+Consolidate the inherited debt and evidence limits, repair the bounded issues
+needed before R6, and give every remaining item an explicit destination,
+activation trigger and completion test. The original intake and implementation sequence are preserved below; the
+implemented repairs and exact-revision binding establish closure. R5.50's hosted parity
+acceptance remains valid for its exact source and declared limits. This newly
+requested follow-up adds work before R6.10 without relabelling that history.
+
+#### Audit baseline and confirmed incoherence
+
+The audit starts at accepted and published
+`51229dc368b2fec72a20bf912ae2c1a9996d62bd`, with a clean checkout and matching
+canonical main. Its annotated approval binds Linux milestone run
+`20260915T150424Z-2e211b530e85` and Darwin schema-3 run
+`20260915T150424Z-71d20c2c55ff`; Pages jobs 1888998/1889000 and mirror jobs
+1888999/1889001 succeeded. These are closure evidence for R5.50, not R5.51.
+
+Inputs are the successor list and 32-row inherited register; R4.30/R4.60 and
+R4.91's major, minor, follow-up and readiness dispositions; R5.10-R5.50;
+the planned R6/R7 obligations; spec [1830]; repository status guidance;
+process, target, IR, fixture, native acceptance and publication guides; and
+the relevant compiler, policy, verifier and test sources. The audit uses
+source inspection and retained acceptance evidence, not a new stress campaign.
+
+- Routine scope is currently inconsistent across the two native gates.
+  `scripts/ci/policy.py routine` changes only the Linux policy. The committed
+  Darwin schema 3 still runs both modes and all LLDB sessions, and
+  `scripts/ci/darwin_parity.py` requires the archived Linux scope to be
+  `milestone`. A bounded temporary-archive probe reproduces its exact refusal:
+  `R5.50 requires the committed Linux milestone matrix`. Changing only the
+  Linux policy therefore cannot deliver the documented routine workflow.
+  The schema-3 check is correct for historical R5.50; a new policy contract is
+  required for subsequent work.
+- CHK-REF-3 remains visible in
+  `landin-stages-checking-references.adb`: `Loop_Frame` owns raw
+  `Exit_State`/`Back_State` pointers, while `Release` is called on normal paths.
+  Exceptions during traversal or transfer can bypass those releases. This
+  bounded ownership repair is proposed for R5.51 instead of waiting for a
+  general scale project. No new allocation-failure experiment has run yet.
+- Historical development sentences are easily mistaken for current backlog.
+  For example, R4.91 m6 says the changed parser mutation stream had not run.
+  The accepted R5.50 debug host transcript explicitly passes `survives
+  deterministic mutations`, `mutation bytes avoid the old short cycle` and
+  `survives every truncation`; the registered fixed-seed parser test still
+  performs those operations. That specific evidence gap is superseded.
+  This does not establish broader driver mutation coverage or arbitrary
+  exhaustion recovery. The same distinction must be made for old runtime
+  evidence notes, rather than mass-editing their historical verdicts.
+- Current guidance mixes historical and current workflows: AGENTS.md offers
+  the container loop and describes an expected-red Mac run, while the R5/R6
+  agreement requires `--host` and native Linux slots. The process table still
+  describes selected release Darwin acceptance although schema 3 is full
+  parity in both modes. Generic resume advice applies to Linux; Darwin has
+  no resume path. None of these inconsistencies authorizes skipping coverage.
+- The compiler guide still describes floats, characters, raw text and compound
+  assignment as a deferred token band even though D164 removed that band.
+  The binding guide's introduction supports both ABIs, but later prose still
+  calls the SysV-only assertion canonical. These are concrete reader-guide
+  contradictions to include in the documentation repair, not new language work.
+- Successor names exist, but several retained observations have no activation
+  condition or measurable closure. Large images, duplicate planning, native
+  failure coverage and maintenance observations need explicit dispositions.
+  R7's remaining normative features already have owners and must stay there.
+
+#### Classification and scheduling rules
+
+The intake labels below are stable within this item. Every row carries its
+original finding or source, current evidence, one disposition owner, activation
+condition and closure obligation. Split mixed findings when correctness,
+resource use and performance have different owners. Keep bounded observations
+separate from proven defects and from rejected or deliberately unsupported
+capabilities. An unsupported capability becomes work only through its stated
+decision or trigger. Do not invent a trigger for inherited C4.
+
+"Do now" means implement within R5.51 before starting R6.10. "Scheduled" means
+an existing executable R6/R7 item owns the work. "Successor" means preserve a
+concrete transfer in this roadmap; it does not silently expand this roadmap's
+endpoint. "Limit/watch" requires an accurate contract and a review trigger,
+not an automatic implementation promise. No dates or performance estimates
+are implied. A transfer cannot discharge still-normative language behavior.
+
+#### Do now: R5.51 implementation scope
+
+| Intake | Problem and action | Completion evidence |
+|---|---|---|
+| R551-01 | Reconcile routine, debugger-risk and milestone policy on both native targets. Introduce a new explicit Darwin policy schema and committed selection alongside Linux. Routine should retain debug compiler-host checks and complete release source/runtime/ABI, derived-program and binding coverage; debugger risk adds full release native debugger coverage. Milestones retain both modes and all debugger obligations. | Tests reject incomplete or substituted scope, commands, profiles and artifacts. Selecting routine produces mutually valid policies, and matching exact-revision Linux/Darwin routine acceptance can be exported and approved. Historical Darwin schemas 1/2/3 and Linux approvals retain their original requirements, including R5.50's milestone restriction. |
+| R551-02 | Repair CHK-REF-3 with explicit ownership of loop-transfer state through vector growth, normal release, transfers and exceptional exits. Keep this separate from declaration-by-field storage redesign. | Bounded injected failures after each relevant allocation/ownership transfer prove exactly-once release and no leaked state; repeated compiler invocations remain usable. Existing loop, break/continue, completion, cleanup, alias and origin verdicts stay unchanged on both compiler hosts. Do not induce host OOM or raise stack limits. |
+| R551-03 | Reconcile current status, workflow and coverage prose in AGENTS.md, README, handoff, process/target/native guides, compiler/binding guides and fixture documentation. Fix the stale token-band and SysV-only guidance. Add clear historical boundaries and links from old handoffs to their current dispositions. Keep R5.50's original closure text and artifacts. | One current next-item pointer; no current container-loop recommendation, expected-red Mac success rule, unconditional debugger promise or Darwin resume claim conflicts with the chosen workflow. Guides agree with implemented source/target facts. Published summaries distinguish successful executions from explicit platform-limited outcomes. |
+| R551-04 | Make this consolidated intake durable and mechanically checkable. Account for every retained R4.91/R5 finding, every successor family and every live delayed normative row; merge duplicates by reference. Add checks for unique intake labels, defined owners, nonempty triggers/closure evidence, valid disposition categories and live roadmap references. | A source-to-disposition crosswalk has no unexplained omission. Tiny malformed-register controls reject dangling owners, duplicate labels and missing dispositions. Full document and rendering checks pass without changing historical findings or inventing new language obligations. |
+| R551-05 | Reconcile evidence claims against accepted archives, commands and transcripts. Supersede m6's parser-only gap; check old m2/m27/M14 and follow-up coverage notes against actual fixture/profile inclusion. Index permanent limits and genuinely untested paths separately. | Every claim names the revision and evidence that supports it, or says precisely what remains untested. Fixture counts, grammar derivation and code-only diagnostic checks are not described as semantic, exact-wording or broad fuzz proof. Current acceptance never backfills missing historical bundles. |
+
+The routine policy design in R551-01 must retain full release hosted coverage;
+falling back to R5.30's selected matrix is not an acceptable cost reduction.
+Use versioned verifier contracts so later oracle/helper changes do not silently
+reinterpret an older schema's evidence. Test preservation against the retained
+R5.30/R5.40/R5.50 records as well as bounded negative controls. The new schema
+must explicitly record whether debugging is required and which native modes
+ran. Do not remove the Darwin marker to bypass dual-native approval. Production
+caching, parallel workload scheduling and Darwin resume remain separate work.
+
+#### Scheduled successor debt and maintenance
+
+| Intake and inherited source | Current limit or gap | Owner, activation and completion evidence |
+|---|---|---|
+| R551-06: CHK-FLOW-1, CHK-FE-2/3; R4.91 C5 | Flow snapshots, declaration-origin matrices, folding/dependency walks and remaining IR scratch arrays retain size-dependent storage/stack costs. Some dense inference tables are already heap-owned; that did not change their growth. | Scale and self-hosting. First workload exceeding the recorded envelope, or before persistent compiler service/self-hosting scale is claimed. Measure bounded separate declaration, field and dependency dimensions on native hosts, repair ownership/algorithms, and state supported failure behavior without universal recovery claims. |
+| R551-07: BE-1; R5.30 branch reach; R5.50 large-array case | Final linker placement is not generally preflighted. Linux RIP-relative reach, Darwin's default 2 GiB static-image collision and arm64 direct-branch reach are distinct limits. | Scale and self-hosting. Before general large-image support is claimed or a real workload requires it. Preserve the native control and original status-42 oracle; prove layout/reach decisions with bounded planner/text cases and carefully bounded native evidence. Any support change updates the acceptance difference manifest explicitly. Cortex-M's selected-image reach and memory map are already R6.50/R6.60 obligations. |
+| R551-08: R4.91 m29 | Compact source or IR can still request enormous assembler repetition/materialized data. Small compiler output is not a bound on assembler memory or object size. | Scale and self-hosting. Before expanding admitted native image sizes or generation policies. Retain the forbidden-fixture boundary, derive a bounded emission/resource policy and test tiny shapes. No giant-image assembly sweep or increased resource cap supplies evidence. |
+| R551-09: LOW-1 | Guarded cleanups can expand rapidly despite correct pop-before-run semantics; R5.20's 4/8/12-cleanup measurements are samples, not complexity bounds. | Competitive optimization. First measured real cleanup workload with unacceptable code growth. Share equivalent continuations only with preserved return/failure selectors, side effects and cleanup order; compare exact behavior and bounded assembly size before/after. No arbitrary cleanup-count refusal. |
+| R551-10: LOW-3, BE-3, m23 | Atom/symbol allocation and imported-module lookup retain repeated identity scans; simplification retains size-dependent scratch work. | Competitive optimization owns algorithmic speedups after a measured bottleneck; scratch ownership belongs to R551-06. Preserve complete identity keys and target semantics, report time/memory evidence on bounded inputs and reject persistent answers across incompatible compiler contexts. |
+| R551-11: K28 | Frame/allocation planning is repeated by preflight, emission and full-debug output. Repetition is a maintenance cost, not evidence of wrong locations. J65's exception-classification defect was separately repaired. | Competitive optimization. When profiling justifies reuse. Retain immutable unit/options/target ownership and derive emission/debug locations from the same actual plan; prove identity, invalidation, limit diagnostics and debugger agreement before sharing results. |
+| R551-12: m28; R5.30 baseline quality | Indexed increment can retain an extra bounds check; Darwin stack homes lack x86 register allocation/body folding. Existing witnesses do not show a wrong result or a universal optimization win. | Competitive optimization. Measured workload pressure. Preserve single evaluation, traps, observable addresses, frame pointers, ABI and location availability; require native code-quality and debugger evidence for changed allocation. |
+| R551-13: R5.20 process evaluation | Production workload scheduling and compiler/program artifact reuse remain unimplemented; different build contexts produced different compiler identities. | Scale and self-hosting. After a measured acceptance bottleneck and producer-identity design. Use aggregate limits, cancellation/timeout ownership, exact immutable keys and independent consumer records. Keep the quality determinism rebuild fresh and native executions mandatory; prove failures under bounded concurrency. |
+| R551-14: Mac acceptance operations | Interrupted Darwin acceptance cannot resume completed steps. This is an explicit operational limit, separate from caching. | Scale and self-hosting. Repeated interrupted-run cost justifies a resume design. Require unchanged source/tools/policy and verified step artifacts, refuse failed-step reuse, and test interruption/cancellation; never relabel an incomplete run as accepted. |
+| R551-15: R5.20 Nix disposition | Nix provides a supplemental development shell, not cached compiler/test derivations or required native CI. | Scale and self-hosting, held by maintainer disposition. Activate only on an explicit decision to revisit Nix CI. Account for native builders, Apple SDK identity, debugger permissions and cache provenance; a shell check cannot replace target acceptance. |
+| R551-16: M12, m14, m19 | Large nested stage procedures, duplicate construction helpers and unused catalogue/helper surfaces remain maintenance observations. `Needs_Source` still has only its declaration in compiler sources. The container recipe duplicates tool versions already checked against shared pins. | Scale and self-hosting. Before replacing/splitting the affected stage or environment, or when a concrete change is obstructed. Refactor with existing behavioral seams and strict warnings; preserve diagnostics/IR/pin agreement and remove only demonstrated dead interfaces. File length or checked pin duplication alone is not a correctness defect. |
+
+#### Evidence, capability and delivery limits
+
+| Intake and inherited source | Disposition | Owner, trigger and completion obligation |
+|---|---|---|
+| R551-17: m1, M14, N5/N7/N8, follow-up coverage notes | Code-only negatives do not prove wording/spans; inventory equality does not prove semantic coverage after deleting and regenerating fixtures. | Scheduled R7.40, with current claim repair in R551-05. At each diagnostic or coverage change, add the exact oracle needed for that claim and retain derivation provenance; no blanket golden regeneration or indiscriminate replay. |
+| R551-18: m6, N15/N19 | The bounded parser mutation/truncation tests now run in accepted suites. This is superseded historical evidence debt, not an unrun current parser campaign. | R551-05 closes the cross-reference with exact transcript and registered-test evidence. Preserve the original development record; no additional campaign is needed to prove an already recorded execution. |
+| R551-19: m7 | Broad driver mutation coverage remains absent; parser mutation is not whole-pipeline fuzzing. | Release readiness. Before robustness/production claims or a deliberately scoped fuzz project. Define fixed seeds, stage/target reach, resource limits, crash classification and retained minimal reproducers before running bounded campaigns. No unbounded campaign is authorized here. |
+| R551-20: A4/M11, J112 | Ordinary/fake host-failure controls do not establish all native device/capture failure paths or exhaustion behavior. | Release readiness. Before claiming those native failure guarantees. Use controlled fault injection with cleanup and diagnostic oracles on each applicable host; keep R551-02's checker ownership injection separate. No destructive device exhaustion or system-wide resource experiment. |
+| R551-21: M6 | Original R1/R2/R3 acceptance bundles remain unrecovered and explicitly unverifiable. Source witnesses and current acceptance do not replace them. | Limit, retained by the maintainer's historical disposition. Release readiness records this provenance boundary; revisit only if original artifacts are recovered and can be verified. Do not schedule manufactured replacement evidence. |
+| R551-22: M5; font/publication guides | Font ancestry was deliberately retained for now; that decision did not settle every later redistribution/release question. | Release readiness. Before distribution or a requested font/history policy change. Preserve the maintainer's decision and existing private-font publication boundary; document the distribution decision before any removal/history rewrite. No license or history change is part of R5.51. |
+| R551-23: native evidence operations | Approved host records and independent local exports are retained, but there is no automatic backup/expiry service or adversarial attestation. | Release readiness. Before host retirement or stronger durability/provenance claims. Assign an operational custodian and retention/recovery procedure; demonstrate restore and hash/approval verification. Missing evidence remains missing; no automatic pruning of accepted records. |
+| R551-24: publication contract | The canonical lease serializes participating publishers; two domain uploads are not atomic and uncertain outcomes retain the lock. | Limit owned by Release readiness. Before promising atomic multi-domain publication or admitting another publisher. Preserve lease/recovery controls and define a tested deployment/recovery contract; success on one domain never proves both. |
+| R551-25: N22; R4.60/R5.40 | Source-debug CFI is not a promise of runtime foreign-exception unwinding or `.eh_frame` consumption. | Limit; Language evolution owns any explicit proposal to add foreign unwinding. Specify semantic/ABI/failure boundaries first and then prove native unwind behavior. No automatic exception model or unwinder work follows from source-debug parity. |
+| R551-26: R5.40 presentation | LLDB uses C scalar spellings and manual tag/payload selection, with no Landin expression evaluator. Source listing requires retained text or remapping. | Supported limit; Language evolution may take a concrete debugger-usability proposal. Preserve truthful represented types and unavailable locations; require native sessions for any new presentation promise. Existing R4.60/R5.40 behavior stays mandatory. |
+| R551-27: m30; R5.40 packaging | Linux driver overrides must honor the GNU finishing contract; Darwin implements thin arm64 Mach-O, not universal binaries. Clang header parsing is a separate capability. | Supported limits; Release readiness owns a requested driver/distribution expansion. Add pinned native producer/consumer and packaging/identity evidence before widening the supported contract. |
+| R551-28: m32; J116 | No current callback-identity counterexample was established; static rejection of known slice-range endpoints is not an existing normative requirement. | Watch/decision, owned by Language evolution if a valid counterexample or an explicit semantic proposal arrives. Preserve existing behavior meanwhile; an optimizer defect against the present contract returns to its implementation owner immediately. Do not convert either observation into an assumed semantic repair. |
+
+#### Existing roadmap obligations and successor families
+
+| Intake | Work retained | Scheduling and closure |
+|---|---|---|
+| R551-29 | Range-subtype composition and references (D188), multi-atom pointer unions (D189), shared-name binding/field/parameter/result forms, u128/i128 and f16 (D190). | Scheduled R7.20 after R7.10. These are pending normative decisions/implementation, not successor debt discharged by R5 parity. Specify all applicable hosted and selected freestanding carriers, conversions, ABI/debug and diagnostics; the inherited x86 cost discussion is not a Darwin implementation plan. Amend spec/tour and derived tests together if the language changes. |
+| R551-30 | Repeated follow-on diagnostics after refused selected imports. | Scheduled R7.40 after its existing dependencies. Retain the original import refusal and suppress only dependent reports; exact diagnostics and an independent valid-use control prove completion. |
+| R551-31 | Packed encodings, concurrency memory model, device/startup/backend/core behavior, the named `noreturn` refusal and complete prototype 1. | Scheduled R6.10-R6.100. R6.10 first selects reproducible CPU/peripheral lanes; R6.50/R6.60 own target reach, map and startup behavior; R6.70 owns `noreturn`. R6.80 owns checked-in device fixtures, not an unbuilt general SVD generator. No Cortex-M implementation enters R5.51. |
+| R551-32 | Stable separate compilation/interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting (inherited B3). | Scale and self-hosting. Activate at successor planning after the current roadmap endpoint or an explicit scope decision. Preserve the tested seams, whole-program behavior and complete interface identity; no serialized IR freeze or self-hosting implementation now. |
+| R551-33 | Package acquisition/version solving, manifests/locks, naming authority, deterministic roots, generators/SVD tooling and sandboxing (B4/B6/D3/D6). The binding generator's four-file replacement recovers failures but is not atomic for concurrent readers; compiler path preflight does not prevent concurrent filesystem replacement. | Companion tool and ecosystem. Before acquisition/general generation or concurrent build consumers are offered. Specify declared inputs/outputs, immutable publication/consumption, reproducible roots and single-package-version conflicts; preserve existing rollback/refusal evidence. R3.10/R4.30/R6.60/R6.80 keep their thin in-scope responsibilities. No adversarial filesystem guarantee follows from current preflight. |
+| R551-34 | Library facilities beyond the complete prototype slices (B5). | Broader standard library. A concrete program needs an omitted facility. Preserve capability-passed allocation/I/O, hosted/freestanding separation and constrained-target costs; require complete derived consumers and failure oracles. |
+| R551-35 | Parked C1-C5, watch E1-E3 and stackful-fibre exploration. | Scheduled disposition at R7.30, then Language evolution if still untriggered. Preserve each inherited trigger, including C4's explicit absence of one; the fibre trigger is a program needing two operations in flight. Stackless coroutines remain rejected, and a second I/O implementation is not promised by this roadmap. |
+| R551-36 | Licensing/distribution decisions, release/version designation, production claims and wider operational readiness. | Release readiness after R7.70 and explicit maintainer decisions. Feature-complete pre-v1 does not itself establish these claims. Preserve the current designation and distinguish current acceptance from all older evidence gaps. |
+
+R551-04 must also map every resolved or refuted intake entry to its existing
+closure rather than duplicating it as new work. In particular, J65, K23/K24,
+M14 and N22 have different dispositions; repaired limit classification,
+per-query memoization, inventory checks and an unsupported unwinder cannot be
+collapsed into one "scaling" task. The inherited 32-row register remains the
+authority for its preserved rationales; this intake links it rather than
+renumbering or replacing its labels.
+
+#### Source-to-disposition crosswalk and evidence reconciliation
+
+This crosswalk is the current handoff for the historical R4.91 and R5 records.
+Their statements about outstanding development checks describe their own batch,
+not a request to rerun them now. Qualified identities keep the older review's
+A/C/D labels separate from the inherited appendix. Resolved findings retain
+those original detailed repair/refutation rows as completion evidence.
+
+| Source family | Current disposition |
+|---|---|
+| R4.91 older review A1-A9, C1-C6, M1-M19 and m1-m32 | Retained exceptions are R551-06 (C5), R551-16 (M12/m14/m19), R551-17 (m1/M14), R551-18 (m6), R551-19 (m7), R551-20 (A4/M11), R551-21 (M6), R551-22 (M5), R551-10 (m23), R551-12 (m28), R551-08 (m29), R551-27 (m30) and R551-28 (m32). All other repairs and refutations retain their individual R4.91 rows and its exact-revision closure binding. m2/m27 and M14's execution gaps are reconciled below. |
+| R4.91 follow-up N1-N27 | N5/N7/N8 retain the coverage limitation in R551-17; N15/N19 link R551-18; N16 merges into R551-20; N22 is R551-25. Other duplicates, repairs and refutations retain the named R4.91 rows. The nine source-review coverage gaps do not become a claim of complete human review: scaling is R551-06, diagnostics/inventory R551-17, native failures R551-20; recovery, width arithmetic, backend/tool integration and driver gating have registered controls and accepted suites, while docs/ir.md now exists and follows representation changes. |
+| R4.91 J1-J139 and K1-K36 | J45/J98/K19/K32 retain their explicit contract/refutation dispositions. J116 is R551-28; K28 is R551-11. J65 is repaired limit-exception classification, independently of planning reuse. K23/K24 are completed per-query memoization repairs, independently of R551-06/R551-10. All remaining entries retain their individual repair or duplicate links and R4.91 closure; no old timing sweep becomes a current obligation. |
+| R4.91 readiness CHK/LOW/BE and R520 rows | CHK-REF-3 moves from R5.20's retained limit to R551-02. CHK-FLOW-1/CHK-FE-2/CHK-FE-3 are R551-06; LOW-1 is R551-09; BE-1 is R551-07; LOW-3/BE-3 split into R551-06/R551-10. F5-F8 and CHK-H-1/2/3 retain R4.91 repairs; CHK-A-3 remains refuted and CHK-R491-1 remains its exact acceptance binding. CHK-R491-4/R520-5/CHK-15600-2 merge into the completed R5.20 symbol repair. R520-1/4/6/7 and BE-2 closed in R5.20; R520-2/3 closed through R5.30 ABI/linking and R5.40 identity. |
+| R5.20-R5.50 retained resource and operational contracts | Resource dimensions R551-06; image/branch reach R551-07; expansion R551-08/R551-09; lookup/planning/code quality R551-10/R551-11/R551-12; scheduling/reuse R551-13; Darwin resume R551-14; Nix R551-15; presentation/source deployment R551-26/R551-27; evidence retention R551-23; publication R551-24. R5.30's selected parity handoff and R5.40's derivative gap closed only at R5.50, whose limits remain. |
+| Inherited A1-A8, B1-B6 | A1/A5/A8 close their live evidence obligations at R7.40 (R551-17); A2/A3/A6/A7 retain R2/R3 closures; A4/B1 are R551-31; B2 retains R4.40 and R5.30 ABI contracts. B3 is R551-32, B4/B6 R551-33, B5 R551-34. |
+| Inherited C1-C6, D1-D6, E1-E3, F1-F3 | C1-C5/E1-E3 are R551-35 with every original trigger preserved, including no invented trigger for C4. C6 retains hosted closure and R6.100. D1/D2/D4 retain their implemented decisions and evidence conditions; D3/D6 link R551-33; D5 retains the rejected C/LLVM alternatives and R6.50 own-backend obligation. F1 retains R7.60; F2 is the continuing mechanical gate, exercised by R551-04; F3 retains R2.70/R2.80/R3.70 and R4.50. R7.30 dispositions every row; R7.70 preserves transfers. |
+| Successor families and delayed normative work | Scale/self-hosting R551-06/07/08/13/14/15/16/32; competitive optimization R551-09/10/11/12; companion/ecosystem R551-33; broader library R551-34; language evolution R551-25/26/28/35; release readiness R551-19/20/21/22/23/24/27/36. Spec [1830], D188/D189/D190 and shared-name forms remain R551-29/R7.20; selected-import recovery is R551-30/R7.40; device/concurrency/packed/noreturn obligations remain R551-31/R6. |
+
+Evidence inspected at accepted `51229dc368b2fec72a20bf912ae2c1a9996d62bd`:
+Linux bundle `20260915T150424Z-2e211b530e85`, debug attempt
+`20260915T150435-8f18e7c018c2` and release attempt
+`20260915T150435-3a7bf352b386`, each `step-02.log`, explicitly pass
+`mutation bytes avoid the old short cycle`, `survives deterministic mutations`
+and `survives every truncation`. The archived parser suite registers the
+fixed-seed mutation and every-truncation operations; the arithmetic diversity
+case alone is not that evidence. Both transcripts report 719/719 cases and
+197649 checks. This supersedes m6/N15/N19's parser-only execution gap,
+without establishing R551-19's broad driver fuzzing or universal exhaustion
+recovery. Current acceptance cannot replace M6's missing original bundles.
+
+The same accepted Darwin bundle `20260915T150424Z-71d20c2c55ff` retains
+`debug/executions/summary.json` and `release/executions/summary.json`.
+For each mode, `defer-does-not-unwind-traps` and `undo-does-not-unwind-traps`
+pass none/off, size/off, size/auto and speed/auto with SIGTRAP (-5);
+`r491-overlapping-result-destination` passes those profiles with status 42.
+Archived metadata and source retain the exit(99) cleanup sentinel and D106
+result/sibling assertions. These executions supersede m2/m27's old pending
+runtime notes. Linux's verified complete suites pass both modes and include
+these metadata-selected profiles through the registered fixture-execution
+case; the transcript aggregates that case rather than listing every native
+process. This is distinct from the per-profile Darwin records.
+
+M14's stream, suite-registration and corpus/profile accounting controls run in
+those accepted full suites, superseding its metadata-only development gap.
+Their inventories do not prove semantic coverage after intentional deletion
+and regeneration. Code-only negatives still prove ordered identities, not
+exact wording/spans. Follow-up source-only reviews remain source-only reviews;
+registered compiler, fixture, quality and debugger controls are mechanical
+backstops, not a claim that every review topic received a complete human audit.
+Native device/capture fault injection remains R551-20 and original R1/R2/R3
+bundles remain R551-21. R5.51 supplies no replacement historical evidence.
+
+#### Mechanically checked disposition ledger
+
+The detailed intake above supplies the source finding and action. This ledger
+makes each disposition, single owner, activation and completion obligation
+explicit; references merge overlapping work rather than creating another task.
+A superseded evidence gap is not an implemented language feature. Supported
+limits and observations are not presumed defects. Rejected alternatives keep
+their original rationale and require an explicit reversal, not an invented
+activation condition. R7.30 and R7.70 preserve this ledger through phase handoff.
+
+<!-- r551-ledger -->
+| Intake | Kind | Disposition | Owner | Activation | Completion evidence |
+|---|---|---|---|---|---|
+| R551-01 | defect | implemented | R5.51 | Before the R5.51 closure candidate | Schema-4 selection and negative verifier tests; matching native routine exports and approval. |
+| R551-02 | defect | implemented | R5.51 | Before R6.10 | Bounded failure injection, exactly-once cleanup and both native checker suites. |
+| R551-03 | defect | implemented | R5.51 | This handoff and each subsequent status/workflow change | Consistent current guides, full document checks and verified rendering. |
+| R551-04 | defect | implemented | R5.51 | This handoff and every new retained finding | Validated 36-record ledger, source crosswalk and malformed-register controls. |
+| R551-05 | evidence-gap | implemented | R5.51 | Before making R5.51 closure claims | Verified original bundles, archived registrations/profiles and explicit claim boundaries. |
+| R551-06 | supported-limit | successor | Scale and self-hosting | A real workload exceeds the recorded envelope or before persistent service/self-hosting claims | Bounded declaration/field/dependency measurements and owned storage with stated failure behavior. |
+| R551-07 | supported-limit | successor | Scale and self-hosting | Before general large-image support or a requiring real workload | Bounded reach/layout evidence and retained native control/status-42 oracle; selected Cortex-M work remains R6.50/R6.60. |
+| R551-08 | supported-limit | successor | Scale and self-hosting | Before expanding admitted image sizes or generation policies | Bounded emission/resource policy and tiny shape tests; preserve forbidden giant-fixture boundary. |
+| R551-09 | observation | successor | Competitive optimization | A measured cleanup workload has unacceptable growth | Preserved selectors, effects, pop-before-run order and bounded size comparison. |
+| R551-10 | observation | successor | Competitive optimization | Measured lookup or simplification bottleneck | Complete identity keys and native time/memory evidence; storage ownership references R551-06. |
+| R551-11 | observation | successor | Competitive optimization | Profiling justifies sharing allocation/frame plans | Immutable context ownership, invalidation, limit diagnostics and native debugger agreement. |
+| R551-12 | observation | successor | Competitive optimization | Measured code-quality pressure | Native behavior, ABI, single evaluation, address/trap and debugger evidence. |
+| R551-13 | observation | successor | Scale and self-hosting | Measured acceptance bottleneck and producer-identity design | Aggregate limits, cancellation, immutable keys, independent consumers and fresh determinism rebuild. |
+| R551-14 | supported-limit | successor | Scale and self-hosting | Repeated interrupted Darwin runs justify resume design | Unchanged source/tools/policy, verified step artifacts and failed-step/interruption refusal. |
+| R551-15 | supported-limit | limit | Scale and self-hosting | Explicit maintainer decision to revisit deferred Nix CI | Native builders, SDK/debug permissions and cache provenance; shell checks never replace acceptance. |
+| R551-16 | observation | successor | Scale and self-hosting | Stage/environment replacement or a concrete obstructed change | Behavioral seams, strict warnings, diagnostics/IR/pin agreement and demonstrated dead-interface removal. |
+| R551-17 | supported-limit | scheduled | R7.40 | Each diagnostic/coverage change and the R7.40 gate | Exact claim-appropriate oracles and derivation provenance; R551-05 repairs present claims. |
+| R551-18 | evidence-gap | superseded | R5.51 | Current evidence reconciliation in R551-05 | Accepted R5.50 parser registrations and debug/release transcripts; broad driver fuzzing stays R551-19. |
+| R551-19 | evidence-gap | successor | Release readiness | Before robustness/production claims or an explicitly scoped fuzz project | Fixed seeds, bounded resources, stage/target coverage, crash classes and minimal reproducers. |
+| R551-20 | evidence-gap | successor | Release readiness | Before claims covering native device/capture failures | Controlled host-specific fault injection with cleanup and diagnostic oracles. |
+| R551-21 | evidence-gap | limit | Release readiness | Only recovery of the original R1/R2/R3 artifacts | Verify recovered originals; preserve the maintainer disposition and unverifiable boundary otherwise. |
+| R551-22 | supported-limit | successor | Release readiness | Before distribution or an explicit font/history-policy change | Maintainer distribution decision and preserved private-font boundary; no implied history rewrite. |
+| R551-23 | supported-limit | successor | Release readiness | Before host retirement or stronger durability/provenance claims | Operational custodian, retention/recovery procedure and demonstrated verified restore. |
+| R551-24 | supported-limit | limit | Release readiness | Before atomic multi-domain claims or another publisher | Tested deployment/recovery contract preserving leases and uncertain-outcome handling. |
+| R551-25 | supported-limit | limit | Language evolution | Explicit proposal for runtime foreign unwinding | Semantic/ABI/failure decisions followed by native evidence; debug CFI alone is insufficient. |
+| R551-26 | supported-limit | limit | Language evolution | Concrete debugger-usability proposal | Truthful types/locations, source availability and native sessions for new promises. |
+| R551-27 | supported-limit | limit | Release readiness | Requested driver or distribution expansion | Pinned native producer/consumer, packaging and identity evidence before widening support. |
+| R551-28 | observation | watch | Language evolution | Valid counterexample or explicit semantic proposal | Present-contract defects return to implementation owner; semantic changes need specification and tests. |
+| R551-29 | normative | scheduled | R7.20 | After R7.10 under existing dependencies | Decisions and implementations for D188/D189/D190 and shared-name forms across applicable targets, with spec/tour and tests. |
+| R551-30 | defect | scheduled | R7.40 | After existing R7.40 dependencies | Original import refusal, suppressed dependent reports and exact diagnostics with independent valid use. |
+| R551-31 | normative | scheduled | R6.10 | R6.10 entry and each R6.20-R6.100 dependency gate | Selected CPU/peripheral lanes, packed/concurrency rules, map/startup/backend/core/noreturn and complete prototype 1 evidence. |
+| R551-32 | observation | successor | Scale and self-hosting | Successor planning after R7.70 or explicit scope decision | Tested seams and complete interface/package identity; preserve whole-program semantics. |
+| R551-33 | supported-limit | successor | Companion tool and ecosystem | Before acquisition/general generation or concurrent build consumers | Declared inputs/outputs, immutable publication, reproducible roots and single-package-version conflicts. |
+| R551-34 | supported-limit | successor | Broader standard library | Concrete program needs an omitted facility | Capability-passed allocation/I/O, constrained costs, complete consumers and failure oracles. |
+| R551-35 | parked-watch | scheduled | R7.30 | Inherited C/E triggers or R7.30 disposition; C4 has no trigger | Preserve each original rationale; transfer untriggered items to Language evolution, including the fibre direction and rejected stackless alternative. |
+| R551-36 | supported-limit | successor | Release readiness | After R7.70 and explicit maintainer decisions | Separate distribution/licensing/version/production decisions with evidence; feature-complete pre-v1 is unchanged. |
+<!-- /r551-ledger -->
+
+#### Implemented repairs and candidate validation
+
+Repository verification preserved the four-file planning draft on
+`r551-debt-plan` at `51229dc368b2fec72a20bf912ae2c1a9996d62bd`;
+canonical main, its annotated dual-native approval and GitHub main matched.
+Guarded Pages job 1889000 and mirror job 1889001 succeeded. The clean audit
+baseline above describes the earlier planning audit; this implementation
+started with the inspected uncommitted draft, saved under `.scratch/r551/`.
+
+R551-01: policy commit `c77fbe7a` precedes this closure candidate. Darwin
+schema 4 records routine/milestone scope, debugger choice and explicit host,
+hosted and debugger modes; the selector writes both policies. Complete release
+hosted source/runtime/ABI, derived-program and binding coverage remains.
+Routine debugging includes every release LLDB profile and derivative. The
+schema-3 milestone verifier stays separate; its derivative oracle is versioned
+and derives positions from archived text without loading live runner helpers.
+All three retained Darwin exports verify with the new code, as do their
+unchanged Linux bundles and annotated approvals:
+
+| historical contract | accepted revision | Darwin run | Linux run |
+|---|---|---|---|
+| R5.30/schema 1 | `a111640720a2d6e0ca8153ef40795ad2583f38fd` | `20260915T112955Z-3b3eecd6a6b0` | `20260915T112955Z-edabe7afd69c` |
+| R5.40/schema 2 | `618abcacf09379aa7610fa0662de7a4fcca3dade` | `20260915T124042Z-262577ebe309` | `20260915T124042Z-3de94b5a1d2e` |
+| R5.50/schema 3 | `51229dc368b2fec72a20bf912ae2c1a9996d62bd` | `20260915T150424Z-71d20c2c55ff` | `20260915T150424Z-2e211b530e85` |
+
+The 22 Darwin policy/parity tests reject omitted modes/profiles, incompatible
+Linux scope/debugger selection, substituted commands/artifacts/identities,
+failed/time-out sessions and missing/weakened derivative assertions. The
+96 existing CI tests pass with two explicit host-specific skips. These are
+bounded verifier controls and historical verification, not new native runs.
+
+R551-02: each loop frame now owns two limited controlled transfer states.
+The vector borrows frame addresses while traversal is active; growth copies
+no owning pointer, and transfers update the referenced frame directly.
+Completion moves a state without allocation and clears its former owner before
+another throwing operation. Normal release and exceptional finalization share
+the same nulling cleanup. A per-checker optional probe has no global or CLI
+state. The new test injects Storage_Error at all 97 reached allocation,
+growth, publication, traversal, move and release boundaries; every invocation
+checks zero live states and equal allocation/release counts, then successfully
+recompiles with the same checker instance. Its 1080 checks pass. Both native
+Mac debug and Linux debug checking suites pass 111 cases/3238 checks, preserving
+loop/completion, cleanup, alias, origin and diagnostic controls. The original
+1220-declaration loop test is unchanged. No OOM, larger stress input, increased
+stack limit or declaration-by-field redesign was used.
+
+R551-03: current guides distinguish native development, compatible routine
+acceptance, debugger risk, milestones and Linux-only resume. The token-band
+and SysV-only binding claims are corrected against current source facts.
+An additional bounded workflow mismatch appeared during implementation:
+`--host` originally refused an exact selector. The harness now accepts it with
+one suite/case in either order while excluding both native workload cases;
+fixture/record/duplicate-host combinations remain misuse. Native Mac controls
+check both orders, both excluded workload cases and the refused combinations.
+Filtered host output retains both banners and cannot satisfy acceptance.
+This changes only developer selection, not a native workload or backend.
+
+R551-04/R551-05: the detailed 36-row intake, explicit disposition ledger and
+source crosswalk retain every successor family and inherited obligation.
+`check.py` rejects malformed/missing/duplicate records, dangling owners and
+roadmap/intake references, invalid categories and transferred normative work;
+tiny negative controls exercise those refusals. Evidence reconciliation above
+supersedes only demonstrated old execution gaps and retains the source-only
+review, diagnostic, missing-bundle and broad-fuzz limits. Development logs,
+historical verification and the original draft patch are in `.scratch/r551/`.
+Full `python3 check.py` and verified non-publishing rendering pass; status
+pointer/renderer tests and malformed-ledger controls pass. Exact acceptance
+below repeats document validation against the final committed archive.
+
+Closure scope remains routine **with release GDB and full release LLDB**.
+Changes are bounded ownership, documentation and acceptance selection/
+verification; no parity/backend implementation expansion requires a milestone.
+Complete release hosted coverage and the large-image platform-limit oracle
+remain mandatory. Nix CI and all successor implementations remain deferred.
+
+#### Implementation order and acceptance
+
+Original planning sequence, preserved for traceability. The implementation
+record above and closure binding below supersede its prospective statements.
+
+1. Establish the R551-04 crosswalk and R551-05 evidence reconciliation using
+   existing source and retained records. Record any newly demonstrated defect
+   separately; do not use a search hit or missing old experiment as proof.
+2. Implement R551-01's versioned dual-native policy contract and negative
+   verifier controls. Preserve historical schemas and approvals; only then
+   select routine scope in the new development revision. Merely changing
+   `policy.json` is insufficient. This planning edit leaves both accepted
+   policy files unchanged and supplies no new approval.
+3. Implement R551-02's bounded ownership repair and injected-failure controls;
+   run focused checker/loop/reference tests first on Mac with `--host` and on
+   the native Linux runner. Broaden only for affected behavior.
+4. Finish R551-03 and the register checks. Run full `python3 check.py` and
+   verified non-publishing rendering after document changes. Keep current
+   guidance concise and historical evidence attributable to its revision.
+5. Commit the final scope before the closure candidate. R5.51 changes native
+   debugger acceptance selection/verification, so use Linux routine scope
+   with release GDB and matching Darwin routine scope with full release LLDB,
+   in addition to their complete release hosted coverage. Run both exact
+   archives natively, verify exports, bind the annotated approval, then
+   promote/publish and verify delivery. A full milestone rerun is needed only
+   if implementation adds substantial parity/backend scope; decide and record
+   that before acceptance, never relabel routine evidence as a milestone.
+
+Exit evidence: all five "do now" rows are implemented and accepted; every
+retained row has one live owner, trigger and completion obligation; historical
+and current claims are distinguishable; normative gaps remain scheduled in
+R6/R7; both native policies support the documented routine workflow without
+weakening historical milestone evidence. No successor implementation, new
+language feature, release designation or Cortex-M backend is implied by this
+organizational closure. R6.10 becomes the next item only after this gate.
+
+#### Exact-revision closure and delivery binding
+
+All five do-now repairs are implemented. The completion status and R6.10
+pointers are prepared with the final candidate so acceptance checks these
+same documents. They become authoritative only after the identical containing
+revision completes Linux's six-job routine policy (including release GDB)
+and Darwin schema-4 routine policy with full release LLDB, complete release
+hosted coverage and both Mac compiler-host modes. Each export is verified;
+the exact annotated `ci/accepted/FULL_COMMIT` approval binds both run IDs,
+source/tree/archive/policy and record hashes. Atomic canonical promotion,
+matching remote approval and GitHub mirror, and successful guarded two-domain
+Pages publication establish delivery. No later bookkeeping revision supplies
+acceptance for changed source, and no current run repairs a missing historical
+bundle. R6.10 becomes next only through this binding.
+
 ### R5 gate
+
+R5.50 accepted the hosted technical criteria below at its recorded revision.
+R5.51 closes the subsequent debt/operations follow-up through its own
+exact-revision binding above; it does not retroactively change R5.50 evidence.
 
 - `refine` builds and runs natively on macOS arm64.
 - Hosted semantics, diagnostics, ABI and prototype behavior match the declared
@@ -9293,7 +9696,7 @@ peripheral-behavior lanes; physical hardware remains supplemental.
 ### R6.10 — Select the Cortex-M execution profile
 
 Status: planned
-Depends on: R5.50
+Depends on: R5.51
 
 Select an exact QEMU-supported core/board, EABI toolchain and debugger at R6
 entry. Record which GPIO, UART, DMA and interrupt behaviors are actually
@@ -9485,7 +9888,7 @@ implementation and tests or an evidence-backed tour amendment.
 ### R7.30 — Disposition every inherited item
 
 Status: planned
-Depends on: R7.10
+Depends on: R7.10, R5.51
 
 Mark each inherited open, parked, held and watch item implemented, rejected with
 evidence, or transferred to one named successor roadmap. Watch observations do
@@ -9493,6 +9896,10 @@ not become blockers merely because they were observed.
 
 Exit evidence: the 32-row migration appendix and all later discoveries have an
 explicit terminal disposition.
+
+Include R5.51's consolidated intake and all subsequent discoveries. Keep named
+successor transfers, activation triggers and completion evidence visible at
+R7.70; a category heading alone does not replace a retained work record.
 
 ### R7.40 — Close all evidence registers
 

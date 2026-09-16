@@ -87,7 +87,6 @@ package body Landin.Stages.Checking is
       Context : in out Compilation;
       Outcome : out Stage_Outcome)
    is
-      pragma Unreferenced (Item);
 
       Spellings : constant not null access Landin.Source.Names.Table :=
         Identities (Context);
@@ -30162,7 +30161,7 @@ package body Landin.Stages.Checking is
            (Context, Of_Tree, Node, Runs,
             Syn.Returns_Of (Of_Tree, Node), Found);
          Landin.Stages.Checking.References.Check_Function
-           (Context, Of_Tree, Node, Runs, Found);
+           (Context, Of_Tree, Node, Runs, Found, Item.Probe);
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
 

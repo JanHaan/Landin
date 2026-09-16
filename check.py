@@ -5292,6 +5292,7 @@ def check_optimization_contract(full_run):
                    "scripts/tests/test_build_lock.py"):
         out += absent([runner])
     out += check_native_ci(full_run)
+    out += check_retained_debt(full_run)
     tour = io.open(TOUR_NAME, encoding="utf-8").read()
     array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
     if "Arithmetic and comparison" in array_section or "reduce_add(" in array_section:
@@ -5380,6 +5381,25 @@ def check_hosted_derivation(full_run):
     return out
 
 
+def check_retained_debt(full_run):
+    """ROADMAP owns retained work; keep its transfer records complete."""
+    if not full_run:
+        return []
+    from scripts.roadmap_debt import validate
+    import subprocess
+    try:
+        with io.open(os.path.join(ROOT, "ROADMAP.md"), encoding="utf-8") as source:
+            validate(source.read())
+        result = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+            capture_output=True, text=True, timeout=20)
+        if result.returncode:
+            return [("ROADMAP.md", 1, result.stdout + result.stderr)]
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        return [("ROADMAP.md", 1, str(error))]
+    return []
+
+
 def check_native_ci(full_run):
     """Preserve the complete native gate while SourceHut only publishes/mirrors."""
     if not full_run:
@@ -5392,7 +5412,14 @@ def check_native_ci(full_run):
         module_spec = importlib.util.spec_from_file_location("landin_ci_contract", path)
         contract = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(contract)
-        contract.validate_policy(contract.read_json(os.path.join(ROOT, "scripts/ci/policy.json")))
+        linux = contract.read_json(os.path.join(ROOT, "scripts/ci/policy.json"))
+        contract.validate_policy(linux)
+        sys.path.insert(0, os.path.join(ROOT, "scripts/ci"))
+        from darwin import MARKER, validate_policy as darwin_policy
+        from darwin_scoped import compatible
+        mac = darwin_policy(contract.read_json(os.path.join(ROOT, MARKER)))
+        if mac["schema"] == 4:
+            compatible(mac, linux)
         override = "environments/native-ci/compose.resources.yaml"
         with io.open(os.path.join(ROOT, override), encoding="utf-8") as stream:
             lines = [line for line in stream.read().splitlines()

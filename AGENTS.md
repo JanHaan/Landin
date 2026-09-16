@@ -50,9 +50,9 @@ python3 check.py prototype-2-parser.md
 # Remove this host's build artefacts (--all removes every host's).
 ./scripts/clean.sh
 
-# Run the same build and suite inside the pinned linux/amd64 image.
-# Needs Apple Container; see docs/environments.md.
-./scripts/linux-loop.sh
+# Mac compiler-host feedback; Linux workloads use the native runner.
+./scripts/dev-test.sh --host --suite=checking
+python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --suite=checking
 
 # Render every document as HTML, verify nothing was dropped, and package
 # it for pages.sr.ht.  --publish uploads it, which the CI gate also does on
@@ -71,7 +71,7 @@ policy against one committed archive, retains host evidence and exports a
 verified local copy. Development runs are incremental/filtered feedback and
 cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
 status, resume, export, administrative approval tags and atomic promotion.
-R5.30/R5.40/R5.50 additionally require `scripts/ci/darwin.py accept COMMIT` and matching
+Revisions carrying the Darwin policy marker additionally require `scripts/ci/darwin.py accept COMMIT` and matching
 Darwin evidence at approval; see `environments/macos-arm64/README.md`.
 
 A push submits only `.build.yml` (Pages) and `.builds/github-mirror.yml`.
@@ -88,20 +88,24 @@ During R5/R6, use `scripts/dev-test.sh --host` on the Mac and native Linux
 development slots for Linux execution. Do not run Linux containers, Linux
 workload emission or repeated complete suites on the Mac as routine feedback.
 Run changed-component tests while editing, one routine acceptance for the
-final promotion candidate, and full matrices only at major milestones. GDB
-is required only for substantial debugging regression risk or milestones.
+final promotion candidate, and full matrices only at major milestones. Native GDB/LLDB
+coverage is required for debugger risk (including selection/verification
+changes) or milestones. `policy.py` selects compatible policies on both targets.
+Routine retains debug host and full release hosted coverage; risk adds full
+release debugging, and milestones retain both modes. Only Linux can resume
+verified successful jobs; Darwin interruptions require a new run.
 Nix CI is deferred. `docs/process.md` explains the workflow; ROADMAP.md owns
 its decisions and remaining work.
 
-On a Mac the no-argument `test.sh` always ends with the fixture-execution
-case failing, by design: runtime fixtures are Linux x86-64 evidence, there is
-no `x86_64-pc-linux-gnu-gcc`, and the harness fails rather than skips on a
-host that cannot finish the target. Only that case red is a green Mac run;
-`scripts/linux-loop.sh` is where the runtime fixtures execute.
+On a Mac use `scripts/dev-test.sh --host`; every selected case must pass.
+The unfiltered harness includes Linux execution and fails without its target
+toolchain. R5.10's retained expected-refusal transcript is historical bootstrap
+evidence, never a current success rule. Linux runtime/GDB evidence comes from
+the native Linux runner; Darwin runtime/LLDB evidence runs natively on the Mac.
 
-`scripts/test.sh` builds and then runs `compiler/ada`'s complete test program;
-`scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those
-are complete local test commands; exact-revision native acceptance owns closure. `scripts/dev-build.sh` and
+`scripts/test.sh` builds and runs the complete Linux test program on native
+Linux. Its `--host` selector retains compiler checks on the Mac. Exact-revision
+native acceptance owns closure. `scripts/dev-build.sh` and
 `scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
 latter accepts one exact `--suite`, `--case`, or `--fixture` selector. A
 filtered run says `FILTERED` in its transcript and is not gate evidence. There
@@ -219,7 +223,9 @@ and R5 handoffs. R5.10 has established the native macOS compiler environment; R5
 target contracts and records retained resource dispositions. R5.30 implements
 native Darwin lowering; R5.40 adds native LLDB and Mach-O debug identity.
 R5.50 closes hosted parity through its dual-native milestone binding;
-R6.10 is the next dependency-ready item.
+R5.51 closes bounded loop-transfer ownership and compatible native routine
+acceptance, with a mechanically checked retained-debt handoff. Its exact-revision
+dual-native binding owns closure; R6.10 is the next dependency-ready item.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

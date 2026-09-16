@@ -32,7 +32,7 @@ retains the exact installed revision and binary hash.
 The Linux nix shell selects `llvmPackages."19".clang`, with `glibc.dev`, from
 the package set fixed by `flake.lock`.  The Darwin shell deliberately gains no
 Linux C frontend or sysroot: Apple headers are not evidence about the selected
-Linux ABI, so use `scripts/linux-loop.sh` there.  No independent Clang archive
+Linux ABI. Use native Linux development slots for that validation.  No independent Clang archive
 is downloaded and no new checksum authority is introduced; each environment
 uses its existing package-set provenance.
 
@@ -56,7 +56,7 @@ linking, execution and an LLDB stop/resume before building and running
 `refine`. The SDK is selected through `xcrun --sdk macosx` and passed as
 `SDKROOT` to the builds. These are host validation tools, not new bootstrap
 libraries. See `environments/macos-arm64/README.md` for the commands, expected
-Linux runtime-case failure and bounded resource probes. A Linux container
+historical Linux runtime-case refusal and bounded resource probes. A Linux container
 cannot supply this evidence. R5.40 supplies emitted Darwin source debugging;
 R5.50 requires matching full hosted parity acceptance in both compiler modes.
 
@@ -69,8 +69,8 @@ from their existing package channel; the Linux nix shell takes it from
 `flake.lock`'s package set. The script uses GDB from the configured PATH
 (which can select the GDB bundled in the pinned toolchain), or `LANDIN_GDB`
 when explicitly set, and records that executable's version. The native Linux
-gate runs the sessions with both debug and release
-builds of `refine`, separately from the emitted program's optimization policy.
+gate runs the sessions with release `refine` for routine debugger risk and both compiler modes at
+milestones, separately from the emitted program's optimization policy.
 
 ### Archives and checksums
 
@@ -149,10 +149,10 @@ export LANDIN_GPRBUILD_HOME=/path/to/gprbuild-26.0.0-1
 ./scripts/test.sh         # build, then run the test program
 ```
 
-On macOS the last command ends with the fixture-execution case failing, by
-design: runtime fixtures need `x86_64-pc-linux-gnu-gcc`, and the harness
-fails rather than skips on a host that cannot finish the target. Only that
-case red is the expected Mac result; `scripts/linux-loop.sh` runs them.
+On macOS replace the last command with `./scripts/dev-test.sh --host`.
+Every selected case must pass. Run Linux workload/GDB checks on the native
+Linux runner and Darwin workload/LLDB checks natively; the unfiltered Linux
+harness's missing-tool refusal is not a successful current Mac test run.
 
 Every command prints the toolchain identification first, so a captured log
 names its own compiler.
