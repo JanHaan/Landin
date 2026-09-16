@@ -258,7 +258,7 @@ def run_job(root, job_id, source):
             products = source / "compiler/ada/build" / request["policy"]["build_tag"] / job["mode"]
             # Keep executable products, build inventory and quality/debugger
             # oracles (including their logs). They survive mutable slot reuse.
-            for relative in ("bin", "source-manifest.txt", "quality", "debugging"):
+            for relative in ("bin", "source-manifest.txt", "quality", "debugging", "cortex-m"):
                 origin = products / relative
                 destination = attempt / "artifacts" / relative
                 if origin.is_dir():

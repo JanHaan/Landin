@@ -290,12 +290,13 @@ def commit_source(root, revision):
             "Git archive differs from committed tree (check export attributes)")
     policy = decode(git(root, "show", commit + ":scripts/ci/policy.json"))
     validate_policy(policy)
+    validate_cortex_policy(policy, inventory)
     return archive, {"commit": commit, "tree": tree, "archive_sha256": digest(archive),
                      "source_sha256": identity(inventory), "inventory": inventory,
                      "policy_sha256": identity(policy), "policy": policy}
 
 
-def required_jobs(scope=None, debugger=False):
+def required_jobs(scope=None, debugger=False, cortex_m=False):
     result = []
     for purpose in ("suite", "quality", "debugger"):
         for mode in ("debug", "release"):
@@ -326,16 +327,22 @@ def required_jobs(scope=None, debugger=False):
             result = [job for job in result if job["id"] != "debugger-release"]
     if scope is not None:
         result[-1]["commands"].insert(-2, ["python3", "scripts/tests/test_check_caching.py"])
+    if cortex_m:
+        result[-1]["commands"].insert(-2, ["python3", "environments/cortex-m/test.py"])
+        result[-1]["commands"].insert(-2, ["python3", "environments/cortex-m/run.py",
+                                         "--output", "compiler/ada/build/native-ci/debug/cortex-m"])
     return result
 
 
-def required_policy(scope=None, debugger=False):
+def required_policy(scope=None, debugger=False, cortex_m=True):
     require(scope in (None, "routine", "milestone"), "unknown acceptance scope")
     result = {"schema": 1 if scope is None else 2,
               "platform": "Linux-x86_64", "pins": "environments/pins.sh",
               "build_tag": "native-ci", "clang": "clang-19",
-              "limits": required_limits(), "jobs": required_jobs(scope, debugger)}
+              "limits": required_limits(), "jobs": required_jobs(scope, debugger, cortex_m and scope is not None)}
     if scope is not None:
+        if cortex_m:
+            result["cortex_m"] = True
         result["scope"] = scope
         result["debugger"] = True if scope == "milestone" else debugger
     return result
@@ -366,9 +373,18 @@ def validate_policy(policy):
             "missing acceptance scope")
     debugger = policy.get("debugger", False)
     require(type(debugger) is bool, "invalid debugger coverage")
-    expected = required_policy(scope, debugger)
+    cortex_m = policy.get("cortex_m", False)
+    require(type(cortex_m) is bool, "invalid embedded profile coverage")
+    expected = required_policy(scope, debugger, cortex_m)
     require(policy == expected, "acceptance policy omits or changes required native checks")
     return policy
+
+
+def validate_cortex_policy(policy, inventory):
+    if any(decoded_name(entry["name"]) == "environments/cortex-m/tools.lock.json"
+           for entry in inventory):
+        require(policy.get("cortex_m") is True,
+                "source contains Cortex-M profile but policy omits its probes")
 
 
 def validate_request(request):
@@ -383,6 +399,7 @@ def validate_request(request):
     for key in ("archive_sha256", "source_sha256", "policy_sha256"):
         require(re.fullmatch(r"[0-9a-f]{64}", request[key]), "invalid " + key)
     validate_policy(request["policy"])
+    validate_cortex_policy(request["policy"], request["inventory"])
     require(identity(request["policy"]) == request["policy_sha256"], "policy hash mismatch")
     require(identity(request["inventory"]) == request["source_sha256"], "source hash mismatch")
     return request
