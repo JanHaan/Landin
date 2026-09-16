@@ -9674,6 +9674,18 @@ was stopped during its debug host step after its clean build. Both attempts
 remain unapproved with retained records. No compiler or workload oracle was
 relaxed. The corrected containing revision requires fresh native acceptance.
 
+Candidate `a56bc2d2acf60972f1961bfab27ca090456ae685` was superseded
+during acceptance when the final compiler-guide review found a second stale
+SysV-only `core/c` description and unqualified Linux debugger/build instructions.
+Linux run `20260916T074550Z-5fd3860fceb4` and Darwin run
+`20260916T074550Z-0ee18d5d52c5` were deliberately stopped and remain
+unapproved; these are operator stops, not evidence of a compiler regression.
+The cancelled Linux release suite retained one empty `GNAT-TEMP-001369.TMP`
+in `compiler/ada/`, which the source-inventory guard correctly refused; no
+archived source file changed. Its document and binding jobs had passed.
+The guide now distinguishes the current dual-native contracts from the
+historical Linux transport account. Fresh acceptance binds the corrected text.
+
 #### Exact-revision closure and delivery binding
 
 All five do-now repairs are implemented. The completion status and R6.10
