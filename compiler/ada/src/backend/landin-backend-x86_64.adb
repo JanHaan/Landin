@@ -804,6 +804,8 @@ package body Landin.Backend.X86_64 is
 
       function Carriers_Agree
         (Left, Right : Landin.Types.Type_Kind) return Boolean;
+      function Atom_Values_Agree
+        (Left, Right : Landin.IR.Atom_Set_Id) return Boolean;
       function Signatures_Have_One_ABI
         (Left, Right : Landin.IR.Signature_Id;
          Limit       : Natural) return Boolean;
@@ -852,6 +854,13 @@ package body Landin.Backend.X86_64 is
          end if;
          return False;
       end Carriers_Agree;
+
+      function Atom_Values_Agree
+        (Left, Right : Landin.IR.Atom_Set_Id) return Boolean
+      is (Left = Right or else
+          (Left /= Landin.IR.No_Atom_Set
+           and then Right /= Landin.IR.No_Atom_Set
+           and then Landin.IR.Atom_Sets_Agree (Of_Unit, Left, Right)));
 
       function Signatures_Have_One_ABI
         (Left, Right : Landin.IR.Signature_Id;
@@ -980,6 +989,11 @@ package body Landin.Backend.X86_64 is
                    (Of_Unit, Left, Landin.IR.Slot_Id (Slot)),
                  Landin.IR.Type_Of
                    (Of_Unit, Right, Landin.IR.Slot_Id (Slot)))
+              or else not Atom_Values_Agree
+                (Landin.IR.Atom_Set_Of
+                   (Of_Unit, Left, Landin.IR.Slot_Id (Slot)),
+                 Landin.IR.Atom_Set_Of
+                   (Of_Unit, Right, Landin.IR.Slot_Id (Slot)))
             then
                return False;
             end if;
@@ -1013,6 +1027,9 @@ package body Landin.Backend.X86_64 is
                     or else not Carriers_Agree
                       (Landin.IR.Result_Of (Of_Unit, Left, A),
                        Landin.IR.Result_Of (Of_Unit, Right, B))
+                    or else not Atom_Values_Agree
+                      (Landin.IR.Atom_Set_Of (Of_Unit, Left, A),
+                       Landin.IR.Atom_Set_Of (Of_Unit, Right, B))
                     or else Landin.IR.Operand_Count (Of_Unit, Left, A)
                       /= Landin.IR.Operand_Count (Of_Unit, Right, B)
                   then

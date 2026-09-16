@@ -3220,29 +3220,39 @@ package body Landin.Stages.Lowering is
                Root := IR.Address_Shape
                  (Unit.all, Filling, Place.Place.Address);
                if Place.Base > 0 then
-                  Root := IR.Nth_Aggregate_Field
-                    (Unit.all, Root, Place.Base);
+                  Root :=
+                    (if Root.Kind = IR.Array_Field_Shape
+                     then IR.Array_Element_Shape (Unit.all, Root)
+                     else IR.Nth_Aggregate_Field
+                       (Unit.all, Root, Place.Base));
                end if;
             when IR.Frame_Slot =>
-               if Place.Base > 0 then
+               if IR.Is_Array (Unit.all, Filling, Place.Place.Slot) then
+                  Root :=
+                    (if Place.Base = 0 then IR.Whole_Slot_Array_Shape
+                       (Unit.all, Filling, Place.Place.Slot)
+                     else IR.Slot_Array_Element_Shape
+                       (Unit.all, Filling, Place.Place.Slot));
+               elsif Place.Base > 0 then
                   Root := IR.Nth_Slot_Field_Shape
                     (Unit.all, Filling, Place.Place.Slot, Place.Base);
-               elsif IR.Is_Array (Unit.all, Filling, Place.Place.Slot) then
-                  Root := IR.Whole_Slot_Array_Shape
-                    (Unit.all, Filling, Place.Place.Slot);
                elsif not Place.Steps.Is_Empty then
                   Root := (Kind => IR.Aggregate_Field_Shape,
                     Nominal => IR.Nominal_Of
                       (Unit.all, Filling, Place.Place.Slot), others => <>);
                end if;
             when IR.Module_Datum =>
-               if Place.Base > 0 then
-                  Root := IR.Nth_Field_Shape
-                    (Unit.all, Place.Place.Datum, Place.Base);
-               elsif IR.Result_Of (Unit.all, Place.Place.Datum)
+               if IR.Result_Of (Unit.all, Place.Place.Datum)
                  = Ty.Fixed_Array
                then
-                  Root := IR.Whole_Array_Shape (Unit.all, Place.Place.Datum);
+                  Root :=
+                    (if Place.Base = 0 then IR.Whole_Array_Shape
+                       (Unit.all, Place.Place.Datum)
+                     else IR.Array_Element_Shape
+                       (Unit.all, Place.Place.Datum));
+               elsif Place.Base > 0 then
+                  Root := IR.Nth_Field_Shape
+                    (Unit.all, Place.Place.Datum, Place.Base);
                elsif not Place.Steps.Is_Empty then
                   Root := (Kind => IR.Aggregate_Field_Shape,
                     Nominal => IR.Nominal_Of
