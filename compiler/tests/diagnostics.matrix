@@ -56,7 +56,7 @@ L0320  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb     
 L0321  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/float-literal-without-fraction,negative/malformed-float-exponent,negative/malformed-hex-float-exponent,negative/r491-float-whole-digit-run
 L0322  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/character-literal-byte-escape,negative/character-literal-empty,negative/character-literal-invalid-codepoint,negative/character-literal-multiple
 L0323  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/raw-literal-inconsistent-indentation
-L0500  Live     false empty-ok    0..0 1     landin-driver.adb                   test:landin-tests-driver_suite.adb
+L0500  Live     false empty-ok    0..0 1     landin-driver.adb                   test:landin-tests-cortex_suite.adb,test:landin-tests-driver_suite.adb
 L0501  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0502  Live     false empty-ok    0..0 0     landin-driver.adb                   negative/r440-native-renamed-entry,test:landin-tests-driver_suite.adb
 L0503  Retired  false empty-ok    0..0 0     -                                   -

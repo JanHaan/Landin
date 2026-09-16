@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.20 — Instantiate the 32-bit layout and ABI (planned).**
+**Next roadmap item: R6.30 — Define and implement the concurrency memory model (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -303,8 +303,11 @@ disposition with its owner and trigger before R6.10. Its completion is bound to 
 exact-revision dual-native acceptance and delivery record in ROADMAP.md.
 R6.10 establishes the pinned QEMU Cortex-M0 CPU/startup and synthetic Renode
 peripheral lanes, with live probe evidence bound into native acceptance.
-No Landin Cortex-M backend or concurrency semantics are enabled by that
-[environment selection](environments/cortex-m/README.md).
+R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
+ABI planning, with independent C/assembly execution evidence agreeing with
+synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
+No Landin Cortex-M emitter, linker, debugger backend or concurrency semantics
+are enabled by this [contract](environments/cortex-m/README.md).
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and

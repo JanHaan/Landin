@@ -228,8 +228,11 @@ acceptance, with a mechanically checked retained-debt handoff. Its exact-revisio
 dual-native binding owns closure. R6.10 establishes QEMU Cortex-M0 CPU/startup
 and synthetic Renode peripheral probes on native Debian 13 x86-64; see
 `environments/cortex-m/README.md`. Its Linux acceptance evidence is retained
-with the accepted revision. R6.20 is the next dependency-ready item; no Landin
-Cortex-M backend or 32-bit ABI is implemented yet.
+with the accepted revision. R6.20 instantiates the 32-bit layouts and external
+AAPCS/internal Landin ABI planner with independent executable C/assembly
+controls. Its exact-revision dual-native binding owns closure. R6.30 is the next
+dependency-ready item; no Landin Cortex-M emitter, linker or debugger backend
+is implemented yet.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 
