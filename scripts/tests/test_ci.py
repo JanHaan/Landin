@@ -1037,10 +1037,22 @@ class PublicationWiringTests(unittest.TestCase):
             root = Path(tmp)
             for name in ("scripts/ci/common.py", "scripts/ci/policy.json", "scripts/site.sh",
                          ".build.yml", ".builds/github-mirror.yml",
-                         "environments/native-ci/compose.resources.yaml"):
+                         "environments/native-ci/compose.resources.yaml",
+                         "environments/macos-arm64/acceptance.json"):
                 target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / name, target)
             with patch.object(checker, "ROOT", str(root)):
+                self.assertEqual(checker.check_native_ci(True), [])
+                mac = root / "environments/macos-arm64/acceptance.json"
+                policy = mac.read_text()
+                mac.unlink()
+                self.assertTrue(checker.check_native_ci(True))
+                from darwin import scoped_policy
+                linux = common.read_json(root / "scripts/ci/policy.json")
+                other = "routine" if linux["scope"] == "milestone" else "milestone"
+                mac.write_text(json.dumps(scoped_policy(other)))
+                self.assertTrue(checker.check_native_ci(True))
+                mac.write_text(policy)
                 self.assertEqual(checker.check_native_ci(True), [])
                 override = root / "environments/native-ci/compose.resources.yaml"
                 limits = override.read_text()
