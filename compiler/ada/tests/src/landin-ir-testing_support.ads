@@ -21,6 +21,13 @@
 
 package Landin.IR.Testing_Support is
 
+   procedure Overwrite_Encoding_Run
+     (Into : in out Unit; Set_Id : Atom_Set_Id; First, Bits : Natural)
+     with Pre => Holds (Into, Set_Id);
+
+   procedure Overwrite_Encoding
+     (Into : in out Unit; Position : Positive; Value : Landin.Packed.Image);
+
    --  Replaces the array datum's image run with the given base and
    --  count, and sets Has_Image accordingly.  Used to build a Unit that
    --  claims a run past the vector's end, a run overlapping another

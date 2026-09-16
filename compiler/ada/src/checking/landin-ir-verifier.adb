@@ -1289,6 +1289,30 @@ package body Landin.IR.Verifier is
             else Of_Unit.Variant_Fields
               (Shape.Payloads_First + Field - 1));
 
+      function Packed_Element_Fits
+        (Shape : Field_Shape; Bits : Positive) return Boolean;
+
+      function Packed_Element_Fits
+        (Shape : Field_Shape; Bits : Positive) return Boolean
+      is
+      begin
+         if Shape.Kind /= Scalar_Field_Shape
+           or else Shape.Pointee /= No_Pointee
+           or else Shape.Signature /= No_Signature
+         then
+            return False;
+         elsif Shape.Atoms /= No_Atom_Set then
+            return Holds (Of_Unit, Shape.Atoms)
+              and then Encoding_Width (Of_Unit, Shape.Atoms) in 1 .. Bits;
+         elsif Shape.Element = Landin.Types.Bool then
+            return Bits = 1;
+         else
+            return Shape.Element in Landin.Types.U8 .. Landin.Types.U64
+              and then Bits <= Natural (Landin.Types.Width
+                (Shape.Element, Facts));
+         end if;
+      end Packed_Element_Fits;
+
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape;
          Aggregate_Allowed : Boolean := False;
@@ -1301,8 +1325,28 @@ package body Landin.IR.Verifier is
             then Variant_Field_Shape_Count (Of_Unit)
               + Nominal_Type_Count (Of_Unit) + 1 else Budget);
       begin
+         if not Landin.Packed.Valid_Geometry
+           (Shape.Packing, Natural (Element_Total'Min (Shape.Length, 65)))
+           or else (Shape.Packing.Bits /= 0
+             and then (Shape.Kind not in Scalar_Field_Shape | Array_Field_Shape
+               or else Shape.Element not in Landin.Types.U8 .. Landin.Types.U64
+                 | Landin.Types.Bool
+               or else Shape.Signature /= No_Signature
+               or else Shape.Pointee /= No_Pointee
+               or else (Shape.Atoms /= No_Atom_Set
+                 and then (not Holds (Of_Unit, Shape.Atoms)
+                   or else Encoding_Width (Of_Unit, Shape.Atoms) = 0
+                   or else Encoding_Width (Of_Unit, Shape.Atoms)
+                     > Shape.Packing.Bits))
+               or else (Shape.Element = Landin.Types.Bool
+                 and then Shape.Packing.Bits /= 1)))
+         then
+            return True;
+         end if;
          if Shape.Kind = Scalar_Field_Shape then
-            return Shape.Nominal /= No_Nominal_Type
+            return (Shape.Packing.Bits /= 0
+                and then not Packed_Element_Fits (Shape, Shape.Packing.Bits))
+              or else Shape.Nominal /= No_Nominal_Type
               or else Shape.Length /= 1
               or else Shape.Cases /= 0
               or else Shape.Payloads_First /= 0
@@ -1338,13 +1382,20 @@ package body Landin.IR.Verifier is
             if not Array_Element_Run_Is_Valid (Of_Unit, Shape) then
                return True;
             elsif Shape.Cases = 0 then
-               return Shape.Nominal /= No_Nominal_Type;
+               return Shape.Nominal /= No_Nominal_Type
+                 or else (Shape.Packing.Bits /= 0
+                   and then not Packed_Element_Fits
+                     (Array_Element_Shape (Of_Unit, Shape),
+                      Shape.Packing.Bits));
             end if;
             declare
                Child : constant Field_Shape :=
                  Array_Element_Shape (Of_Unit, Shape);
             begin
                return Child.Kind = Variant_Field_Shape
+                 or else (Shape.Packing.Bits /= 0
+                   and then not Packed_Element_Fits
+                     (Child, Shape.Packing.Bits))
                  or else Child.Nominal /= Shape.Nominal
                  or else Child.Element /= Shape.Element
                  or else Left = 0
@@ -2808,6 +2859,9 @@ package body Landin.IR.Verifier is
          declare
             Nominal : constant Nominal_Type_Id :=
               Nth_Nominal_Type (Of_Unit, Position);
+            Shape : constant Field_Shape :=
+              (Kind => Aggregate_Field_Shape,
+               Nominal => Nominal, others => <>);
          begin
             if Has_Nominal_Shape (Of_Unit, Nominal)
               and then not Aggregate_Field_Run_Is_Valid
@@ -2816,6 +2870,51 @@ package body Landin.IR.Verifier is
             then
                return (Kind => Nominal_Metadata_Malformed, others => <>);
             end if;
+            if Has_Nominal_Shape (Of_Unit, Nominal) then
+               declare
+                  use type Landin.Packed.Image;
+                  use type Landin.Layouts.Policy;
+                  Packed : constant Boolean :=
+                    Layout_Of (Of_Unit, Nominal) = Landin.Layouts.Packed;
+                  Claimed : Landin.Packed.Image := 0;
+                  Storage : Natural := 0;
+               begin
+                  for Index in 1 .. Aggregate_Field_Count (Of_Unit, Shape)
+                  loop
+                     declare
+                        Field : constant Field_Shape :=
+                          Nth_Aggregate_Field (Of_Unit, Shape, Index);
+                     begin
+                        if not Landin.Packed.Valid_Geometry
+                          (Field.Packing,
+                           Natural (Element_Total'Min (Field.Length, 65)))
+                          or else Packed /= (Field.Packing.Bits /= 0)
+                        then
+                           return (Kind => Field_Shape_Malformed,
+                                   others => <>);
+                        end if;
+                        if Packed then
+                           declare
+                              Mask : constant Landin.Packed.Image :=
+                                Landin.Packed.Mask
+                                  (Field.Packing.Bits * Natural (Field.Length))
+                                  * 2 ** Field.Packing.First;
+                           begin
+                              if (Claimed and Mask) /= 0
+                                or else (Storage /= 0
+                                  and then Storage /= Field.Packing.Storage)
+                              then
+                                 return (Kind => Field_Shape_Malformed,
+                                         others => <>);
+                              end if;
+                              Claimed := Claimed or Mask;
+                              Storage := Field.Packing.Storage;
+                           end;
+                        end if;
+                     end;
+                  end loop;
+               end;
+            end if;
          end;
       end loop;
 
@@ -2823,6 +2922,7 @@ package body Landin.IR.Verifier is
       --  Validate it before a signature, slot or instruction asks membership.
       declare
          Members : Natural := 0;
+         Encodings : Natural := 0;
       begin
          for Which in 1 .. Atom_Set_Count (Of_Unit) loop
             declare
@@ -2837,6 +2937,63 @@ package body Landin.IR.Verifier is
                   return (Kind => Atom_Set_Runs_Overlap, others => <>);
                end if;
 
+               if Held.Encoding_Bits > 64
+                 or else (Held.Encoding_Bits = 0
+                   and then Held.Encodings_First /= 0)
+                 or else (Held.Encoding_Bits /= 0
+                   and then (Held.Encodings_First >
+                       Natural (Of_Unit.Encodings.Length)
+                     or else Held.Members.Count >
+                       Natural (Of_Unit.Encodings.Length)
+                         - Held.Encodings_First))
+               then
+                  return (Kind => Atom_Set_Malformed, others => <>);
+               end if;
+               if Held.Encoding_Bits /= 0 then
+                  if Held.Members.Count > Natural (Of_Unit.Encodings.Length)
+                    - Encodings
+                  then
+                     return (Kind => Atom_Set_Malformed, others => <>);
+                  end if;
+                  for Prior in 1 .. Which - 1 loop
+                     declare
+                        Other : constant Atom_Set_Record :=
+                          Of_Unit.Atom_Sets (Prior);
+                     begin
+                        if Other.Encoding_Bits /= 0
+                          and then Held.Encodings_First
+                            < Other.Encodings_First + Other.Members.Count
+                          and then Other.Encodings_First
+                            < Held.Encodings_First + Held.Members.Count
+                        then
+                           return (Kind => Atom_Set_Malformed, others => <>);
+                        end if;
+                     end;
+                  end loop;
+                  Encodings := Encodings + Held.Members.Count;
+                  for Index in 1 .. Held.Members.Count loop
+                     declare
+                        use type Landin.Packed.Image;
+                        Value : constant Landin.Packed.Image :=
+                          Of_Unit.Encodings
+                            (Held.Encodings_First + Index);
+                     begin
+                        if not Landin.Packed.Fits
+                          (Value, Held.Encoding_Bits)
+                        then
+                           return (Kind => Atom_Set_Malformed, others => <>);
+                        end if;
+                        for Prior in 1 .. Index - 1 loop
+                           if Value = Of_Unit.Encodings
+                             (Held.Encodings_First + Prior)
+                           then
+                              return
+                                (Kind => Atom_Set_Malformed, others => <>);
+                           end if;
+                        end loop;
+                     end;
+                  end loop;
+               end if;
                for Index in 1 .. Held.Members.Count loop
                   declare
                      Atom : constant Declaration_Id :=
@@ -2860,6 +3017,8 @@ package body Landin.IR.Verifier is
          end loop;
          if Members /= Natural (Of_Unit.Atoms.Length) then
             return (Kind => Atom_Set_Runs_Overlap, others => <>);
+         elsif Encodings /= Natural (Of_Unit.Encodings.Length) then
+            return (Kind => Atom_Set_Malformed, others => <>);
          end if;
       end;
 
@@ -5521,8 +5680,14 @@ package body Landin.IR.Verifier is
                               declare
                                  Place : constant Storage :=
                                    (if Reaches_A_Slot (Of_Unit, Id, V)
-                                    then (Kind => Frame_Slot,
-                                          Slot => Slot_Of (Of_Unit, Id, V))
+                                    then (if Is_Address
+                                      (Of_Unit, Id, Slot_Of (Of_Unit, Id, V))
+                                      then (Kind => Runtime_Address,
+                                            Address => Slot_Of
+                                              (Of_Unit, Id, V))
+                                      else (Kind => Frame_Slot,
+                                            Slot => Slot_Of
+                                              (Of_Unit, Id, V)))
                                     else (Kind => Module_Datum,
                                           Datum => Datum_Of
                                             (Of_Unit, Id, V)));
@@ -6856,8 +7021,14 @@ package body Landin.IR.Verifier is
                                    Nth_Operand (Of_Unit, Id, V, 1);
                                  Place : constant Storage :=
                                    (if Reaches_A_Slot (Of_Unit, Id, V)
-                                    then (Kind => Frame_Slot,
-                                          Slot => Slot_Of (Of_Unit, Id, V))
+                                    then (if Is_Address
+                                      (Of_Unit, Id, Slot_Of (Of_Unit, Id, V))
+                                      then (Kind => Runtime_Address,
+                                            Address => Slot_Of
+                                              (Of_Unit, Id, V))
+                                      else (Kind => Frame_Slot,
+                                            Slot => Slot_Of
+                                              (Of_Unit, Id, V)))
                                     else (Kind => Module_Datum,
                                           Datum => Datum_Of
                                             (Of_Unit, Id, V)));

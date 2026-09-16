@@ -1,0 +1,14 @@
+a: atom
+b: atom
+mode: type = (a = 1 | b = 7)
+image: type = layout(packed) struct
+    mode: mode at 0..2
+    row: [1]mode at 3..5
+end image
+value: image = zeroed
+public main: () -> (code: i32) =
+    unchecked begin
+        _ = value.mode
+    end unchecked
+    code = 99
+end main

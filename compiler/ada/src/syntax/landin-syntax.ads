@@ -577,6 +577,14 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                    in Type_Declaration | Struct_Body;
 
+   function Bit_First (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Field;
+
+   function Bit_Last (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Field;
+
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
      with Pre => Contains (Of_Tree, Id)
@@ -1291,6 +1299,20 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Atom_Union_Type;
 
+   function Has_Encodings (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Atom_Union_Type;
+
+   function Representation_Width
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) in Atom_Union_Type | Struct_Body;
+
+   function Atom_Encoding
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre => Has_Encodings (Of_Tree, Id)
+                 and then Index <= Atom_Member_Count (Of_Tree, Id);
+
    function Nth_Atom_Member
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
@@ -1488,6 +1510,8 @@ private
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
       Layout     : Landin.Layouts.Policy := Landin.Layouts.Natural;
+      Encoded    : Boolean := False;
+      Width      : Natural range 0 .. 64 := 0;
       Link_Name  : Landin.Source.Span := Landin.Source.Empty_Span;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;

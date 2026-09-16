@@ -1,0 +1,19 @@
+a: atom
+b: atom
+c: atom
+mode: type = (a = 0 | b = 1 | c = 4)
+image: type = layout(packed) struct
+    mode: mode at 2..4
+end image
+public extern(c) decode: (raw: u8) -> (code: i32) =
+    mut value: image = zeroed
+    p: ptr mut u8 = ptr(usize(addr value))
+    p.val = raw
+    unchecked begin
+        match value.mode
+            a: code = 10
+            b: code = 20
+            c: code = 30
+        end match
+    end unchecked
+end decode

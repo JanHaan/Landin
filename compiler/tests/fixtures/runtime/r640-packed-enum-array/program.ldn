@@ -1,0 +1,37 @@
+a: atom
+b: atom
+left: type = (a = 0 | b = 3)
+right: type = (a = 3 | b = 0)
+wide: type = u64 (a = 0 | b = 0xffff_ffff_ffff_ffff)
+image: type = layout(packed, u16) struct
+    first: [3]left at 0..5
+    second: [3]right at 8..13
+end image
+large: type = layout(packed, u64) struct
+    field: [1]wide at 0..63
+end large
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    raw: ptr mut u16 = ptr(usize(addr value))
+    raw.val = 0xc0c0
+    value.first = [a, b, a]
+    value.second = [a, b, a]
+    mut i: usize = 0
+    while i < 3 do
+        if value.first[i] <> value.second[i] then
+            code = 1
+            return
+        end if
+        inc i
+    end while
+    ordinary: [3]left = value.first
+    mut full: large = (field: [1 of b])
+    full_raw: ptr u64 = ptr(usize(addr full))
+    if raw.val == 0xf3cc and ordinary[1] == b
+      and full.field[0] == b and full_raw.val == 0xffff_ffff_ffff_ffff
+    then
+        code = 42
+    else
+        code = 2
+    end if
+end main

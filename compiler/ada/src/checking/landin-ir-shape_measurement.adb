@@ -1,4 +1,5 @@
 with Ada.Containers.Hashed_Maps;
+with Landin.Targets.Packed;
 
 package body Landin.IR.Shape_Measurement is
 
@@ -31,6 +32,9 @@ package body Landin.IR.Shape_Measurement is
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Signature));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Atoms));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Pointee));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.First));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.Bits));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Shape.Packing.Storage));
       Mix (Ada.Containers.Hash_Type'Mod (Key.Nominal_Position));
       return Result;
    end Hash;
@@ -191,6 +195,15 @@ package body Landin.IR.Shape_Measurement is
          else Cache.Values.Find (Key));
       Measured : Layout.Field_Extent;
    begin
+      if Shape.Packing.Bits /= 0 then
+         declare
+            Held : constant Targets.Scalar_Size :=
+              Targets.Packed.Carrier (Shape.Packing.Storage);
+         begin
+            return (Targets.Byte_Count (Targets.Bytes (Held)),
+                    Targets.Alignment_Of (Facts, Held));
+         end;
+      end if;
       if Extent_Maps.Has_Element (Position) then
          declare
             Saved : constant Cached_Extent := Extent_Maps.Element (Position);

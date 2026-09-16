@@ -1,0 +1,3 @@
+image: type = layout(packed) struct
+    value: i8 at 0..7
+end image

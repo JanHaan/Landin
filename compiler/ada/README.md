@@ -1031,8 +1031,12 @@ admitted memory operations. The [target guide](../../docs/targets.md#explicit-me
 records actual instruction requirements. Packed/register/volatile-pointer type
 syntax and the ordinary CPU/cache modules retain their separate R6 owners.
 
-R6.40 currently adds independently tested image algebra in `Landin.Packed`
-and storage/capability queries in `Targets.Packed`. These are compiler library
-foundations, not yet consumers of parsed packed declarations. No new packed
-source form, IR opcode or native lowering is enabled by these packages.
-ROADMAP.md records the remaining integration and closure obligations.
+R6.40 uses `Landin.Packed` for unsigned image algebra and access planning,
+`Targets.Packed` for target storage/capability queries, and syntax/checking for
+encoded unions and explicit packed positions. Neutral shapes retain geometry
+and encoding tables through verification and optimization. Native backends
+implement checked extraction/insertion and raw aggregate copies; the DWARF
+consumer exposes the raw carrier. Explicit register-image intrinsics use the
+existing volatile IR boundary with retained reserved-bit guards. General
+register wrappers and a Cortex-M emitter are not enabled. ROADMAP.md owns the
+remaining audits, evidence and closure obligations.

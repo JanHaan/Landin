@@ -1,0 +1,9 @@
+class: abi
+summary: independent C control checks all 256 raw images and every encoding hole
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+status: 42
+constructs: 0630, 0730, 1120, 1975
+targets: linux-x86-64, macos-arm64
+profiles: specialization

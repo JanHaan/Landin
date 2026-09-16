@@ -6,11 +6,13 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets.Layouts;
 with Landin.Types;
+with Landin.Layouts;
 
 package body Landin.Backend.Dwarf is
 
    package US renames Ada.Strings.Unbounded;
    use Landin.IR;
+   use type Landin.Layouts.Policy;
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Nominal_Type_Id;
    use type Landin.IR.Scope_Id;
@@ -291,6 +293,24 @@ package body Landin.Backend.Dwarf is
             --  An array DIE carries its element type and count. Its total
             --  byte extent need not be known for a pointer-to-array type.
             Field_Extent (Of_Unit, Shape, Facts, Size, Alignment);
+         end if;
+         if Shape.Kind = Aggregate_Field_Shape
+           and then Layout_Of (Of_Unit, Shape) = Landin.Layouts.Packed
+         then
+            --  A raw image is not a set of byte-addressable fields.
+            --  Expose its complete carrier, including unnamed encodings,
+            --  without fabricating ordinary-array strides for bit arrays.
+            U (6);
+            Str (Decl_Name (Template_Of (Of_Unit, Shape.Nominal)));
+            U (Natural (Size));
+            Member ("raw", Shape_Type
+              ((Element => (case Size is
+                   when 1 => Landin.Types.U8,
+                   when 2 => Landin.Types.U16,
+                   when 4 => Landin.Types.U32,
+                   when others => Landin.Types.U64), others => <>)), 0);
+            U (0);
+            return;
          end if;
          case Shape.Kind is
             when Scalar_Field_Shape =>

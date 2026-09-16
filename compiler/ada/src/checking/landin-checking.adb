@@ -1,4 +1,5 @@
 with Landin.Targets.Layouts;
+with Landin.Targets.Packed;
 
 package body Landin.Checking is
 
@@ -415,6 +416,53 @@ package body Landin.Checking is
       return Is_Prepared (Of_Table);
    end Holds;
 
+   function Encoding_Maps_Agree
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean;
+
+   function Encoding_Maps_Agree
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
+   is
+      use type Landin.Packed.Image;
+   begin
+      if Left = No_Atom_Set or else Right = No_Atom_Set then
+         return Left = Right;
+      elsif Encoding_Width (Of_Table, Left)
+        /= Encoding_Width (Of_Table, Right)
+      then
+         return False;
+      elsif Encoding_Width (Of_Table, Left) = 0 then
+         return True;
+      end if;
+      for A in 1 .. Atom_Count (Of_Table, Left) loop
+         for B in 1 .. Atom_Count (Of_Table, Right) loop
+            if Nth_Atom (Of_Table, Left, A) = Nth_Atom (Of_Table, Right, B)
+              and then Nth_Encoding (Of_Table, Left, A)
+                /= Nth_Encoding (Of_Table, Right, B)
+            then
+               return False;
+            end if;
+         end loop;
+      end loop;
+      return True;
+   end Encoding_Maps_Agree;
+
+   function Actual_Shapes_Agree
+     (Of_Table : Table; Left, Right : Field_Shape) return Boolean;
+
+   function Actual_Shapes_Agree
+     (Of_Table : Table; Left, Right : Field_Shape) return Boolean is
+   begin
+      if not Field_Shapes_Agree (Of_Table, Left, Right) then
+         return False;
+      elsif Left.Kind = Fixed_Array_Field then
+         return Actual_Shapes_Agree
+           (Of_Table, Array_Field_Element (Of_Table, Left),
+            Array_Field_Element (Of_Table, Right));
+      else
+         return Encoding_Maps_Agree (Of_Table, Left.Atoms, Right.Atoms);
+      end if;
+   end Actual_Shapes_Agree;
+
    function Actuals_Agree
      (Of_Table : Table; Left, Right : Actual_Key) return Boolean;
 
@@ -438,10 +486,12 @@ package body Landin.Checking is
          when Scalar_Actual_Type =>
             return Left.Scalar = Right.Scalar;
          when Atom_Set_Actual_Type =>
-            return Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms);
+            return Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms)
+              and then Encoding_Maps_Agree
+                (Of_Table, Left.Atoms, Right.Atoms);
          when Fixed_Array_Actual_Type =>
             return Left.Length = Right.Length
-              and then Field_Shapes_Agree
+              and then Actual_Shapes_Agree
                 (Of_Table, Array_Element_Shape_Of (Of_Table, Left),
                  Array_Element_Shape_Of (Of_Table, Right));
          when Nominal_Actual_Type =>
@@ -1463,7 +1513,8 @@ package body Landin.Checking is
    function Add_Atom_Set
      (Into : in out Table; Atoms : Atom_Array) return Atom_Set_Id
    is
-      Made : Atom_Set_Record := (Members => (First => 0, Count => 0));
+      Made : Atom_Set_Record :=
+        (Members => (First => 0, Count => 0), others => <>);
    begin
       Made.Members.First := Natural (Into.Atoms.Length);
       for Atom of Atoms loop
@@ -1473,6 +1524,34 @@ package body Landin.Checking is
       Into.Atom_Sets.Append (Made);
       return Atom_Set_Id (Into.Atom_Sets.Last_Index);
    end Add_Atom_Set;
+
+   procedure Set_Encodings
+     (Into : in out Table; Set_Id : Atom_Set_Id;
+      Values : Landin.Packed.Encoding_Array; Bits : Landin.Packed.Width) is
+   begin
+      if Values'Length /= Atom_Count (Into, Set_Id)
+        or else not Landin.Packed.Valid_Encodings (Values, Bits)
+        or else Encoding_Width (Into, Set_Id) /= 0
+      then
+         raise Landin.Compiler_Defect with "invalid encoded atom set";
+      end if;
+      Into.Atom_Sets (Positive (Set_Id)).Encodings_First :=
+        Natural (Into.Encodings.Length);
+      Into.Atom_Sets (Positive (Set_Id)).Encoding_Bits := Bits;
+      for Value of Values loop
+         Into.Encodings.Append (Value);
+      end loop;
+   end Set_Encodings;
+
+   function Encoding_Width
+     (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
+     is (Of_Table.Atom_Sets (Positive (Set_Id)).Encoding_Bits);
+
+   function Nth_Encoding
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
+      return Landin.Packed.Image
+     is (Of_Table.Encodings
+       (Of_Table.Atom_Sets (Positive (Set_Id)).Encodings_First + Index));
 
    function Atom_Count
      (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
@@ -1876,6 +1955,14 @@ package body Landin.Checking is
          return False;
       end if;
       loop
+         if not Landin.Packed.Valid_Geometry
+           (Current.Packing,
+            Natural (Element_Count'Min (Current.Length, 65)))
+           or else (Current.Packing.Bits /= 0
+             and then Current.Kind not in Scalar_Field | Fixed_Array_Field)
+         then
+            return False;
+         end if;
          if Current.Kind /= Scalar_Field
            and then Current.Atoms /= No_Atom_Set
          then
@@ -3514,6 +3601,16 @@ package body Landin.Checking is
          raise Landin.Compiler_Defect with "a measured field is malformed";
       end if;
       Fits := True;
+      if Field.Packing.Bits /= 0 then
+         declare
+            Held : constant Landin.Targets.Scalar_Size :=
+              Landin.Targets.Packed.Carrier (Field.Packing.Storage);
+         begin
+            Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
+            Alignment := Landin.Targets.Alignment_Of (Facts, Held);
+            return;
+         end;
+      end if;
       case Field.Kind is
          when Scalar_Field =>
             declare
@@ -3763,6 +3860,7 @@ package body Landin.Checking is
             Landin.Targets.Place
               (Built.Placed, Extents (Field).Size,
                Extents (Field).Alignment, Ignored);
+            exit when Policy = Landin.Layouts.Packed;
          end;
       end loop;
 

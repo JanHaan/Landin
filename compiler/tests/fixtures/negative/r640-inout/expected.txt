@@ -1,0 +1,10 @@
+error[L0301]: a packed field has no independent address for an inout parameter
+  --> ../tests/fixtures/negative/r640-inout/program.ldn:7:9
+  |
+7 |     set(x.value)
+  |         ^^^^^^^
+  --> ../tests/fixtures/negative/r640-inout/program.ldn:4:7
+  |
+4 | set: (inout v: u8) -> none = v = 1 end set
+  |       ^^^^^^^^^^^ this inout parameter
+  = note: [0730]: pass the containing image

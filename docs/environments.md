@@ -338,3 +338,10 @@ Landin atomics, generic evidence calls, SC fences and an escaping ordinary DMA
 slice on each real host. Cacheless emulator results never stand in for cached
 DMA maintenance. The containing dual-native archive binds all three evidence
 classes; the memory [probe guide](../environments/cortex-m/README.md) records limits.
+
+R6.40 adds compiler-generated packed image execution on both native hosts and
+the Linux/Renode transport lane, including unnamed-encoding traps at all six
+optimization/specialization profiles. Independent M0 C controls and literal
+access traces remain separate from native Landin execution. The mandatory
+documents job builds the archived compiler and exports these new lanes beside
+all previous embedded evidence; it does not imply a Cortex-M compiler backend.

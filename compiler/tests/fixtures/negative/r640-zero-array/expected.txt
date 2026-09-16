@@ -1,0 +1,10 @@
+error[L0301]: this array has no all-bits-zero value
+  --> ../tests/fixtures/negative/r640-zero-array/program.ldn:10:17
+   |
+10 |     value.row = zeroed
+   |                 ^^^^^^
+  --> ../tests/fixtures/negative/r640-zero-array/program.ldn:10:5
+   |
+10 |     value.row = zeroed
+   |     ^^^^^^^^^ the array place written here
+  = note: [0540]: the complete element type must have a zero image

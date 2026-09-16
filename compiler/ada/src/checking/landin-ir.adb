@@ -1,5 +1,83 @@
 package body Landin.IR is
 
+   function Packed_Field_Image
+     (Of_Unit : Unit; Item : Item_Id; Shape : Field_Shape;
+      Descriptor : Aggregate_Field_Image; Scalar : Landin.Types.Folded)
+      return Landin.Packed.Image
+   is
+      Result : Landin.Packed.Image := 0;
+      Part : constant Landin.Packed.Field :=
+        (Shape.Packing.First, Shape.Packing.Bits, Natural (Shape.Length));
+
+      function Encoded
+        (Leaf : Field_Shape; Value : Landin.Types.Folded)
+         return Landin.Packed.Image;
+
+      function Encoded
+        (Leaf : Field_Shape; Value : Landin.Types.Folded)
+         return Landin.Packed.Image
+      is
+      begin
+         if Value < 0 then
+            raise Compiler_Defect with "negative packed image";
+         elsif Leaf.Atoms = No_Atom_Set or else Value = 0 then
+            return Landin.Packed.Image (Value);
+         end if;
+         for Index in 1 .. Atom_Count (Of_Unit, Leaf.Atoms) loop
+            if Landin.Types.Folded (Nth_Atom (Of_Unit, Leaf.Atoms, Index))
+              = Value
+            then
+               return Nth_Encoding (Of_Unit, Leaf.Atoms, Index);
+            end if;
+         end loop;
+         raise Compiler_Defect with "unnamed packed constructor atom";
+      end Encoded;
+   begin
+      if Shape.Kind = Scalar_Field_Shape then
+         return Landin.Packed.Insert (0, Encoded (Shape, Scalar), Part);
+      elsif Descriptor.Form = Absent then
+         return 0;
+      end if;
+      declare
+         Leaf : constant Field_Shape := Array_Element_Shape (Of_Unit, Shape);
+         Position : Natural := 0;
+
+         procedure Add (Value : Landin.Types.Folded; Count : Natural := 1);
+
+         procedure Add (Value : Landin.Types.Folded; Count : Natural := 1) is
+         begin
+            for Index in 1 .. Count loop
+               Result := Landin.Packed.Insert
+                 (Result, Encoded (Leaf, Value), Part, Position);
+               Position := Position + 1;
+            end loop;
+         end Add;
+      begin
+         if Descriptor.Form = Element_Sequence then
+            for Index in 1 .. Descriptor.Count loop
+               Add (Descendant_Image_Of
+                      (Of_Unit, Item, Descriptor, Index).Value,
+                    (if Index = Descriptor.Count
+                     then Natural (Descriptor.Value) else 1));
+            end loop;
+         else
+            if Descriptor.Form in Finite | Hybrid then
+               for Index in 1 .. Descriptor.Count loop
+                  Add (Nth_Descriptor_Element
+                    (Of_Unit, Item, Descriptor, Part_Position (Index)));
+               end loop;
+            end if;
+            if Descriptor.Form in Repeated | Hybrid then
+               Add (Descriptor.Value, Part.Count - Position);
+            end if;
+         end if;
+         if Position /= Part.Count then
+            raise Compiler_Defect with "incomplete packed array image";
+         end if;
+      end;
+      return Result;
+   end Packed_Field_Image;
+
    use type Landin.Layouts.Policy;
 
    procedure Note_Caller_Source
@@ -588,7 +666,8 @@ package body Landin.IR is
    function Add_Atom_Set
      (Into : in out Unit; Atoms : Atom_Array) return Atom_Set_Id
    is
-      Made : Atom_Set_Record := (Members => (First => 0, Count => 0));
+      Made : Atom_Set_Record :=
+        (Members => (First => 0, Count => 0), others => <>);
    begin
       Made.Members.First := Natural (Into.Atoms.Length);
       for Atom of Atoms loop
@@ -598,6 +677,34 @@ package body Landin.IR is
       Into.Atom_Sets.Append (Made);
       return Atom_Set_Id (Into.Atom_Sets.Last_Index);
    end Add_Atom_Set;
+
+   procedure Set_Encodings
+     (Into : in out Unit; Set_Id : Atom_Set_Id;
+      Values : Landin.Packed.Encoding_Array; Bits : Landin.Packed.Width) is
+   begin
+      if Values'Length /= Atom_Count (Into, Set_Id)
+        or else not Landin.Packed.Valid_Encodings (Values, Bits)
+        or else Encoding_Width (Into, Set_Id) /= 0
+      then
+         raise Landin.Compiler_Defect with "invalid encoded atom set";
+      end if;
+      Into.Atom_Sets (Positive (Set_Id)).Encodings_First :=
+        Natural (Into.Encodings.Length);
+      Into.Atom_Sets (Positive (Set_Id)).Encoding_Bits := Bits;
+      for Value of Values loop
+         Into.Encodings.Append (Value);
+      end loop;
+   end Set_Encodings;
+
+   function Encoding_Width
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
+     is (Of_Unit.Atom_Sets (Positive (Set_Id)).Encoding_Bits);
+
+   function Nth_Encoding
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
+      return Landin.Packed.Image
+     is (Of_Unit.Encodings
+       (Of_Unit.Atom_Sets (Positive (Set_Id)).Encodings_First + Index));
 
    function Atom_Count
      (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
@@ -3121,12 +3228,45 @@ package body Landin.IR is
 
    --  The walk carries a budget for the reason Field_Shape_Is_Malformed's
    --  does: nothing in the vector proves a run does not name itself.
+   function Encoding_Maps_Agree
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean;
+
+   function Encoding_Maps_Agree
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+   is
+      use type Landin.Packed.Image;
+   begin
+      if Left = No_Atom_Set or else Right = No_Atom_Set then
+         return Left = Right;
+      elsif not Holds (Of_Unit, Left) or else not Holds (Of_Unit, Right)
+        or else Encoding_Width (Of_Unit, Left)
+          /= Encoding_Width (Of_Unit, Right)
+      then
+         return False;
+      elsif Encoding_Width (Of_Unit, Left) = 0 then
+         return True;
+      end if;
+      for A in 1 .. Atom_Count (Of_Unit, Left) loop
+         for B in 1 .. Atom_Count (Of_Unit, Right) loop
+            if Nth_Atom (Of_Unit, Left, A) = Nth_Atom (Of_Unit, Right, B)
+              and then Nth_Encoding (Of_Unit, Left, A)
+                /= Nth_Encoding (Of_Unit, Right, B)
+            then
+               return False;
+            end if;
+         end loop;
+      end loop;
+      return True;
+   end Encoding_Maps_Agree;
+
    function Same_Shape
      (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural;
       Nominal_Identity : Boolean := False) return Boolean
    is
+      use type Landin.Packed.Geometry;
    begin
-      if Left.Kind /= Right.Kind
+      if Left.Packing /= Right.Packing
+        or else Left.Kind /= Right.Kind
         or else Left.Nominal /= Right.Nominal
       then
          return False;
@@ -3135,6 +3275,9 @@ package body Landin.IR is
       case Left.Kind is
          when Scalar_Field_Shape =>
             return Left.Element = Right.Element
+              and then (Left.Packing.Bits = 0
+                or else Encoding_Maps_Agree
+                  (Of_Unit, Left.Atoms, Right.Atoms))
               and then Pointees_Agree
                 (Of_Unit, Left.Pointee, Right.Pointee, Budget)
               and then
@@ -3163,6 +3306,10 @@ package body Landin.IR is
                return False;
             end if;
             return Budget > 0
+              and then (Left.Packing.Bits = 0
+                or else Encoding_Maps_Agree
+                  (Of_Unit, Array_Element_Shape (Of_Unit, Left).Atoms,
+                   Array_Element_Shape (Of_Unit, Right).Atoms))
               and then Same_Shape
                 (Of_Unit,
                  Array_Element_Shape (Of_Unit, Left),
@@ -4158,6 +4305,47 @@ package body Landin.IR is
       Into.Operands.Append (Index);
       return Append (Into, Item, Made);
    end Emit_Load_Slot_Element;
+
+   function Emit_Shaped_Load
+     (Into : in out Unit; Item : Item_Id; Address : Slot_Id;
+      Field : Natural; Index : Value_Id; Site : Landin.Provenance.Origin)
+      return Value_Id
+   is
+      Field_Shape : constant Landin.IR.Field_Shape :=
+        (if Field = 0 then Address_Shape (Into, Item, Address)
+         else Nth_Aggregate_Field
+           (Into, Address_Shape (Into, Item, Address), Field));
+      Leaf : constant Landin.IR.Field_Shape :=
+        (if Index = No_Value then Field_Shape
+         else Array_Element_Shape (Into, Field_Shape));
+      Made : Instruction :=
+        (Op => (if Index = No_Value then Load_Field else Load_Element),
+         Result => Leaf.Element, Site => Site, Slot => Address,
+         Part => (if Index = No_Value then Part_Position (Field) else 1),
+         Element_Field => (if Index = No_Value then 0 else Field),
+         Atom_Set => Leaf.Atoms, others => <>);
+   begin
+      if Index /= No_Value then
+         Made.First_Arg := Natural (Into.Operands.Length);
+         Made.Args := 1;
+         Into.Operands.Append (Index);
+      end if;
+      return Append (Into, Item, Made);
+   end Emit_Shaped_Load;
+
+   procedure Emit_Shaped_Store
+     (Into : in out Unit; Item : Item_Id; Address : Slot_Id;
+      Field : Natural; Index, Value : Value_Id;
+      Site : Landin.Provenance.Origin) is
+   begin
+      if Index = No_Value then
+         Emit_Store_Slot_Field
+           (Into, Item, Address, Part_Position (Field), Value, Site);
+      else
+         Emit_Store_Slot_Element
+           (Into, Item, Address, Index, Value, Site, Field => Field);
+      end if;
+   end Emit_Shaped_Store;
 
    procedure Emit_Store_Slot_Element
      (Into  : in out Unit;

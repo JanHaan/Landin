@@ -1,0 +1,12 @@
+a: atom
+b: atom
+mode: type = (a = 0 | b = 2)
+public main: () -> (code: i32) =
+    mut value: mode = a
+    raw: ptr mut u32 = ptr(usize(addr value))
+    raw.val = 0
+    unchecked begin
+        _ = value
+    end unchecked
+    code = 99
+end main

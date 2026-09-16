@@ -10,7 +10,7 @@ package body Landin.IR.Effects is
             | Function_Address | Evidence_Address =>
             return (others => False);
          when Load =>
-            return (Reads => True, others => False);
+            return (Reads => True, Traps => True, others => False);
          when Store =>
             return (Writes => True, others => False);
          when Storage_Address | Place_Address | Slice_Address | Conversion
@@ -20,11 +20,11 @@ package body Landin.IR.Effects is
          when Load_Indirect | Load_Datum | Load_Field | Load_Element
             | Load_Variant_Tag | Load_Variant_Field | Evidence_Function =>
             return (Reads => True, Traps => True, others => False);
-         when Store_Indirect | Store_Datum | Store_Field | Store_Element
+         when Store_Indirect | Store_Datum
             | Clear_Array | Fill_Array | Select_Variant
             | Store_Variant_Field =>
             return (Writes => True, Traps => True, others => False);
-         when Copy_Array | Copy_Variant =>
+         when Copy_Array | Copy_Variant | Store_Field | Store_Element =>
             return (Reads => True, Writes => True, Traps => True,
                     others => False);
          when Evidence_Self =>

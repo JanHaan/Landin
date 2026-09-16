@@ -1,0 +1,18 @@
+image: type = layout(packed) struct
+    pins: [16]u2 at 0..31
+end image
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    p: ptr mut u32 = ptr(usize(addr x))
+    p.val = 0xa5a5a5a5
+    mut n: usize = 0
+    while n < 16 do
+        x.pins[n] = u8(n % 4)
+        inc n
+    end while
+    code = 1
+    if p.val == 0xe4e4e4e4 and x.pins[0] == 0 and x.pins[15] == 3
+      and sizeof image == 4 and alignof image == 4 then
+        code = 42
+    end if
+end main

@@ -18,6 +18,8 @@ with Landin.Cleanup;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
+with Landin.IR.Testing_Support;
+with Landin.Layouts;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -2091,8 +2093,116 @@ package body Landin.Tests.IR_Suite is
       end;
    end Detailed_Dumps_Retain_Pointer_Metadata;
 
+   procedure Packed_Shapes_Reject_Malformed_Geometry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Packed_Shapes_Reject_Malformed_Geometry
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      for Case_Id in 0 .. 7 loop
+         declare
+            Unit : IR.Unit;
+            Nominal : IR.Nominal_Type_Id;
+            Shape : IR.Field_Shape :=
+              (Element => Landin.Types.U8,
+               Packing => (First => 0, Bits => 2, Storage => 16),
+               others => <>);
+            Fault : IR.Verifier.Fault;
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Nominal := IR.Add_Nominal_Type (Unit, 1);
+            case Case_Id is
+               when 0 => null;
+               when 1 => Shape.Packing.Bits := 9;
+               when 2 => Shape.Element := Landin.Types.Bool;
+               when 3 => Shape.Packing.First := 15;
+               when 4 => Shape.Packing.Storage := 12;
+               when 5 =>
+                  Shape.Kind := IR.Array_Field_Shape;
+                  Shape.Length := 9;
+               when 6 =>
+                  Shape := IR.Make_Array_Shape
+                    (Unit, 2, (Element => Landin.Types.Usize,
+                               Signature => IR.Add_Signature
+                                 (Unit, IR.No_Signature_Parts,
+                                  (Kind => Landin.Types.No_Value,
+                                   others => <>)), others => <>));
+                  Shape.Packing := (First => 0, Bits => 2, Storage => 16);
+               when 7 => Shape.Element := Landin.Types.I8;
+            end case;
+            IR.Set_Nominal_Shape
+              (Unit, Nominal, [1 => Shape], Policy => Landin.Layouts.Packed);
+            Fault := IR.Verifier.Check (Unit);
+            if Case_Id = 0 then
+               declare
+                  Other : IR.Field_Shape := Shape;
+               begin
+                  Other.Packing.First := 1;
+                  Landin.Testing.Check
+                    (Item, not IR.Same_Shape (Unit, Shape, Other),
+                     "equal logical types do not erase bit positions");
+               end;
+            end if;
+            Landin.Testing.Check
+              (Item, (Fault.Kind = IR.Verifier.Nothing_Wrong) = (Case_Id = 0),
+               "packed geometry case" & Natural'Image (Case_Id) & ": "
+               & IR.Verifier.Fault_Kind'Image (Fault.Kind));
+         end;
+      end loop;
+   end Packed_Shapes_Reject_Malformed_Geometry;
+
+   procedure Encoding_Tables_Are_Verified
+     (Item : in out Landin.Testing.Context);
+
+   procedure Encoding_Tables_Are_Verified
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      for Case_Id in 0 .. 5 loop
+         declare
+            Unit : IR.Unit;
+            Atoms : IR.Atom_Set_Id;
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Atoms := IR.Add_Atom_Set (Unit, [1, 2]);
+            IR.Set_Encodings (Unit, Atoms, [0, 4], 3);
+            case Case_Id is
+               when 0 => null;
+               when 1 => IR.Testing_Support.Overwrite_Encoding_Run
+                 (Unit, Atoms, 0, 65);
+               when 2 => IR.Testing_Support.Overwrite_Encoding_Run
+                 (Unit, Atoms, Natural'Last, 3);
+               when 3 => IR.Testing_Support.Overwrite_Encoding (Unit, 2, 0);
+               when 4 => IR.Testing_Support.Overwrite_Encoding (Unit, 2, 8);
+               when 5 => IR.Testing_Support.Overwrite_Encoding_Run
+                 (Unit, Atoms, 0, 0);
+            end case;
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit).Kind =
+                 (if Case_Id = 0 then IR.Verifier.Nothing_Wrong
+                  else IR.Verifier.Atom_Set_Malformed),
+               "encoding table corruption case" & Natural'Image (Case_Id));
+         end;
+      end loop;
+   end Encoding_Tables_Are_Verified;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir", "encoding tables are verified",
+         Encoding_Tables_Are_Verified'Access);
+      Landin.Testing.Register
+        (Into, "ir", "packed shapes reject malformed geometry",
+         Packed_Shapes_Reject_Malformed_Geometry'Access);
       Landin.Testing.Register
         (Into, "ir", "detailed dumps retain pointer metadata",
          Detailed_Dumps_Retain_Pointer_Metadata'Access);

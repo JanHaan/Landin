@@ -6,7 +6,8 @@ from setup import HERE
 TRACE = ('r32:0:a50000f0;w32:0:a50000d0;r32:0:a50000d0;'
          'r32:4:0000009b;r32:4:00000000;w32:8:00000051;'
          'w32:c:00000002;r32:c:000000f1;w32:c:00000000;r32:c:000000f1;'
-         'r16:10:ffff;w16:10:0000;r16:10:0000;w16:10:ffff')
+         'r16:10:ffff;w16:10:0000;r16:10:0000;w16:10:ffff;'
+         'w32:14:ffffff51;r32:14:ffffff51')
 
 
 def execute(run):
@@ -37,6 +38,7 @@ assert model.Normal == 0xa50000d0
 assert model.Command == 0x51
 assert model.Pending == 0xf1
 assert model.Count == 0xffff
+assert model.Ones == 0xffffff51
 print("R640_PACKED_TRACE " + str(model.Trace))
 # Invalid accesses are attempted only after the successful trace assertion.
 # The model independently refuses direction, width and reserved-bit faults.
@@ -47,12 +49,13 @@ for action in [lambda: model.ReadDoubleWord(8),
                lambda: model.ReadDoubleWord(16),
                lambda: model.WriteDoubleWord(0, 0),
                lambda: model.WriteDoubleWord(8, 0x100),
-               lambda: model.WriteDoubleWord(12, 0x100)]:
+               lambda: model.WriteDoubleWord(12, 0x100),
+               lambda: model.WriteDoubleWord(20, 0x51)]:
     try:
         action()
     except Exception:
         refused += 1
-assert refused == 7
+assert refused == 8
 assert str(model.Trace) == {TRACE!r}
 print("R640_PACKED_PASS")
 ''')

@@ -175,6 +175,14 @@ package body Landin.Syntax is
       return Layout_Of (Of_Tree, Id) = Landin.Layouts.C;
    end Has_C_Layout;
 
+   function Bit_First (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (if Element (Of_Tree, Id).Slots > 1
+         then Slot (Of_Tree, Id, 2) else No_Node);
+
+   function Bit_Last (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (if Element (Of_Tree, Id).Slots > 2
+         then Slot (Of_Tree, Id, 3) else Bit_First (Of_Tree, Id));
+
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
      is (Element (Of_Tree, Id).Link_Name);
@@ -872,11 +880,24 @@ package body Landin.Syntax is
 
    function Atom_Member_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural
-     is (Run_Length (Of_Tree, Id));
+     is (Run_Length (Of_Tree, Id) /
+           (if Has_Encodings (Of_Tree, Id) then 2 else 1));
+
+   function Has_Encodings (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Encoded);
+
+   function Representation_Width
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Element (Of_Tree, Id).Width);
+
+   function Atom_Encoding
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, 2 * Index));
 
    function Nth_Atom_Member
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
-     is (Nth_Item (Of_Tree, Id, Index));
+     is (Nth_Item (Of_Tree, Id,
+           (if Has_Encodings (Of_Tree, Id) then 2 * Index - 1 else Index)));
 
    function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));

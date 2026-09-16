@@ -176,10 +176,9 @@ package Landin.Types is
    --  private and has no defaults for this reason.  Asking the host is not
    --  available here and must not become available.
    --
-   --  bool is absent on purpose.  [0150] says a one-bit field is spelt
-   --  bool and that outside a packed struct one occupies the next machine
-   --  width, which makes bool's storage a layout question and layout is
-   --  R2.10's.  Its value domain is the two literals and needs no width.
+   --  bool is absent on purpose: its domain is the two literals, while
+   --  its storage is a layout question. D228's numeric u1 packed field
+   --  extracts an ordinary u8 and does not change bool's value domain.
    function Width
      (Item : Integer_Name; Facts : Landin.Targets.Target_Facts)
      return Landin.Targets.Bit_Width

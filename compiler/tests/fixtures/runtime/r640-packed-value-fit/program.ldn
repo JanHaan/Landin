@@ -1,0 +1,11 @@
+image: type = layout(packed) struct
+    value: u2 at 0..1
+end image
+number: () -> (value: u8) = 4 end number
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    unchecked begin
+        x.value = number()
+    end unchecked
+    code = 99
+end main

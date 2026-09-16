@@ -1,0 +1,22 @@
+word: type = layout(packed) struct
+    low: u63 at 0..62
+    high: bool at 63
+end word
+count: type = layout(packed) struct
+    value: u23 at 0..22
+end count
+public main: () -> (code: i32) =
+    mut x: word = (low: 0x7fff_ffff_ffff_ffff, high: true)
+    p: ptr u64 = ptr(usize(addr x))
+    mut n: count = (value: 0x7f_ffff)
+    q: ptr mut u32 = ptr(usize(addr n))
+    q.val = 0xffff_ffff
+    n.value = 0
+    code = 1
+    if p.val == 0xffff_ffff_ffff_ffff and x.high
+      and x.low == 0x7fff_ffff_ffff_ffff
+      and q.val == 0xff80_0000 and sizeof word == 8
+      and sizeof count == 4 and alignof word == 8 then
+        code = 42
+    end if
+end main

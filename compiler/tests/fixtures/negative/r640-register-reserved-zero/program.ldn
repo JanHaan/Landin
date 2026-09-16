@@ -1,0 +1,6 @@
+import compiler
+mut value: u32 = 0
+public main: () -> (code: i32) =
+    compiler.register_write(addr value, 0x100, compiler.normal_write, compiler.write_zero, 0xff)
+    code = 0
+end main

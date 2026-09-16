@@ -1,0 +1,9 @@
+class: negative
+summary: zeroed does not manufacture validated encoded values in zero-field
+program: program.ldn
+constructs: 0540, 0630, 0730
+targets: linux-x86-64, macos-arm64
+codes: L0301
+args: ../tests/fixtures/negative/r640-zero-field/program.ldn
+expect: expected.txt
+status: 1

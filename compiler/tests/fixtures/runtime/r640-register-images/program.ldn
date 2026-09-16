@@ -1,0 +1,32 @@
+public main: () -> (code: i32) =
+    mut word: u32 = 0xa50000f0
+    p: ptr mut u32 = addr word
+    raw := compiler.register_read(p, compiler.normal_read)
+    compiler.register_write(p, raw, compiler.normal_write,
+                            compiler.preserve, 0xff)
+    if word <> 0xa50000f0 then
+        code = 1
+        return
+    end if
+    compiler.register_write(p, 0x51, compiler.normal_write,
+                            compiler.write_zero, 0xff)
+    if word <> 0x51 then
+        code = 2
+        return
+    end if
+    compiler.register_write(p, 0xffffff51, compiler.normal_write,
+                            compiler.write_one, 0xff)
+    if word <> 0xffffff51 then
+        code = 3
+        return
+    end if
+    -- This RAM control observes the command word; device effects belong
+    -- to the separate peripheral contract and actual Renode execution.
+    compiler.register_write(p, 2, compiler.one_clears,
+                            compiler.write_zero, 0xff)
+    if word <> 2 then
+        code = 4
+        return
+    end if
+    code = 42
+end main

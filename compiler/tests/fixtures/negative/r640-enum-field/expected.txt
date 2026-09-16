@@ -1,0 +1,10 @@
+error[L0301]: this bit range does not fit the field's value type
+  --> ../tests/fixtures/negative/r640-enum-field/program.ldn:4:5
+  |
+4 |     value: mode at 0..1
+  |     ^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r640-enum-field/program.ldn:3:30
+  |
+3 | image: type = layout(packed) struct
+  |                              ^^^^^^ this layout declaration
+  = note: [0730]: packed fields have explicit, disjoint bit positions within one unsigned image

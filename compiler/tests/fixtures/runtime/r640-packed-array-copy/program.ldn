@@ -1,0 +1,22 @@
+image: type = layout(packed, u32) struct
+    low: [4]u2 at 0..7
+    high: [4]u2 at 16..23
+end image
+update: (inout x: image) -> none =
+    x.low = [0, 1, 2, 3]
+    x.high = x.low
+end update
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    p: ptr mut u32 = ptr(usize(addr x))
+    p.val = 0xa500a500
+    update(x)
+    values: [4]u8 = x.high
+    code = 1
+    if values[0] <> 0 or values[3] <> 3 then
+        code = 2
+    end if
+    if p.val == 0xa5e4a5e4 and values[0] == 0 and values[3] == 3 then
+        code = 42
+    end if
+end main

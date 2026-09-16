@@ -1,0 +1,10 @@
+error[L0301]: bit positions require layout(packed)
+  --> ../tests/fixtures/negative/r640-ordinary-position/program.ldn:2:5
+  |
+2 |     value: u8 at 0..7
+  |     ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r640-ordinary-position/program.ldn:1:15
+  |
+1 | image: type = struct
+  |               ^^^^^^ this layout declaration
+  = note: [0730]: packed fields have explicit, disjoint bit positions within one unsigned image

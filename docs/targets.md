@@ -315,10 +315,23 @@ The cache model demonstrates stale reads and destructive maintenance, under an
 explicit two-byte cache-line abstraction; the cacheless emulator cannot test
 physical cache behavior. See the [probe guide](../environments/cortex-m/README.md).
 
-The R6.40 work in progress adds `Targets.Packed` measurements for explicit bit
-fields and array element widths, rounded to 1/2/4/8-byte storage with target
-alignment. Its transaction query delegates to existing volatile capabilities:
-M0 remains limited to one-, two- and four-byte transactions. The companion
-image algebra and access planner are tested library seams, not yet connected
-to packed source declarations. The [probe guide](../environments/cortex-m/README.md)
-records the independent C peripheral witness and exact width/event oracle.
+R6.40 connects `Targets.Packed` to source declarations and neutral field
+geometry. One carrier of 1/2/4/8 bytes uses the selected target's size and
+alignment, with least-significant-bit numbering and little-endian byte order.
+Unsigned field widths through 64 bits do not add ordinary scalar widths or
+calling conventions. Natural, C and optimal layouts retain their contracts.
+Native x86-64 and Darwin arm64 lowering extract and insert that carrier and
+validate encoded members. M0 remains limited to one-, two- and four-byte
+volatile transactions; describing an eight-byte ordinary image does not enable
+an eight-byte MMIO access or a Cortex-M emitter.
+
+Packed debug types expose one unsigned `raw` member and their true storage
+size. This preserves unnamed encodings without claiming independently
+addressable fields or ordinary array strides. Full named bitfield/bit-array
+presentation is a retained debugger limit; the
+[DWARF 4 specification](https://dwarfstd.org/doc/DWARF4.pdf) and
+[bit-offset clarification](https://dwarfstd.org/issues/081130.1.html) distinguish
+those representations. Native debugger controls inspect a raw image containing
+an unnamed pattern. The [probe guide](../environments/cortex-m/README.md)
+distinguishes compiler-generated hosted peripheral execution, independent M0
+C controls, and abstract model assertions.

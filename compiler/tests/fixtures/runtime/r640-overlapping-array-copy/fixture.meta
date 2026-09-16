@@ -1,0 +1,7 @@
+class: runtime
+summary: physically overlapping packed array transfers snapshot both directions
+program: program.ldn
+constructs: 0470, 0730, 0750
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

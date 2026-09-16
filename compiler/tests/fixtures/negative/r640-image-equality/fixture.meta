@@ -1,0 +1,9 @@
+class: negative
+summary: packed contract refuses image-equality
+program: program.ldn
+constructs: 0630, 0730, 0740
+targets: linux-x86-64, macos-arm64
+codes: L0301, L0301
+args: ../tests/fixtures/negative/r640-image-equality/program.ldn
+expect: expected.txt
+status: 1

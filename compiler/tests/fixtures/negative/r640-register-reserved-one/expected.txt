@@ -1,0 +1,6 @@
+error[L0300]: register image violates reserved bits
+  --> ../tests/fixtures/negative/r640-register-reserved-one/program.ldn:4:41
+  |
+4 |     compiler.register_write(addr value, 0, compiler.normal_write, compiler.write_one, 0xff)
+  |                                         ^
+  = note: [0740]: a whole-image write cannot repair the supplied bits or read the device

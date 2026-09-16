@@ -1,0 +1,10 @@
+error[L0301]: a packed field has no independent address
+  --> ../tests/fixtures/negative/r640-address/program.ldn:6:14
+  |
+6 |     _ = addr x.value
+  |              ^^^^^^^
+  --> ../tests/fixtures/negative/r640-address/program.ldn:6:9
+  |
+6 |     _ = addr x.value
+  |         ^^^^^^^^^^^^ this address operation
+  = note: [0730]: take the containing image's address

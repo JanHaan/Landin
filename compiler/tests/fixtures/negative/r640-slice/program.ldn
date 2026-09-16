@@ -1,0 +1,7 @@
+image: type = layout(packed) struct
+    value: [4]u2 at 0..7
+end image
+f: () -> none =
+    mut x: image = zeroed
+    _ = x.value[0..<4]
+end f

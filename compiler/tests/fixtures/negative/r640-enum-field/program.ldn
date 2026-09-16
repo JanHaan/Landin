@@ -1,0 +1,5 @@
+a: atom
+mode: type = (a = 4)
+image: type = layout(packed) struct
+    value: mode at 0..1
+end image

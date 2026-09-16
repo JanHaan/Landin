@@ -62,6 +62,8 @@ void probe(void)
     COUNT = 0;
     require(COUNT == 0);
     COUNT = 0xffff;
+    IMAGE(20) = 0xffffff51;
+    require(IMAGE(20) == 0xffffff51);
     result = failures == 0 ? 0x640 : 0xbad;
     stage = 1;
     for(;;) {}

@@ -1,0 +1,6 @@
+error[L0301]: incompatible register access contract
+  --> ../tests/fixtures/negative/r640-register-one-clears-ones/program.ldn:8:5
+  |
+8 |     compiler.register_write(p, 0, compiler.one_clears, compiler.write_one, 0xff)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

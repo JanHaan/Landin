@@ -1,0 +1,6 @@
+error[L0301]: register contract forbids this read
+  --> ../tests/fixtures/negative/r640-register-unknown-read/program.ldn:8:9
+  |
+8 |     _ = compiler.register_read(p, compiler.read_twice)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

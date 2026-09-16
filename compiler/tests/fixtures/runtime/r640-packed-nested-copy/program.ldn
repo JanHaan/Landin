@@ -1,0 +1,33 @@
+a: atom
+b: atom
+mode: type = (a = 1 | b = 7)
+image: type = layout(packed, u16) struct
+    mode: mode at 0..2
+    flag: bool at 9
+end image
+holder: type = struct
+    prefix: u8
+    image: image
+    tail: u32
+end holder
+mut static: holder = (prefix: 5, image: zeroed, tail: 19)
+copy: (in source: holder) -> (value: holder) =
+    value = source
+end copy
+public main: () -> (code: i32) =
+    raw: ptr mut u16 = ptr(usize(addr static.image))
+    raw.val = 0xb6a5
+    mut nested: holder = copy(static)
+    nested_raw: ptr u16 = ptr(usize(addr nested.image))
+    mut images: [2]image = [static.image, nested.image]
+    copies: [2]image = images
+    first: ptr u16 = ptr(usize(addr copies[0]))
+    second: ptr u16 = ptr(usize(addr copies[1]))
+    if nested_raw.val == 0xb6a5 and first.val == 0xb6a5
+      and second.val == 0xb6a5 and nested.prefix == 5 and nested.tail == 19
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

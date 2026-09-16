@@ -36,6 +36,27 @@ package body Landin.Targets.Layouts is
       for Position in Made.Order'Range loop
          Made.Order (Position) := Position;
       end loop;
+      if Policy = Landin.Layouts.Packed then
+         if Fields'Length = 0 then
+            raise Landin.Compiler_Defect with "an empty packed image";
+         end if;
+         Made.Size := Fields (Fields'First).Size;
+         Made.Alignment := Fields (Fields'First).Alignment;
+         for Field of Fields loop
+            if Field.Size /= Made.Size
+              or else Field.Alignment /= Made.Alignment
+            then
+               raise Landin.Compiler_Defect with
+                 "packed fields disagree on their containing image";
+            end if;
+         end loop;
+         if Made.Size > Maximum then
+            raise Landin.Compiler_Defect with "packed image exceeds limit";
+         end if;
+         Made.Offsets := [others => 0];
+         Made.Natural_Size := Made.Size;
+         return Made;
+      end if;
       Place_Order (Made);
       Made.Natural_Size := Made.Size;
       if Policy = Landin.Layouts.Optimal then

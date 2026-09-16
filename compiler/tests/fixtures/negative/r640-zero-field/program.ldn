@@ -1,0 +1,12 @@
+a: atom
+b: atom
+mode: type = (a = 1 | b = 4)
+image: type = layout(packed) struct
+    field: mode at 0..2
+    row: [1]mode at 3..5
+end image
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    value.field = zeroed
+    code = 0
+end main

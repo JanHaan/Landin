@@ -1,3 +1,11 @@
+debug_a: atom
+debug_b: atom
+debug_mode: type = (debug_a = 0 | debug_b = 4)
+debug_packed: type = layout(packed, u32) struct
+    mode: debug_mode at 1..3
+    pins: [8]u2 at 8..23
+end debug_packed
+
 debug_site: type = struct
     file_id: u32
     line: u32
@@ -138,6 +146,9 @@ debug_outer: (caller call_site: debug_site,
     record_local: debug_record = record_param
     variant_local: debug_choice = variant_param
     array_local: [3]u16 = array_param
+    mut packed_local: debug_packed = zeroed
+    packed_raw: ptr mut u32 = ptr(usize(addr packed_local))
+    packed_raw.val = 0x65a5a5a5
     inner_result: i32 = debug_inner(scalar_local, pointer_local, record_local, variant_local, array_local, saved_a, saved_b, saved_c)
     result = 1
     match variant_local.choice

@@ -1,0 +1,6 @@
+error[L0301]: register contract forbids this write
+  --> ../tests/fixtures/negative/r640-register-no-write/program.ldn:8:5
+  |
+8 |     compiler.register_write(p, 0, compiler.no_write, compiler.write_zero, 0xff)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

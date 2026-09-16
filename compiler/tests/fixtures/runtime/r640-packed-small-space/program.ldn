@@ -1,0 +1,67 @@
+a: atom
+b: atom
+c: atom
+mode: type = (a = 0 | b = 1 | c = 4)
+image: type = layout(packed) struct
+    low: u2 at 0..1
+    mode: mode at 2..4
+    flags: [3]bool at 5..7
+end image
+identity: (in value: image) -> (copy: image) =
+    copy = value
+end identity
+classify: (value: mode) -> (code: u8) =
+    match value
+        a: code = 10
+        b: code = 20
+        c: code = 30
+    end match
+end classify
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    p: ptr mut u8 = ptr(usize(addr x))
+    mut raw: u16 = 0
+    while raw < 256 do
+        p.val = u8(raw)
+        mut copy: image = identity(x)
+        q: ptr u8 = ptr(usize(addr copy))
+        if q.val <> u8(raw) or x.low <> u8(raw % 4) then
+            code = 1
+            return
+        end if
+        encoding := (raw / 4) % 8
+        if encoding == 0 then
+            if classify(x.mode) <> 10 then
+                code = 2
+                return
+            end if
+        elsif encoding == 1 then
+            if classify(x.mode) <> 20 then
+                code = 3
+                return
+            end if
+        elsif encoding == 4 then
+            if classify(x.mode) <> 30 then
+                code = 4
+                return
+            end if
+        end if
+        mut bit: usize = 0
+        mut divisor: u16 = 32
+        while bit < 3 do
+            if x.flags[bit] <> ((raw / divisor) % 2 == 1) then
+                code = 5
+                return
+            end if
+            divisor *= 2
+            inc bit
+        end while
+        x.low = 3
+        if p.val <> u8((raw / 4) * 4 + 3) then
+            code = 6
+            return
+        end if
+        inc raw
+    end while
+    code = 42
+end main

@@ -1,0 +1,6 @@
+error[L0301]: an encoded union requires distinct atoms and distinct fixed unsigned encodings
+  --> ../tests/fixtures/negative/r640-duplicate-encoding/program.ldn:3:14
+  |
+3 | mode: type = (a = 1 | b = 1)
+  |              ^^^^^^^^^^^^^^^ this encoded union
+  = note: [0730]: each member names one atom and a pattern within 64 bits; holes remain unnamed

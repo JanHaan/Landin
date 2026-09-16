@@ -1,0 +1,4 @@
+image: type = layout(packed) struct
+    low: u4 at 0..3
+    high: u4 at 3..6
+end image

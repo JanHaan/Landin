@@ -1,0 +1,31 @@
+a: atom
+b: atom
+left: type = (a = 0 | b = 3)
+right: type = (a = 3 | b = 0)
+marker: type = concept (t: type)
+    mark: (self: ptr t) -> (value: i32)
+end marker
+mark_left: (self: ptr left) -> (value: i32) =
+    value = if self.val == b then 35 else 0 end if
+end mark_left
+mark_right: (self: ptr right) -> (value: i32) =
+    value = if self.val == b then 7 else 0 end if
+end mark_right
+left is marker (mark: mark_left)
+right is marker (mark: mark_right)
+mark_generic: (t: type is marker, self: ptr t) -> (value: i32) =
+    value = t.mark(self)
+end mark_generic
+public main: () -> (code: i32) =
+    x: left = b
+    y: right = b
+    px: ptr left = addr x
+    py: ptr right = addr y
+    ex: any marker = any(px)
+    ey: any marker = any(py)
+    if x == y and ex.mark() == 35 and ey.mark() == 7 then
+        code = mark_generic(px) + mark_generic(py)
+    else
+        code = 1
+    end if
+end main

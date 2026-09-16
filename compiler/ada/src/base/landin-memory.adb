@@ -1,6 +1,11 @@
 package body Landin.Memory is
    function Named (Name : String) return Operation is
    begin
+      if Name = "register_read" then
+         return Volatile_Load;
+      elsif Name = "register_write" then
+         return Volatile_Store;
+      end if;
       for Op in Operation range Atomic_Load .. Completion_Barrier loop
          declare
             Upper : constant String := Operation'Image (Op);

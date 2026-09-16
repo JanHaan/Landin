@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 193 with evidence, 7 with neither.
+#  200 constructs, 195 with evidence, 5 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted executed          Line comment, to end of line
@@ -86,8 +86,8 @@
 0700   tour        accepted emitted executed refused  Construction and conversion use the same form
 0710   tour        accepted emitted executed refused  A struct literal is untyped
 0720   tour        accepted emitted executed refused refused-by-name 'of' fills every field the literal did not name
-0730   tour        -                                  A register has three kinds of field
-0740   tour        -                                  Access behaviour is data, not keywords
+0730   tour        accepted emitted executed refused  A register has three kinds of field
+0740   tour        accepted emitted executed refused  Access behaviour is data, not keywords
 0750   tour        accepted emitted executed refused  Fields keep the order you wrote them
 0760   tour        accepted emitted executed refused  Attributes are prefix words, from a closed set
 0770   tour        accepted emitted executed refused  There is no borrow checker and there are no lifetime

@@ -409,7 +409,20 @@ Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
 with no atomicity promise. Target instructions are described in the target guide.
 
-R6.40's current image-algebra and target-layout foundations do not yet change
-this representation. They are not evidence that packed source fields can be
-lowered through ordinary byte-addressed field paths. ROADMAP.md owns that
-pending integration and its required verifier and optimization evidence.
+R6.40 adds packed geometry to neutral field shapes: first bit, element width
+and total carrier width. Encoded atom sets retain a separate unsigned encoding
+table; ordinary values retain their existing atom identities. The verifier
+checks geometry, field kinds, encoding membership tables and typed array/address
+witnesses. A shaped extraction validates an encoding before producing an atom.
+Discarding its result does not remove that check. Field stores preserve the
+other image bits and retain fit checks; their effects include reads, writes and
+traps. Whole aggregate copies preserve the carrier without extracting fields.
+
+The native backends consume the same geometry and map validated atoms to or
+from each union's encoding table. Explicit register accesses reuse the volatile
+memory instruction; fixed modes are checked before lowering and reserved-bit
+requirements become retained guards before a write. The operation still has
+one scalar transaction. No packed field is an independently addressable object.
+Debug information exposes a packed nominal as its unsigned `raw` carrier;
+field-level bit-array presentation is not claimed. ROADMAP.md owns validation,
+limits and exact-revision closure.

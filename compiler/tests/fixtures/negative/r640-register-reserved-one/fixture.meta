@@ -1,0 +1,9 @@
+class: negative
+summary: known invalid packed image register-reserved-one
+program: program.ldn
+constructs: 0730, 0740
+targets: linux-x86-64, macos-arm64
+codes: L0300
+args: ../tests/fixtures/negative/r640-register-reserved-one/program.ldn
+expect: expected.txt
+status: 1

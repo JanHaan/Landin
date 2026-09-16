@@ -3,6 +3,8 @@ with Landin.Packed;
 
 package Landin.Targets.Packed is
 
+   function Carrier (Bits : Landin.Packed.Width) return Scalar_Size;
+
    type Layout is record
       Fits      : Boolean := False;
       Size      : Byte_Count := 0;

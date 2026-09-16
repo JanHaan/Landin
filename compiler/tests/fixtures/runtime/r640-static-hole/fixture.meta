@@ -1,0 +1,7 @@
+class: runtime
+summary: a zeroed static image retains its invalid extraction check
+program: program.ldn
+constructs: 0540, 0630, 0730, 1120
+targets: linux-x86-64, macos-arm64
+traps: yes
+profiles: specialization

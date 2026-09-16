@@ -1,0 +1,9 @@
+class: negative
+summary: explicit register access refusal implicit-update
+program: program.ldn
+constructs: 0730, 0740, 0850
+targets: linux-x86-64, macos-arm64
+codes: L0203
+args: ../tests/fixtures/negative/r640-register-implicit-update/program.ldn
+expect: expected.txt
+status: 1

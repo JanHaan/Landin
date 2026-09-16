@@ -141,6 +141,18 @@ package body Landin.IR.Dump is
             then Variant_Field_Shape_Count (Of_Unit)
               + Nominal_Type_Count (Of_Unit) + 1 else Budget);
       begin
+         if Shape.Packing.Bits /= 0 then
+            declare
+               Plain : Field_Shape := Shape;
+            begin
+               Plain.Packing := (others => <>);
+               return "packed(" & Trimmed
+                 (Natural'Image (Shape.Packing.First)) & ":"
+                 & Trimmed (Natural'Image (Shape.Packing.Bits)) & "/"
+                 & Trimmed (Natural'Image (Shape.Packing.Storage)) & ") "
+                 & Shape_Text (Plain, Budget);
+            end;
+         end if;
          if Left = 0 and then Shape.Kind /= Scalar_Field_Shape then
             return "invalid recursive shape";
          end if;
@@ -886,6 +898,23 @@ package body Landin.IR.Dump is
          Put
            ("atom set " & Trimmed (Atom_Set_Id'Image (Atom_Set_Id (Which)))
             & Atom_Set_Text (Atom_Set_Id (Which)));
+         if Encoding_Width (Of_Unit, Atom_Set_Id (Which)) /= 0 then
+            declare
+               Set_Id : constant Atom_Set_Id := Atom_Set_Id (Which);
+               Text : Unbounded.Unbounded_String :=
+                 Unbounded.To_Unbounded_String
+                   ("  encoding width " & Trimmed
+                    (Natural'Image (Encoding_Width (Of_Unit, Set_Id))));
+            begin
+               for Index in 1 .. Atom_Count (Of_Unit, Set_Id) loop
+                  Unbounded.Append
+                    (Text, " " & Named (Nth_Atom (Of_Unit, Set_Id, Index))
+                     & "=" & Trimmed (Landin.Packed.Image'Image
+                       (Nth_Encoding (Of_Unit, Set_Id, Index))));
+               end loop;
+               Put (Unbounded.To_String (Text));
+            end;
+         end if;
       end loop;
 
       for Which in 1 .. Nominal_Type_Count (Of_Unit) loop
