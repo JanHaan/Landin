@@ -1,0 +1,16 @@
+a: atom
+b: atom
+mode: type = (a = 0 | b = 4)
+image: type = layout(packed, u32) struct
+    mode: mode at 1..3
+end image
+mut backing: u32 = 6
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    raw: ptr mut u32 = ptr(usize(addr value))
+    raw.val = compiler.register_read(addr backing, compiler.normal_read)
+    unchecked begin
+        _ = value.mode
+    end unchecked
+    code = 99
+end main

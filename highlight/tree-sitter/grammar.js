@@ -240,7 +240,8 @@ module.exports = grammar({
     type_declaration: $ => seq(
       field('name', $._declaration_name), ':', 'type',
       choice(
-        seq('=', choice($.atom_union, $.range_subtype, $._type, $.struct_body)),
+        seq('=', choice($.atom_union, $.encoded_union, $.range_subtype,
+                         $._type, $.struct_body)),
         seq($.type_formals, '=', choice($._type, $.struct_body)),
       ),
     ),
@@ -298,20 +299,29 @@ module.exports = grammar({
       repeat(seq('|', $._union_member)),
     ),
     _union_member: $ => choice($.declaration_reference, $.pointer_type),
+    encoded_union: $ => prec(1, seq(
+      optional(choice($.scalar_type, $.identifier)), '(', $.encoded_member,
+      repeat(seq('|', $.encoded_member)), ')',
+    )),
+    encoded_member: $ => seq($.declaration_reference, '=', $.exclusion_expression),
 
     struct_body: $ => seq(
       optional($.c_layout),
       'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
     ),
     // Keep the existing node name for editor-query compatibility; the
-    // contextual policy is now either C or explicit optimal placement.
+    // contextual policy also admits explicit packed carrier storage.
     c_layout: $ => seq(
       field('attribute', alias('layout', $.identifier)), '(',
       field('convention', choice(alias('c', $.identifier),
-                                  alias('optimal', $.identifier))),
+                                  alias('optimal', $.identifier),
+                                  alias('packed', $.identifier))),
+      optional(seq(',', $.scalar_type)),
       ')',
     ),
-    field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type)),
+    field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type),
+      optional(seq('at', $._expression,
+                   optional(seq('..', $._expression))))),
     variant_part: $ => seq(
       field('name', $._declaration_name), ':', 'variant',
       $.variant_case, repeat(seq('|', $.variant_case)),

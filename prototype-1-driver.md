@@ -26,6 +26,14 @@ this 32 KB device. A synthetic-32 layout test is not Cortex-M execution proof.
 
 ---
 
+D228 distinguishes each packed register image from the validated atom values
+extracted from it. A copied hardware image may contain unnamed encodings;
+reading an encoded field checks membership. Configuration updates preserve
+unselected image bits, while a one-clears command starts from a zero image.
+The R6.40 record in ROADMAP.md owns source/compiler and bounded peripheral
+evidence; this sketch's complete generated device modules remain R6.80 work.
+The ordinary-slice DMA and D227 barrier contract are unchanged.
+
 ## chip/vendor/gpio  —  generated from the SVD
 
 How a pin is driven. The encoding is the datasheet's, not ours.

@@ -1,5 +1,33 @@
 package body Landin.Packed is
 
+   function Named_Width (Name : String) return Natural is
+      Result : Natural := 0;
+   begin
+      if Name'Length not in 2 .. 3 or else Name (Name'First) /= 'u'
+        or else Name (Name'First + 1) = '0'
+      then
+         return 0;
+      end if;
+      for Digit of Name (Name'First + 1 .. Name'Last) loop
+         if Digit not in '0' .. '9' then
+            return 0;
+         end if;
+         Result := 10 * Result + Character'Pos (Digit) - Character'Pos ('0');
+      end loop;
+      return (if Result in 1 .. 64 then Result else 0);
+   end Named_Width;
+
+   function Valid_Geometry
+     (Shape : Geometry; Count : Natural := 1) return Boolean is
+   begin
+      if Shape.Bits = 0 then
+         return Shape.First = 0 and then Shape.Storage = 0;
+      end if;
+      return Shape.Storage in 8 | 16 | 32 | 64
+        and then Count in 1 .. 64
+        and then Fits ((Shape.First, Shape.Bits, Count), Shape.Storage);
+   end Valid_Geometry;
+
    function Mask (Bits : Width) return Image is
      (if Bits = 64 then Image'Last else 2 ** Bits - 1);
 

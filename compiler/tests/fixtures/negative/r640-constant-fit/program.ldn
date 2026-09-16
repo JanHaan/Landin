@@ -1,0 +1,4 @@
+image: type = layout(packed) struct
+    value: u2 at 0..1
+end image
+bad: image = (value: 4)

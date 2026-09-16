@@ -1,0 +1,28 @@
+image: type = layout(packed, u64) struct
+    bits: [64]bool at 0..63
+end image
+counter: type = layout(packed) struct
+    bit: u1 at 0
+end counter
+set_last: (inout value: image, index: usize) -> none =
+    value.bits[index] = true
+end set_last
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    mut numeric: counter = zeroed
+    numeric.bit = 1
+    set_last(value, 63)
+    set_last(value, 0)
+    raw: ptr u64 = ptr(usize(addr value))
+    bytes: ptr [8]u8 = ptr(usize(addr value))
+    if numeric.bit == 1 and sizeof counter == 1
+      and raw.val == 0x8000_0000_0000_0001 and value.bits[63]
+      and value.bits[0] and not value.bits[62]
+      and bytes.val[0] == 1 and bytes.val[7] == 128
+      and sizeof image == 8 and alignof image == alignof u64
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

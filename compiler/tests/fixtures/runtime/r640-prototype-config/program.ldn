@@ -1,0 +1,30 @@
+peripheral_to_memory: atom
+memory_to_peripheral: atom
+direction: type = (peripheral_to_memory = 0 | memory_to_peripheral = 1)
+config: type = layout(packed, u32) struct
+    enable: bool at 0
+    transfer_complete: bool at 1
+    half_transfer: bool at 2
+    transfer_error: bool at 3
+    dir: direction at 6..7
+    circular: bool at 8
+    mem_inc: bool at 10
+end config
+mut backing: u32 = 0xa5a5a5a0
+public main: () -> (code: i32) =
+    mut value: config = zeroed
+    raw: ptr mut u32 = ptr(usize(addr value))
+    raw.val = compiler.register_read(addr backing, compiler.normal_read)
+    value.dir = memory_to_peripheral
+    value.enable = true
+    value.transfer_complete = true
+    value.half_transfer = false
+    value.transfer_error = true
+    compiler.register_write(addr backing, raw.val, compiler.normal_write,
+                            compiler.preserve, 0x5cf)
+    if backing == 0xa5a5a56b then
+        code = 42
+    else
+        code = 1
+    end if
+end main

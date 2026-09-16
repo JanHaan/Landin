@@ -1,0 +1,5 @@
+image: type = layout(packed) struct
+    row: [4]u2 at 0..7
+end image
+values: [4]u8 = [4 of 4]
+value: image = (row: values)

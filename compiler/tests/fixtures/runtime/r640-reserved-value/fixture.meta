@@ -1,0 +1,7 @@
+class: runtime
+summary: a required reserved-bit pattern is checked before a volatile store
+program: program.ldn
+constructs: 0740, 0850, 1120
+targets: linux-x86-64, macos-arm64
+traps: yes
+profiles: specialization

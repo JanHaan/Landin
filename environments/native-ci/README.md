@@ -85,8 +85,9 @@ supervisors terminate their owned sessions even if live output stalls. The
 controller also requests cancellation on a failed SSH job. Eight host-wide
 slots bound acceptance concurrency across controllers. Children inherit the
 slot, individual job lock and shared compatibility lock; an older exclusive
-serial runner cannot overlap these jobs. Milestone acceptance has six compiler build jobs and at most 48 build workers;
-routine acceptance has three, or four when GDB is required. All remain within
+serial runner cannot overlap these jobs. With the mandatory compiler/peripheral
+documents lane, milestone acceptance has seven compiler build jobs and at most
+56 build workers; routine acceptance has four, or five when GDB is required. All remain within
 the same aggregate limits on the 96-CPU host.
 
 Before probing tools, initialization verifies the current unified cgroup v2
@@ -321,3 +322,11 @@ interrupt controls plus bounded SC, release-sequence, DMA and cache models.
 with the unchanged R6.10/R6.20 lanes. Hosted release fixtures additionally
 execute Landin-generated memory operations. Routine debugger-risk scope keeps
 native release GDB; model success alone cannot approve this compiler change.
+
+R6.40 extends that mandatory probe command with `--refine {refine}` and a
+committed debug build in the documents job. The compiler-generated Linux/Renode
+transport lane and its six profiles remain beside the independent M0 C controls
+in `artifacts/cortex-m`; the existing inventory/export checks bind both to the
+accepted archive. Packed native lowering and raw-carrier DWARF changes select
+routine acceptance with debugger risk on both hosts. Development transcripts
+and model success never substitute for identical-revision dual-native approval.

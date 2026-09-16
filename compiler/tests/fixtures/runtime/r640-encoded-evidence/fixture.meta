@@ -1,0 +1,7 @@
+class: runtime
+summary: encoded type actuals retain evidence identity while atom values compare structurally
+program: program.ldn
+constructs: 0630, 0730, 1330, 1380
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

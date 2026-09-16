@@ -1,0 +1,7 @@
+class: runtime
+summary: first and last of 64 indexed bits, byte order, storage size and alignment
+program: program.ldn
+constructs: 0360, 0730, 0750, 0900
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

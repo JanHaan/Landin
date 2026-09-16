@@ -1,0 +1,10 @@
+error[L0301]: this bit range does not fit the field's value type
+  --> ../tests/fixtures/negative/r640-width/program.ldn:2:5
+  |
+2 |     value: u4 at 0..4
+  |     ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r640-width/program.ldn:1:30
+  |
+1 | image: type = layout(packed) struct
+  |                              ^^^^^^ this layout declaration
+  = note: [0730]: packed fields have explicit, disjoint bit positions within one unsigned image

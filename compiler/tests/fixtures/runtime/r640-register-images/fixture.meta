@@ -1,0 +1,7 @@
+class: runtime
+summary: explicit image accesses and required reserved write patterns
+program: program.ldn
+constructs: 0430, 0740, 0850, 1620
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

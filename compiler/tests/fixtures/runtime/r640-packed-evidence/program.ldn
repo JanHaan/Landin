@@ -1,0 +1,44 @@
+a: atom
+b: atom
+mode: type = (a = 1 | b = 7)
+image: type = layout(packed, u16) struct
+    mode: mode at 0..2
+    pins: [4]u2 at 4..11
+end image
+reader: type = concept (t: type)
+    read: (self: ptr t) -> (value: u8)
+end reader
+read_image: (self: ptr image) -> (value: u8) =
+    match self.val.mode
+        a: value = self.val.pins[1]
+        b: value = 42
+    end match
+end read_image
+image is reader (read: read_image)
+read_generic: (t: type is reader, self: ptr t) -> (value: u8) =
+    value = t.read(self)
+end read_generic
+copy: (t: type, in source: t) -> (value: t) =
+    value = source
+end copy
+public main: () -> (code: i32) =
+    mut source: image = zeroed
+    raw: ptr mut u16 = ptr(usize(addr source))
+    raw.val = 0xaad5
+    mut duplicate: image = copy(source)
+    duplicate_raw: ptr u16 = ptr(usize(addr duplicate))
+    if duplicate_raw.val <> 0xaad5 then
+        code = 1
+        return
+    end if
+    duplicate.mode = b
+    erased: any reader = any(addr duplicate)
+    view: ptr image = addr duplicate
+    if erased.read() == 42 and read_generic(view) == 42
+      and duplicate_raw.val == 0xaad7
+    then
+        code = 42
+    else
+        code = 2
+    end if
+end main

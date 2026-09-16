@@ -1,0 +1,6 @@
+error[L0301]: memory access needs an unsigned scalar pointer without a subtype
+  --> ../tests/fixtures/negative/r640-register-device-fields/program.ldn:8:9
+  |
+8 |     _ = compiler.register_read(addr image, compiler.normal_read)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

@@ -1,0 +1,5 @@
+mut word: u64 = 0
+public main: () -> (code: i32) =
+    _ = compiler.register_read(addr word, compiler.normal_read)
+    code = 0
+end main

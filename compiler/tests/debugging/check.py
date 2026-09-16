@@ -183,6 +183,8 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
         ("saved_a", "saved_a"),
         ("saved_b", "saved_b"),
         ("saved_c", "saved_c"),
+        ("packed_raw", "packed_local.raw"),
+        ("packed_size", "sizeof(packed_local)"),
     ))
     emit_section(lines, "outer-variant", ["output variant_param", "printf \"\\n\"",
                                             "output variant_local", "printf \"\\n\""])
@@ -742,6 +744,7 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
         "outer.scalar_local": 37, "outer.local_pointee": 41,
         "outer.local_record_huge": 7000000000, "outer.local_array_2": 333,
         "outer.saved_a": 51, "outer.saved_b": 52, "outer.saved_c": 53,
+        "outer.packed_raw": 0x65a5a5a5, "outer.packed_size": 4,
         "saved-outer.call_file": 2, "saved-outer.call_line": caller_line,
         "saved-outer.call_column": caller_column,
         "saved-outer.scalar_param": 37, "saved-outer.pointee": 41,

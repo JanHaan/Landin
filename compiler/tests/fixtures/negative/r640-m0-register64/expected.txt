@@ -1,0 +1,6 @@
+error[L0301]: memory operation or width unavailable on target
+  --> ../tests/fixtures/negative/r640-m0-register64/program.ldn:3:9
+  |
+3 |     _ = compiler.register_read(addr word, compiler.normal_read)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

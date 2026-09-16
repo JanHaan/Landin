@@ -1,0 +1,5 @@
+image: type = layout(packed, u16) struct
+    flag: bool at 8
+    row: [4]u2 at 0..7
+end image
+value: image = (flag: true, of [4 of 4])

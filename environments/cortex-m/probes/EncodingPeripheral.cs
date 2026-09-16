@@ -17,10 +17,12 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public uint Command { get; private set; }
         public uint Pending { get; private set; }
         public ushort Count { get; private set; }
+        public uint Ones { get; private set; }
         public void Reset()
         {
             events.Clear(); Normal = 0xa50000f0; destructive = 0x9b;
             Command = 0; Pending = 0xf3; Count = 0xffff;
+            Ones = 0xffffff00;
         }
         public uint ReadDoubleWord(long offset)
         {
@@ -31,6 +33,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 case 4: value = destructive; destructive = 0; break;
                 case 8: throw new InvalidOperationException("write-only image");
                 case 12: value = Pending; break;
+                case 20: value = Ones; break;
                 default: throw new InvalidOperationException("wrong read width or address");
             }
             events.Add(String.Format("r32:{0:x}:{1:x8}", offset, value));
@@ -54,6 +57,10 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                     if((value & 0xffffff00) != 0)
                         throw new InvalidOperationException("clear reserved bits must be zero");
                     Pending &= ~value; break;
+                case 20:
+                    if((value & 0xffffff00) != 0xffffff00)
+                        throw new InvalidOperationException("reserved bits must be one");
+                    Ones = value; break;
                 default: throw new InvalidOperationException("forbidden write or width");
             }
             events.Add(String.Format("w32:{0:x}:{1:x8}", offset, value));

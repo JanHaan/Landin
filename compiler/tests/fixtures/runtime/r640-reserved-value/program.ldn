@@ -1,0 +1,11 @@
+invalid: () -> (value: u32) =
+    value = 0
+end invalid
+public main: () -> (code: i32) =
+    mut word: u32 = 0xdeadbeef
+    unchecked begin
+        compiler.register_write(addr word, invalid(), compiler.normal_write,
+                                compiler.write_one, 0xff)
+    end unchecked
+    code = 99
+end main

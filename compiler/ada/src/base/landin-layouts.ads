@@ -2,6 +2,6 @@
 --  Nested types keep their own policy; field identities stay source ordered.
 package Landin.Layouts is
 
-   type Policy is (Natural, C, Optimal);
+   type Policy is (Natural, C, Optimal, Packed);
 
 end Landin.Layouts;

@@ -151,8 +151,14 @@
           "environments/cortex-m/test.py"
         ],
         [
+          "./scripts/build.sh",
+          "-j8"
+        ],
+        [
           "python3",
           "environments/cortex-m/run.py",
+          "--refine",
+          "{refine}",
           "--output",
           "compiler/ada/build/native-ci/debug/cortex-m"
         ],

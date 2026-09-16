@@ -10117,7 +10117,8 @@ Linux and Darwin archives. Guarded Pages jobs 1889506/1889507 and mirror jobs
 No pre-existing edits were present. This intake verifies the R6.30 delivery,
 not R6.40 acceptance.
 
-The first implemented layer is a compiler-library algebra, not source support.
+The first implementation commit, `c43e7666`, established a compiler-library
+algebra and independent controls before source integration.
 `Landin.Packed` checks overlap, extent and indexed element bounds before
 arithmetic; manipulates unsigned images through 64 bits without losing unnamed
 bits; validates encoding-list uniqueness/fit and tests raw membership without
@@ -10135,8 +10136,8 @@ that a complete supplied image carries its reserved bits: writing it performs
 no hidden read. A local field insertion keeps all other bits, including unknown
 encodings elsewhere. The prototype's contradictory fresh-constructor claim is
 removed: preserving old hardware bits requires the explicit existing-image read
-shown in its revised configuration sketch. These internal APIs do not yet settle
-or enable the complete language-facing raw/validated type surface.
+shown in its revised configuration sketch. D228 now settles the source-facing
+raw-image and validated-value distinction described below.
 
 Independent evidence developed so far:
 
@@ -10168,33 +10169,128 @@ Independent evidence developed so far:
   CPU/startup, ABI, memory-model, DMA and verified empty-lock cleanup evidence
   remains mandatory; nothing is replaced by this new lane.
 
-Remaining R6.40 work, before any completion or promotion:
+Source implementation and semantic decisions (continuation, 2026-09-16):
 
-- Record normative decisions in spec.md for the raw-image/validated-value
-  distinction and its complete construction, extraction, conversion, assignment,
-  matching, equality, copy and zeroed behavior. Resolve implicit versus explicit
-  storage width, enum base/field-width differences (notably prototype direction
-  at 6..7), signedness, packed scalar widths, set expansion, arrays and address
-  restrictions. Keep alternatives, rationale and executable source pins.
-- Implement source grammar, recognition, checking, target-neutral shapes and
-  effects, verifier rules and native lowering. Handle invalid constants and
-  dynamically obtained encodings from ordinary, volatile, pointer and external
-  storage; preserve D187 checks and D227 boundaries without invalid-value UB.
-  Audit folding, exhaustive matches, aggregate/field copies, calls, evidence
-  dispatch and specialization. Classify every source operation and diagnostic.
-- Supply positive, negative and boundary source fixtures and actual
-  compiler-generated native execution across required profiles, including
-  externally written ordinary-slice storage and packed completion observation.
-  The current Ada algebra and C peripheral control alone cannot close this item.
-- Finalize normative register access/reserved policies and the source surface
-  for explicit image operations, adding compiler refusals for unsafe operations.
-  Keep actual event counts/widths independently checked in the peripheral lane.
-- Update source/prototype/guarantee/diagnostic/target matrices and all affected
-  guides with the implemented boundary; run full checks and verified rendering.
-  Select compatible native policies before the closure candidate, justify
-  debugger risk from the final changes, then perform identical-revision native
-  acceptance, verified exports, dual approval, atomic promotion, mirror and
-  guarded publication verification. No R6.40 acceptance has run yet.
+- D228 defines an unsigned raw carrier with inclusive least-significant-bit
+  positions, little-endian bytes, disjoint fields and target-derived size and
+  alignment. Storage rounds to 1/2/4/8 bytes or uses an explicit carrier.
+  Unsigned u1..u64 fields, one-bit booleans, encoded unions and fixed arrays
+  fit within that carrier. `set(X)` has the described named-boolean expansion:
+  encoded bit numbers plus the containing range base. The compiler accepts
+  the explicit expansion, pinned by `runtime/r640-prototype-config`; automatic
+  generator surfaces remain part of the existing R6.80 device-fixture boundary,
+  with general SVD tooling still R551-33. Nested aggregate fields and automatic
+  set/register generation are not claimed as enabled packed kernel syntax. Nonstandard widths do not become scalar/ABI types.
+  Encoded unions retain per-union maps, holes and explicit minimum widths.
+- A raw image admits every pattern. Whole copies, calls, returns and `zeroed`
+  retain bits without extracting fields. A packed constructor builds a fresh
+  zero image, evaluates labels in order and a shared fill once, then commits
+  the image. Ordinary struct construction retains D29/D214. Enum extraction
+  validates before producing an atom identity, even when discarded or under
+  unchecked. Invalid ordinary software atom reads also trap. A known non-fitting
+  insertion diagnoses; dynamic fit and packed-index checks remain enabled.
+  Direct encoded-field/array assignment requires values; `zeroed` is a raw
+  whole-image/constructor operation, not an invented atom. No invalid-value UB,
+  optimizer poison, hidden padding or exhaustive-match assumption is imported.
+- Explicit `compiler.register_read` and `register_write` accept raw unsigned
+  pointers and fixed mode/policy declarations. Normal/destructive reads and
+  normal/one-clears writes retain one transaction of the selected width.
+  No-read/no-write and all synthesized field-update operations refuse. Preserve
+  writes the supplied image without a hidden read. Write-zero/write-one guard
+  all omitted bits before the store; one-clears requires reserved zero. The
+  address's actual device behavior remains an outside premise. The programmer
+  expresses any justified normal RMW as separate read, local insertion and
+  write; neither CPU atomicity nor interrupt exclusion follows from it.
+- Geometry and encoding tables cross the existing checking/IR seams. The
+  verifier rejects malformed widths, extents, children, overlapping storage,
+  inconsistent carriers and malformed/overlapping/orphaned encoding runs.
+  Shaped loads/stores retain atom metadata; effects preserve validation traps
+  and local RMW reads. Both native backends lower extraction/insertion and raw
+  copies. The IR dump records geometry and encoding tables. Native DWARF exposes
+  a truthful raw-carrier member and size, not fictitious byte-addressed fields.
+- The audit repaired an x86 load path that bypassed software-enum validation,
+  missing constructor-array atom metadata, named-array and fill fit checks,
+  static packed-array extraction that bypassed membership validation,
+  and generic instance keys that previously equated different encoding maps.
+  Raw nested/array copies, evidence dispatch and specialization have executable
+  controls. Logical atom assignment/equality stays structural; layout-bearing
+  generic actuals retain maps and widths. Source diagnostics use the existing
+  catalogue rather than hiding failures as internal compiler defects.
+- D227's ordinary-slice DMA contract is unchanged. `abi/r640-dma-packed` observes
+  a raw completion/count word written by an independent C peer, validates the
+  selected state, executes the barrier and reads ordinary buffer elements.
+  Cache maintenance, device completion ordering, lifetime, no-overwrite windows
+  and circular-buffer overrun remain separate premises/owners.
+
+Additional development evidence (not exact-revision approval):
+
+- Mac checking passes 111 cases/3238 assertions; IR passes 23/124, including
+  eight geometry and six encoding-table corruption controls; optimization passes
+  17/254. Focused Darwin source/runtime/ABI profiles pass, including all 256
+  byte images with independently specified membership and traps for every hole,
+  64-bit enum arrays, generic/evidence paths, nested copies, static holes,
+  volatile-to-validated transitions, and pre-store reserved-bit traps. The
+  unoptimized and size/auto native LLDB sessions display the raw 32-bit image `0x65a5a5a5`, whose
+  encoded field is unnamed, and confirms its four-byte size.
+- Native Linux filtered R6.40 runtime, ABI and exact negative fixtures pass;
+  the source-positive IR golden is recorded on that host. Development logs live
+  under `.scratch/r640/`. The first combined fixture invocation used shell
+  brace syntax unsupported by `sh` and selected no fixture; its failed log is
+  retained. The corrected invocation uses three explicit globs.
+- `/home/landin/work/r640-peripheral/src/.scratch/r640-complete-probes-1`
+  passes the original mandatory lanes plus both packed lanes. The independently
+  copied `.scratch/r640/complete-probes-1` has all 114 recorded artifact hashes
+  verified, with no leftover lock; `complete-probes-validation.json` indexes it.
+  Six native compiler profiles drive the actual Renode device through a C
+  transport that does no field arithmetic or oracle work. Each matches the
+  independently specified 14-event trace and final register images. This is
+  Linux-generated execution against a synthetic peripheral, separate from the
+  independently compiled M0 C firmware and abstract algebra/model checks.
+- The expanded peripheral development run is
+  `/home/landin/work/r640-peripheral/src/.scratch/r640-complete-probes-2`.
+  It adds a separate required-one reserved-bit register to both compiler and
+  independent C lanes: 16 literal events, eight independently refused accesses,
+  and a 684-byte text/zero-data/16-byte BSS C control. All original lanes and six
+  native compiler profiles pass. The local copy has all 114 file hashes verified;
+  `complete-probes-validation-2.json` retains the binding. Earlier 14-event and
+  660-byte measurements above remain historical results for their original inputs.
+- The final development run, `r640-complete-probes-3` in the same native slot,
+  adds a negative compiler-generated peripheral program at all six profiles.
+  A single destructive read returns `0x9b`; extracting its unnamed mode inside
+  `unchecked`, with the result discarded, must terminate with SIGILL. The
+  independent oracle requires exactly `r32:4:0000009b`, no further command and
+  exit 132 through the pinned .NET process API. All original lanes, positive
+  traces and six negative profiles pass. The independent local copy verifies
+  all 156 artifact hashes with no lock file; `complete-probes-validation-3.json`
+  records result SHA256
+  `508d9b772df373f42722135c8e8b472364e6013b5b9c2ee0d65420a66b6b620e`.
+- `run.py --refine` makes the native compiler lane mandatory beside the existing
+  CPU, ABI, memory-model and independent C controls. The documents acceptance
+  job builds the committed debug compiler and exports every lane through the
+  existing verified `cortex-m` path. Nine supervisor controls and 97 CI process
+  tests pass (two configured skips). Empty Renode lock cleanup is unchanged.
+- The isolated highlighter/parser/editor checks pass after extending packed and
+  encoded syntax. The optional broad editor integration attempt also reports
+  older unsupported constructs; it is not compiler or acceptance evidence.
+  The source grammar and compiler corpus remain authoritative.
+
+The representation/generic audit now has source, native and malformed-IR pins.
+Full document checking and verified rendering pass on the implementation tree;
+matrices and the compiler-recorded IR are updated. Remaining closure work is to
+commit the compatible native policies before the closure candidate, then run
+identical-revision acceptance and verify exports, dual approval, atomic promotion,
+mirror and guarded publication. Native policies select routine debugger risk:
+new extraction/selection/verifier paths and raw-carrier DWARF justify full
+release GDB/LLDB. This is not the R6.100 milestone. No R6.40 approval exists yet.
+
+Resource and evidence limits: an image has at most 64 bits/elements. Local
+array transfers snapshot at most 64 scalar values; encoding lists remain in
+bounded compiler-owned vectors and membership lowering uses explicit comparisons.
+No new quota, streaming compiler, persistent cache, scheduler or ABI expansion
+is claimed. R551-06/07/08 retain their resource dispositions; R551-17 keeps
+coverage-inventory versus semantic-oracle limits; R551-26 retains debugger
+presentation limits. Assembly, library models and C controls are distinguished
+from compiler-generated execution throughout.
 
 R6.80 owns complete checked-in generated-device fixtures and their provenance;
 general SVD generation stays with R551-33. A bounded hand-authored contract

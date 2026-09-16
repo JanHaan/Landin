@@ -888,8 +888,17 @@ The R6.40 development case `targets/packed image algebra and access plans`
 checks the compiler library with an independent bit-by-bit reference over
 257024 combinations, enum holes, 64-bit boundaries, indexed fields and the
 complete bounded access-mode table. It also compares four target descriptions.
-This is compiler-host evidence only; no packed source fixture is enabled by
-that case. The separate Cortex-M `packed.py` lane executes independent C
-firmware against an explicit Renode device and asserts the full access trace.
-ROADMAP.md distinguishes these foundations from the unfinished source/IR/native
-integration and exact-revision acceptance.
+That case is compiler-host evidence. Source fixtures named `r640-*` separately
+cover packed geometry, enum maps, raw copies, validated extraction, fit/index
+traps, exact diagnostics, register access modes, reserved policies, and generic
+and erased evidence paths across the six specialization profiles. Independent
+C ABI controls enumerate all byte images and observe backing storage after
+pre-store traps. The ordinary-slice DMA control retains D227's barrier contract.
+The native debugger source checks the raw carrier and its size; named packed
+bitfield/array display is not claimed.
+
+`packed.py` executes independent M0 C firmware. `packed_native.py` executes
+compiler-generated hosted instructions against Renode through a C bus transport,
+with literal independent image/trace assertions. Both are mandatory in the
+embedded probe/export path, alongside all R6.10/R6.20/R6.30 controls. ROADMAP.md
+owns results, assumptions, limits and exact-revision closure.

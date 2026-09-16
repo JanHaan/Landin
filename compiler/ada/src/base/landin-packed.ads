@@ -14,6 +14,21 @@ package Landin.Packed is
    type Field_Array is array (Positive range <>) of Field;
    type Encoding_Array is array (Positive range <>) of Image;
 
+   --  Representation widths, not additional standalone scalar/ABI kinds.
+   function Named_Width (Name : String) return Natural;
+
+   --  Zero Bits/Storage denotes an ordinary byte-addressed field. A packed
+   --  field records its element width and the containing image's carrier.
+   --  Counts belong to the field shape, never to a per-element allocation.
+   type Geometry is record
+      First   : Position := 0;
+      Bits    : Natural range 0 .. 64 := 0;
+      Storage : Natural range 0 .. 64 := 0;
+   end record;
+
+   function Valid_Geometry
+     (Shape : Geometry; Count : Natural := 1) return Boolean;
+
    function Mask (Bits : Width) return Image;
    function Fits (Value : Image; Bits : Width) return Boolean;
    function Fits (Part : Field; Bits : Width) return Boolean;

@@ -1,0 +1,9 @@
+class: negative
+summary: packed representation refusal slice
+program: program.ldn
+constructs: 0730, 0750
+targets: linux-x86-64, macos-arm64
+codes: L0301
+args: ../tests/fixtures/negative/r640-slice/program.ldn
+expect: expected.txt
+status: 1

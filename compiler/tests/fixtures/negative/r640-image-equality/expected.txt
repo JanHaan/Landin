@@ -1,0 +1,12 @@
+error[L0301]: a packed image is not a scalar operand
+  --> ../tests/fixtures/negative/r640-image-equality/program.ldn:9:9
+  |
+9 |     _ = x == x
+  |         ^ this raw image
+  = note: [0730]/D228: extract a validated field or explicitly inspect the complete raw carrier
+error[L0301]: a packed image is not a scalar operand
+  --> ../tests/fixtures/negative/r640-image-equality/program.ldn:9:14
+  |
+9 |     _ = x == x
+  |              ^ this raw image
+  = note: [0730]/D228: extract a validated field or explicitly inspect the complete raw carrier

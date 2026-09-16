@@ -1,0 +1,11 @@
+image: type = layout(packed) struct
+    values: [4]u2 at 0..7
+end image
+index: () -> (value: usize) = 4 end index
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    unchecked begin
+        x.values[index()] = 1
+    end unchecked
+    code = 99
+end main

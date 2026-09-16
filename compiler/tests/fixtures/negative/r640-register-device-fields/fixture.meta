@@ -1,0 +1,9 @@
+class: negative
+summary: explicit register access refusal device-fields
+program: program.ldn
+constructs: 0730, 0740, 0850
+targets: linux-x86-64, macos-arm64
+codes: L0301
+args: ../tests/fixtures/negative/r640-register-device-fields/program.ldn
+expect: expected.txt
+status: 1

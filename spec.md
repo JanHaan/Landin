@@ -42,9 +42,12 @@ spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
-'optimal', 'link', 'symbol' and 'distinct' remain identifier tokens everywhere
+'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol'
+and 'distinct' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
-in every position, including ordinary name positions.
+in every position, including ordinary name positions. The `packed_unsigned`
+production names contextual representation widths; it does not expand the
+ordinary scalar family.
 D202 separately reserves the three tool names as declaration/import bindings;
 that semantic reservation does not turn their tokens into keywords.
 A token is as long as it can be, comments excepted, whose
@@ -278,7 +281,7 @@ template and normalized actual tuple, then checks the substituted field shape.
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
 type          ::= function_type | array_type | pointer_type | slice_type
-                | any_type | type_application | scalar_name | text_name
+                | any_type | type_application | scalar_name | packed_unsigned | text_name
                 | declaration_reference
 function_type ::= signature | c_convention c_signature
 array_type    ::= "[" expression "]" type
@@ -328,8 +331,8 @@ spelling of it.
 
 ```landin-grammar
 type_declaration ::= identifier ":" "type"
-                     ("=" (atom_union | range_subtype | distinct_body | type | struct_body)
-                     | type_formals "=" (atom_union | distinct_body | type | struct_body))
+                     ("=" (encoded_union | atom_union | range_subtype | distinct_body | type | struct_body)
+                     | type_formals "=" (encoded_union | atom_union | distinct_body | type | struct_body))
 distinct_body   ::= "distinct" type
 range_subtype   ::= (scalar_name | declaration_reference) "range"
                     expression ".." expression
@@ -356,11 +359,23 @@ type_formal     ::= identifier ":" "type" constraint?
 constraint      ::= "is" concept_reference
 atom_union      ::= union_member "|" union_member ("|" union_member)*
 union_member    ::= declaration_reference | type_application | pointer_type
-struct_body      ::= ("layout" "(" ("c" | "optimal") ")")?
+encoded_union    ::= packed_unsigned? "(" encoded_member
+                     ("|" encoded_member)* ")"
+encoded_member   ::= declaration_reference "=" exclusion
+packed_unsigned  ::= "u1" | "u2" | "u3" | "u4" | "u5" | "u6" | "u7" | "u8"
+                   | "u9" | "u10" | "u11" | "u12" | "u13" | "u14" | "u15" | "u16"
+                   | "u17" | "u18" | "u19" | "u20" | "u21" | "u22" | "u23" | "u24"
+                   | "u25" | "u26" | "u27" | "u28" | "u29" | "u30" | "u31" | "u32"
+                   | "u33" | "u34" | "u35" | "u36" | "u37" | "u38" | "u39" | "u40"
+                   | "u41" | "u42" | "u43" | "u44" | "u45" | "u46" | "u47" | "u48"
+                   | "u49" | "u50" | "u51" | "u52" | "u53" | "u54" | "u55" | "u56"
+                   | "u57" | "u58" | "u59" | "u60" | "u61" | "u62" | "u63" | "u64"
+struct_body      ::= ("layout" "(" ("c" | "optimal"
+                     | "packed" ("," ("u8" | "u16" | "u32" | "u64"))?) ")")?
                      ("struct" member+ "end" identifier?
                      | "(" field ("," field)* ")")
 member           ::= field | variant_part
-field            ::= identifier ":" type
+field            ::= identifier ":" type ("at" expression (".." expression)?)?
 variant_part     ::= identifier ":" "variant" variant_case
                    ("|" variant_case)* "end" identifier
 variant_case     ::= identifier (":" "(" field ("," field)* ")")?
@@ -875,12 +890,13 @@ were, [0310] would refuse a program on one target and accept
 it on another for a reason no paragraph here could state.
 [1510]'s 'sizeof usize == 8' asks what a machine does; it
 does not say two names are one type.
-u128 and i128 [0150], the packed widths [0730] and f16 [0170] are described in
+u128 and i128 [0150] and f16 [0170] are described in
 this tour and are not enabled yet. D162 enables f32 and f64 without making
 either an integer or one another. D190 says which work enables the rest: the
 wide integers and f16 are refused by name against R7.20, which owns the
 two-register carrier and the third float width they need, while the packed
-widths stay with the freestanding register work [0730].
+widths are enabled only in D228's packed-field positions [0730]. They are
+representations within an image, not new ordinary scalar or ABI types.
 An atom declaration introduces one value and its singleton type. An atom union
 is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
@@ -9130,6 +9146,12 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
+| `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
+| `packed.image` | static | 0540, 0730, 0750 | Explicit disjoint positions, one target-sized carrier and packed-only unsigned widths; ordinary storage retains its existing representation | `runtime/r640-packed-fields`, `runtime/r640-packed-construction`, `runtime/r640-packed-static` |
+| `packed.register` | static | 0740, 0850 | L0301 rejects unavailable access modes, invalid masks and unsafe synthesized device field operations; a legal explicit image operation retains exactly its carrier width | `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, `runtime/r640-register-images` |
+| `packed.insertion` | trap | 0730, 1120 | Dynamic field-width and packed-index checks remain enabled under unchecked; no silent truncation or machine shift masking | `runtime/r640-packed-value-fit`, `runtime/r640-packed-index-bound` |
+| `packed.reserved` | trap | 0740, 1120 | A dynamic write-zero/write-one violation traps before the single volatile store, including under unchecked | `runtime/r640-reserved-value`, `abi/r640-reserved-trap` |
+| `packed.device` | outside | 0740, 0850 | non-guarantee: a declared access mode, width and reserved policy do not prove that an arbitrary address implements that peripheral contract | `runtime/r640-register-images`, `abi/r640-dma-packed` |
 | `memory.eligibility` | static | 0430, 0850, 1620 | D227: L0301 for invalid arity, type, permission, fixed ordering or target capability | `negative/r630-load-release`, `negative/r630-immutable`, `negative/r630-m0-rmw`, `runtime/r630-memory-scalars`, `abi/r630-native-memory` |
 | `memory.alignment` | trap | 0430, 0850, 1120, 1620 | D227: misalignment traps before access, even unchecked | `runtime/r630-atomic-load-alignment`, `runtime/r630-volatile-load-alignment` |
 | `memory.external-writers` | outside | 0430, 0470, 0770, 0850, 1620, 1720 | D227 non-guarantee: backing validity, races, device completion and cache obligations remain caller/platform responsibilities; no race-based optimizer assumptions | `abi/r630-native-memory` |
@@ -11564,6 +11586,10 @@ records, and the `pointer.optional` guarantee row.
 
 ### D190 — u128, i128 and f16 are refused by name against R7.20
 
+D228 subsequently enables packed unsigned field representations in R6.40;
+the historical quotation below records the earlier kernel boundary. The
+u128, i128 and f16 refusal remains unchanged.
+
 **The tour said** that the integers are u8, u16, u32, u64, u128, i8, i16,
 i32, i64 and i128 [0150], and that the floating-point types are f16, f32 and
 f64 [0170]. It teaches the language and does not schedule work, so it said
@@ -13736,15 +13762,13 @@ make a sequence atomic or establish happens-before. MMIO bus atomicity and
 peripheral tearing are separate device premises; no RAM instruction guarantee
 is transferred to an arbitrary bus bridge. Unsupported wider accesses refuse.
 A register image read-modify-write remains two separate events and
-can lose an intervening hardware or interrupt update. Packed field legality,
-register access modes and the `volatile ptr` surface retain R6.40/R6.80; these
-scalar primitives do not enable those deferred types.
-A fresh local image construction cannot preserve previous device bits without
-an explicit read. Whole-image stores do not imply such a read. The packed
-image algebra and independent C peripheral controls under development do not
-enable new source syntax, validate hardware enumerations, or permit an
-optimizer to treat unnamed encodings as unreachable. [0730]/[0740]'s described
-surface remains outside the grammar of the enabled kernel.
+can lose an intervening hardware or interrupt update. D228 defines packed image
+fields and explicit register-image access modes without changing this memory
+model. The generated `register(t, ...)` and `volatile ptr` surfaces remain
+separate from these scalar intrinsics. A fresh local image construction cannot
+preserve previous device bits without an explicit read. Whole-image stores do
+not imply such a read. Unnamed encodings remain raw bits until extraction,
+which validates membership; they never authorize unreachable-code assumptions.
 
 All explicit memory primitives above are full compiler memory boundaries.
 Ordinary stores before one must be materialized, and ordinary loads after
@@ -13846,3 +13870,202 @@ success nor failure to observe a weak outcome proves this entire model.
 `runtime/r630-atomic-load-alignment`, `runtime/r630-volatile-load-alignment`
 and `ir opt/memory events`. The mandatory Cortex-M probe path retains
 independent CPU/interrupt/DMA controls and the bounded cache/store-buffer models.
+
+### D228 — A packed image holds bits; extraction produces a validated value
+
+**The tour said** [0730] fixes explicit positions and encodings, including
+holes, and [0740] forbids field writes through a volatile pointer. It did not
+say whether a hardware image containing an unnamed pattern was a language
+value, whether copying it inspected every field, or what an exhaustive match
+could assume. D227 deliberately left those questions here. R6.40's completion
+record owns implementation coverage and acceptance of this decision.
+
+**Chosen representation:** a `layout(packed)` struct is a nominal raw image.
+Every stored bit belongs to the image, including omitted bits; there is no
+padding whose contents the compiler may discard. Positions are inclusive,
+numbered from the least significant bit of the unsigned carrier. All fields
+write `at`, positions are disjoint and in 0..63, and declaration order does
+not choose positions. The smallest carrier that covers the highest position
+is u8, u16, u32 or u64. `layout(packed, u32)` explicitly retains all 32 bits,
+even when the highest named bit is lower. Size and alignment come from that
+carrier in the selected target description. This implementation contract is
+little-endian; a different byte order requires a separate target decision.
+A storage layout does not establish a permitted device transaction width.
+
+A packed boolean occupies exactly one bit. `u1` through `u64` are unsigned
+field representations whose written width equals the occupied range; a
+nonstandard width is admitted only directly in a packed field or its fixed
+array element. Extraction yields the smallest enabled unsigned scalar that
+holds it. This introduces neither general u12 arithmetic nor a u12 ABI.
+`u1` yields u8 values 0 or 1; it is distinct from a boolean flag and does not
+add implicit boolean conversions. Requiring every one-bit field to be bool
+was an alternative, but would make numeric hardware fields change their value
+domain merely because of their width.
+Signed, floating, pointer, callback, nested aggregate and variant fields are
+not this representation. An array occupies count times element width,
+element zero at the low end. It is nonempty and fits the one carrier.
+The described `set(X)` generator form expands encoded bit numbers to named
+boolean fields; it is not a new runtime representation. The enabled kernel
+accepts the explicit boolean expansion, including the prototype-derived flag
+fixture, and does not yet provide the automatic `set(X)` or generated-register
+surface. A containing image adds the field-range base to each expanded bit.
+This fixes the representation contract without implementing general generation.
+An indexed operation checks the index before selecting bits. Its check stays
+in `unchecked`: an out-of-range bit selection has no computed byte address,
+and target-specific shift masking is not D187's removed-address-check result.
+
+`(internal = 0 | external = 1 | pll = 4)` associates distinct unsigned fixed
+encodings with distinct atoms. Its width is at least one bit and otherwise
+the smallest width containing every encoding. An explicit base, as in
+`u4 (internal = 0 | external = 1)`, can widen it. A field may give an encoded
+union additional bits; those additional patterns remain unnamed. Encodings
+belong to the union, not to an atom globally. The same atom may have a
+different encoding in another packed field. Outside an image, the value is
+still the ordinary atom identity with the existing software representation
+and calling convention. Encoding is not an implicit integer conversion.
+Compile-time type arguments retain the encoding map and declared width,
+including nominal/routine instance keys and conformance lookup. Unions with
+the same atoms but different maps cannot share a packed instance or silently
+select the other representation's evidence. Ordinary atom-value assignment,
+matching and equality still compare declaration identities, not encodings.
+
+**Raw and validated operations:** every carrier pattern is a valid raw image.
+A whole-image copy, assignment, argument or return preserves all bits and
+never extracts fields. `zeroed` produces an all-zero raw image, even when
+zero is an unnamed encoding in one of its fields. This does not make a
+standalone atom set zeroable: [0540] still requires writing a named value.
+A direct encoded-field or encoded-array assignment also requires validated
+values; `zeroed` can clear the complete image or supply a raw constructor
+field/fill, but cannot manufacture an atom through such an assignment.
+A packed constructor builds a fresh zero image, evaluates labels in source
+order, then copies the resulting image into its destination. Unclaimed bits
+and fields supplied by a zeroed fill remain zero. Named fields still obey
+the existing label/fill completeness rule. A shared nonzero fill is evaluated once. This
+fresh-image construction is specific to packed images; D29's incremental
+ordinary-struct assignment and D214's ordinary fill ordering remain unchanged.
+
+Reading a field extracts its bits. Booleans and unsigned fields have no holes.
+An encoded field checks membership before producing an atom identity; an
+unnamed pattern traps, including when the expression is discarded or is
+inside `unchecked`. Assigning a named atom inserts that union's encoding;
+an unsigned insertion checks the field width and traps if it does not fit.
+A known non-fitting value is a static diagnostic. Neither case truncates
+silently. A field insertion preserves every other bit, including holes in
+other fields. Copying a packed array as an array value extracts its elements;
+a whole image copy does not. Packed field extraction is not a static module
+initializer operation: L0305 requires a runtime extraction, even if a raw
+constant image is available. Static whole-image copies remain allowed; a
+module initializer cannot silently create an invalid ordinary enum array.
+Type/length measurements do not extract values. Array assignment snapshots its source elements
+before inserting them so that overlapping image storage does not corrupt the
+source of later elements. Fields have no independently addressable storage:
+`addr`, slices and `inout` cannot expose a packed field's byte address.
+Pass the containing image to update an indexed field.
+
+Matching and equality on extracted enum values use atom identities. An
+exhaustive match covers validated members; it does not prove that all hardware
+patterns are members. The raw-image boundary remains observable before the
+match. Whole-image comparison, when performed through its unsigned carrier,
+compares all stored bits, including reserved bits; field equality is not a
+substitute. This decision introduces no general aggregate equality operator.
+Existing explicit integer/pointer operations can copy a complete carrier into
+or out of ordinary image storage, subject to their existing lifetime,
+alignment and backing-storage obligations. A pointer or external write does
+not confer validity on a subsequent typed enum read. Invalid software atom
+codes encountered by such a read trap; they do not create optimizer poison,
+unreachable control flow, or permission to rewrite earlier effects.
+
+**Device operations:** a raw image read and a raw image write are separate
+operations. Each accepted operation performs exactly one transaction at its
+specified width. A read does not validate every encoded field. Normal and
+clear-on-read contracts permit an explicit read; no-read contracts refuse it.
+Normal and one-clears contracts permit an explicit write; no-write contracts
+refuse it. All synthesized device field updates refuse, including the normal
+read/write combination: the programmer must express the image read, local
+update and image write. A write-only register has no old image to preserve;
+a destructive read consumes state, and a one-clears readback is not a command
+image. No convenience lowering may insert a read, split or widen a transaction,
+or write reserved bits to simplify insertion.
+
+The bounded compiler surface is `compiler.register_read(pointer, read_mode)`
+and `compiler.register_write(pointer, image, write_mode, reserved_policy,
+named_mask)`. The pointer is to u8, u16, u32 or u64 and selects the transaction
+width; it is not a pointer to an encoded value. Read modes are
+`compiler.normal_read` and `compiler.clear_on_read`; `compiler.no_read` refuses.
+Write modes are `compiler.normal_write` and `compiler.one_clears`;
+`compiler.no_write` refuses. Reserved policies are `compiler.preserve`,
+`compiler.write_zero` and `compiler.write_one`; the named-bit mask is a fixed
+unsigned expression of the carrier type. Invalid mode/policy combinations,
+wrong mask width, unavailable target accesses and absent write permission
+refuse statically. A dynamic write violating write-zero or write-one traps
+before the single volatile store, even under `unchecked`. Mode and reserved
+arguments declare the platform contract; the compiler cannot verify that the
+physical address actually implements it. Consistency with that peripheral is
+an `outside` premise. These explicit raw-image intrinsics do not enable the
+general generated `register(t, ...)` wrapper or a synthesized update operation.
+
+Reserved policy is part of the peripheral contract. Preserve means a supplied
+whole image carries the caller's reserved bits; it does not authorize a hidden
+read of the device. Write-zero and write-one require those values in every
+omitted bit of the supplied carrier. One-clears requires write-zero for
+reserved bits; zero in a named command bit means no action and one requests
+clearing. Read values, write commands and reset metadata are distinct even
+when they share a carrier. Reset metadata initializes neither software storage
+nor hardware. A normal read/modify/write sequence is not atomic and requires
+an independent device and concurrency justification.
+
+D227 is unchanged. CPU atomics, a volatile transaction, compiler boundaries,
+hardware barriers, interrupt exclusion and device completion are separate
+contracts. Prototype 1 retains an ordinary slice as its DMA buffer. Decode a
+copied status/count image only after its explicit read; the device contract
+must establish which buffer writes precede completion, then the required
+barrier and cache maintenance precede ordinary buffer reads. The barrier
+invalidates prior compiler knowledge of those bytes. A packed count does not
+solve wraparound, overrun, cache coherence, buffer lifetime or concurrent
+external writes. Interrupt notification alone remains insufficient.
+
+**Alternatives and rationale:** eager validation would make a hardware snapshot
+or harmless copy trap because of a field the program never inspects. Treating
+holes as unreachable would import invalid-value undefined behavior and break
+exhaustive matching after external writes. Silent truncation loses commands;
+an implicit unknown atom changes the declared value set and its matches.
+Implicit device RMW introduces access events and reserved writes that may be
+forbidden by the peripheral. These alternatives are rejected. Raw images with
+checked extraction retain unknown information and keep the existing unsafe
+pointer guarantees explicit. General register generation and the complete
+SVD-derived fixture programme remain outside this semantic slice.
+
+The choice boundaries and their executable pins are explicit:
+
+| choice | alternative and rationale | pin |
+|---|---|---|
+| One explicit or minimally rounded carrier, target alignment, LSB numbering and little-endian bytes | Byte-packed/C-bitfield rules or declaration-order placement would leave transaction width and reserved bits implicit; no foreign padding rule is imported | `runtime/r640-indexed-boundary`, `runtime/r640-packed-boundaries`, `negative/r640-overlap`, `negative/r640-c-abi` |
+| Unsigned field representations and one-bit booleans; numeric u1 remains numeric | General scalar widths, signed field arithmetic or boolean coercions would expand value/ABI rules beyond this image contract | `runtime/r640-indexed-boundary`, `negative/r640-signed`, `negative/packed-field-width-is-not-a-scalar-name` |
+| Per-union maps, holes and type-argument/evidence identity | Atom-global encodings or map-insensitive instance keys conflate distinct hardware layouts; software values still use atom identities | `runtime/r640-packed-enum-array`, `runtime/r640-generic-encoding`, `runtime/r640-encoded-evidence` |
+| Raw whole images and checked extraction, including discarded reads | Eager validation destroys harmless snapshots; unchecked holes/unreachable assumptions erase observable behavior | `runtime/r640-packed-small-space`, `runtime/r640-static-hole`, `runtime/r640-volatile-hole`, `abi/r640-exhaustive-encodings` |
+| Fresh zero constructors and raw copies; explicit runtime field extraction | Implicit RMW would add a device read; static array image copying must not bypass validation | `runtime/r640-packed-construction`, `runtime/r640-packed-nested-copy`, `negative/r640-static-array-extraction`, `negative/r640-zero-field` |
+| Arrays snapshot values; fields have no independent byte address | Streaming overlap or exposing an ordinary slice invents a false stride and may corrupt later source elements | `runtime/r640-overlapping-array-copy`, `negative/r640-address`, `negative/r640-inout`, `negative/r640-slice` |
+| Named-value comparison/matching; explicit raw-carrier comparison | Aggregate equality or integer-to-enum casts would confuse image bits with atom identities | `runtime/r640-packed-small-space`, `negative/r640-image-equality`, `negative/r640-enum-integer-conversion` |
+| Explicit one-event image accesses; no synthesized field operations | Hidden reads, split/widened accesses and readback-based one-clears commands violate device contracts | `runtime/r640-register-images`, `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, the Renode literal trace |
+| Required reserved patterns are checked, never repaired silently | Truncating a supplied write or silently inserting ones conceals an invalid command; preserve performs no hidden read | `runtime/r640-reserved-value`, `abi/r640-reserved-trap`, `negative/r640-register-reserved-zero`, `negative/r640-register-reserved-one`, the Renode required-one register |
+| D187/D227 remain independent of image layout | Field RMW is not an atomic operation, and status decoding cannot make an ordinary DMA slice coherent | `runtime/r640-packed-index-bound`, `runtime/r640-packed-value-fit`, `abi/r640-dma-packed`, `negative/r640-m0-register64` |
+
+**Guarantee classes:** positions, widths, overlap, encoding uniqueness, field
+kinds, known-value fit and addressability are `static`; dynamic membership,
+field fit and packed indexing are `trap`, retained by `unchecked`. Backing
+storage, pointer-origin erasure, device premises and external-write ordering
+retain D148/D227's existing `outside` and `beyond-lifetime` classifications.
+There is no invalid-encoding optimizer license. Natural, C and optimal layout
+retain their existing representations and ABI contracts. Packed structs are
+not C bitfield structs and cannot cross a C signature by value; explicit
+unsigned carriers or pointers use the existing C boundary.
+
+**Pinned by:** `runtime/r640-packed-fields`,
+`runtime/r640-packed-indexed`, `runtime/r640-packed-construction`,
+`runtime/r640-packed-array-copy`, `runtime/r640-packed-static`,
+`runtime/r640-packed-small-space` and `runtime/r640-packed-hole` distinguish
+images, validated extraction, copies, calls and indexed updates. The independent
+`targets/packed image algebra and access plans` case and the retained Renode
+contract define separate image and transaction oracles. ROADMAP.md records the
+remaining implementation audits and the actual results; these pins do not by
+themselves assert R6.40 closure.

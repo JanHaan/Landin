@@ -1,0 +1,9 @@
+class: negative
+summary: packed carriers do not claim a C bitfield aggregate ABI
+program: program.ldn
+constructs: 0730, 0750, 1975
+targets: linux-x86-64, macos-arm64
+codes: L0301
+args: ../tests/fixtures/negative/r640-c-abi/program.ldn
+expect: expected.txt
+status: 1

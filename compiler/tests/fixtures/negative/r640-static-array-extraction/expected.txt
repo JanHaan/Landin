@@ -1,0 +1,6 @@
+error[L0305]: packed field extraction needs runtime validation
+  --> ../tests/fixtures/negative/r640-static-array-extraction/program.ldn:9:18
+  |
+9 | named: [1]mode = raw.row
+  |                  ^^^^^^^
+  = note: [0730]/D228: a static module image cannot perform checked extraction; copy the raw image instead

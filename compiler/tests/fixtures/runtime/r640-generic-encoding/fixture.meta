@@ -1,0 +1,7 @@
+class: runtime
+summary: generic packed layouts retain per-union encoding maps
+program: program.ldn
+constructs: 0630, 0730, 1330
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

@@ -173,9 +173,10 @@ An inner scope may shadow an outer name.
 Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128.
 Any other width exists as well — u4, u12, u23 — for the
 packed fields of [0730], where the datasheet decides how
-many bits a thing gets. Outside a packed struct one
-occupies the next machine width, and a one-bit field is
-spelt bool.
+many bits a thing gets. D228 admits u1 through u64 only in packed field
+positions; extracting one produces the next enabled machine width. A flag
+is spelt bool. A numeric one-bit field may be spelt u1 and produces u8
+values 0 or 1; it does not acquire implicit boolean conversions.
 
 ### [0160] Pointer-width integers: usize, isize
 
@@ -741,7 +742,9 @@ aggregates of those accept it. Named value sets do not:
 write the name. Pointers and 'any' have no zero image at
 all, because there is no null. Where the destination supplies
 that context, assignment writes the complete zero image as one
-value rather than spelling its parts.
+value rather than spelling its parts. D228's packed structs are raw images:
+`zeroed` is permitted even when an encoded field's zero pattern has no name.
+Reading that field then traps; copying the image preserves its bits.
 
 ```landin
 mut buffer: [256]u8 = zeroed
@@ -1216,6 +1219,11 @@ divider_sel: type = u4 (by_1 = 0 | by_2 = 1)   -- four bits, as given
 
 ```
 
+The enabled D228 kernel accepts the explicit named-boolean expansion below
+that generator form; automatic `set(X)` and generated-register surfaces remain
+with the complete device-fixture slice. Their expansion does not change the
+raw-image or validation contract.
+
 A set is not a kind of its own. set(X) generates a packed
 struct of bool, one field per member of X, each sitting at
 the bit its encoding names — so membership is a field read,
@@ -1265,7 +1273,8 @@ end moder
 
 Indexing such a field by a value known only at run time is
 ordinary code: it is a shift by a computed amount inside a
-register image, with the same bounds check any index gets.
+register image, with a bounds check. D228 retains this bit-selection check
+in `unchecked`, because an invalid bit index has no computed byte address.
 On an image, that is — never straight through the volatile
 pointer, for the reason [0740] gives.
 
@@ -1275,6 +1284,19 @@ set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
 end set_pin
 
 ```
+
+D228 makes the distinction precise: the packed struct is a raw image and
+accepts every carrier pattern. Copying it, passing it and returning it preserve
+all bits. Extracting an encoded field checks membership and traps on an unnamed
+pattern before producing a named value. Exhaustive matching applies to that
+validated value. An insertion preserves all other bits, and a fresh constructor
+starts with zero omitted bits. Packed fields have no independent byte address;
+pass the image for updates. `layout(packed, u32)` explicitly retains a 32-bit
+carrier when the highest named position would otherwise select a smaller one.
+The enabled representation widths are u1 through u64 within packed fields;
+they do not add arbitrary-width arithmetic or calling conventions. Generated
+`set` expansion and the full register wrapper surface below retain their
+roadmap owners.
 
 ### [0740] Access behaviour is data, not keywords
 
@@ -1305,8 +1327,9 @@ Preserving reserved hardware bits therefore requires an explicit image read
 before the local update; a whole-image write cannot hide that read. This
 read/modify/write sequence is not atomic, and its normal-read/normal-write
 premise does not extend to clear-on-read or one-clears behavior. Packed
-source forms remain outside the enabled kernel; [1830] distinguishes the
-examples here from implemented constructs.
+image source forms are governed by D228. The complete generated register
+wrapper and `volatile ptr` surface remain outside the enabled kernel; [1830]
+distinguishes those examples from implemented constructs.
 'reset' initialises nothing. It is what the datasheet says
 the register holds after a reset, recorded so that tools
 and readers know what they are starting from. The hardware

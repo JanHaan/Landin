@@ -1,0 +1,47 @@
+-- P1 ordinary-slice DMA pressure. The C peer is a serialized device control.
+extern(c) arm: (escaping p: ptr mut u8, size: usize) -> none
+extern(c) feed: () -> none
+extern(c) completed: () -> (count: u32)
+
+idle: atom
+done: atom
+state: type = (idle = 0 | done = 4)
+status: type = layout(packed, u32) struct
+    state: state at 0..2
+    count: u16 at 8..23
+end status
+
+rx: type = struct
+    buf: []u8
+end rx
+
+open: (escaping buf: []mut u8) -> (value: rx from buf) =
+    compiler.device_barrier()
+    arm(addr buf[0], lenof buf)
+    value = rx(buf: buf)
+end open
+
+read: (in receiver: rx) -> (value: u32) =
+    mut image: status = zeroed
+    raw: ptr mut u32 = ptr(usize(addr image))
+    raw.val = completed()
+    value = 0
+    if image.state == done and image.count == 4 then
+        compiler.device_barrier()
+        for byte in receiver.buf do
+            value += u32(byte)
+        end for
+    end if
+end read
+
+mut storage: [4]u8 = [1, 2, 3, 4]
+
+public extern(c) scenario: () -> (value: u32) =
+    receiver := open(storage[0..<4])
+    before := read(receiver)
+    feed()
+    after := read(receiver)
+    compiler.completion_barrier()
+    copy := storage
+    value = before + after + u32(copy[0])
+end scenario

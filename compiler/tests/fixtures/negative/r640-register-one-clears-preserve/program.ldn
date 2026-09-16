@@ -1,0 +1,9 @@
+image_type: type = layout(packed) struct
+    bit: bool at 0
+end image_type
+f: () -> none =
+    mut word: u32 = 0
+    p: ptr mut u32 = addr word
+    mut image: image_type = zeroed
+    compiler.register_write(p, 0, compiler.one_clears, compiler.preserve, 0xff)
+end f

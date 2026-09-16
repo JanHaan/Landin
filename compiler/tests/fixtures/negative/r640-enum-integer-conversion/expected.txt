@@ -1,0 +1,10 @@
+error[L0301]: this value is not a function, so this is not a call
+  --> ../tests/fixtures/negative/r640-enum-integer-conversion/program.ldn:9:15
+  |
+9 |     x.field = mode(4)
+  |               ^^^^
+  --> ../tests/fixtures/negative/r640-enum-integer-conversion/program.ldn:9:15
+  |
+9 |     x.field = mode(4)
+  |               ^^^^^^^ this call
+  = note: [1920]: a callee has a function type

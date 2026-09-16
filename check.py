@@ -1168,7 +1168,7 @@ def read_grammar(path):
     reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
     contextual = set()
     for name, rule in rules.items():
-        if name not in LEXICAL_RULES | {"scalar_name", "text_name"}:
+        if name not in LEXICAL_RULES | {"scalar_name", "text_name", "packed_unsigned"}:
             contextual.update(re.findall(r'"([a-z][a-z_0-9]*)"', rule))
     preamble = text.split("### [1740]", 1)[0]
     stated = set(re.findall(r"'([a-z][a-z_0-9]*)'", preamble))
@@ -3836,6 +3836,8 @@ def check_coverage_registers(full_run):
             "conversion.float-to-bool",
             "memory.eligibility", "memory.alignment",
             "memory.external-writers",
+            "packed.extraction", "packed.image", "packed.register",
+            "packed.insertion", "packed.reserved", "packed.device",
             "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",

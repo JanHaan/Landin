@@ -1,0 +1,91 @@
+-- Native Landin image operations; the C peer transports exact-width events
+-- to the real synthetic Renode peripheral. This is not Cortex-M emission.
+extern(c) read32: (offset: u32) -> (value: u32)
+extern(c) write32: (offset: u32, value: u32) -> none
+extern(c) read16: (offset: u32) -> (value: u16)
+extern(c) write16: (offset: u32, value: u16) -> none
+
+internal: atom
+external: atom
+pll: atom
+clock: type = (internal = 0 | external = 1 | pll = 4)
+control: type = layout(packed, u32) struct
+    mode: clock at 1..3
+    enabled: bool at 5
+end control
+flags: type = layout(packed, u32) struct
+    bits: [8]bool at 0..7
+end flags
+counter: type = layout(packed, u16) struct
+    count: u16 at 0..15
+end counter
+
+public extern(c) scenario: () -> (result: u32) =
+    mut image: control = zeroed
+    raw: ptr mut u32 = ptr(usize(addr image))
+    raw.val = read32(0)
+    if image.mode <> internal then
+        result = 1
+        return
+    end if
+    image.enabled = false
+    write32(0, raw.val)
+    if read32(0) <> 0xa50000d0 then
+        result = 2
+        return
+    end if
+
+    -- Destructive reads remain two explicit image operations. The image
+    -- with unnamed clock bits is copied without extracting that field.
+    raw.val = read32(4)
+    copy := image
+    if copy.enabled or read32(4) <> 0 then
+        result = 3
+        return
+    end if
+
+    -- Write-only and one-clears images start from zero, never a hidden read.
+    mut command: flags = zeroed
+    command.bits[0] = true
+    command.bits[4] = true
+    command.bits[6] = true
+    command_raw: ptr u32 = ptr(usize(addr command))
+    write32(8, command_raw.val)
+    mut clear: flags = zeroed
+    clear.bits[1] = true
+    clear_raw: ptr mut u32 = ptr(usize(addr clear))
+    write32(12, clear_raw.val)
+    if read32(12) <> 0xf1 then
+        result = 4
+        return
+    end if
+    clear = zeroed
+    write32(12, clear_raw.val)
+    if read32(12) <> 0xf1 then
+        result = 5
+        return
+    end if
+
+    mut count: counter = zeroed
+    count_raw: ptr mut u16 = ptr(usize(addr count))
+    count_raw.val = read16(16)
+    if count.count <> 65535 then
+        result = 6
+        return
+    end if
+    count.count = 0
+    write16(16, count_raw.val)
+    count_raw.val = read16(16)
+    if count.count <> 0 then
+        result = 7
+        return
+    end if
+    count.count = 65535
+    write16(16, count_raw.val)
+    write32(20, 0xffffff51)
+    if read32(20) <> 0xffffff51 then
+        result = 8
+        return
+    end if
+    result = 0x640
+end scenario

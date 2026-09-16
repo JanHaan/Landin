@@ -671,6 +671,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "scalar_type",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1175,6 +1185,48 @@
     "fields": {}
   },
   {
+    "type": "encoded_member",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "declaration_reference",
+          "named": true
+        },
+        {
+          "type": "exclusion_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "encoded_union",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "encoded_member",
+          "named": true
+        },
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "scalar_type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "errors",
     "named": true,
     "fields": {},
@@ -1308,6 +1360,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -2830,6 +2892,10 @@
           "named": true
         },
         {
+          "type": "encoded_union",
+          "named": true
+        },
+        {
           "type": "range_subtype",
           "named": true
         },
@@ -3346,6 +3412,10 @@
   },
   {
     "type": "assembler",
+    "named": false
+  },
+  {
+    "type": "at",
     "named": false
   },
   {

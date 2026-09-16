@@ -1,0 +1,12 @@
+extern(c) invalid: (mode: u32) -> (value: u32)
+public extern(c) guarded: (p: ptr mut u32, mode: u32) -> none =
+    unchecked begin
+        if mode == 0 then
+            compiler.register_write(p, invalid(mode), compiler.normal_write,
+                                    compiler.write_zero, 0xff)
+        else
+            compiler.register_write(p, invalid(mode), compiler.normal_write,
+                                    compiler.write_one, 0xff)
+        end if
+    end unchecked
+end guarded

@@ -96,6 +96,9 @@ def run(debugger, config_path):
         values(f, 'entry', {'scalar_param': 37, 'saved_c': 53})
         target.BreakpointDelete(entry.GetID())
         f = continued('outer-ready', 'debug_outer')
+        values(f, 'outer-packed', {'packed_local.raw': 0x65a5a5a5})
+        record('outer-packed.bytes',
+               f.FindVariable('packed_local').GetType().GetByteSize(), 4)
         selected(f, 'outer', 37)
         caller = {'call_site.file_id': 2, 'call_site.line': config['caller_line'],
                   'call_site.column': config['caller_column']}

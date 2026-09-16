@@ -213,3 +213,11 @@ code/debug boundary. Full release GDB/LLDB accompanies complete release hosted
 coverage and both Mac compiler-host modes. This is not R6.100 milestone scope.
 The existing Linux embedded evidence export also includes the memory controls
 and models, from the identical candidate archive. Nix CI remains deferred.
+
+R6.40 selects routine debugger risk because packed extraction/selection,
+verification and raw-carrier DWARF change. Its Linux documents job builds the
+committed debug compiler before the mandatory combined embedded probe. The
+probe exports compiler-generated native/Renode execution alongside independent
+M0 C/assembly and model controls, with existing lock cleanup and ABI/memory
+lanes preserved. These development or model results do not authorize promotion;
+matching native archive acceptance and the guarded publication path still do.

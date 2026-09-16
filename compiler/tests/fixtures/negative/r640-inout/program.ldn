@@ -1,0 +1,8 @@
+image: type = layout(packed) struct
+    value: u2 at 0..1
+end image
+set: (inout v: u8) -> none = v = 1 end set
+f: () -> none =
+    mut x: image = zeroed
+    set(x.value)
+end f

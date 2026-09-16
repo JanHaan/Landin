@@ -1,4 +1,5 @@
 with Landin.Memory;
+with Landin.Packed;
 --  The target-neutral intermediate representation.
 --
 --  `tour.md` [1550] is the authority for its existence -- "a verified,
@@ -424,6 +425,7 @@ package Landin.IR is
       Variant_Field_Shape);
 
    type Field_Shape is record
+      Packing : Landin.Packed.Geometry;
       Kind    : Field_Shape_Kind          := Scalar_Field_Shape;
       Element : Landin.Types.Scalar_Name    := Landin.Types.Bool;
       Length  : Element_Total               := 1;
@@ -638,6 +640,22 @@ package Landin.IR is
    function Atom_Count
      (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
      with Pre => Holds (Of_Unit, Set_Id);
+
+   procedure Set_Encodings
+     (Into : in out Unit; Set_Id : Atom_Set_Id;
+      Values : Landin.Packed.Encoding_Array; Bits : Landin.Packed.Width)
+     with Pre => Holds (Into, Set_Id);
+
+   function Encoding_Width
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
+     with Pre => Holds (Of_Unit, Set_Id);
+
+   function Nth_Encoding
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
+      return Landin.Packed.Image
+     with Pre => Holds (Of_Unit, Set_Id)
+       and then Encoding_Width (Of_Unit, Set_Id) /= 0
+       and then Index <= Atom_Count (Of_Unit, Set_Id);
 
    function Nth_Atom
      (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
@@ -1388,6 +1406,13 @@ package Landin.IR is
 
    type Aggregate_Field_Image_Array is
      array (Positive range <>) of Aggregate_Field_Image;
+
+   --  A constructor's contribution to its containing packed image. This
+   --  is bit geometry, independent of host byte order and native selection.
+   function Packed_Field_Image
+     (Of_Unit : Unit; Item : Item_Id; Shape : Field_Shape;
+      Descriptor : Aggregate_Field_Image; Scalar : Landin.Types.Folded)
+      return Landin.Packed.Image;
 
    function Field_Image_Element_Count
      (Fields : Aggregate_Field_Image_Array) return Element_Total;
@@ -3195,6 +3220,18 @@ package Landin.IR is
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Load_Field'Result, Load_Field);
 
+   --  A packed selection keeps the containing image address and its field
+   --  identity. It never manufactures a byte address for the selected bits.
+   function Emit_Shaped_Load
+     (Into : in out Unit; Item : Item_Id; Address : Slot_Id;
+      Field : Natural; Index : Value_Id; Site : Landin.Provenance.Origin)
+      return Value_Id;
+
+   procedure Emit_Shaped_Store
+     (Into : in out Unit; Item : Item_Id; Address : Slot_Id;
+      Field : Natural; Index, Value : Value_Id;
+      Site : Landin.Provenance.Origin);
+
    --  The same field of a cell in this item's own frame [1810].
    function Emit_Load_Slot_Field
      (Into   : in out Unit;
@@ -3931,7 +3968,13 @@ private
 
    type Atom_Set_Record is record
       Members : Run;
+      Encodings_First : Natural := 0;
+      Encoding_Bits : Natural := 0;
    end record;
+
+   package Encoding_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Landin.Packed.Image,
+      "=" => Landin.Packed."=");
 
    package Atom_Set_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Record);
@@ -4047,6 +4090,7 @@ private
       Pointees   : Field_Shape_Vectors.Vector;
       Atom_Sets  : Atom_Set_Vectors.Vector;
       Atoms      : Atom_Vectors.Vector;
+      Encodings  : Encoding_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;

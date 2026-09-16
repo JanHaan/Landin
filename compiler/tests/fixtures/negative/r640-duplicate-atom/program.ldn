@@ -1,0 +1,2 @@
+a: atom
+mode: type = (a = 1 | a = 2)

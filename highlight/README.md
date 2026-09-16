@@ -64,7 +64,8 @@ What it cannot do is tell the `set` of `[0410]` from a variable called
 `link`, `align` — are coloured by position, and some of them will be
 coloured wrongly. A regex cannot fix that. The tree-sitter grammar handles
 the enabled structural surface, including contextual `lenof` and `of`, the
-`layout(c)`, `layout(optimal)` and `link(symbol: ...)` annotations, and
+`layout(c)`, `layout(optimal)`, `layout(packed, u32)`, packed positions,
+encoded unions and `link(symbol: ...)` annotations, and
 `extern(c)` function types, while `c`, `optimal`, `layout`, `link`, and `symbol`
 remain ordinary identifiers
 outside those positions. It remains deliberately non-normative and tolerant

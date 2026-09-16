@@ -194,3 +194,11 @@ and ordinary-slice fixtures in all six specialization profiles; source verdicts
 include ordering, width, permission and unsupported-target refusals. Release
 LLDB remains mandatory. Embedded M0/peripheral/model evidence stays on Linux
 and is bound by the same dual-native approval.
+
+R6.40 packed images use the native Darwin arm64 backend. The shared release
+corpus covers raw copies, checked extraction and insertion, register-image
+intrinsics, ordinary-slice completion observation, generic/evidence dispatch
+and independent ABI controls. Packed DWARF exposes a single unsigned `raw`
+member and its true size; named bitfield/array presentation is not claimed.
+The routine debugger-risk policy retains full release LLDB scope. Embedded
+QEMU/Renode probes continue to run only on the supported native Linux host.

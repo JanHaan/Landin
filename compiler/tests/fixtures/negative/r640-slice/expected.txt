@@ -1,0 +1,10 @@
+error[L0301]: packed elements have no slice stride
+  --> ../tests/fixtures/negative/r640-slice/program.ldn:6:9
+  |
+6 |     _ = x.value[0..<4]
+  |         ^^^^^^^
+  --> ../tests/fixtures/negative/r640-slice/program.ldn:6:9
+  |
+6 |     _ = x.value[0..<4]
+  |         ^^^^^^^^^^^^^^ this slice operation
+  = note: [0730]: copy values to an ordinary array before taking a slice

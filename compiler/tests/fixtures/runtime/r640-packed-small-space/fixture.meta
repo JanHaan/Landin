@@ -1,0 +1,7 @@
+class: runtime
+summary: all byte images preserve holes across copies and calls
+program: program.ldn
+constructs: 0540, 0630, 0730, 1050
+targets: linux-x86-64, macos-arm64
+status: 42
+profiles: specialization

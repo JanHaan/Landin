@@ -1,6 +1,6 @@
-error[L0201]: `u12` is not declared in any scope this reaches
+error[L0301]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn:1:9
   |
 1 | narrow: u12 = 1
-  |         ^^^
-  = note: [1860]: a name that names nothing is refused
+  |         ^^^ this representation width
+  = note: [0730]: ordinary values use u8, u16, u32 or u64

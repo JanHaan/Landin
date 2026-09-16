@@ -1,0 +1,5 @@
+class: positive
+summary: packed geometry, encoded unions and indexed image construction
+constructs: 0540, 0630, 0730, 0750
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.register_update
+  --> ../tests/fixtures/negative/r640-register-implicit-update/program.ldn:8:14
+  |
+8 |     compiler.register_update(p, 1)
+  |              ^^^^^^^^^^^^^^^
+  = note: [1560]: unknown builtin member compiler.register_update

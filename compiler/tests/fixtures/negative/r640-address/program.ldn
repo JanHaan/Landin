@@ -1,0 +1,7 @@
+image: type = layout(packed) struct
+    value: u2 at 0..1
+end image
+f: () -> none =
+    mut x: image = zeroed
+    _ = addr x.value
+end f

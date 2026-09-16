@@ -1,4 +1,7 @@
+with Landin.Layouts;
+with Landin.Packed;
 with Landin.Memory;
+with Landin.Targets.Packed;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Hosted;
@@ -29,6 +32,7 @@ package body Landin.Backend.Arm64 is
    use type Landin.Types.Type_Kind;
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Layouts.Policy;
    use type Landin.Targets.C_ABI_Kind;
 
    LF : constant Character := Character'Val (10);
@@ -935,8 +939,30 @@ package body Landin.Backend.Arm64 is
          end Load_Value;
 
          procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "x9") is
+           (Value : Landin.IR.Value_Id; Register : String := "x9")
+         is
+            Atoms : constant Landin.IR.Atom_Set_Id :=
+              Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
+            if Atoms /= Landin.IR.No_Atom_Set
+              and then Landin.IR.Op_Of (Of_Unit, Item, Value) in
+                Landin.IR.Load | Landin.IR.Load_Indirect
+                | Landin.IR.Load_Datum | Landin.IR.Load_Field
+                | Landin.IR.Load_Element | Landin.IR.Load_Variant_Field
+            then
+               declare
+                  Done : constant String := Fresh;
+               begin
+                  for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms) loop
+                     Immediate ("x14", Pattern (Atom_Code
+                       (Of_Unit, Landin.IR.Nth_Atom (Of_Unit, Atoms, Index))));
+                     Emit ("cmp " & Register & ", x14");
+                     Emit ("b.eq " & Done);
+                  end loop;
+                  Emit ("b " & Trap);
+                  Put (Done & ":");
+               end;
+            end if;
             Frame_Address (Value_Offset (Layout, Value));
             Memory (True, Size_Of_Value (Value), Register, "x15");
          end Store_Value;
@@ -1672,6 +1698,37 @@ package body Landin.Backend.Arm64 is
                      Datum => Landin.IR.Datum_Of (Of_Unit, Item, Value)));
             function FP (Scalar : Landin.Types.Scalar_Name) return String
               is (if Scalar = Landin.Types.F32 then "s" else "d");
+            procedure Packed_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
+
+            procedure Packed_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean)
+            is
+               Done : constant String := Fresh;
+            begin
+               if Set_Id = Landin.IR.No_Atom_Set then
+                  return;
+               end if;
+               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
+                  declare
+                     Next : constant String := Fresh;
+                     Code : constant Pattern := Pattern (Atom_Code
+                       (Of_Unit, Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)));
+                     Raw : constant Pattern := Pattern
+                       (Landin.IR.Nth_Encoding (Of_Unit, Set_Id, Index));
+                  begin
+                     Immediate ("x14", (if Encode then Code else Raw));
+                     Emit ("cmp x9, x14");
+                     Emit ("b.ne " & Next);
+                     Immediate ("x9", (if Encode then Raw else Code));
+                     Emit ("b " & Done);
+                     Put (Next & ":");
+                  end;
+               end loop;
+               Emit ("b " & Trap);
+               Put (Done & ":");
+            end Packed_Atom;
+
             procedure FP_Load (Which : Positive; Register : String);
             procedure FP_Save;
             procedure Index_Address
@@ -1881,6 +1938,45 @@ package body Landin.Backend.Arm64 is
                      Memory (True, Size_Of_Value (Operand (1)), "x9", "x10");
                   end if;
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
+                  declare
+                     Shape : constant Landin.IR.Field_Shape := Reached_Shape
+                       (Place, Natural (Landin.IR.Field_Of
+                          (Of_Unit, Item, Value)),
+                        Landin.IR.Path_Of (Of_Unit, Item, Value));
+                  begin
+                     if Shape.Packing.Bits /= 0 then
+                        Part_Address
+                          (Place, Landin.IR.Element_Total
+                             (Landin.IR.Field_Of (Of_Unit, Item, Value)),
+                           "x10", Nested => Landin.IR.Path_Of
+                             (Of_Unit, Item, Value));
+                        if Op = Landin.IR.Load_Field then
+                           Memory (False, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x9", "x10");
+                           Emit ("ubfx x9, x9, #" & Trimmed
+                             (Natural'Image (Shape.Packing.First)) & ", #"
+                             & Trimmed (Natural'Image (Shape.Packing.Bits)));
+                           Packed_Atom (Shape.Atoms, Encode => False);
+                           Store_Value (Value);
+                        else
+                           Load_Value (Operand (1));
+                           Packed_Atom (Shape.Atoms, Encode => True);
+                           if Shape.Packing.Bits < 64 then
+                              Emit ("lsr x11, x9, #" & Trimmed
+                                (Natural'Image (Shape.Packing.Bits)));
+                              Emit ("cbnz x11, " & Trap);
+                           end if;
+                           Memory (False, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x11", "x10");
+                           Emit ("bfi x11, x9, #" & Trimmed
+                             (Natural'Image (Shape.Packing.First)) & ", #"
+                             & Trimmed (Natural'Image (Shape.Packing.Bits)));
+                           Memory (True, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x11", "x10");
+                        end if;
+                        return;
+                     end if;
+                  end;
                   Part_Address
                     (Place, Landin.IR.Element_Total
                        (Landin.IR.Field_Of (Of_Unit, Item, Value)),
@@ -1894,6 +1990,54 @@ package body Landin.Backend.Arm64 is
                      Memory (True, Size_Of_Value (Operand (1)), "x9", "x10");
                   end if;
                when Landin.IR.Load_Element | Landin.IR.Store_Element =>
+                  declare
+                     Field : constant Natural :=
+                       Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Reached_Shape (Place, Field, Nested);
+                  begin
+                     if Shape.Packing.Bits /= 0 then
+                        Load_Value (Operand (1), "x13");
+                        Immediate ("x14", Pattern (Shape.Length));
+                        Emit ("cmp x13, x14");
+                        Emit ("b.hs " & Trap);
+                        Immediate ("x14", Pattern (Shape.Packing.Bits));
+                        Emit ("mul x13, x13, x14");
+                        Emit ("add x13, x13, #" & Trimmed
+                          (Natural'Image (Shape.Packing.First)));
+                        Storage_Address
+                          (Place, Field, "x10", Nested => Nested);
+                        Immediate ("x12", (if Shape.Packing.Bits = 64
+                          then Pattern'Last else
+                            2 ** Shape.Packing.Bits - 1));
+                        if Op = Landin.IR.Load_Element then
+                           Memory (False, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x9", "x10");
+                           Emit ("lsr x9, x9, x13");
+                           Emit ("and x9, x9, x12");
+                           Packed_Atom (Landin.IR.Array_Element_Shape
+                             (Of_Unit, Shape).Atoms, Encode => False);
+                           Store_Value (Value);
+                        else
+                           Load_Value (Operand (2));
+                           Packed_Atom (Landin.IR.Array_Element_Shape
+                             (Of_Unit, Shape).Atoms, Encode => True);
+                           Emit ("bic x11, x9, x12");
+                           Emit ("cbnz x11, " & Trap);
+                           Emit ("lsl x9, x9, x13");
+                           Emit ("lsl x12, x12, x13");
+                           Memory (False, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x11", "x10");
+                           Emit ("bic x11, x11, x12");
+                           Emit ("orr x11, x11, x9");
+                           Memory (True, Landin.Targets.Packed.Carrier
+                             (Shape.Packing.Storage), "x11", "x10");
+                        end if;
+                        return;
+                     end if;
+                  end;
                   Index_Address
                     (Place, Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
                      Landin.IR.Variant_Case_Of (Of_Unit, Item, Value),
@@ -3172,6 +3316,48 @@ package body Landin.Backend.Arm64 is
            (if Is_Array then Landin.Targets.Layouts.Make ([])
             else Datum_Layout (Of_Unit, Item, Facts));
 
+         procedure Emit_Packed
+           (Shape : Landin.IR.Field_Shape;
+            Parent : Landin.IR.Aggregate_Field_Image;
+            Top : Boolean := False);
+
+         procedure Emit_Packed
+           (Shape : Landin.IR.Field_Shape;
+            Parent : Landin.IR.Aggregate_Field_Image;
+            Top : Boolean := False)
+         is
+            use type Landin.Packed.Image;
+            Bits : Landin.Packed.Image := 0;
+            Storage : Natural := 0;
+            Count : constant Natural :=
+              (if Top then Landin.IR.Field_Count (Of_Unit, Item)
+               else Landin.IR.Aggregate_Field_Count (Of_Unit, Shape));
+         begin
+            for Index in 1 .. Count loop
+               declare
+                  Leaf : constant Landin.IR.Field_Shape :=
+                    (if Top then Landin.IR.Nth_Field_Shape
+                       (Of_Unit, Item, Index)
+                     else Landin.IR.Nth_Aggregate_Field
+                       (Of_Unit, Shape, Index));
+                  Image : constant Landin.IR.Aggregate_Field_Image :=
+                    (if Top then Landin.IR.Field_Image_Of
+                       (Of_Unit, Item, Index)
+                     else Landin.IR.Descendant_Image_Of
+                       (Of_Unit, Item, Parent, Index));
+                  Scalar : constant Landin.Types.Folded :=
+                    (if Top then Landin.IR.Nth_Field_Image
+                       (Of_Unit, Item, Index) else Image.Value);
+               begin
+                  Bits := Bits or Landin.IR.Packed_Field_Image
+                    (Of_Unit, Item, Leaf, Image, Scalar);
+                  Storage := Leaf.Packing.Storage;
+               end;
+            end loop;
+            Emit (Directive (Landin.Targets.Packed.Carrier (Storage)) & " "
+              & Trimmed (Landin.Packed.Image'Image (Bits)));
+         end Emit_Packed;
+
          procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count);
 
          procedure Emit_Field
@@ -3403,6 +3589,11 @@ package body Landin.Backend.Arm64 is
             Child_Size : Landin.Targets.Byte_Count;
             Child_Alignment : Landin.Targets.Byte_Alignment;
          begin
+            if Landin.IR.Layout_Of (Of_Unit, Shape) = Landin.Layouts.Packed
+            then
+               Emit_Packed (Shape, Parent);
+               return;
+            end if;
             for Child of Plan.Order loop
                declare
                   Leaf : constant Landin.IR.Field_Shape :=
@@ -3491,6 +3682,13 @@ package body Landin.Backend.Arm64 is
            (Character'Val (9) & ".balign "
             & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Put (Symbol (Item) & ":");
+         if not Is_Array
+           and then Landin.IR.Layout_Of (Of_Unit, Item) = Landin.Layouts.Packed
+         then
+            Emit_Packed ((others => <>), (others => <>), Top => True);
+            return;
+         end if;
+
 
          if Is_Array then
             Emit_Array

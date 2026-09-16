@@ -682,6 +682,14 @@ package body Landin.Stages.Resolution is
                   Resolve
                     (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, I), Inside);
                end loop;
+               if Landin.Configuration.Compiler_Member
+                 (Spellings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                   = "register_write"
+                 and then Syn.Argument_Count (Of_Tree, Node) >= 5
+               then
+                  Resolve
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 5), Inside);
+               end if;
                return;
             end if;
          end;

@@ -1,0 +1,13 @@
+image: type = layout(packed) struct
+    flag: bool at 0
+    count: u4 at 4..7
+end image
+public main: () -> (code: i32) =
+    mut x: image = zeroed
+    x.flag = true
+    x.count = 13
+    code = 1
+    if x.flag and x.count == 13 then
+        code = 42
+    end if
+end main

@@ -60,6 +60,7 @@ private with Ada.Containers.Vectors;
 private with System;
 
 with Landin.Layouts;
+with Landin.Packed;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -403,6 +404,22 @@ package Landin.Checking is
      (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
      with Pre => Holds (Of_Table, Set_Id);
 
+   procedure Set_Encodings
+     (Into : in out Table; Set_Id : Atom_Set_Id;
+      Values : Landin.Packed.Encoding_Array; Bits : Landin.Packed.Width)
+     with Pre => Holds (Into, Set_Id);
+
+   function Encoding_Width
+     (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
+     with Pre => Holds (Of_Table, Set_Id);
+
+   function Nth_Encoding
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
+      return Landin.Packed.Image
+     with Pre => Holds (Of_Table, Set_Id)
+       and then Encoding_Width (Of_Table, Set_Id) /= 0
+       and then Index <= Atom_Count (Of_Table, Set_Id);
+
    function Nth_Atom
      (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
       return Declaration_Id
@@ -625,6 +642,7 @@ package Landin.Checking is
       Variant_Field);
 
    type Field_Shape is record
+      Packing : Landin.Packed.Geometry;
       Kind    : Field_Kind               := Scalar_Field;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Length  : Element_Count            := 1;
@@ -2457,7 +2475,13 @@ private
 
    type Atom_Set_Record is record
       Members : Run;
+      Encodings_First : Natural := 0;
+      Encoding_Bits : Natural := 0;
    end record;
+
+   package Encoding_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Landin.Packed.Image,
+      "=" => Landin.Packed."=");
 
    package Atom_Set_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Record);
@@ -2663,6 +2687,7 @@ private
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;
+      Encodings  : Encoding_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
       Declaration_References : Reference_Id_Vectors.Vector;
       Declaration_Constraints : Constraint_Id_Vectors.Vector;

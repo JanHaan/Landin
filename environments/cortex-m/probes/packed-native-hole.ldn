@@ -1,0 +1,19 @@
+-- One destructive hardware read supplies an unnamed encoding. Validation
+-- must trap even when its result is discarded inside unchecked.
+extern(c) read32: (offset: u32) -> (value: u32)
+internal: atom
+external: atom
+pll: atom
+clock: type = (internal = 0 | external = 1 | pll = 4)
+control: type = layout(packed, u32) struct
+    mode: clock at 1..3
+end control
+public extern(c) scenario: () -> (result: u32) =
+    mut image: control = zeroed
+    raw: ptr mut u32 = ptr(usize(addr image))
+    raw.val = read32(4)
+    unchecked begin
+        _ = image.mode
+    end unchecked
+    result = 0x640
+end scenario

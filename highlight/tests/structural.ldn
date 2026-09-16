@@ -47,3 +47,13 @@ public main: () -> (code: i32) =
         code = 0
     end if
 end main
+
+-- D228 packed image surface; raw bits are validated at field extraction.
+packed_idle: atom
+packed_busy: atom
+packed_mode: type = u4 (packed_idle = 0 | packed_busy = 4)
+packed_image: type = layout(packed, u32) struct
+    enabled: bool at 0
+    mode: packed_mode at 1..4
+    pins: [4]u2 at 8..15
+end packed_image

@@ -1,4 +1,6 @@
 with Landin.Memory;
+with Landin.Layouts;
+with Landin.Packed;
 with Landin.Stages.Folding;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Vectors;
@@ -26,6 +28,7 @@ package body Landin.Stages.Lowering is
    package Ty  renames Landin.Types;
    package IR  renames Landin.IR;
 
+   use type Landin.Layouts.Policy;
    use type IR.Block_Id;
    use type IR.Opcode;
    use type IR.Element_Total;
@@ -392,6 +395,19 @@ package body Landin.Stages.Lowering is
                end loop;
                Atom_Sets (Positive (Source)) :=
                  IR.Add_Atom_Set (Unit.all, Members);
+               if Landin.Checking.Encoding_Width (Types.all, Source) /= 0 then
+                  declare
+                     Values : Landin.Packed.Encoding_Array (1 .. Count);
+                  begin
+                     for Index in Values'Range loop
+                        Values (Index) := Landin.Checking.Nth_Encoding
+                          (Types.all, Source, Index);
+                     end loop;
+                     IR.Set_Encodings
+                       (Unit.all, Atom_Sets (Positive (Source)), Values,
+                        Landin.Checking.Encoding_Width (Types.all, Source));
+                  end;
+               end if;
             end;
          end if;
          return Atom_Sets (Positive (Source));
@@ -1151,6 +1167,10 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return Stored_Place;
 
+      function Stored_Shape
+        (Place : Stored_Place; Fallback : IR.Field_Shape)
+         return IR.Field_Shape;
+
       function Addressed_Storage
         (Place : Stored_Place;
          Shape : IR.Field_Shape;
@@ -1757,6 +1777,7 @@ package body Landin.Stages.Lowering is
             when Landin.Checking.Scalar_Field =>
                return
                  (Kind      => IR.Scalar_Field_Shape,
+                  Packing   => Source.Packing,
                   Element   => Source.Element,
                   Length    => 1,
                   Signature =>
@@ -1794,9 +1815,11 @@ package body Landin.Stages.Lowering is
                   Element : constant IR.Field_Shape := Neutral_Shape
                     (Landin.Checking.Array_Field_Element (Types.all, Source),
                      Identity_Only);
-               begin
-                  return IR.Make_Array_Shape
+                  Made : IR.Field_Shape := IR.Make_Array_Shape
                     (Unit.all, IR.Element_Total (Source.Length), Element);
+               begin
+                  Made.Packing := Source.Packing;
+                  return Made;
                end;
 
             when Landin.Checking.Aggregate_Field =>
@@ -1909,6 +1932,36 @@ package body Landin.Stages.Lowering is
          end case;
          return IR.Add_Pointee (Unit.all, Shape);
       end Pointee_For;
+
+      function Packed_Field_Node
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Packed_Field_Node
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+         Selected : constant Syn.Node_Id :=
+           (if Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+            then Syn.Target_Of (Of_Tree, Node) else Node);
+      begin
+         if Syn.Kind (Of_Tree, Selected) /= Syn.Member_Selection then
+            return Syn.No_Node;
+         end if;
+         declare
+            Target : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Selected);
+            Nominal : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, Target);
+            Field : constant Natural :=
+              Landin.Checking.Field_Index (Types.all, Of_Tree, Selected);
+         begin
+            if Field /= 0 and then Nominal /= Landin.Checking.No_Nominal_Type
+              and then Landin.Checking.Field_Shape_Of
+                (Types.all, Nominal, Field).Packing.Bits /= 0
+            then
+               return Selected;
+            end if;
+         end;
+         return Syn.No_Node;
+      end Packed_Field_Node;
 
       function Neutral_Value_Shape
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape
@@ -2780,7 +2833,10 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Place.Place, Site,
                   Field => Place.Base, Nested => Stored_Steps (Place)));
             Slot : constant IR.Slot_Id :=
-              IR.Add_Address_Slot (Unit.all, Filling, Shape, Site);
+              IR.Add_Address_Slot
+                (Unit.all, Filling,
+                 (if Shape.Kind = IR.Array_Field_Shape
+                  then Stored_Shape (Place, Shape) else Shape), Site);
          begin
             IR.Emit_Store (Unit.all, Filling, Slot, Address, Site);
             return (Kind => IR.Runtime_Address, Address => Slot);
@@ -3153,6 +3209,49 @@ package body Landin.Stages.Lowering is
          end if;
       end Store_Shaped_Scalar;
 
+      function Stored_Shape
+        (Place : Stored_Place; Fallback : IR.Field_Shape)
+         return IR.Field_Shape
+      is
+         Root : IR.Field_Shape := Fallback;
+      begin
+         case Place.Place.Kind is
+            when IR.Runtime_Address =>
+               Root := IR.Address_Shape
+                 (Unit.all, Filling, Place.Place.Address);
+               if Place.Base > 0 then
+                  Root := IR.Nth_Aggregate_Field
+                    (Unit.all, Root, Place.Base);
+               end if;
+            when IR.Frame_Slot =>
+               if Place.Base > 0 then
+                  Root := IR.Nth_Slot_Field_Shape
+                    (Unit.all, Filling, Place.Place.Slot, Place.Base);
+               elsif IR.Is_Array (Unit.all, Filling, Place.Place.Slot) then
+                  Root := IR.Whole_Slot_Array_Shape
+                    (Unit.all, Filling, Place.Place.Slot);
+               elsif not Place.Steps.Is_Empty then
+                  Root := (Kind => IR.Aggregate_Field_Shape,
+                    Nominal => IR.Nominal_Of
+                      (Unit.all, Filling, Place.Place.Slot), others => <>);
+               end if;
+            when IR.Module_Datum =>
+               if Place.Base > 0 then
+                  Root := IR.Nth_Field_Shape
+                    (Unit.all, Place.Place.Datum, Place.Base);
+               elsif IR.Result_Of (Unit.all, Place.Place.Datum)
+                 = Ty.Fixed_Array
+               then
+                  Root := IR.Whole_Array_Shape (Unit.all, Place.Place.Datum);
+               elsif not Place.Steps.Is_Empty then
+                  Root := (Kind => IR.Aggregate_Field_Shape,
+                    Nominal => IR.Nominal_Of
+                      (Unit.all, Place.Place.Datum), others => <>);
+               end if;
+         end case;
+         return IR.Shape_At (Unit.all, Root, Stored_Steps (Place));
+      end Stored_Shape;
+
       procedure Copy_Shaped_Storage
         (Source      : Stored_Place;
          Destination : Stored_Place;
@@ -3170,7 +3269,42 @@ package body Landin.Stages.Lowering is
          Site        : Landin.Provenance.Origin)
       is
       begin
-         if Shape.Kind = IR.Aggregate_Field_Shape then
+         if Shape.Kind = IR.Array_Field_Shape
+           and then (Stored_Shape (Source, Shape).Packing.Bits /= 0
+             or else Stored_Shape (Destination, Shape).Packing.Bits /= 0)
+         then
+            declare
+               From : constant IR.Storage := Addressed_Storage
+                 (Source, Stored_Shape (Source, Shape), Site);
+               Into : constant IR.Storage := Addressed_Storage
+                 (Destination, Stored_Shape (Destination, Shape), Site);
+               Saved : array (1 .. Natural (Shape.Length)) of IR.Value_Id;
+            begin
+               --  Snapshot first: two bit arrays may overlap within the
+               --  same carrier even though neither has a byte address.
+               for Position in Saved'Range loop
+                  declare
+                     Index : constant IR.Value_Id := IR.Emit_Number
+                       (Unit.all, Filling, Ty.Usize,
+                        Ty.Magnitude (Position - 1), False, Site);
+                  begin
+                     Saved (Position) := IR.Emit_Shaped_Load
+                       (Unit.all, Filling, From.Address, 0, Index, Site);
+                  end;
+               end loop;
+               for Position in Saved'Range loop
+                  declare
+                     Index : constant IR.Value_Id := IR.Emit_Number
+                       (Unit.all, Filling, Ty.Usize,
+                        Ty.Magnitude (Position - 1), False, Site);
+                  begin
+                     IR.Emit_Shaped_Store
+                       (Unit.all, Filling, Into.Address, 0, Index,
+                        Saved (Position), Site);
+                  end;
+               end loop;
+            end;
+         elsif Shape.Kind = IR.Aggregate_Field_Shape then
             declare
                From : constant IR.Storage :=
                  Addressed_Storage (Source, Shape, Site);
@@ -3393,6 +3527,25 @@ package body Landin.Stages.Lowering is
                end if;
             end;
          elsif Shape.Kind = IR.Array_Field_Shape
+           and then Stored_Shape (Destination, Shape).Packing.Bits /= 0
+         then
+            declare
+               Plain : IR.Field_Shape := Shape;
+            begin
+               Plain.Packing := (others => <>);
+               declare
+                  Temporary : constant IR.Slot_Id :=
+                    Shaped_Temporary (Plain, Site);
+                  Place : constant Stored_Place := Stored_At
+                    ((Kind => IR.Frame_Slot, Slot => Temporary));
+               begin
+                  Write_Shaped_Value (Of_Tree, Node, Scope, Plain, Place);
+                  if Current /= IR.No_Block then
+                     Copy_Shaped_Storage (Place, Destination, Plain, Site);
+                  end if;
+               end;
+            end;
+         elsif Shape.Kind = IR.Array_Field_Shape
            and then Kind in Syn.Negation | Syn.Add | Syn.Subtract
              | Syn.Multiply | Syn.Divide | Syn.Remainder | Syn.Wrapping_Add
              | Syn.Wrapping_Subtract | Syn.Wrapping_Multiply
@@ -3404,6 +3557,129 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling, Destination.Place, Site,
                Field => Destination.Base,
                Nested => Stored_Steps (Destination));
+         elsif Shape.Kind = IR.Aggregate_Field_Shape
+           and then IR.Layout_Of (Unit.all, Shape) = Landin.Layouts.Packed
+           and then Is_Struct_Construction (Of_Tree, Node)
+         then
+            declare
+               Temporary : constant IR.Slot_Id :=
+                 Shaped_Temporary (Shape, Site);
+               Place : constant Stored_Place := Stored_At
+                 ((Kind => IR.Frame_Slot, Slot => Temporary));
+               Address : constant IR.Storage :=
+                 Addressed_Storage (Place, Shape, Site);
+               Seen : array (1 .. IR.Aggregate_Field_Count (Unit.all, Shape))
+                 of Boolean := [others => False];
+               Fill_Value : IR.Value_Id := IR.No_Value;
+               Fill_Array : IR.Slot_Id := IR.No_Slot;
+
+               procedure Write_Field
+                 (Field : Positive; Given : Syn.Node_Id);
+
+               procedure Write_Field
+                 (Field : Positive; Given : Syn.Node_Id)
+               is
+                  Child : IR.Field_Shape :=
+                    IR.Nth_Aggregate_Field (Unit.all, Shape, Field);
+               begin
+                  if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
+                     return;
+                  elsif Child.Kind = IR.Scalar_Field_Shape then
+                     declare
+                        Value : constant IR.Value_Id :=
+                          (if Given = Construction_Fill (Of_Tree, Node)
+                            and then Fill_Value /= IR.No_Value
+                           then Fill_Value
+                           else Lower_Expression (Of_Tree, Given, Scope));
+                     begin
+                        if Given = Construction_Fill (Of_Tree, Node) then
+                           Fill_Value := Value;
+                        end if;
+                        if Current /= IR.No_Block then
+                           IR.Emit_Shaped_Store
+                             (Unit.all, Filling, Address.Address,
+                              Field, IR.No_Value, Value, Site);
+                        end if;
+                     end;
+                  else
+                     Child.Packing := (others => <>);
+                     declare
+                        Reuse : constant Boolean :=
+                          Given = Construction_Fill (Of_Tree, Node)
+                          and then Fill_Array /= IR.No_Slot;
+                        Saved : constant IR.Slot_Id :=
+                          (if Reuse then Fill_Array
+                           else Shaped_Temporary (Child, Site));
+                        Saved_Address : constant IR.Storage :=
+                          Addressed_Storage
+                            (Stored_At ((Kind => IR.Frame_Slot,
+                                         Slot => Saved)), Child, Site);
+                     begin
+                        if not Reuse then
+                           Write_Shaped_Value
+                             (Of_Tree, Given, Scope, Child, Stored_At
+                                ((Kind => IR.Frame_Slot, Slot => Saved)));
+                        end if;
+                        if Given = Construction_Fill (Of_Tree, Node) then
+                           Fill_Array := Saved;
+                        end if;
+                        if Current = IR.No_Block then
+                           return;
+                        end if;
+                        --  A packed image has at most 64 elements. Each
+                        --  ordinary value is encoded independently.
+                        for Element in 0 .. Natural (Child.Length) - 1 loop
+                           declare
+                              Index : constant IR.Value_Id := IR.Emit_Number
+                                (Unit.all, Filling, Ty.Usize,
+                                 Ty.Magnitude (Element), False, Site);
+                              Value : constant IR.Value_Id :=
+                                IR.Emit_Shaped_Load
+                                  (Unit.all, Filling, Saved_Address.Address,
+                                   0, Index, Site);
+                           begin
+                              IR.Emit_Shaped_Store
+                                (Unit.all, Filling, Address.Address,
+                                 Field, Index, Value, Site);
+                           end;
+                        end loop;
+                     end;
+                  end if;
+               end Write_Field;
+            begin
+               --  Packed constructors build a fresh raw image. Omitted
+               --  and reserved bits start at zero; field extraction is
+               --  the validation boundary, not this image construction.
+               IR.Emit_Array_Clear (Unit.all, Filling, Address, Site);
+               for Written in 1 .. Construction_Field_Count (Of_Tree, Node)
+               loop
+                  declare
+                     Label : constant Syn.Node_Id :=
+                       Nth_Construction_Field (Of_Tree, Node, Written);
+                     Field : constant Positive := Positive
+                       (Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Label));
+                  begin
+                     Seen (Field) := True;
+                     Write_Field
+                       (Field, Construction_Field_Value (Of_Tree, Label));
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
+                  end;
+               end loop;
+               if Construction_Fill (Of_Tree, Node) /= Syn.No_Node then
+                  for Field in Seen'Range loop
+                     if not Seen (Field) then
+                        Write_Field (Field, Construction_Fill (Of_Tree, Node));
+                        if Current = IR.No_Block then
+                           return;
+                        end if;
+                     end if;
+                  end loop;
+               end if;
+               Copy_Shaped_Storage (Place, Destination, Shape, Site);
+            end;
          elsif Shape.Kind = IR.Aggregate_Field_Shape
            and then Is_Struct_Construction (Of_Tree, Node)
          then
@@ -4232,6 +4508,42 @@ package body Landin.Stages.Lowering is
                     (Landin.Configuration.Compiler_Member
                       (Spellings.all, Of_Tree,
                        Syn.Nth_Argument (Of_Tree, Node, Count + 2)));
+               end if;
+               if Landin.Configuration.Compiler_Member
+                 (Spellings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                   = "register_write"
+               then
+                  declare
+                     Policy : constant String :=
+                       Landin.Configuration.Compiler_Member
+                         (Spellings.all, Of_Tree,
+                          Syn.Nth_Argument (Of_Tree, Node, 4));
+                     Mask : constant IR.Value_Id := Lower_Expression
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 5), Scope);
+                     Tested, Guard : IR.Value_Id;
+                     Required : Ty.Folded := 0;
+                     pragma Unreferenced (Guard);
+                  begin
+                     if Policy /= "preserve" then
+                        if Policy = "write_zero" then
+                           Tested := IR.Emit_Unary
+                             (Unit.all, Filling, IR.Complement,
+                              Mask, Scalar, Site);
+                           Tested := IR.Emit_Binary
+                             (Unit.all, Filling, IR.Bitwise_And,
+                              Args (2), Tested, Scalar, Site);
+                        else
+                           Tested := IR.Emit_Binary
+                             (Unit.all, Filling, IR.Bitwise_Or,
+                              Args (2), Mask, Scalar, Site);
+                           Required := Ty.Folded (Landin.Packed.Mask
+                             (Positive (Ty.Width (Scalar, Facts))));
+                        end if;
+                        Guard := IR.Emit_Range_Check
+                          (Unit.all, Filling, Tested, Scalar,
+                           Required, Required, Site);
+                     end if;
+                  end;
                end if;
                return IR.Emit_Memory
                  (Unit.all, Filling, Op, Scalar, Success, Failure,
@@ -6658,6 +6970,39 @@ package body Landin.Stages.Lowering is
          end Fixed_Actual_Of;
 
       begin
+         if Packed_Field_Node (Of_Tree, Node) /= Syn.No_Node
+           and then Type_At (Of_Tree, Node) /= Ty.Fixed_Array
+         then
+            declare
+               Field_Node : constant Syn.Node_Id :=
+                 Packed_Field_Node (Of_Tree, Node);
+               Container : constant Syn.Node_Id :=
+                 Syn.Target_Of (Of_Tree, Field_Node);
+               Reached : constant Stored_Place :=
+                 Lower_Stored_Place (Of_Tree, Container, Scope);
+            begin
+               if Current = IR.No_Block then
+                  return IR.No_Value;
+               end if;
+               declare
+                  Address : constant IR.Storage := Addressed_Storage
+                    (Reached, Neutral_Value_Shape (Of_Tree, Container), Site);
+                  Index : constant IR.Value_Id :=
+                    (if Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+                     then Lower_Expression
+                       (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope)
+                     else IR.No_Value);
+               begin
+                  if Current = IR.No_Block then
+                     return IR.No_Value;
+                  end if;
+                  return IR.Emit_Shaped_Load
+                    (Unit.all, Filling, Address.Address,
+                     Landin.Checking.Field_Index
+                       (Types.all, Of_Tree, Field_Node), Index, Site);
+               end;
+            end;
+         end if;
          if Syn.Kind (Of_Tree, Node)
               in Syn.Element_Index | Syn.Member_Selection
            and then
@@ -10033,6 +10378,9 @@ package body Landin.Stages.Lowering is
                Site : constant Landin.Provenance.Origin :=
                  Site_Of (Of_Tree, Stmt);
 
+               Packed_Field : Natural := 0;
+               Packed_Index : IR.Slot_Id := IR.No_Slot;
+
                --  [0410] evaluates a destination place before its value.
                --  Reference storage retains the complete checked address;
                --  other computed places carry their index through the
@@ -10323,6 +10671,16 @@ package body Landin.Stages.Lowering is
                              Landin.Checking.Field_Shape_Of
                                (Types.all, Wrote, Field).Nominal;
                         begin
+                           if IR.Layout_Of (Unit.all, Neutral_Body (Child))
+                             = Landin.Layouts.Packed
+                           then
+                              Copy_Shaped_Storage
+                                (Stored_At (Source, From_Field, From_Steps),
+                                 Stored_At
+                                   (Destination, Into_Field, Into_Steps),
+                                 Neutral_Body (Child), Site);
+                              return;
+                           end if;
                            for Part in
                              1 .. Landin.Checking.Layout_Field_Count
                                     (Types.all, Child)
@@ -10377,6 +10735,8 @@ package body Landin.Stages.Lowering is
                   if Has_Computed_Index (Of_Tree, Source_Node)
                     or else Has_Reference_Storage (Of_Tree, Source_Node)
                     or else Destination.Kind = IR.Runtime_Address
+                    or else IR.Layout_Of (Unit.all, Neutral_Body (Wrote))
+                      = Landin.Layouts.Packed
                   then
                      Source := Lower_Stored_Place
                        (Of_Tree, Source_Node, Scope);
@@ -10673,6 +11033,48 @@ package body Landin.Stages.Lowering is
                function Reference_Address_For
                  (Place : Syn.Node_Id) return IR.Slot_Id is
                begin
+                  if Packed_Field_Node (Of_Tree, Place) /= Syn.No_Node then
+                     declare
+                        Field_Node : constant Syn.Node_Id :=
+                          Packed_Field_Node (Of_Tree, Place);
+                        Container : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Field_Node);
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Container, Scope);
+                     begin
+                        if Current = IR.No_Block then
+                           return IR.No_Slot;
+                        end if;
+                        declare
+                           Address : constant IR.Storage := Addressed_Storage
+                             (Reached, Neutral_Value_Shape
+                               (Of_Tree, Container), Site);
+                        begin
+                           Packed_Field := Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Field_Node);
+                           if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
+                           then
+                              declare
+                                 Index : constant IR.Value_Id :=
+                                   Lower_Expression
+                                     (Of_Tree, Syn.Index_Of
+                                       (Of_Tree, Place), Scope);
+                              begin
+                                 if Current = IR.No_Block then
+                                    return IR.No_Slot;
+                                 end if;
+                                 Packed_Index := IR.Add_Slot
+                                   (Unit.all, Filling, Ty.Usize,
+                                    Res.No_Declaration, Site);
+                                 IR.Emit_Store
+                                   (Unit.all, Filling, Packed_Index,
+                                    Index, Site);
+                              end;
+                           end if;
+                           return Address.Address;
+                        end;
+                     end;
+                  end if;
                   if Current = IR.No_Block
                     or else not
                       (Has_Reference_Storage (Of_Tree, Place)
@@ -10765,6 +11167,13 @@ package body Landin.Stages.Lowering is
                        (Of_Tree, Chain_Above (Of_Tree, From)));
                   Means : Res.Declaration_Id;
                begin
+                  if Packed_Field /= 0 then
+                     return IR.Emit_Shaped_Load
+                       (Unit.all, Filling, Address_Slot, Packed_Field,
+                        (if Packed_Index = IR.No_Slot then IR.No_Value
+                         else IR.Emit_Load
+                           (Unit.all, Filling, Packed_Index, Site)), Site);
+                  end if;
                   if Address_Slot /= IR.No_Slot then
                      return IR.Emit_Load_Indirect
                        (Unit.all, Filling, Address_Slot, Site);
@@ -10859,6 +11268,14 @@ package body Landin.Stages.Lowering is
                      else Res.Bound_To (Meanings.all, Of_Tree, Named));
                begin
                   if Current = IR.No_Block then
+                     return;
+                  elsif Packed_Field /= 0 then
+                     IR.Emit_Shaped_Store
+                       (Unit.all, Filling, Address_Slot, Packed_Field,
+                        (if Packed_Index = IR.No_Slot then IR.No_Value
+                         else IR.Emit_Load
+                           (Unit.all, Filling, Packed_Index, Site)),
+                        Value, Site);
                      return;
                   elsif Address_Slot /= IR.No_Slot then
                      IR.Emit_Store_Indirect
@@ -12239,15 +12656,28 @@ package body Landin.Stages.Lowering is
                                  end case;
 
                                  if Current /= IR.No_Block then
-                                    for Field in
-                                      1 .. Landin.Checking.Layout_Field_Count
+                                    if IR.Layout_Of
+                                      (Unit.all, Neutral_Body (Wrote))
+                                        = Landin.Layouts.Packed
+                                    then
+                                       Copy_Shaped_Storage
+                                         (Stored_At (Source),
+                                          Stored_At (Destination,
+                                            Parent_Field, Parent_Steps),
+                                          Neutral_Body (Wrote), Site);
+                                    else
+                                       for Field in
+                                         1 .. Landin.Checking.
+                                           Layout_Field_Count
                                              (Types.all, Wrote)
-                                    loop
-                                       Copy_Field
-                                         (Wrote, Source, Destination, Field,
-                                          Destination_Base => Parent_Field,
-                                          Destination_Steps => Parent_Steps);
-                                    end loop;
+                                       loop
+                                          Copy_Field
+                                            (Wrote, Source, Destination, Field,
+                                             Destination_Base => Parent_Field,
+                                             Destination_Steps =>
+                                               Parent_Steps);
+                                       end loop;
+                                    end if;
                                  end if;
                               end;
                            elsif Syn.Kind (Of_Tree, From)

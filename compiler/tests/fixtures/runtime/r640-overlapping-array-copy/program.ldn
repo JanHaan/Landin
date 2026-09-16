@@ -1,0 +1,24 @@
+low: type = layout(packed, u8) struct
+    bits: [3]u2 at 0..5
+end low
+high: type = layout(packed, u8) struct
+    bits: [3]u2 at 2..7
+end high
+public main: () -> (code: i32) =
+    mut value: low = zeroed
+    raw: ptr mut u8 = ptr(usize(addr value))
+    other: ptr mut high = ptr(usize(addr value))
+    raw.val = 0xe4
+    other.val.bits = value.bits
+    if raw.val <> 0x90 then
+        code = 1
+        return
+    end if
+    raw.val = 0xe4
+    value.bits = other.val.bits
+    if raw.val == 0xf9 then
+        code = 42
+    else
+        code = 2
+    end if
+end main

@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 
 with Landin.Diagnostics.Syntactic;
+with Landin.Packed;
 with Landin.Syntax.Precedence;
 
 package body Landin.Syntax.Parser is
@@ -15,6 +16,7 @@ package body Landin.Syntax.Parser is
    use type Tok.Token_Index;
    use type Pre.Level;
    use type Pre.Associativity;
+   use type Landin.Layouts.Policy;
    use type Tok.Token_Kind;
 
    ------------------------------------------------------------------
@@ -376,7 +378,8 @@ package body Landin.Syntax.Parser is
                return Node_Id;
             procedure Recover_Annotation_Closer;
             procedure Parse_C_Convention;
-            function Parse_Layout return Landin.Layouts.Policy;
+            function Parse_Layout
+              (Bits : out Natural) return Landin.Layouts.Policy;
             procedure Parse_Parameters
               (Into         : in out Slot_Vectors.Vector;
                C_ABI        : Boolean;
@@ -891,6 +894,8 @@ package body Landin.Syntax.Parser is
                    C_ABI      => C_ABI,
                    Variadic   => Variadic,
                    Layout     => Layout,
+                   Encoded    => False,
+                   Width      => 0,
                    Link_Name  => Link_Name,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
@@ -2128,10 +2133,13 @@ package body Landin.Syntax.Parser is
                end if;
             end Parse_C_Convention;
 
-            function Parse_Layout return Landin.Layouts.Policy is
+            function Parse_Layout
+              (Bits : out Natural) return Landin.Layouts.Policy
+            is
                Opened : constant Landin.Source.Span := Here;
                Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
             begin
+               Bits := 0;
                Advance;
                if not Expect
                  (Tok.Left_Paren, "a layout annotation opens with `(`",
@@ -2150,15 +2158,38 @@ package body Landin.Syntax.Parser is
                    (Names, Named_Here) = "optimal"
                then
                   Policy := Landin.Layouts.Optimal;
+               elsif Peek = Tok.Identifier
+                 and then Landin.Source.Names.Spelling
+                   (Names, Named_Here) = "packed"
+               then
+                  Policy := Landin.Layouts.Packed;
                else
                   Complain
                     (Syn.Token_Expected, Here,
-                     "the supported layouts are `c` and `optimal`",
+                     "the supported layouts are `c`, `optimal` and `packed`",
                      Note => "[0750]: ordinary structs retain natural layout",
                      Related => Opened, Because => "this annotation");
                end if;
                if Peek = Tok.Identifier then
                   Advance;
+               end if;
+               if Peek = Tok.Comma then
+                  Advance;
+                  if Policy = Landin.Layouts.Packed
+                    and then Peek = Tok.Identifier
+                  then
+                     Bits := Landin.Packed.Named_Width
+                       (Landin.Source.Names.Spelling (Names, Named_Here));
+                  end if;
+                  if Bits not in 8 | 16 | 32 | 64 then
+                     Complain
+                       (Syn.Type_Expected, Here,
+                        "a packed image carrier is u8, u16, u32 or u64",
+                        Note => "[0730]: the carrier owns every stored bit");
+                  end if;
+                  if Peek = Tok.Identifier then
+                     Advance;
+                  end if;
                end if;
                if not Expect
                  (Tok.Right_Paren, "a layout annotation closes with `)`",
@@ -2537,6 +2568,13 @@ package body Landin.Syntax.Parser is
                         end if;
                      end loop;
 
+                     if Landin.Packed.Named_Width
+                       (Landin.Source.Names.Spelling (Names, Spelled)) /= 0
+                     then
+                        Advance;
+                        return Add (Type_Name, At_Type, Named => Spelled);
+                     end if;
+
                      --  [1795] lets a program declare a type, so a name
                      --  that is not one of the built-in scalars is no
                      --  longer wrong
@@ -2815,8 +2853,9 @@ package body Landin.Syntax.Parser is
                     and then Ahead (1) = Tok.Left_Paren
                   then
                      declare
+                        Bits : Natural;
                         Policy : constant Landin.Layouts.Policy :=
-                          Parse_Layout;
+                          Parse_Layout (Bits);
                      begin
                         if Peek = Tok.Kw_Struct
                           or else (Peek = Tok.Left_Paren
@@ -2827,6 +2866,8 @@ package body Landin.Syntax.Parser is
                               Compact => Peek = Tok.Left_Paren);
                            Result.Items (Positive (Aliased_Type)).Layout :=
                              Policy;
+                           Result.Items (Positive (Aliased_Type)).Width :=
+                             Bits;
                         else
                            Complain
                              (Syn.Type_Expected, Here,
@@ -2836,6 +2877,54 @@ package body Landin.Syntax.Parser is
                               Related => At_Name, Because => "this type");
                            Aliased_Type := Add (Error_Type, Here);
                         end if;
+                     end;
+                  elsif (Peek = Tok.Left_Paren
+                    and then Ahead (1) = Tok.Identifier
+                    and then Ahead (2) = Tok.Equal)
+                    or else (Peek = Tok.Identifier
+                      and then Landin.Packed.Named_Width
+                        (Landin.Source.Names.Spelling
+                           (Names, Named_Here)) /= 0
+                      and then Ahead (1) = Tok.Left_Paren
+                      and then Ahead (2) = Tok.Identifier
+                      and then Ahead (3) = Tok.Equal)
+                  then
+                     declare
+                        Opened : constant Landin.Source.Span := Here;
+                        Members : Slot_Vectors.Vector;
+                        Bits : Natural := 0;
+                     begin
+                        if Peek = Tok.Identifier then
+                           Bits := Landin.Packed.Named_Width
+                             (Landin.Source.Names.Spelling
+                                (Names, Named_Here));
+                           Advance;
+                        end if;
+                        Advance;
+                        loop
+                           Members.Append (Parse_Type (False, At_Name));
+                           exit when not Expect
+                             (Tok.Equal, "an encoded atom requires `=`",
+                              "[0730]: each atom has an integer encoding",
+                              Opened, "this encoded union");
+                           Members.Append
+                             (Parse_Expression (Pre.Level_Exclusion));
+                           exit when Peek /= Tok.Bar;
+                           Advance;
+                        end loop;
+                        if not Expect
+                          (Tok.Right_Paren, "an encoded union closes with `)`",
+                           "[0730]: parentheses enclose explicit encodings",
+                           Opened, "this encoded union")
+                        then
+                           Resync (List_Anchor);
+                        end if;
+                        Aliased_Type := Add
+                          (Atom_Union_Type, Opened,
+                           Extent => Join (Opened, After_Previous),
+                           Children => To_List (Members));
+                        Result.Items (Positive (Aliased_Type)).Encoded := True;
+                        Result.Items (Positive (Aliased_Type)).Width := Bits;
                      end;
                   elsif Peek = Tok.Kw_Struct then
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
@@ -3667,13 +3756,29 @@ package body Landin.Syntax.Parser is
                      end if;
 
                      if not Is_Variant_Part then
-                        Fields.Append
-                          (Add
-                             (Of_Kind  => Field,
-                              At_Token => At_Field,
-                              Extent   => Join (At_Field, After_Previous),
-                              Children => [1 => Of_Type],
-                              Named    => Field_Named));
+                        declare
+                           Parts : Slot_Vectors.Vector;
+                        begin
+                           Parts.Append (Of_Type);
+                           if Peek = Tok.Identifier
+                             and then Landin.Source.Names.Spelling
+                               (Names, Named_Here) = "at"
+                           then
+                              Advance;
+                              Parts.Append (Parse_Expression);
+                              if Peek = Tok.Dot_Dot then
+                                 Advance;
+                                 Parts.Append (Parse_Expression);
+                              end if;
+                           end if;
+                           Fields.Append
+                             (Add
+                                (Of_Kind  => Field,
+                                 At_Token => At_Field,
+                                 Extent   => Join (At_Field, After_Previous),
+                                 Children => To_List (Parts),
+                                 Named    => Field_Named));
+                        end;
                         Had_Field := True;
                      end if;
                   end;

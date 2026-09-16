@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Bounded Cortex-M environment and ABI probes; no compiler backend is involved."""
+"""Independent M0 controls and native Landin/Renode peripheral execution.
+
+The Landin lane uses the hosted Linux backend; no Cortex-M emitter is implied.
+"""
 import argparse
 import hashlib
 import json
@@ -185,7 +188,7 @@ class Run:
                           f'machine LoadPlatformDescription @{HERE}/probes/stock.repl',
                           f'include @{HERE}/probes/stock.py'], 'R610_STOCK_LIMIT_CONFIRMED', stock=True)
 
-    def execute(self):
+    def execute(self, refine=None):
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
         require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
@@ -207,6 +210,9 @@ class Run:
         memory_execute(self)
         from packed import execute as packed_execute
         packed_execute(self)
+        require(refine is not None, 'native Landin compiler is required')
+        from packed_native import execute as native_execute
+        native_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 
@@ -214,13 +220,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--refine', type=Path, required=True)
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
     record = {'status': 'failed', 'inputs': inventory(HERE), 'platform': os.uname().sysname,
               'machine': os.uname().machine, 'kernel': os.uname().release}
     try:
-        Run(out, args.tools.resolve()).execute()
+        Run(out, args.tools.resolve()).execute(args.refine)
         require(record['inputs'] == inventory(HERE), 'probe inputs changed')
         record['status'] = 'passed'
     except Exception as exc:

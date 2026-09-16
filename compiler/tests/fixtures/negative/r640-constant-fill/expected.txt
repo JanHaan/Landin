@@ -1,0 +1,6 @@
+error[L0300]: this value does not fit the packed field
+  --> ../tests/fixtures/negative/r640-constant-fill/program.ldn:5:38
+  |
+5 | value: image = (flag: true, of [4 of 4])
+  |                                      ^
+  = note: [0730]: field insertion retains its width check even in an unchecked region

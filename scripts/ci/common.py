@@ -329,7 +329,9 @@ def required_jobs(scope=None, debugger=False, cortex_m=False):
         result[-1]["commands"].insert(-2, ["python3", "scripts/tests/test_check_caching.py"])
     if cortex_m:
         result[-1]["commands"].insert(-2, ["python3", "environments/cortex-m/test.py"])
+        result[-1]["commands"].insert(-2, ["./scripts/build.sh", "-j8"])
         result[-1]["commands"].insert(-2, ["python3", "environments/cortex-m/run.py",
+                                         "--refine", "{refine}",
                                          "--output", "compiler/ada/build/native-ci/debug/cortex-m"])
     return result
 

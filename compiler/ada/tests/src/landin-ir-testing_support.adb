@@ -1,5 +1,21 @@
 package body Landin.IR.Testing_Support is
 
+   procedure Overwrite_Encoding_Run
+     (Into : in out Unit; Set_Id : Atom_Set_Id; First, Bits : Natural)
+   is
+      Held : Atom_Set_Record := Into.Atom_Sets (Positive (Set_Id));
+   begin
+      Held.Encodings_First := First;
+      Held.Encoding_Bits := Bits;
+      Into.Atom_Sets (Positive (Set_Id)) := Held;
+   end Overwrite_Encoding_Run;
+
+   procedure Overwrite_Encoding
+     (Into : in out Unit; Position : Positive; Value : Landin.Packed.Image) is
+   begin
+      Into.Encodings (Position) := Value;
+   end Overwrite_Encoding;
+
    function Image_Byte_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Images.Length));
 

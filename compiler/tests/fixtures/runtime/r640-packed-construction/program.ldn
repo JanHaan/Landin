@@ -1,0 +1,20 @@
+a: atom
+b: atom
+c: atom
+mode: type = u4 (a = 0 | b = 1 | c = 4)
+image: type = layout(packed, u32) struct
+    mode: mode at 1..4
+    pins: [4]u2 at 8..15
+    flag: bool at 31
+end image
+make: (n: u8) -> (value: image) =
+    value = (mode: c, pins: [4 of n], flag: true)
+end make
+public main: () -> (code: i32) =
+    mut x: image = make(2)
+    p: ptr mut u32 = ptr(usize(addr x))
+    code = 1
+    if p.val == 0x8000aa08 and x.mode == c and x.pins[3] == 2 then
+        code = 42
+    end if
+end main

@@ -124,7 +124,10 @@ On the documented native Linux host, with Python 3 and `dpkg-deb`:
 ```sh
 python3 environments/cortex-m/setup.py
 python3 environments/cortex-m/test.py
-python3 environments/cortex-m/run.py --output /absolute/new/evidence-directory
+./scripts/build.sh
+python3 environments/cortex-m/run.py \
+  --refine compiler/ada/build/linux-amd64/debug/bin/refine \
+  --output /absolute/new/evidence-directory
 ```
 
 The default private tool root is `~/work/.cortex-m`; `--tools` selects another
@@ -274,7 +277,7 @@ are compiler-generated hosted execution, not embedded or model evidence.
 
 ## R6.40 image and access controls in development
 
-The mandatory `run.py` path now also executes `packed.py`. It preserves every
+The mandatory `run.py` path executes `packed.py` and `packed_native.py`. It preserves every
 R6.10/R6.20/R6.30 lane and the verified empty Renode lock cleanup. The new
 `EncodingPeripheral.cs` is a separate, synthetic peripheral at `0x40030000`:
 
@@ -285,15 +288,16 @@ R6.10/R6.20/R6.30 lane and the verified empty Renode lock cleanup. The new
 | 8 | write-only 32-bit command | bits 8..31 must be zero; reading refuses |
 | 12 | 32-bit status and one-clears command | initial `0xf3`; ones clear, zeros preserve; written bits 8..31 must be zero |
 | 16 | normal 16-bit count | initial `0xffff`; word accesses and other widths refuse |
+| 20 | normal 32-bit read/write | initial `0xffffff00`; written bits 8..31 must be one |
 
 Pinned GCC compiles `probes/packed.c` to real M0 instructions. Its ordinary
 unsigned images enumerate all byte inputs, four two-bit indexed elements and
 every three-bit encoding of the independently tabulated named set 0/1/4.
 Firmware then performs the device accesses. `packed.py` asserts a literal
-14-event oracle, including each direction, width, address and value; that
+16-event oracle, including each direction, width, address and value; that
 oracle is neither generated from the C code nor derived from the C# model.
 Reading the model's final properties does not access its emulated registers.
-Seven invalid direction/width/reserved operations must raise without adding
+Eight invalid direction/width/reserved operations must raise without adding
 an event. A destructive read is consumed once locally; a second explicit read
 returns zero. Write-only and one-clears commands issue no preparatory read.
 The count is never widened to the neighboring halfword.
@@ -302,15 +306,43 @@ The runner retains the generated platform, Monitor and assertion scripts,
 ELF/map/disassembly, trace, tool identities, exact commands and hashes under
 the same exported evidence directory. The existing 30-second subprocess limit,
 fixed virtual-time execution and process-group cleanup apply. The new
-firmware has 660 text bytes, zero data and 16 BSS bytes; these are control sizes,
+initial firmware had 660 text bytes, zero data and 16 BSS bytes before the
+write-one reserved-bit register was added; current sizes are retained in
+`size-packed.log`. These are control sizes,
 not Landin firmware or stack bounds. `packed-validation.json` indexes the
 successful development run and its independent local copy.
 
-This is actual peripheral-harness execution of independent C controls. The
-Ada `targets/packed image algebra and access plans` test separately checks
-compiler-library algebra with an independent bit oracle. Neither supplies
-Landin packed source support, a new IR operation, an implemented Cortex-M
-backend or R6.40 completion. ROADMAP.md owns the remaining integration.
+The C firmware is one independent control. `packed_native.py` separately
+compiles `probes/packed-native.ldn` using the actual native Linux compiler at
+six optimization/specialization profiles. Its C peer only transports explicit
+width/address/value commands and replies; it performs no field arithmetic,
+encoding validation or expected-image calculation. The native Landin program
+computes packed indexed updates and images, then Renode executes each bus
+transaction against the same device. Every run must match the literal
+16-event oracle and final register values. This is compiler-generated hosted
+execution against an actual peripheral harness, not compiler-generated M0
+firmware. The Ada algebra suite and abstract oracle remain distinct evidence.
+
+At each of the same six profiles, `probes/packed-native-hole.ldn` starts a
+fresh peripheral, reads the destructive register once, and extracts its
+unnamed mode inside `unchecked`. The independently specified reply is `0x9b`
+and the complete trace is `r32:4:0000009b`. The native process must terminate
+with SIGILL (exit 132 through .NET's process API), without a second access or
+the normal completion reply. Discarding the extracted value cannot remove
+validation. The transport disables core dumps; it still contains no encoding
+logic. This negative compiler-generated lane complements the positive raw
+copy of the same invalid image and the independent C membership control.
+
+The runner requires `--refine`, retains its SHA256 and `--identify` output,
+the native GCC identity, Landin/C input hashes, assembly, executable, transport
+commands, Renode trace and assertions. Compilation is bounded to 60 seconds;
+the Renode process group and native peer have a 30-second outer bound and a
+17-command positive limit; the negative case permits exactly one command.
+Both success and failure paths remove only a verified empty
+Renode lock file after exit. Tool inventories are checked before and after
+execution. Native acceptance builds the committed debug compiler in its
+documents job and retains this lane in the existing verified `cortex-m` export.
+No Cortex-M emitter or generated vendor fixture programme is implied.
 The original DMA lane continues to test ordinary externally written buffer
 storage under D227's explicit serialized-device premise.
 

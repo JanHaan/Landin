@@ -3,8 +3,6 @@ with Landin.Targets.Capabilities;
 
 package body Landin.Targets.Packed is
 
-   function Carrier (Bits : Landin.Packed.Width) return Scalar_Size;
-
    function Carrier (Bits : Landin.Packed.Width) return Scalar_Size is
      (if Bits <= 8 then Byte_1
       elsif Bits <= 16 then Byte_2

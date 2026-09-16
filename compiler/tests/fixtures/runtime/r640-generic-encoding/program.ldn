@@ -1,0 +1,18 @@
+a: atom
+b: atom
+left: type = (a = 0 | b = 3)
+right: type = (a = 3 | b = 0)
+box: type (t: type) = layout(packed) struct
+    field: t at 0..1
+end box
+public main: () -> (code: i32) =
+    mut x: box(left) = (field: b)
+    mut y: box(right) = (field: b)
+    px: ptr u8 = ptr(usize(addr x))
+    py: ptr u8 = ptr(usize(addr y))
+    if px.val == 3 and py.val == 0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
