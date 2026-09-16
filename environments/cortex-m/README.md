@@ -1,8 +1,8 @@
 # Cortex-M execution profile
 
 ROADMAP.md R6.10 owns the selection and completion evidence. This environment
-runs small C/assembly controls, not Landin output. R6.20 and later items own
-the ABI implementation, memory model, encodings, backend and firmware startup.
+runs small C/assembly controls, not Landin output. R6.20 adds layout and ABI planning with independent controls below; later
+items retain the memory model, encodings, backend and firmware startup.
 
 ## Selected lanes and pins
 
@@ -27,9 +27,9 @@ and retains that inventory. Debian 13 supplies the base libc and Python;
 this is a supported host profile, not a hermetic operating-system image.
 
 These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
-They do not select Landin aggregate/error/evidence-table transport ahead of
-R6.20. The compiler's synthetic-32 facts remain separate and no Cortex-M
-emitter or compiler target is enabled by this environment.
+R6.20 separately selects the internal Landin transport described in the
+[target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
+The compiler describes Cortex-M0 layout but has no Cortex-M emitter.
 
 ## Memory and device map
 
@@ -163,3 +163,71 @@ The retained development result is indexed by [validation.json](validation.json)
 Its successful probe images contain 643 and 836 text bytes respectively, no
 initialized data and 24 BSS bytes each. These are environment-control sizes,
 not measurements of the future Landin driver or a stack-usage guarantee.
+
+## R6.20 layout and ABI evidence
+
+The same mandatory `run.py` now also builds `probes/abi.c` and `abi.S` with
+the original pinned flags, startup and memory limits, then executes them in
+QEMU. Renode remains a separate peripheral lane; its result is never counted
+as ABI evidence. No library or tool pin changes. The additional ELF,
+disassembly, macro dump, GDB script/log, measured JSON and both layout contract
+inputs are retained in the existing exported `cortex-m` directory. The original
+Renode lock-file cleanup and its regression controls remain required.
+
+Three independent comparisons meet:
+
+1. The Ada `cortex ABI` suite computes scalar, aggregate, variant, evidence,
+   any and multiple-result layouts and physical call plans from compiler
+   packages, comparing with `compiler/tests/cortex-m.contract`. It also checks
+   eight existing source fixtures through lowering and entry/direct/indirect
+   planning under Cortex-M0 and synthetic-32, comparing detailed neutral IR.
+   These are compiler-host tests, not target execution.
+2. `abi.py` compares the contract with **every original synthetic-32 row** in
+   `layout.targets`, without regenerating that golden. GCC independently lays
+   out C control structures, unions and tables. QEMU/GDB reads their emitted
+   measurements and compares them with the contract. Static assertions also
+   cover data/code pointers, slices, ILP32, plain-char policy and 64-bit
+   alignment. The C union is a representation control, not C semantics for
+   a Landin variant.
+3. Independently written assembly captures actual GCC-produced r0–r3,
+   incoming sp and stack argument words. Assertions compare meaningful words
+   with the compiler plan for double-word gaps, split 12-byte records, narrow
+   stack arguments, soft floats, float-only records, promoted varargs and
+   result-pointer displacement. Separate hand callers check GCC callees, and
+   C callers check hand returns/callbacks, including 3/4/5-byte records and
+   integer/double 64-bit results. Padding and skipped registers are unspecified
+   and are not asserted as values.
+
+The Landin convention has a separate handwritten witness: hidden aggregate
+result and direct/parent evidence addresses, an address-passed value, a stacked
+u64, successful and failing r12 outcomes, r0/r1 scalar results, multiple-result
+storage, and erased data/table dispatch through Thumb code pointers. GDB checks
+the nested r11 frame records, saved lr, chain termination and aligned sp;
+firmware checks callee-save registers and restoration. These execute the
+selected contract with real M0 instructions; they are not compiler-generated
+Landin calls or Landin source-debugging acceptance.
+
+Compiler refusal/boundary controls cover wrong targets, unavailable C and
+emission capabilities, narrow extension, the four-byte C result threshold,
+empty C carriers, unpromoted varargs, declared C errors, stack-budget rounding
+and a target-overflowing argument without materializing it. Source checks
+cover pointer-sized integer/address overflow and the array byte-extent boundary.
+The Python controls refuse duplicate/missing/invalid contract rows, synthetic
+mismatches, missing markers, subprocess errors and timeouts. They preserve the
+R6.10 lock cleanup refusal for linked or nonempty replacements.
+
+Every subprocess retains the original deadlines (GDB 20 seconds, build/tools
+30, debugger readiness three) and owned process-group cleanup. The final
+exact-archive Linux documents job repeats all lanes and retains tool/input
+hashes alongside the new ABI artifacts. Its ordinary dual-native approval binds
+these results to the same revision as the hosted checks. Development results
+are indexed separately in `abi-validation.json`; `validation.json` keeps its
+historical R6.10 meaning.
+
+These bounded probes establish neither floating arithmetic helpers, general
+unwind support, a complete C language ABI surface, firmware stack bounds,
+physical hardware behavior nor a Cortex-M compiler backend. R6.50 must consume
+the plans with native selection and frame code; R6.60 must implement image
+placement/startup; R6.100 must establish Landin debugging and stack evidence.
+R6.30/R6.40 retain concurrency and invalid packed encodings. Existing resource,
+evidence, scheduling, Nix and general-generator dispositions are unchanged.

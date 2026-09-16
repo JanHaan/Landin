@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "abi-measurements.json": "9a01f2001d0e49df27e49659276c898b3c04c7f36c2a266d107f5117408f02fa",
+    "abi.elf": "a88db67a8458448df747b16d46bbf1f00b8414548ee2757860916d2c8fcc1258",
+    "abi.gdb": "3bf731967cfc521fb0ce803b585960e24abd54ccd7fa3c09421cecf1de91e7e7",
+    "abi.map": "2edd399040ad9aec5409c8b255986e0a46899109bfa990b5435dc7af7060c15c",
+    "commands.json": "fb1979cad5b4b930aeeb05aca09e95ee9d9cd3084d4086d82b3c305eb21486bb",
+    "cortex-m.contract": "68048e7b4d6d363ff89cc85226e04a538dc72b5d3067ff4a776e4997432254c2",
+    "disassemble-abi.log": "7048ea191ec07b1c237750a63c79083785208fc65ee16692bc280237b8c5b9de",
+    "gdb-abi.log": "7c7d71d6268a7b4fffb04908a3313233531170c009a3a66e366cfe15917aec35",
+    "layout.targets": "e19bb7850dfddaf6f2787011401ea20fc0efb63df4ec7352cc977e870154f9e5",
+    "macros-abi.log": "73e159187ae43c5a769d6bbc5b172d7d80ada8a8f560a7dee39a0010d09d1bcf",
+    "tools.json": "27edb3d56e9c4a2525331e9dadd18888aa29445af51099f4a6a5dba28ab29a14"
+  },
+  "date": "2026-09-16",
+  "host": "native Debian 13 x86-64",
+  "input_inventory": {
+    "README.md": "bbf7cc816a55a4485b7dc4f8b88e081ba70ee2e03000381806466f7cf1eeb8ac",
+    "abi.py": "b10c36d2b3bec5141eff7cb0f1525dd9ad895820f5e2d130dfad536df4b16b28",
+    "probes/PrototypePeripheral.cs": "d1ee678fdb47cbb4f91e1364b0258890d37b9459ae4ad7ae36d8d369b7ef2ab5",
+    "probes/abi.S": "6948571f06995e34923a20deca43fb9cdca5501bbaa0cfe2f883c764603391ec",
+    "probes/abi.c": "5ab15976474c4bf97905f00b43a54cd3d31e186364d9ca85f53d49849f284187",
+    "probes/cpu.c": "8b82d4b73bbb8d7ac64bbb85c3caa542d800085a38ef143ee1c6b378b214d388",
+    "probes/memory.ld": "9adc40628e37594124aee1e8157ee66cfec5a8611e76515bddf386d0609e2514",
+    "probes/model-checks.py": "f6c8b7e7e8797df82e86587b7eb8f39d07ee75efbcc4a83fb2b0f4a8469a09b3",
+    "probes/peripheral.c": "2c4406970fbf6ca6b3062a9d908d04e6bcd37a5ef976b603d9c6c7a69e9197ec",
+    "probes/prototype.repl": "56f3b43650268cf0318598d7ef4d03270fe4ea74db30070d5ad1e4d557e28d74",
+    "probes/start.S": "d76cb4aed088bd6f8da0b42c2e3080c46cc9e9a64014f8d1b7164fdc81832c35",
+    "probes/stock.py": "9dcd5b669ec219c23016eb83e5a75a028a139cd63fc9d54bad6d851e1a3c6709",
+    "probes/stock.repl": "f9e9cddc652da3c7cac3f79932aaf8e9aeafd94a5fa499955678b259d55abaae",
+    "run.py": "f7afccde47bd0246e4fb7bada06938a7745a28567b18bedbe0d5b9ac751059cc",
+    "setup.py": "1ab88485c21b37bc9681a51e6db564d7924809f85a7ce1d7b080645623bd1a1a",
+    "test.py": "53668b897d756068c38247ccf6216a04f0b7a1ae2ff718add2a1b3a60482e050",
+    "tools.lock.json": "4f18b202e15500e0dca4c10955b3fa89723283b3caa38ec933289ffc4e33f4cc",
+    "validation.json": "06126ee7904ad9b4a88cd8bf5f7ff961dba769968894f0775bf617d3ded2ffbc"
+  },
+  "kind": "development-only; exact-revision acceptance owns closure",
+  "limit": "C/assembly controls of the layout and planned ABI; not Landin emission, source debugging or a measured stack bound",
+  "result_sha256": "762f82262c01e64b535b883e42e2684b724c0ce66ea29ca62c68f62cfb6643c0",
+  "retained_local": ".scratch/r620/evidence-5",
+  "retained_remote": "/home/landin/work/r620-probe/evidence-5",
+  "sizes": {
+    "abi": {
+      "bss": 332,
+      "data": 0,
+      "text": 2216
+    }
+  },
+  "status": "passed"
+}

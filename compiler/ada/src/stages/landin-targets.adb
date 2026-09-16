@@ -36,6 +36,17 @@ package body Landin.Targets is
       Keeps_Frame      => True,
       Widest_Alignment => 16);
 
+   function Cortex_M return Target_Facts is
+     (Label            => Padded ("cortex-m0"),
+      Machine          => Cortex_M0,
+      C_ABI            => Arm_AAPCS32_Soft,
+      Pointer          => 32,
+      Pointer_Align    => 4,
+      Stack_Align      => 8,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 8);
+
    function Synthetic_32 return Target_Facts is
      (Label            => Padded ("synthetic-32"),
       Machine          => Synthetic_32_Architecture,
@@ -122,10 +133,16 @@ package body Landin.Targets is
       Declaration_Order : Positive) return Byte_Count
    is
       Cell : constant Byte_Count := Evidence_Cell_Size (Facts);
-      Position : constant Byte_Count :=
-        Byte_Count (Landin.Evidence.Function_Position (Declaration_Order));
+      Position : Byte_Count;
    begin
-      if Position > Byte_Count'Last / Cell then
+      if Declaration_Order = Natural (Landin.Evidence.Semantic_Position'Last)
+      then
+         raise Compiler_Defect with "evidence position overflow";
+      end if;
+      Position := Byte_Count
+        (Landin.Evidence.Function_Position (Declaration_Order));
+      --  The complete cell, not only its starting address, must fit usize.
+      if Position >= Maximum_Object_Size (Facts) / Cell then
          raise Compiler_Defect with "evidence-table offset overflow";
       end if;
       return Position * Cell;
@@ -139,7 +156,7 @@ package body Landin.Targets is
       Count   : constant Byte_Count := Byte_Count (Function_Count);
       Entries : Byte_Count;
    begin
-      if Count > Byte_Count'Last - 2 then
+      if Count > Byte_Count (Landin.Evidence.Semantic_Position'Last) - 2 then
          raise Compiler_Defect with "evidence-table size overflow";
       end if;
       Entries := Byte_Count (Landin.Evidence.Entry_Count (Function_Count));

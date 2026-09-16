@@ -113,6 +113,7 @@ different responsibilities.
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
+| `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
 | `Landin.Backend.Darwin_ABI` | Apple arm64 C classification and argument/result placement from neutral shapes and target facts | infer layout from the host, reuse SysV transport or change source semantics |
 | `Landin.Backend.Arm64` | Darwin assembly, stack homes, frame records, native/C calls, hosted runtime and Mach-O data/symbol rendering | parse/check source, put physical transport in IR, write files or run tools |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
@@ -1009,5 +1010,10 @@ commands, identity matching and the demonstrated debugger presentation limits.
 
 R6.10's [Cortex-M environment probes](../../environments/cortex-m/README.md)
 are separate C/assembly controls for QEMU and a synthetic Renode device lane.
-They change none of the compiler package/capability boundaries above. R6.20
-owns the 32-bit ABI and R6.50 owns the Landin backend.
+R6.20 adds `Targets.Cortex_M` and `Backend.Arm32_ABI` layout/transport planning,
+with independent executable controls under that environment. The existing
+neutral shape machinery supplies storage; no Cortex emitter, C source
+capability, compiler linker path or debugger is enabled.
+`--target=cortex-m0` accepts checking requests and refuses output requests.
+R6.50 retains the Landin backend; see
+[target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded R6.10 environment probes; no compiler backend is involved."""
+"""Bounded Cortex-M environment and ABI probes; no compiler backend is involved."""
 import argparse
 import hashlib
 import json
@@ -94,10 +94,10 @@ class Run:
             remove_renode_lock(self.out)
         oracle(text, marker, stock)
 
-    def build(self, name):
+    def build(self, name, extra=()):
         self.command('build-' + name, [self.bin / 'arm-none-eabi-gcc', *FLAGS,
                      '-Wl,-T,' + str(HERE / 'probes/memory.ld') + ',--gc-sections,-Map,' + name + '.map',
-                     HERE / 'probes/start.S', HERE / ('probes/' + name + '.c'), '-o', name + '.elf'])
+                     HERE / 'probes/start.S', HERE / ('probes/' + name + '.c'), *extra, '-o', name + '.elf'])
         self.command('elf-' + name, [self.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', name + '.elf'])
         self.command('size-' + name, [self.bin / 'arm-none-eabi-size', name + '.elf'])
         symbols = self.command('symbols-' + name, [self.bin / 'arm-none-eabi-nm', name + '.elf'])
@@ -201,6 +201,8 @@ class Run:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
         self.qemu()
         self.peripheral()
+        from abi import execute
+        execute(self)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 
@@ -219,11 +221,11 @@ def main():
         record['status'] = 'passed'
     except Exception as exc:
         record['error'] = str(exc)
-        print('R6.10 FAILED:', exc, file=sys.stderr)
+        print('Cortex-M probes FAILED:', exc, file=sys.stderr)
     finally:
         record['files'] = inventory(out)
         (out / 'result.json').write_text(json.dumps(record, indent=2, sort_keys=True)+'\n')
-    print('R6.10 ' + record['status'] + ': ' + str(out))
+    print('Cortex-M probes ' + record['status'] + ': ' + str(out))
     return 0 if record['status'] == 'passed' else 1
 
 

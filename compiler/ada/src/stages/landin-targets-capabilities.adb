@@ -3,17 +3,17 @@ package body Landin.Targets.Capabilities is
    function C_Signatures (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
-         when No_C_ABI => False);
+         when No_C_ABI | Arm_AAPCS32_Soft => False);
 
    function C_Records (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
-         when No_C_ABI => False);
+         when No_C_ABI | Arm_AAPCS32_Soft => False);
 
    function C_Variadic_Calls (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,
-         when No_C_ABI => False);
+         when No_C_ABI | Arm_AAPCS32_Soft => False);
 
    function Object_Format_Of (Facts : Target_Facts) return Object_Format is
    begin
@@ -21,7 +21,7 @@ package body Landin.Targets.Capabilities is
          return ELF;
       elsif Facts = Darwin_Arm64 then
          return Mach_O;
-      elsif Facts = Synthetic_32 then
+      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
          return No_Object_Format;
       else
          raise Compiler_Defect with "target has no stated object format";
@@ -53,7 +53,7 @@ package body Landin.Targets.Capabilities is
          return Linux_X86_64_ELF;
       elsif Facts = Darwin_Arm64 then
          return Darwin_Arm64_Mach_O;
-      elsif Facts = Synthetic_32 then
+      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
          return No_Backend;
       else
          raise Compiler_Defect
@@ -67,7 +67,7 @@ package body Landin.Targets.Capabilities is
          return "x86_64-pc-linux-gnu";
       elsif Facts = Darwin_Arm64 then
          return "arm64-apple-darwin";
-      elsif Facts = Synthetic_32 then
+      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
          return "";
       else
          raise Compiler_Defect

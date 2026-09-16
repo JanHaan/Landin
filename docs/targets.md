@@ -11,7 +11,7 @@ the package boundaries, not a second work list.
 | implemented C signatures, records and variadic calls | `Landin.Targets.Capabilities` |
 | object format, symbol prefix, available backend/debug format and triplet | `Landin.Targets.Capabilities` |
 | source-level C subset eligibility | checking, using capability queries |
-| physical C transport | backend ABI planner; separate SysV and Darwin planners |
+| physical C transport | backend ABI planner; separate SysV, Darwin and Cortex-M planners |
 | frame preflight and emission selection | `Landin.Backend.Dispatch` |
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
 | logical hosted helper identities | `Landin.Hosted`, shared by checker and backend |
@@ -188,7 +188,86 @@ new exhaustion guarantee is introduced.
 
 R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's
 Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
-probes establish the environment; they add no target constructor, C capability,
-backend, debug format or toolchain triplet to `Landin.Targets`. R6.20 owns
-32-bit layout/ABI and R6.50/R6.60 own emission and startup. The synthetic-32
-seam remains unchanged.
+probes establish the environment. R6.20 adds layout and ABI planning below;
+R6.50/R6.60 retain emission and startup. The original synthetic-32 goldens
+remain unchanged.
+
+## Cortex-M0 layout and ABI planning
+
+R6.20 adds `Targets.Cortex_M` (`cortex-m0`), selecting ARMv6-M Thumb,
+little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
+checks source against these facts. Assembly/executable requests fail with
+L0500 before writing output or invoking tools. Implemented C signatures,
+records, varargs, object/debug output and a compiler toolchain triplet remain
+disabled. The independent environment tools are not a compiler linker path.
+`core/c` and the header generator still accept only their two hosted ABIs.
+
+The existing scalar and recursive shape machinery supplies all byte placement;
+there is no separate Cortex layout algorithm in checking or neutral IR.
+
+| represented value | Cortex-M0 storage and alignment |
+|---|---|
+| enabled integer and float scalars | 1/2/4/8 bytes with equal natural alignment; bool occupies one byte |
+| `usize`, `isize`, references, optional atom/pointer, function address | four bytes, aligned four; semantic identities remain distinct |
+| slice, utf8/utf16 view, `any` | two four-byte cells, aligned four; slice base then length, any data then table |
+| cstring | one four-byte pointer |
+| natural structs, fixed arrays and instantiated generic records | shared source-order placement, element stride and final padding, bounded by target `usize` |
+| variants | smallest enabled tag carrier, followed by maximally aligned/padded case storage; the golden example is 12 bytes, payload at four |
+| ordinary atoms and declared-error codes | four-byte unsigned carriers; dense nonzero identities, zero reserved for successful call outcome |
+| direct and flattened erased evidence tables | size/alignment at 0/4, functions at 8, 12, …; extent `(N+2)*4`, alignment four |
+
+Distinct wrappers retain their base representation. Caller coordinates retain
+D192's three `u32` fields (12 bytes), rather than turning into pointer-sized
+integers. The 32-bit maximum object extent is 4294967295 bytes; it is a layout
+arithmetic limit, not an available-RAM promise. The selected probe image still
+has 32 KiB flash, 16 KiB RAM and a 4 KiB stack reservation. Packed encodings,
+over-aligned source types and deferred scalar widths are not enabled here.
+
+`Backend.Arm32_ABI` derives placement from neutral signature parts, including
+entry signatures and direct/indirect call operands. It selects the convention
+explicitly; a four-byte pointer never implies compatibility. The external C
+planner follows [AAPCS32 2025Q4](https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs32/aapcs32.rst):
+r0–r3 precede the stack, double-word arguments start at even registers or
+8-byte stack addresses, and a composite may split at the register/stack
+boundary. Narrow integers extend to 32 bits. Stack argument extents round to
+four bytes; the total outgoing area rounds to eight. Soft-float values use
+core bit carriers, including float-only records; there is no HFA register bank.
+C composite results through four bytes use r0; larger results use a hidden
+address in r0, consuming that argument position. Scalar 64-bit results use
+r0/r1. Variadic tails use this same base PCS after default promotions, with
+unpromoted tails refused by the planner. Empty/non-C/variant records and
+Landin errors or multiple results are outside the C boundary.
+
+The internal Landin convention uses the same scalar/word placement but passes
+aggregate, array, slice and any values by address, with the required callee
+value copy. `inout` instead carries the original place address. Aggregate and
+multiple results always use caller-owned storage, even below five bytes.
+Its address comes first; the existing signature's generic evidence pointers
+follow in D144 order, then written parameters. Static type/fixed parameters
+consume no runtime position. Erased dispatch inserts its data pointer in the
+provider's self position, without a hidden table argument. Declared failure
+uses r12: zero on success, otherwise the nonzero atom code. Successful scalar
+results remain in r0/r1, and failed calls promise no successful result. C
+calls do not preserve this internal error carrier. Linker call veneers may
+clobber r12 on entry; it is only an outcome after the called routine returns.
+
+The selected frame obligation keeps r11 in every Landin routine, including
+leaves, pointing to an eight-byte record: previous r11 then incoming lr.
+Publish the frame pointer only after constructing that record. Preserve
+r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
+flags as call-clobbered, maintain sp modulo four at all times and modulo eight
+at calls, and allocate no red zone below sp. This is an obligation for R6.50's
+actual frame/emitter implementation, with a handwritten executable witness
+here. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
+r11 chain or foreign-exception unwinding is promised. Code addresses retain
+the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
+[Arm ELF32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aaelf32/aaelf32.rst),
+[GNU Arm directives](https://sourceware.org/binutils/docs/as/ARM-Directives.html)
+and [GCC Arm options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/ARM-Options.html)
+are checked against the pinned tools. Their unsigned plain C char and ILP32
+model are measured, not inherited from the hosted `core/c` aliases.
+
+The [probe guide](../environments/cortex-m/README.md#r620-layout-and-abi-evidence)
+distinguishes Ada planner/IR tests, GCC layout measurements and executed
+C/assembly witnesses. No language semantic decision, instruction selection,
+Landin startup or source debugger is supplied by these plans.

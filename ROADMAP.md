@@ -9837,7 +9837,7 @@ binding; R6.30 is also dependency-ready and retains its separate semantic gate.
 
 ### R6.20 — Instantiate the 32-bit layout and ABI
 
-Status: planned
+Status: active
 Depends on: R2.10, R5.20, R6.10
 
 Implement Cortex-M scalar, aggregate, variant, error and evidence-table layouts
@@ -9845,6 +9845,126 @@ and the selected embedded ABI from the target-parametric schema.
 
 Exit evidence: prior synthetic 32-bit goldens agree with emitted layout and ABI
 probes; no x86 pointer-size assumption survives.
+
+Implementation and decisions (2026-09-16):
+
+- Intake verified a clean `r610-profile` checkout at accepted R6.10 revision
+  `fd8e849d342b9472d61dd8f3c222c6e3ebcf73cd`, identical canonical main,
+  annotated dual-native approval and GitHub mirror. Guarded Pages job 1889394
+  and mirror job 1889395 succeeded. Work uses the separate `r620-layout-abi`
+  branch; no pre-existing edits were present.
+- `Targets.Cortex_M` describes the accepted Cortex-M0/ARMv6-M Thumb,
+  little-endian, base AAPCS32 soft-float profile. Pointers align/occupy four
+  bytes; stack alignment is eight; 64-bit scalars retain eight-byte alignment.
+  Existing `Types`, `Targets.Layouts`, `IR.Shape_Measurement` and backend
+  placement derive complete scalar, natural/optimal aggregate, array and
+  variant layouts. No parsing or target-neutral semantic branch was added.
+  `--target=cortex-m0` checks source but explicitly refuses assembly/executable
+  output before host writes/tools. C source capabilities, object/debug output,
+  triplet, `core/c` and header-generator support remain disabled for this target.
+- `Backend.Arm32_ABI` plans external base AAPCS and internal Landin entry,
+  direct-call and indirect-call transport separately. C uses r0-r3 then stack,
+  even-register double words, composite splits and four-byte stack slots,
+  eight-byte call alignment, extended narrow integers and core soft-float
+  carriers. Results through four bytes use r0; wider scalar results use r0/r1;
+  larger C records use a hidden r0 destination. Promoted C variadic tails use
+  the same base PCS, with no Darwin HFA bank or Darwin stack-tail convention.
+- Internal aggregates, arrays, slices, any and multiple results preserve the
+  existing address/caller-storage protocol. A result address precedes D144's
+  already ordered generic evidence and written parameters. `inout` carries
+  the original place. Scalar 64-bit arguments/results use two words. Dense
+  four-byte atom codes use the separate r12 outcome, zero for success;
+  no C error convention is inferred. Every Landin entry must keep an r11
+  record containing previous r11 and incoming lr, including leaves. r4-r11
+  and sp are preserved; r9 remains reserved. Thumb code-address bit zero is
+  retained by callbacks and evidence/erased tables. These are physical ABI
+  choices under the existing semantics, not a new language decision.
+- The audit follows pointer-sized integers, references, optional pointers,
+  cstring, slices/text, callbacks, instantiated/distinct records, variants,
+  caller coordinates, ordinary atoms/errors, direct/parent evidence and any
+  through existing neutral carriers. D192's coordinates stay three u32 fields.
+  No x86 byte width enters the implemented Cortex layout/planner path. The
+  separate x86 synthetic-width text seam is unchanged and cannot emit Cortex
+  output. The audit also found evidence-offset queries could describe a cell
+  beyond target usize, and maximal semantic counts could overflow before the
+  existing extent guard. Target queries now refuse both with Compiler_Defect;
+  bounded last-valid/first-invalid controls allocate no tables or images.
+- Current official Arm ABI release 2025Q4, GCC's Arm options and GNU Thumb
+  directives are linked in [target contracts](docs/targets.md#cortex-m0-layout-and-abi-planning).
+  The pinned GCC/binutils/GDB and unchanged R6.10 image limits independently
+  check those rules. The measured C model is ILP32 with unsigned plain char;
+  it does not inherit either hosted `core/c` contract.
+
+Executable and compiler evidence:
+
+`compiler/tests/cortex-m.contract` records assertions consumed independently by
+the Ada compiler tests and the Linux C/assembly lane. The original
+`layout.targets` remains byte-for-byte unchanged. `abi.py` compares every prior
+synthetic-32 scalar, aggregate, variant, nested, empty/nonempty evidence and any
+row; QEMU/GDB then reads GCC-produced measurements. Separate assembly entry
+captures prove actual register/stack placement for double-word gaps, split
+records, narrow stack cells, soft-float/float-only records, promoted varargs
+and hidden results. Independent calls in both C/assembly directions check
+3/4/5-byte result boundaries, 64-bit integer/double results, Thumb callbacks
+and preserved registers. Unspecified padding and unused registers are excluded.
+
+Handwritten M0 Landin-contract controls execute aggregate-result/evidence
+ordering, separate parent tables, value transport, stacked u64, r12 success
+and failure, two-word scalar results, multiple-result storage and erased
+self/table dispatch. Native GDB asserts nested r11 records, saved return
+addresses, chain termination and sp alignment. These are executable contract
+witnesses, not Landin-generated programs, a Cortex emitter or Landin debugging.
+The [probe guide](environments/cortex-m/README.md#r620-layout-and-abi-evidence)
+records each oracle and limit, source files, exact options and deadlines.
+
+Development run `/home/landin/work/r620-probe/evidence-5` passes the existing
+QEMU CPU/startup and both Renode controls plus the new ABI lane. The ABI image
+has 2216 text bytes, zero initialized data and 332 BSS bytes. This is a small
+control's footprint, not a compiler-produced driver size or measured stack
+bound. `.scratch/r620/evidence-5` retains the independent local copy;
+`environments/cortex-m/abi-validation.json` indexes source/tool/result hashes.
+The previous four incremental successful runs remain in that development slot.
+The current Mac and native Linux `cortex ABI` suites each pass four cases and
+261 checks, including
+eight existing lowered-source controls with detailed synthetic/Cortex IR
+agreement, entry/call planning, pointer-size and array-extent boundaries,
+capability/no-write/no-tool refusals and ABI budget/invalid-input tests.
+Embedded supervisor controls pass eight cases, preserving R6.10's Renode
+lock-file cleanup regression. The Mac target suite passes 12 cases/160 checks
+and the driver suite 53 cases/1871 checks. Final full document checks and verified
+rendering precede acceptance.
+
+Acceptance scope and successor handoff:
+
+`policy.py routine --debugger` deliberately reselects R6.10's compatible
+six-job Linux and schema-4 Darwin policies, retained with the implementation
+before the closure candidate. ABI/frame planning and new native debugger
+assertions justify release GDB/LLDB scope. Complete release hosted coverage and
+both Mac compiler-host modes remain mandatory. This is not R6.100 milestone
+scope. The Linux documents job's unchanged mandatory `test.py`/`run.py` path
+now also executes the ABI controls and exports their scripts, contracts,
+measurements, ELF/map/disassembly, logs and tool identities under `cortex-m`.
+Missing tools, drift, failed assertions, missing markers and timeouts fail;
+Renode's verified empty-lock cleanup remains in place before inventory/export.
+
+The containing closure revision becomes authoritative only after identical
+Linux/Darwin archive acceptance, verified exports, annotated dual-native
+`ci/accepted/FULL_COMMIT`, atomic canonical promotion, matching remote approval
+and GitHub mirror, and successful guarded publication. No subsequent bookkeeping
+revision substitutes for that accepted archive.
+
+R6.30 is the next dependency-ready item after this binding; R6.40 is also
+ready and retains its own semantic gate. R6.50 must implement instruction
+selection, frame allocation/emission and actual Landin calls using this ABI;
+R6.60 owns startup/vectors, image placement and linking; R6.70 owns freestanding
+core and noreturn; R6.80 owns checked-in generated device fixtures; R6.90 owns
+the complete derived driver; R6.100 owns Landin source debugging, measured
+stack/firmware evidence and milestone closure. No concurrency or packed invalid-
+encoding semantics are settled here. Renode remains synthetic peripheral
+evidence. R551-31 is discharged only for this layout/ABI slice; its remaining
+obligations keep their R6 owners. R551-06/07/08 resource limits, R551-13/14 scheduler/cache/resume,
+R551-15 deferred Nix, R551-17/20/21/23/24 evidence/delivery limits and R551-33's
+general SVD tooling disposition remain unchanged.
 
 ### R6.30 — Define and implement the concurrency memory model
 

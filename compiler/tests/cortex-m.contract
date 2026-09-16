@@ -1,0 +1,68 @@
+u8 1 1
+u16 2 2
+u32 4 4
+u64 8 8
+i8 1 1
+i16 2 2
+i32 4 4
+i64 8 8
+usize 4 4
+isize 4 4
+f32 4 4
+f64 8 8
+bool 1 1
+a 12 4 0 4 8
+b 8 4 0 1 4
+c 8 4 0 4
+d 16 8 0 8
+variant 12 4 0
+payload 4
+wrapped 20 4 0 4 16
+child 16 4 0 4 8
+nested 24 4 0 4 20
+multiple 16 8 0 8
+evidence0 8 4
+evidence 16 4 0 4 8 12
+any 8 4 0 4
+gap.result 0 4 0 8 0
+gap.arg1 0 1 0 0 0
+gap.arg2 2 2 0 0 0
+gap.arg3 4 0 0 4 0
+split.result 0 4 0 16 0
+split.arg1 0 1 0 0 0
+split.arg2 1 1 0 0 0
+split.arg3 2 1 0 0 0
+split.arg4 3 1 0 8 0
+split.arg5 4 0 8 4 0
+stack.result 0 4 0 24 0
+stack.arg1 0 1 0 0 0
+stack.arg2 1 1 0 0 0
+stack.arg3 2 1 0 0 0
+stack.arg4 3 1 0 0 0
+stack.arg5 4 0 0 4 0
+stack.arg6 4 0 8 8 0
+stack.arg7 4 0 16 4 0
+sret.result 1 0 1 8 0
+sret.arg1 1 1 0 0 0
+sret.arg2 2 2 0 0 0
+sret.arg3 4 0 0 4 0
+small.result 0 0 1 0 0
+small.arg1 0 1 0 0 0
+small.arg2 1 1 0 0 0
+small.arg3 2 1 0 0 0
+varargs.result 0 4 0 8 0
+varargs.arg1 0 1 0 0 0
+varargs.arg2 1 1 0 0 0
+varargs.arg3 2 2 0 0 0
+varargs.arg4 4 0 0 4 0
+floatpair.result 0 0 2 0 0
+floatpair.arg1 0 1 0 0 0
+floatpair.arg2 1 2 0 0 0
+floatpair.arg3 3 1 0 0 0
+native.result 1 0 1 8 1
+native.arg1 1 1 0 0 0
+native.arg2 2 1 0 0 0
+native.arg3 3 1 0 0 1
+native.arg4 4 0 0 8 0
+multi.result 1 0 1 0 1
+multi.arg1 1 1 0 0 0
