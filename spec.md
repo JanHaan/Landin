@@ -13974,6 +13974,9 @@ alignment and backing-storage obligations. A pointer or external write does
 not confer validity on a subsequent typed enum read. Invalid software atom
 codes encountered by such a read trap; they do not create optimizer poison,
 unreachable control flow, or permission to rewrite earlier effects.
+The private call-failure status channel retains its existing zero-for-success
+transport code. IR-designated status-slot loads admit that sentinel before
+the failure test; it is not a named atom or a zeroable source enum value.
 
 **Device operations:** a raw image read and a raw image write are separate
 operations. Each accepted operation performs exactly one transaction at its

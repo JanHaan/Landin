@@ -418,6 +418,13 @@ Discarding its result does not remove that check. Field stores preserve the
 other image bits and retain fit checks; their effects include reads, writes and
 traps. Whole aggregate copies preserve the carrier without extracting fields.
 
+Ordinary atom loads also validate their software codes. The private call-status
+slot has a different domain: zero means success, otherwise the code identifies
+a declared error. `Is_Failure_Status_Load` recognizes only a slot designated by
+a direct or indirect call's failure edge. Both backends permit zero for that
+transport load before `Failure_Test`; ordinary source atom storage does not
+gain a zero value. Recovery still observes a named error on the failing branch.
+
 The native backends consume the same geometry and map validated atoms to or
 from each union's encoding table. Explicit register accesses reuse the volatile
 memory instruction; fixed modes are checked before lowering and reserved-bit

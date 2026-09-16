@@ -2474,6 +2474,12 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                             in Call | Indirect_Call;
 
+   --  The private call-status channel also admits zero for success. It is
+   --  not an ordinary source atom value; Failure_Test separates the paths.
+   function Is_Failure_Status_Load
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value);
+
    --  Where the construct this instruction came from is written.  Taken
    --  from Landin.Syntax.Anchor and not from the extent, because that is
    --  the one token the node is attributed to and R4.60 puts a line-table
