@@ -136,6 +136,11 @@ warnings and absent assertions all fail. Renode returning zero after a script
 error is insufficient: the runner requires the unique final marker and scans
 its log for failures. The stock control allows only its two known warnings.
 
+After Renode exits, the runner removes only its verified empty
+`renode.config.lock` coordination file before inventorying evidence. Native
+export omits lock files, so recording that transient file would correctly
+fail export verification. Nonempty or linked replacements fail instead.
+
 Each subprocess has a 30-second deadline, GDB 20 seconds, and QEMU startup
 three seconds; timeout cleanup terminates the owned process group, escalating
 after two seconds. Each run needs a new output directory and retains failure

@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from run import Run, oracle
+from run import Run, oracle, remove_renode_lock
 
 
 class ProbeFailures(unittest.TestCase):
@@ -36,6 +36,21 @@ class ProbeFailures(unittest.TestCase):
     def test_timeout(self):
         record = self.command_failure([sys.executable, '-c', 'import time; time.sleep(10)'], .05)
         self.assertTrue(record['timed_out'])
+
+    def test_ephemeral_renode_lock_is_not_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock = root / 'renode.config.lock'
+            lock.touch()
+            remove_renode_lock(root)
+            self.assertFalse(lock.exists())
+            lock.write_text('unexpected bytes')
+            with self.assertRaises(RuntimeError):
+                remove_renode_lock(root)
+            lock.unlink()
+            lock.symlink_to(root / 'absent')
+            with self.assertRaises(RuntimeError):
+                remove_renode_lock(root)
 
     def test_unsupported_host(self):
         from unittest.mock import patch
