@@ -14067,5 +14067,5 @@ unsigned carriers or pointers use the existing C boundary.
 images, validated extraction, copies, calls and indexed updates. The independent
 `targets/packed image algebra and access plans` case and the retained Renode
 contract define separate image and transaction oracles. ROADMAP.md records the
-remaining implementation audits and the actual results; these pins do not by
+implementation audits, limits and actual results; these pins do not by
 themselves assert R6.40 closure.
