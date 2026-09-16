@@ -1944,9 +1944,10 @@ package body Landin.Backend.Arm64 is
                   end if;
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
                   declare
-                     Shape : constant Landin.IR.Field_Shape := Reached_Shape
-                       (Place, Natural (Landin.IR.Field_Of
-                          (Of_Unit, Item, Value)),
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Shape_At
+                       (Of_Unit, Part_Shape_Of
+                          (Place, Landin.IR.Field_Of (Of_Unit, Item, Value)),
                         Landin.IR.Path_Of (Of_Unit, Item, Value));
                   begin
                      if Shape.Packing.Bits /= 0 then

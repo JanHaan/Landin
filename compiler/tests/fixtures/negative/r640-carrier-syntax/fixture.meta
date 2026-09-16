@@ -1,0 +1,9 @@
+class: negative
+summary: a packed carrier refusal retains the annotation as a related diagnostic span
+program: program.ldn
+constructs: 0730
+codes: L0101
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/r640-carrier-syntax/program.ldn
+expect: expected.txt
+status: 1

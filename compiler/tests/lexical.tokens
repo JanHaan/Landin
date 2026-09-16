@@ -66428,6 +66428,25 @@ file negative/r640-carrier/program.ldn tokens 20
   61 63 15
   64 67 end
   68 73 image
+file negative/r640-carrier-syntax/program.ldn tokens 18
+  0 5 image
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 layout
+  20 21 (
+  21 27 packed
+  27 28 ,
+  29 31 u7
+  31 32 )
+  33 39 struct
+  44 47 bit
+  47 48 :
+  49 53 bool
+  54 56 at
+  57 58 0
+  59 62 end
+  63 68 image
 file negative/r640-constant-array/program.ldn tokens 42
   0 5 image
   5 6 :

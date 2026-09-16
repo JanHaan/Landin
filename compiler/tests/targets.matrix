@@ -840,6 +840,7 @@ negative/r640-address | linux-x86-64, macos-arm64
 negative/r640-array-span | linux-x86-64, macos-arm64
 negative/r640-c-abi | linux-x86-64, macos-arm64
 negative/r640-carrier | linux-x86-64, macos-arm64
+negative/r640-carrier-syntax | linux-x86-64, macos-arm64
 negative/r640-constant-array | linux-x86-64, macos-arm64
 negative/r640-constant-fill | linux-x86-64, macos-arm64
 negative/r640-constant-fit | linux-x86-64, macos-arm64

@@ -1,0 +1,10 @@
+error[L0101]: a packed image carrier is u8, u16, u32 or u64
+  --> ../tests/fixtures/negative/r640-carrier-syntax/program.ldn:1:30
+  |
+1 | image: type = layout(packed, u7) struct
+  |                              ^^
+  --> ../tests/fixtures/negative/r640-carrier-syntax/program.ldn:1:15
+  |
+1 | image: type = layout(packed, u7) struct
+  |               ^^^^^^ this annotation
+  = note: [0730]: the carrier owns every stored bit

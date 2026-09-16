@@ -436,7 +436,9 @@ package body Landin.Tests.Frontend_Review_Suite is
    procedure Layout_Boundaries (Item : in out Landin.Testing.Context) is
    begin
       for Small in Boolean loop
-         for Policy in Landin.Layouts.Policy loop
+         --  These ordinary fields exercise the three byte layouts; packed
+         --  geometry has its own target-parametric controls.
+         for Policy in Landin.Layouts.Natural .. Landin.Layouts.Optimal loop
             declare
                Facts : constant Landin.Targets.Target_Facts :=
                  (if Small then Landin.Targets.Synthetic_32

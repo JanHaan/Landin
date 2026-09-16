@@ -2185,7 +2185,8 @@ package body Landin.Syntax.Parser is
                      Complain
                        (Syn.Type_Expected, Here,
                         "a packed image carrier is u8, u16, u32 or u64",
-                        Note => "[0730]: the carrier owns every stored bit");
+                        Note => "[0730]: the carrier owns every stored bit",
+                        Related => Opened, Because => "this annotation");
                   end if;
                   if Peek = Tok.Identifier then
                      Advance;

@@ -10281,7 +10281,7 @@ policies selected before this closure candidate. New extraction, selection,
 verification and raw-carrier DWARF justify full release GDB/LLDB; this is not
 R6.100 milestone scope. Debug compiler-host checks and complete release hosted
 coverage remain mandatory. The source corpus adds 24 runtime, three independent
-ABI, 36 negative and one positive fixture; the earlier Ada algebra and malformed
+ABI, 37 negative and one positive fixture; the earlier Ada algebra and malformed
 IR controls remain separate. Generated coverage/diagnostic matrices and the
 compiler-recorded IR are updated. Full `python3 check.py` and verified
 `scripts/site.sh` rendering pass on the implementation tree and are required
@@ -10310,6 +10310,19 @@ on both backends. Ordinary software-enum reads still validate, including the
 zero corruption in `runtime/r640-software-hole`. Existing derived-parser and
 generic nested-recovery profiles pin both paths. This is a correction to the
 existing failure transport, not a new source atom or an unchecked exemption.
+
+Candidate `3a185038` also remains unaccepted. Darwin run
+`20260916T190310Z-fa3014f261e5` completed 726 host cases, finding five failures:
+three old byte-layout tests accidentally included the newly added packed policy
+without supplying bit geometry; Darwin field selection narrowed a wide target
+array position to host `Natural`; and a truncated packed-carrier annotation
+raised a diagnostic without its required related span. The correction retains
+the original three byte-layout policies and their assertions, uses the existing
+wide part-shape query in native selection, and pins the related annotation with
+`negative/r640-carrier-syntax` and the every-byte truncation campaign. Packed
+geometry keeps its separate target-parametric controls. Linux run
+`20260916T190310Z-43b956d65481` had passed the full mandatory embedded/documents
+job before cancellation; its incomplete peer jobs are not acceptance evidence.
 
 Resource and evidence limits: an image has at most 64 bits/elements. Local
 array transfers snapshot at most 64 scalar values; encoding lists remain in
