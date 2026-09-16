@@ -198,6 +198,7 @@ import chip/vendor/gpio
 import chip/vendor/dma
 import chip/vendor/usart
 import core/sets
+import landin/compiler
 
 public busy:          atom
 public bad_baud:      atom
@@ -301,6 +302,7 @@ Every bit not named here is reserved and stays as it was.
     stream.val.count     = u16(lenof buf)
     stream.val.config    = cfg
 
+    compiler.device_barrier()
     cfg.enable = true
     stream.val.config = cfg
 
@@ -313,12 +315,19 @@ end open
 
 Reading what the hardware has delivered. The DMA counter runs
 down, so the write position is the far end minus what is left.
+D227 requires the device to publish each byte before its count observation.
+The following barrier invalidates compiler knowledge of the ordinary slice;
+on a cached noncoherent target a platform cache protocol is required too.
+This sketch assumes the consumed interval is not overwritten during the copy
+and that a full wrap cannot go undetected. Interrupt masking cannot establish
+those conditions. R6.90 owns their complete executable driver controls.
 
 ---
 
 ```landin
 public available: (in r: rx) -> (n: usize) =
     remaining := usize(r.stream.val.count)
+    compiler.device_barrier()
     tail := lenof r.buf - remaining
     if tail >= r.head then
         n = tail - r.head

@@ -1,3 +1,6 @@
+with Landin.Memory;
+with Landin.IR.Testing_Support;
+with Landin.Targets.Capabilities;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Landin.Backend.X86_64;
@@ -61,6 +64,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    function Count (Code : IR.Unit; Op : IR.Opcode) return Natural;
    procedure Constant_Shifts (Item : in out Landin.Testing.Context);
    procedure Effect_Preservation (Item : in out Landin.Testing.Context);
+   procedure Memory_Events (Item : in out Landin.Testing.Context);
    procedure Static_Dispatch (Item : in out Landin.Testing.Context);
    procedure Exposed_Evidence (Item : in out Landin.Testing.Context);
    procedure Raw_Any (Item : in out Landin.Testing.Context);
@@ -148,6 +152,77 @@ package body Landin.Tests.IR_Optimization_Suite is
             "every beyond-width shift is zero, including signed right shift");
       end;
    end Constant_Shifts;
+
+   procedure Memory_Events (Item : in out Landin.Testing.Context) is
+      use all type Landin.Memory.Operation;
+      use all type Landin.Memory.Ordering;
+      use type IR.Value_Id;
+      use Landin.Targets;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Linux_X86_64);
+      Code : constant not null access IR.Unit := Landin.Stages.Code (Work);
+      Load : IR.Value_Id := IR.No_Value;
+      Report : Reports.Report;
+   begin
+      Lower (Item, Work,
+        "public f: (p: ptr mut u32) -> none = "
+        & "_ = compiler.volatile_load(p) "
+        & "compiler.compiler_barrier() "
+        & "compiler.volatile_store(p, 7) "
+        & "_ = compiler.atomic_load(p, compiler.acquire) "
+        & "compiler.thread_fence(compiler.seq_cst) end f");
+      for Objective in Opt.Objective loop
+         for Mode in Opt.Specialization_Mode loop
+            IR.Specialization.Run (Code.all, Linux_X86_64,
+                                   (Objective, Mode), Report);
+            IR.Simplification.Run (Code.all, Linux_X86_64, Objective);
+            Landin.Testing.Check_Equal
+              (Item, Count (Code.all, IR.Memory_Access), 5,
+               "discarded memory events survive every policy");
+         end loop;
+      end loop;
+      for V in 1 .. IR.Value_Count (Code.all, 1) loop
+         if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Memory_Access
+           and then IR.Memory_Operation (Code.all, 1, IR.Value_Id (V))
+             = Atomic_Load
+         then
+            Load := IR.Value_Id (V);
+         end if;
+      end loop;
+      Landin.Testing.Check
+        (Item, Load /= IR.No_Value, "atomic event retained");
+      for Bad_Order in Landin.Memory.Ordering loop
+         IR.Testing_Support.Overwrite_Memory
+           (Code.all, 1, Load, Atomic_Load, Landin.Types.U32,
+            Bad_Order, No_Ordering);
+         Landin.Testing.Check
+           (Item, (IR.Verifier.Check (Code.all, Linux_X86_64).Kind
+                   = IR.Verifier.Nothing_Wrong)
+              = (Bad_Order in Relaxed | Acquire | Seq_Cst),
+            "verifier independently refuses invalid load orderings");
+      end loop;
+      IR.Testing_Support.Overwrite_Memory
+        (Code.all, 1, Load, Atomic_Load, Landin.Types.U16,
+         Acquire, No_Ordering);
+      Landin.Testing.Check
+        (Item, IR.Verifier.Check (Code.all).Kind /= IR.Verifier.Nothing_Wrong,
+         "corrupted scalar width is refused");
+      IR.Testing_Support.Overwrite_Memory
+        (Code.all, 1, Load, Atomic_Load, Landin.Types.U32,
+         Acquire, No_Ordering);
+      Landin.Testing.Check
+        (Item, IR.Verifier.Check (Code.all, Synthetic_32).Kind /=
+           IR.Verifier.Nothing_Wrong, "unimplemented target refuses events");
+      for Width in Scalar_Size loop
+         Landin.Testing.Check
+           (Item, Capabilities.Memory_Access
+             (Cortex_M, Atomic_Load, Width) = (Width in Byte_1 .. Byte_4),
+            "M0 load boundary is independent of hosted width");
+         Landin.Testing.Check
+           (Item, not Capabilities.Memory_Access
+             (Cortex_M, Atomic_Add, Width), "M0 has no hidden RMW fallback");
+      end loop;
+   end Memory_Events;
 
    procedure Effect_Preservation (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
@@ -1160,6 +1235,8 @@ package body Landin.Tests.IR_Optimization_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir opt", "memory events", Memory_Events'Access);
       Landin.Testing.Register
         (Into, "ir opt", "exposure traversal keeps references",
          Exposure_Traversal_Keeps_References'Access);

@@ -1,3 +1,4 @@
+with Landin.Memory;
 --  The target-neutral intermediate representation.
 --
 --  `tour.md` [1550] is the authority for its existence -- "a verified,
@@ -222,6 +223,7 @@ package Landin.IR is
       --  value; the referred scalar type is retained on the load result and
       --  the store's value.  Aggregate reference copies use the existing
       --  target-neutral storage operations through an address slot.
+      Memory_Access,
       Load_Indirect,
       Store_Indirect,
       --  A module value [1940] read and written.  Written, because
@@ -3076,6 +3078,24 @@ package Landin.IR is
                     (Into, Item, Emit_Empty_Slice_Base'Result,
                      Empty_Slice_Base);
 
+   type Value_Id_Array is array (Positive range <>) of Value_Id;
+
+   function Emit_Memory
+     (Into : in out Unit; Item : Item_Id; Op : Landin.Memory.Operation;
+      Scalar : Landin.Types.Scalar_Name;
+      Success, Failure : Landin.Memory.Ordering;
+      Arguments : Value_Id_Array;
+      Site : Landin.Provenance.Origin) return Value_Id;
+   function Memory_Operation
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Memory.Operation;
+   function Memory_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Scalar_Name;
+   function Memory_Order
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id;
+      Failure : Boolean := False) return Landin.Memory.Ordering;
+
    function Emit_Load_Indirect
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -3745,6 +3765,10 @@ private
    --  variant part would make the element type indefinite and would fix
    --  an instruction's shape when it is created.
    type Instruction is record
+      Memory_Op : Landin.Memory.Operation := Landin.Memory.No_Operation;
+      Memory_Type : Landin.Types.Scalar_Name := Landin.Types.U8;
+      Success_Order : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
+      Failure_Order : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
       Op          : Opcode                    := Jump;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Site        : Landin.Provenance.Origin  :=

@@ -1,0 +1,8 @@
+class: negative
+summary: r630 wrong arity
+program: program.ldn
+constructs: 0430, 0850, 1620
+targets: linux-x86-64, macos-arm64
+codes: L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/r630-wrong-arity/program.ldn

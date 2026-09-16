@@ -3580,11 +3580,20 @@ around them. The ordering is a compile-time atom. The
 standard library wraps these into a pleasant type.
 
 ```landin
-bump: (p: ptr u32) -> none =
-    _ = compiler.atomic_add(p, 1, acq_rel)
+bump: (p: ptr mut u32) -> none =
+    _ = compiler.atomic_add(p, 1, compiler.acq_rel)
 end bump
 
 ```
+
+D227 in `spec.md` defines the supported scalar operations, exact orderings,
+alignment traps, happens-before and race limits. Atomics synchronize coherent
+CPU memory; volatile accesses preserve individual accesses but do not synchronize
+threads. Compiler barriers invalidate memory knowledge without ordering hardware.
+Device ordering and completion require the target's barriers and the device's
+own protocol. Ordinary DMA slices stay ordinary: after certified completion,
+the driver establishes hardware/cache visibility and a compiler memory boundary
+before reading them. Interrupt masking alone does not stop DMA.
 
 ### [1630] Inline assembly, for what has no builtin
 

@@ -1,0 +1,53 @@
+incrementable: type = concept (t: type)
+    increment: (p: ptr mut u32, by: t) -> (old: u32)
+end incrementable
+
+increment_u32: (p: ptr mut u32, by: u32) -> (old: u32) =
+    old = compiler.atomic_add(p, by, compiler.relaxed)
+end increment_u32
+
+u32 is incrementable (increment: increment_u32)
+
+bump: (t: type is incrementable, p: ptr mut u32, by: t) -> (old: u32) =
+    old = t.increment(p, by)
+end bump
+
+public extern(c) add_many: (p: ptr mut u32) -> none =
+    for i in 0..<2000 do
+        _ = bump(p, u32(1))
+    end for
+end add_many
+
+public extern(c) publish: (data: ptr mut u32, flag: ptr mut u32) -> none =
+    data.val = 42
+    compiler.atomic_store(flag, 1, compiler.release)
+end publish
+
+public extern(c) consume: (data: ptr u32, flag: ptr u32) -> (value: u32) =
+    value = 0
+    for i in 0..<10000000 do
+        if compiler.atomic_load(flag, compiler.acquire) == 1 then
+            value = data.val
+            return
+        end if
+    end for
+end consume
+
+public extern(c) alias_bytes: (p: ptr mut u32) -> (value: u32) =
+    p.val = 0
+    bytes: ptr mut u8 = ptr(usize(p))
+    compiler.volatile_store(bytes, 42)
+    value = p.val
+end alias_bytes
+
+public extern(c) swap_value: (p: ptr mut u64, expected: u64, desired: u64)
+    -> (old: u64) =
+    old = compiler.atomic_compare_exchange(p, expected, desired,
+        compiler.acq_rel, compiler.acquire)
+end swap_value
+
+public extern(c) fenced: (own: ptr mut u32, other: ptr u32) -> (r: u32) =
+    compiler.atomic_store(own, 1, compiler.relaxed)
+    compiler.thread_fence(compiler.seq_cst)
+    r = compiler.atomic_load(other, compiler.relaxed)
+end fenced

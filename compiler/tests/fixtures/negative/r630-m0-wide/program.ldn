@@ -1,0 +1,3 @@
+f: (p: ptr u64) -> none =
+    _ = compiler.atomic_load(p, compiler.relaxed)
+end f

@@ -1,5 +1,27 @@
 package body Landin.Targets.Capabilities is
 
+   function Memory_Access
+     (Facts : Target_Facts; Op : Landin.Memory.Operation;
+      Width : Scalar_Size) return Boolean
+   is
+      use all type Landin.Memory.Operation;
+   begin
+      if Op = No_Operation or else Width = Byte_16 then
+         return False;
+      end if;
+      case Architecture_Of (Facts) is
+         when X86_64 | Arm64 =>
+            return True;
+         when Cortex_M0 =>
+            return Width /= Byte_8
+              and then Op not in Atomic_Exchange | Atomic_Add
+                | Atomic_Compare_Exchange;
+         when Synthetic_32_Architecture =>
+            return False;
+      end case;
+   end Memory_Access;
+
+
    function C_Signatures (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 => True,

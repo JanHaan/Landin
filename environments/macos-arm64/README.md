@@ -187,3 +187,10 @@ dumps and complete native LLDB sessions. Source inventories and compiler/tool
 identities are checked against the containing archive and native environment.
 Filtered or missing profiles, failed sessions and substituted artifacts refuse
 acceptance. See [target debugging contracts](../../docs/targets.md#native-source-debugging).
+
+R6.30 uses routine debugger-risk scope for its new verified memory opcode and
+native scalar/LL-SC lowering. Full release parity executes the memory, pthread
+and ordinary-slice fixtures in all six specialization profiles; source verdicts
+include ordering, width, permission and unsupported-target refusals. Release
+LLDB remains mandatory. Embedded M0/peripheral/model evidence stays on Linux
+and is bound by the same dual-native approval.

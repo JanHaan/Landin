@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Ada.Strings.Fixed;
 
 with Landin.Hosted;
@@ -3064,6 +3065,75 @@ package body Landin.Backend.X86_64 is
                         & ", " & Value_Operand (Value));
                   end;
 
+               when Landin.IR.Memory_Access =>
+                  declare
+                     use all type Landin.Memory.Operation;
+                     M : constant Landin.Memory.Operation :=
+                       Landin.IR.Memory_Operation (Of_Unit, Item, Value);
+                     Size : constant Held_Size := Landin.Types.Storage_Size
+                       (Landin.IR.Memory_Scalar (Of_Unit, Item, Value), Facts);
+                     S : constant String := Suffix (Size);
+                     A : constant String := Accumulator (Size);
+                     Ready : constant String := Value_Label (Value)
+                       & "_aligned";
+                  begin
+                     if Landin.Memory.Operands (M) = 0 then
+                        if M /= Compiler_Barrier then
+                           Emit ("mfence");
+                        end if;
+                     else
+                        Emit ("movq " & Value_Operand (Operand (1))
+                              & ", %rcx");
+                        if Size /= Landin.Targets.Byte_1 then
+                           Emit ("testq $" & Trimmed (Positive'Image
+                             (Landin.Targets.Bytes (Size) - 1)) & ", %rcx");
+                           Emit ("jz " & Ready);
+                           Emit ("ud2");
+                           Put (Ready & ":");
+                        end if;
+                        if M not in Volatile_Load | Volatile_Store then
+                           Emit ("mfence");
+                        end if;
+                        if M in Atomic_Load | Volatile_Load then
+                           Emit ("mov" & S & " (%rcx), " & A);
+                        else
+                           Emit ("mov" & S & " "
+                             & Value_Operand (Operand (2)) & ", " & A);
+                           case M is
+                              when Atomic_Store | Atomic_Exchange =>
+                                 Emit ("xchg" & S & " " & A & ", (%rcx)");
+                              when Volatile_Store =>
+                                 Emit ("mov" & S & " " & A & ", (%rcx)");
+                              when Atomic_Add =>
+                                 Emit ("lock xadd" & S & " " & A
+                                       & ", (%rcx)");
+                              when Atomic_Compare_Exchange =>
+                                 Emit ("mov" & S & " "
+                                   & Value_Operand (Operand (3)) & ", "
+                                   & (case Size is
+                                        when Landin.Targets.Byte_1 => "%dl",
+                                        when Landin.Targets.Byte_2 => "%dx",
+                                        when Landin.Targets.Byte_4 => "%edx",
+                                        when others => "%rdx"));
+                                 Emit ("lock cmpxchg" & S & " "
+                                   & (case Size is
+                                        when Landin.Targets.Byte_1 => "%dl",
+                                        when Landin.Targets.Byte_2 => "%dx",
+                                        when Landin.Targets.Byte_4 => "%edx",
+                                        when others => "%rdx") & ", (%rcx)");
+                              when others =>
+                                 raise Landin.Compiler_Defect;
+                           end case;
+                        end if;
+                        if M not in Volatile_Load | Volatile_Store then
+                           Emit ("mfence");
+                        end if;
+                        if Landin.Memory.Returns_Value (M) then
+                           Store_Value (Value, A);
+                        end if;
+                     end if;
+                  end;
+
                when Landin.IR.Load_Indirect =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
@@ -5224,6 +5294,7 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call
+                        | Landin.IR.Memory_Access
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address

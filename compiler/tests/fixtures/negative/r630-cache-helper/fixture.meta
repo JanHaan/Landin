@@ -1,0 +1,8 @@
+class: negative
+summary: explicit memory boundary refusal cache-helper
+program: program.ldn
+constructs: 0430, 0850, 1620
+targets: linux-x86-64, macos-arm64
+codes: L0203
+expect: expected.txt
+args: ../tests/fixtures/negative/r630-cache-helper/program.ldn

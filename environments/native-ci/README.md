@@ -314,3 +314,10 @@ R6.20 keeps that mandatory path and adds the QEMU layout/ABI controls to
 measurements, assembly witnesses, ELF/maps/disassembly and GDB assertions.
 The annotated approval binds their actual execution to the accepted revision;
 a planner golden alone cannot satisfy this obligation.
+
+R6.30 extends the same mandatory embedded job with independent M0 memory and
+interrupt controls plus bounded SC, release-sequence, DMA and cache models.
+`memory-model.json`, tool commands, inputs, ELF and GDB results are exported
+with the unchanged R6.10/R6.20 lanes. Hosted release fixtures additionally
+execute Landin-generated memory operations. Routine debugger-risk scope keeps
+native release GDB; model success alone cannot approve this compiler change.

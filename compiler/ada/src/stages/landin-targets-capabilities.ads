@@ -1,3 +1,4 @@
+with Landin.Memory;
 --  Target backend availability.
 --
 --  This is a separate authority from Target_Facts: machine width and
@@ -12,6 +13,11 @@
 --  hold apart.
 
 package Landin.Targets.Capabilities is
+
+   --  Admitted source contracts; Cortex-M still has no emitter.
+   function Memory_Access
+     (Facts : Target_Facts; Op : Landin.Memory.Operation;
+      Width : Scalar_Size) return Boolean;
 
    --  An ABI identity describes the intended boundary. Each implemented
    --  capability must be enabled explicitly; equal LP64 widths prove none.

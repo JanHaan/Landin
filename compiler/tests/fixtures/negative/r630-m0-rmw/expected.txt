@@ -1,0 +1,6 @@
+error[L0301]: memory operation or width unavailable on target
+  --> ../tests/fixtures/negative/r630-m0-rmw/program.ldn:2:9
+  |
+2 |     _ = compiler.atomic_add(p, 1, compiler.relaxed)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

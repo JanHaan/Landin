@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Landin.Configuration;
 with Landin.Diagnostics.Resolution;
 with Landin.Modules;
@@ -666,6 +667,24 @@ package body Landin.Stages.Resolution is
          if Node = Syn.No_Node then
             return;
          end if;
+
+         declare
+            use type Landin.Memory.Operation;
+            Op : constant Landin.Memory.Operation :=
+              Landin.Configuration.Memory_Call
+                (Spellings.all, Of_Tree, Node);
+         begin
+            if Op /= Landin.Memory.No_Operation then
+               for I in 1 .. Natural'Min
+                 (Landin.Memory.Operands (Op),
+                  Syn.Argument_Count (Of_Tree, Node))
+               loop
+                  Resolve
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, I), Inside);
+               end loop;
+               return;
+            end if;
+         end;
 
          if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
             Resolve_Anonymous (Of_Tree, Node);

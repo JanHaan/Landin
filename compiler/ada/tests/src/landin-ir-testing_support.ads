@@ -217,6 +217,11 @@ package Landin.IR.Testing_Support is
       Atoms : Atom_Set_Id)
      with Pre => Holds (Into, Item, Value);
 
+   procedure Overwrite_Memory
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Op : Landin.Memory.Operation; Scalar : Landin.Types.Scalar_Name;
+      Success, Failure : Landin.Memory.Ordering);
+
    procedure Overwrite_Value_Type
      (Into : in out Unit; Item : Item_Id; Value : Value_Id;
       Result : Landin.Types.Type_Kind)

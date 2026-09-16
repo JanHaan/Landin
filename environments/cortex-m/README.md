@@ -231,3 +231,43 @@ the plans with native selection and frame code; R6.60 must implement image
 placement/startup; R6.100 must establish Landin debugging and stack evidence.
 R6.30/R6.40 retain concurrency and invalid packed encodings. Existing resource,
 evidence, scheduling, Nix and general-generator dispositions are unchanged.
+
+## R6.30 memory evidence
+
+The mandatory `run.py` path additionally executes `memory.py`, without changing
+R6.10/R6.20's CPU, peripheral, independent ABI or lock-cleanup obligations.
+`probes/memory.c` executes GCC's scalar 8/16/32-bit atomic loads/stores, DMB,
+DSB and ISB, nested PRIMASK save/restore, pending interrupt exclusion and
+ordinary RAM publication in both directions across handler delivery. QEMU/GDB
+requires result `0x630` and no fault. These are independent C/assembly controls,
+not compiler-generated Cortex-M code. GCC separately compiles an atomic RMW
+control to an object whose unresolved `__atomic_fetch_add_4` is asserted; no
+helper is linked or inferred as a Landin capability.
+
+`memory_model.py` explores a finite FIFO store-buffer machine and compares its
+fenced outcomes with an independently enumerated SC permutation oracle and
+a separate reads-from/SC-fence constraint oracle. It checks twelve
+release-sequence source cases, including plain-store interruption. It
+also enumerates payload/notification propagation with and without the device
+ordering premise, split-byte tearing, DMA progress while IRQ delivery is
+masked, and a write-back cache-line model. The cache controls require stale
+reads without invalidation, visible bytes after invalidation, destructive
+post-receive cleaning, and loss of an unrelated dirty byte on a shared line.
+These assertions test the stated abstractions, not the complete Arm model or
+cache instructions. No absence of a weak emulator outcome counts as proof.
+
+The original Renode lane remains the executable DMA witness: static ordinary
+byte storage, circular overwrite, count/status updates and delayed IRQ while
+masked. Feeds are serialized at stopped virtual-time boundaries. D227 supplies
+the language contract; the model supplies only its explicit device premise.
+A cached profile needs platform-specific maintenance, cache levels/aliases and
+visibility-point evidence before it can be admitted. M0 has no cache and supplies
+none of that evidence. Hardware testing stays supplemental.
+
+Each new subprocess uses the existing 30-second tool and 20-second debugger
+limits, three-second readiness deadline and owned process-group cleanup.
+Commands, logs, ELF/map/disassembly, generated controls and GDB input, tool/input
+hashes and `memory-model.json` are retained under the same exported `cortex-m`
+directory. Native Linux and Darwin separately execute the Landin scalar and
+pthread ABI fixtures over their selected optimization profiles. Those results
+are compiler-generated hosted execution, not embedded or model evidence.

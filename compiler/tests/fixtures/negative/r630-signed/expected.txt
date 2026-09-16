@@ -1,0 +1,6 @@
+error[L0301]: memory access needs an unsigned scalar pointer without a subtype
+  --> ../tests/fixtures/negative/r630-signed/program.ldn:5:9
+  |
+5 |     _ = compiler.atomic_load(addr s, compiler.relaxed)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: explicit memory contract

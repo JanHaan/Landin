@@ -1,0 +1,126 @@
+public main: () -> (code: i32) =
+    mut a: u8 = 255
+    mut b: u16 = 65535
+    mut c: u32 = 4294967295
+    mut d: u64 = 18446744073709551615
+    old_a := compiler.atomic_add(addr a, 1, compiler.relaxed)
+    if old_a <> u8(255) or a <> 0 then
+        code = 1
+        return
+    end if
+    compiler.atomic_store(addr a, 9, compiler.release)
+    if compiler.atomic_load(addr a, compiler.acquire) <> 9 then
+        code = 2
+        return
+    end if
+    if compiler.atomic_exchange(addr a, 11, compiler.acq_rel) <> 9 then
+        code = 3
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr a, 10, 13, compiler.seq_cst, compiler.acquire) <> 11 then
+        code = 4
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr a, 11, 13, compiler.seq_cst, compiler.seq_cst) <> 11 then
+        code = 5
+        return
+    end if
+    compiler.volatile_store(addr a, 42)
+    _ = compiler.volatile_load(addr a)
+    if compiler.volatile_load(addr a) <> 42 then
+        code = 6
+        return
+    end if
+    old_b := compiler.atomic_add(addr b, 1, compiler.relaxed)
+    if old_b <> u16(65535) or b <> 0 then
+        code = 1
+        return
+    end if
+    compiler.atomic_store(addr b, 9, compiler.release)
+    if compiler.atomic_load(addr b, compiler.acquire) <> 9 then
+        code = 2
+        return
+    end if
+    if compiler.atomic_exchange(addr b, 11, compiler.acq_rel) <> 9 then
+        code = 3
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr b, 10, 13, compiler.seq_cst, compiler.acquire) <> 11 then
+        code = 4
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr b, 11, 13, compiler.seq_cst, compiler.seq_cst) <> 11 then
+        code = 5
+        return
+    end if
+    compiler.volatile_store(addr b, 42)
+    _ = compiler.volatile_load(addr b)
+    if compiler.volatile_load(addr b) <> 42 then
+        code = 6
+        return
+    end if
+    old_c := compiler.atomic_add(addr c, 1, compiler.relaxed)
+    if old_c <> u32(4294967295) or c <> 0 then
+        code = 1
+        return
+    end if
+    compiler.atomic_store(addr c, 9, compiler.release)
+    if compiler.atomic_load(addr c, compiler.acquire) <> 9 then
+        code = 2
+        return
+    end if
+    if compiler.atomic_exchange(addr c, 11, compiler.acq_rel) <> 9 then
+        code = 3
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr c, 10, 13, compiler.seq_cst, compiler.acquire) <> 11 then
+        code = 4
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr c, 11, 13, compiler.seq_cst, compiler.seq_cst) <> 11 then
+        code = 5
+        return
+    end if
+    compiler.volatile_store(addr c, 42)
+    _ = compiler.volatile_load(addr c)
+    if compiler.volatile_load(addr c) <> 42 then
+        code = 6
+        return
+    end if
+    old_d := compiler.atomic_add(addr d, 1, compiler.relaxed)
+    if old_d <> u64(18446744073709551615) or d <> 0 then
+        code = 1
+        return
+    end if
+    compiler.atomic_store(addr d, 9, compiler.release)
+    if compiler.atomic_load(addr d, compiler.acquire) <> 9 then
+        code = 2
+        return
+    end if
+    if compiler.atomic_exchange(addr d, 11, compiler.acq_rel) <> 9 then
+        code = 3
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr d, 10, 13, compiler.seq_cst, compiler.acquire) <> 11 then
+        code = 4
+        return
+    end if
+    if compiler.atomic_compare_exchange(addr d, 11, 13, compiler.seq_cst, compiler.seq_cst) <> 11 then
+        code = 5
+        return
+    end if
+    compiler.volatile_store(addr d, 42)
+    _ = compiler.volatile_load(addr d)
+    if compiler.volatile_load(addr d) <> 42 then
+        code = 6
+        return
+    end if
+    compiler.compiler_barrier()
+    compiler.thread_fence(compiler.acquire)
+    compiler.thread_fence(compiler.release)
+    compiler.thread_fence(compiler.acq_rel)
+    compiler.thread_fence(compiler.seq_cst)
+    compiler.device_barrier()
+    compiler.completion_barrier()
+    code = 42
+end main

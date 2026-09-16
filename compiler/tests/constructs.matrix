@@ -98,7 +98,7 @@
 0820   tour        accepted emitted executed refused refused-by-name Arenas are ordinary allocators with explicit backing
 0830   tour        accepted emitted executed refused  A view derived from a local borrows it
 0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part
-0850   tour        refused refused-by-name            Volatile is exempt from the borrow rule and from every
+0850   tour        accepted emitted executed refused refused-by-name Volatile is exempt from the borrow rule and from every
 0860   tour        accepted emitted executed refused  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
@@ -175,7 +175,7 @@
 1590   tour        accepted emitted executed refused  Linking a static library
 1600   tour        accepted emitted executed          Exporting to C
 1610   tour        accepted emitted executed refused  A symbol name the language's identifiers cannot spell
-1620   tour        refused                            Atomics are builtins
+1620   tour        accepted emitted executed refused  Atomics are builtins
 1630   tour        refused                            Inline assembly, for what has no builtin
 1640   tour        -                                  Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed refused  Entry point

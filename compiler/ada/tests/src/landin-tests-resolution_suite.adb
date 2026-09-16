@@ -959,7 +959,7 @@ package body Landin.Tests.Resolution_Suite is
       Check ("option answer: i32 = 1" & LF
              & "f: (answer: i32) -> (v: i32) = answer end f", "");
       Check ("f: () -> none = assembler.block() end f", "R6.60");
-      Check ("f: () -> none = compiler.atomic_add() end f", "R6.30");
+      Check ("f: () -> none = compiler.atomic_sub() end f", "R6.30");
       Check ("f: () -> none = compiler.assert(true) end f", "module");
    end Import_Scopes_And_Refusals;
 

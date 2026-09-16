@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `u32` belongs here
+  --> ../tests/fixtures/negative/r630-wrong-value/program.ldn:5:35
+  |
+5 |     compiler.atomic_store(addr a, false, compiler.release)
+  |                                   ^^^^^
+  --> ../tests/fixtures/negative/r630-wrong-value/program.ldn:5:5
+  |
+5 |     compiler.atomic_store(addr a, false, compiler.release)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the memory scalar
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

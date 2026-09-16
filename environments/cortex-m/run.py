@@ -203,6 +203,8 @@ class Run:
         self.peripheral()
         from abi import execute
         execute(self)
+        from memory import execute as memory_execute
+        memory_execute(self)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

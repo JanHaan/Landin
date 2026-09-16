@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Hashed_Sets;
 with Ada.Containers.Vectors;
@@ -18413,6 +18414,24 @@ package body Landin.Stages.Checking is
 
                   Held := Synthesise (Of_Tree, Operand);
                   declare
+                     use type Landin.Memory.Operation;
+                  begin
+                     if Landin.Configuration.Memory_Call
+                       (Spellings.all, Of_Tree, Operand) /=
+                         Landin.Memory.No_Operation
+                     then
+                        Bad.Report
+                          (Item => Bad.Type_Mismatch,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Where (Of_Tree, Node),
+                           Message => "memory intrinsics cannot fail",
+                           Note => "[1620]/D227: no declared error result",
+                           Related => Syn.Origin (Of_Tree, Operand),
+                           Because => "this memory operation", Into => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                  end;
+                  declare
                      Signature : constant Landin.Checking.Signature_Id :=
                        Effective_Call_Signature (Of_Tree, Operand);
                   begin
@@ -18483,6 +18502,108 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Call | Syn.Labeled_Application =>
+               declare
+                  use all type Landin.Memory.Operation;
+                  use type Landin.Memory.Ordering;
+                  Op : constant Landin.Memory.Operation :=
+                    Landin.Configuration.Memory_Call
+                      (Spellings.all, Of_Tree, Node);
+                  Count : constant Natural := Landin.Memory.Operands (Op);
+                  Success : Landin.Memory.Ordering :=
+                    Landin.Memory.No_Ordering;
+                  Failure : Landin.Memory.Ordering :=
+                    Landin.Memory.No_Ordering;
+                  Scalar : Ty.Type_Kind := Ty.U8;
+                  function Refuse (Message : String) return Ty.Type_Kind;
+                  function Refuse (Message : String) return Ty.Type_Kind is
+                  begin
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Node),
+                        Message => Message,
+                        Note => "[1620]/D227: explicit memory contract",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this memory operation", Into => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end Refuse;
+               begin
+                  if Op /= No_Operation then
+                     if Syn.Argument_Count (Of_Tree, Node) /=
+                       Count + Landin.Memory.Orders (Op)
+                     then
+                        return Refuse ("wrong memory intrinsic arity");
+                     elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+                        return Refuse ("memory intrinsics cannot fail");
+                     end if;
+                     if Landin.Memory.Orders (Op) > 0 then
+                        Success := Landin.Memory.Order_Named
+                          (Landin.Configuration.Compiler_Member
+                            (Spellings.all, Of_Tree,
+                             Syn.Nth_Argument (Of_Tree, Node, Count + 1)));
+                     end if;
+                     if Landin.Memory.Orders (Op) = 2 then
+                        Failure := Landin.Memory.Order_Named
+                          (Landin.Configuration.Compiler_Member
+                            (Spellings.all, Of_Tree,
+                             Syn.Nth_Argument (Of_Tree, Node, Count + 2)));
+                     end if;
+                     if not Landin.Memory.Legal (Op, Success, Failure) then
+                        return Refuse ("invalid constant memory ordering");
+                     end if;
+                     if Count > 0 then
+                        declare
+                           Arg : constant Syn.Node_Id :=
+                             Syn.Nth_Argument (Of_Tree, Node, 1);
+                           Held : constant Ty.Type_Kind :=
+                             Synthesise (Of_Tree, Arg);
+                        begin
+                           if Held /= Ty.Pointer_Value then
+                              return Refuse ("memory access needs a pointer");
+                           end if;
+                           declare
+                              Ref : constant
+                                Landin.Checking.Reference_Descriptor :=
+                                  Landin.Checking.Descriptor_Of
+                                    (Types.all, Landin.Checking.Reference_Of
+                                      (Types.all, Of_Tree, Arg));
+                           begin
+                              if Ref.Empty_Atom /= Res.No_Declaration
+                                or else Ref.View /= Ty.Ordinary_View
+                                or else Ref.Nominal /=
+                                  Landin.Checking.No_Nominal_Type
+                                or else Ref.Referent not in
+                                  Ty.U8 | Ty.U16 | Ty.U32 | Ty.U64
+                              then
+                                 return Refuse
+                                   ("memory access needs an unsigned scalar"
+                                    & " pointer without a subtype");
+                              elsif Landin.Memory.Writes (Op)
+                                and then not Ref.Mutable
+                              then
+                                 return Refuse
+                                   ("memory write needs mutable permission");
+                              end if;
+                              Scalar := Ref.Referent;
+                           end;
+                        end;
+                     end if;
+                     if not Landin.Targets.Capabilities.Memory_Access
+                       (Facts, Op, Ty.Storage_Size (Scalar, Facts))
+                     then
+                        return Refuse
+                          ("memory operation or width unavailable on target");
+                     end if;
+                     for I in 2 .. Count loop
+                        Require (Of_Tree,
+                          Syn.Nth_Argument (Of_Tree, Node, I), Scalar,
+                          Syn.Origin (Of_Tree, Node), "the memory scalar");
+                     end loop;
+                     return Kept
+                       (if Landin.Memory.Returns_Value (Op) then Scalar
+                        else Ty.No_Value);
+                  end if;
+               end;
                if Syn.Kind (Of_Tree, Node) = Syn.Call
                  and then Syn.Argument_Count (Of_Tree, Node) /= 1
                  and then

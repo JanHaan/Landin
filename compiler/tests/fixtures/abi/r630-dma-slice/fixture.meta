@@ -1,0 +1,9 @@
+class: abi
+profiles: specialization
+summary: P1 escaping ordinary slice observes serialized external writes after completion and preserves aggregate copy semantics
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+status: 42
+constructs: 0430, 0470, 0770, 0780, 0850, 1620, 1975
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,8 @@
+class: negative
+summary: P1 rejects a tracked frame buffer passed to an escaping DMA handoff
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0780, 1620
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r630-frame-dma/program.ldn

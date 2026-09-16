@@ -271,3 +271,46 @@ The [probe guide](../environments/cortex-m/README.md#r620-layout-and-abi-evidenc
 distinguishes Ada planner/IR tests, GCC layout measurements and executed
 C/assembly witnesses. No language semantic decision, instruction selection,
 Landin startup or source debugger is supplied by these plans.
+
+## Explicit memory operations
+
+R6.30/D227 admits unsigned scalar memory primitives through
+`Targets.Capabilities.Memory_Access`, independently of backend availability.
+Widths are 1/2/4/8 bytes on hosted targets and 1/2/4 on Cortex-M0. Every implemented access
+checks natural alignment at runtime, including inside `unchecked`. The M0
+source contract refuses exchange/add/compare-exchange; no Cortex emitter or
+atomic runtime library is implied. Synthetic-32 refuses these operations.
+
+The initial hosted lowering deliberately strengthens every atomic ordering.
+x86 uses aligned MOV for loads, XCHG for stores/exchanges, LOCK XADD for wrapping
+fetch-add and LOCK CMPXCHG for strong compare-exchange, with MFENCE before and
+after each. Darwin uses DMB ISH before and after, ordinary scalar load/store,
+and a baseline LDXR/STXR retry loop for read-modify-write; a failed comparison
+clears the reservation with CLREX. It requires no LSE extension or out-of-line
+atomic helper. Retry loops promise no wait-free bound. Scalar volatile accesses
+use exactly one width-matched load/store and no implicit hardware fence.
+
+Compiler barriers have no hardware instruction. Thread fences use MFENCE or
+DMB ISH. Device barriers use MFENCE or DMB SY; completion barriers use MFENCE
+or DSB SY. CPU atomic contracts assume ordinary coherent RAM (x86 write-back;
+Arm Normal shareable memory). Device/MMIO behavior requires platform mappings,
+permitted bus width and the device's completion protocol. A fence cannot turn
+an arbitrary user pointer into a valid device mapping or drain a device's
+internal command queue. On x86, MFENCE provides global visibility ordering,
+not instruction serialization or a peripheral acknowledgment; posted writes
+can require a device-specific readback. On Arm, DSB waits for architectural
+completion, which also does not imply peripheral-command completion. No portable cache-maintenance builtin is enabled.
+
+Official architecture and toolchain references checked on 2026-09-16:
+[Armv6-M reference manual DDI0419E](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
+[Arm A-profile manual entry](https://developer.arm.com/documentation/ddi0487/mc/)
+and [Arm's explanation of SC instruction sequences](https://developer.arm.com/community/arm-community-blogs/b/tools-software-ides-blog/posts/armv8-sequential-consistency),
+[Intel architecture manuals](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html),
+[GCC atomic builtins](https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html),
+[GCC memory clobbers](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/Extended-Asm.html),
+and [Arm CMSIS cache operations](https://arm-software.github.io/CMSIS_6/latest/Core/group__Dcache__functions__m7.html).
+The pinned M0 tools execute the supported load/store/barrier and nested PRIMASK
+controls, and independently show GCC's RMW needs an unresolved helper.
+The cache model demonstrates stale reads and destructive maintenance, under an
+explicit two-byte cache-line abstraction; the cacheless emulator cannot test
+physical cache behavior. See the [probe guide](../environments/cortex-m/README.md).
