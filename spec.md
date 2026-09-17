@@ -1804,8 +1804,14 @@ runs after compiler reset initialization; it does not replace the reset
 loader. This is the explicit exception to [1550]'s frame guarantee. It does
 not permit an ordinary routine to omit its frame.
 
-`assembler.block` takes exactly one quoted or raw fixed text literal in a
-routine body on Cortex-M0. A block is at most 4096 decoded ASCII bytes, using
+`assembler.block` takes a quoted or raw fixed text literal in a routine body
+on Cortex-M0. Its one-argument form returns `none`. In an ordinary or interrupt
+body, a second positional argument of type `u32` selects the scalar form:
+the argument is evaluated once before the block, enters in r0, and the final
+r0 is the `u32` result. The fixed text is not a runtime argument. There are no
+other input/output registers, implicit casts, named operands or recovery
+clauses. A naked body retains the one-argument form. D230 records the choice.
+A block is at most 4096 decoded ASCII bytes, using
 LF, horizontal tabs and printable characters. It is a conservative read/write,
 call and trap boundary in IR: memory knowledge is invalidated and memory
 operations cannot be moved across it. This compiler boundary alone issues no
@@ -9310,7 +9316,7 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229 checks target, machine signatures, placement and fixed assembly; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D229 entry return and naked fallthrough execute an undefined instruction; hardware fault dispatch applies without a hosted caller | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -14276,3 +14282,49 @@ masking does not stop DMA and a notification alone is insufficient.
 GDB and device inputs, plus the unchanged R6.10–R6.50 independent and generated
 lanes. These pins state semantics and boundaries; ROADMAP.md alone records
 actual results, acceptance, closure and successor ownership.
+
+### D230 — Scalar transport through the ordinary assembly boundary
+
+**From** [1360], [1550], [1570], [1620], [1630], [1990], D202, D227 and
+prototype 1's X8.
+
+**Decision:** [1990]'s bounded two-argument `assembler.block(text, operand)`
+transports one `u32` through r0. It is an ordinary body expression and remains
+an opaque read/write, call and trap boundary even if its result is discarded.
+The operand's effects complete before assembly begins; the result is saved
+before subsequent Landin evaluation. All ordinary register/frame restrictions
+still apply. This form is available inside an interrupt's ordinary framed
+body, but neither an interrupt signature nor a naked body acquires parameters.
+Other targets refuse both assembly forms at checking.
+
+This permits `core/cpu` to implement PRIMASK save/disable/restore with ordinary
+Landin functions. It does not add a CPU intrinsic namespace, an assembly
+template language, pointer operands or a new calling convention. The saved
+mask is explicit caller state; nested sections restore their own prior mask.
+The selected ARMv6-M PRIMASK bit affects configurable exceptions only. It does
+not exclude NMI, HardFault or DMA. WFI can wake spuriously or with an enabled
+pending masked interrupt; callers must recheck the condition they wait for.
+Hardware barriers and compiler boundaries retain D227's separate meanings.
+
+**Alternatives and rationale:** the former result-free surface could disable
+interrupts but could not return the prior mask without an undocumented memory
+or register convention. A new intrinsic namespace would contradict X8's
+ordinary-module boundary. General constraints/clobber lists would add a new
+register-allocation interface when a single low-register carrier suffices.
+Implicit memory-output tricks would bypass the frame/storage restrictions.
+Those alternatives are declined for this slice.
+
+**Guarantees and pins:** `positive/r670-scalar-assembly` pins target-fixed
+parsing without enabling hosted assembly. Checking and IR verification reject malformed carrier,
+ordering, target and naked combinations (`cortex ABI/machine directives` and
+`cortex ABI/scalar assembly IR`). Compiler-generated `core-cpu.ldn` observes
+nested masks, deferred restoration, actual interrupt execution and the
+interrupted hardware/software state in QEMU. The independently asserted
+peripheral trace in `freestanding.py` uses the same ordinary-slice completion
+protocol as `firmware.py`. Assembly instructions and indirect writes remain
+programmer obligations; no ownership or interrupt-safety proof is introduced.
+ROADMAP.md owns actual results and the remaining R6.70 obligations.
+
+**Pinned by:** `positive/r670-scalar-assembly`, the Cortex source/IR cases and
+the compiler-generated `core-cpu.ldn` and ordinary-slice DMA execution in
+`environments/cortex-m/freestanding.py`.

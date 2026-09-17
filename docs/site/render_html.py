@@ -957,6 +957,10 @@ GUIDES = [
          nav="the bootstrap compiler", group="the implementation",
          blurb="The Ada 2022 chassis: what each package owns, what it may "
                "not own, and what is deliberately absent."),
+    dict(key="core", src="core/README.md", out="core.html",
+         nav="the core modules", group="the implementation",
+         blurb="Explicit allocator capabilities, collections and the "
+               "constrained CPU library, with their module boundaries."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "

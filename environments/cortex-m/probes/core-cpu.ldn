@@ -1,0 +1,92 @@
+import core/cpu
+
+mut initialized: u32 = 0x670
+mut cleared: u32 = 0
+mut observed: u32 = 0
+mut interrupts: u32 = 0
+mut handler_mask: u32 = 99
+mut discarded: u32 = 0
+mut evaluations: u32 = 0
+
+operand: () -> (carrier: u32) =
+    evaluations = evaluations + 1
+    carrier = u32(usize(addr discarded))
+end operand
+
+skip_assembly: (early: bool) -> (result: u32) =
+    result = 41
+    _ = assembler.block("movs r1, #99\nstr r1, [r0]", begin
+        return when early
+        operand()
+    end)
+    result = 42
+end skip_assembly
+
+link(vector: 16)
+extern(interrupt) irq: () -> none =
+    previous := cpu.disable_interrupts()
+    nested := cpu.disable_interrupts()
+    cpu.restore_interrupts(nested)
+    handler_mask = previous + cpu.interrupt_mask()
+    cpu.restore_interrupts(previous)
+    interrupts = interrupts + 1
+end irq
+
+transport: (item: type, value: u32) -> (result: u32) =
+    result = assembler.block("adds r0, #7\nmovs r1, #99\nmovs r4, #88", value)
+end transport
+
+temporary_mask: (early: bool) -> (masked: u32) =
+    previous := cpu.disable_interrupts()
+    defer cpu.restore_interrupts(previous)
+    masked = cpu.interrupt_mask()
+    return when early
+    masked = masked + cpu.interrupt_mask()
+end temporary_mask
+
+start: () -> none =
+    observed = 1
+    return when initialized <> 0x670 or cleared <> 0
+    return when cpu.interrupt_mask() <> 0
+    previous := cpu.disable_interrupts()
+    return when previous <> 0 or cpu.interrupt_mask() <> 1
+    nested := cpu.disable_interrupts()
+    return when nested <> 1
+    cpu.restore_interrupts(nested)
+    return when cpu.interrupt_mask() <> 1
+    cpu.restore_interrupts(previous)
+    return when cpu.interrupt_mask() <> 0
+    return when temporary_mask(true) <> 1 or cpu.interrupt_mask() <> 0
+    return when temporary_mask(false) <> 2 or cpu.interrupt_mask() <> 0
+    outer := cpu.disable_interrupts()
+    return when temporary_mask(true) <> 1 or cpu.interrupt_mask() <> 1
+    cpu.restore_interrupts(outer)
+
+    mut value: u32 = 35
+    answer := transport(item: u32, value: value)
+    return when answer <> 42 or value <> 35
+    before := discarded
+    _ = assembler.block("movs r1, #73\nstr r1, [r0]", operand())
+    return when before <> 0 or discarded <> 73 or evaluations <> 1
+    return when skip_assembly(true) <> 41
+    return when discarded <> 73 or evaluations <> 1
+    return when value <> 35
+
+    saved := cpu.disable_interrupts()
+    enable: ptr mut u32 = ptr(0xe000e100)
+    pending: ptr mut u32 = ptr(0xe000e200)
+    compiler.volatile_store(enable, 1)
+    compiler.volatile_store(pending, 1)
+    cpu.completion_barrier()
+    cpu.wait_for_interrupt()
+    return when interrupts <> 0 or cpu.interrupt_mask() <> 1
+    cpu.restore_interrupts(saved)
+    while interrupts == 0 do
+        cpu.wait_for_interrupt()
+    end while
+    return when interrupts <> 1 or handler_mask <> 1
+    return when cpu.interrupt_mask() <> 0
+    cpu.device_barrier()
+    cpu.compiler_barrier()
+    observed = 0x670
+end start

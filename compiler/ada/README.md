@@ -9,6 +9,14 @@ For an introduction to the intermediate representation and the reasons for
 its structure, read [the IR guide](../../docs/ir.md). It is a maintained,
 non-authoritative account derived from the implementation and its tests.
 
+D230's Cortex-only scalar `assembler.block` has one explicit u32 operand/result
+through r0, with the same conservative effects and ordinary register/frame
+restrictions as result-free assembly. `core/cpu` uses this ordinary source
+surface; [the core guide](../../core/README.md) records its public interfaces.
+The compiler-host Cortex tests verify source/IR restrictions and the native
+Linux freestanding lane executes the generated firmware. ROADMAP.md owns the
+active R6.70 work, including the still-required noreturn and panic contracts.
+
 ## Layout
 
 ```text

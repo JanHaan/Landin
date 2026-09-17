@@ -7,7 +7,9 @@ with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
+with Landin.IR.Testing_Support;
 with Landin.Machine;
+with Landin.Memory;
 with Landin.Platform.Native;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -775,11 +777,34 @@ package body Landin.Tests.Cortex_Suite is
            when 36 => "link(align: 0x10) mut x: u32 = 0",
            when 37 => "link(vector: 0x10) extern(interrupt) h: () -> none"
              & " = end h",
+           when 38 => "h: (x: u32) -> (r: u32) = "
+             & "assembler.block(""adds r0, #1"", x) end h",
+           when 39 => "h: (x: u16) -> none = "
+             & "_ = assembler.block(""nop"", x) end h",
+           when 40 => "extern(naked) h: () -> none = "
+             & "assembler.block(""bx lr"", 0) end h",
+           when 41 => "h: () -> none = "
+             & "_ = assembler.block(""nop"", missing) end h",
+           when 42 => "h: (x: u32) -> none = "
+             & "_ = assembler.block(""mov r11, r0"", x) end h",
+           when 43 => "h: (x: u32) -> none = "
+             & "_ = assembler.block(""nop"", x, x) end h",
+           when 44 => "h: (x: u32) -> none = "
+             & "_ = assembler.block(""nop"", x) end h",
+           when 45 => "h: (x: u32) -> (r: u32) = r = 42 "
+             & "_ = assembler.block(""nop"", begin return when x == 0 "
+             & "x end) end h",
+           when 46 => "h: (x: u32) -> none = "
+             & "_ = assembler.block(""nop"", x) else 0 end h",
+           when 47 => "h: () -> none = "
+             & "_ = assembler.block(""nop"", 0) end h",
+           when 48 => "h: (x: u32) -> none = "
+             & "_ = assembler.block(text: ""nop"", operand: x) end h",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 37 loop
+      for Case_Number in 1 .. 48 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -790,7 +815,7 @@ package body Landin.Tests.Cortex_Suite is
             if Case_Number = 1 then
                Args.Append ("--firmware-entry=start");
             end if;
-            Args.Append (if Case_Number in 25 .. 27
+            Args.Append (if Case_Number in 25 .. 27 | 44
                          then "--target=darwin-arm64"
                          else "--target=cortex-m0");
             Args.Append ("--emit=asm");
@@ -803,11 +828,12 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
-                  (if Case_Number = 1 then Landin.Driver.Status_Success
+                  (if Case_Number in 1 | 38 | 45
+                   then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number /= 1 then
+               if Case_Number not in 1 | 38 | 45 then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");
@@ -869,8 +895,90 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Machine_IR;
 
+   procedure Assembly_IR (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_IR (Item : in out Landin.Testing.Context) is
+      use type IR.Verifier.Fault_Kind;
+      use type Ty.Type_Kind;
+   begin
+      for Mode in 1 .. 6 loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (T.Cortex_M);
+            Order : Landin.Stages.Pipeline;
+            Written : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Work, "assembly.ldn", "f: (x: u32) -> (r: u32) = "
+                 & "flag: bool = true _ = flag "
+                 & "r = assembler.block(""adds r0, #7"", x) end f");
+            pragma Unreferenced (Written);
+         begin
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Resolver'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Landin.Stages.Append (Order, Lowerer'Access);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Run (Order, Work), 5,
+               "scalar assembly reaches verified IR");
+            declare
+               Code : constant not null access IR.Unit :=
+                 Landin.Stages.Code (Work);
+               Assembly_Value : IR.Value_Id := IR.No_Value;
+               Boolean_Value : IR.Value_Id := IR.No_Value;
+            begin
+               for V in 1 .. IR.Value_Count (Code.all, 1) loop
+                  if IR.Op_Of (Code.all, 1, IR.Value_Id (V))
+                    = IR.Memory_Access
+                  then
+                     Assembly_Value := IR.Value_Id (V);
+                  elsif IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Truth
+                  then
+                     Boolean_Value := IR.Value_Id (V);
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, IR.Result_Of (Code.all, 1, Assembly_Value) = Ty.U32,
+                  "assembly produces the declared scalar carrier");
+               case Mode is
+                  when 1 =>
+                     IR.Testing_Support.Overwrite_Value_Type
+                       (Code.all, 1, Assembly_Value, Ty.U16);
+                  when 2 =>
+                     IR.Testing_Support.Overwrite_Operand
+                       (Code.all, 1, Assembly_Value, 1, Boolean_Value);
+                  when 3 =>
+                     IR.Testing_Support.Overwrite_Memory
+                       (Code.all, 1, Assembly_Value,
+                        Landin.Memory.Compiler_Barrier, Ty.U32,
+                        Landin.Memory.Seq_Cst, Landin.Memory.No_Ordering);
+                  when 4 =>
+                     IR.Testing_Support.Overwrite_Memory
+                       (Code.all, 1, Assembly_Value,
+                        Landin.Memory.Volatile_Load, Ty.U32,
+                        Landin.Memory.No_Ordering, Landin.Memory.No_Ordering);
+                  when 6 =>
+                     IR.Testing_Support.Overwrite_Memory
+                       (Code.all, 1, Assembly_Value,
+                        Landin.Memory.Compiler_Barrier, Ty.U16,
+                        Landin.Memory.No_Ordering, Landin.Memory.No_Ordering);
+                  when others => null;
+               end case;
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check
+                    (Code.all, (if Mode = 5 then T.Darwin_Arm64
+                                else T.Cortex_M)).Kind
+                      /= IR.Verifier.Nothing_Wrong,
+                  "malformed scalar assembly refuses before selection");
+            end;
+         end;
+      end loop;
+   end Assembly_IR;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "scalar assembly IR", Assembly_IR'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register

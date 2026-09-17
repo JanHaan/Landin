@@ -378,6 +378,16 @@ array/struct shapes, memory effects and private call-status validation. Hosted
 body-sharing repairs remain unchanged. Code size is a retained physical-image
 constraint, not a competitive-optimization claim.
 
+D230 adds one u32 input/output in r0 to ordinary `assembler.block`. The input
+is loaded from its verified value home and the result is saved before later
+code. The existing low-register/flag clobbers and full opaque effects remain;
+no high-register, frame or naked-body restriction is relaxed. `core/cpu` uses
+MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB SY/WFI through this source
+surface. CPU functions retain ordinary framed Landin calls in both thread and
+handler mode. Its explicit barriers preserve D227, including the difference
+between a compiler boundary and device completion. The freestanding consumers
+retain map/module/helper closure evidence under the same fixed image profile.
+
 ### Runtime helper boundary
 
 The external test link selects the pinned GCC 14.2.1

@@ -244,7 +244,7 @@ synthetic peripheral execution bound by native acceptance. R6.60 adds
 compiler-owned reset, initialized-data/RAM-code copying, BSS,
 vectors, interrupt/naked conventions, sections/keep and opaque assembly.
 Its QEMU/Renode firmware lane remains distinct from R6.50's external harness.
-ROADMAP.md owns exact-revision closure; R6.70 is next dependency-ready. Source
+ROADMAP.md owns exact-revision closure; R6.70 is active. Source
 debugging and complete measured firmware evidence remain R6.100. R6.80
 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's

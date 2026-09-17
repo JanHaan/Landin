@@ -1,0 +1,5 @@
+class: positive
+summary: D230 parses bounded u32 assembly transport under target-fixed selection
+program: program.ldn
+constructs: 1360, 1550, 1570, 1620, 1630, 1990
+targets: linux-x86-64, macos-arm64, synthetic-32

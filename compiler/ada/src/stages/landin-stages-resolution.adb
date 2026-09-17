@@ -671,8 +671,12 @@ package body Landin.Stages.Resolution is
          if Landin.Configuration.Assembly_Call
            (Spellings.all, Of_Tree, Node)
          then
-            --  Fixed text is checked by the assembly boundary, not resolved
-            --  as a runtime function or an ordinary text view.
+            --  Fixed text belongs to the assembly boundary. The optional
+            --  scalar operand remains an ordinary evaluated expression.
+            for I in 2 .. Syn.Argument_Count (Of_Tree, Node) loop
+               Resolve
+                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, I), Inside);
+            end loop;
             return;
          end if;
 

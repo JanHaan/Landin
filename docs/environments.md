@@ -12,6 +12,11 @@ Linux bundle with compatible committed scope at approval (`--darwin DARWIN_BUNDL
 execution identities are retained; Linux acceptance alone cannot close the
 Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
 
+Embedded firmware and freestanding library consumers run on the supported
+native Linux host through `environments/cortex-m/run.py`. They retain separate
+QEMU and synthetic Renode evidence in the native export. Mac `--host` checks
+compiler behavior for Cortex; they do not execute embedded workloads.
+
 ## Environments
 
 | environment | role | status |

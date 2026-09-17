@@ -10,6 +10,27 @@ from run import Run, oracle, remove_renode_lock
 
 
 class ProbeFailures(unittest.TestCase):
+    def test_freestanding_module_and_linker_closure(self):
+        from freestanding import imports, linker_closure, programs
+        self.assertEqual(imports('import core/mem\nimport core/cpu\n'), {'mem', 'cpu'})
+        for name in ('heap', 'io', 'c', '../heap'):
+            with self.assertRaises(RuntimeError):
+                imports('import core/'+name)
+        helper = '/tools/thumb/v6-m/nofp/libgcc.a'
+        base = 'LOAD core.elf.o\nLOAD '+helper+'\n'
+        for suffix in ('', 'LOAD linker stubs\n'):
+            self.assertEqual(linker_closure(base+suffix, helper)[0][:2],
+                             ['core.elf.o', helper])
+        for bad in (base+'LOAD libc.a\n', base+'LOAD crt0.o\n',
+                    base.replace(helper, '/tools/libgcc.a'),
+                    base.replace('LOAD core.elf.o\n', ''),
+                    base+'LOAD linker stubs\nLOAD linker stubs\n'):
+            with self.assertRaises(RuntimeError):
+                linker_closure(bad, helper)
+        self.assertEqual(set(programs()), {
+            'cpu', 'dma', 'pool', 'zero', 'vec', 'core-mem-allocators',
+            'core-mem-arena-boundaries', 'core-mem-raw-storage'})
+
     def test_oracle_refuses_false_pass(self):
         for text in ('', 'PASS PASS', 'PASS\nAssertionError', 'PASS\n[WARNING] bad',
                      'PASS\nThere was an error executing command'):

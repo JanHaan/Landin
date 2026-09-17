@@ -43,6 +43,10 @@ the unchanged IR golden and traversal execution checks in both compiler modes;
 that delivery used routine scope without GDB. R5.51 changes debugger selection
 and verification, so its closure uses routine scope with full release GDB/LLDB.
 
+R6.70's planned noreturn/panic control flow, frames and source-site identity
+require native debugger-risk coverage at closure. Focused CPU/library firmware
+development is recorded separately and cannot approve the still-active item.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.

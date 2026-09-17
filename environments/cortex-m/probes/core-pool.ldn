@@ -1,0 +1,44 @@
+import core/mem
+import core/pool
+
+mut backing: [64]u8 = zeroed
+mut records: [2]pool.slot = zeroed
+mut observed: u32 = 0
+
+exercise: () -> (result: u32) ! mem.out_of_memory =
+    result = 1
+    base: ptr mut u8 = ptr(usize(addr backing[0]) + 1)
+    mut state := try pool.over(base, 63, 16, 2, 4, records[0..<2])
+    zero := try mem.allocate(state, usize(0), usize(0))
+    return when usize(zero) % 4 <> 0 or pool.live(state) <> 1
+    mut refused: bool = false
+    _ = mem.allocate(state, usize(17), usize(1)) else (problem)
+        _ = problem
+        refused = true
+    end
+    return when not refused or pool.allocation_count(state) <> 1
+    mem.free(state, zero, usize(0))
+    raw := try mem.allocate(state, usize(4), usize(4))
+    object: ptr mut u32 = ptr(usize(raw))
+    object.val = 42
+    return when usize(object) <> usize(zero) or object.val <> 42
+    bytes := try mem.allocate(state, usize(16), usize(1))
+    last: ptr mut u8 = ptr(usize(bytes) + 15)
+    bytes.val = 17
+    last.val = 25
+    valid: bool = u32(bytes.val) + u32(last.val) == 42
+    return when not valid or pool.live(state) <> 2
+    refused = false
+    _ = mem.allocate(state, usize(1), usize(1)) else (problem)
+        _ = problem
+        refused = true
+    end
+    return when not refused or object.val <> 42
+    mem.free(state, bytes, usize(16))
+    mem.free(state, raw, usize(4))
+    return when pool.live(state) <> 0 or pool.free_count(state) <> 3
+    return when pool.allocation_count(state) <> 3
+    result = 42
+end exercise
+
+start: () -> none = observed = exercise() else 1 end start

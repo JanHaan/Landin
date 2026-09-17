@@ -1,0 +1,34 @@
+--  Cortex-M0 CPU operations. The saved mask is an ordinary explicit value.
+--  Restore it in lexical reverse order; masking does not stop DMA or faults.
+compiler.assert(compiler.arch == cortex_m0)
+
+public disable_interrupts: () -> (previous: u32) =
+    zero: u32 = 0
+    previous = assembler.block("mrs r0, primask\ncpsid i", zero)
+end disable_interrupts
+
+public restore_interrupts: (previous: u32) -> none =
+    _ = assembler.block("msr primask, r0\nisb sy", previous)
+end restore_interrupts
+
+public interrupt_mask: () -> (current: u32) =
+    zero: u32 = 0
+    current = assembler.block("mrs r0, primask", zero)
+end interrupt_mask
+
+--  Architectural completion before sleep does not acknowledge a device.
+public wait_for_interrupt: () -> none =
+    assembler.block("dsb sy\nwfi")
+end wait_for_interrupt
+
+public device_barrier: () -> none =
+    compiler.device_barrier()
+end device_barrier
+
+public completion_barrier: () -> none =
+    compiler.completion_barrier()
+end completion_barrier
+
+public compiler_barrier: () -> none =
+    compiler.compiler_barrier()
+end compiler_barrier
