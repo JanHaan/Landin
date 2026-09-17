@@ -680,7 +680,11 @@ package body Landin.Tests.Cortex_Suite is
                   Landin.Testing.Check
                     (Item, Result.Status /= Landin.Driver.Status_Success,
                      "invalid firmware request refuses " & Mode'Image);
-                  if Mode = 12 then
+                  if Mode = 3 then
+                     Landin.Testing.Check
+                       (Item, U.Index (Result.Report, "p.ldn:1:") > 0,
+                        "an invalid entry points to its source identity");
+                  elsif Mode = 12 then
                      Landin.Testing.Check
                        (Item, U.Index (Result.Report, "L0502") > 0,
                         "a reached generic instance is not a source entry");

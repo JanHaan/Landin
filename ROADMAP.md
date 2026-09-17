@@ -10575,7 +10575,7 @@ dependency-ready and retains its independent generated-device fixture gate.
 
 ### R6.60 — Implement startup, vectors and machine directives
 
-Status: active
+Status: complete
 Depends on: R4.30, R6.30, R6.40, R6.50
 
 Implement linker scripts, startup, firmware entry, vector placement,
@@ -10584,7 +10584,7 @@ interrupt/naked conventions, sections, keep rules and inline assembly.
 Exit evidence: firmware boots, vectors and interrupts execute, sections land at
 expected addresses and link/map evidence is deterministic.
 
-Implementation intake and selected boundary (not completion evidence):
+Verified intake and selected boundary:
 
 The clean intake was branch `r650-cortex-backend` at accepted revision
 `f83b8a54922a2c0958166565296e908b114f4f45`. Canonical `origin/main` and GitHub
@@ -10597,8 +10597,7 @@ success for the expected revision. Implementation proceeds on `r660-startup`.
 
 The selected compiler request is `--target=cortex-m0 --firmware-entry=NAME`.
 The name identifies a nongeneric ordinary or naked, infallible `() -> none`
-definition
-in the entry module, independently of its optional link symbol. The compiler
+definition in the entry module, independently of its optional link symbol. The compiler
 owns reset, the vector image and the constrained linker script. This retains
 32 KiB flash at zero, 16 KiB RAM at `0x20000000`, and the inherited upper
 4 KiB stack reservation. Reset copies initialized RAM from its flash load
@@ -10630,15 +10629,49 @@ Arm private helper names are reserved. This chooses an explicit bounded
 firmware request over a general build-description language or externally
 hidden initialization.
 
-Development evidence so far uses the implemented compiler executable path,
-without `backend-start.S` or `backend-memory.ld`. QEMU observes poisoned RAM
-being initialized on cold boot and reset, source entry execution and its
-return trap. Fresh directories produce byte-identical ELF, object, assembly,
-linker script and map files. A generated SVC handler calls an ordinary routine
-and is preempted by generated IRQ0; independent GDB observations check both
-hardware frames, EXC_RETURN, all saved registers, flags, eight-byte stack
-alignment and final source data. These are development runs, not accepted
-revision evidence; the complete exit gate above remains open.
+Executable development results, retained separately from acceptance:
+
+`firmware.py --all-profiles` passed on the supported native Linux runner using
+the implemented compiler executable path, without `backend-start.S` or
+`backend-memory.ld`. The retained development compiler SHA-256 was
+`4fb16642f1fc71390e0d1dc9a3cbef45556428d07bb5faddd344926e898bf015`;
+private `thumb/v6-m/nofp/libgcc.a` SHA-256 was
+`137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`.
+These identify development observations, not the final archive's compiler;
+acceptance rebuilds and binds its own identities.
+
+| Evidence | Actual development result and scope |
+| --- | --- |
+| Generated boot and reset | 12 cold boots plus 12 resets across six profiles; poisoned initialized data/BSS are repaired, initial SP/reset Thumb identity and reserved zero slots agree, entry executes and return traps |
+| QEMU exception/machine execution | 36 generated sessions plus one independent C/assembly session; SVC/IRQ0 nesting, ordinary helper, MSP/PSP, F1/F9/FD EXC_RETURN, hardware padding, registers/flags, naked fallthrough and root frame observations pass |
+| Placement and linkage | Immutable flash, initialized RAM, BSS, aligned kept/discarded sections, typed function/text relocations, copied RAM code/handler, both-direction veneers and libgcc success/failure transport pass |
+| Determinism | 54 fresh-directory scenario/profile pairs, 108 generated ELF builds; all 270 ELF/object/assembly/script/map byte comparisons pass, including section/relocation bytes |
+| Synthetic generated peripherals | 24 Renode runs across six profiles: IRQ/DMA completion, packed images, invalid encoding trap and byte access; independently asserted register states, exact widths/counts and traces pass |
+| Bounded refusal controls | Ten programs retain reported failures for flash overflow, stack overlap, materialization budget, missing symbol, bad encoding/instruction, vector placement/reset ownership, bad entry and reserved symbol |
+| Compiler-host machine controls | Eight Cortex ABI cases, 432 assertions pass, including 35 machine-source combinations, firmware requests and malformed IR placement; the generic-instance entry refusal and source/link-name separation are pinned |
+| Focused inherited gates | Ten executions across module-image and packed-hole profiles and four oversized-image verdicts pass under the old external backend harness; its complete 533-fixture inventory remains mandatory |
+| Documentation/tooling | Full `check.py` and verified rendering pass; generated grammar/coverage/diagnostic records are current; editor structural parser regenerated and its corpus passes |
+
+The bounded new generated images reached at most 10,012 flash-load bytes and
+896 static RAM bytes (including RAM code). Nested interrupt runs touched
+256 bytes of the 4 KiB painted stack reservation in every profile, retaining
+the untouched lower guard. This is an observed small-program extent, not a
+maximum call-depth proof, arbitrary nesting guarantee or R6.100 measurement
+programme. Independent assembly establishes the interrupted four-byte SP and
+hardware alignment-padding case; ordinary Landin calls still require eight-byte
+alignment. Reset assumes hardware vector entry and no NMI/fault during its
+initialization window. Physical-device timing, arbitrary assembly memory
+corruption and programmer-owned naked obligations remain outside the claim.
+
+The full Mac host pass exposed the newly changed refusal stage, a stale
+catalogue count and an annotation source-span regression. The span was repaired;
+the existing refusal source was preserved, its two remaining resolution errors
+were recorded, and a dedicated hosted-assembly L0301 fixture was added. Focused
+catalogue, parser-code, resolution and recorded-fixture checks then all passed.
+No warning was suppressed. The machine directive allowlist rejects later-core
+system registers/instructions; unencodable M0 operands remain retained tool
+failures. The fixed script and materialization budget are supported limits,
+not a general linker-script language or a resource-safety promise.
 
 The cross-prototype audit keeps prototype 2's recoverable diagnostic/provider
 failures on ordinary calls, prototype 3's allocator/evidence signatures and
@@ -10673,6 +10706,26 @@ measured stack/firmware evidence and milestone closure are R6.100. General
 SVD generation remains companion-tool work. R551 resource/evidence/tooling
 dispositions remain retained; this item adds no scheduler, package ecosystem,
 cache/resume programme or Nix CI.
+
+Exact-revision completion and delivery binding:
+
+The complete status of this containing closure tree becomes authoritative only
+after the identical committed archive passes both selected native policies,
+including the full old R6.10–R6.50 probes/corpus and the new mandatory firmware
+lane. `artifacts/cortex-m/firmware` retains scripts, input images, independent
+controls, assertions, timeouts, ELF/map/section/relocation/disassembly evidence,
+actual closure, tool identities and results; the existing export inventory and
+Renode lock cleanup remain mandatory. Linux GDB and native Darwin LLDB cover
+the debugger-risk scope, without claiming Landin source debugging on Cortex.
+Verified exports and the annotated dual-native `ci/accepted/FULL_COMMIT` bind
+actual results to this exact revision. Atomic canonical promotion, matching
+remote commit/approval and GitHub mirror, and successful guarded Pages
+publication are required. No later bookkeeping revision substitutes for the
+accepted archive. Assembly inspection or independent controls alone cannot
+satisfy this gate.
+
+R6.70 is the next dependency-ready item. R6.80 remains independently ready
+with its separate checked-in generated-device fixture gate.
 
 ### R6.70 — Implement the freestanding Landin core slice
 
