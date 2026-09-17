@@ -3,7 +3,7 @@
 ROADMAP.md owns selection, implementation and completion evidence. R6.10-R6.40
 retain their independent C/assembly, memory-model and hosted transport controls.
 R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
-access. Language startup and firmware linking remain R6.60.
+access. R6.60 adds the separate compiler-owned startup and firmware-linking lane.
 
 ## Selected lanes and pins
 
@@ -30,8 +30,9 @@ this is a supported host profile, not a hermetic operating-system image.
 These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
 R6.20 separately selects the internal Landin transport described in the
 [target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
-The compiler emits Cortex-M0 assembly; the external test harness owns startup
-and linking. The general C source surface remains disabled.
+The R6.50 assembly lane retains external startup/linking test support. The
+R6.60 firmware lane uses compiler-owned reset, vectors and linking. The general
+C source surface remains disabled.
 
 ## Memory and device map
 
@@ -446,3 +447,84 @@ surfaces; R6.70 freestanding core/noreturn; R6.80 checked-in device fixtures;
 R6.90 the complete driver; R6.100 the milestone. General SVD generation stays
 with its companion tool. No scheduler, interrupt-masking abstraction, C source
 expansion or new DMA ownership model is introduced.
+
+## R6.60 compiler-owned firmware
+
+`firmware.py` is a mandatory addition to `run.py` and its existing evidence
+export, separate from every earlier lane. It invokes the compiler with
+`--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
+path. The compiler generates reset, vectors and the linker script; neither
+`backend-start.S` nor `backend-memory.ld` supplies these semantics. The older
+533-fixture corpus, 72 generated controls and independent controls remain
+mandatory and retain their own startup and applicability records.
+
+The fixed image remains 32 KiB flash, 16 KiB RAM and a 4 KiB stack reservation.
+D229/[1990] specify the source/request, convention, section and assembly
+contracts. Initialized data and `.ramtext.*` have separate flash load and RAM
+execution addresses; compiler reset copies both and clears BSS. Immutable
+images stay in flash. The compiler retains `.s`, `.o`, `.ld`, `.map` and ELF;
+the probe also retains readelf sections/program headers/relocations/attributes,
+disassembly, symbols, independently decoded load extents, tool identities,
+commands, timeouts, debugger assertions and device traces. Empty undefined
+symbols and explicit runtime-archive identity supplement map-based closure
+checks. The archive must be the pinned `thumb/v6-m/nofp/libgcc.a`.
+
+The six optimization/specialization profiles each exercise:
+
+- Two fresh builds, each cold-booted and reset again after poisoning RAM.
+  Assertions observe initial SP/reset Thumb identity, zero reserved vectors,
+  copied data, cleared BSS, source entry and the entry-return HardFault trap.
+- Generated SVC, ordinary helper and higher-priority nested IRQ0, checking
+  hardware frames, EXC_RETURN, every preserved register, flags, r11 records,
+  eight-byte stack alignment and source results. A painted 4 KiB stack retains
+  an untouched lower guard; its observed write extent is evidence for this
+  small execution, never a whole-program bound.
+- Naked source entry selecting PSP, naked SVC returning through EXC_RETURN,
+  and a specialized generic opaque-assembly memory write with live values.
+  A separate naked-fallthrough image reaches its appended trap without a frame.
+- Copied RAM code and RAM handler, flash/RAM veneers, integer libgcc helpers
+  and private success/failure transport through checked ordinary calls.
+- Four Renode runs: DMA IRQ0 half/completion notifications, packed register
+  images, invalid-encoding HardFault and byte transactions. The latter three
+  execute ordinary generated programs inside a generated SVC handler. Expected
+  values and exact access traces remain independent device-side observations.
+  DMA continues with PRIMASK set; half notification is not completion; only
+  observed completion plus the explicit boundary precedes ordinary slice reads.
+
+This adds 37 QEMU sessions (36 generated, one independent C/assembly control)
+and 24 generated Renode runs. The independent control establishes PSP/MSP,
+four-byte interrupted SP with hardware alignment padding, nested exception
+returns and C callee saves independently of Landin emission. Ten retained
+failure programs cover flash overflow, stack overlap, materialization budget,
+missing symbol, invalid instruction encoding, later-core instruction, wrong
+vector placement, owned reset slot, invalid entry and reserved symbol.
+Source unit controls additionally refuse incompatible conventions/calls,
+invalid naked bodies, duplicate directives, unavailable slots and hosted use.
+
+Equivalent inputs in fresh directories must produce byte-identical ELF,
+object, assembly, script and map for every generated scenario/profile. ELF
+identity includes sections and relocations. Log paths, TCP debugger ports,
+command durations and host/compiler identity records intentionally vary and
+are retained as execution metadata, not image bytes. Renode lock cleanup and
+failure-oracle requirements are inherited unchanged from `Run.renode_script`.
+The new records are under `artifacts/cortex-m/firmware` in accepted evidence.
+
+For a focused development run on the supported Linux host:
+
+```sh
+python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
+```
+
+The contract was checked against Arm's [ARMv6-M Architecture Reference Manual DDI0419E](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
+[Cortex-M0 Devices Generic User Guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1),
+[AAPCS32 and AAELF32 2025Q4](https://github.com/ARM-software/abi-aa/releases/tag/2025Q4),
+the selected-device [nRF51 reference manual](https://docs-be.nordicsemi.com/bundle/nRF51-Series/raw/resource/enus/nRF51_RM_v3.0.1.pdf),
+and GNU binutils' [section flags](https://sourceware.org/binutils/docs/as/Section.html),
+[retention](https://sourceware.org/binutils/docs/ld/Input-Section-Keep.html),
+[load addresses](https://sourceware.org/binutils/docs/ld/Output-Section-LMA.html)
+and [Arm veneers](https://sourceware.org/binutils/docs/ld/ARM.html).
+Executable controls establish behavior on the pinned microbit/ARMv6-M profile;
+they do not generalize to another core, board, real peripheral or timing model.
+R6.70 owns core/CPU-library packaging and noreturn, R6.80 generated fixtures,
+R6.90 the complete driver, and R6.100 source debugging and complete measured
+stack/firmware evidence. General SVD generation remains companion-tool work.

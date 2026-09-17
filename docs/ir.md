@@ -451,3 +451,33 @@ sharing; specialization and IR optimization retain their existing proofs.
 The [target guide](targets.md#cortex-m0-assembly-implementation) records physical
 choices. The complete profile corpus, explicit 32-bit counterparts and memory/
 packed peripheral execution are retained by the embedded acceptance path.
+
+## Firmware and opaque assembly
+
+D229 machine conventions are part of checked and IR signatures, independently
+of C linkage. Signature equality, generic matching and verification preserve
+ordinary, interrupt and naked identities. The verifier rejects ordinary calls
+to machine-convention routines, invalid machine signatures, invalid placement
+and naked bodies other than one opaque assembly operation followed by leave.
+Items retain section, alignment, keep and vector metadata and a separate
+immutable-image flag. Placement marks roots/address exposure before optimization;
+the generated kept vector image supplies linker relocations to its handlers.
+A convention alone is not a retention root.
+
+Fixed `assembler.block` text lowers to a memory-access compiler boundary with
+an interned payload. Its existing full memory/call/trap effects invalidate
+memory knowledge and preserve ordering through optimization and specialization.
+It is not a hardware barrier. Cortex emission reads live values from their
+compiler stack homes after ordinary low-register-clobbering text; ordinary
+text cannot name SP, LR, r9, r11 or other high registers. Naked text owns all
+machine state and receives no frame. Ordinary and interrupt routines retain
+the eight-byte previous-r11/incoming-LR record; an interrupt's incoming LR is
+EXC_RETURN. The hardware frame separately saves volatile registers and flags.
+
+`Landin.Backend.Firmware` constructs reset and the selected memory script;
+`Landin.Targets.Firmware` owns board limits and assembly eligibility. Startup
+copies initialized data and RAM code, clears BSS and transfers to the selected
+source entry. Neither module-image lowering nor startup executes user module
+initializers. Target ELF relocations distinguish Thumb code pointers from data
+addresses. The generated firmware probes test these boundaries through actual
+QEMU and Renode execution; source-level Cortex debugging remains R6.100.

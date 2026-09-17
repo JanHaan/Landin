@@ -2996,6 +2996,7 @@ that has no implementation owner.
 | `[1970]` | hosted-now | R1.80 | matrix evidence |
 | `[1975]` | hosted-now | R3.50 | matrix evidence |
 | `[1980]` | hosted-now | R2.30 | matrix evidence |
+| `[1990]` | freestanding | R6.60 | compiler-owned firmware, typed machine conventions and placement |
 
 ### R2 gate
 
@@ -10574,7 +10575,7 @@ dependency-ready and retains its independent generated-device fixture gate.
 
 ### R6.60 — Implement startup, vectors and machine directives
 
-Status: planned
+Status: active
 Depends on: R4.30, R6.30, R6.40, R6.50
 
 Implement linker scripts, startup, firmware entry, vector placement,
@@ -10582,6 +10583,96 @@ interrupt/naked conventions, sections, keep rules and inline assembly.
 
 Exit evidence: firmware boots, vectors and interrupts execute, sections land at
 expected addresses and link/map evidence is deterministic.
+
+Implementation intake and selected boundary (not completion evidence):
+
+The clean intake was branch `r650-cortex-backend` at accepted revision
+`f83b8a54922a2c0958166565296e908b114f4f45`. Canonical `origin/main` and GitHub
+main matched that revision. Both annotated approval refs resolved to
+`a7bb74d591fa3ec1d77171920be7350df798b19d`, binding Linux
+`20260917T081355Z-a8092e4b8669` and Darwin
+`20260917T081355Z-fadfb7b50875`; the local publication guard verified the
+binding. SourceHut jobs 1889881 (guarded Pages) and 1889882 (mirror) reported
+success for the expected revision. Implementation proceeds on `r660-startup`.
+
+The selected compiler request is `--target=cortex-m0 --firmware-entry=NAME`.
+The name identifies a nongeneric ordinary or naked, infallible `() -> none`
+definition
+in the entry module, independently of its optional link symbol. The compiler
+owns reset, the vector image and the constrained linker script. This retains
+32 KiB flash at zero, 16 KiB RAM at `0x20000000`, and the inherited upper
+4 KiB stack reservation. Reset copies initialized RAM from its flash load
+address, clears BSS, initializes reserved r9 and root r11, then calls the entry.
+Returning enters an explicit undefined-instruction trap; `none` is not
+`noreturn`, and no hosted exit or failure service is imported. Immutable
+module images reside in flash; no user-code module initialization is added.
+
+Machine calling conventions are represented separately from C/native linkage
+in syntax, checked signatures and IR. Interrupt routines have no parameters,
+results or declared failures and cannot be called as ordinary functions.
+Their ordinary frame record preserves EXC_RETURN as incoming LR; the hardware
+exception frame preserves volatile registers and flags. A naked body is one
+fixed assembly block, with no compiler prologue; it owns its stack/register
+and branch/return obligations. Falling off that block traps. Ordinary assembly
+is straight-line ARMv6-M text and cannot name frame, stack, reserved or high
+registers. Its IR memory boundary invalidates compiler memory knowledge;
+hardware barriers remain explicit instructions.
+
+Placement uses `link(section: text, align: integer, keep, vector: integer)`.
+Vector references belong to the compiler-owned kept image, so interrupt
+convention alone does not retain a handler. Slot zero and reset belong to
+startup. Reserved core slots, the selected nRF51 IRQ 5 slot and absent IRQ
+26–31 slots are zero. Source sections must match code, immutable data,
+initialized RAM or zeroed RAM; GNU section retention is independent of
+calling convention. Existing `link(symbol: text)` remains independent and
+Cortex module data may also declare an explicit symbol. Compiler startup and
+Arm private helper names are reserved. This chooses an explicit bounded
+firmware request over a general build-description language or externally
+hidden initialization.
+
+Development evidence so far uses the implemented compiler executable path,
+without `backend-start.S` or `backend-memory.ld`. QEMU observes poisoned RAM
+being initialized on cold boot and reset, source entry execution and its
+return trap. Fresh directories produce byte-identical ELF, object, assembly,
+linker script and map files. A generated SVC handler calls an ordinary routine
+and is preempted by generated IRQ0; independent GDB observations check both
+hardware frames, EXC_RETURN, all saved registers, flags, eight-byte stack
+alignment and final source data. These are development runs, not accepted
+revision evidence; the complete exit gate above remains open.
+
+The cross-prototype audit keeps prototype 2's recoverable diagnostic/provider
+failures on ordinary calls, prototype 3's allocator/evidence signatures and
+manual origins unchanged, and prototype 4's hosted authority root, callback
+records and C boundary unchanged. A machine-convention function value cannot
+silently enter any ordinary callback/evidence signature. Prototype 1's handler
+has an empty error set; its ordinary-slice DMA contract still requires observed
+completion and explicit compiler/hardware boundaries. Historical findings and
+rejected syntax remain historical. Natural/C/optimal layout, D187 bounded
+unchecked behavior, D227 transactions and D228 raw-copy/member checks are
+unchanged. Function identity comparisons include the machine convention;
+placement marks address exposure before specialization, vector relocations
+retain handlers, and opaque assembly uses the existing conservative memory
+boundary. Cortex adds no body sharing; hosted body sharing retains its accepted
+enum-domain and stored-shape keys. The private status-slot repairs remain in
+place and execute across firmware veneers and helper calls.
+
+The selected native policies are the already compatible committed routine
+policies with debugger risk. `policy.py routine --debugger` reproduced them;
+startup/frame/exception work requires full release Linux GDB and Darwin LLDB,
+with compiler-host debug and complete release hosted execution. R6.100 retains
+milestone scope. D148's new firmware boundaries classify source restrictions as
+static, entry/naked fallthrough as traps, and programmer-owned naked/indirect
+machine-state obligations outside the guarantees. R551-31's enabled slice is
+bounded by D229; R551 resource, runtime packaging, evidence and companion-tool
+dispositions are not broadened into safety or production claims.
+
+Successor ownership is unchanged: freestanding core, CPU-library packaging
+and `noreturn` are R6.70; checked-in generated-device fixtures are R6.80;
+the complete derived driver is R6.90; Landin source debugging, complete
+measured stack/firmware evidence and milestone closure are R6.100. General
+SVD generation remains companion-tool work. R551 resource/evidence/tooling
+dispositions remain retained; this item adds no scheduler, package ecosystem,
+cache/resume programme or Nix CI.
 
 ### R6.70 — Implement the freestanding Landin core slice
 

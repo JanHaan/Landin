@@ -992,6 +992,11 @@ package body Landin.IR.Dump is
                   then " erased-self" else "")
                & (if Signature_Uses_C_ABI (Of_Unit, Id)
                   then " extern(c)" else "")
+               & (case Signature_Machine (Of_Unit, Id) is
+                    when Landin.Machine.Ordinary => "",
+                    when Landin.Machine.Interrupt_Handler =>
+                      " extern(interrupt)",
+                    when Landin.Machine.Naked_Routine => " extern(naked)")
                & " (" & Unbounded.To_String (Parameters) & ") -> "
                & (if Signature_Result_Count (Of_Unit, Id) = 0
                   then "none"

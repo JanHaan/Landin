@@ -3,6 +3,8 @@ with Landin.Targets.Packed;
 
 package body Landin.Checking is
 
+   use type Landin.Machine.Convention;
+
    use type Landin.Layouts.Policy;
    use type Landin.Types.Reference_View;
 
@@ -2794,7 +2796,8 @@ package body Landin.Checking is
       Error_Form : Error_Set_Form := Infallible;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
    is
       Made : Signature_Record :=
@@ -2804,6 +2807,7 @@ package body Landin.Checking is
          Site       => Site,
          Errors     => Errors,
          Error_Form => Error_Form,
+         Machine    => Machine,
          C_ABI      => C_ABI,
          Variadic   => Variadic);
 
@@ -2847,19 +2851,27 @@ package body Landin.Checking is
       Error_Form : Error_Set_Form := Infallible;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature
            (Into, Parameters, No_Signature_Parts, Site,
-            Errors, Error_Form, Sources, C_ABI, Variadic);
+            Errors, Error_Form, Sources, C_ABI, Variadic, Machine);
       end if;
       return Add_Signature
         (Into, Parameters, Signature_Part_Array'[1 => Result], Site,
-         Errors, Error_Form, Sources, C_ABI, Variadic);
+         Errors, Error_Form, Sources, C_ABI, Variadic, Machine);
    end Add_Signature;
+
+   function Signature_Machine
+     (Of_Table : Table; Signature : Signature_Id)
+      return Landin.Machine.Convention is
+     (if Holds (Of_Table, Signature)
+      then Of_Table.Signatures (Positive (Signature)).Machine
+      else Landin.Machine.Ordinary);
 
    function Signature_Uses_C_ABI
      (Of_Table : Table; Signature : Signature_Id) return Boolean
@@ -3153,7 +3165,9 @@ package body Landin.Checking is
          return True;
       end if;
 
-      if Signature_Uses_C_ABI (Of_Table, Left)
+      if Signature_Machine (Of_Table, Left)
+           /= Signature_Machine (Of_Table, Right)
+        or else Signature_Uses_C_ABI (Of_Table, Left)
            /= Signature_Uses_C_ABI (Of_Table, Right)
         or else Signature_Is_Variadic (Of_Table, Left)
            /= Signature_Is_Variadic (Of_Table, Right)

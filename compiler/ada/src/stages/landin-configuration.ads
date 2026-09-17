@@ -1,4 +1,5 @@
 with Landin.Memory;
+with Landin.Machine;
 --  D139/D202 configuration metadata. Syntax remains complete; this table
 --  retains request overrides and mode, and records option provenance,
 --  inactive declarations and ordered library requests for one compilation.
@@ -17,6 +18,18 @@ package Landin.Configuration is
    function Compiler_Member
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return String;
+   function Assembly_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean;
+   function Fixed_Text
+     (Snapshot : Landin.Source.Snapshot; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return String;
+
+   function Placement_Of
+     (Snapshot : Landin.Source.Snapshot; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id; Names : in out Landin.Source.Names.Table)
+      return Landin.Machine.Placement;
+
    function Memory_Call
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return Landin.Memory.Operation;

@@ -215,6 +215,8 @@ class Run:
         native_execute(self, refine)
         from backend_acceptance import execute as backend_execute
         backend_execute(self, refine)
+        from firmware import execute_suite as firmware_execute
+        firmware_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

@@ -1,0 +1,47 @@
+link(symbol: "assembly_data") mut data: u32 = 18
+mut observed: u32 = 0
+mut naked_hits: u32 = 0
+link(vector: 11)
+extern(naked) naked_handler: () -> none =
+    assembler.block("""
+        ldr r0, =naked_hits
+        ldr r1, [r0]
+        adds r1, #1
+        str r1, [r0]
+        bx lr
+        """)
+end naked_handler
+opaque: (t: type, inout value: t) -> none =
+    assembler.block("ldr r0, =assembly_data\nmovs r1, #99\nstr r1, [r0]")
+end opaque
+link(symbol: "worker") worker: () -> none =
+    before := data + 7
+    opaque(data)
+    assembler.block("""
+        movs r0, #17
+        movs r1, #34
+        movs r2, #51
+        movs r3, #68
+        movs r4, #85
+        movs r5, #102
+        movs r6, #119
+        movs r7, #136
+        ldr r0, =assembly_data
+        movs r1, #99
+        str r1, [r0]
+        cmp r0, r0
+        svc #0
+        """)
+    observed = before + data
+end worker
+extern(naked) start: () -> none =
+    assembler.block("""
+        ldr r0, =0x20003800
+        msr psp, r0
+        movs r0, #2
+        msr control, r0
+        isb sy
+        bl worker
+        b _landin_firmware_returned
+        """)
+end start

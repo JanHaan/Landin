@@ -361,8 +361,12 @@ def check_code(lines, offset):
     for n, line in enumerate(lines, 1):
         if not looks_like_code(line):
             continue
+        declaration_line = re.sub(
+            r"\blink\([^)]*\)",
+            lambda match: re.sub(r"\balign\s*:", "placement_alignment:",
+                                 match.group()), line)
         for m in re.finditer(
-                r"(?:^|[(,]|\bmut\s+|\bpublic\s+)\s*([a-z_][a-z0-9_]*)\s*(?::=|:)", line):
+                r"(?:^|[(,]|\bmut\s+|\bpublic\s+)\s*([a-z_][a-z0-9_]*)\s*(?::=|:)", declaration_line):
             word = m.group(1)
             if word in KEYWORDS:
                 out.append((n, "%r is a keyword and cannot be a name" % word))
@@ -3836,6 +3840,8 @@ def check_coverage_registers(full_run):
             "conversion.float-to-bool",
             "memory.eligibility", "memory.alignment",
             "memory.external-writers",
+            "firmware.surface", "firmware.return",
+            "firmware.assembly-obligations",
             "packed.extraction", "packed.image", "packed.register",
             "packed.insertion", "packed.reserved", "packed.device",
             "arithmetic.known",
@@ -3898,8 +3904,26 @@ def check_coverage_registers(full_run):
                     out.append((where, line,
                                 "%s names missing fixture %s" % (key, name)))
             if row["Class"] == "trap":
-                if not any(fixtures.get(name, (None, {}))[1].get("traps")
-                           == "yes" for name in names):
+                # Firmware traps execute through hardware exception vectors,
+                # not the hosted signal-based fixture runner. Keep this named
+                # evidence route tied to its mandatory generated-image lane.
+                firmware_trap = False
+                if key == "firmware.return":
+                    probe = "environments/cortex-m/firmware.py"
+                    runner = "environments/cortex-m/run.py"
+                    if probe in row["Evidence"] and os.path.isfile(probe):
+                        probe_text = io.open(probe, encoding="utf-8").read()
+                        runner_text = io.open(runner, encoding="utf-8").read()
+                        firmware_trap = all(pin in probe_text for pin in (
+                            "R660_FIRMWARE_BOOT_PASS",
+                            "R660_NAKED_FALLTHROUGH_PASS",
+                            "fallthrough(run, refine, optimize, specialize)",
+                            "0xde01")) and all(pin in runner_text for pin in (
+                            "from firmware import execute_suite as firmware_execute",
+                            "firmware_execute(self, refine)"))
+                if not firmware_trap and not any(
+                        fixtures.get(name, (None, {}))[1].get("traps")
+                        == "yes" for name in names):
                     out.append((where, line,
                                 "%s has no trapping runtime evidence" % key))
             elif row["Class"] in ("outside", "beyond-lifetime"):

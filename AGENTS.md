@@ -19,7 +19,8 @@ execute through that path with native source-debugging coverage. Darwin arm64 ha
 R5.50 adds complete shared hosted and derived-program parity on both targets,
 with the explicit physical-image limits recorded in ROADMAP.md. R6.50 adds a
 Cortex-M0 assembly backend, validated through an external emulator harness;
-language firmware startup/linking and the broader standard library remain future work. Under
+R6.60 adds compiler-owned firmware startup/linking and machine directives;
+source debugging and the broader standard library retain their later owners. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
 the scanner, parser, syntax table, name resolver, type checker, verified IR,
@@ -239,10 +240,12 @@ images, validated extraction and explicit register-image policies on both native
 backends, with compiler-generated and independent peripheral controls. Its
 exact-revision dual-native binding owns closure. R6.50 implements Cortex-M0
 instruction selection and internal ABI transport, with generated QEMU and
-synthetic peripheral execution bound by native acceptance. Language Cortex
-startup/linking and source debugging remain R6.60 and R6.100. ROADMAP.md owns
-R6.50's exact-revision dual-native closure. R6.60 is the next dependency-ready
-item; R6.80 retains its separate generated-device fixture gate.
+synthetic peripheral execution bound by native acceptance. R6.60 adds compiler-owned reset, initialized-data/RAM-code copying, BSS,
+vectors, interrupt/naked conventions, sections/keep and opaque assembly.
+Its QEMU/Renode firmware lane remains distinct from R6.50's external harness.
+ROADMAP.md owns exact-revision closure and successor readiness; source
+debugging and complete measured firmware evidence remain R6.100. R6.80
+retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

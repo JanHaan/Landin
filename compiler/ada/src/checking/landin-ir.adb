@@ -1,5 +1,8 @@
 package body Landin.IR is
 
+   use type Landin.Machine.Convention;
+   use type Landin.Source.Names.Name_Id;
+
    function Packed_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Shape : Field_Shape;
       Descriptor : Aggregate_Field_Image; Scalar : Landin.Types.Folded)
@@ -760,7 +763,8 @@ package body Landin.IR is
       Errors     : Atom_Set_Id := No_Atom_Set;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
    is
       Made : Signature_Record :=
@@ -768,6 +772,7 @@ package body Landin.IR is
          Results    => (First => 0, Count => 0),
          Sources    => (First => 0, Count => 0),
          Errors     => Errors,
+         Machine    => Machine,
          C_ABI      => C_ABI,
          Variadic   => Variadic,
          Erased_Self => False);
@@ -805,19 +810,27 @@ package body Landin.IR is
       Errors     : Atom_Set_Id := No_Atom_Set;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature_With_Results
            (Into, Parameters, No_Signature_Parts, Errors, Sources,
-            C_ABI, Variadic);
+            C_ABI, Variadic, Machine);
       end if;
       return Add_Signature_With_Results
         (Into, Parameters, Signature_Part_Array'[1 => Result], Errors,
-         Sources, C_ABI, Variadic);
+         Sources, C_ABI, Variadic, Machine);
    end Add_Signature;
+
+   function Signature_Machine
+     (Of_Unit : Unit; Signature : Signature_Id)
+      return Landin.Machine.Convention is
+     (if Holds (Of_Unit, Signature)
+      then Of_Unit.Signatures (Positive (Signature)).Machine
+      else Landin.Machine.Ordinary);
 
    function Signature_Uses_C_ABI
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
@@ -1014,6 +1027,8 @@ package body Landin.IR is
    begin
       if Signature_Has_Erased_Self (Of_Unit, Left)
            /= Signature_Has_Erased_Self (Of_Unit, Right)
+        or else Signature_Machine (Of_Unit, Left)
+           /= Signature_Machine (Of_Unit, Right)
         or else Signature_Uses_C_ABI (Of_Unit, Left)
            /= Signature_Uses_C_ABI (Of_Unit, Right)
         or else Signature_Is_Variadic (Of_Unit, Left)
@@ -1144,7 +1159,7 @@ package body Landin.IR is
             end loop;
             Dispatch := Add_Signature_With_Results
               (Into, Parameters, Results, Concrete.Errors, Sources,
-               Concrete.C_ABI, Concrete.Variadic);
+               Concrete.C_ABI, Concrete.Variadic, Concrete.Machine);
             Into.Signatures (Positive (Dispatch)).Erased_Self := True;
          end;
       end if;
@@ -1548,6 +1563,32 @@ package body Landin.IR is
 
    function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).External);
+
+   function Placement_Of (Of_Unit : Unit; Item : Item_Id)
+     return Landin.Machine.Placement
+     is (Of_Unit.Items (Positive (Item)).Placement);
+
+   procedure Set_Placement
+     (Into : in out Unit; Item : Item_Id; Value : Landin.Machine.Placement) is
+   begin
+      Into.Items (Positive (Item)).Placement := Value;
+      if Value.Keep or else Value.Vector /= 0
+        or else Value.Section /= Landin.Source.Names.No_Name
+      then
+         Into.Items (Positive (Item)).Address_Exposed := True;
+      end if;
+   end Set_Placement;
+
+   function Is_Immutable (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Immutable);
+
+   procedure Mark_Immutable (Into : in out Unit; Item : Item_Id) is
+   begin
+      if not Holds (Into, Item) or else Kind_Of (Into, Item) /= Datum then
+         raise Compiler_Defect with "immutable marker requires a datum";
+      end if;
+      Into.Items (Positive (Item)).Immutable := True;
+   end Mark_Immutable;
 
    function Is_Read_Only (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Read_Only);
@@ -3911,6 +3952,25 @@ package body Landin.IR is
                          Site => Site,
                          Element_Shape => Element,
                          others => <>)));
+
+   function Emit_Assembly
+     (Into : in out Unit; Item : Item_Id;
+      Text : Landin.Source.Names.Name_Id;
+      Site : Landin.Provenance.Origin) return Value_Id is
+   begin
+      if Text = Landin.Source.Names.No_Name then
+         raise Compiler_Defect with "empty assembly identity";
+      end if;
+      return Append
+        (Into, Item, (Op => Memory_Access,
+         Memory_Op => Landin.Memory.Compiler_Barrier,
+         Assembly_Name => Text, Site => Site, others => <>));
+   end Emit_Assembly;
+
+   function Assembly_Text
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Source.Names.Name_Id
+     is (Held (Of_Unit, Item, Value).Assembly_Name);
 
    function Emit_Memory
      (Into : in out Unit; Item : Item_Id; Op : Landin.Memory.Operation;

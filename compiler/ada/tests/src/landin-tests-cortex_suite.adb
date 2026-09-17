@@ -2,11 +2,12 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
-with Landin.Backend.Toolchain;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
+with Landin.IR.Verifier;
+with Landin.Machine;
 with Landin.Platform.Native;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -540,8 +541,8 @@ package body Landin.Tests.Cortex_Suite is
                   & U.To_String (Result.Report));
                if Mode = 3 then
                   Landin.Testing.Check
-                    (Item, U.Index (Result.Report, "L0500") > 0,
-                     "language executable linking is explicitly refused");
+                    (Item, U.Index (Result.Report, "L0502") > 0,
+                     "firmware executable needs an explicit entry");
                end if;
                Landin.Testing.Check_Equal
                  (Item, Host.Write_Count, (if Mode = 2 then 1 else 0),
@@ -601,21 +602,271 @@ package body Landin.Tests.Cortex_Suite is
             end;
          end;
       end loop;
-      declare
-         Args : Landin.Platform.Path_List;
-         pragma Unreferenced (Args);
-      begin
-         Args := Landin.Backend.Toolchain.Link_Arguments
-           ("p.s", "p", "", Facts => T.Cortex_M);
-         Landin.Testing.Fail (Item, "Cortex language linking was enabled");
-      exception
-         when Compiler_Defect =>
-            Landin.Testing.Check (Item, True, "R6.60 owns Cortex linking");
-      end;
    end Backend_Boundaries;
+
+   procedure Firmware_Path (Item : in out Landin.Testing.Context);
+
+   procedure Firmware_Path (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 12 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn",
+              (case Mode is
+                 when 1 => "mut result: u32 = 1 "
+                   & "link(symbol: ""firmware_source_entry"") "
+                   & "start: () -> none = result = 42 end start",
+                 when 11 => "start: () -> none = end start "
+                   & "start: () -> none = end start",
+                 when 12 => "start: (t: type) -> none = end start "
+                   & "invoke: () -> none = start(t: u32) end invoke",
+                 when 3 => "start: (x: u32) -> none = end start",
+                 when 4 => "start: () -> (r: u32) = 1 end start",
+                 when 5 => "bad: atom start: () -> none ! bad = "
+                   & "fail bad end start",
+                 when 10 => "link(keep) image: [8388609]u8 = [of 1] "
+                   & "start: () -> none = end start",
+                 when others => "mut result: u32 = 1 "
+                   & "start: () -> none = result = 42 end start"));
+            Args.Append (if Mode = 6 then "--target=darwin-arm64"
+                         else "--target=cortex-m0");
+            Args.Append ("--emit=exe");
+            Args.Append ("--firmware-entry="
+                         & (if Mode = 2 then "absent" else "start"));
+            Args.Append ("-o");
+            Args.Append ("p.elf");
+            Args.Append ("p.ldn");
+            if Mode = 7 then
+               Args.Append ("--firmware-entry=start");
+            elsif Mode = 8 then
+               Host.Add_Alias ("p.elf.ld", "p.ldn");
+            end if;
+            Tools.Set_Result
+              ((if Mode = 9 then 1 else 0), "test tool result");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               if Mode = 1 then
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Success,
+                     U.To_String (Result.Report));
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count, 2,
+                     "assembly and freestanding link are separate calls");
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 2,
+                     "compiler writes assembly and linker script");
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index
+                       (Tools.Last_Command, "-nostdlib") > 0,
+                     "firmware suppresses hosted defaults");
+                  Landin.Testing.Check
+                    (Item, Ada.Strings.Fixed.Index
+                       (Host.Written ("p.elf.s"),
+                        "bl firmware_source_entry") > 0,
+                     "reset calls the selected source routine");
+               elsif Mode = 9 then
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Reported,
+                     "assembler failure is a reported tool failure");
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count, 1,
+                     "assembly failure prevents linking");
+               else
+                  Landin.Testing.Check
+                    (Item, Result.Status /= Landin.Driver.Status_Success,
+                     "invalid firmware request refuses " & Mode'Image);
+                  if Mode = 12 then
+                     Landin.Testing.Check
+                       (Item, U.Index (Result.Report, "L0502") > 0,
+                        "a reached generic instance is not a source entry");
+                  elsif Mode = 10 then
+                     Landin.Testing.Check
+                       (Item, U.Index (Result.Report, "L0505") > 0,
+                        "bounded image failure has a dedicated diagnostic");
+                  end if;
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "entry and artifact refusal precedes writes");
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count, 0,
+                     "entry and artifact refusal precedes tools");
+               end if;
+            end;
+         end;
+      end loop;
+   end Firmware_Path;
+
+   procedure Machine_Directives (Item : in out Landin.Testing.Context);
+
+   procedure Machine_Directives (Item : in out Landin.Testing.Context) is
+      function Program (Case_Number : Positive) return String;
+      function Program (Case_Number : Positive) return String is
+      begin
+         return (case Case_Number is
+           when 1 => "link(vector: 11) extern(interrupt) h: () -> none = "
+             & "assembler.block(""nop"") end h "
+             & "link(keep) extern(naked) n: () -> none = "
+             & "assembler.block(""bx lr"") end n "
+             & "link(section: "".data.value"", align: 16, keep, "
+             & "symbol: ""value"") mut x: u32 = 1",
+           when 2 => "extern(interrupt) h: (x: u32) -> none = end h",
+           when 3 => "extern(interrupt) h: () -> (r: u32) = 1 end h",
+           when 4 => "bad: atom extern(interrupt) h: () -> none ! bad = "
+             & "fail bad end h",
+           when 5 => "extern(naked) h: () -> none = mut x: u32 = 0 end h",
+           when 6 => "extern(naked) h: () -> none = end h",
+           when 7 => "extern(naked) h: () -> none = "
+             & "assembler.block(""nop"") assembler.block(""bx lr"") end h",
+           when 8 => "extern(interrupt) h: () -> none = end h "
+             & "call: () -> none = h() end call",
+           when 9 => "extern(interrupt) h: () -> none = end h "
+             & "fn: type = () -> none p: fn = h",
+           when 10 => "link(vector: 4) extern(interrupt) h: () -> none = "
+             & "end h",
+           when 11 => "link(vector: 11) extern(interrupt) h: () -> none = "
+             & "end h link(vector: 11) extern(interrupt) j: () -> none = "
+             & "end j",
+           when 12 => "link(vector: 16) h: () -> none = end h",
+           when 13 => "link(section: "".data.code"") h: () -> none = end h",
+           when 14 => "link(align: 3) mut x: u32 = 0",
+           when 15 => "link(align: 0) mut x: u32 = 0",
+           when 16 => "link(section: "".isr_vector"", keep) x: u32 = 0",
+           when 17 => "link(section: "".bss.bad"") mut x: u32 = 1",
+           when 18 => "link(keep, keep) x: u32 = 1",
+           when 19 => "link(keep) link(keep) x: u32 = 1",
+           when 20 => "extern(naked) h: () -> none = "
+             & "assembler.block(""local: .cpu cortex-m3"") end h",
+           when 21 => "h: () -> none = assembler.block(""mov r9, r0"") end h",
+           when 22 => "h: () -> none = "
+             & "assembler.block(""ldrex r0, [r1]"") end h",
+           when 23 => "link(symbol: ""_landin_firmware_reset"") "
+             & "h: () -> none = end h",
+           when 24 => "link(symbol: ""data_symbol"") x: u32 = 0 "
+             & "link(symbol: ""data_symbol"") y: u32 = 0",
+           when 25 => "extern(interrupt) h: () -> none = end h",
+           when 26 => "h: () -> none = assembler.block(""nop"") end h",
+           when 27 => "link(keep) x: u32 = 0",
+           when 28 => "link(vector: 42) extern(interrupt) h: () -> none"
+             & " = end h",
+           when 29 => "h: () -> none = assembler.block(""mrs r0, basepri"")"
+             & " end h",
+           when 30 => "h: () -> none = assembler.block(""msr control, r0"")"
+             & " end h",
+           when 31 => "h: () -> none = assembler.block(""cpsid f"") end h",
+           when 32 => "h: () -> none = assembler.block(""dmb ish"") end h",
+           when 33 => "extern(naked) h: () -> none = "
+             & "assembler.block(""bx lr"") end h "
+             & "fn: type = extern(interrupt) () -> none p: fn = h",
+           when 34 => "extern(interrupt) h: () -> none = end h "
+             & "fn: type = extern(interrupt) () -> none p: fn = h "
+             & "call: () -> none = p() end call",
+           when others => "link(vector: 11) extern(interrupt) h: () -> none"
+             & " = end h");
+      end Program;
+   begin
+      for Case_Number in 1 .. 35 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn", Program (Case_Number)
+              & " start: () -> none = end start");
+            if Case_Number = 1 then
+               Args.Append ("--firmware-entry=start");
+            end if;
+            Args.Append (if Case_Number in 25 .. 27
+                         then "--target=darwin-arm64"
+                         else "--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Case_Number = 1 then Landin.Driver.Status_Success
+                   else Landin.Driver.Status_Reported),
+                  "machine contract case" & Case_Number'Image & ": "
+                    & U.To_String (Result.Report));
+               if Case_Number /= 1 then
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "invalid machine constructs refuse before emission");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "assembly checks run no tool");
+            end;
+         end;
+      end loop;
+   end Machine_Directives;
+
+   procedure Machine_IR (Item : in out Landin.Testing.Context);
+
+   procedure Machine_IR (Item : in out Landin.Testing.Context) is
+      use type IR.Verifier.Fault_Kind;
+   begin
+      for Mode in 1 .. 4 loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (T.Cortex_M);
+            Order : Landin.Stages.Pipeline;
+            Written : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Work, "machine.ldn", "f: () -> none = end f");
+            pragma Unreferenced (Written);
+         begin
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Resolver'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Landin.Stages.Append (Order, Lowerer'Access);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Run (Order, Work), 5,
+               "machine verifier control reaches IR");
+            declare
+               Code : constant not null access IR.Unit :=
+                 Landin.Stages.Code (Work);
+               Attr : Landin.Machine.Placement;
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Code.all, T.Cortex_M).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  "unmodified machine verifier control is sound");
+               case Mode is
+                  when 1 => Attr.Alignment := 3;
+                  when 2 => Attr.Vector := 11;
+                  when 3 => Attr.Vector := 4;
+                  when others => Attr.Keep := True;
+               end case;
+               IR.Set_Placement (Code.all, 1, Attr);
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check
+                   (Code.all, (if Mode = 4 then T.Linux_X86_64
+                               else T.Cortex_M)).Kind
+                    = IR.Verifier.Routine_Signature_Disagrees,
+                  "malformed placement/identity refuses before emission");
+            end;
+         end;
+      end loop;
+   end Machine_IR;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "machine directives", Machine_Directives'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "firmware path", Firmware_Path'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register

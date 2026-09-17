@@ -1,3 +1,4 @@
+with Landin.Machine;
 with Landin.Memory;
 with Landin.Packed;
 --  The target-neutral intermediate representation.
@@ -685,7 +686,8 @@ package Landin.IR is
       Errors     : Atom_Set_Id := No_Atom_Set;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
@@ -700,7 +702,8 @@ package Landin.IR is
       Errors     : Atom_Set_Id := No_Atom_Set;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
@@ -765,6 +768,10 @@ package Landin.IR is
    function Nth_Nominal_Field
      (Of_Unit : Unit; Id : Nominal_Type_Id; Index : Positive)
       return Field_Shape;
+
+   function Signature_Machine
+     (Of_Unit : Unit; Signature : Signature_Id)
+      return Landin.Machine.Convention;
 
    function Signature_Uses_C_ABI
      (Of_Unit : Unit; Signature : Signature_Id) return Boolean
@@ -1059,6 +1066,14 @@ package Landin.IR is
    --  D161/D181: a finite u8 or u16 datum whose image may be placed in
    --  read-only storage, which is where [0260] says a text literal lives.
    --  Nothing stores through it: the checker admits no writable reference.
+   function Placement_Of (Of_Unit : Unit; Item : Item_Id)
+     return Landin.Machine.Placement;
+   procedure Set_Placement
+     (Into : in out Unit; Item : Item_Id; Value : Landin.Machine.Placement);
+
+   function Is_Immutable (Of_Unit : Unit; Item : Item_Id) return Boolean;
+   procedure Mark_Immutable (Into : in out Unit; Item : Item_Id);
+
    function Is_Read_Only (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item);
 
@@ -3111,6 +3126,14 @@ package Landin.IR is
 
    type Value_Id_Array is array (Positive range <>) of Value_Id;
 
+   function Emit_Assembly
+     (Into : in out Unit; Item : Item_Id;
+      Text : Landin.Source.Names.Name_Id;
+      Site : Landin.Provenance.Origin) return Value_Id;
+   function Assembly_Text
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Source.Names.Name_Id;
+
    function Emit_Memory
      (Into : in out Unit; Item : Item_Id; Op : Landin.Memory.Operation;
       Scalar : Landin.Types.Scalar_Name;
@@ -3808,6 +3831,8 @@ private
    --  variant part would make the element type indefinite and would fix
    --  an instruction's shape when it is created.
    type Instruction is record
+      Assembly_Name : Landin.Source.Names.Name_Id :=
+        Landin.Source.Names.No_Name;
       Memory_Op : Landin.Memory.Operation := Landin.Memory.No_Operation;
       Memory_Type : Landin.Types.Scalar_Name := Landin.Types.U8;
       Success_Order : Landin.Memory.Ordering := Landin.Memory.No_Ordering;
@@ -3910,6 +3935,8 @@ private
       Link_Name   : Landin.Source.Names.Name_Id :=
                       Landin.Source.Names.No_Name;
       Read_Only   : Boolean                   := False;
+      Placement : Landin.Machine.Placement;
+      Immutable   : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
       Address_Image  : Item_Id                := No_Item;
@@ -3996,6 +4023,7 @@ private
       Results    : Run;
       Sources    : Run;
       Errors     : Atom_Set_Id := No_Atom_Set;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
       Erased_Self : Boolean := False;

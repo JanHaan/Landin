@@ -1,0 +1,2 @@
+error[L0505]: firmware static images exceed 8 MiB before section GC
+  --> <unknown source>

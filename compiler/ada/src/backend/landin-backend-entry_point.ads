@@ -38,6 +38,13 @@ package Landin.Backend.Entry_Point is
       Modules  : Landin.Modules.Table;
       Names    : Landin.Source.Names.Table) return Landin.IR.Item_Id;
 
+   function Firmware_Start
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Modules  : Landin.Modules.Table;
+      Names    : Landin.Source.Names.Table;
+      Selected : String) return Landin.IR.Item_Id;
+
    --  What [1970] requires, spelled once so a diagnostic and this package
    --  cannot drift apart.
    function Required_Shape return String

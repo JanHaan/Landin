@@ -183,6 +183,14 @@ package body Landin.Syntax is
      is (if Element (Of_Tree, Id).Slots > 2
          then Slot (Of_Tree, Id, 3) else Bit_First (Of_Tree, Id));
 
+   function Machine_Convention (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Machine.Convention is
+     (Of_Tree.Items (Positive (Id)).Machine);
+
+   function Attributes (Of_Tree : Tree; Id : Node_Id)
+     return Machine_Attributes
+     is (Of_Tree.Items (Positive (Id)).Attributes);
+
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
      is (Element (Of_Tree, Id).Link_Name);

@@ -154,6 +154,35 @@ package body Landin.Backend.Toolchain is
       Libraries := Resolved;
    end Resolve_Libraries;
 
+   function File_Operand (Path : String) return String is
+     (if Path'Length > 0 and then Path (Path'First) in '-' | '@'
+      then "./" & Path else Path);
+
+   function Assemble_Arguments
+     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List
+   is
+      List : Landin.Platform.Path_List;
+   begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        /= Landin.Targets.Capabilities.Cortex_M0_ELF
+      then
+         raise Compiler_Defect with "firmware assembly requires Cortex-M0";
+      end if;
+      List.Append ("-mcpu=cortex-m0");
+      List.Append ("-mthumb");
+      List.Append ("-mfloat-abi=soft");
+      List.Append ("-mabi=aapcs");
+      List.Append ("-Wa,--fatal-warnings");
+      List.Append ("-x");
+      List.Append ("assembler");
+      List.Append ("-c");
+      List.Append (File_Operand (Assembly));
+      List.Append ("-o");
+      List.Append (File_Operand (Output));
+      return List;
+   end Assemble_Arguments;
+
    function Link_Arguments
      (Assembly : String;
       Output   : String;
@@ -167,24 +196,47 @@ package body Landin.Backend.Toolchain is
    is
       List : Landin.Platform.Path_List;
 
-      function File_Operand (Path : String) return String;
-
-      function File_Operand (Path : String) return String is
-      begin
-         --  A driver interprets leading '-' as an option and leading '@'
-         --  as a response file, even for a separately passed argv entry.
-         --  './' keeps the same relative file identity on the native host.
-         if Path'Length > 0 and then Path (Path'First) in '-' | '@' then
-            return "./" & Path;
-         end if;
-         return Path;
-      end File_Operand;
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
-        in Landin.Targets.Capabilities.No_Backend
-          | Landin.Targets.Capabilities.Cortex_M0_ELF
+        = Landin.Targets.Capabilities.No_Backend
       then
          raise Compiler_Defect with "target has no linker argument policy";
+      end if;
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Cortex_M0_ELF
+      then
+         if Full_Debug or else not Libraries.Is_Empty then
+            raise Compiler_Defect with "unsupported firmware link request";
+         end if;
+         List.Append ("-mcpu=cortex-m0");
+         List.Append ("-mthumb");
+         List.Append ("-mfloat-abi=soft");
+         List.Append ("-mabi=aapcs");
+         List.Append ("-nostdlib");
+         List.Append ("-nostartfiles");
+         List.Append ("-nodefaultlibs");
+         List.Append (File_Operand (Output & ".o"));
+         List.Append ("-lgcc");
+         List.Append ("-Xlinker");
+         List.Append ("--gc-sections");
+         List.Append ("-Xlinker");
+         List.Append ("--build-id=none");
+         List.Append ("-Xlinker");
+         List.Append ("--emit-relocs");
+         List.Append ("-Xlinker");
+         List.Append ("-T");
+         List.Append ("-Xlinker");
+         List.Append (File_Operand (Output & ".ld"));
+         List.Append ("-Xlinker");
+         List.Append ("-Map");
+         List.Append ("-Xlinker");
+         List.Append (File_Operand (Output & ".map"));
+         List.Append ("-o");
+         List.Append (File_Operand (Output));
+         if Linker /= "" then
+            List.Append ("-fuse-ld=" & Linker);
+         end if;
+         return List;
       end if;
       if Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O

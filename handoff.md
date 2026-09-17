@@ -98,7 +98,7 @@ compiler is written in Ada 2022 with pinned GNAT/GPRbuild, minimal
 dependencies, no SPARK, and a custom test harness. It compiles whole
 programs, may keep private caches, and lowers through a verified,
 target-neutral internal IR that evolves from implementation evidence to
-assembly text for the platform assembler and linker. The frame pointer
+assembly text for the platform assembler and linker. The ordinary frame pointer
 is always present. Linux x86-64 comes first, native macOS arm64 second, and emulator-first Cortex-M third. Not
 LLVM, which is a dependency larger than the language, and not C, which
 loses the calling convention, traps and debug information the design
@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.60 — Implement startup, vectors and machine directives (planned).**
+**Current roadmap work: R6.60 — Implement startup, vectors and machine directives.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -307,7 +307,7 @@ R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
 ABI planning, with independent C/assembly execution evidence agreeing with
 synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
 That [contract](environments/cortex-m/README.md) preceded R6.50 emission;
-language startup/linking and source debugging retain their later owners.
+R6.60 adds compiler-owned startup/linking; source debugging remains R6.100.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
@@ -331,8 +331,8 @@ generated-device fixtures.
 verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
 assembly, and
 can assemble and link hosted executables checked by each native target gate.
-Cortex-M language startup/linking, source debugging and the broader standard
-library remain successor work. `ROADMAP.md` is the sole durable work authority. Outstanding
+Cortex-M source debugging and the broader standard library remain successor
+work. D229 enables compiler-owned firmware startup, vectors and linking. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end
 barrier.
@@ -357,3 +357,14 @@ throughout. Backticks mark code, names and paths, never emphasis. Prefer
 deciding over deferring, and
 say plainly where a decision is a guess. Push back with reasons rather
 than agreeing.
+
+
+R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
+typed interrupt/naked functions, vector references, placement/retention and
+fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
+16 KiB RAM and 4 KiB stack reservation. The
+[firmware execution lane](environments/cortex-m/README.md#r660-compiler-owned-firmware)
+checks generated boot, nested exceptions, PSP return, veneers and peripheral
+traces alongside independent C/assembly controls. Its exact-revision dual-native
+binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
+core, CPU-library packaging and noreturn; R6.80 retains generated-device fixtures.

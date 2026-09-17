@@ -6,6 +6,8 @@ with Landin.Syntax.Precedence;
 
 package body Landin.Syntax.Parser is
 
+   use type Landin.Machine.Convention;
+
    package Tok renames Landin.Tokens;
    package Syn renames Landin.Diagnostics.Syntactic;
    package Pre renames Landin.Syntax.Precedence;
@@ -290,6 +292,8 @@ package body Landin.Syntax.Parser is
                  Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
+               Machine   : Landin.Machine.Convention :=
+                 Landin.Machine.Ordinary;
                C_ABI     : Boolean := False;
                Variadic  : Boolean := False;
                Layout    : Landin.Layouts.Policy := Landin.Layouts.Natural;
@@ -348,6 +352,7 @@ package body Landin.Syntax.Parser is
             function Parse_Program return Node_Id;
             function Parse_Import (Late : Boolean := False) return Node_Id;
             function Parse_Declaration return Node_Id;
+            function Parse_Link_Declaration return Node_Id;
             function Parse_Fixed_Conditional return Node_Id;
             function Parse_Atom_Declaration
               (Exported  : Boolean;
@@ -373,11 +378,14 @@ package body Landin.Syntax.Parser is
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span;
+               Machine   : Landin.Machine.Convention :=
+                 Landin.Machine.Ordinary;
                C_ABI     : Boolean := False;
                Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
                return Node_Id;
             procedure Recover_Annotation_Closer;
-            procedure Parse_C_Convention;
+            procedure Parse_C_Convention
+              (Machine : out Landin.Machine.Convention);
             function Parse_Layout
               (Bits : out Natural) return Landin.Layouts.Policy;
             procedure Parse_Parameters
@@ -844,6 +852,8 @@ package body Landin.Syntax.Parser is
                  Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
+               Machine   : Landin.Machine.Convention :=
+                 Landin.Machine.Ordinary;
                C_ABI     : Boolean := False;
                Variadic  : Boolean := False;
                Layout    : Landin.Layouts.Policy := Landin.Layouts.Natural;
@@ -896,6 +906,8 @@ package body Landin.Syntax.Parser is
                    Layout     => Layout,
                    Encoded    => False,
                    Width      => 0,
+                   Machine    => Machine,
+                   Attributes => (others => <>),
                    Link_Name  => Link_Name,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
@@ -1321,6 +1333,113 @@ package body Landin.Syntax.Parser is
             --  `identifier ":"` then `(` opens a signature and anything
             --  else is a type, so two tokens past the name decide.  That
             --  is [1800]'s own rule read one position earlier.
+            function Parse_Link_Declaration return Node_Id is
+               Opened : constant Landin.Source.Span := Here;
+               Attr : Machine_Attributes;
+               Symbol : Landin.Source.Span := Landin.Source.Empty_Span;
+               Parsed : Node_Id;
+               Seen : Boolean := False;
+
+               procedure Refuse_Link (Message : String);
+               procedure Refuse_Link (Message : String) is
+               begin
+                  Complain
+                    (Syn.Token_Expected, Here, Message,
+                     Note => "[1640]: link(section: text, align: integer,"
+                       & " vector: integer, keep, symbol: text)",
+                     Related => Opened, Because => "this annotation");
+               end Refuse_Link;
+            begin
+               Advance;
+               Advance;
+               while Peek not in Tok.Right_Paren | Tok.End_Of_Input loop
+                  if Peek /= Tok.Identifier then
+                     Refuse_Link ("a link attribute requires its label");
+                     exit;
+                  end if;
+                  declare
+                     Label : constant String := Landin.Source.Names.Spelling
+                       (Names, Named_Here);
+                     Value : Landin.Source.Span := Landin.Source.Empty_Span;
+                  begin
+                     Seen := True;
+                     Advance;
+                     if Label /= "keep" then
+                        if not Expect
+                          (Tok.Colon, "a link label requires `:`",
+                           "[1640]: labelled link attributes", Opened,
+                           "this annotation")
+                        then
+                           exit;
+                        end if;
+                        if (Label in "section" | "symbol"
+                            and then Peek = Tok.Text_Literal)
+                          or else (Label in "align" | "vector"
+                            and then Peek = Tok.Integer_Literal)
+                        then
+                           Value := Here;
+                           Advance;
+                        else
+                           Refuse_Link ("unknown link attribute or invalid"
+                             & " literal value");
+                           exit;
+                        end if;
+                     end if;
+                     if (Label = "section" and then Attr.Section
+                           /= Landin.Source.Empty_Span)
+                       or else (Label = "align" and then Attr.Alignment
+                           /= Landin.Source.Empty_Span)
+                       or else (Label = "vector" and then Attr.Vector
+                           /= Landin.Source.Empty_Span)
+                       or else (Label = "symbol" and then Symbol
+                           /= Landin.Source.Empty_Span)
+                       or else (Label = "keep" and then Attr.Keep)
+                     then
+                        Refuse_Link ("duplicate link attribute");
+                     end if;
+                     if Label = "section" then
+                        Attr.Section := Value;
+                     elsif Label = "symbol" then
+                        Symbol := Value;
+                     elsif Label = "align" then
+                        Attr.Alignment := Value;
+                     elsif Label = "vector" then
+                        Attr.Vector := Value;
+                     else
+                        Attr.Keep := True;
+                     end if;
+                     Attr.Present := Attr.Present or else Label /= "symbol";
+                  end;
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+               if not Seen then
+                  Refuse_Link ("a link annotation must not be empty");
+               end if;
+               if not Expect
+                 (Tok.Right_Paren, "a link annotation closes with `)`",
+                  "[1640]: link attributes", Opened, "this annotation")
+               then
+                  Recover_Annotation_Closer;
+               end if;
+               Parsed := Parse_Declaration;
+               if Kind (Result, Parsed) not in Binding | Function_Declaration
+               then
+                  Refuse_Link ("link applies to a function or module datum");
+               elsif Result.Items (Positive (Parsed)).Attributes.Present
+                 or else Result.Items (Positive (Parsed)).Link_Name
+                   /= Landin.Source.Empty_Span
+               then
+                  Refuse_Link ("duplicate link annotation");
+               else
+                  Result.Items (Positive (Parsed)).Attributes := Attr;
+                  Result.Items (Positive (Parsed)).Link_Name := Symbol;
+                  Result.Items (Positive (Parsed)).Extent := Join
+                    (Opened, Result.Items (Positive (Parsed)).Extent);
+               end if;
+               return Parsed;
+            end Parse_Link_Declaration;
+
             function Parse_Declaration return Node_Id is
                Exported  : Boolean := False;
                Public_At : Landin.Source.Span := Landin.Source.Empty_Span;
@@ -1451,11 +1570,39 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Kw_Extern then
                   declare
                      Extern_At : constant Landin.Source.Span := Here;
+                     Machine : Landin.Machine.Convention;
                   begin
-                     Parse_C_Convention;
+                     Parse_C_Convention (Machine);
+                     if Machine /= Landin.Machine.Ordinary
+                       and then Peek = Tok.Identifier
+                       and then Landin.Source.Names.Spelling
+                         (Names, Named_Here) = "link"
+                       and then Ahead (1) = Tok.Left_Paren
+                     then
+                        declare
+                           Parsed : constant Node_Id := Parse_Link_Declaration;
+                        begin
+                           if Kind (Result, Parsed)
+                             /= Function_Declaration
+                           then
+                              Complain
+                                (Syn.Token_Expected, Extern_At,
+                                 "extern requires a routine");
+                           else
+                              Result.Items (Positive (Parsed)).Machine :=
+                                Machine;
+                              Result.Items (Positive (Parsed)).C_ABI :=
+                                Machine = Landin.Machine.Ordinary;
+                              Result.Items (Positive (Parsed)).Exported :=
+                                Exported;
+                           end if;
+                           return Parsed;
+                        end;
+                     end if;
                      return Parse_Function
-                       (Exported, Public_At, C_ABI => True,
-                        Extern_At => Extern_At);
+                       (Exported, Public_At,
+                        C_ABI => Machine = Landin.Machine.Ordinary,
+                        Machine => Machine, Extern_At => Extern_At);
                   end;
                end if;
 
@@ -1464,7 +1611,14 @@ package body Landin.Syntax.Parser is
                    (Names, Named_Here) = "link"
                  and then Ahead (1) = Tok.Left_Paren
                then
-                  return Parse_Function (Exported, Public_At);
+                  declare
+                     Parsed : constant Node_Id := Parse_Link_Declaration;
+                  begin
+                     if Exported then
+                        Result.Items (Positive (Parsed)).Exported := True;
+                     end if;
+                     return Parsed;
+                  end;
                end if;
 
                if Peek in Tok.Left_Paren | Tok.Left_Bracket | Tok.Kw_Ptr
@@ -2100,12 +2254,14 @@ package body Landin.Syntax.Parser is
                end if;
             end Recover_Annotation_Closer;
 
-            procedure Parse_C_Convention is
+            procedure Parse_C_Convention
+              (Machine : out Landin.Machine.Convention) is
                Opened : constant Landin.Source.Span := Here;
             begin
+               Machine := Landin.Machine.Ordinary;
                Advance;
                if not Expect
-                 (Tok.Left_Paren, "a C annotation opens with `(`",
+                 (Tok.Left_Paren, "a convention opens with `(`",
                   "[1580]: write `extern(c)` or `layout(c)`",
                   Opened, "this annotation")
                then
@@ -2113,19 +2269,28 @@ package body Landin.Syntax.Parser is
                end if;
                if Peek /= Tok.Identifier
                  or else Landin.Source.Names.Spelling
-                   (Names, Named_Here) /= "c"
+                   (Names, Named_Here) not in "c" | "interrupt" | "naked"
                then
                   Complain
                     (Syn.Token_Expected, Here,
-                     "the supported convention is `c`",
+                     "expected c, interrupt or naked convention",
                      Note => "[1580]: write `extern(c)` or `layout(c)`",
                      Related => Opened, Because => "this annotation");
                end if;
                if Peek = Tok.Identifier then
+                  if Landin.Source.Names.Spelling
+                    (Names, Named_Here) = "interrupt"
+                  then
+                     Machine := Landin.Machine.Interrupt_Handler;
+                  elsif Landin.Source.Names.Spelling
+                    (Names, Named_Here) = "naked"
+                  then
+                     Machine := Landin.Machine.Naked_Routine;
+                  end if;
                   Advance;
                end if;
                if not Expect
-                 (Tok.Right_Paren, "a C annotation closes with `)`",
+                 (Tok.Right_Paren, "a convention closes with `)`",
                   "[1580]: write `extern(c)` or `layout(c)`",
                   Opened, "this annotation")
                then
@@ -2267,12 +2432,15 @@ package body Landin.Syntax.Parser is
                Declared_At  : Landin.Source.Span) return Node_Id
             is
                At_Type : constant Landin.Source.Span := Here;
-               C_ABI   : constant Boolean := Peek = Tok.Kw_Extern;
+               C_ABI   : Boolean := Peek = Tok.Kw_Extern;
+               Machine : Landin.Machine.Convention :=
+                 Landin.Machine.Ordinary;
 
             begin
                Type_Refused := False;
                if C_ABI then
-                  Parse_C_Convention;
+                  Parse_C_Convention (Machine);
+                  C_ABI := Machine = Landin.Machine.Ordinary;
                end if;
 
                --  [0850]'s qualifier is identified by its pointer shape.
@@ -2373,7 +2541,8 @@ package body Landin.Syntax.Parser is
                               At_Token => At_Type,
                               Extent   => Join (At_Type, After_Previous),
                               Children => Head & To_List (Params),
-                              C_ABI => C_ABI, Variadic => Variadic);
+                              C_ABI => C_ABI, Variadic => Variadic,
+                              Machine => Machine);
                         end;
                      end;
                   end if;
@@ -2400,10 +2569,10 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
-               if C_ABI then
+               if C_ABI or else Machine /= Landin.Machine.Ordinary then
                   Complain
                     (Syn.Type_Expected, At_Type,
-                     "`extern(c)` in a type position requires a signature",
+                     "`extern` in a type position requires a signature",
                      Note => "[1580]: a C function type starts with extern(c)"
                              & " and retains its parameter and return lists",
                      Related => Declared_At, Because => "this type");
@@ -4682,13 +4851,16 @@ package body Landin.Syntax.Parser is
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span;
+               Machine   : Landin.Machine.Convention :=
+                 Landin.Machine.Ordinary;
                C_ABI     : Boolean := False;
                Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
                return Node_Id
             is
                Start : constant Landin.Source.Span :=
                  (if Exported then Public_At
-                  elsif C_ABI then Extern_At
+                  elsif C_ABI or else Machine /= Landin.Machine.Ordinary
+                  then Extern_At
                   else Here);
                Named        : Landin.Source.Names.Name_Id;
                At_Name      : Landin.Source.Span;
@@ -4896,7 +5068,7 @@ package body Landin.Syntax.Parser is
                      Named    => Named,
                      Exported => Exported,
                      External => External,
-                     C_ABI => C_ABI, Variadic => Variadic,
+                     C_ABI => C_ABI, Variadic => Variadic, Machine => Machine,
                      Link_Name => Link_Name);
                end;
             end Parse_Function;

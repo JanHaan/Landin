@@ -1,3 +1,5 @@
+with Landin.Targets.Firmware;
+with Landin.Machine;
 with Landin.Memory;
 with Landin.Layouts;
 with Landin.Packed;
@@ -32,6 +34,9 @@ with Landin.Hosted;
 with Landin.Types;
 
 package body Landin.Stages.Checking is
+
+   use type Landin.Machine.Convention;
+   use type Landin.Targets.Architecture;
 
    package Bad renames Landin.Diagnostics.Checking;
    package Name_Bad renames Landin.Diagnostics.Resolution;
@@ -830,6 +835,62 @@ package body Landin.Stages.Checking is
                        and then Landin.Targets.Capabilities.C_Variadic_Calls
                          (Facts)));
       begin
+         if Syn.Machine_Convention (Of_Tree, Node)
+           /= Landin.Machine.Ordinary
+         then
+            Supported := Landin.Targets.Architecture_Of (Facts)
+              = Landin.Targets.Cortex_M0
+              and then Parameters'Length = 0 and then Results'Length = 0
+              and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
+              and then not Syn.Is_Variadic (Of_Tree, Node);
+            if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration then
+               Supported := Supported
+                 and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+                 and then not Syn.Is_External (Of_Tree, Node);
+            end if;
+            if Supported and then Syn.Kind (Of_Tree, Node)
+              = Syn.Function_Declaration
+              and then Syn.Machine_Convention (Of_Tree, Node)
+                = Landin.Machine.Naked_Routine
+            then
+               declare
+                  Body_Node : constant Syn.Node_Id :=
+                    Syn.Body_Of (Of_Tree, Node);
+               begin
+                  Supported := Syn.Statement_Count (Of_Tree, Body_Node) = 1
+                    and then Landin.Configuration.Assembly_Call
+                      (Spellings.all, Of_Tree,
+                       Syn.Nth_Statement (Of_Tree, Body_Node, 1));
+                  if not Supported then
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Body_Node),
+                        Message => "a naked body is one assembler.block",
+                        Note => "[1570]: the programmer owns its stack,"
+                          & " registers, branches and return protocol",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this naked body", Into => Found);
+                     Valid := False;
+                     return;
+                  end if;
+               end;
+            end if;
+            if not Supported then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Where (Of_Tree, Node),
+                  Message => "machine convention requires Cortex-M0 and"
+                    & " a nongeneric () -> none signature without errors",
+                  Note => "[1570]: interrupt and naked routines have"
+                    & " distinct machine entry and return obligations",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "this machine signature", Into => Found);
+               Valid := False;
+            end if;
+            return;
+         end if;
          if not Syn.Uses_C_ABI (Of_Tree, Node) then
             return;
          end if;
@@ -3734,6 +3795,7 @@ package body Landin.Stages.Checking is
                      (if Source_Count = 0
                       then Landin.Checking.No_Return_Sources
                       else Sources (1 .. Source_Count)),
+                     Machine => Syn.Machine_Convention (Of_Tree, Written),
                      C_ABI => Syn.Uses_C_ABI (Of_Tree, Written),
                      Variadic => Syn.Is_Variadic (Of_Tree, Written)),
                   others    => <>);
@@ -7086,6 +7148,7 @@ package body Landin.Stages.Checking is
                  (if Source_Count = 0
                   then Landin.Checking.No_Return_Sources
                   else Sources (1 .. Source_Count)),
+                 Machine => Syn.Machine_Convention (Of_Tree, Node),
                  C_ABI => Syn.Uses_C_ABI (Of_Tree, Node),
                  Variadic => Syn.Is_Variadic (Of_Tree, Node));
          begin
@@ -9388,6 +9451,9 @@ package body Landin.Stages.Checking is
                   if Syn.Uses_C_ABI (Pattern_Tree, Pattern)
                        /= Landin.Checking.Signature_Uses_C_ABI
                          (Types.all, Signature)
+                    or else Syn.Machine_Convention (Pattern_Tree, Pattern)
+                      /= Landin.Checking.Signature_Machine
+                        (Types.all, Signature)
                     or else Syn.Is_Variadic (Pattern_Tree, Pattern)
                        /= Landin.Checking.Signature_Is_Variadic
                          (Types.all, Signature)
@@ -10294,6 +10360,8 @@ package body Landin.Stages.Checking is
                         (if Source_Count = 0
                          then Landin.Checking.No_Return_Sources
                          else Sources (1 .. Source_Count)),
+                        Machine => Syn.Machine_Convention
+                          (Template_Tree.all, Function_Node),
                         C_ABI => Syn.Uses_C_ABI
                           (Template_Tree.all, Function_Node),
                         Variadic => Syn.Is_Variadic
@@ -12080,6 +12148,21 @@ package body Landin.Stages.Checking is
             return Valid;
          end Match_Runtime_Arguments;
       begin
+         if Landin.Checking.Signature_Machine (Types.all, Signature)
+           /= Landin.Machine.Ordinary
+         then
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Node),
+               Message => "a machine entry cannot be called as a routine",
+               Note => "[1570]: vectors enter handlers; naked transfers"
+                 & " belong to explicit assembly",
+               Related => Landin.Checking.Signature_Origin
+                 (Types.all, Signature), Because => "this machine entry",
+               Into => Found);
+            return Ty.Ill_Typed;
+         end if;
          for Position in Offset + 1 .. Total_Parameters loop
             if not Landin.Checking.Nth_Signature_Parameter
               (Types.all, Signature, Position).Caller
@@ -18899,6 +18982,73 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Call | Syn.Labeled_Application =>
+               if Landin.Configuration.Assembly_Call
+                 (Spellings.all, Of_Tree, Node)
+               then
+                  declare
+                     Naked : Boolean := False;
+                     Argument : Syn.Node_Id := Syn.No_Node;
+                     Fault : Ada.Strings.Unbounded.Unbounded_String;
+                  begin
+                     for Index in Natural (Node) + 1 .. Syn.Node_Count
+                       (Of_Tree)
+                     loop
+                        declare
+                           Parent : constant Syn.Node_Id :=
+                             Syn.Node_Id (Index);
+                        begin
+                           if Syn.Kind (Of_Tree, Parent) in
+                             Syn.Function_Declaration | Syn.Anonymous_Function
+                             and then Landin.Source.Contains
+                               (Syn.Where (Of_Tree, Parent),
+                                Syn.Where (Of_Tree, Node))
+                           then
+                              Naked := Syn.Machine_Convention
+                                (Of_Tree, Parent) =
+                                  Landin.Machine.Naked_Routine;
+                              exit;
+                           end if;
+                        end;
+                     end loop;
+                     if Landin.Targets.Architecture_Of (Facts)
+                       /= Landin.Targets.Cortex_M0
+                     then
+                        Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                          ("assembler.block is enabled only on Cortex-M0");
+                     elsif Syn.Argument_Count (Of_Tree, Node) /= 1 then
+                        Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                          ("assembler.block requires one fixed text literal");
+                     else
+                        Argument := Syn.Nth_Argument (Of_Tree, Node, 1);
+                        if Syn.Kind (Of_Tree, Argument)
+                          not in Syn.Text_Literal | Syn.Raw_Literal
+                        then
+                           Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                             ("assembly text must be a literal");
+                        else
+                           Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                             (Landin.Targets.Firmware.Assembly_Error
+                                (Landin.Configuration.Fixed_Text
+                                   (Source (Context, Syn.Source_Of (Of_Tree)),
+                                    Of_Tree, Argument), Naked));
+                        end if;
+                     end if;
+                     if Ada.Strings.Unbounded.Length (Fault) /= 0 then
+                        Bad.Report
+                          (Item => Bad.Type_Mismatch,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Where (Of_Tree, Node),
+                           Message => Ada.Strings.Unbounded.To_String (Fault),
+                           Note => "[1630]: opaque assembly is a compiler"
+                             & " memory boundary, not a hardware barrier",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this assembly block", Into => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                     return Kept (Ty.No_Value);
+                  end;
+               end if;
+
                declare
                   use all type Landin.Memory.Operation;
                   use type Landin.Memory.Ordering;
@@ -31351,6 +31501,14 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         if Landin.Targets.Architecture_Of (Facts) = Landin.Targets.Cortex_M0
+           and then (Ada.Strings.Fixed.Head (Spelled (Symbol), 17)
+             = "_landin_firmware_"
+             or else Ada.Strings.Fixed.Head (Spelled (Symbol), 8) = "__aeabi_")
+         then
+            Reject ("this symbol belongs to compiler firmware startup");
+            return;
+         end if;
          if not Check_Helper (Helper_Of (Spelled (Symbol))) then
             return;
          end if;
@@ -31369,7 +31527,9 @@ package body Landin.Stages.Checking is
                   Prior_Signature : constant Landin.Checking.Signature_Id :=
                     Landin.Checking.Signature_Of (Types.all, Prior);
                begin
-                  if not Signatures_Agree (Signature, Prior_Signature)
+                  if Syn.Kind (Prior_Tree.all, Prior_Node)
+                    /= Syn.Function_Declaration
+                    or else not Signatures_Agree (Signature, Prior_Signature)
                     or else (not Syn.Is_External (Of_Tree, Node)
                              and then not Syn.Is_External
                                (Prior_Tree.all, Prior_Node))
@@ -31485,6 +31645,151 @@ package body Landin.Stages.Checking is
          end loop;
       end Check_Hosted_Main_Linkage;
 
+      procedure Check_Data_Link (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Check_Data_Link (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         Explicit : constant Landin.Source.Span :=
+           Syn.Link_Symbol_Span (Of_Tree, Node);
+         Id : constant Res.Declaration_Id :=
+           Declaration_At (Syn.Source_Of (Of_Tree), Node);
+      begin
+         if Explicit = Landin.Source.Empty_Span then
+            return;
+         end if;
+         declare
+            Text : constant String := Landin.Source.Slice
+              (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
+            Name : constant String := Text (Text'First + 1 .. Text'Last - 1);
+            Symbol : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Spellings.all, Name);
+            Valid : Boolean := Landin.Targets.Architecture_Of (Facts)
+              = Landin.Targets.Cortex_M0 and then Name'Length > 0
+              and then Name (Name'First) in 'a' .. 'z' | 'A' .. 'Z' | '_'
+              and then (for all C of Name =>
+                C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_')
+              and then Ada.Strings.Fixed.Index
+                (Name, "_landin_firmware_") /= Name'First
+              and then Ada.Strings.Fixed.Index
+                (Name, "__aeabi_") /= Name'First;
+         begin
+            for Prior in Res.Declaration_Id'(1)
+              .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+            loop
+               if Prior /= Id and then Landin.Checking.Link_Symbol
+                 (Types.all, Prior) = Symbol
+               then
+                  Valid := False;
+               end if;
+            end loop;
+            if not Valid then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree), Where => Explicit,
+                  Message => "invalid, reserved or duplicate datum symbol",
+                  Note => "[1640]: Cortex data linkage requires one ASCII"
+                    & " identifier, distinct from all explicit symbols",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "this data linkage", Into => Found);
+            else
+               Landin.Checking.Note_Link_Symbol (Types.all, Id, Symbol);
+            end if;
+         end;
+      end Check_Data_Link;
+
+      Vector_Owner : array (2 .. 47) of Landin.Provenance.Origin :=
+        [others => Landin.Provenance.No_Origin];
+
+      procedure Check_Placement (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Check_Placement (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         Attr : constant Syn.Machine_Attributes :=
+           Syn.Attributes (Of_Tree, Node);
+         Value : constant Landin.Machine.Placement :=
+           Landin.Configuration.Placement_Of
+             (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree, Node,
+              Spellings.all);
+         Routine : constant Boolean :=
+           Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration;
+         Valid : Boolean := True;
+         function Starts (Text, Prefix : String) return Boolean is
+           (Text'Length > Prefix'Length and then Text
+              (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
+      begin
+         if not Attr.Present then
+            return;
+         end if;
+         Valid := Landin.Targets.Architecture_Of (Facts)
+           = Landin.Targets.Cortex_M0;
+         if Value.Alignment /= 0 then
+            Valid := Valid and then Value.Alignment in
+              1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256;
+         elsif Attr.Alignment /= Landin.Source.Empty_Span then
+            Valid := False;
+         end if;
+         if Value.Section /= Landin.Source.Names.No_Name then
+            declare
+               Text : constant String := Landin.Source.Names.Spelling
+                 (Spellings.all, Value.Section);
+            begin
+               Valid := Valid and then Text'Length <= 80
+                 and then Ada.Strings.Fixed.Index (Text, ".landin_") = 0
+                 and then (for all C of Text =>
+                   C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.')
+                 and then (if Routine then Starts (Text, ".text.")
+                   or Starts (Text, ".ramtext.")
+                   elsif Syn.Is_Mutable (Of_Tree, Node)
+                   then Starts (Text, ".data.") or Starts (Text, ".bss.")
+                   else Starts (Text, ".rodata."));
+               if not Routine and then Starts (Text, ".bss.") then
+                  declare
+                     Initial : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Node);
+                  begin
+                     Valid := Valid and then Initial /= Syn.No_Node
+                       and then (Syn.Kind (Of_Tree, Initial)
+                         = Syn.Zeroed_Literal
+                         or else (Syn.Kind (Of_Tree, Initial)
+                           = Syn.Integer_Literal
+                           and then Landin.Source.Slice
+                             (Source (Context, Syn.Source_Of (Of_Tree)),
+                              Syn.Anchor (Of_Tree, Initial)) = "0"));
+                  end;
+               end if;
+            end;
+         end if;
+         if Attr.Vector /= Landin.Source.Empty_Span then
+            Valid := Valid and then Routine
+              and then Syn.Machine_Convention (Of_Tree, Node)
+                in Landin.Machine.Interrupt_Handler
+                  | Landin.Machine.Naked_Routine
+              and then Value.Vector in 2 | 3 | 11 | 14 | 15 | 16 .. 20
+                | 22 .. 41;
+            if Valid then
+               if Vector_Owner (Value.Vector).Source
+                 /= Landin.Source.No_Source
+               then
+                  Valid := False;
+               else
+                  Vector_Owner (Value.Vector) := Syn.Origin (Of_Tree, Node);
+               end if;
+            end if;
+         end if;
+         if Routine then
+            Valid := Valid and then not Syn.Is_External (Of_Tree, Node)
+              and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0;
+         end if;
+         if not Valid then
+            Bad.Report
+              (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Node),
+               Message => "invalid or conflicting Cortex-M0 placement",
+               Note => "[1640]: sections use .text.*, .rodata.*, .data.* or"
+                 & " .bss.* according to storage; alignment is a power of"
+                 & " two through 256; vectors require a unique implemented"
+                 & " exception and interrupt/naked convention",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "this placement", Into => Found);
+         end if;
+      end Check_Placement;
+
       --  D139 presents its active declarations through the same traversal
       --  as ordinary module declarations.  This action deliberately knows
       --  nothing about arms, so it cannot descend into an inactive one.
@@ -31492,6 +31797,7 @@ package body Landin.Stages.Checking is
 
       procedure Check_Declaration (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
       begin
+         Check_Placement (Of_Tree, Node);
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Type_Declaration =>
                declare
@@ -31501,6 +31807,7 @@ package body Landin.Stages.Checking is
                   pragma Unreferenced (Ignored);
                end;
             when Syn.Binding =>
+               Check_Data_Link (Of_Tree, Node);
                Check_Module_Value (Of_Tree, Node);
                Check_Statement (Of_Tree, Node, Ty.Not_Typed);
                Check_Module_Fold (Of_Tree, Node);

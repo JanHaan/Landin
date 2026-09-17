@@ -14,7 +14,7 @@ with Landin.Memory;
 
 package Landin.Targets.Capabilities is
 
-   --  Admitted source contracts; Cortex-M still has no emitter.
+   --  Admitted source contracts, independent of instruction selection.
    function Memory_Access
      (Facts : Target_Facts; Op : Landin.Memory.Operation;
       Width : Scalar_Size) return Boolean;

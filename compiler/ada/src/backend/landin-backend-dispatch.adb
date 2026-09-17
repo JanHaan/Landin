@@ -45,7 +45,8 @@ package body Landin.Backend.Dispatch is
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null) is
+      Debug : access constant Landin.Debugging.Information := null;
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) is
    begin
       case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.Linux_X86_64_ELF =>
@@ -59,7 +60,7 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             Landin.Backend.Cortex_M.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
-               Hosted_Entry, Debug);
+               Hosted_Entry, Debug, Firmware_Entry);
          when Landin.Targets.Capabilities.No_Backend =>
             raise Compiler_Defect with "target has no assembly emitter";
       end case;

@@ -1,0 +1,95 @@
+-- A bounded interrupt/DMA test using an ordinary mutable slice.
+mut buffer: [4]u8 = zeroed
+mut notifications: u32 = 0
+mut completed: u32 = 0
+mut result: u32 = 0
+mut stage: u32 = 0
+config: type = layout(packed, u32) struct
+    enable: bool at 0
+    complete_irq: bool at 1
+    half_irq: bool at 2
+    increment: bool at 10
+end config
+status_image: type = layout(packed, u32) struct
+    bits: [8]bool at 0..7
+end status_image
+count_image: type = layout(packed, u16) struct
+    count: u16 at 0..15
+end count_image
+
+link(vector: 16)
+extern(interrupt) device_irq: () -> none =
+    mut status: status_image = zeroed
+    status_raw: ptr mut u32 = ptr(usize(addr status))
+    status_port: ptr u32 = ptr(0x40026000)
+    clear_port: ptr mut u32 = ptr(0x40026004)
+    status_raw.val = compiler.register_read(status_port, compiler.normal_read)
+    notifications = notifications + 1
+    if status.bits[5] then
+        mut count: count_image = zeroed
+        count_raw: ptr mut u16 = ptr(usize(addr count))
+        count_port: ptr u16 = ptr(0x4002605c)
+        count_raw.val = compiler.register_read(count_port, compiler.normal_read)
+        compiler.device_barrier()
+        if count.count == 0 then
+            completed = 1
+        end if
+    end if
+    compiler.register_write(clear_port, 0x60, compiler.one_clears,
+                            compiler.write_zero, 0xe0)
+    compiler.completion_barrier()
+end device_irq
+
+receive: (buf: []mut u8) -> (value: u32) =
+    cfg_port: ptr mut u32 = ptr(0x40026058)
+    count_port: ptr mut u16 = ptr(0x4002605c)
+    source_port: ptr mut u32 = ptr(0x40026060)
+    dest_port: ptr mut u32 = ptr(0x40026064)
+    if buf[0] <> 0 or buf[1] <> 0 or buf[2] <> 0 or buf[3] <> 0 then
+        value = 1
+        return
+    end if
+    compiler.volatile_store(source_port, 0x40021004)
+    compiler.volatile_store(dest_port, u32(usize(addr buf[0])))
+    mut count: count_image = zeroed
+    count.count = u16(lenof buf)
+    count_raw: ptr mut u16 = ptr(usize(addr count))
+    compiler.register_write(count_port, count_raw.val, compiler.normal_write,
+                            compiler.preserve, 0xffff)
+    mut cfg: config = zeroed
+    cfg_raw: ptr mut u32 = ptr(usize(addr cfg))
+    cfg_raw.val = 0x80000000
+    cfg.increment = true
+    cfg.complete_irq = true
+    cfg.half_irq = true
+    compiler.register_write(cfg_port, cfg_raw.val, compiler.normal_write,
+                            compiler.preserve, 0x407)
+    compiler.device_barrier()
+    cfg.enable = true
+    compiler.register_write(cfg_port, cfg_raw.val, compiler.normal_write,
+                            compiler.preserve, 0x407)
+    stage = 1
+    while stage == 1 do
+        assembler.block("nop")
+    end while
+    assembler.block("cpsid i")
+    stage = 3
+    while stage == 3 do
+        assembler.block("nop")
+    end while
+    assembler.block("cpsie i\ndsb sy\nisb sy")
+    while completed == 0 do
+        assembler.block("nop")
+    end while
+    compiler.device_barrier()
+    value = u32(buf[0]) + u32(buf[1]) + u32(buf[2]) + u32(buf[3])
+end receive
+
+start: () -> none =
+    assembler.block("ldr r0, =0xe000e100\nmovs r1, #1\nstr r1, [r0]")
+    result = receive(buffer[0..<lenof buffer])
+    stage = 5
+    loop do
+        assembler.block("wfi")
+    end loop
+end start

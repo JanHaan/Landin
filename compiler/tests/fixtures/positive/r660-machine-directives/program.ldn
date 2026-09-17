@@ -1,0 +1,14 @@
+fixed if compiler.arch == cortex_m0 then
+    link(section: ".rodata.identity", align: 16, keep)
+    identity: [4]u8 = [55, 48, 49, 0]
+    link(vector: 11)
+    extern(interrupt) handler: () -> none =
+        assembler.block("nop")
+    end handler
+    extern(naked) raw_handler: () -> none =
+        assembler.block("bx lr")
+    end raw_handler
+    interrupt_type: type = extern(interrupt) () -> none
+    link(keep) reference: interrupt_type = handler
+end if
+start: () -> none = end start
