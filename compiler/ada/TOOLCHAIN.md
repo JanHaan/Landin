@@ -185,3 +185,16 @@ R6.10 separately pins Arm EABI GCC, binutils, GDB, QEMU and Renode in
 options and native Debian reproduction. They compile only small environment
 controls, are not Ada bootstrap dependencies and do not enable a Landin
 Cortex-M backend.
+
+
+## Cortex-M emitted-code runtime
+
+R6.50's external execution harness uses the existing pinned Arm tools in
+[`environments/cortex-m/tools.lock.json`](../../environments/cortex-m/tools.lock.json).
+Generated arithmetic may require the GCC 14.2.1 `thumb/v6-m/nofp/libgcc.a`
+multilib. This is a target runtime dependency, not an Ada bootstrap dependency
+or a C backend. Each linked test records its archive hash, requested helpers,
+map members, ELF attributes and unresolved-symbol check. The
+[target guide](../../docs/targets.md#runtime-helper-boundary) records provenance,
+calling conventions and the R6.60/R6.70 freestanding handoff. Cortex executable
+linking through `refine` remains refused.

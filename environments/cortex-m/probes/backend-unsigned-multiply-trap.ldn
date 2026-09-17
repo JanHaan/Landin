@@ -1,0 +1,5 @@
+u: (n: u64) -> (r: u64) = n end u
+public main: () -> (code: i32) =
+    _ = u(4294967296) * u(4294967296)
+    code = 1
+end main

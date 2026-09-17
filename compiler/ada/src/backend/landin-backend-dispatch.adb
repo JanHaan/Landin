@@ -1,5 +1,6 @@
 with Landin.Backend.X86_64;
 with Landin.Backend.Arm64;
+with Landin.Backend.Cortex_M;
 with Landin.Targets.Capabilities;
 
 package body Landin.Backend.Dispatch is
@@ -10,6 +11,8 @@ package body Landin.Backend.Dispatch is
             "signed 32-bit offsets this backend addresses",
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
             "signed 32-bit frame budget of the arm64 backend",
+         when Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            "32-bit address budget of the Cortex-M backend",
          when Landin.Targets.Capabilities.No_Backend =>
             "frame encoding of an unavailable backend");
 
@@ -25,6 +28,9 @@ package body Landin.Backend.Dispatch is
               (Of_Unit, Item, Facts, Options);
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
             return Landin.Backend.Arm64.Frame_Is_Addressable
+              (Of_Unit, Item, Facts, Options);
+         when Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            return Landin.Backend.Cortex_M.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
          when Landin.Targets.Capabilities.No_Backend => return False;
       end case;
@@ -48,6 +54,10 @@ package body Landin.Backend.Dispatch is
                Hosted_Entry, Debug);
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
             Landin.Backend.Arm64.Emit
+              (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
+               Hosted_Entry, Debug);
+         when Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            Landin.Backend.Cortex_M.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug);
          when Landin.Targets.Capabilities.No_Backend =>

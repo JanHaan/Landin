@@ -13682,7 +13682,8 @@ ordinary coherent RAM. The Cortex-M0 contract admits one-, two- and four-byte
 loads/stores and barriers, and refuses exchange, add and compare-exchange:
 ARMv6-M has no exclusive instruction pair. It does not silently substitute
 interrupt masking, an unavailable `libatomic` helper, or a stronger core.
-Cortex-M emission remains R6.50. Synthetic-32 admits no memory intrinsics.
+R6.50 implements Cortex-M emission for that admitted subset. Synthetic-32
+admits no memory intrinsics.
 Device addresses must use volatile accesses, never CPU atomics. Even a CPU
 instruction that is atomic in RAM says nothing about peripheral bus semantics.
 

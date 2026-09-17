@@ -1,0 +1,30 @@
+-- The admitted M0 subset of the shared R6.30 scalar memory corpus.
+public main: () -> (code: i32) =
+    mut byte: u8 = 0
+    mut half: u16 = 0
+    mut word: u32 = 0
+    compiler.atomic_store(addr byte, 0xa5, compiler.release)
+    compiler.atomic_store(addr half, 0x5aa5, compiler.seq_cst)
+    compiler.atomic_store(addr word, 0x12345678, compiler.relaxed)
+    if compiler.atomic_load(addr byte, compiler.acquire) <> 0xa5
+      or compiler.atomic_load(addr half, compiler.seq_cst) <> 0x5aa5
+      or compiler.atomic_load(addr word, compiler.relaxed) <> 0x12345678 then
+        code = 1
+        return
+    end if
+    compiler.volatile_store(addr byte, 42)
+    compiler.volatile_store(addr half, 65535)
+    compiler.volatile_store(addr word, 4294967295)
+    _ = compiler.volatile_load(addr byte)
+    compiler.compiler_barrier()
+    compiler.thread_fence(compiler.seq_cst)
+    compiler.device_barrier()
+    compiler.completion_barrier()
+    if compiler.volatile_load(addr byte) == 42
+      and compiler.volatile_load(addr half) == 65535
+      and compiler.volatile_load(addr word) == 4294967295 then
+        code = 42
+    else
+        code = 2
+    end if
+end main

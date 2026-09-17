@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Independent M0 controls and native Landin/Renode peripheral execution.
 
-The Landin lane uses the hosted Linux backend; no Cortex-M emitter is implied.
+Retained hosted transport is separate from R6.50's generated M0 execution.
 """
 import argparse
 import hashlib
@@ -213,6 +213,8 @@ class Run:
         require(refine is not None, 'native Landin compiler is required')
         from packed_native import execute as native_execute
         native_execute(self, refine)
+        from backend_acceptance import execute as backend_execute
+        backend_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

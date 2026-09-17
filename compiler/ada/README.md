@@ -116,6 +116,7 @@ different responsibilities.
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
+| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations and ELF assembly from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or claim Landin source debugging |
 | `Landin.Backend.Darwin_ABI` | Apple arm64 C classification and argument/result placement from neutral shapes and target facts | infer layout from the host, reuse SysV transport or change source semantics |
 | `Landin.Backend.Arm64` | Darwin assembly, stack homes, frame records, native/C calls, hosted runtime and Mach-O data/symbol rendering | parse/check source, put physical transport in IR, write files or run tools |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
@@ -1015,10 +1016,11 @@ R6.10's [Cortex-M environment probes](../../environments/cortex-m/README.md)
 are separate C/assembly controls for QEMU and a synthetic Renode device lane.
 R6.20 adds `Targets.Cortex_M` and `Backend.Arm32_ABI` layout/transport planning,
 with independent executable controls under that environment. The existing
-neutral shape machinery supplies storage; no Cortex emitter, C source
-capability, compiler linker path or debugger is enabled.
-`--target=cortex-m0` accepts checking requests and refuses output requests.
-R6.50 retains the Landin backend; see
+neutral shape machinery supplies storage. R6.50 adds `Backend.Cortex_M` assembly
+emission and compiler-generated QEMU/Renode execution. `--target=cortex-m0`
+accepts checking and `--emit=asm`; general C source, compiler executable linking
+and Landin source debugging remain refused. External startup/linker probes are
+identified test harnesses, not language capabilities. See
 [target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
 
 R6.30's `Landin.Memory` owns the neutral operation/order vocabulary.
@@ -1026,8 +1028,9 @@ R6.30's `Landin.Memory` owns the neutral operation/order vocabulary.
 runtime operands and checking validates fixed orders, pointer permission,
 unsigned scalar identity and target capability. `IR.Memory_Access` retains
 that contract through verification and optimization. Native backends implement
-scalar atomics/volatile access and barriers; Cortex-M still only describes its
-admitted memory operations. The [target guide](../../docs/targets.md#explicit-memory-operations)
+scalar atomics/volatile access and barriers. Cortex-M implements admitted
+one-, two- and four-byte loads/stores and barriers, retaining alignment checks
+and refusing RMW/eight-byte memory intrinsics. The [target guide](../../docs/targets.md#explicit-memory-operations)
 records actual instruction requirements. Packed/register/volatile-pointer type
 syntax and the ordinary CPU/cache modules retain their separate R6 owners.
 
@@ -1038,5 +1041,6 @@ and encoding tables through verification and optimization. Native backends
 implement checked extraction/insertion and raw aggregate copies; the DWARF
 consumer exposes the raw carrier. Explicit register-image intrinsics use the
 existing volatile IR boundary with retained reserved-bit guards. General
-register wrappers and a Cortex-M emitter are not enabled. ROADMAP.md owns the
+register wrappers remain deferred; the Cortex emitter preserves the same raw
+image and validation contracts. ROADMAP.md owns the
 remaining audits, evidence and closure obligations.

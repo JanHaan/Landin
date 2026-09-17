@@ -330,3 +330,12 @@ in `artifacts/cortex-m`; the existing inventory/export checks bind both to the
 accepted archive. Packed native lowering and raw-carrier DWARF changes select
 routine acceptance with debugger risk on both hosts. Development transcripts
 and model success never substitute for identical-revision dual-native approval.
+
+
+R6.50 extends that same mandatory embedded path with the complete inventoried
+Cortex-M corpus, generated ABI/frame and arithmetic controls, and direct
+synthetic peripheral/DMA execution. `artifacts/cortex-m/backend` retains its
+ELF/object/map/disassembly, scripts, commands, identities, results and explicit
+physical-limit records. Existing R6.10/R6.20/R6.30/R6.40 evidence and Renode lock
+cleanup remain required. These artifacts belong to the accepted archive;
+development selectors cannot approve a revision.

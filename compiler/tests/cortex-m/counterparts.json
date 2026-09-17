@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "replacements": {
+    "calls-return-through-the-abi": [
+      [
+        "18446744073709551615",
+        "4294967295"
+      ]
+    ],
+    "fixed-conditional-generic-runtime": [
+      [
+        "compiler.arch == arm64)",
+        "compiler.arch == arm64 or compiler.arch == cortex_m0)"
+      ]
+    ],
+    "r430-fixed-tools": [
+      [
+        "compiler.arch == arm64)",
+        "compiler.arch == arm64 or compiler.arch == cortex_m0)"
+      ]
+    ],
+    "pointer-unions": [
+      [
+        "i32(total) - 6",
+        "i32(total) - 2"
+      ]
+    ],
+    "r250-references": [
+      [
+        "sizeof ptr u32 == 8",
+        "sizeof ptr u32 == 4"
+      ],
+      [
+        "sizeof []u32 == 16",
+        "sizeof []u32 == 8"
+      ],
+      [
+        "alignof ptr u32 == 8",
+        "alignof ptr u32 == 4"
+      ],
+      [
+        "alignof []u32 == 8",
+        "alignof []u32 == 4"
+      ]
+    ],
+    "measurements-answer-for-the-target": [
+      [
+        "sizeof usize == 8",
+        "sizeof usize == 4"
+      ],
+      [
+        "sizeof isize == 8",
+        "sizeof isize == 4"
+      ],
+      [
+        "sizeof array_header == 32",
+        "sizeof array_header == 16"
+      ],
+      [
+        "alignof array_header == 8",
+        "alignof array_header == 4"
+      ],
+      [
+        "sizeof array_header_alias == 32",
+        "sizeof array_header_alias == 16"
+      ],
+      [
+        "alignof array_header_alias == 8",
+        "alignof array_header_alias == 4"
+      ],
+      [
+        "array_header_image[0] == 32",
+        "array_header_image[0] == 16"
+      ],
+      [
+        "array_header_image[1] == 8",
+        "array_header_image[1] == 4"
+      ]
+    ],
+    "nested-struct-measurements-answer-for-the-target": [
+      [
+        "sizeof inner == 24",
+        "sizeof inner == 16"
+      ],
+      [
+        "alignof inner == 8",
+        "alignof inner == 4"
+      ],
+      [
+        "sizeof outer == 40",
+        "sizeof outer == 24"
+      ],
+      [
+        "alignof outer == 8",
+        "alignof outer == 4"
+      ]
+    ],
+    "variant-part-measurements-answer-for-the-target": [
+      [
+        "sizeof mixed == 40",
+        "sizeof mixed == 20"
+      ],
+      [
+        "alignof mixed == 8",
+        "alignof mixed == 4"
+      ],
+      [
+        "sizeof variant_first == 32",
+        "sizeof variant_first == 16"
+      ],
+      [
+        "alignof variant_first == 8",
+        "alignof variant_first == 4"
+      ]
+    ],
+    "sizeof-of-nominal-element-array": [
+      [
+        "sizeof [3]ptr u8 == 24",
+        "sizeof [3]ptr u8 == 12"
+      ],
+      [
+        "sizeof [2][]u8 == 32",
+        "sizeof [2][]u8 == 16"
+      ]
+    ],
+    "core-mem-raw-storage": [
+      [
+        "slots * sizeof ptr node == 16",
+        "slots * sizeof ptr node == 8"
+      ]
+    ]
+  }
+}

@@ -10363,7 +10363,7 @@ R6.80 is also dependency-ready and retains its separate generated-device gate.
 
 ### R6.50 — Implement the Cortex-M backend
 
-Status: planned
+Status: active
 Depends on: R5.20, R6.20, R6.30, R6.40
 
 Implement instruction selection, frame layout, register allocation, traps and
@@ -10372,6 +10372,188 @@ frame pointer.
 
 Exit evidence: the shared target-applicable IR corpus assembles and executes in
 the selected emulator profile.
+
+Intake and implementation evidence (2026-09-17):
+
+The checkout was clean on `r640-packed-encodings` at accepted R6.40 revision
+`e391dfd7a62eba5ccaef28a23ae765f18a09d130`. Canonical main and GitHub main
+matched, including annotated approval object
+`f07099ea6f8805aaa83b2eec053f715aa0f2841c`. The annotation binds matching
+Linux/Darwin source archives and passing native records. The canonical approval
+validator passed; guarded Pages jobs 1889651/1889653 and mirror jobs
+1889652/1889654 succeeded. Work is on `r650-cortex-backend`.
+
+`Backend.Cortex_M` is implemented against `Backend.Arm32_ABI`, the
+shared frame/layout machinery and verified IR. Its initial allocation uses
+stack homes and low-register scratch; r9 is reserved. Every entry, including
+a leaf, constructs the previous-r11/incoming-lr record before publishing r11.
+The emitter uses ARMv6-M forms and adjacent literal islands, with expanded
+conditional transfers. Multiword storage is ordinary transport, never permission
+to split a volatile access. Memory selection retains alignment traps and full
+compiler boundaries, strengthens atomic loads/stores with DMB SY on both sides,
+and leaves unsupported RMW and eight-byte device accesses refused.
+
+The external `backend-start.S`/`backend-memory.ld` test harness owns reset,
+vectors, initialized-data copying, BSS clearing and result/fault observation
+solely for backend execution tests. It keeps the selected microbit M0 profile,
+32 KiB flash, 16 KiB RAM and 4 KiB stack reservation. These files do not enable
+language startup, firmware entry, vectors, interrupt/naked conventions, sections,
+keep rules or inline assembly: all remain R6.60. Executable requests retain
+an explicit refusal; assembly is the backend's output boundary. Freestanding
+core/noreturn remain R6.70, generated-device fixtures R6.80, the complete driver
+R6.90, and Landin debugging/measured firmware and stack closure R6.100.
+General SVD tooling, resource/evidence limits and deferred Nix retain R551's
+existing dispositions. No scheduler or general C source surface is introduced.
+
+Implementation decisions and rationale:
+
+- Physical selection stays ARMv6-M/Thumb and little endian. The official Arm
+  architecture/ABI/ELF and GNU references are recorded in `docs/targets.md`.
+  Described target facts, the retained R6.20 ABI planner and implemented emitter
+  capabilities remain separate. Later Thumb instructions, hardware floating
+  point, exclusive accesses and a board substitution are rejected alternatives.
+- Low registers are selector scratch; source places are pinned and block-local
+  scalar temporaries reuse eight-byte homes only after their last explicit IR
+  operand read. This consumes the existing target-byte frame placer. A general
+  register allocator, omission of leaf frames or use of reserved r9 would add
+  different proof obligations and is not used. r4-r7 are saved, r8/r10 remain
+  untouched, and every r11 record publishes only after both words exist.
+  Incoming stack arguments start above the 24 saved bytes; call plans own
+  register gaps, stacked words, hidden results and evidence ordering.
+- Constants use legal MOVS/shift forms or adjacent aligned literals. Local
+  conditional transfers invert a nearby branch over an absolute Thumb jump;
+  this avoids depending on a large routine fitting short Thumb branch reach.
+  Direct BL relocations admit linker veneers, including the independently
+  executed flash-to-SRAM control. Functions retain Thumb identity; data pointers
+  do not acquire it. Per-routine ELF input sections belong to assembly emission
+  and the external linker harness, not an enabled Landin section/keep surface.
+- Narrow integer operations extend explicitly. Multiword operations, shifts,
+  comparisons and range checks preserve the enabled 64-bit scalars. Division
+  zero and signed minimum/-1 behavior are guarded. Checked multiplication proves
+  the product bound before using the low-product helper. Conversions preserve
+  bool/integer domains and IEEE rounding/overflow rules. Float-to-integer
+  selection decodes the carrier without a host float or unspecified cast.
+- The pinned GCC `thumb/v6-m/nofp/libgcc.a` supplies the named Arm runtime
+  multiply/divide and soft-float helpers. Every linked image records requests,
+  archive path/hash, actual dependency members and no unresolved symbols.
+  The target guide records provenance, PCS and freestanding implications.
+  Inventing a new software arithmetic runtime or refusing already admitted
+  widths is unnecessary; a C/LLVM compiler backend remains rejected. These
+  private runtime calls do not enable general C source. Helpers and veneers
+  may clobber r12; Landin outcomes are captured immediately after return and
+  successful routines explicitly publish zero separately from source atoms.
+- D187, D227 and D228 are unchanged. One-, two- and four-byte memory accesses
+  use exactly their requested transaction width. Atomic loads/stores strengthen
+  orderings with DMB SY on both sides; compiler barriers remain compiler-only,
+  device/thread barriers use DMB SY and completion barriers DSB SY. Alignment
+  checks remain under unchecked. RMW and eight-byte memory intrinsics retain
+  L0301, with no interrupt masking, extra read, split transaction or helper
+  atomic substitute. Barriers do not establish device completion.
+- Packed copying/assignment/arguments/results retain every raw bit, including
+  ordinary eight-byte carriers. Extraction validates membership even when
+  discarded or unchecked; indexed field, fit and reserved-bit guards remain.
+  Zeroed images may contain unnamed encodings. Explicit normal/destructive/
+  write-only/one-clears contracts produce only their written accesses. UDF #1
+  implements checked traps; the harness must distinguish it from another fault.
+- The emitter consumes every verified IR opcode and uses the shared optimization
+  and specialization pipeline. It performs no body sharing. Hosted enum-domain,
+  array-versus-struct stored-shape and private-status repairs remain intact.
+  No target-neutral representation/effect change or new semantic decision was
+  needed. Runtime library calls and all source places remain visible to the
+  existing effect/alias rules. Ordinary-slice DMA uses completion observation,
+  the required barrier and later ordinary reads; no new ownership abstraction
+  replaces prototype 1's contract.
+
+Coverage and retained limits:
+
+`compiler/tests/cortex-m/corpus.json` is the executable inventory of all 533
+shared runtime/ABI fixtures, derived from this scope decision. It schedules 452
+runtime programs, 50 precise target source refusals and 31 general-C-surface
+restrictions. Ten exact counterpart diffs pin independent 32-bit pointer,
+slice, nested/variant layout or Cortex fixed-branch expectations without editing
+hosted sources. The unchanged fixed-conditional fallback returns one on Cortex.
+All four inherited runtime profiles apply; specialization rows add none/all
+and speed/all. A missing/new fixture, stale counterpart or unexplained exclusion
+fails the supervisor. Positive/negative compiler-verdict and neutral-IR golden
+fixtures retain their compiler-host gate; they have no independent runtime
+exit oracle and are not relabelled as execution tests. The C restrictions consume R6.20's accepted capability
+boundary and R6.70's freestanding-core ownership; they do not reduce the ABI
+planner or independent C/assembly controls.
+
+The selected 32 KiB flash/16 KiB RAM/4 KiB stack map is retained. The following
+programs have explicit capacity dispositions; every profile is still attempted
+within a bounded materialization guard and must execute if it fits. A retained
+limit is not an execution pass. Linker overflow, represented static extent and
+minimum frame evidence are recorded independently; wrong instructions, missing
+helpers, bad results and timeouts cannot be recategorized as limits.
+
+| Shared runtime fixture | Existing restriction and owner |
+|---|---|
+| `large-array-offset-is-addressed` | Multi-gigabyte static reservation exceeds the selected physical map; bounded emission/preflight retains R551-07 and R6.50/R6.60 placement limits. |
+| `r450-array-large-loop`, `r450-review-backend-large-routine`, `r491-cleanup-verifier-storage` | Large local storage/straight-line cleanup stress exceeds the selected frame or image budget; source oracles and hosted coverage remain unchanged under R551-06/07/08. |
+| `r420-vec-large-list`, `r420-tree-real-exhaustion` | Large static/frame allocations exceed the selected RAM/stack budget; complete freestanding library workloads remain R6.70 and measured firmware closure R6.100. |
+| `core-text-runtime-helpers`, `text-range-slicing` | Complete shared text programs may exceed selected flash in a profile; admitted operations remain supported, with fitting profiles required to execute. R551-07 and R6.50/R6.60 retain image limits. |
+| `r420-buffer-real-exhaustion`, `r420-list-real-exhaustion`, `r420-map-arena`, `r420-map-failure-rollback`, `r420-pool-provider`, `r420-small-real-exhaustion`, `r420-small-vector`, `r420-vec-capacity-boundaries`, `r420-vec-growth-transaction` | Complete container compositions may exceed selected flash; fitting profiles execute, original expected values remain authoritative, and R6.70 owns freestanding core packaging. No larger board or image replaces the accepted profile. |
+
+Independent and generated evidence remains explicitly separated. The existing
+C/assembly ABI and memory controls, abstract memory model, R6.40 hosted transport,
+packed traces, CPU and stock/synthetic Renode lanes remain mandatory. New
+`backend-abi.ldn`/`backend-abi.S` checks real generated entries, stacked u64,
+caller-owned results, callee value copies with an aliased inout place, failures,
+Thumb indirect calls and helper results. GDB instruction stepping observes
+pre-publication and completed nested/leaf r11 chains. A real GNU veneer reaches
+a generated SRAM leaf. Generated boundary and symbol-collision programs retain
+frame/immediate/literal/branch and helper-name pressure; independent assembler
+controls execute last-legal encodings and reject one-past or unavailable forms.
+Additional literal 64-bit arithmetic/checked-overflow controls cover helper
+boundaries alongside the shared scalar and conversion corpus.
+
+Generated M0 packed accesses match the unchanged EncodingPeripheral 16-event
+oracle. A discarded unchecked hole extraction performs exactly one destructive
+read before trapping. A separate byte endpoint trace pins two destructive
+reads, a write-only command, a one-clears command and a pending read:
+`r8:18:a5;r8:18:00;w8:19:41;w8:1a:02;r8:1a:f1`. Wider or extra accesses fail
+the independent model. Generated ordinary-slice DMA observes half-completion
+without returning, then complete externally written bytes, packed count/status,
+a device barrier and ordinary reads summing to 174. The count trace has one
+halfword write and one halfword read, no word count transaction. These programs
+run all six optimization/specialization profiles. Added model telemetry does
+not change the retained C/interrupt probe's behavior. Source-level interrupt,
+vector or scheduler behavior is not inferred from the external harness.
+
+Complete-inventory development execution passes all 2165 scheduled verdicts:
+2012 QEMU executions across 435 programs (435 each at none/off, size/off,
+size/auto and speed/auto, plus 136 each at none/all and speed/all), 50 precise
+source refusals, 31 retained general-C restrictions and 72 capacity limits
+across the 17 named programs. All 17 exceed this image/stack profile in every
+scheduled mode; no limit is counted as execution. Inputs, commands, errors and
+artifacts remain retained in the native development slot's
+`evidence/full-corpus-1`; exact-revision acceptance reruns the inventory.
+The Mac Cortex suite passes five cases/277 checks and driver checks pass
+53 cases/1871 checks. Thirteen supervisor failure controls cover corpus
+omissions, image-limit misclassification, compact-image materialization,
+ELF extent/entry changes and retained Renode lock cleanup. Focused generated
+ABI/frame/veneer/memory/boundary/word/symbol/overflow controls and independent
+instruction limits pass. Packed/hole/DMA/byte controls run all six profiles.
+Development is not exact-revision approval; native acceptance remains pending.
+
+Compatible native policies were explicitly reselected with
+`policy.py routine --debugger` before the implementation commit. Frame
+construction, new instruction selection and debugger control/evidence changes
+justify full release GDB and LLDB coverage. Both compiler modes and full release
+hosted execution remain required. This is routine debugger-risk acceptance;
+R6.100 retains full freestanding milestone scope and Nix remains deferred.
+
+`run.py` extends its existing pinned-inventory/evidence-export boundary through
+`backend_acceptance.py`; all new objects, ELF/map/disassembly, helper identities,
+commands, assertions, timeouts and results live under `artifacts/cortex-m/backend`
+in acceptance exports. Actual ELF LOAD extents enforce the selected image map.
+A stack watermark is an observed footprint, not a proved maximum depth or the
+R6.100 measurement programme. Language startup/linker/firmware entry/vectors,
+interrupt/naked/sections/keep/inline assembly remain R6.60; core/noreturn R6.70;
+generated-device fixtures R6.80; complete driver R6.90; Landin source-debugging
+and freestanding milestone closure R6.100. General SVD generation, R551 resource
+and evidence/tooling dispositions and deferred Nix remain unchanged.
 
 ### R6.60 — Implement startup, vectors and machine directives
 

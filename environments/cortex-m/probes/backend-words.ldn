@@ -1,0 +1,22 @@
+-- Independent literal 64-bit boundaries; ordinary calls prevent folding.
+u: (n: u64) -> (r: u64) = n end u
+s: (n: i64) -> (r: i64) = n end s
+public main: () -> (code: u32) =
+    maximum := u(18446744073709551615)
+    minimum := s(-9223372036854775808)
+    near := s(3037000499)
+    if maximum * u(1) <> maximum or maximum * u(0) <> 0
+      or minimum * s(1) <> minimum or minimum * s(0) <> 0
+      or s(-1) * s(-9223372036854775807) <> 9223372036854775807
+      or near * near <> 9223372030926249001
+      or u(4294967295) * u(4294967295) <> 18446744065119617025
+      or maximum / u(4294967297) <> 4294967295
+      or maximum % u(4294967297) <> 0
+      or minimum / s(1) <> minimum or minimum % s(-1) <> 0
+      or s(-9223372036854775807) / s(3) <> -3074457345618258602
+      or s(-9223372036854775807) % s(3) <> -1 then
+        code = 1
+    else
+        code = 42
+    end if
+end main

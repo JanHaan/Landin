@@ -1,0 +1,27 @@
+-- Exact byte transactions on independently specified synthetic endpoints.
+flags: type = layout(packed, u8) struct
+    bits: [8]bool at 0..7
+end flags
+public main: () -> (code: u32) =
+    destructive: ptr u8 = ptr(0x40030018)
+    command: ptr mut u8 = ptr(0x40030019)
+    pending: ptr mut u8 = ptr(0x4003001a)
+    if compiler.register_read(destructive, compiler.clear_on_read) <> 0xa5
+      or compiler.register_read(destructive, compiler.clear_on_read) <> 0 then
+        code = 1
+        return
+    end if
+    mut image: flags = zeroed
+    image.bits[0] = true
+    image.bits[6] = true
+    raw: ptr u8 = ptr(usize(addr image))
+    compiler.register_write(command, raw.val, compiler.normal_write,
+                            compiler.write_zero, 0xff)
+    compiler.register_write(pending, 2, compiler.one_clears,
+                            compiler.write_zero, 0xff)
+    if compiler.register_read(pending, compiler.normal_read) == 0xf1 then
+        code = 42
+    else
+        code = 2
+    end if
+end main

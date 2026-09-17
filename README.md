@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.50 — Implement the Cortex-M backend (planned).**
+**Current roadmap work: R6.50 — Implement the Cortex-M backend.**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -271,14 +271,15 @@ CPU/startup probes and a deterministic Renode peripheral lane. Its completion
 has the same exact-revision dual-native binding. R6.20 instantiates 32-bit
 layouts and external AAPCS/internal Landin ABI planning, checked independently
 by native Linux C/assembly execution controls and the existing synthetic-32
-goldens. Its closure has the same dual-native binding; no Landin Cortex-M
-emitter, linker or debugger backend is enabled yet.
+goldens. Its closure has the same dual-native binding. R6.50 subsequently adds
+Cortex assembly; language startup/linking and source debugging remain separate.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
 DMA visibility, interrupt exclusion and cache obligations have independent
 executable/model controls, bound by the same exact-revision dual-native gate.
-Cortex-M memory capabilities remain described until R6.50 supplies emission.
+R6.50 lowers the admitted Cortex-M memory subset with exact scalar accesses
+and retained alignment checks.
 
 R6.40 implements D228's packed raw images, checked encoded-field extraction,
 indexed fields and explicit register-image access policies on both hosted
@@ -287,6 +288,15 @@ backends. Raw copies preserve unnamed patterns; extraction traps even under
 retain exact access traces and reserved-bit checks. The containing revision's
 dual-native approval and guarded delivery bind closure; R6.50 now owns the
 Cortex-M instruction-selection path, while R6.80 retains generated-device fixtures.
+
+R6.50 adds ARMv6-M Thumb assembly, reusable stack homes, the always-present r11
+frame chain, internal calls/results/failures/evidence, soft scalar arithmetic,
+packed-image checks and the admitted memory/barrier operations. Its
+[generated-code corpus](environments/cortex-m/README.md#r650-compiler-generated-execution)
+runs on the selected QEMU profile; synthetic Renode tests execute actual Cortex
+register and ordinary-slice DMA code. The external test startup/linker harness
+does not enable those language surfaces. Exact-revision validation and closure
+remain recorded in ROADMAP.md.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

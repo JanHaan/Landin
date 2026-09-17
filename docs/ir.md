@@ -390,7 +390,8 @@ their entry/direct/indirect signatures. The planner consumes lowered pointer,
 atom, slice/any, distinct and evidence carriers; it adds the physical result
 address before the signature's existing evidence/parameter run. External C
 and internal Landin transport remain separate. Independent C/assembly probes
-execute the selected contract, but the compiler still refuses Cortex-M emission.
+execute the selected contract. R6.50's Cortex emitter now consumes those same
+plans; no new target-neutral opcode or effect category was needed.
 See [the target contract](targets.md#cortex-m0-layout-and-abi-planning).
 
 R6.30 adds `Memory_Access`, retaining operation, scalar width identity and
@@ -421,7 +422,7 @@ traps. Whole aggregate copies preserve the carrier without extracting fields.
 Ordinary atom loads also validate their software codes. The private call-status
 slot has a different domain: zero means success, otherwise the code identifies
 a declared error. `Is_Failure_Status_Load` recognizes only a slot designated by
-a direct or indirect call's failure edge. Both backends permit zero for that
+a direct or indirect call's failure edge. All three backends permit zero for that
 transport load before `Failure_Test`; ordinary source atom storage does not
 gain a zero value. Recovery still observes a named error on the failing branch.
 
@@ -438,3 +439,15 @@ one scalar transaction. No packed field is an independently addressable object.
 Debug information exposes a packed nominal as its unsigned `raw` carrier;
 field-level bit-array presentation is not claimed. ROADMAP.md owns validation,
 limits and exact-revision closure.
+
+
+Cortex-M selection uses pinned source places and reusable eight-byte homes for
+block-local scalar temporaries. Last reads come from the verifier's explicit
+operand runs; live operands cannot share a home, and a call cannot destroy a
+live value. Selection uses low-register scratch and always constructs the r11
+frame record before publishing it, including for leaves. The shared frame
+placer still owns target-byte offsets and limits. Cortex performs no body
+sharing; specialization and IR optimization retain their existing proofs.
+The [target guide](targets.md#cortex-m0-assembly-implementation) records physical
+choices. The complete profile corpus, explicit 32-bit counterparts and memory/
+packed peripheral execution are retained by the embedded acceptance path.

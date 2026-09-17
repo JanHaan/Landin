@@ -11,14 +11,15 @@ environment, R5.20 isolates target contracts, and R5.30 implements Darwin arm64 
 scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
-target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and can invoke a
+target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0 assembly, and can invoke a
 target-selected native toolchain to assemble and link a hosted executable. Runtime
 fixtures execute those binaries on the native Linux x86-64 gate. A small
 repository-owned `core` library and complete derived prototypes 2, 3 and 4
 execute through that path with native source-debugging coverage. Darwin arm64 has native lowering, ABI and LLDB source-debugging acceptance;
 R5.50 adds complete shared hosted and derived-program parity on both targets,
-with the explicit physical-image limits recorded in ROADMAP.md. There is no Cortex-M backend,
-and the broader standard library remains future work. Under
+with the explicit physical-image limits recorded in ROADMAP.md. R6.50 adds a
+Cortex-M0 assembly backend, validated through an external emulator harness;
+language firmware startup/linking and the broader standard library remain future work. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
 the scanner, parser, syntax table, name resolver, type checker, verified IR,
@@ -236,9 +237,11 @@ accesses and barriers, with independent interrupt/DMA/cache controls. Its
 exact-revision dual-native binding owns closure. R6.40 implements D228's packed
 images, validated extraction and explicit register-image policies on both native
 backends, with compiler-generated and independent peripheral controls. Its
-exact-revision dual-native binding owns closure. R6.50 is the next
-dependency-ready item; no Cortex-M emitter, linker or debugger backend is
-implemented yet.
+exact-revision dual-native binding owns closure. R6.50 implements Cortex-M0
+instruction selection and internal ABI transport, with generated QEMU and
+synthetic peripheral execution under development/acceptance. Language Cortex
+startup/linking and source debugging remain R6.60 and R6.100. ROADMAP.md owns
+R6.50's remaining validation and closure.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

@@ -8,7 +8,7 @@ using Antmicro.Renode.Peripherals.Bus;
 
 namespace Antmicro.Renode.Peripherals.Miscellaneous
 {
-    public class EncodingPeripheral : IDoubleWordPeripheral, IWordPeripheral, IKnownSize
+    public class EncodingPeripheral : IDoubleWordPeripheral, IWordPeripheral, IBytePeripheral, IKnownSize
     {
         public EncodingPeripheral(IMachine machine) { Reset(); }
         public long Size { get { return 0x20; } }
@@ -18,11 +18,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public uint Pending { get; private set; }
         public ushort Count { get; private set; }
         public uint Ones { get; private set; }
+        public byte ByteCommand { get; private set; }
+        public byte BytePending { get; private set; }
         public void Reset()
         {
             events.Clear(); Normal = 0xa50000f0; destructive = 0x9b;
             Command = 0; Pending = 0xf3; Count = 0xffff;
             Ones = 0xffffff00;
+            byteDestructive = 0xa5; ByteCommand = 0; BytePending = 0xf3;
         }
         public uint ReadDoubleWord(long offset)
         {
@@ -77,6 +80,29 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             Count = value;
             events.Add(String.Format("w16:10:{0:x4}", value));
         }
+        public byte ReadByte(long offset)
+        {
+            byte value;
+            switch(offset)
+            {
+                case 24: value = byteDestructive; byteDestructive = 0; break;
+                case 26: value = BytePending; break;
+                default: throw new InvalidOperationException("wrong byte read or write-only port");
+            }
+            events.Add(String.Format("r8:{0:x}:{1:x2}", offset, value));
+            return value;
+        }
+        public void WriteByte(long offset, byte value)
+        {
+            switch(offset)
+            {
+                case 25: ByteCommand = value; break;
+                case 26: BytePending = (byte)(BytePending & ~value); break;
+                default: throw new InvalidOperationException("wrong byte write");
+            }
+            events.Add(String.Format("w8:{0:x}:{1:x2}", offset, value));
+        }
+        private byte byteDestructive;
         private uint destructive;
         private readonly List<string> events = new List<string>();
     }

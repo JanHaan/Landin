@@ -221,3 +221,11 @@ probe exports compiler-generated native/Renode execution alongside independent
 M0 C/assembly and model controls, with existing lock cleanup and ABI/memory
 lanes preserved. These development or model results do not authorize promotion;
 matching native archive acceptance and the guarded publication path still do.
+
+
+R6.50 generated embedded evidence uses the supported native Linux runner and
+the existing Cortex probe/export path. The complete corpus runs under an
+external startup/linker test harness. Its physical-limit and source-restriction
+records remain distinct from execution passes. This does not change native
+Linux/Darwin acceptance or grant a firmware publication path; the identical
+archive still needs both native bindings before approval and promotion.

@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
+with Landin.Backend.Toolchain;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
@@ -294,11 +295,11 @@ package body Landin.Tests.Cortex_Suite is
          and then not T.Capabilities.C_Records (T.Cortex_M)
          and then not T.Capabilities.C_Variadic_Calls (T.Cortex_M)
          and then T.Capabilities.Backend_For (T.Cortex_M)
-           = T.Capabilities.No_Backend
+           = T.Capabilities.Cortex_M0_ELF
          and then T.Capabilities.Debug_Format_Of (T.Cortex_M)
            = T.Capabilities.No_Debug_Format
-         and then T.Capabilities.Triplet (T.Cortex_M) = "",
-         "planning does not advertise implemented C or code generation");
+         and then T.Capabilities.Triplet (T.Cortex_M) = "arm-none-eabi",
+         "assembly does not advertise C or source debugging");
       for Kind in Ty.Scalar_Name loop
          C := ABI.Classify (Unit, Part (Kind), T.Cortex_M, ABI.External_C);
          Landin.Testing.Check
@@ -533,17 +534,18 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
-                  (if Mode in 1 | 9 then Landin.Driver.Status_Success
+                  (if Mode in 1 | 2 | 9 then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "Cortex target boundary " & Mode'Image & ": "
                   & U.To_String (Result.Report));
-               if Mode in 2 .. 3 then
+               if Mode = 3 then
                   Landin.Testing.Check
                     (Item, U.Index (Result.Report, "L0500") > 0,
-                     "unimplemented emission is explicitly refused");
+                     "language executable linking is explicitly refused");
                end if;
                Landin.Testing.Check_Equal
-                 (Item, Host.Write_Count, 0, "boundary writes no output");
+                 (Item, Host.Write_Count, (if Mode = 2 then 1 else 0),
+                  "only assembly emission writes output");
                Landin.Testing.Check_Equal
                  (Item, Tools.Run_Count, 0, "boundary invokes no tool");
             end;
@@ -551,8 +553,71 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Driver_Boundaries;
 
+   procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
+
+   procedure Backend_Boundaries (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn",
+              (case Mode is
+                 when 1 => "main: () -> (r: u32) = "
+                   & "mut a: [4294967295]u8 = zeroed r = u32(a[0]) end main",
+                 when 2 => "main: () -> (r: u32) = mut a: u32 = 0 "
+                   & "r = compiler.atomic_add(addr a, 1, compiler.relaxed) "
+                   & "end main",
+                 when 3 => "main: () -> (r: u64) = mut a: u64 = 0 "
+                   & "r = compiler.volatile_load(addr a) end main",
+                 when 4 => "main: () -> (r: u32) = 42 end main"));
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            if Mode = 4 then
+               Args.Append ("--debug=full");
+            end if;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Code : constant String :=
+                 (case Mode is when 1 => "L0504", when 2 | 3 => "L0301",
+                    when 4 => "L0500");
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Reported,
+                  "unsupported Cortex boundary reports a diagnostic");
+               Landin.Testing.Check
+                 (Item, U.Index (Result.Report, Code) > 0,
+                  "precise Cortex refusal: " & U.To_String (Result.Report));
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0, "refusal writes no artifact");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "refusal invokes no host tool");
+            end;
+         end;
+      end loop;
+      declare
+         Args : Landin.Platform.Path_List;
+         pragma Unreferenced (Args);
+      begin
+         Args := Landin.Backend.Toolchain.Link_Arguments
+           ("p.s", "p", "", Facts => T.Cortex_M);
+         Landin.Testing.Fail (Item, "Cortex language linking was enabled");
+      exception
+         when Compiler_Defect =>
+            Landin.Testing.Check (Item, True, "R6.60 owns Cortex linking");
+      end;
+   end Backend_Boundaries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "layout and transport contract", Contract'Access);
       Landin.Testing.Register
