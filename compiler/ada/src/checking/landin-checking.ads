@@ -1,3 +1,4 @@
+with Landin.Machine;
 --  What type everything in a program has.
 --
 --  `spec.md` [1790] gives the kernel's scalar types, [0190] says an integer
@@ -966,7 +967,8 @@ package Landin.Checking is
       Error_Form : Error_Set_Form := Infallible;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -992,7 +994,8 @@ package Landin.Checking is
       Error_Form : Error_Set_Form := Infallible;
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
-      Variadic   : Boolean := False)
+      Variadic   : Boolean := False;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -1029,6 +1032,10 @@ package Landin.Checking is
       Node     : Landin.Syntax.Node_Id) return Signature_Part
      with Pre => Is_Prepared (Of_Table) and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Signature_Machine
+     (Of_Table : Table; Signature : Signature_Id)
+      return Landin.Machine.Convention;
 
    function Signature_Uses_C_ABI
      (Of_Table : Table; Signature : Signature_Id) return Boolean
@@ -2549,6 +2556,7 @@ private
       Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Error_Form : Error_Set_Form := Infallible;
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
    end record;

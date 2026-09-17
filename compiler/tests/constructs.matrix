@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 195 with evidence, 5 with neither.
+#  201 constructs, 197 with evidence, 4 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted executed          Line comment, to end of line
@@ -176,8 +176,8 @@
 1600   tour        accepted emitted executed          Exporting to C
 1610   tour        accepted emitted executed refused  A symbol name the language's identifiers cannot spell
 1620   tour        accepted emitted executed refused  Atomics are builtins
-1630   tour        refused                            Inline assembly, for what has no builtin
-1640   tour        -                                  Kept against section garbage collection, and placed
+1630   tour        accepted emitted refused           Inline assembly, for what has no builtin
+1640   tour        accepted emitted refused           Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed refused  Entry point
 1660   tour        accepted emitted executed refused  And this is where capabilities come from
 1670   tour        accepted emitted executed          A failed check calls a fixed, never-returning symbol
@@ -214,3 +214,4 @@
 1970   spec        accepted emitted executed refused  The first hosted path has one entry shape
 1975   spec        accepted emitted executed refused  The selected hosted C boundaries
 1980   spec        accepted emitted executed          Declared errors are an orthogonal payload-free atom outcome
+1990   spec        accepted emitted refused           Firmware and machine directives have explicit target contracts

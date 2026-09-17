@@ -28,6 +28,7 @@ package Landin.Backend.Dispatch is
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null);
+      Debug : access constant Landin.Debugging.Information := null;
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item);
 
 end Landin.Backend.Dispatch;

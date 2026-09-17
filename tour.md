@@ -1393,8 +1393,8 @@ entry cannot be called that — the same goes for 'from',
 
 ```text
 big little escaping caller fixed option
-link(section: "...", symbol: "...", keep, weak,
-     inline, noinline)
+link(section: "...", symbol: "...", align: 16, vector: 16, keep)
+-- weak, inline and noinline remain outside the enabled machine slice
 extern(c|interrupt|naked|...)
 ```
 
@@ -3417,7 +3417,8 @@ shape before implementation evidence exists. The compiler emits
 deterministic assembly text and relies on the assembler and
 linker of the platform. Linux x86-64 comes first, native macOS
 arm64 second, and emulator-first Cortex-M third. The frame
-pointer is always set up. The whole program is compiled together
+pointer is always set up for ordinary routines and interrupt handlers.
+Explicit naked routines [1570] own their frame instead. The whole program is compiled together
 [1480], with optional private caches that do not create a stable
 separate-compilation interface.
 Not LLVM and not C: LLVM is a dependency larger than the
@@ -3427,10 +3428,12 @@ cost is owned deliberately — every target is work that nobody
 else does.
 
 The Cortex-M0 backend emits ARMv6-M Thumb assembly using the selected
-little-endian, soft-float target contract. Its emulator tests use an explicitly
-external startup/linker harness. Language startup, vector placement and
-freestanding library delivery retain their own roadmap items; enabling
-assembly does not enable those source constructs.
+little-endian, soft-float target contract. The firmware request now emits its
+own reset, vector image and constrained linker script, copies initialized RAM
+and RAM code, and clears BSS before entering source code. Its tests execute
+that path separately from the older external backend harness. Freestanding
+library delivery remains a separate roadmap item; [1990] specifies the exact
+firmware boundary.
 
 ### [1560] Three builtin modules are the way to the tools
 
@@ -3449,8 +3452,10 @@ else.
 Their calls are builtin, take only fixed arguments, and
 cannot be written by hand.
 The hosted slice enables the compiler facts and assertions above and
-`linker.library` below. Other tool operations receive named refusals:
-atomics belong to R6.30, and inline assembly and machine placement to R6.60.
+`linker.library` below. Scalar atomics and barriers follow D227. Cortex-M0
+also enables body-only `assembler.block`, declaration placement annotations
+and an explicit firmware-entry request. Hosted targets refuse machine assembly
+and placement. Other tool operations still receive named refusals.
 Where the line runs: something is builtin when the compiler
 has to know it. Atomics are, because opaque assembly in a
 hot loop wrecks the register allocation around it. Masking
@@ -3477,6 +3482,15 @@ is trivial and whose numeric libraries are everywhere, and
 Swift, which puts its error in a register of its own just
 as Landin does. Zig, Odin, Rust and Python all speak C, so
 there is nothing to gain there.
+
+The enabled Cortex forms are distinct function types: both machine conventions
+require nongeneric `() -> none` definitions with no declared failures. Their
+values can be retained in data or named by a vector, but cannot be called or
+converted as ordinary/C routines. Interrupt handlers use an ordinary Landin
+frame on top of the hardware exception frame and return through EXC_RETURN.
+Naked bodies are one assembly block with no compiler prologue; the programmer
+owns stack, registers, calls and return instructions. Falling off that block
+traps. Neither convention implies `keep`.
 
 ### [1580] Importing from C
 
@@ -3605,8 +3619,9 @@ it after applying that prefix. Compatible bodyless C declarations may share
 one spelling and one definition, but incompatible signatures and multiple
 definitions are refused.
 C imports and public C definitions default to their declared name; private C
-definitions without an override use collision-safe internal names. This enables
-no section-placement or Cortex-M ABI.
+definitions without an override use collision-safe internal names. This C
+boundary does not enable Cortex C signatures. D229 separately enables Cortex
+module-data symbols, machine conventions and the placement in [1640].
 
 ### [1620] Atomics are builtins
 
@@ -3633,52 +3648,65 @@ before reading them. Interrupt masking alone does not stop DMA.
 
 ### [1630] Inline assembly, for what has no builtin
 
-Inline assembly, for what has no builtin. Opaque to the
-compiler, which therefore assumes it may touch any memory
-and must not be reordered.
+`assembler.block` takes one fixed quoted or raw text literal in a Cortex-M0
+routine body. It is opaque to the compiler: memory knowledge is invalidated
+and memory accesses cannot be reordered across it. It is not itself a hardware
+barrier. An ordinary block can clobber r0–r7 and flags; live compiler values
+have stack homes, while frame, stack, reserved and high registers are excluded.
+Ordinary blocks are straight-line code with no labels or calls. [1990] gives
+the exact instruction, system-register, text and programmer-obligation limits.
+
+A naked body owns its control flow. For example, this selected entry runs
+after compiler reset has initialized data and stacks:
 
 ```landin
-extern(naked) reset_handler: () -> none =
+extern(naked) start: () -> none =
     assembler.block("""
-        ldr r0, =_stack_top
-        mov sp, r0
-        bl  start
+        1:
+        wfi
+        b 1b
         """)
-end reset_handler
+end start
 ```
 
-'start' and not 'main': freestanding there is no main, and
-the build description names the entry [1650].
+The request `--target=cortex-m0 --firmware-entry=start --emit=exe` names the
+source entry. A naked entry can set up PSP or call explicitly linked ordinary
+code, but must meet that code's eight-byte stack alignment, r9 and frame
+obligations. `none` is not a promise never to return. The compiler traps on
+entry return or naked fallthrough; it does not invent a hosted caller.
 
 ### [1640] Kept against section garbage collection, and placed
 
-Kept against section garbage collection, and placed. The
-table is a struct, not an array of addresses: a function
-type is an ordinary type [1000], so a handler is written as
-one, and the first word is a stack pointer rather than a
-handler at all. 'handler' is the function type from [1000].
+Calling convention, symbol spelling, placement and retention are independent.
+The selected firmware compiler owns the fixed vector image: its first word
+is the initial SP, its second is compiler reset, reserved slots are zero, and
+source annotations supply typed handler relocations. This avoids treating
+stack addresses, reserved words and machine function types as interchangeable.
 
 ```landin
-vector_table: type = layout(c) struct
-    stack_top: usize
-    reset:     handler
-    rest:      [46]handler
-end vector_table
+link(vector: 16)
+extern(interrupt) device_handler: () -> none =
+    assembler.block("nop")
+end device_handler
 
-link(section: ".isr_vector", keep)
-vectors: vector_table = (
-    stack_top: stack_top_address,
-    reset:     start,
-    rest:      [of default_handler]
-)
+link(section: ".rodata.firmware_mark", align: 16, keep)
+firmware_mark: [4]u8 = [55, 48, 49, 0]
 ```
 
-Being reachable from something kept is what keeps a
-handler. The table carries keep and names them, so they
-survive by being named. extern(interrupt) does not imply
-it and should not: a calling convention is what the
-program means, keep is an instruction to the toolchain,
-and [0760] separated those two on purpose.
+Slot 16 is IRQ0 in the selected profile; it is not a portable peripheral name.
+A vector annotation requires a firmware-entry request. The kept vector image
+references the handler, so section garbage collection retains it. An interrupt
+routine with no reference or keep can still disappear. `keep` retains its
+containing section; multiple objects deliberately placed in one section share
+that retention. Linkage alone does not retain anything.
+
+Functions can select `.text.*` in flash or `.ramtext.*` copied to RAM at reset.
+Immutable data selects `.rodata.*`; mutable data selects `.data.*` or zeroed
+`.bss.*`. Placement alignment is a power of two through 256 and does not change
+type layout. The 32 KiB flash/16 KiB RAM image reserves the top 4 KiB of RAM for
+stacks. The linker checks bounds and overlap; the compiler rejects reserved
+vectors, mismatched sections, duplicate attributes and symbol collisions.
+There is no user-code module initialization [1460].
 
 ### [1650] Entry point
 
@@ -3698,7 +3726,11 @@ work merely because `core/io` is linked, and no ordinary export or callback
 initializes or resets the root. Those views derive from the resulting world; a
 caller that must mutate the same backing-aware provider while retaining one
 first copies what it needs into its own storage. Freestanding there is no
-`main`; the build description names the entry.
+`main`; the explicit compiler request names an ordinary or naked, infallible
+`() -> none` source definition in the entry module. Compiler reset initializes
+RAM before calling it. Both normal return and failed checks trap without a
+hosted exit service. [1990] defines this constrained firmware path; general
+build/package orchestration is outside it.
 
 ### [1660] And this is where capabilities come from
 

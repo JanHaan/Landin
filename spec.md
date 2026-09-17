@@ -42,7 +42,8 @@ spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
-'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol'
+'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
+'align', 'section', 'keep', 'vector', 'interrupt', 'naked'
 and 'distinct' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
@@ -70,7 +71,8 @@ import_declaration ::= "import" import_path
                        ("as" identifier | "(" identifiers ")")?
 import_path ::= identifier ("/" identifier)*
 declaration ::= "public"? (atom_declaration | binding | function
-                            | external_function | type_declaration
+                            | external_function | machine_function | linked_binding
+                            | type_declaration
                             | concept_declaration)
                 | conformance_declaration
                 | fixed_conditional
@@ -284,6 +286,7 @@ type          ::= function_type | array_type | pointer_type | slice_type
                 | any_type | type_application | scalar_name | packed_unsigned | text_name
                 | declaration_reference
 function_type ::= signature | c_convention c_signature
+                  | machine_convention c_signature
 array_type    ::= "[" expression "]" type
 pointer_type  ::= "ptr" "mut"? type
 slice_type    ::= "[" "]" "mut"? type
@@ -433,12 +436,21 @@ also keeps `return 1` the refused payload spelling [1810]. A guarded return may
 prefix a final expression because its untaken edge continues.
 
 ```landin-grammar
-function           ::= link_symbol? identifier ":" declared_signature "=" body
-                       "end" identifier?
-external_function  ::= c_convention link_symbol? identifier ":" c_declared_signature
+function           ::= (link_attributes "public"?)? identifier ":"
+                       declared_signature "=" body "end" identifier?
+external_function  ::= (link_attributes "public"?)? c_convention link_symbol?
+                       identifier ":" c_declared_signature
                        ("=" body "end" identifier?)?
+machine_function   ::= (link_attributes "public"?)? machine_convention
+                       link_attributes? identifier ":" declared_signature
+                       "=" body "end" identifier?
+linked_binding     ::= link_attributes "public"? binding
 c_convention       ::= "extern" "(" "c" ")"
+machine_convention ::= "extern" "(" ("interrupt" | "naked") ")"
 link_symbol        ::= "link" "(" "symbol" ":" text ")"
+link_attributes    ::= "link" "(" link_attribute ("," link_attribute)* ")"
+link_attribute     ::= ("symbol" | "section") ":" text
+                     | ("align" | "vector") ":" integer | "keep"
 c_signature        ::= "(" (parameters ("," "...")?)? ")" "->" returns errors?
 c_declared_signature ::= "(" (routine_formals ("," "...")?)? ")"
                          "->" returns errors?
@@ -1716,6 +1728,156 @@ The ordinary scalar or function result remains in `%rax`, and an aggregate
 success still uses caller-owned storage, so the error carrier consumes no
 source parameter, result position, or stack argument. No source atom has code
 zero.
+
+### [1990] Firmware and machine directives have explicit target contracts
+
+D229 enables the constrained Cortex-M0 firmware path. The request selects
+`--target=cortex-m0 --firmware-entry=NAME` and an assembly or executable output.
+NAME is a source declaration in the entry module, not a linker symbol or a
+hosted `main` convention. It must identify one defined, nongeneric ordinary or
+naked `() -> none` routine with no declared error outcome. Source duplicate
+names, missing entries, invalid signatures and duplicate request options are
+errors. Entry selection does not require `public`. A different explicit
+`link(symbol: text)` does not change which source declaration is selected.
+Hosted entry and linkage rules remain [1970]/[1975].
+
+The selected image has 32 KiB flash at zero and 16 KiB RAM at `0x20000000`.
+The initial SP is `0x20004000`, aligned to eight bytes. The upper 4 KiB of RAM
+is reserved for stacks; static RAM ends no later than `0x20003000`. This is a
+constrained test profile, not permission to use the board's larger flash.
+The compiler creates a 48-word, 256-byte-aligned vector image at address zero.
+Its first two words are the initial SP and compiler reset function. Core
+slots 4–10 and 12–13 and selected-device slots 21 and 42–47 are zero.
+Other unspecified handlers enter the compiler's terminal unhandled-exception
+loop. There is no VTOR relocation, FPU frame, exclusive-access primitive,
+priority grouping or later-Thumb instruction contract.
+
+Reset masks configurable interrupts, initializes reserved r9 and the root
+r11 to zero, copies initialized RAM data and RAM code from their flash load
+addresses, and clears BSS. DSB and ISB precede unmasking and transfer to the
+selected entry. It does not call user module initializers [1460]/[1940],
+construct a hosted environment, allocate memory or run a scheduler. This reset
+contract assumes execution through the hardware reset vector, with no NMI or
+fault during initialization; a custom NMI/HardFault handler cannot assume
+initialized storage before reset has completed it. Ordinary entry return,
+naked fallthrough and a failed runtime check execute the selected undefined
+instruction trap. Hardware fault dispatch applies; no failure is returned to
+a nonexistent hosted caller. `none` remains absence of a result, not the
+separate deferred `noreturn` feature.
+
+`extern(interrupt)` and `extern(naked)` are distinct structural function
+conventions, separate from ordinary and C functions. Definitions are
+nongeneric, have exactly `() -> none`, and declare no error set. Machine
+conventions are also available in function types. Values retain that exact
+convention through assignment, parameters, aggregates and generic matching.
+Taking their function value is allowed; converting to ordinary/C convention
+or calling it with ordinary source call syntax is refused. A vector reference
+is a machine entry, not such a call. Interrupt bodies may call ordinary
+functions and must handle any declared failure locally. Traps still trap.
+There is no implicit keep attached to either convention.
+
+On exception entry ARMv6-M saves r0–r3, r12, incoming LR, return PC and xPSR
+on the interrupted stack, adding the architectural alignment word when needed.
+Handler mode uses MSP; thread mode may use MSP or programmer-established PSP.
+An interrupt routine additionally preserves r4–r7 and constructs the same
+previous-r11/incoming-LR eight-byte record as every ordinary Landin routine
+before publishing r11. r8 and r10 are untouched, r9 remains reserved, and
+r11 is restored. Incoming LR in that record is EXC_RETURN, not a code address.
+The epilogue restores it and uses BX LR; the hardware restores volatile state,
+flags and the interrupted stack. `0xfffffff1`, `0xfffffff9` and `0xfffffffd`
+are respectively supported returns to a handler, a thread using MSP, and a
+thread using PSP. The NVIC implements four programmable priority levels (the upper two
+priority bits), with fixed NMI/HardFault priorities and no priority grouping.
+Higher-priority interrupts may nest; same/lower priority ones remain pending. PRIMASK masks configurable exceptions, not NMI/HardFault
+or DMA. The compiler adds no interrupt masking around source memory events.
+Eight-byte alignment at ordinary calls, callee saves, no red zone and the
+private r12 zero-success/nonzero-failure outcome are unchanged. Zero is not
+added to any ordinary source atom domain.
+
+A naked body consists of one `assembler.block` statement. It has no compiler
+frame, saved registers, local bindings, ordinary source calls, source branches,
+cleanup or implicit return. Its text may contain labels, explicit branches
+and machine return instructions; an appended trap handles fallthrough. The
+programmer owns stack selection, alignment, callee saves, r9/r11 obligations,
+LR/EXC_RETURN and any calls written in the assembly. A naked selected entry
+runs after compiler reset initialization; it does not replace the reset
+loader. This is the explicit exception to [1550]'s frame guarantee. It does
+not permit an ordinary routine to omit its frame.
+
+`assembler.block` takes exactly one quoted or raw fixed text literal in a
+routine body on Cortex-M0. A block is at most 4096 decoded ASCII bytes, using
+LF, horizontal tabs and printable characters. It is a conservative read/write,
+call and trap boundary in IR: memory knowledge is invalidated and memory
+operations cannot be moved across it. This compiler boundary alone issues no
+hardware barrier and establishes neither device completion nor cache
+coherence. D227's external-writer obligations remain.
+
+The accepted spelling is a bounded straight-line subset of ARMv6-M unified
+assembly. Ordinary blocks can clobber r0–r7 and condition flags. Compiler
+values live across them have stack homes and are reloaded; no compiler flags
+remain live across the block. r8–r15, their high-register aliases, SP, LR,
+r9, r11 and stack-selection system registers cannot be named there. Ordinary
+blocks cannot branch, return, define labels, call a routine or change control
+mode. Naked blocks additionally admit labels, branches, BL/BLX/BX, PUSH/POP,
+UDF and the MSP/PSP/CONTROL system registers. CPS changes only PRIMASK; barrier
+operands are `sy` or omitted. BASEPRI, FAULTMASK and later-core system registers
+are refused. Assembler directives, comments, macros and statement separators
+are refused in both forms. Unencodable operands/instructions remain explicit
+assembler failures under the pinned ARMv6-M flags, never a target upgrade.
+The instruction allowlist is an implementation limit, pinned by the machine
+checks. Assembly must not overwrite compiler spill/frame storage, saved
+registers or immutable source storage through an indirect address; arbitrary
+machine text cannot prove that programmer obligation.
+
+Placement is a declaration annotation:
+`link(section: text, align: integer, vector: integer, keep, symbol: text)`.
+Only supplied attributes apply, and duplicate attributes/annotations are
+errors. Section names are at most 80 ASCII letters, digits, underscores or
+dots, with a nonempty suffix. Functions select `.text.*` (flash) or
+`.ramtext.*` (RAM execution with a flash load image); immutable data selects
+`.rodata.*`, mutable data `.data.*` or `.bss.*`. An explicit BSS initializer
+must be `zeroed` or the integer literal `0`. Compiler `.landin_` section names
+are reserved. Alignment is a decimal power of two from 1 through 256 and is
+a minimum placement alignment; type layout and `alignof` do not change.
+Without a section annotation every datum/routine has its own input section;
+mutable zero images use BSS and immutable images use flash.
+
+`keep` marks the containing input section as a retention root. Naming the
+same section deliberately coalesces its objects, and keep on any of them
+retains that section. Relocations from retained sections retain their targets.
+Unreferenced sections are garbage-collected. Symbol linkage does not itself
+retain a section. Cortex module data may give one explicit ASCII identifier
+as its symbol; symbols cannot collide with other explicit declarations or
+compiler startup/private Arm helpers. Function symbol spelling retains
+[1975]'s existing rules. Ordinary, C and optimal aggregate layout do not change.
+
+`vector: N` associates a defined interrupt/naked routine with one unique
+implemented exception slot: 2, 3, 11, 14, 15, 16–20 or 22–41. Slots are absolute
+vector indexes, not IRQ numbers. Zero, reset, reserved slots, duplicates and
+ordinary/C routines are refused. Emitting such an annotation requires an
+explicit firmware-entry request. The compiler-owned kept vector image carries
+a relocation to the handler; an unreferenced interrupt routine without keep
+can still disappear. Thumb function relocations retain bit zero; data
+addresses are not tagged as code. Linker-defined startup addresses distinguish
+load from execution locations. Existing static function/text-address images
+remain relocations, not calls or user-code initialization. The compiler does
+not enable an arbitrary source initializer referring to a linker symbol;
+fixed assembly can name the documented `_landin_firmware_*` startup symbols.
+
+Executable emission retains assembly, object, compiler-generated linker
+script, ELF and map as explicit outputs. The driver passes each host effect
+through `Landin.Platform`, checks output/source aliases before writes, uses
+ARMv6-M Thumb/AAPCS soft-float assembler flags with fatal warnings, and links
+with no hosted startup, default libraries or libc. Only the selected private
+`thumb/v6-m/nofp/libgcc.a` helper closure is admitted. This does not enable the
+general C source surface. The linker checks flash bounds, static RAM/stack
+overlap and the vector address/size; unresolved symbols and relocation or
+encoding failures remain reported tool failures. An 8 MiB static-image
+materialization guard applies before firmware emission, including unreachable
+images, independently of the much smaller physical map and section GC.
+Hosted machine directives, arbitrary section addresses/linker scripts, weak
+symbols, inline hints, arbitrary clobber lists and general tool directives
+remain explicit refusals. No request is silently ignored.
 
 ## THE DECISIONS THIS DOCUMENT TOOK
 
@@ -9146,6 +9308,9 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229 checks target, machine signatures, placement and fixed assembly; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
+| `firmware.return` | trap | 1550, 1570, 1650, 1990 | D229 entry return and naked fallthrough execute an undefined instruction; hardware fault dispatch applies without a hosted caller | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
+| `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
 | `packed.image` | static | 0540, 0730, 0750 | Explicit disjoint positions, one target-sized carrier and packed-only unsigned widths; ordinary storage retains its existing representation | `runtime/r640-packed-fields`, `runtime/r640-packed-construction`, `runtime/r640-packed-static` |
 | `packed.register` | static | 0740, 0850 | L0301 rejects unavailable access modes, invalid masks and unsafe synthesized device field operations; a legal explicit image operation retains exactly its carrier width | `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, `runtime/r640-register-images` |
@@ -12619,7 +12784,10 @@ the bare filename, which must then exist in the invocation directory; a custom
 driver may provide a different archive search policy. Neither target changes
 the source order or repetition of archive operands.
 Inactive directives add no arguments. D227 enables scalar atomic operations;
-inline assembly, sections and machine entry retain R6.60 as named refusals.
+D229 enables Cortex-M0 body assembly, placement annotations and explicit
+firmware requests. Other targets refuse those uses. `assembler.block` is a
+body operation, not a module initializer; Cortex firmware refuses
+`linker.library`. No fourth namespace or general build language is introduced.
 
 **The alternatives:** conditional switch declarations make switch discovery
 depend on their own values. Last-override-wins hides repeated configuration;
@@ -14073,3 +14241,36 @@ images, validated extraction, copies, calls and indexed updates. The independent
 contract define separate image and transaction oracles. ROADMAP.md records the
 implementation audits, limits and actual results; these pins do not by
 themselves assert R6.40 closure.
+
+### D229 — Compiler-owned firmware and explicit machine boundaries
+
+**From** [1460], [1550]–[1570], [1630]–[1660], [1940], D202, D227 and D228.
+
+**Decision:** [1990] defines the enabled Cortex-M0 source/request contract.
+The compiler owns reset, the fixed constrained linker script and the vector
+image; source annotations contribute typed handler references and placement.
+This is a toolchain slice, not a new initialization language or package system.
+
+| Choice | Alternative and reason for declining it | Executable pin |
+| --- | --- | --- |
+| Explicit source entry and compiler-owned initialization | Treating R6.50's external harness as language startup hides initialization and cannot validate the compiler/toolchain request | `cortex ABI/firmware path`, `firmware.py` cold boot/reset |
+| Kept compiler vector image with typed slot references | A heterogeneous raw array conflates SP, reset, reserved zero slots and handler conventions; unrestricted vector replacement could bypass reset initialization | `cortex ABI/machine directives`, generated SVC/IRQ and RAM vectors |
+| Distinct interrupt/naked signatures with no failures | Ordinary-call conversion loses EXC_RETURN and invents a caller for failures | machine signature/call/conversion refusals and nested execution |
+| Ordinary frames in handlers; programmer-owned naked bodies | Omitting ordinary leaf/handler frames contradicts the frame contract; applying that prologue to naked code contradicts no-prologue semantics | independent C/assembly frame control, generated MSP/PSP and nested-handler controls |
+| Conservative opaque assembly with restricted ordinary registers/control flow | Unstated clobbers corrupt live values; treating a compiler boundary as a hardware barrier invents ordering/completion | generic opaque-memory and ordinary-live-value execution, generated interrupt/DMA trace |
+| Flash immutable images, RAM data/BSS and explicit RAM code load images | Leaving initialization to test setup or treating load addresses as execution addresses conceals relocation failures | poisoned boot, copied RAM handler, veneer and libgcc execution |
+| Section retention separate from calling convention | Keeping every handler changes reachability and code size; dropping relocation targets breaks vector/data images | kept/discarded sections, first-class handler and text relocations |
+| Explicit constrained script and bounded materialization | A larger board hides overflows; a general script/build ecosystem exceeds this item; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505 and misplaced-vector controls |
+
+The physical startup/exception premises are outside language memory safety;
+shape, convention, placement and assembly restrictions are static checks;
+accepted runtime checks still trap under D187. D228's raw-image preservation,
+invalid-encoding checks and exact volatile widths are unchanged. D227 retains
+ordinary DMA slices and requires actual device completion before consumption;
+masking does not stop DMA and a notification alone is insufficient.
+
+**Pinned by:** `compiler/ada/tests/src/landin-tests-cortex_suite.adb` and
+`environments/cortex-m/firmware.py`, its retained source, assembly, linker,
+GDB and device inputs, plus the unchanged R6.10–R6.50 independent and generated
+lanes. These pins state semantics and boundaries; ROADMAP.md alone records
+actual results, acceptance, closure and successor ownership.

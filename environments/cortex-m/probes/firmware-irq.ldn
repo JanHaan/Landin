@@ -1,0 +1,63 @@
+link(section: ".data.initial", align: 16, keep)
+mut initialized: u32 = 123
+link(section: ".bss.seen", align: 32)
+mut seen: u32 = 0
+mut nested: u32 = 0
+mut helper_calls: u32 = 0
+mut completed: u32 = 0
+link(section: ".rodata.retained", keep, align: 64)
+retained: [3]u32 = [11, 22, 33]
+discarded: [3]u32 = [44, 55, 66]
+link(vector: 11)
+extern(interrupt) svc_handler: () -> none =
+    seen = 1
+    helper()
+    assembler.block("""
+        ldr r0, =0xe000e200
+        movs r1, #1
+        str r1, [r0]
+        dsb sy
+        isb sy
+        """)
+    seen = 2
+end svc_handler
+link(vector: 16)
+extern(interrupt) irq_handler: () -> none =
+    nested = nested + 1
+end irq_handler
+extern(interrupt) discarded_handler: () -> none =
+    nested = 99
+end discarded_handler
+helper: () -> none =
+    helper_calls = helper_calls + 1
+end helper
+start: () -> none =
+    assembler.block("""
+        ldr r0, =0xe000ed1c
+        ldr r1, =0xc0000000
+        str r1, [r0]
+        ldr r0, =0xe000e100
+        movs r1, #1
+        str r1, [r0]
+        dsb sy
+        isb sy
+        movs r0, #17
+        movs r1, #34
+        movs r2, #51
+        movs r3, #68
+        movs r4, #85
+        movs r5, #102
+        movs r6, #119
+        movs r7, #136
+        cmp r0, r0
+        svc #0
+        """)
+    completed = seen + nested + helper_calls
+end start
+
+interrupt_type: type = extern(interrupt) () -> none
+extern(interrupt) address_only: () -> none = end address_only
+link(keep) handler_ref: interrupt_type = address_only
+link(keep) message: cstring = "boot"
+link(section: ".data.shared", keep) mut shared_zero: u32 = 0
+link(section: ".data.shared") mut shared_value: u32 = 321

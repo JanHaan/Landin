@@ -969,6 +969,8 @@ package body Landin.Stages.Lowering is
                 (Landin.Checking.Signature_Errors (Types.all, Source)),
               (if Source_Count = 0 then IR.No_Return_Sources
                else Sources (1 .. Source_Count)),
+              Machine => Landin.Checking.Signature_Machine
+                (Types.all, Source),
               C_ABI => Landin.Checking.Signature_Uses_C_ABI
                 (Types.all, Source),
               Variadic => Landin.Checking.Signature_Is_Variadic
@@ -1031,6 +1033,7 @@ package body Landin.Stages.Lowering is
               IR.Signature_Errors (Unit.all, Source),
               (if Source_Count = 0 then IR.No_Return_Sources
                else Sources (1 .. Source_Count)),
+              Machine => IR.Signature_Machine (Unit.all, Source),
               C_ABI => IR.Signature_Uses_C_ABI (Unit.all, Source),
               Variadic => IR.Signature_Is_Variadic (Unit.all, Source));
          return Generic_Signatures (Position);
@@ -4465,6 +4468,15 @@ package body Landin.Stages.Lowering is
               "a lowered written argument has no source parameter";
          end Nth_Written_Parameter;
       begin
+         if Landin.Configuration.Assembly_Call
+           (Spellings.all, Of_Tree, Node)
+         then
+            return IR.Emit_Assembly
+              (Unit.all, Filling, Landin.Source.Names.Intern
+                 (Spellings.all, Landin.Configuration.Fixed_Text
+                    (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+                     Syn.Nth_Argument (Of_Tree, Node, 1))), Site);
+         end if;
          declare
             use type Landin.Memory.Operation;
             Op : constant Landin.Memory.Operation :=
@@ -14023,6 +14035,10 @@ package body Landin.Stages.Lowering is
                              (Types.all, Id)));
                   end if;
 
+                  if not Syn.Is_Mutable (Of_Tree, Node) then
+                     IR.Mark_Immutable (Unit.all, Made);
+                  end if;
+
                   --  [0750]'s fields, in the order they were
                   --  written.  The compact scalar or fixed-array
                   --  shapes and not the offsets: a backend has a
@@ -14050,7 +14066,17 @@ package body Landin.Stages.Lowering is
                Made := IR.No_Item;
             end case;
 
-            pragma Assert (Made /= IR.No_Item or else True);
+            if Made /= IR.No_Item then
+               if Landin.Checking.Link_Symbol (Types.all, Id)
+                 /= Landin.Source.Names.No_Name
+               then
+                  IR.Set_Link_Symbol (Unit.all, Made,
+                    Landin.Checking.Link_Symbol (Types.all, Id));
+               end if;
+               IR.Set_Placement
+                 (Unit.all, Made, Landin.Configuration.Placement_Of
+                    (Source (Context, Src), Of_Tree, Node, Spellings.all));
+            end if;
          end Add_Declaration;
       begin
          for Index in 1 .. Source_Count (Context) loop

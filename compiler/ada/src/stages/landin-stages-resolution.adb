@@ -668,6 +668,14 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         if Landin.Configuration.Assembly_Call
+           (Spellings.all, Of_Tree, Node)
+         then
+            --  Fixed text is checked by the assembly boundary, not resolved
+            --  as a runtime function or an ordinary text view.
+            return;
+         end if;
+
          declare
             use type Landin.Memory.Operation;
             Op : constant Landin.Memory.Operation :=

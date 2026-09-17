@@ -1,3 +1,4 @@
+with Landin.Machine;
 --  The syntax representation.
 --
 --  `spec.md` [1740]-[1830] is the authority, and this is that grammar made
@@ -585,10 +586,24 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Field;
 
+   function Machine_Convention (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Machine.Convention
+     with Pre => Contains (Of_Tree, Id);
+
+   type Machine_Attributes is record
+      Present : Boolean := False;
+      Section, Alignment, Vector : Landin.Source.Span :=
+        Landin.Source.Empty_Span;
+      Keep : Boolean := False;
+   end record;
+   function Attributes (Of_Tree : Tree; Id : Node_Id)
+     return Machine_Attributes
+     with Pre => Contains (Of_Tree, Id);
+
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Function_Declaration;
+                 and then Kind (Of_Tree, Id) in Binding | Function_Declaration;
 
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
@@ -1512,6 +1527,8 @@ private
       Layout     : Landin.Layouts.Policy := Landin.Layouts.Natural;
       Encoded    : Boolean := False;
       Width      : Natural range 0 .. 64 := 0;
+      Machine : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Attributes : Machine_Attributes;
       Link_Name  : Landin.Source.Span := Landin.Source.Empty_Span;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;

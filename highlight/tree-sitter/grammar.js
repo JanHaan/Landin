@@ -152,6 +152,7 @@ module.exports = grammar({
     ),
 
     extern_declaration: $ => seq(
+      optional($.link_symbol),
       $.c_convention,
       optional($.link_symbol),
       field('name', $._declaration_name), ':', $.c_declared_signature,
@@ -161,12 +162,17 @@ module.exports = grammar({
       )),
     ),
     c_convention: $ => seq(
-      'extern', '(', field('convention', alias('c', $.identifier)), ')',
+      'extern', '(', field('convention', alias(choice('c', 'interrupt', 'naked'), $.identifier)), ')',
     ),
     link_symbol: $ => seq(
       field('attribute', alias('link', $.identifier)), '(',
-      field('label', alias('symbol', $.identifier)), ':',
-      field('value', $.text_literal),
+      commaSep1(choice(
+        seq(field('label', choice(alias('symbol', $.identifier), alias('section', $.identifier))), ':',
+            field('value', $.text_literal)),
+        seq(field('label', alias(choice('align', 'vector'), $.identifier)), ':',
+            field('value', $.integer_literal)),
+        field('label', alias('keep', $.identifier)),
+      )),
       ')',
     ),
 
@@ -189,7 +195,7 @@ module.exports = grammar({
       alias('link', $.identifier),
     ),
 
-    binding: $ => choice(
+    binding: $ => seq(optional($.link_symbol), choice(
       seq(
         optional('mut'),
         field('name', $._declaration_name),
@@ -203,7 +209,7 @@ module.exports = grammar({
         ':=',
         field('value', $._expression),
       ),
-    ),
+    )),
 
     _type: $ => choice(
       $.function_type,

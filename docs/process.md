@@ -229,3 +229,13 @@ external startup/linker test harness. Its physical-limit and source-restriction
 records remain distinct from execution passes. This does not change native
 Linux/Darwin acceptance or grant a firmware publication path; the identical
 archive still needs both native bindings before approval and promotion.
+
+
+R6.60 adds mandatory compiler-owned firmware execution to that same embedded
+probe/export command. Its fresh-image comparisons, QEMU boot/exception runs,
+Renode device traces and independent C/assembly controls remain distinguishable
+from the old external backend harness. Startup/frame/exception changes select
+routine acceptance **with debugger risk**: full release Linux GDB and Darwin
+LLDB, debug compiler-host checks and complete release hosted execution. This
+is not R6.100 milestone/source-debugging closure. Both policies are committed
+before the closure candidate; all embedded artifacts bind to that archive.

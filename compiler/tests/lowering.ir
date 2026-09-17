@@ -11214,6 +11214,12 @@ item 2 ROUTINE main result i32 signature 2 params 0 slots 11 blocks 8 values 51
   block 8 scope 7 BLOCK length 2
     50 LOAD i32 slot 1
     51 LEAVE <- 50
+file positive/r660-machine-directives/program.ldn
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE start result none signature 1 params 0 slots 0 blocks 1 values 1
+  block 1 scope 5 BLOCK length 1
+    1 LEAVE
 file positive/range-subtype-exit-before-the-check/program.ldn
 unit signatures 9 items 9
 signature 1 (in u8) -> i32

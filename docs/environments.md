@@ -354,3 +354,13 @@ export retains objects, ELF/map/disassembly, literal ABI and device oracles,
 helper identities and bounded image/stack observations; complete measured
 firmware and Landin source debugging remain R6.100. Native GDB/LLDB coverage
 still checks each hosted backend at the identical accepted revision.
+
+
+R6.60's compiler-owned Cortex firmware lane runs only in the existing native
+Linux embedded environment. It extends the same pinned tool inventory and
+acceptance export with generated startup/vector/linker inputs and fresh-image
+comparisons. The external backend harness, hosted Renode transport and
+independent C/assembly probes remain separate evidence. See the
+[firmware execution contract](../environments/cortex-m/README.md#r660-compiler-owned-firmware).
+The Mac remains the native compiler-host/Darwin/LLDB lane; no local Linux
+container or Nix CI path is introduced.

@@ -189,7 +189,7 @@ new exhaustion guarantee is introduced.
 R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's
 Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
 probes establish the environment. R6.20 adds layout and ABI planning below;
-R6.50 adds compiler-generated M0 execution; R6.60 retains language startup.
+R6.50 adds compiler-generated M0 execution; R6.60 adds compiler-owned firmware startup and linking.
 The original synthetic-32 goldens
 remain unchanged.
 
@@ -198,10 +198,11 @@ remain unchanged.
 R6.20 adds `Targets.Cortex_M` (`cortex-m0`), selecting ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly against these facts. The toolchain
-identity is `arm-none-eabi`. Executable and source-debug requests still fail
-with L0500 before output or tool invocation. C signatures, records, varargs
-and object/debug output remain disabled. The independent external startup/linker
-harness is not a compiler linker path.
+identity is `arm-none-eabi`. Executable requests require the explicit
+`--firmware-entry=NAME` source identity (D229); missing or invalid entries report
+L0502. C signatures, records, varargs and object/source-debug output remain
+disabled. The independent external startup/linker harness remains distinct
+from the compiler-owned firmware path.
 `core/c` and the header generator still accept only their two hosted ABIs.
 
 The existing scalar and recursive shape machinery supplies all byte placement;
@@ -404,9 +405,42 @@ their headers carry GPLv3 with GCC Runtime Library Exception 3.1. Every image
 retains requested helper names, archive path/hash, ELF/map/disassembly and an
 empty undefined-symbol inventory. This links no libc, allocator, scheduler or
 atomic emulation. Division guards prevent entering the archive's divide-zero
-fallback; dependency members remain visible in the map. Packaging or replacing
-this runtime for firmware remains an explicit R6.60/R6.70 handoff.
+fallback; dependency members remain visible in the map. The firmware linker explicitly selects the pinned thumb/v6-m/nofp archive
+with `-lgcc`. General runtime/CPU-library packaging remains R6.70.
 
 The [execution guide](../environments/cortex-m/README.md#r650-compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical
-limits. Landin startup and source debugging remain R6.60 and R6.100 respectively.
+limits. Compiler-owned startup is D229; Landin source debugging remains R6.100.
+
+
+## Cortex-M0 firmware images
+
+`--target=cortex-m0 --firmware-entry=NAME --emit=exe` selects the entry-module
+source definition; its exported symbol may differ. `Backend.Firmware` generates
+the reset source and linker script for the existing 32 KiB flash/16 KiB RAM
+profile. The top 4 KiB of RAM is reserved for stacks, with eight-byte-aligned
+initial MSP `0x20004000`. Static images cannot overlap `0x20003000`.
+The 48-word vector image starts at zero. There is no VTOR relocation, FPU,
+exclusive-access implementation or change of board. D229 owns the exact
+implemented/reserved slots, typed handlers and ordinary/naked obligations.
+
+The driver retains `OUTPUT.s`, `OUTPUT.o`, `OUTPUT.ld`, `OUTPUT.map` and the ELF.
+The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.
+The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
+explicit generated script, `--gc-sections --build-id=none --emit-relocs` and
+`-lgcc`. Host writes and invocations pass through `Landin.Platform`.
+There is no implicit hosted startup, libc, allocator or scheduler. Source
+library requests refuse. Assembler/linker failures retain the invoked tool's
+diagnostic and driver failure status. ELF attributes and helper selection do
+not enable the general C source surface.
+
+`.text.*` and `.rodata.*` reside in flash; `.data.*`, `.bss.*` and `.ramtext.*`
+execute in RAM, with flash load images for initialized data and RAM code.
+Startup copies both load images and clears BSS before source entry. GNU ARM
+veneers handle out-of-range calls between flash and RAM. Link assertions bound
+physical images; L0505 independently bounds pre-GC static materialization to
+8 MiB. Explicit symbol/section collisions and alignment/convention violations
+refuse rather than silently changing requested placement. Section retention
+is independent of calling convention, and a kept vector image retains its
+referenced handlers. Linker symbols are private fixed assembly inputs, not
+user-code module initialization or general static address arithmetic.

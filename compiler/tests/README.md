@@ -915,3 +915,15 @@ The [embedded guide](../../environments/cortex-m/README.md#r650-compiler-generat
 describes generated execution, independent ABI/instruction controls, peripheral
 traces, helper provenance and the external startup/linker boundary. GDB observes
 machine instructions and frame records; this is not R6.100 Landin debugging.
+
+
+D229's `positive/r660-machine-directives` pins target-fixed parsing of typed
+machine functions and placement without enabling hosted machine semantics.
+`negative/r660-materialization` pins the L0505 pre-GC budget. The `cortex ABI`
+suite exercises firmware request failures, conventions/conversions, naked body
+restrictions, placement conflicts and unsupported hosted assembly. Actual
+compiler-generated firmware and independent machine controls live in the
+[embedded execution lane](../../environments/cortex-m/README.md#r660-compiler-owned-firmware);
+those QEMU/Renode results are not hosted fixture passes or source-debugging
+acceptance. Existing runtime/ABI fixtures and their Cortex dispositions remain
+unchanged.

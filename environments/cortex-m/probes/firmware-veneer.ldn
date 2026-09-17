@@ -1,0 +1,18 @@
+bad: atom
+mut denominator: u64 = 7
+mut observed: u32 = 0
+mut irq_seen: u32 = 0
+link(section: ".ramtext.worker")
+ram_worker: (value: u32) -> (result: u32) ! bad =
+    fail bad when value == 0
+    result = flash_helper(value) + u32(u64(value) * denominator / denominator)
+end ram_worker
+flash_helper: (value: u32) -> (result: u32) = value + 1 end flash_helper
+link(section: ".ramtext.irq", vector: 11)
+extern(interrupt) ram_irq: () -> none =
+    irq_seen = irq_seen + 1
+end ram_irq
+start: () -> none =
+    observed = (ram_worker(20) else 0) + (ram_worker(0) else 1)
+    assembler.block("svc #0")
+end start

@@ -461,31 +461,35 @@ the call. local has frame origin. The compiler refuses, and the
 bug it refuses is the one that would have shown up as corrupted
 memory hours later, on a device with no debugger attached.
 
+The complete physical device binding remains a separate driver concern. The
+bounded Cortex-M0 derivative uses the compiler-owned vector image described by
+[1640] and [1990]: SP and reset are compiler entries, reserved slots are zero,
+and source contributes a typed handler reference. For that synthetic lane,
+IRQ0 is vector slot 16. It is not the STM32 DMA1 stream 5 interrupt number.
+
 ```landin
-default_handler: () -> none = loop do end loop end default_handler
-
+-- Applied to the handler declaration in the bounded synthetic derivative:
+link(vector: 16)
+extern(interrupt) synthetic_handler: () -> none =
+    assembler.block("nop")
+end synthetic_handler
 ```
-A function type is an ordinary type and a function an ordinary
-value of it, so the table holds them directly. The first word is
-the initial stack pointer, which is not a handler, so the table
-is a struct rather than one array.
-```landin
-handler: type = () -> none
 
-vector_table: type = layout(c) struct
-    stack_top: usize
-    reset:     handler
-    rest:      [46]handler
-end vector_table
+The real handler body above still has an empty error set. A handler is an
+`extern(interrupt) () -> none` value, and a naked entry has its own distinct
+function convention; neither can be converted to or called as an ordinary
+`() -> none` function. Shared handler work therefore belongs in an ordinary
+helper called from the interrupt body, not in an ordinary call to another
+handler. A kept image retains the handlers its relocations name;
+`extern(interrupt)` alone does not imply keep. The selected source annotation
+is such a reference in the compiler-owned kept image, not a new retention
+property of the function type.
 
-link(section: ".isr_vector", keep)
-vectors: vector_table = (
-    stack_top: stack_top_address,
-    reset:     start,
-    rest:      [of default_handler]
-)
-
-```
+The older heterogeneous stack/reset/handler table pressure is retained by the
+compiler's image and relocation tests rather than an ordinary array of
+addresses. Data and code addresses remain distinct, and the reset loader does
+not run user module initializers. The complete device-specific driver and its
+generated register modules retain their roadmap gates.
 
 ---
 

@@ -531,6 +531,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "link_symbol",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1877,7 +1887,7 @@
         ]
       },
       "label": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
           {
@@ -1887,9 +1897,13 @@
         ]
       },
       "value": {
-        "multiple": false,
-        "required": true,
+        "multiple": true,
+        "required": false,
         "types": [
+          {
+            "type": "integer_literal",
+            "named": true
+          },
           {
             "type": "text_literal",
             "named": true

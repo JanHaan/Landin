@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.60 — Implement startup, vectors and machine directives (planned).**
+**Current roadmap work: R6.60 — Implement startup, vectors and machine directives.**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -272,7 +272,8 @@ has the same exact-revision dual-native binding. R6.20 instantiates 32-bit
 layouts and external AAPCS/internal Landin ABI planning, checked independently
 by native Linux C/assembly execution controls and the existing synthetic-32
 goldens. Its closure has the same dual-native binding. R6.50 subsequently adds
-Cortex assembly; language startup/linking and source debugging remain separate.
+Cortex assembly; R6.60 adds compiler-owned startup/linking, while source
+debugging remains R6.100.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
@@ -337,3 +338,14 @@ What `refine` produces is not a derivative work of `refine`. Compiling a
 program places no licensing condition on that program, and neither does
 linking `core/*` into it — which is the point of a language that has to fit
 in 32 KB of somebody else's flash.
+
+
+R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
+typed interrupt/naked functions, vector references, placement/retention and
+fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
+16 KiB RAM and 4 KiB stack reservation. The
+[firmware execution lane](environments/cortex-m/README.md#r660-compiler-owned-firmware)
+checks generated boot, nested exceptions, PSP return, veneers and peripheral
+traces alongside independent C/assembly controls. Its exact-revision dual-native
+binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
+core, CPU-library packaging and noreturn; R6.80 retains generated-device fixtures.

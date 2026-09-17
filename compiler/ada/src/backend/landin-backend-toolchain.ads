@@ -89,6 +89,10 @@ package Landin.Backend.Toolchain is
    --  `mold -run`.  So selecting a linker changes one argument and not the
    --  shape of the invocation.  The empty string leaves the driver's own
    --  default alone.
+   function Assemble_Arguments
+     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List;
+
    function Link_Arguments
      (Assembly : String;
       Output   : String;

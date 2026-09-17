@@ -1,0 +1,9 @@
+class: negative
+summary: D229 bounds firmware image materialization before assembly and before section garbage collection
+program: program.ldn
+constructs: 1640, 1990
+targets: linux-x86-64, macos-arm64
+codes: L0505
+args: --target=cortex-m0 --firmware-entry=start --emit=asm ../tests/fixtures/negative/r660-materialization/program.ldn
+expect: expected.txt
+status: 1

@@ -1,0 +1,6 @@
+error[L0301]: assembler.block is enabled only on Cortex-M0
+  --> ../tests/fixtures/negative/r660-hosted-assembly/program.ldn:1:17
+  |
+1 | f: () -> none = assembler.block("nop") end f
+  |                 ^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

@@ -78,6 +78,7 @@ different responsibilities.
 | `Landin.Byte_Encoding` | byte-preserving hexadecimal ASCII encoding | interpret an encoding or access the host |
 | `Landin.Hosted` | exact logical compiler-owned hosted helper identities shared by checking and emission | encode target prefixes, libc names or machine signatures |
 | `Landin.Packed` | bounded raw-image masks, field/index algebra, encoding membership and explicit register access plans | access hardware, validate source values or infer optimizer facts |
+| `Landin.Machine` | source machine conventions and checked placement metadata | infer target widths, perform host effects or reinterpret a calling convention |
 | `Landin.Memory` | D227 memory operation identities and ordering legality | select instructions, infer aliases or choose a target |
 | `Landin.Layouts` | source representation policy names | place fields or derive target widths |
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
@@ -127,6 +128,7 @@ different responsibilities.
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Firmware` | compiler-owned reset text, constrained linker script and bounded image materialization | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |
@@ -140,6 +142,7 @@ different responsibilities.
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
+| `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |
 | `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
 | `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |
@@ -1018,9 +1021,10 @@ R6.20 adds `Targets.Cortex_M` and `Backend.Arm32_ABI` layout/transport planning,
 with independent executable controls under that environment. The existing
 neutral shape machinery supplies storage. R6.50 adds `Backend.Cortex_M` assembly
 emission and compiler-generated QEMU/Renode execution. `--target=cortex-m0`
-accepts checking and `--emit=asm`; general C source, compiler executable linking
-and Landin source debugging remain refused. External startup/linker probes are
-identified test harnesses, not language capabilities. See
+accepts checking, `--emit=asm` and D229 firmware linking with explicit
+`--firmware-entry=NAME`. General C source and Landin source debugging remain
+refused. `Backend.Firmware` owns reset/script generation; the older external
+startup/linker probes remain independently identified test harnesses. See
 [target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
 
 R6.30's `Landin.Memory` owns the neutral operation/order vocabulary.

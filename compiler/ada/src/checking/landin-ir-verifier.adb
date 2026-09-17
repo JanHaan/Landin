@@ -7,6 +7,10 @@ with Landin.Targets.Capabilities;
 
 package body Landin.IR.Verifier is
 
+   use type Landin.Machine.Convention;
+   use type Landin.Memory.Operation;
+   use type Landin.Targets.Architecture;
+
    use type Landin.Source.Names.Name_Id;
    use type Landin.Types.Magnitude;
 
@@ -3366,6 +3370,19 @@ package body Landin.IR.Verifier is
          declare
             Signature : constant Signature_Id := Signature_Id (Position);
          begin
+            if Signature_Machine (Of_Unit, Signature)
+              /= Landin.Machine.Ordinary
+              and then ((Check_Image and then
+                Landin.Targets.Architecture_Of (Facts)
+                  /= Landin.Targets.Cortex_M0)
+                or else Signature_Uses_C_ABI (Of_Unit, Signature)
+                or else Signature_Is_Variadic (Of_Unit, Signature)
+                or else Signature_Parameter_Count (Of_Unit, Signature) /= 0
+                or else Signature_Result_Count (Of_Unit, Signature) /= 0
+                or else Signature_Errors (Of_Unit, Signature) /= No_Atom_Set)
+            then
+               return (Kind => Signature_Part_Malformed, others => <>);
+            end if;
             if Signature_Has_Erased_Self (Of_Unit, Signature) then
                if Signature_Parameter_Count (Of_Unit, Signature) = 0 then
                   return (Kind => Erased_Dispatch_Malformed, others => <>);
@@ -3705,8 +3722,8 @@ package body Landin.IR.Verifier is
                        Item => Id, others => <>);
             end if;
             if Link_Symbol (Of_Unit, Id) /= Landin.Source.Names.No_Name then
-               if Kind_Of (Of_Unit, Id) /= Routine
-                 or else not Holds (Of_Unit, Signature_Of (Of_Unit, Id))
+               if Kind_Of (Of_Unit, Id) = Routine
+                 and then not Holds (Of_Unit, Signature_Of (Of_Unit, Id))
                then
                   return (Kind => Routine_Signature_Disagrees,
                           Item => Id, others => <>);
@@ -4208,6 +4225,63 @@ package body Landin.IR.Verifier is
             Reached : array (1 .. Positive'Max (1, Blocks)) of Boolean :=
               [others => False];
          begin
+            declare
+               Attr : constant Landin.Machine.Placement :=
+                 Placement_Of (Of_Unit, Id);
+               Present : constant Boolean := Attr.Keep
+                 or else Attr.Alignment /= 0 or else Attr.Vector /= 0
+                 or else Attr.Section /= Landin.Source.Names.No_Name;
+            begin
+               if (Is_Immutable (Of_Unit, Id) and then not Is_Datum)
+                 or else Attr.Alignment not in
+                   0 | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256
+                 or else (Present and then Check_Image and then
+                   Landin.Targets.Architecture_Of (Facts)
+                     /= Landin.Targets.Cortex_M0)
+               then
+                  return (Kind => Routine_Signature_Disagrees,
+                          Item => Id, others => <>);
+               end if;
+               if Attr.Vector /= 0 then
+                  if Is_Datum or else Is_External (Of_Unit, Id)
+                    or else Attr.Vector not in
+                      2 | 3 | 11 | 14 | 15 | 16 .. 20 | 22 .. 41
+                    or else Signature_Machine
+                      (Of_Unit, Signature_Of (Of_Unit, Id))
+                        not in Landin.Machine.Interrupt_Handler
+                          | Landin.Machine.Naked_Routine
+                  then
+                     return (Kind => Routine_Signature_Disagrees,
+                             Item => Id, others => <>);
+                  end if;
+                  for Prior in 1 .. Which - 1 loop
+                     if Placement_Of (Of_Unit, Item_Id (Prior)).Vector
+                       = Attr.Vector
+                     then
+                        return (Kind => Routine_Signature_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+                  end loop;
+               end if;
+            end;
+            if Signature_Machine (Of_Unit, Signature_Of (Of_Unit, Id))
+              = Landin.Machine.Naked_Routine
+            then
+               if Is_Datum or else Is_External (Of_Unit, Id)
+                 or else Blocks /= 1 or else Slot_Count (Of_Unit, Id) /= 0
+                 or else Length (Of_Unit, Id, 1) /= 2
+                 or else Op_Of (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 1))
+                   /= Memory_Access
+                 or else Assembly_Text
+                   (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 1))
+                     = Landin.Source.Names.No_Name
+                 or else Op_Of (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 2))
+                   /= Leave
+               then
+                  return (Kind => Routine_Signature_Disagrees,
+                          Item => Id, others => <>);
+               end if;
+            end if;
             --  Read-only data needs a complete numeric text image.
             --  Recheck builder eligibility after every metadata mutation.
             if Is_Read_Only (Of_Unit, Id)
@@ -5292,6 +5366,13 @@ package body Landin.IR.Verifier is
                         Op : constant Opcode := Op_Of (Of_Unit, Id, V);
                         Ends : constant Boolean := Op in Terminator_Kind;
                      begin
+                        if Assembly_Text (Of_Unit, Id, V)
+                          /= Landin.Source.Names.No_Name
+                          and then Op /= Memory_Access
+                        then
+                           return (Kind => Result_Disagrees,
+                                   Item => Id, Block => Block, Value => V);
+                        end if;
                         if Ends and then Position /= Last then
                            return (Kind => Terminator_Inside_A_Block,
                                    Item => Id, Block => Block, Value => V);
@@ -6094,6 +6175,14 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
+                                 if Signature_Machine (Of_Unit, Signature)
+                                   /= Landin.Machine.Ordinary
+                                 then
+                                    return
+                                      (Kind => Routine_Signature_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+
                                  if Op = Call then
                                     declare
                                        C : constant Item_Id :=
@@ -6668,6 +6757,16 @@ package body Landin.IR.Verifier is
                                  S : constant Landin.Types.Scalar_Name :=
                                    Memory_Scalar (Of_Unit, Id, V);
                               begin
+                                 if Assembly_Text (Of_Unit, Id, V)
+                                   /= Landin.Source.Names.No_Name
+                                   and then
+                                     (M /= Landin.Memory.Compiler_Barrier
+                                     or else (Check_Image and then
+                                       Landin.Targets.Architecture_Of (Facts)
+                                         /= Landin.Targets.Cortex_M0))
+                                 then
+                                    return (Result_Disagrees, Id, Block, V);
+                                 end if;
                                  if not Landin.Memory.Legal
                                    (M, Memory_Order (Of_Unit, Id, V),
                                     Memory_Order (Of_Unit, Id, V, True))

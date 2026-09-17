@@ -3,6 +3,7 @@ with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Firmware;
 with Landin.Backend.Toolchain;
 with Landin.Backend.Dispatch;
 with Landin.Build_Reports;
@@ -124,6 +125,8 @@ package body Landin.Driver is
       & "  -o PATH             where to write it" & LF
       & "  --toolchain=NAME    the assembler and linker driver to run" & LF
       & "  --linker=NAME       pass -fuse-ld=NAME to that driver" & LF
+      & "  --firmware-entry=NAME  Cortex entry-module routine () -> none"
+      & LF
       & LF
       & "Source files are scanned, parsed, resolved and checked as one"
       & LF
@@ -133,8 +136,9 @@ package body Landin.Driver is
       & LF
       & "that is accepted produces no"
       & LF
-      & "output.  --emit=exe requires "
+      & "output. Hosted --emit=exe requires "
       & Landin.Backend.Entry_Point.Required_Shape & "." & LF
+      & "Cortex --emit=exe requires --firmware-entry=NAME." & LF
       & LF
       & "The toolchain is found by the target's GNU triplet, so"
       & LF
@@ -174,6 +178,8 @@ package body Landin.Driver is
       Output    : Unbounded.Unbounded_String;
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
+      Firmware_Name : Unbounded.Unbounded_String;
+      Firmware_Seen : Boolean := False;
       Build_Report_Path : Unbounded.Unbounded_String;
       Optimization : Landin.Optimization.Options :=
         Landin.Optimization.Default_Options;
@@ -268,6 +274,17 @@ package body Landin.Driver is
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
 
+            elsif Starts_With (Argument, "--firmware-entry=") then
+               if Firmware_Seen
+                 or else After (Argument, "--firmware-entry=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Firmware_Seen := True;
+               Firmware_Name := Unbounded.To_Unbounded_String
+                 (After (Argument, "--firmware-entry="));
+
             elsif Starts_With (Argument, "--toolchain=") then
                Toolchain :=
                  Unbounded.To_Unbounded_String
@@ -331,7 +348,8 @@ package body Landin.Driver is
       --  build report describes an emitted artifact, not a checking request.
       if ((Optimize_Seen or Specialize_Seen or Report_Seen or Debug_Seen)
           and then (Wants_Usage or Wants_Identity))
-        or else ((Report_Seen or Debug_Seen) and then Emit = Emit_Nothing)
+        or else ((Report_Seen or Debug_Seen or Firmware_Seen)
+                 and then Emit = Emit_Nothing)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
         or else (Output_Seen and then
@@ -846,6 +864,10 @@ package body Landin.Driver is
               or else Landin.IR.Caller_Source_Count
                 (Landin.Stages.Code (Context).all) > 0;
             Destinations : Landin.Platform.Path_List;
+            Cortex : constant Boolean :=
+              Landin.Targets.Architecture_Of (Facts)
+                = Landin.Targets.Cortex_M0;
+            Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
 
             function Conflicts_With (Path : String) return Boolean is
               (Host.Paths_Overlap (Report_Path, Path));
@@ -871,6 +893,11 @@ package body Landin.Driver is
             Destinations.Append (Assembly_Path);
             if Emit = Emit_Executable then
                Destinations.Append (Product_Path);
+               if Cortex then
+                  Destinations.Append (Product_Path & ".o");
+                  Destinations.Append (Product_Path & ".ld");
+                  Destinations.Append (Product_Path & ".map");
+               end if;
                if Full_Debug then
                   for Path of Landin.Backend.Toolchain.Debug_Artifacts
                     (Product_Path, Facts, Host)
@@ -959,14 +986,60 @@ package body Landin.Driver is
                return;
             end if;
 
-            if Emit = Emit_Executable
-              and then Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0
+            if Cortex and then not Firmware_Seen
+              and then Emit = Emit_Assembly
             then
-               Note_No_Toolchain
-                 ("Cortex-M executable linking is not enabled",
-                  "R6.60 owns startup and linking; use --emit=asm");
+               for Index in 1 .. Landin.IR.Item_Count
+                 (Landin.Stages.Code (Context).all)
+               loop
+                  if Landin.IR.Placement_Of
+                    (Landin.Stages.Code (Context).all,
+                     Landin.IR.Item_Id (Index)).Vector /= 0
+                  then
+                     Note_Failure
+                       (Code_No_Entry, "vector placement requires an explicit"
+                        & " --firmware-entry=NAME request");
+                     return;
+                  end if;
+               end loop;
+            end if;
+            if Firmware_Seen and then not Cortex then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option,
+                  "--firmware-entry requires --target=cortex-m0");
                return;
+            end if;
+            if Cortex and then (Emit = Emit_Executable or Firmware_Seen) then
+               Firmware_Entry := Landin.Backend.Entry_Point.Firmware_Start
+                 (Landin.Stages.Code (Context).all,
+                  Landin.Stages.Meanings (Context).all,
+                  Landin.Stages.Modules (Context).all,
+                  Landin.Stages.Identities (Context).all,
+                  Unbounded.To_String (Firmware_Name));
+               if Firmware_Entry = Landin.IR.No_Item then
+                  Note_Failure
+                    (Code_No_Entry, "firmware requires --firmware-entry=NAME"
+                     & " naming an entry-module routine () -> none"
+                     & " with an empty error set");
+                  return;
+               end if;
+               if not Landin.Backend.Firmware.Materialization_Fits
+                 (Landin.Stages.Code (Context).all)
+               then
+                  Note_Failure
+                    (Rows.Code (Rows.Image_Materialization_Limit),
+                     "firmware static images exceed 8 MiB before section GC");
+                  return;
+               end if;
+               if Landin.Configuration.Library_Count
+                 (Landin.Stages.Configurations (Context).all) /= 0
+               then
+                  Note_No_Toolchain
+                    ("firmware does not admit linker.library",
+                     "only the selected private Arm runtime is linked");
+                  return;
+               end if;
             end if;
 
             --  A target nothing emits for cannot be asked for a file.
@@ -986,7 +1059,7 @@ package body Landin.Driver is
             --  [1970]'s entry is required before anything is written, so a
             --  program that could never be linked does not leave a file
             --  behind on the way to saying so.
-            if Emit = Emit_Executable
+            if Emit = Emit_Executable and then not Cortex
               and then Landin.Backend.Entry_Point.Hosted_Main
                          (Landin.Stages.Code (Context).all,
                           Landin.Stages.Meanings (Context).all,
@@ -1115,7 +1188,8 @@ package body Landin.Driver is
                      Landin.Stages.Meanings (Context).all,
                      Landin.Stages.Modules (Context).all,
                      Landin.Stages.Identities (Context).all),
-                  Debug => (if Full_Debug then Debug'Access else null));
+                  Debug => (if Full_Debug then Debug'Access else null),
+                  Firmware_Entry => Firmware_Entry);
                if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
@@ -1182,6 +1256,31 @@ package body Landin.Driver is
                --  rather than an unhandled exception at the top of
                --  `refine`.
                begin
+                  if Cortex then
+                     Host.Write_File
+                       (Product_Path & ".ld",
+                        Landin.Backend.Firmware.Linker_Script, Written);
+                     if Written /= Landin.Platform.Write_Ok then
+                        Note_Failure
+                          (Code_Unwritable,
+                           "cannot write: " & Product_Path & ".ld");
+                        return;
+                     end if;
+                     Tools.Run
+                       (Driver,
+                        Landin.Backend.Toolchain.Assemble_Arguments
+                          (Assembly_Path, Product_Path & ".o", Facts),
+                        Ran, Landin.Platform.Merged);
+                     if Ran.Ended /= Landin.Platform.Exited
+                       or else Ran.Exit_Code /= 0
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           "firmware assembly failed" & LF
+                           & Unbounded.To_String (Ran.Output));
+                        return;
+                     end if;
+                  end if;
                   Landin.Backend.Toolchain.Resolve_Libraries
                     (Facts, Driver, Host, Tools, Libraries, Ran,
                      Libraries_Ready);

@@ -1,6 +1,9 @@
+with Landin.Tokens.Text;
+
 package body Landin.Configuration is
 
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Span;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Source.Names.Name_Id;
@@ -24,6 +27,92 @@ package body Landin.Configuration is
       end if;
       return "";
    end Compiler_Member;
+
+   function Assembly_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean
+   is
+      package Syn renames Landin.Syntax;
+      Callee : Syn.Node_Id;
+   begin
+      if Node = Syn.No_Node or else Syn.Kind (Of_Tree, Node) /= Syn.Call then
+         return False;
+      end if;
+      Callee := Syn.Callee_Of (Of_Tree, Node);
+      return Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+        and then Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Callee))
+          = Syn.Name_Reference
+        and then Landin.Source.Names.Spelling
+          (Names, Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Callee)))
+            = "assembler"
+        and then Landin.Source.Names.Spelling
+          (Names, Syn.Name (Of_Tree, Callee)) = "block";
+   end Assembly_Call;
+
+   function Fixed_Text
+     (Snapshot : Landin.Source.Snapshot; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return String
+   is
+      Lexeme : constant String := Landin.Source.Slice
+        (Snapshot, Landin.Syntax.Anchor (Of_Tree, Node));
+      Units : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
+      Count, First, Last : Natural;
+      Fault : Landin.Tokens.Text.Problem;
+      use type Landin.Tokens.Text.Problem;
+   begin
+      Landin.Tokens.Text.Decode_View
+        (Lexeme,
+         Landin.Syntax.Kind (Of_Tree, Node) = Landin.Syntax.Raw_Literal,
+         Landin.Tokens.Text.Byte_Units, Units, Count, Fault, First, Last);
+      if Fault /= Landin.Tokens.Text.Well_Formed then
+         return "";
+      end if;
+      declare
+         Result : String (1 .. Count);
+      begin
+         for Index in Result'Range loop
+            Result (Index) := Character'Val (Units (Index));
+         end loop;
+         return Result;
+      end;
+   end Fixed_Text;
+
+   function Placement_Of
+     (Snapshot : Landin.Source.Snapshot; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id; Names : in out Landin.Source.Names.Table)
+      return Landin.Machine.Placement
+   is
+      Attr : constant Landin.Syntax.Machine_Attributes :=
+        Landin.Syntax.Attributes (Of_Tree, Node);
+      Result : Landin.Machine.Placement;
+      function Number (At_Span : Landin.Source.Span) return Natural;
+      function Number (At_Span : Landin.Source.Span) return Natural is
+         Text : constant String := Landin.Source.Slice (Snapshot, At_Span);
+         Value : Natural := 0;
+      begin
+         for C of Text loop
+            if C not in '0' .. '9' or else Value > 256 then
+               return Natural'Last;
+            end if;
+            Value := Value * 10 + Character'Pos (C) - Character'Pos ('0');
+         end loop;
+         return Value;
+      end Number;
+   begin
+      Result.Keep := Attr.Keep;
+      Result.Alignment := Number (Attr.Alignment);
+      Result.Vector := Number (Attr.Vector);
+      if Attr.Section /= Landin.Source.Empty_Span then
+         declare
+            Text : constant String := Landin.Source.Slice
+              (Snapshot, Attr.Section);
+         begin
+            Result.Section := Landin.Source.Names.Intern
+              (Names, Text (Text'First + 1 .. Text'Last - 1));
+         end;
+      end if;
+      return Result;
+   end Placement_Of;
 
    function Memory_Call
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
@@ -66,7 +155,9 @@ package body Landin.Configuration is
       then
          return "[0590]: compiler." & Member & " is enabled by R4.50";
       elsif Namespace = "linker" and then Member in "section" | "entry" then
-         return "[1640]: linker." & Member & " is enabled by R6.60";
+         return "[1640]/D229: use link(section: ...) or "
+           & "--firmware-entry; linker." & Member
+           & " is not a module-call directive";
       elsif (Namespace = "compiler" and then Member = "assert")
         or else (Namespace = "linker" and then Member = "library")
       then

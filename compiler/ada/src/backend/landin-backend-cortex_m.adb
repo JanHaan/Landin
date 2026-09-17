@@ -1,3 +1,5 @@
+with Landin.Backend.Firmware;
+with Landin.Machine;
 with Landin.Layouts;
 with Landin.Packed;
 with Landin.Memory;
@@ -8,6 +10,8 @@ with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
 package body Landin.Backend.Cortex_M is
+
+   use type Landin.Machine.Convention;
 
    package Unbounded renames Ada.Strings.Unbounded;
    use type Landin.Source.Names.Name_Id;
@@ -274,7 +278,8 @@ package body Landin.Backend.Cortex_M is
       Assembly : out Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null)
+      Debug : access constant Landin.Debugging.Information := null;
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
    is
       Out_Text : Unbounded.Unbounded_String;
       Serial : Natural := 0;
@@ -565,7 +570,8 @@ package body Landin.Backend.Cortex_M is
             if (Candidate'Length >= 8
                 and then Candidate (Candidate'First
                   .. Candidate'First + 7) = "__aeabi_")
-
+              or else Ada.Strings.Fixed.Index
+                (Candidate, "_landin_firmware_") = Candidate'First
             then
                return False;
             end if;
@@ -663,8 +669,9 @@ package body Landin.Backend.Cortex_M is
          Declared : constant Landin.IR.Declaration_Id :=
            Landin.IR.Declares (Of_Unit, Item);
       begin
-         return Declared /= Landin.IR.No_Declaration
-           and then Landin.Resolution.Is_Public (Meanings, Declared);
+         return Is_Forced (Item)
+           or else (Declared /= Landin.IR.No_Declaration
+             and then Landin.Resolution.Is_Public (Meanings, Declared));
       end Is_Public_Item;
 
       --  Labels carry the item, because a Block_Id restarts at 1 in the
@@ -747,6 +754,75 @@ package body Landin.Backend.Cortex_M is
            (Item, Placed, Landin.IR.Element_Total (Field), Offset);
          return Offset;
       end Field_Offset;
+
+      procedure Select_Section
+        (Item : Landin.IR.Item_Id; Prefix, Flags : String);
+      procedure Select_Section
+        (Item : Landin.IR.Item_Id; Prefix, Flags : String)
+      is
+         Attr : constant Landin.Machine.Placement :=
+           Landin.IR.Placement_Of (Of_Unit, Item);
+         Name : constant String :=
+           (if Attr.Section = Landin.Source.Names.No_Name
+            then Prefix & "landin_" & Trimmed (Item'Image)
+            else Landin.Source.Names.Spelling (Names, Attr.Section));
+         Retained : Boolean := Attr.Keep;
+         BSS : constant Boolean :=
+           Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First;
+      begin
+         if Attr.Section /= Landin.Source.Names.No_Name then
+            for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               declare
+                  Other : constant Landin.Machine.Placement :=
+                    Landin.IR.Placement_Of
+                      (Of_Unit, Landin.IR.Item_Id (Index));
+               begin
+                  if Other.Section = Attr.Section then
+                     Retained := Retained or else Other.Keep;
+                  end if;
+               end;
+            end loop;
+         end if;
+         Emit (".section " & Name & ",""" & Flags
+           & (if Retained then "R" else "") & """,%"
+           & (if BSS then "nobits" else "progbits"));
+         if Attr.Alignment /= 0 then
+            Emit (".balign " & Trimmed (Attr.Alignment'Image));
+         end if;
+      end Select_Section;
+
+      procedure Emit_Vectors;
+      procedure Emit_Vectors is
+         Handlers : array (2 .. 47) of Landin.IR.Item_Id :=
+           [others => Landin.IR.No_Item];
+      begin
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+               Slot : constant Natural :=
+                 Landin.IR.Placement_Of (Of_Unit, Item).Vector;
+            begin
+               if Slot /= 0 then
+                  Handlers (Slot) := Item;
+               end if;
+            end;
+         end loop;
+         Emit (".section .isr_vector,""a"",%progbits");
+         Emit (".balign 256");
+         Emit (".globl _landin_firmware_vectors");
+         Put ("_landin_firmware_vectors:");
+         Emit (".word _landin_firmware_stack_top");
+         Emit (".word _landin_firmware_reset");
+         for Slot in Handlers'Range loop
+            if Slot in 4 .. 10 | 12 | 13 | 21 | 42 .. 47 then
+               Emit (".word 0");
+            elsif Handlers (Slot) /= Landin.IR.No_Item then
+               Emit (".word " & Symbol (Handlers (Slot)));
+            else
+               Emit (".word _landin_firmware_unhandled");
+            end if;
+         end loop;
+      end Emit_Vectors;
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
@@ -2546,7 +2622,21 @@ package body Landin.Backend.Cortex_M is
                   begin
                      if Landin.Memory.Operands (M) = 0 then
                         case M is
-                           when Compiler_Barrier => null;
+                           when Compiler_Barrier =>
+                              if Landin.IR.Assembly_Text (Of_Unit, Item, Value)
+                                /= Landin.Source.Names.No_Name
+                              then
+                                 declare
+                                    After_Block : constant String := Fresh;
+                                 begin
+                                    Put (Landin.Source.Names.Spelling
+                                      (Names, Landin.IR.Assembly_Text
+                                         (Of_Unit, Item, Value)));
+                                    Emit ("b " & After_Block);
+                                    Emit (".ltorg");
+                                    Put (After_Block & ":");
+                                 end;
+                              end if;
                            when Completion_Barrier => Emit ("dsb sy");
                            when others => Emit ("dmb sy");
                         end case;
@@ -2617,13 +2707,40 @@ package body Landin.Backend.Cortex_M is
             end case;
          end Instruction;
       begin
-         Emit (".section .text.landin_" & Trimmed (Item'Image)
-           & ",""ax"",%progbits");
+         Select_Section (Item, ".text.", "ax");
          Emit (".globl " & Symbol (Item));
          Emit (".balign 2");
          Emit (".type " & Symbol (Item) & ", %function");
          Emit (".thumb_func");
          Put (Symbol (Item) & ":");
+         if Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+             = Landin.Machine.Naked_Routine
+         then
+            for Position in 1 .. Landin.IR.Length (Of_Unit, Item, 1) loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value (Of_Unit, Item, 1, Position);
+               begin
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    = Landin.IR.Memory_Access
+                  then
+                     Put (Landin.Source.Names.Spelling
+                       (Names, Landin.IR.Assembly_Text
+                          (Of_Unit, Item, Value)));
+                  end if;
+               end;
+            end loop;
+            --  A naked block may branch or return explicitly. Falling off
+            --  it traps; `none` does not promise nonreturning control flow.
+            Emit ("udf #1");
+            Emit (".ltorg");
+            Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+            Landin.Build_Reports.Append (Report,
+              Landin.Build_Reports.Routine_Statistics'
+                (Item => Item, others => <>));
+            return;
+         end if;
          Emit ("push {r4, r5, r6, r7}");
          Emit ("mov r4, r11");
          Emit ("mov r5, lr");
@@ -3713,12 +3830,12 @@ package body Landin.Backend.Cortex_M is
          Size      : Landin.Targets.Byte_Count;
          Alignment : Landin.Targets.Byte_Alignment) is
       begin
-         Emit (".pushsection .bss");
+         Select_Section (Item, ".bss.", "aw");
          Emit (".globl " & Symbol (Item));
          Emit (".balign " & Trimmed (Alignment'Image));
          Put (Symbol (Item) & ":");
          Emit (".zero " & Trimmed (Size'Image));
-         Emit (".popsection");
+
       end Emit_Reserved;
 
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
@@ -3898,6 +4015,10 @@ package body Landin.Backend.Cortex_M is
       Emit (".cpu cortex-m0");
       Emit (".thumb");
       Emit (".text");
+      if Firmware_Entry /= Landin.IR.No_Item then
+         Emit_Vectors;
+         Put (Landin.Backend.Firmware.Startup (Symbol (Firmware_Entry)));
+      end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
@@ -3915,11 +4036,18 @@ package body Landin.Backend.Cortex_M is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
-                  Emit (".section .rodata");
+                  Select_Section (Item, ".rodata.", "a");
                   Emit_Array_Image_Datum (Item);
                else
-                  Emit (".data");
-                  if Is_All_Zero (Item) then
+                  Select_Section
+                    (Item, (if Landin.IR.Is_Immutable (Of_Unit, Item)
+                     then ".rodata." elsif Is_All_Zero (Item)
+                     then ".bss." else ".data."),
+                     (if Landin.IR.Is_Immutable (Of_Unit, Item)
+                      then "a" else "aw"));
+                  if Is_All_Zero (Item)
+                    and then not Landin.IR.Is_Immutable (Of_Unit, Item)
+                  then
                      if Landin.IR.Result_Of (Of_Unit, Item) =
                        Landin.Types.Aggregate
                      then
