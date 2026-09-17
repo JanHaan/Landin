@@ -10363,7 +10363,7 @@ R6.80 is also dependency-ready and retains its separate generated-device gate.
 
 ### R6.50 — Implement the Cortex-M backend
 
-Status: active
+Status: complete
 Depends on: R5.20, R6.20, R6.30, R6.40
 
 Implement instruction selection, frame layout, register allocation, traps and
@@ -10538,7 +10538,7 @@ instruction limits pass. Packed/hole/DMA/byte controls run all six profiles.
 Development is not exact-revision approval; native acceptance remains pending.
 
 Compatible native policies were explicitly reselected with
-`policy.py routine --debugger` before the implementation commit. Frame
+`policy.py routine --debugger` before implementation commit `8e4874a2`. Frame
 construction, new instruction selection and debugger control/evidence changes
 justify full release GDB and LLDB coverage. Both compiler modes and full release
 hosted execution remain required. This is routine debugger-risk acceptance;
@@ -10554,6 +10554,23 @@ interrupt/naked/sections/keep/inline assembly remain R6.60; core/noreturn R6.70;
 generated-device fixtures R6.80; complete driver R6.90; Landin source-debugging
 and freestanding milestone closure R6.100. General SVD generation, R551 resource
 and evidence/tooling dispositions and deferred Nix remain unchanged.
+
+Exact-revision completion and delivery binding:
+
+The containing closure tree requires full `python3 check.py` and verified
+`scripts/site.sh` rendering. Its complete status becomes authoritative only
+after identical committed Linux/Darwin archive acceptance, verified exports,
+annotated dual-native `ci/accepted/FULL_COMMIT`, atomic canonical promotion,
+matching remote commit/approval and GitHub mirror, and successful guarded
+publication. The native documents job must execute the entire generated Cortex
+corpus and all old/new embedded controls; assembly inspection or independent
+controls alone cannot close this item. Approval and retained bundles bind the
+actual results and tool identities to that exact revision. No later bookkeeping
+revision substitutes for the accepted archive.
+
+R6.60 is the next dependency-ready item, with startup/linker, firmware entry,
+vectors and machine directives retaining their complete gate. R6.80 is also
+dependency-ready and retains its independent generated-device fixture gate.
 
 ### R6.60 — Implement startup, vectors and machine directives
 

@@ -239,9 +239,10 @@ images, validated extraction and explicit register-image policies on both native
 backends, with compiler-generated and independent peripheral controls. Its
 exact-revision dual-native binding owns closure. R6.50 implements Cortex-M0
 instruction selection and internal ABI transport, with generated QEMU and
-synthetic peripheral execution under development/acceptance. Language Cortex
+synthetic peripheral execution bound by native acceptance. Language Cortex
 startup/linking and source debugging remain R6.60 and R6.100. ROADMAP.md owns
-R6.50's remaining validation and closure.
+R6.50's exact-revision dual-native closure. R6.60 is the next dependency-ready
+item; R6.80 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 
