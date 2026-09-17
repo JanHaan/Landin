@@ -3426,6 +3426,12 @@ debug information that the design spends its precision on. The
 cost is owned deliberately — every target is work that nobody
 else does.
 
+The Cortex-M0 backend emits ARMv6-M Thumb assembly using the selected
+little-endian, soft-float target contract. Its emulator tests use an explicitly
+external startup/linker harness. Language startup, vector placement and
+freestanding library delivery retain their own roadmap items; enabling
+assembly does not enable those source constructs.
+
 ### [1560] Three builtin modules are the way to the tools
 
 Three builtin modules are the way to the tools. They are

@@ -345,3 +345,12 @@ optimization/specialization profiles. Independent M0 C controls and literal
 access traces remain separate from native Landin execution. The mandatory
 documents job builds the archived compiler and exports these new lanes beside
 all previous embedded evidence; it does not imply a Cortex-M compiler backend.
+
+R6.50 extends the same pinned tool and evidence path with compiler-generated
+Cortex-M0 execution of the inventoried shared runtime corpus and direct
+Renode packed/byte/ordinary-slice DMA transactions. The external startup and
+linker test harness does not enable Landin firmware entry or vectors. The
+export retains objects, ELF/map/disassembly, literal ABI and device oracles,
+helper identities and bounded image/stack observations; complete measured
+firmware and Landin source debugging remain R6.100. Native GDB/LLDB coverage
+still checks each hosted backend at the identical accepted revision.

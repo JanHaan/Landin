@@ -12,6 +12,12 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public PrototypePeripheral(IMachine machine) { this.machine = machine; Reset(); }
         public long Size { get { return 0x7000; } }
         public GPIO IRQ { get; } = new GPIO();
+        public uint Remaining { get { return count; } }
+        public uint Configuration { get { return Get(0x6058); } }
+        public uint CountHalfReads { get; private set; }
+        public uint CountHalfWrites { get; private set; }
+        public uint CountWordReads { get; private set; }
+        public uint CountWordWrites { get; private set; }
         public uint Transfers { get; private set; }
         public uint Errors { get; private set; }
         public uint Reads { get; private set; }
@@ -19,12 +25,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public void Reset()
         {
             regs.Clear(); count = initial = position = status = 0;
+            CountHalfReads = CountHalfWrites = CountWordReads = CountWordWrites = 0;
             Transfers = Errors = Reads = Writes = 0; IRQ.Unset();
         }
         public ushort ReadWord(long offset)
         {
             if(offset != 0x10 && offset != 0x14 && offset != 0x605c)
                 throw new InvalidOperationException("unsupported halfword read");
+            if(offset == 0x605c) { CountHalfReads++; Reads++; return (ushort)count; }
             return (ushort)ReadDoubleWord(offset);
         }
         public void WriteWord(long offset, ushort value)
@@ -32,13 +40,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             if(offset != 0x14 && offset != 0x605c)
                 throw new InvalidOperationException("unsupported halfword write");
             WriteDoubleWord(offset, value);
+            if(offset == 0x605c) { CountHalfWrites++; CountWordWrites--; }
         }
         public void SetInput(ushort value) { regs[0x10] = value; }
         public uint ReadDoubleWord(long offset)
         {
             Reads++;
             if(offset == 0x6000) return status;
-            if(offset == 0x605c) return count;
+            if(offset == 0x605c) { CountWordReads++; return count; }
             if(offset == 0x6004 || offset == 0x18)
                 throw new InvalidOperationException("read from write-only register");
             if(!Known(offset)) throw new InvalidOperationException("unsupported register read");
@@ -54,6 +63,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             if(!Known(offset)) throw new InvalidOperationException("unsupported register write");
             if(offset == 0x605c)
             {
+                CountWordWrites++;
                 if(value > 65535) throw new InvalidOperationException("count exceeds 16 bits");
                 count = initial = value; position = 0;
             }

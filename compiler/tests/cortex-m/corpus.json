@@ -1,0 +1,1924 @@
+{
+  "schema": 1,
+  "fixtures": {
+    "abi/r440-bindings-generated": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-bindings-generated/fixture.meta"
+    },
+    "abi/r440-errno-interposition": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-errno-interposition/fixture.meta"
+    },
+    "abi/r440-errno-thread-local": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-errno-thread-local/fixture.meta"
+    },
+    "abi/r440-native-aggregates": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-aggregates/fixture.meta"
+    },
+    "abi/r440-native-banks": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-banks/fixture.meta"
+    },
+    "abi/r440-native-bounds": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-bounds/fixture.meta"
+    },
+    "abi/r440-native-callback-array-fields": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-callback-array-fields/fixture.meta"
+    },
+    "abi/r440-native-callbacks": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-callbacks/fixture.meta"
+    },
+    "abi/r440-native-dollar-link": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-dollar-link/fixture.meta"
+    },
+    "abi/r440-native-hosted": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-hosted/fixture.meta"
+    },
+    "abi/r440-native-link-namespace": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-link-namespace/fixture.meta"
+    },
+    "abi/r440-native-nested-shape": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-nested-shape/fixture.meta"
+    },
+    "abi/r440-native-recursive-array-fields": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-recursive-array-fields/fixture.meta"
+    },
+    "abi/r440-native-renamed-main": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-renamed-main/fixture.meta"
+    },
+    "abi/r440-native-scalars": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-scalars/fixture.meta"
+    },
+    "abi/r440-native-startup-empty": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-startup-empty/fixture.meta"
+    },
+    "abi/r440-native-startup-initialized": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-startup-initialized/fixture.meta"
+    },
+    "abi/r440-native-startup-replaced": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-startup-replaced/fixture.meta"
+    },
+    "abi/r440-native-startup-uninitialized": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-startup-uninitialized/fixture.meta"
+    },
+    "abi/r440-native-varargs": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-native-varargs/fixture.meta"
+    },
+    "abi/r440-smoke": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-smoke/fixture.meta"
+    },
+    "abi/r440-sret-pointer-observation": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-sret-pointer-observation/fixture.meta"
+    },
+    "abi/r440-varargs-pointer-callback": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r440-varargs-pointer-callback/fixture.meta"
+    },
+    "abi/r450-review-backend-c-entry": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r450-review-backend-c-entry/fixture.meta"
+    },
+    "abi/r450-x86-callee-probes": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r450-x86-callee-probes/fixture.meta"
+    },
+    "abi/r490-distinct-c-roundtrip": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r490-distinct-c-roundtrip/fixture.meta"
+    },
+    "abi/r630-dma-slice": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r630-dma-slice/fixture.meta"
+    },
+    "abi/r630-native-memory": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r630-native-memory/fixture.meta"
+    },
+    "abi/r640-dma-packed": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r640-dma-packed/fixture.meta"
+    },
+    "abi/r640-exhaustive-encodings": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r640-exhaustive-encodings/fixture.meta"
+    },
+    "abi/r640-reserved-trap": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/r640-reserved-trap/fixture.meta"
+    },
+    "runtime/a-zero-divisor-traps": {
+      "mode": "execute"
+    },
+    "runtime/a-zero-remainder-divisor-traps": {
+      "mode": "execute"
+    },
+    "runtime/add-exits-with-its-sum": {
+      "mode": "execute"
+    },
+    "runtime/aggregate-results-across-branches": {
+      "mode": "execute"
+    },
+    "runtime/aggregate-results-across-early-exits": {
+      "mode": "execute"
+    },
+    "runtime/allocator-vec-pressure": {
+      "mode": "execute"
+    },
+    "runtime/any-aggregate-storage": {
+      "mode": "execute"
+    },
+    "runtime/any-argument-save": {
+      "mode": "execute"
+    },
+    "runtime/any-compiler-constraint": {
+      "mode": "execute"
+    },
+    "runtime/any-composed-dispatch": {
+      "mode": "execute"
+    },
+    "runtime/any-expression-result": {
+      "mode": "execute"
+    },
+    "runtime/any-generic-storage": {
+      "mode": "execute"
+    },
+    "runtime/any-heterogeneous-dispatch": {
+      "mode": "execute"
+    },
+    "runtime/any-inferred-construction": {
+      "mode": "execute"
+    },
+    "runtime/any-inferred-entry-staging": {
+      "mode": "execute"
+    },
+    "runtime/any-parameterized-provider": {
+      "mode": "execute"
+    },
+    "runtime/any-return-origin": {
+      "mode": "execute"
+    },
+    "runtime/any-untracked-pointer-origin": {
+      "mode": "execute"
+    },
+    "runtime/any-unused-object-unsafe-transport": {
+      "mode": "execute"
+    },
+    "runtime/arena-is-an-ordinary-name": {
+      "mode": "execute"
+    },
+    "runtime/array-arguments-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/array-elements-hold-their-own": {
+      "mode": "execute"
+    },
+    "runtime/array-literal-assignment-is-source-ordered": {
+      "mode": "execute"
+    },
+    "runtime/array-of-structs": {
+      "mode": "execute"
+    },
+    "runtime/array-repetition-evaluates-once": {
+      "mode": "execute"
+    },
+    "runtime/array-returns-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/array-zeroed-assignment-clears-storage": {
+      "mode": "execute"
+    },
+    "runtime/atom-values-cross-the-abi": {
+      "mode": "execute"
+    },
+    "runtime/benchmark-game-fannkuch-redux": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/benchmark-game-fasta": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/benchmark-game-mandelbrot": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/binary-search": {
+      "mode": "execute"
+    },
+    "runtime/bool-to-float-conversions": {
+      "mode": "execute"
+    },
+    "runtime/bool-to-integer-conversions": {
+      "mode": "execute"
+    },
+    "runtime/bools-cross-the-abi": {
+      "mode": "execute"
+    },
+    "runtime/break-in-value-block": {
+      "mode": "execute"
+    },
+    "runtime/caller-is-an-ordinary-name": {
+      "mode": "execute"
+    },
+    "runtime/caller-parameters": {
+      "mode": "execute"
+    },
+    "runtime/calls-return-through-the-abi": {
+      "mode": "execute",
+      "counterpart": "calls-return-through-the-abi",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/character-literal-codepoints": {
+      "mode": "execute"
+    },
+    "runtime/checked-multiplication-traps": {
+      "mode": "execute"
+    },
+    "runtime/checked-negation-traps": {
+      "mode": "execute"
+    },
+    "runtime/checked-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/checked-subtraction-traps": {
+      "mode": "execute"
+    },
+    "runtime/checks-return-after-the-region": {
+      "mode": "execute"
+    },
+    "runtime/comparisons-exit-with-their-verdict": {
+      "mode": "execute"
+    },
+    "runtime/compound-assignment": {
+      "mode": "execute"
+    },
+    "runtime/compound-assignment-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/compound-statement-boundaries": {
+      "mode": "execute"
+    },
+    "runtime/computed-aggregate-elements": {
+      "mode": "execute"
+    },
+    "runtime/computed-array-index-reads-and-writes": {
+      "mode": "execute"
+    },
+    "runtime/computed-array-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/condition-declarations": {
+      "mode": "execute"
+    },
+    "runtime/constant-return-exits-with-its-code": {
+      "mode": "execute"
+    },
+    "runtime/control-expression-aggregate-joins": {
+      "mode": "execute"
+    },
+    "runtime/control-expression-edges-keep-source-order": {
+      "mode": "execute"
+    },
+    "runtime/control-expression-function-values": {
+      "mode": "execute"
+    },
+    "runtime/copy-before-sink-remains-live": {
+      "mode": "execute"
+    },
+    "runtime/core-io-erased-system": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-mem-allocators": {
+      "mode": "execute"
+    },
+    "runtime/core-mem-arena-boundaries": {
+      "mode": "execute"
+    },
+    "runtime/core-mem-dispose-empty": {
+      "mode": "execute"
+    },
+    "runtime/core-mem-initialized-objects": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-mem-initialized-prefix": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-mem-owned-bytes": {
+      "mode": "refuse",
+      "codes": [
+        "L0300",
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-mem-raw-storage": {
+      "mode": "execute",
+      "counterpart": "core-mem-raw-storage",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/core-mem-reference-prefix": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-mem-zero-prefix": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-text-byte-positions": {
+      "mode": "execute"
+    },
+    "runtime/core-text-runtime-helpers": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/core-tree-count-overflow": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-tree-indices": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-tree-provider-failures": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-vec-pointer-storage": {
+      "mode": "execute"
+    },
+    "runtime/core-vec-used-references": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/core-vec-used-sort": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/cstring-first-nul-validation": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/cstring-traversal-invalid-traps": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/declared-errors-direct-and-inferred": {
+      "mode": "execute"
+    },
+    "runtime/declared-errors-indirect-abi": {
+      "mode": "execute"
+    },
+    "runtime/deep-nested-struct-children": {
+      "mode": "execute"
+    },
+    "runtime/deep-nested-struct-leaves": {
+      "mode": "execute"
+    },
+    "runtime/defer-call-shapes": {
+      "mode": "execute"
+    },
+    "runtime/defer-cleanups-follow-control-edges": {
+      "mode": "execute"
+    },
+    "runtime/defer-does-not-unwind-traps": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/derived-address-empty-slice-traps": {
+      "mode": "execute"
+    },
+    "runtime/derived-array-slice-origin": {
+      "mode": "execute"
+    },
+    "runtime/derived-containers": {
+      "mode": "refuse",
+      "reason": "The complete hosted derivative imports core/heap, whose allocator/releaser require extern(c). R6.70 owns the freestanding core path. This is not an emulator execution verdict.",
+      "codes": [
+        "L0301"
+      ]
+    },
+    "runtime/derived-hosted-memory": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/derived-parser": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/derived-storage-address-origin": {
+      "mode": "execute"
+    },
+    "runtime/diagnostic-loggers-dispatch": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/division-and-remainder-exit-with-their-results": {
+      "mode": "execute"
+    },
+    "runtime/erased-named-recovery": {
+      "mode": "execute"
+    },
+    "runtime/erased-parameterized-recovery": {
+      "mode": "execute"
+    },
+    "runtime/erased-self-snapshot-transport": {
+      "mode": "execute"
+    },
+    "runtime/erased-shaped-argument-spills": {
+      "mode": "execute"
+    },
+    "runtime/evaluation-order-is-left-then-right": {
+      "mode": "execute"
+    },
+    "runtime/fixed-array-any-shapes": {
+      "mode": "execute"
+    },
+    "runtime/fixed-array-bound-expression": {
+      "mode": "execute"
+    },
+    "runtime/fixed-array-bound-zero": {
+      "mode": "execute"
+    },
+    "runtime/fixed-array-reference-shapes": {
+      "mode": "execute"
+    },
+    "runtime/fixed-conditional-generic-runtime": {
+      "mode": "execute",
+      "counterpart": "fixed-conditional-generic-runtime",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/fixed-conditional-runtime": {
+      "mode": "execute",
+      "status": 1,
+      "reason": "The unchanged fixed-if source explicitly selects status 1 for cortex_m0."
+    },
+    "runtime/fizzbuzz": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/float-decimal-rounding": {
+      "mode": "execute"
+    },
+    "runtime/float-decimal-runtime": {
+      "mode": "execute"
+    },
+    "runtime/float-hexadecimal-runtime": {
+      "mode": "execute"
+    },
+    "runtime/float-named-specials": {
+      "mode": "execute"
+    },
+    "runtime/float-to-bool-conversions": {
+      "mode": "execute"
+    },
+    "runtime/float-to-bool-invalid-traps": {
+      "mode": "execute"
+    },
+    "runtime/float-to-integer-conversions": {
+      "mode": "execute"
+    },
+    "runtime/float-to-integer-nan-traps": {
+      "mode": "execute"
+    },
+    "runtime/float-to-integer-out-of-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/float-width-conversion-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/float-width-conversions": {
+      "mode": "execute"
+    },
+    "runtime/for-aggregate-element-traversal": {
+      "mode": "execute"
+    },
+    "runtime/for-any-element-traversal": {
+      "mode": "execute"
+    },
+    "runtime/for-collection-traversal": {
+      "mode": "execute"
+    },
+    "runtime/for-iterable-evidence-traversal": {
+      "mode": "execute"
+    },
+    "runtime/for-range-traversal": {
+      "mode": "execute"
+    },
+    "runtime/for-value-block-statements": {
+      "mode": "execute"
+    },
+    "runtime/function-valued-struct-fields": {
+      "mode": "execute"
+    },
+    "runtime/generic-any-construction-evidence": {
+      "mode": "execute"
+    },
+    "runtime/generic-any-nominal-transport": {
+      "mode": "execute"
+    },
+    "runtime/generic-composed-evidence": {
+      "mode": "execute"
+    },
+    "runtime/generic-contextual-text-literals": {
+      "mode": "execute"
+    },
+    "runtime/generic-declared-errors": {
+      "mode": "execute"
+    },
+    "runtime/generic-direct-descriptor-deduction": {
+      "mode": "execute"
+    },
+    "runtime/generic-erased-aggregate-try": {
+      "mode": "execute"
+    },
+    "runtime/generic-evidence-indirect": {
+      "mode": "execute"
+    },
+    "runtime/generic-explicit-parameterized-actuals": {
+      "mode": "execute"
+    },
+    "runtime/generic-explicit-static": {
+      "mode": "execute"
+    },
+    "runtime/generic-fixed-array-deduction": {
+      "mode": "execute"
+    },
+    "runtime/generic-identity-deduction": {
+      "mode": "execute"
+    },
+    "runtime/generic-parameterized-evidence": {
+      "mode": "execute"
+    },
+    "runtime/generic-reference-carriers": {
+      "mode": "execute"
+    },
+    "runtime/generic-reference-fields": {
+      "mode": "execute"
+    },
+    "runtime/generic-reference-results": {
+      "mode": "execute"
+    },
+    "runtime/generic-routine-inferred-errors": {
+      "mode": "execute"
+    },
+    "runtime/generic-same-key-recursion": {
+      "mode": "execute"
+    },
+    "runtime/generic-scalar-result-origin": {
+      "mode": "execute"
+    },
+    "runtime/generic-structural-deduction": {
+      "mode": "execute"
+    },
+    "runtime/generic-text-literal-deduction": {
+      "mode": "execute"
+    },
+    "runtime/generic-try-effective-signature": {
+      "mode": "execute"
+    },
+    "runtime/generic-zero-nominal-array-signatures": {
+      "mode": "execute"
+    },
+    "runtime/greatest-common-divisor": {
+      "mode": "execute"
+    },
+    "runtime/hosted-heap-provider": {
+      "mode": "refuse",
+      "codes": [
+        "L0300",
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/hosted-io-reads-parser-input": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/hosted-text-traversal": {
+      "mode": "execute"
+    },
+    "runtime/hosted-text-views": {
+      "mode": "execute"
+    },
+    "runtime/import-alias-selected-identities": {
+      "mode": "execute"
+    },
+    "runtime/import-contextual-as": {
+      "mode": "execute"
+    },
+    "runtime/in-array-argument-precedes-later-argument": {
+      "mode": "execute"
+    },
+    "runtime/in-struct-argument-precedes-later-argument": {
+      "mode": "execute"
+    },
+    "runtime/indirect-function-abi": {
+      "mode": "execute"
+    },
+    "runtime/infallible-function-values": {
+      "mode": "execute"
+    },
+    "runtime/inferred-function-values": {
+      "mode": "execute"
+    },
+    "runtime/inout-pointer-alias-is-unchecked": {
+      "mode": "execute"
+    },
+    "runtime/insertion-sort": {
+      "mode": "execute"
+    },
+    "runtime/integer-conversion-out-of-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/integer-conversion-signed-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/integer-conversion-unsigned-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/integer-conversions": {
+      "mode": "execute"
+    },
+    "runtime/integer-to-bool-conversions": {
+      "mode": "execute"
+    },
+    "runtime/integer-to-bool-out-of-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/integer-to-float-conversions": {
+      "mode": "execute"
+    },
+    "runtime/large-array-offset-is-addressed": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/lenof-array-literal-is-compile-time": {
+      "mode": "execute"
+    },
+    "runtime/lenof-named-fixed-arrays": {
+      "mode": "execute"
+    },
+    "runtime/line-end-continues-expression": {
+      "mode": "execute"
+    },
+    "runtime/local-array-computed-index-reads-and-writes": {
+      "mode": "execute"
+    },
+    "runtime/local-array-computed-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/local-array-computed-store-traps": {
+      "mode": "execute"
+    },
+    "runtime/local-array-elements-are-independent": {
+      "mode": "execute"
+    },
+    "runtime/local-array-initializer-copies-storage": {
+      "mode": "execute"
+    },
+    "runtime/local-array-initializers-from-fields": {
+      "mode": "execute"
+    },
+    "runtime/local-array-literal-infers-and-initializes": {
+      "mode": "execute"
+    },
+    "runtime/local-array-literal-initializes-elements": {
+      "mode": "execute"
+    },
+    "runtime/local-array-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/local-scalar-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/local-struct-inference-copies-storage": {
+      "mode": "execute"
+    },
+    "runtime/local-struct-initializer-copies-storage": {
+      "mode": "execute"
+    },
+    "runtime/local-struct-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/loop-any-values": {
+      "mode": "execute"
+    },
+    "runtime/loop-control-flow": {
+      "mode": "execute"
+    },
+    "runtime/loop-values": {
+      "mode": "execute"
+    },
+    "runtime/match-expressions-produce-values": {
+      "mode": "execute"
+    },
+    "runtime/measurements-answer-for-the-target": {
+      "mode": "execute",
+      "counterpart": "measurements-answer-for-the-target",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/merge-sort": {
+      "mode": "execute"
+    },
+    "runtime/minimum-remainder-minus-one-is-zero": {
+      "mode": "execute"
+    },
+    "runtime/mixed-array-repetition-assignment-is-source-ordered": {
+      "mode": "execute"
+    },
+    "runtime/mixed-array-repetition-is-source-ordered": {
+      "mode": "execute"
+    },
+    "runtime/module-array-from-struct-field-is-independent": {
+      "mode": "execute"
+    },
+    "runtime/module-array-initializers-copy-images": {
+      "mode": "execute"
+    },
+    "runtime/module-array-literal-holds-its-image": {
+      "mode": "execute"
+    },
+    "runtime/module-array-literal-infers-static-image": {
+      "mode": "execute"
+    },
+    "runtime/module-array-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/module-float-arithmetic": {
+      "mode": "execute"
+    },
+    "runtime/module-known-short-circuit-bools": {
+      "mode": "execute"
+    },
+    "runtime/module-mixed-array-repetition-holds-hybrid": {
+      "mode": "execute"
+    },
+    "runtime/module-range-subtype-negative-mask-operand": {
+      "mode": "execute"
+    },
+    "runtime/module-scalar-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-initializers-copy-images": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-literal-array-image-copy-is-independent": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-literal-array-image-is-loaded": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-literal-image-is-loaded": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-literal-selected-field-image-is-independent": {
+      "mode": "execute"
+    },
+    "runtime/module-struct-zeroed-image-is-static": {
+      "mode": "execute"
+    },
+    "runtime/module-values-hold-and-are-updated": {
+      "mode": "execute"
+    },
+    "runtime/multiple-named-returns": {
+      "mode": "execute"
+    },
+    "runtime/multiplication-exits-with-its-products": {
+      "mode": "execute"
+    },
+    "runtime/named-call-statements": {
+      "mode": "execute"
+    },
+    "runtime/named-return-zeroed-reads-zero": {
+      "mode": "execute"
+    },
+    "runtime/named-runtime-call-order": {
+      "mode": "execute"
+    },
+    "runtime/narrow-extern-argument-is-extended": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/narrow-scalars-in-stack-slots": {
+      "mode": "execute"
+    },
+    "runtime/negative-left-shift-traps": {
+      "mode": "execute"
+    },
+    "runtime/negative-right-shift-traps": {
+      "mode": "execute"
+    },
+    "runtime/nested-scalar-array-stores": {
+      "mode": "execute"
+    },
+    "runtime/nested-storage-arguments": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-array-elements": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-array-values": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-child-values": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-measurements-answer-for-the-target": {
+      "mode": "execute",
+      "counterpart": "nested-struct-measurements-answer-for-the-target",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/nested-struct-returns-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-scalar-fields": {
+      "mode": "execute"
+    },
+    "runtime/nested-struct-zero-storage-keeps-neighbours": {
+      "mode": "execute"
+    },
+    "runtime/nested-variant-parts": {
+      "mode": "execute"
+    },
+    "runtime/null-pointer-dynamic-traps": {
+      "mode": "execute"
+    },
+    "runtime/null-pointer-unchecked-traps": {
+      "mode": "execute"
+    },
+    "runtime/null-pointer-union-call-else": {
+      "mode": "execute"
+    },
+    "runtime/one-module-across-two-files": {
+      "mode": "execute"
+    },
+    "runtime/parameterized-struct-lazy-value-layout": {
+      "mode": "execute"
+    },
+    "runtime/parameterized-struct-values": {
+      "mode": "execute"
+    },
+    "runtime/parameterized-type-alias-fixed-array": {
+      "mode": "execute"
+    },
+    "runtime/pointer-to-small-integer-traps": {
+      "mode": "execute"
+    },
+    "runtime/pointer-unions": {
+      "mode": "execute",
+      "counterpart": "pointer-unions",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/r230-composition": {
+      "mode": "execute"
+    },
+    "runtime/r230-composition-trap": {
+      "mode": "execute"
+    },
+    "runtime/r250-references": {
+      "mode": "execute",
+      "counterpart": "r250-references",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/r420-argument-text-worlds": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-array-place-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r420-buffer-real-exhaustion": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-failing-providers": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-fixed-array-pointer-whole-copy": {
+      "mode": "execute"
+    },
+    "runtime/r420-generic-array-selection-transfer": {
+      "mode": "execute"
+    },
+    "runtime/r420-list-real-exhaustion": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-map-arena": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-map-failure-rollback": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-map-operations": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-map-reference-providers": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-memory-delivery": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-memory-world": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-memory-world-boundaries": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-object-buffer-providers": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-pool-provider": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-reader-cleanup": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-reference-provider-matrix": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-runtime-array-writes": {
+      "mode": "execute"
+    },
+    "runtime/r420-small-aggregate": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-small-real-exhaustion": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-small-vector": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-small-vector-providers": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-stateful-filter-list": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r420-static-nested-array-stores": {
+      "mode": "execute"
+    },
+    "runtime/r420-tree-real-exhaustion": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-vec-capacity-boundaries": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-vec-growth-boundary": {
+      "mode": "execute"
+    },
+    "runtime/r420-vec-growth-transaction": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r420-vec-large-list": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r430-fixed-tools": {
+      "mode": "execute",
+      "counterpart": "r430-fixed-tools",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/r430-static-library": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r440-aggregate-shaped-copy-endpoints": {
+      "mode": "execute"
+    },
+    "runtime/r440-c-aliases": {
+      "mode": "refuse",
+      "codes": [
+        "L0324"
+      ],
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. R6.20 does not enable a Cortex core/c surface; R6.70 owns freestanding core."
+    },
+    "runtime/r440-callback-pointer-witness": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r440-checker-qualified-alias-conversions": {
+      "mode": "execute"
+    },
+    "runtime/r440-checker-qualified-c-conversions": {
+      "mode": "refuse",
+      "codes": [
+        "L0324"
+      ],
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. R6.20 does not enable a Cortex core/c surface; R6.70 owns freestanding core."
+    },
+    "runtime/r440-checker-qualified-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/r440-contextual-compound-array-child-copies": {
+      "mode": "execute"
+    },
+    "runtime/r440-errno-detail": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r440-io-partial-progress": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r440-optional-origin-edges": {
+      "mode": "execute"
+    },
+    "runtime/r440-pointer-union-saved-witness": {
+      "mode": "execute"
+    },
+    "runtime/r440-reached-scalar-places": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-arithmetic-composition": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-compound-snapshot": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-empty-operands": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-float-order": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-large-loop": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r450-array-later-division-zero": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-later-overflow": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-signed-division-overflow": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-snapshots": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-unary-overflow": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-unchecked-division-zero": {
+      "mode": "execute"
+    },
+    "runtime/r450-array-wrapping-unchecked": {
+      "mode": "execute"
+    },
+    "runtime/r450-contextual-control-literals": {
+      "mode": "execute"
+    },
+    "runtime/r450-contextual-nested-returns": {
+      "mode": "execute"
+    },
+    "runtime/r450-contextual-value-boundaries": {
+      "mode": "execute"
+    },
+    "runtime/r450-expression-body-returning-operands": {
+      "mode": "execute"
+    },
+    "runtime/r450-opt-discarded-trap": {
+      "mode": "execute"
+    },
+    "runtime/r450-opt-effects": {
+      "mode": "execute"
+    },
+    "runtime/r450-optimal-layout-composition": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r450-review-backend-large-routine": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r450-review-frontend-imports": {
+      "mode": "execute"
+    },
+    "runtime/r450-review-frontend-measurement": {
+      "mode": "execute"
+    },
+    "runtime/r450-review-frontend-return-operands": {
+      "mode": "execute"
+    },
+    "runtime/r450-review-frontend-scalar-return": {
+      "mode": "execute"
+    },
+    "runtime/r450-specialization-recursive-errors": {
+      "mode": "execute"
+    },
+    "runtime/r450-specialization-threshold": {
+      "mode": "execute"
+    },
+    "runtime/r450-x86-pressure": {
+      "mode": "execute"
+    },
+    "runtime/r470-array-field-range": {
+      "mode": "execute"
+    },
+    "runtime/r470-array-inout-parameter": {
+      "mode": "execute"
+    },
+    "runtime/r470-nested-guarded-field-range": {
+      "mode": "execute"
+    },
+    "runtime/r470-scalar-operator-origins": {
+      "mode": "execute"
+    },
+    "runtime/r480-arena-independent-results": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r480-arena-nested-exhaustion": {
+      "mode": "execute"
+    },
+    "runtime/r480-concrete-error-deduction": {
+      "mode": "execute"
+    },
+    "runtime/r480-generic-nested-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r480-generic-provider-entry": {
+      "mode": "execute"
+    },
+    "runtime/r480-hosted-count": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r480-hosted-text": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/r480-loop-fresh-view": {
+      "mode": "execute"
+    },
+    "runtime/r480-recovery-loop-transfer": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-generic-bool-images": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-generic-dispatch": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-generic-pointer-images": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-generic-representations": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-module-images": {
+      "mode": "execute"
+    },
+    "runtime/r490-distinct-scalars": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-alias-rethrow": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-atom-arrays": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-atom-fields": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-atom-identity": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-atom-storage": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-cleanup-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-distinct-float-images": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-erased-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-erased-recovery-views": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-field-fill": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-fill-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-fixed-conversion-discovery": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-inferred-recovery": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-inline-struct": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-nonreading-measurements": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-recovery-alias-chains": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-recovery-frontier": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-recursive-alias": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-static-fills": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-static-selection-descriptors": {
+      "mode": "execute"
+    },
+    "runtime/r490-generic-union-alias": {
+      "mode": "execute"
+    },
+    "runtime/r490-lexical-module-observation": {
+      "mode": "execute"
+    },
+    "runtime/r490-review-generic-distinct-atom-array": {
+      "mode": "execute"
+    },
+    "runtime/r490-review-generic-distinct-bool": {
+      "mode": "execute"
+    },
+    "runtime/r490-review-generic-empty-module-nonzeroable": {
+      "mode": "execute"
+    },
+    "runtime/r491-callee-errors": {
+      "mode": "execute"
+    },
+    "runtime/r491-cleanup-verifier-storage": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/r491-consumed-place-restoration": {
+      "mode": "execute"
+    },
+    "runtime/r491-function-final-values": {
+      "mode": "execute"
+    },
+    "runtime/r491-generic-array-fields": {
+      "mode": "execute"
+    },
+    "runtime/r491-generic-empty-slice-contexts": {
+      "mode": "execute"
+    },
+    "runtime/r491-overlapping-result-destination": {
+      "mode": "execute"
+    },
+    "runtime/r491-payload-alias-last-use": {
+      "mode": "execute"
+    },
+    "runtime/r491-reference-store-origins": {
+      "mode": "execute"
+    },
+    "runtime/r491-static-entry-labels": {
+      "mode": "execute"
+    },
+    "runtime/r491-static-entry-labels-reversed": {
+      "mode": "execute"
+    },
+    "runtime/r491-static-receiver-label": {
+      "mode": "execute"
+    },
+    "runtime/r491-variant-array-construction": {
+      "mode": "execute"
+    },
+    "runtime/r630-atomic-load-alignment": {
+      "mode": "execute"
+    },
+    "runtime/r630-memory-scalars": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "D227 and R6.20 target capabilities refuse M0 RMW and eight-byte memory intrinsics; backend-memory.ldn executes every admitted width/order instead."
+    },
+    "runtime/r630-volatile-load-alignment": {
+      "mode": "execute"
+    },
+    "runtime/r640-encoded-evidence": {
+      "mode": "execute"
+    },
+    "runtime/r640-generic-encoding": {
+      "mode": "execute"
+    },
+    "runtime/r640-indexed-boundary": {
+      "mode": "execute"
+    },
+    "runtime/r640-overlapping-array-copy": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-array-copy": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-boundaries": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-construction": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-encoded": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-enum-array": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-evidence": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-fields": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-hole": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-index-bound": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-indexed": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-nested-copy": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-small-space": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-static": {
+      "mode": "execute"
+    },
+    "runtime/r640-packed-value-fit": {
+      "mode": "execute"
+    },
+    "runtime/r640-prototype-config": {
+      "mode": "execute"
+    },
+    "runtime/r640-register-images": {
+      "mode": "execute"
+    },
+    "runtime/r640-reserved-value": {
+      "mode": "execute"
+    },
+    "runtime/r640-software-hole": {
+      "mode": "execute"
+    },
+    "runtime/r640-static-hole": {
+      "mode": "execute"
+    },
+    "runtime/r640-volatile-hole": {
+      "mode": "execute"
+    },
+    "runtime/range-subtype-checks": {
+      "mode": "execute"
+    },
+    "runtime/range-subtype-conversion-traps": {
+      "mode": "execute"
+    },
+    "runtime/range-subtype-store-traps": {
+      "mode": "execute"
+    },
+    "runtime/range-subtype-update-traps": {
+      "mode": "execute"
+    },
+    "runtime/raw-literal-bytes": {
+      "mode": "execute"
+    },
+    "runtime/recursive-fibonacci": {
+      "mode": "execute"
+    },
+    "runtime/recursive-module-images-are-laid-out-and-distinct": {
+      "mode": "execute"
+    },
+    "runtime/reference-array-scalar-index": {
+      "mode": "execute"
+    },
+    "runtime/reference-expression-bodies": {
+      "mode": "execute"
+    },
+    "runtime/reference-place-assignment-order": {
+      "mode": "execute"
+    },
+    "runtime/reference-place-bounds-before-rhs": {
+      "mode": "execute"
+    },
+    "runtime/reference-place-update-recovery": {
+      "mode": "execute"
+    },
+    "runtime/reference-place-updates": {
+      "mode": "execute"
+    },
+    "runtime/run-length-encoding": {
+      "mode": "execute"
+    },
+    "runtime/scalar-selection-copies": {
+      "mode": "execute"
+    },
+    "runtime/scalar-subobject-zeroed-assignment-clears-values": {
+      "mode": "execute"
+    },
+    "runtime/scalar-subobject-zeroed-computed-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/scalar-traversal-values": {
+      "mode": "execute"
+    },
+    "runtime/scalar-zeroed-assignment-clears-values": {
+      "mode": "execute"
+    },
+    "runtime/selection-sort": {
+      "mode": "execute"
+    },
+    "runtime/shifts-fill-with-zeros-beyond-the-width": {
+      "mode": "execute"
+    },
+    "runtime/sieve-of-eratosthenes": {
+      "mode": "execute"
+    },
+    "runtime/signed-division-overflow-traps": {
+      "mode": "execute"
+    },
+    "runtime/sizeof-of-nominal-element-array": {
+      "mode": "execute",
+      "counterpart": "sizeof-of-nominal-element-array",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/slice-half-open-upper-traps": {
+      "mode": "execute"
+    },
+    "runtime/slice-inclusive-upper-traps": {
+      "mode": "execute"
+    },
+    "runtime/slice-index-read-traps": {
+      "mode": "execute"
+    },
+    "runtime/slice-index-write-traps": {
+      "mode": "execute"
+    },
+    "runtime/slice-lower-after-upper-traps": {
+      "mode": "execute"
+    },
+    "runtime/stack-arguments-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/statements-run-as-they-read": {
+      "mode": "execute"
+    },
+    "runtime/struct-arguments-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-computed-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-copy-endpoints": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-element-zeroed-computed-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-literal-assignment-order": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-local-computed-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-local-scalar-siblings": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-repetition-assignment-order": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-state-scalar-siblings": {
+      "mode": "execute"
+    },
+    "runtime/struct-array-field-whole-copy": {
+      "mode": "execute"
+    },
+    "runtime/struct-construction-order": {
+      "mode": "execute"
+    },
+    "runtime/struct-fields-are-written-and-read": {
+      "mode": "execute"
+    },
+    "runtime/struct-fields-read-as-zero": {
+      "mode": "execute"
+    },
+    "runtime/struct-literal-array-field-order": {
+      "mode": "execute"
+    },
+    "runtime/struct-literal-order-and-fill": {
+      "mode": "execute"
+    },
+    "runtime/struct-locals-hold-their-fields": {
+      "mode": "execute"
+    },
+    "runtime/struct-returns-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/struct-zeroed-assignment-clears-storage": {
+      "mode": "execute"
+    },
+    "runtime/structs-copy-whole": {
+      "mode": "execute"
+    },
+    "runtime/text-conversion-invalid-traps": {
+      "mode": "execute"
+    },
+    "runtime/text-conversion-operand-exit": {
+      "mode": "execute"
+    },
+    "runtime/text-conversion-out-of-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/text-conversion-overlong-traps": {
+      "mode": "execute"
+    },
+    "runtime/text-conversion-truncated-traps": {
+      "mode": "execute"
+    },
+    "runtime/text-literal-bytes": {
+      "mode": "execute"
+    },
+    "runtime/text-ordinary-conversions": {
+      "mode": "execute"
+    },
+    "runtime/text-range-slicing": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+    },
+    "runtime/try-nominal-inference": {
+      "mode": "execute"
+    },
+    "runtime/unary-and-bitwise-exit-with-their-results": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-arithmetic-wraps": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-does-not-cross-a-call": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-does-not-reach-an-anonymous-body": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-does-not-reach-an-outer-cleanup": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-integer-conversion-truncates": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-keeps-bool-conversion-traps": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-keeps-float-conversion-traps": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-keeps-text-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-keeps-the-divisor-check": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-keeps-the-shift-check": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-pointer-conversion-truncates": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-reaches-a-cleanup-written-inside": {
+      "mode": "execute"
+    },
+    "runtime/unchecked-slice-index-passes-the-length": {
+      "mode": "execute"
+    },
+    "runtime/undo-call-shapes": {
+      "mode": "execute"
+    },
+    "runtime/undo-cleanups-follow-failure-edges": {
+      "mode": "execute"
+    },
+    "runtime/undo-does-not-unwind-traps": {
+      "mode": "refuse",
+      "codes": [
+        "L0301"
+      ],
+      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+    },
+    "runtime/utf16-slice-not-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-indexing": {
+      "mode": "execute"
+    },
+    "runtime/utf8-ordinal-out-of-range-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-position-at-end-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-position-not-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-slice-lower-not-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-slice-upper-not-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/variant-case-construction-runs-in-source-order": {
+      "mode": "execute"
+    },
+    "runtime/variant-inside-an-element": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-array-payload-bindings-update-storage": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-origin-channels": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-payload-bindings-update-storage": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-referenced-payload-places": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-referenced-payload-storage": {
+      "mode": "execute"
+    },
+    "runtime/variant-match-selects-tag": {
+      "mode": "execute"
+    },
+    "runtime/variant-module-array-payload-image-copy-is-distinct": {
+      "mode": "execute"
+    },
+    "runtime/variant-module-array-payload-image-selects-case": {
+      "mode": "execute"
+    },
+    "runtime/variant-module-case-image-is-distinct": {
+      "mode": "execute"
+    },
+    "runtime/variant-part-measurements-answer-for-the-target": {
+      "mode": "execute",
+      "counterpart": "variant-part-measurements-answer-for-the-target",
+      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+    },
+    "runtime/variant-returns-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/variant-runtime-array-payload-writes-target-storage": {
+      "mode": "execute"
+    },
+    "runtime/variant-struct-arguments": {
+      "mode": "execute"
+    },
+    "runtime/variant-struct-payloads": {
+      "mode": "execute"
+    },
+    "runtime/variant-whole-copy-is-distinct": {
+      "mode": "execute"
+    },
+    "runtime/variant-zeroed-storage-is-distinct": {
+      "mode": "execute"
+    },
+    "runtime/whole-array-elements": {
+      "mode": "execute"
+    },
+    "runtime/whole-arrays-copy-between-storage": {
+      "mode": "execute"
+    },
+    "runtime/wrapping-add-and-subtract-cross-the-boundaries": {
+      "mode": "execute"
+    },
+    "runtime/wrapping-multiplication-keeps-low-products": {
+      "mode": "execute"
+    },
+    "runtime/written-function-values": {
+      "mode": "execute"
+    }
+  }
+}

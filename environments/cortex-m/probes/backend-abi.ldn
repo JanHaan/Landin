@@ -1,0 +1,27 @@
+-- Internal Landin signatures called by the independent assembly witness.
+bad: atom
+problem: type = bad
+pair: type = struct
+    x: u32
+    y: u32
+end pair
+public cm_gap: (a: u32, b: u64, c: u8) -> (result: u64) =
+    result = b + u64(a) + u64(c)
+end cm_gap
+public cm_many: (a: u8) -> (first: u8, second: u64) =
+    first = a
+    second = 107374182424
+end cm_many
+public cm_failure: (fails: bool) -> (result: u32) ! problem =
+    fail bad when fails
+    result = 42
+end cm_failure
+public cm_leaf: (a: u32) -> (result: u32) = a + 1 end cm_leaf
+public cm_parent: (a: u32) -> (result: u32) = cm_leaf(a) end cm_parent
+public cm_copy: (value: pair, inout place: pair) -> (result: pair) =
+    place.x = 99
+    result = value
+end cm_copy
+public cm_helpers: (a: u64, b: u64) -> (result: u64) =
+    result = a * b / 7
+end cm_helpers

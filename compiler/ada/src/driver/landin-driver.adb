@@ -36,6 +36,8 @@ with Landin.Targets.Capabilities;
 
 package body Landin.Driver is
 
+   use type Landin.Targets.Architecture;
+
    package Unbounded renames Ada.Strings.Unbounded;
 
    LF : constant Character := Character'Val (10);
@@ -99,7 +101,7 @@ package body Landin.Driver is
       & "language frontend: scanner, parser, names, types, definite assignment"
       & LF
       & "target-neutral IR: lowered and verified" & LF
-      & "backends: linux-x86-64 and darwin-arm64 assembly" & LF
+      & "backends: linux-x86-64, darwin-arm64 and cortex-m0 assembly" & LF
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF
       & "targets described: linux-x86-64, darwin-arm64, cortex-m0, "
@@ -954,6 +956,16 @@ package body Landin.Driver is
                Note_No_Toolchain
                  ("no source debugger emission for target "
                   & Landin.Targets.Name (Facts), "drop --debug=full");
+               return;
+            end if;
+
+            if Emit = Emit_Executable
+              and then Landin.Targets.Architecture_Of (Facts)
+                = Landin.Targets.Cortex_M0
+            then
+               Note_No_Toolchain
+                 ("Cortex-M executable linking is not enabled",
+                  "R6.60 owns startup and linking; use --emit=asm");
                return;
             end if;
 

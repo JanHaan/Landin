@@ -1,0 +1,14 @@
+-- R6.50 counterpart: the original hosted fixture remains unchanged.
+fixed if (compiler.arch == x86_64 or compiler.arch == arm64 or compiler.arch == cortex_m0) then
+    copy: (t: type, value: t) -> (result: t) = value end copy
+else
+    wrong: (t: type, value: t) -> (result: t) =
+        _ = 1 / 0
+        result = value
+    end wrong
+end if
+
+public main: () -> (code: i32) =
+    value: i32 = copy(42)
+    code = value
+end main

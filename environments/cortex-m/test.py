@@ -79,6 +79,71 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 model()
 
+    def test_complete_backend_inventory_and_counterparts(self):
+        from backend_corpus import inventory
+        from unittest.mock import patch
+        rows = inventory()
+        self.assertGreater(len(rows), 500)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'corpus.json').write_text('{"schema":1,"fixtures":{}}')
+            with patch('backend_corpus.COUNTERPARTS', root):
+                with self.assertRaisesRegex(RuntimeError, 'inventory disagrees'):
+                    inventory()
+
+    def test_image_limit_does_not_hide_codegen_failure(self):
+        from backend_corpus import image_limit
+        row = {'profile_limit': 'selected-image', 'reason': 'test physical map'}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            for text in ("undefined reference to helper",
+                         "region `FLASH' overflowed by 8 bytes; undefined reference to helper",
+                         "region `RAM' overflowed by 8 bytes; Assembler messages: bad instruction"):
+                (root / 'assemble-link.log').write_text(text)
+                with self.assertRaises(RuntimeError):
+                    image_limit(run, row, RuntimeError('assemble-link failed; inspect retained log'))
+            with self.assertRaises(RuntimeError):
+                image_limit(run, row, RuntimeError('gdb-backend failed; inspect retained log'))
+            (root / 'assemble-link.log').write_text("region `FLASH' overflowed by 8 bytes")
+            result = image_limit(run, row, RuntimeError('assemble-link failed; inspect retained log'))
+            self.assertEqual(result['verdict'], 'selected-image-limit')
+            self.assertEqual(result['overflow_bytes'], {'FLASH': 8})
+
+    def test_compact_images_are_bounded_before_assembler(self):
+        from backend import preflight
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'image.s'
+            for text in ('.zero 2147483688', '.rept 4294967295\n.quad 0\n.endr'):
+                path.write_text(text)
+                with self.assertRaisesRegex(RuntimeError, 'materialization exceeds'):
+                    preflight(path)
+            path.write_text('.rept 0\n.quad 1\n.endr\n.byte 42')
+            self.assertEqual(preflight(path), 1)
+            path.write_text('.endr')
+            with self.assertRaisesRegex(RuntimeError, 'unbalanced'):
+                preflight(path)
+
+    def test_elf_profile_guard_checks_physical_extents(self):
+        import struct
+        from backend import image_contract
+        # A structural ELF witness only; no instruction execution is claimed.
+        header = struct.pack('<16sHHIIIIIHHHHHH', b'\x7fELF\x01\x01' + b'\0'*10,
+                             2, 40, 1, 193, 52, 0, 0, 52, 32, 1, 0, 0, 0)
+        segment = struct.pack('<8I', 1, 84, 0, 0, 256, 256, 5, 4)
+        payload = struct.pack('<II', 0x20004000, 193) + b'\0'*248
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'image.elf'
+            original = header + segment + payload
+            path.write_bytes(original)
+            self.assertEqual(image_contract(path)['flash_load_extent'], 256)
+            for offset, value in ((52+12, 32768), (52+8, 0x20002fff), (84, 0), (24, 192)):
+                altered = bytearray(original)
+                struct.pack_into('<I', altered, offset, value)
+                path.write_bytes(altered)
+                with self.assertRaises(RuntimeError):
+                    image_contract(path)
+
     def test_unsupported_host(self):
         from unittest.mock import patch
         from setup import supported_host

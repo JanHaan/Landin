@@ -181,7 +181,8 @@ package body Landin.Backend.Toolchain is
       end File_Operand;
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
-        = Landin.Targets.Capabilities.No_Backend
+        in Landin.Targets.Capabilities.No_Backend
+          | Landin.Targets.Capabilities.Cortex_M0_ELF
       then
          raise Compiler_Defect with "target has no linker argument policy";
       end if;

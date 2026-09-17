@@ -1,0 +1,63 @@
+-- Bounded ordinary-slice DMA observation, not the complete R6.90 driver.
+-- The independent synthetic device publishes four bytes before completion.
+-- Interrupts are disabled in the device contract; no interrupt entry is used.
+mut buffer: [4]u8 = zeroed
+config: type = layout(packed, u32) struct
+    enable: bool at 0
+    increment: bool at 10
+end config
+status_image: type = layout(packed, u32) struct
+    bits: [8]bool at 0..7
+end status_image
+count_image: type = layout(packed, u16) struct
+    count: u16 at 0..15
+end count_image
+
+receive: (buf: []mut u8) -> (result: u32) =
+    cfg_port: ptr mut u32 = ptr(0x40026058)
+    count_port: ptr mut u16 = ptr(0x4002605c)
+    source_port: ptr mut u32 = ptr(0x40026060)
+    dest_port: ptr mut u32 = ptr(0x40026064)
+    status_port: ptr u32 = ptr(0x40026000)
+    clear_port: ptr mut u32 = ptr(0x40026004)
+    if buf[0] <> 0 or buf[1] <> 0 or buf[2] <> 0 or buf[3] <> 0 then
+        result = 1
+        return
+    end if
+    compiler.volatile_store(source_port, 0x40021004)
+    compiler.volatile_store(dest_port, u32(usize(addr buf[0])))
+    mut count: count_image = zeroed
+    count.count = u16(lenof buf)
+    count_raw: ptr mut u16 = ptr(usize(addr count))
+    compiler.register_write(count_port, count_raw.val, compiler.normal_write,
+                            compiler.preserve, 0xffff)
+    mut cfg: config = zeroed
+    cfg_raw: ptr mut u32 = ptr(usize(addr cfg))
+    cfg_raw.val = 0x80000000
+    cfg.increment = true
+    compiler.register_write(cfg_port, cfg_raw.val, compiler.normal_write,
+                            compiler.preserve, 0x401)
+    compiler.device_barrier()
+    cfg.enable = true
+    compiler.register_write(cfg_port, cfg_raw.val, compiler.normal_write,
+                            compiler.preserve, 0x401)
+    mut status: status_image = zeroed
+    status_raw: ptr mut u32 = ptr(usize(addr status))
+    while not status.bits[5] do
+        status_raw.val = compiler.register_read(status_port, compiler.normal_read)
+    end while
+    count_raw.val = compiler.register_read(count_port, compiler.normal_read)
+    compiler.device_barrier()
+    if count.count <> 0 then
+        result = 2
+        return
+    end if
+    result = u32(buf[0]) + u32(buf[1]) + u32(buf[2]) + u32(buf[3])
+    compiler.register_write(clear_port, 0x60, compiler.one_clears,
+                            compiler.write_zero, 0xe0)
+    compiler.completion_barrier()
+end receive
+
+public main: () -> (code: u32) =
+    code = receive(buffer[0..<lenof buffer])
+end main

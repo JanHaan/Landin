@@ -189,17 +189,19 @@ new exhaustion guarantee is introduced.
 R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's
 Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
 probes establish the environment. R6.20 adds layout and ABI planning below;
-R6.50/R6.60 retain emission and startup. The original synthetic-32 goldens
+R6.50 adds compiler-generated M0 execution; R6.60 retains language startup.
+The original synthetic-32 goldens
 remain unchanged.
 
 ## Cortex-M0 layout and ABI planning
 
 R6.20 adds `Targets.Cortex_M` (`cortex-m0`), selecting ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
-checks source against these facts. Assembly/executable requests fail with
-L0500 before writing output or invoking tools. Implemented C signatures,
-records, varargs, object/debug output and a compiler toolchain triplet remain
-disabled. The independent environment tools are not a compiler linker path.
+checks source and emits ARMv6-M assembly against these facts. The toolchain
+identity is `arm-none-eabi`. Executable and source-debug requests still fail
+with L0500 before output or tool invocation. C signatures, records, varargs
+and object/debug output remain disabled. The independent external startup/linker
+harness is not a compiler linker path.
 `core/c` and the header generator still accept only their two hosted ABIs.
 
 The existing scalar and recursive shape machinery supplies all byte placement;
@@ -220,8 +222,8 @@ Distinct wrappers retain their base representation. Caller coordinates retain
 D192's three `u32` fields (12 bytes), rather than turning into pointer-sized
 integers. The 32-bit maximum object extent is 4294967295 bytes; it is a layout
 arithmetic limit, not an available-RAM promise. The selected probe image still
-has 32 KiB flash, 16 KiB RAM and a 4 KiB stack reservation. Packed encodings,
-over-aligned source types and deferred scalar widths are not enabled here.
+has 32 KiB flash, 16 KiB RAM and a 4 KiB stack reservation. D228 packed images use the same target facts;
+over-aligned source types and deferred scalar widths remain unavailable.
 
 `Backend.Arm32_ABI` derives placement from neutral signature parts, including
 entry signatures and direct/indirect call operands. It selects the convention
@@ -256,9 +258,9 @@ leaves, pointing to an eight-byte record: previous r11 then incoming lr.
 Publish the frame pointer only after constructing that record. Preserve
 r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
 flags as call-clobbered, maintain sp modulo four at all times and modulo eight
-at calls, and allocate no red zone below sp. This is an obligation for R6.50's
-actual frame/emitter implementation, with a handwritten executable witness
-here. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
+at calls, and allocate no red zone below sp. R6.50 implements this record and
+checks its construction through instruction stepping, including leaves and
+nested calls. The earlier handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
 r11 chain or foreign-exception unwinding is promised. Code addresses retain
 the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
 [Arm ELF32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aaelf32/aaelf32.rst),
@@ -278,8 +280,8 @@ R6.30/D227 admits unsigned scalar memory primitives through
 `Targets.Capabilities.Memory_Access`, independently of backend availability.
 Widths are 1/2/4/8 bytes on hosted targets and 1/2/4 on Cortex-M0. Every implemented access
 checks natural alignment at runtime, including inside `unchecked`. The M0
-source contract refuses exchange/add/compare-exchange; no Cortex emitter or
-atomic runtime library is implied. Synthetic-32 refuses these operations.
+source contract refuses exchange/add/compare-exchange. R6.50 emits the admitted
+loads/stores and barriers; it introduces no atomic runtime helper. Synthetic-32 refuses these operations.
 
 The initial hosted lowering deliberately strengthens every atomic ordering.
 x86 uses aligned MOV for loads, XCHG for stores/exchanges, LOCK XADD for wrapping
@@ -323,7 +325,7 @@ calling conventions. Natural, C and optimal layouts retain their contracts.
 Native x86-64 and Darwin arm64 lowering extract and insert that carrier and
 validate encoded members. M0 remains limited to one-, two- and four-byte
 volatile transactions; describing an eight-byte ordinary image does not enable
-an eight-byte MMIO access or a Cortex-M emitter.
+an eight-byte MMIO access. The Cortex emitter preserves this distinction.
 
 Packed debug types expose one unsigned `raw` member and their true storage
 size. This preserves unnamed encodings without claiming independently
@@ -335,3 +337,76 @@ those representations. Native debugger controls inspect a raw image containing
 an unnamed pattern. The [probe guide](../environments/cortex-m/README.md)
 distinguishes compiler-generated hosted peripheral execution, independent M0
 C controls, and abstract model assertions.
+
+
+## Cortex-M0 assembly implementation
+
+`Backend.Cortex_M` consumes verified IR and `Backend.Arm32_ABI` entry/call plans.
+It does not change ordinary, C or optimal layout. Source slots remain pinned;
+verified block-local scalar temporaries reuse eight-byte stack homes only after
+their last operand read. Heap-owned work arrays keep allocation scratch off the
+Ada host stack. r0-r7 are selector scratch, with r4-r7 saved, r8/r10 untouched,
+r9 reserved, and r11 the frame pointer. The fixed prologue saves r4-r7, constructs
+the eight-byte previous-r11/lr record, publishes r11, then reserves aligned
+homes and incoming-register staging. Every epilogue restores that chain and the
+saved registers. Incoming stack arguments start 24 bytes above r11. Outgoing
+arguments use the planner's aligned stack area plus private r0-r3 staging.
+
+| Selection | Implemented choice and boundary |
+|---|---|
+| Instructions and constants | ARMv6-M low-register forms; high-register MOV/BX where admitted. Small constants use MOVS and shifts; other constants use aligned adjacent literal islands skipped in execution. No MOVW/MOVT, Thumb-2 arithmetic, FPU or exclusive-access instructions. |
+| Addresses and branches | Frame offsets materialize into a low register; no narrow displacement is assumed. Conditional transfers invert a nearby condition over an absolute Thumb jump. Direct BL relocations permit GNU veneers; indirect calls use BLX. ELF function identity carries the Thumb bit, ordinary data identity does not. |
+| Frames and limits | Shared target-byte placement, no red zone. Preflight reserves selector and outgoing-call overhead inside the 32-bit address budget and reports L0504. The external test map's 32 KiB flash/16 KiB RAM/4 KiB stack limits are separate from that arithmetic bound. |
+| Integer operations | Enabled 8/16/32/64-bit values, explicit narrow extension and pair operations, width-bounded shifts, signed/unsigned comparisons, checked overflow, division-zero and signed minimum/-1 handling. D187 removes only its specified checks. |
+| Conversion and floating operations | Software IEEE arithmetic/comparison and integer-to-float/float-width helpers. Float-to-integer selection decodes the IEEE carrier and checks range before constructing the integer; bool accepts only its specified domain. Finite narrowing overflow traps. |
+| Calls and values | Direct/indirect entries, value copies, inout places, caller-owned aggregate/multiple results, generic evidence and erased self/table dispatch. Capture r12 immediately after a Landin call; foreign helpers and veneers may clobber it. Every successful Landin return writes zero privately. |
+| Images and checks | Raw packed copies retain every bit. Extraction validates named encodings even when discarded or unchecked; insertion fit, indices and reserved policies retain their guards. Ordinary atoms still exclude zero. |
+| Memory and traps | One aligned LDRB/LDRH/LDR or STRB/STRH/STR per admitted transaction. Atomic orders are conservatively strengthened by DMB SY before and after; compiler barriers emit no hardware operation, device/thread barriers use DMB SY, completion uses DSB SY. Checked failure uses UDF #1. No interrupt masking or helper atomics. |
+
+The instruction envelope follows the official
+[ARMv6-M Architecture Reference Manual](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
+with executable legal/illegal encoding controls under the pinned assembler.
+Per-routine ELF input sections support placement and garbage collection by the
+external test linker; they do not enable a Landin section or keep directive.
+The flash-to-SRAM control forces a real call veneer while preserving the
+selected core and physical RAM map.
+
+The emitter performs no body sharing. Shared optimization and specialization
+still transform verified IR before selection, preserving atom domains, stored
+array/struct shapes, memory effects and private call-status validation. Hosted
+body-sharing repairs remain unchanged. Code size is a retained physical-image
+constraint, not a competitive-optimization claim.
+
+### Runtime helper boundary
+
+The external test link selects the pinned GCC 14.2.1
+`thumb/v6-m/nofp/libgcc.a` (SHA-256
+`137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`).
+Helpers use the Arm base runtime ABI, not Landin's r12 failure outcome.
+The [Arm runtime ABI](https://github.com/ARM-software/abi-aa/blob/2025Q4/rtabi32/rtabi32.rst)
+and [GCC runtime description](https://gcc.gnu.org/onlinedocs/gccint/Libgcc.html)
+are checked against actual linked code and execution.
+
+| Helper family | Purpose and transport |
+|---|---|
+| `__aeabi_lmul` | low 64-bit product, two core-register pairs; checked selection first proves the product fits |
+| `__aeabi_idivmod`, `__aeabi_uidivmod` | 32-bit quotient in r0 and remainder in r1 |
+| `__aeabi_ldivmod`, `__aeabi_uldivmod` | 64-bit quotient in r0/r1 and remainder in r2/r3; also bounds checked multiplication |
+| `__aeabi_fadd/fsub/fmul/fdiv`, `__aeabi_dadd/dsub/dmul/ddiv` | soft IEEE f32/f64 arithmetic in core bit carriers |
+| `__aeabi_fcmp*`, `__aeabi_dcmp*` | ordered/equality predicates; inequality inverts equality |
+| `__aeabi_i2f/ui2f/l2f/ul2f`, corresponding `*2d` | signed/unsigned integer-to-float rounding |
+| `__aeabi_f2d`, `__aeabi_d2f` | float-width conversion with Landin's retained finite-overflow guard |
+
+The linked archive is an external pinned compiler runtime dependency. Source
+provenance includes GCC's [Arm integer routines](https://github.com/gcc-mirror/gcc/blob/releases/gcc-14.2.0/libgcc/config/arm/lib1funcs.S)
+and [soft-float routines](https://github.com/gcc-mirror/gcc/blob/releases/gcc-14.2.0/libgcc/config/arm/ieee754-sf.S);
+their headers carry GPLv3 with GCC Runtime Library Exception 3.1. Every image
+retains requested helper names, archive path/hash, ELF/map/disassembly and an
+empty undefined-symbol inventory. This links no libc, allocator, scheduler or
+atomic emulation. Division guards prevent entering the archive's divide-zero
+fallback; dependency members remain visible in the map. Packaging or replacing
+this runtime for firmware remains an explicit R6.60/R6.70 handoff.
+
+The [execution guide](../environments/cortex-m/README.md#r650-compiler-generated-execution)
+separates generated code, independent controls, target refusals and physical
+limits. Landin startup and source debugging remain R6.60 and R6.100 respectively.

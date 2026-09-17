@@ -865,7 +865,8 @@ real lowered source and target/budget/refusal boundaries. The independent
 compare every original synthetic-32 golden with GCC measurements and run
 C/assembly ABI controls in QEMU on the supported native Linux host. The native
 acceptance documents job retains their evidence. These are executable ABI
-contract controls; no Cortex-M Landin fixture is relabelled as executed.
+contract controls. R6.50 adds separately identified generated M0 execution;
+these earlier controls retain their independent role.
 
 R6.30's `r630-memory-scalars` runs all supported widths, old-value and
 compare-exchange outcomes, wrapping addition, volatile access and barriers.
@@ -902,3 +903,15 @@ compiler-generated hosted instructions against Renode through a C bus transport,
 with literal independent image/trace assertions. Both are mandatory in the
 embedded probe/export path, alongside all R6.10/R6.20/R6.30 controls. ROADMAP.md
 owns results, assumptions, limits and exact-revision closure.
+
+
+R6.50's `cortex-m/corpus.json` inventories every shared runtime/ABI fixture.
+The mandatory embedded runner executes every selected optimization/specialization
+profile, checks precise source refusals, and retains physical limits separately.
+`cortex-m/counterparts.json` pins exact 32-bit/architecture differences without
+editing the hosted originals. Independent numeric layout expectations stay
+literal, including pointer/slice carriers and nested variant placement.
+The [embedded guide](../../environments/cortex-m/README.md#r650-compiler-generated-execution)
+describes generated execution, independent ABI/instruction controls, peripheral
+traces, helper provenance and the external startup/linker boundary. GDB observes
+machine instructions and frame records; this is not R6.100 Landin debugging.

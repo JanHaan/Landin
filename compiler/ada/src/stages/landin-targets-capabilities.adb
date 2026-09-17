@@ -43,7 +43,9 @@ package body Landin.Targets.Capabilities is
          return ELF;
       elsif Facts = Darwin_Arm64 then
          return Mach_O;
-      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
+      elsif Facts = Cortex_M then
+         return ELF;
+      elsif Facts = Synthetic_32 then
          return No_Object_Format;
       else
          raise Compiler_Defect with "target has no stated object format";
@@ -54,7 +56,7 @@ package body Landin.Targets.Capabilities is
      (case Backend_For (Facts) is
          when Linux_X86_64_ELF => ELF_DWARF,
          when Darwin_Arm64_Mach_O => Mach_O_DWARF,
-         when No_Backend => No_Debug_Format);
+         when No_Backend | Cortex_M0_ELF => No_Debug_Format);
 
    function Link_Symbol (Facts : Target_Facts; Name : String) return String is
    begin
@@ -75,7 +77,9 @@ package body Landin.Targets.Capabilities is
          return Linux_X86_64_ELF;
       elsif Facts = Darwin_Arm64 then
          return Darwin_Arm64_Mach_O;
-      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
+      elsif Facts = Cortex_M then
+         return Cortex_M0_ELF;
+      elsif Facts = Synthetic_32 then
          return No_Backend;
       else
          raise Compiler_Defect
@@ -89,7 +93,9 @@ package body Landin.Targets.Capabilities is
          return "x86_64-pc-linux-gnu";
       elsif Facts = Darwin_Arm64 then
          return "arm64-apple-darwin";
-      elsif Facts = Synthetic_32 or else Facts = Cortex_M then
+      elsif Facts = Cortex_M then
+         return "arm-none-eabi";
+      elsif Facts = Synthetic_32 then
          return "";
       else
          raise Compiler_Defect

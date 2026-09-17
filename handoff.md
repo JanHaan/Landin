@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.50 — Implement the Cortex-M backend (planned).**
+**Current roadmap work: R6.50 — Implement the Cortex-M backend.**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -306,26 +306,33 @@ peripheral lanes, with live probe evidence bound into native acceptance.
 R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
 ABI planning, with independent C/assembly execution evidence agreeing with
 synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
-No Landin Cortex-M emitter, linker or debugger backend is enabled by this
-[contract](environments/cortex-m/README.md).
+That [contract](environments/cortex-m/README.md) preceded R6.50 emission;
+language startup/linking and source debugging retain their later owners.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
 DMA visibility, interrupt exclusion and cache obligations have independent
 executable/model controls, bound by the same exact-revision dual-native gate.
-Cortex-M memory capabilities remain described until R6.50 supplies emission.
+R6.50 lowers the admitted Cortex-M memory operations with their exact widths
+and retained alignment checks.
 
 R6.40 implements D228's packed raw images and checked encoded-field extraction,
 including holes, indexed updates and explicit reserved-bit/access policies.
 Native compiler execution, independent C controls and actual Renode traces
 remain distinct evidence, bound by the exact-revision dual-native closure.
 D187 and D227, including the ordinary-slice DMA contract, are unchanged.
-R6.50 owns Cortex-M lowering; R6.80 retains generated-device fixtures.
+R6.50 implements Cortex-M lowering, r11 frame chains, scalar and aggregate
+transport, failures/evidence, checked packed images and memory/barriers.
+Generated programs execute through an external test harness in QEMU and the
+synthetic Renode lane; ROADMAP.md binds exact-revision closure. R6.80 retains
+generated-device fixtures.
 
 `refine` runs the frontend, lowers and
-verifies target-neutral IR, emits Linux x86-64 or Darwin arm64 assembly, and
+verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
+assembly, and
 can assemble and link hosted executables checked by each native target gate.
-The Cortex-M backend and broader standard library remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
+Cortex-M language startup/linking, source debugging and the broader standard
+library remain successor work. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end
 barrier.

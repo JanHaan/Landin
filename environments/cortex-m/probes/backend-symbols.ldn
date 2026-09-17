@@ -1,0 +1,20 @@
+callback: type = (n: u32) -> (r: u32)
+-- Source identities must not capture selector labels or runtime helpers.
+lcm_step_1: (n: u32) -> (r: u32) = n + 1 end lcm_step_1
+l1_1: (n: u32) -> (r: u32) = n + 1 end l1_1
+__aeabi_lmul: (n: u32) -> (r: u32) = n + 1 end __aeabi_lmul
+r0: (n: u32) -> (r: u32) = n + 1 end r0
+sp: (n: u32) -> (r: u32) = n + 1 end sp
+lr: (n: u32) -> (r: u32) = n + 1 end lr
+pc: (n: u32) -> (r: u32) = n + 1 end pc
+u: (n: u64) -> (r: u64) = n end u
+public main: () -> (code: u32) =
+    f: callback = r0
+    if f(41) == 42 and sp(41) == 42 and lr(41) == 42 and pc(41) == 42
+      and lcm_step_1(41) == 42 and l1_1(41) == 42
+      and __aeabi_lmul(41) == 42 and u(2) * u(3) == 6 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

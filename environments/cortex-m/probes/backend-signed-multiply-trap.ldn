@@ -1,0 +1,5 @@
+s: (n: i64) -> (r: i64) = n end s
+public main: () -> (code: i32) =
+    _ = s(-9223372036854775808) * s(-1)
+    code = 1
+end main

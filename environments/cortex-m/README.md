@@ -1,8 +1,9 @@
 # Cortex-M execution profile
 
-ROADMAP.md R6.10 owns the selection and completion evidence. This environment
-runs small C/assembly controls, not Landin output. R6.20 adds layout and ABI planning with independent controls below; later
-items retain the memory model, encodings, backend and firmware startup.
+ROADMAP.md owns selection, implementation and completion evidence. R6.10-R6.40
+retain their independent C/assembly, memory-model and hosted transport controls.
+R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
+access. Language startup and firmware linking remain R6.60.
 
 ## Selected lanes and pins
 
@@ -29,7 +30,8 @@ this is a supported host profile, not a hermetic operating-system image.
 These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
 R6.20 separately selects the internal Landin transport described in the
 [target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
-The compiler describes Cortex-M0 layout but has no Cortex-M emitter.
+The compiler emits Cortex-M0 assembly; the external test harness owns startup
+and linking. The general C source surface remains disabled.
 
 ## Memory and device map
 
@@ -358,3 +360,89 @@ requires aligned accesses for this core. These documents were consulted on
 2026-09-16; they inform the explicit control contracts, not an assertion that
 this synthetic map describes vendor hardware. R6.80 retains generated-device
 fixture provenance, and general SVD tooling remains outside this item.
+
+
+## R6.50 compiler-generated execution
+
+`run.py` preserves every earlier lane, then requires `backend_acceptance.py`.
+The same installed tool inventory is verified before and after all lanes.
+`backend/corpus` retains the complete shared runtime/ABI inventory from
+`compiler/tests/cortex-m/corpus.json`. Every ordinary runtime case uses the
+four inherited profiles; specialization cases add none/all and speed/all.
+Ten explicit 32-bit/architecture counterparts retain the original hosted
+sources and independent numeric expectations. `counterparts.json` records
+exact reviewed textual differences, checked before execution. Missing/new
+fixtures or counterpart drift fail the supervisor. Compiler-verdict and
+neutral-IR golden fixtures retain their native compiler-host checks; they have
+no independent execution oracle.
+
+The corpus keeps source refusals, the disabled general C surface and physical
+image limits distinct from executed programs. Every whitelisted image-limit
+profile is still compiled and attempted within the materialization guard;
+when it fits, it must execute successfully. Only a demonstrated oversized
+frame/static extent or the selected linker's flash/RAM overflow can produce a
+limit record. Missing helpers, bad instructions, wrong results and timeouts
+cannot. The original multi-gigabyte image and oversized hosted stress programs
+retain their original oracles and R551-07/R6.50/R6.60 dispositions. Their
+unchanged hosted execution does not become a Cortex execution claim.
+
+`backend-start.S` and `backend-memory.ld` are small external test support:
+reset/vector words, bytewise initialized-data copying, BSS clearing, a stack
+watermark and result/fault observation. The compiler emits ordinary routines,
+not reset or interrupt entries. The map remains 32 KiB flash, 16 KiB RAM and
+4 KiB stack. A single routine requiring more than that stack reservation is
+recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
+sentinels and a bottom watermark are asserted. The lowest changed watermark
+word is retained as an observation, explicitly not a proved stack bound.
+R6.100 still owns measured stack/firmware and source-debugging acceptance.
+
+QEMU uses exactly `microbit`, single-threaded TCG and a loopback-only GDB port.
+Each program has a bounded startup wait and a 20-second debugger deadline;
+process groups are stopped on failure. Expected traps require HardFault at
+the emitted UDF #1, not merely any fault. Normal results use the shared fixture's
+exit-byte oracle and require r12 zero. Build reports, sources, compiler identity,
+requested runtime helpers, the exact v6-M/nofp archive hash, empty unresolved
+symbol set, ELF attributes, map, disassembly and commands are retained.
+Assembly expansion is bounded before invoking GNU as, including nested compact
+repetitions, so a multi-gigabyte source image cannot materialize in the harness.
+
+Independent controls are kept separate:
+
+| Evidence | What actually executes |
+|---|---|
+| `backend-abi.ldn` with `backend-abi.S` | Generated entries called by literal assembly ABI oracles: double-word register gap/stack tail, caller-owned multiple and aggregate results, aliased value/inout transport, separate failure status, indirect Thumb address and runtime helpers |
+| Frame stepping | GDB observes the old r11 until both record words exist, then the published record; checks nested and leaf links, return addresses and aligned SP |
+| `backend-veneer.ld` | The generated leaf is copied to SRAM by the external harness, forcing a real GNU Thumb call veneer over the flash/RAM gap; frame and result assertions remain identical |
+| `backend-boundaries.ldn` | Generated accesses across frame/immediate boundaries through a 2304-byte array, nontrivial literals and a long conditional transfer |
+| `backend-instructions.S` | Independent maximum literal/branch/conditional encodings execute; separate one-past-limit and forbidden high-register/Thumb-2/FPU/exclusive forms must be rejected by GNU as |
+| `backend-words.ldn`, signed/unsigned multiply trap controls | Literal multiword product/division/remainder boundaries, including signed minimum and maximum unsigned product, plus checked overflow reaching UDF #1 |
+| `backend-symbols.ldn` | Source helper-name collisions, assembly register-like names and direct/indirect code-pointer identity |
+| `backend-byte.ldn` | Five exact byte transactions, independently expected as `r8:18:a5;r8:18:00;w8:19:41;w8:1a:02;r8:1a:f1`; no widened/destructive extra read or hidden write-only read |
+| `backend-memory.ldn` | Generated D227 8/16/32-bit atomic loads/stores, volatile operations and barriers, with literal values independent of selection |
+| `packed-cortex.ldn` and `packed-cortex-hole.ldn` | Actual generated M0 instructions drive the existing EncodingPeripheral model. The unchanged literal 16-event trace pins halfword/word widths, counts, destructive reads, one-clears and reserved policies. The hole path performs exactly one destructive read before trapping. |
+| `backend-dma.ldn` | Generated packed config/count/status operations publish an ordinary slice to PrototypePeripheral; four externally supplied bytes precede completion. A half-complete observation does not permit return. After completion and a device barrier, ordinary reads sum the bytes to 174. Count accesses are exactly one halfword write and one halfword read, with no word count access. |
+
+ABI, memory, frame/boundary and all four peripheral controls run all six
+profiles. The standalone encoding control remains independent assembly.
+PrototypePeripheral's added count-width telemetry leaves its earlier C control
+and interrupt behavior intact. Renode remains a synthetic device lane and its
+verified empty lock file is removed before evidence inventory/export. The
+R6.40 hosted Landin transport remains separately identified and required.
+
+For focused development on the supported native Linux host:
+
+```sh
+python3 environments/cortex-m/backend_corpus.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --case runtime/r640-packed-hole --profile speed-all
+python3 environments/cortex-m/backend_controls.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
+python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
+```
+
+Filtered commands are development feedback. Exact-revision native acceptance
+runs the complete mandatory path and exports `artifacts/cortex-m/backend` with
+all prior evidence. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
+records instruction, allocation, ABI, runtime-helper and memory decisions.
+R6.60 owns language startup/linking/sections/interrupt/naked/inline-assembly
+surfaces; R6.70 freestanding core/noreturn; R6.80 checked-in device fixtures;
+R6.90 the complete driver; R6.100 the milestone. General SVD generation stays
+with its companion tool. No scheduler, interrupt-masking abstraction, C source
+expansion or new DMA ownership model is introduced.
