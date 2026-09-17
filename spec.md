@@ -1839,6 +1839,8 @@ dots, with a nonempty suffix. Functions select `.text.*` (flash) or
 must be `zeroed` or the integer literal `0`. Compiler `.landin_` section names
 are reserved. Alignment is a decimal power of two from 1 through 256 and is
 a minimum placement alignment; type layout and `alignof` do not change.
+Alignment and vector indexes use decimal integer literals, with the ordinary
+digit separators allowed; nondecimal prefixes and computed expressions refuse.
 Without a section annotation every datum/routine has its own input section;
 mutable zero images use BSS and immutable images use flash.
 

@@ -31781,10 +31781,10 @@ package body Landin.Stages.Checking is
               (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
                Message => "invalid or conflicting Cortex-M0 placement",
-               Note => "[1640]: sections use .text.*, .rodata.*, .data.* or"
-                 & " .bss.* according to storage; alignment is a power of"
-                 & " two through 256; vectors require a unique implemented"
-                 & " exception and interrupt/naked convention",
+               Note => "[1640]: sections use .text.*, .ramtext.*, .rodata.*,"
+                 & " .data.* or .bss.*; alignment is a decimal power of"
+                 & " two through 256; decimal vectors require a unique"
+                 & " implemented exception and interrupt/naked convention",
                Related => Syn.Origin (Of_Tree, Node),
                Because => "this placement", Into => Found);
          end if;

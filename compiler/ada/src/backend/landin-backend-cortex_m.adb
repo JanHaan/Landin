@@ -3830,7 +3830,10 @@ package body Landin.Backend.Cortex_M is
          Size      : Landin.Targets.Byte_Count;
          Alignment : Landin.Targets.Byte_Alignment) is
       begin
-         Select_Section (Item, ".bss.", "aw");
+         Select_Section
+           (Item, (if Landin.IR.Is_Immutable (Of_Unit, Item)
+                   then ".rodata." else ".bss."),
+            (if Landin.IR.Is_Immutable (Of_Unit, Item) then "a" else "aw"));
          Emit (".globl " & Symbol (Item));
          Emit (".balign " & Trimmed (Alignment'Image));
          Put (Symbol (Item) & ":");
@@ -4045,9 +4048,7 @@ package body Landin.Backend.Cortex_M is
                      then ".bss." else ".data."),
                      (if Landin.IR.Is_Immutable (Of_Unit, Item)
                       then "a" else "aw"));
-                  if Is_All_Zero (Item)
-                    and then not Landin.IR.Is_Immutable (Of_Unit, Item)
-                  then
+                  if Is_All_Zero (Item) then
                      if Landin.IR.Result_Of (Of_Unit, Item) =
                        Landin.Types.Aggregate
                      then

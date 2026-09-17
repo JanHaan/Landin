@@ -3694,6 +3694,8 @@ firmware_mark: [4]u8 = [55, 48, 49, 0]
 ```
 
 Slot 16 is IRQ0 in the selected profile; it is not a portable peripheral name.
+Alignment and vector indexes are decimal integer literals; ordinary digit
+separators are allowed, while nondecimal prefixes and expressions refuse.
 A vector annotation requires a firmware-entry request. The kept vector image
 references the handler, so section garbage collection retains it. An interrupt
 routine with no reference or keep can still disappear. `keep` retains its
