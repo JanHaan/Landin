@@ -716,8 +716,11 @@ package body Landin.Tests.Cortex_Suite is
              & "assembler.block(""nop"") end h "
              & "link(keep) extern(naked) n: () -> none = "
              & "assembler.block(""bx lr"") end n "
-             & "link(section: "".data.value"", align: 16, keep, "
-             & "symbol: ""value"") mut x: u32 = 1",
+             & "link(section: "".data.value"", align: 1_6, keep, "
+             & "symbol: ""value"") mut x: u32 = 1 "
+             & "link(keep) zs: [2]u64 = zeroed "
+             & "pair: type = struct value: u32 end pair "
+             & "link(keep) zp: pair = zeroed",
            when 2 => "extern(interrupt) h: (x: u32) -> none = end h",
            when 3 => "extern(interrupt) h: () -> (r: u32) = 1 end h",
            when 4 => "bad: atom extern(interrupt) h: () -> none ! bad = "
@@ -769,11 +772,14 @@ package body Landin.Tests.Cortex_Suite is
            when 34 => "extern(interrupt) h: () -> none = end h "
              & "fn: type = extern(interrupt) () -> none p: fn = h "
              & "call: () -> none = p() end call",
+           when 36 => "link(align: 0x10) mut x: u32 = 0",
+           when 37 => "link(vector: 0x10) extern(interrupt) h: () -> none"
+             & " = end h",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 35 loop
+      for Case_Number in 1 .. 37 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;

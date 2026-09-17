@@ -10648,7 +10648,7 @@ acceptance rebuilds and binds its own identities.
 | Determinism | 54 fresh-directory scenario/profile pairs, 108 generated ELF builds; all 270 ELF/object/assembly/script/map byte comparisons pass, including section/relocation bytes |
 | Synthetic generated peripherals | 24 Renode runs across six profiles: IRQ/DMA completion, packed images, invalid encoding trap and byte access; independently asserted register states, exact widths/counts and traces pass |
 | Bounded refusal controls | Ten programs retain reported failures for flash overflow, stack overlap, materialization budget, missing symbol, bad encoding/instruction, vector placement/reset ownership, bad entry and reserved symbol |
-| Compiler-host machine controls | Eight Cortex ABI cases, 432 assertions pass, including 35 machine-source combinations, firmware requests and malformed IR placement; the generic-instance entry refusal and source/link-name separation are pinned |
+| Compiler-host machine controls | Eight Cortex ABI cases, 438 assertions pass, including 37 machine-source combinations, firmware requests and malformed IR placement; the generic-instance entry refusal and source/link-name separation are pinned |
 | Focused inherited gates | Ten executions across module-image and packed-hole profiles and four oversized-image verdicts pass under the old external backend harness; its complete 533-fixture inventory remains mandatory |
 | Documentation/tooling | Full `check.py` and verified rendering pass; generated grammar/coverage/diagnostic records are current; editor structural parser regenerated and its corpus passes |
 
@@ -10672,6 +10672,21 @@ No warning was suppressed. The machine directive allowlist rejects later-core
 system registers/instructions; unencodable M0 operands remain retained tool
 failures. The fixed script and materialization budget are supported limits,
 not a general linker-script language or a resource-safety promise.
+
+The first exact candidate `4b7045d2c41a8866be85a9b311a4c86c0c5506ab`
+was rejected during Linux run `20260917T190355Z-573ad3d3ab9b`: the unchanged
+`array-repetition-evaluates-once` fixture exposed immutable zero-image emission
+in all four profiles. Both acceptors were stopped; Darwin run
+`20260917T190355Z-33f4ac6c0a00` is interrupted, never acceptance evidence.
+The repair preserves zero-filled array/record IR, emits its bytes in immutable
+flash storage, and adds retained/aligned zero-image assertions to generated
+firmware. The original fixture and oracle remain unchanged. Focused repair validation
+passed all eight inherited array-repetition/zero-record profile executions and
+the default firmware profile, including aligned flash zero arrays/records.
+Full document checking and verified rendering passed again. Fresh acceptance
+of the corrected containing revision is required; neither failed/interrupted
+run can bind closure. Decimal placement literals retain ordinary digit
+separators; nondecimal prefixes refuse explicitly.
 
 The cross-prototype audit keeps prototype 2's recoverable diagnostic/provider
 failures on ordinary calls, prototype 3's allocator/evidence signatures and

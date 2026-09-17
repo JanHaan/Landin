@@ -91,10 +91,13 @@ package body Landin.Configuration is
          Value : Natural := 0;
       begin
          for C of Text loop
-            if C not in '0' .. '9' or else Value > 256 then
+            if C = '_' then
+               null;
+            elsif C not in '0' .. '9' or else Value > 256 then
                return Natural'Last;
+            else
+               Value := Value * 10 + Character'Pos (C) - Character'Pos ('0');
             end if;
-            Value := Value * 10 + Character'Pos (C) - Character'Pos ('0');
          end loop;
          return Value;
       end Number;

@@ -61,3 +61,9 @@ link(keep) handler_ref: interrupt_type = address_only
 link(keep) message: cstring = "boot"
 link(section: ".data.shared", keep) mut shared_zero: u32 = 0
 link(section: ".data.shared") mut shared_value: u32 = 321
+
+link(section: ".rodata.zero_array", align: 32, keep)
+zero_array: [2]u64 = zeroed
+zero_pair: type = struct value: u32 end zero_pair
+link(section: ".rodata.zero_record", align: 16, keep)
+zero_record: zero_pair = zeroed
