@@ -465,7 +465,11 @@ the generated kept vector image supplies linker relocations to its handlers.
 A convention alone is not a retention root.
 
 Fixed `assembler.block` text lowers to a memory-access compiler boundary with
-an interned payload. Its existing full memory/call/trap effects invalidate
+an interned payload. D230's scalar form adds one u32 operand and a u32 result;
+verification checks that carrier independently of the memory operation's
+compiler-barrier tag. The target loads r0 immediately before the text and
+saves it immediately afterward. No new implicit register dependency enters IR.
+Its existing full memory/call/trap effects invalidate
 memory knowledge and preserve ordering through optimization and specialization.
 It is not a hardware barrier. Cortex emission reads live values from their
 compiler stack homes after ordinary low-register-clobbering text; ordinary

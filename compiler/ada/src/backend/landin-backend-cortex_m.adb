@@ -2629,9 +2629,20 @@ package body Landin.Backend.Cortex_M is
                                  declare
                                     After_Block : constant String := Fresh;
                                  begin
+                                    if Landin.IR.Operand_Count
+                                      (Of_Unit, Item, Value) = 1
+                                    then
+                                       Load_Value (Landin.IR.Nth_Operand
+                                         (Of_Unit, Item, Value, 1));
+                                    end if;
                                     Put (Landin.Source.Names.Spelling
                                       (Names, Landin.IR.Assembly_Text
                                          (Of_Unit, Item, Value)));
+                                    if Landin.IR.Operand_Count
+                                      (Of_Unit, Item, Value) = 1
+                                    then
+                                       Store_Value (Value);
+                                    end if;
                                     Emit ("b " & After_Block);
                                     Emit (".ltorg");
                                     Put (After_Block & ":");

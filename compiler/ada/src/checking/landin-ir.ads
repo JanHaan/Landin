@@ -3129,7 +3129,8 @@ package Landin.IR is
    function Emit_Assembly
      (Into : in out Unit; Item : Item_Id;
       Text : Landin.Source.Names.Name_Id;
-      Site : Landin.Provenance.Origin) return Value_Id;
+      Site : Landin.Provenance.Origin;
+      Operand : Value_Id := No_Value) return Value_Id;
    function Assembly_Text
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Landin.Source.Names.Name_Id;

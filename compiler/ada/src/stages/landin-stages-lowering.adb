@@ -4471,11 +4471,22 @@ package body Landin.Stages.Lowering is
          if Landin.Configuration.Assembly_Call
            (Spellings.all, Of_Tree, Node)
          then
-            return IR.Emit_Assembly
-              (Unit.all, Filling, Landin.Source.Names.Intern
-                 (Spellings.all, Landin.Configuration.Fixed_Text
-                    (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
-                     Syn.Nth_Argument (Of_Tree, Node, 1))), Site);
+            declare
+               Operand : constant IR.Value_Id :=
+                 (if Syn.Argument_Count (Of_Tree, Node) = 2
+                  then Lower_Expression
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2), Scope)
+                  else IR.No_Value);
+            begin
+               if Current = IR.No_Block then
+                  return IR.No_Value;
+               end if;
+               return IR.Emit_Assembly
+                 (Unit.all, Filling, Landin.Source.Names.Intern
+                    (Spellings.all, Landin.Configuration.Fixed_Text
+                       (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+                        Syn.Nth_Argument (Of_Tree, Node, 1))), Site, Operand);
+            end;
          end if;
          declare
             use type Landin.Memory.Operation;

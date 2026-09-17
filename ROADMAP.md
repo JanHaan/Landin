@@ -10744,7 +10744,7 @@ with its separate checked-in generated-device fixture gate.
 
 ### R6.70 — Implement the freestanding Landin core slice
 
-Status: planned
+Status: active
 Depends on: R3.30, R3.40, R6.30, R6.50, R6.60
 
 Implement the minimal freestanding memory, collections, panic, CPU and device
@@ -10752,6 +10752,145 @@ support required by the driver. Hosted dependencies must not enter its closure.
 
 Exit evidence: the linker closure contains only declared freestanding modules
 and startup/toolchain shims; allocator and panic behavior fit the profile.
+
+The intake verified a clean `r660-startup` checkout at accepted revision
+`2ad47724bba3d0e6fc1af41cb60821c5322068af` before creating
+`r670-freestanding-core`. Canonical main and the HTTPS GitHub mirror agreed
+on that commit and annotated approval object
+`cfc0f8ab42170263bc6b88f55a187013633be9b1`. Both verified native exports,
+Linux `20260917T191449Z-a6784df09c5b` and Darwin
+`20260917T191449Z-0376997652b2`, bind archive SHA-256
+`a23f75879f61bb8c5530948c55055d923a63fabad1e0ae99b0330c48884b1da6`.
+The guarded approval check passed; Pages job 1890286 and mirror job 1890287
+were verified successful. GitHub SSH host-key verification failed, so mirror
+verification used HTTPS without changing SSH trust. This is base evidence,
+not acceptance of the implementation below.
+
+The initial implemented increment keeps `core/mem`, `core/vec` and `core/pool`
+unchanged and adds ordinary `core/cpu`. The allocator concept is the existing
+explicit capability. `mem` supplies arena/failure-injection providers, raw
+storage and allocated objects/bytes; `vec` supplies a bounded consumer of its
+transactional growth; `pool` supplies caller-backed reclamation. D193 absolute
+alignment, zero-size rules, overflow/exhaustion failure before mutation and
+manual lifetime/origin obligations remain. No allocator is embedded in a
+container and no allocation failure becomes an implicit panic.
+
+`core/failing`, `core/region`, `core/small`, `core/map`, `core/tree`, `core/sort`
+and `core/text` have reusable target-neutral implementations; existing R6.50
+image limits still apply. The initial consumers do not import them. Hosted
+`core/heap`, `core/io`, `core/diag` and `core/c` are excluded from their closure.
+This inventory does not broaden the R551-34 standard-library disposition or
+promise that every composition fits this image. The module guide is derived
+documentation in `core/README.md`, not a separate work authority.
+
+D230 extends the constrained assembler surface with one u32 input/output in
+r0, keeping all ordinary high-register, stack, frame and control restrictions.
+The prior result-free surface could not return PRIMASK without undocumented
+register/memory transport. A new CPU intrinsic namespace or general assembly
+constraint language was declined: prototype 1's X8 requires ordinary target
+modules and one scalar carrier suffices. Resolution, checking, lowering, IR
+verification and Cortex emission carry the explicit operand/result. Existing
+full memory/call/trap effects preserve even a discarded result. Rewriting and
+specialization retain the instruction and operand; no Cortex body sharing is
+introduced, and accepted atom-domain/stored-shape/status repairs remain.
+
+`core/cpu` provides prior-mask save/disable/restore, mask observation, DSB/WFI
+and compiler/device/completion barriers. Nested and deferred restoration use
+the saved value rather than enabling interrupts unconditionally. Thread and
+handler use are supported; NMI/HardFault and DMA are unaffected by PRIMASK.
+The selected ARMv6-M instructions require no FPU, exclusives, VTOR or cache.
+The normative assembly contract is in spec.md; ordinary calls retain the
+eight-byte r11/LR record, callee saves, reserved r9, eight-byte call alignment
+and private r12 status. Exception return restores its separate hardware frame.
+
+`freestanding.py` extends the mandatory old probe/export path after the R6.60
+firmware lane. It compiles rooted library consumers through compiler reset,
+vectors, initialized-data copying, BSS clearing and the generated linker script.
+It records reached modules, source/tool hashes, exact linker LOAD inputs,
+libgcc members, ELF/map/assembly/disassembly/relocations, assertions, timeouts,
+stack observations and fresh-directory artifact comparisons. Allowed link
+inputs are the generated object, pinned `thumb/v6-m/nofp/libgcc.a` and GNU
+linker stubs. The fixed 32 KiB flash/16 KiB RAM/4 KiB stack profile is unchanged.
+R6.50's external startup lane and R6.60's independent C/assembly control remain
+distinct. The library DMA consumer reuses the unchanged independent peripheral
+oracle and ordinary-slice protocol; the old firmware consumer still runs too.
+Renode lock cleanup and supervisor failure controls remain mandatory.
+
+Development evidence is retained under the native `r670-core` slot's
+`evidence/` directory. `core-memory-3` passed 24 QEMU runs and 120 fresh
+artifact comparisons for vector growth, allocator boundaries and raw storage.
+`core-cpu-dma-1` passed six QEMU and six Renode runs plus 60 comparisons,
+including generic scalar assembly, discarded-result effects, deferred mask
+restoration, actual interrupt state and the independent DMA trace.
+`core-pool-zero-3` passed the initial pool and zero-sized-vector consumers.
+The larger exploratory pool/object/byte-buffer composition in
+`core-pool-zero-2` exceeded flash by 10,152 bytes at none/off; that refusal is
+retained. Its bounded raw-allocation consumer fits without changing the board.
+The inherited full allocator/raw-storage tests and their original oracles
+remain, including the already-reviewed 32-bit raw-storage counterpart.
+
+The combined `core-complete-2` development run passed all eight consumers at
+all six profiles: 42 QEMU sessions, six Renode runs and 240 deterministic
+artifact comparisons. Its local copied result has SHA-256
+`a2313c5036c08253aa013c0f865c88b06aa02023a1294b17583b2c42b7ffee44`;
+all 1,941 recorded artifact hashes were independently rechecked after transfer.
+The Mac Cortex compiler-host suite passed nine cases/487 checks and the
+embedded supervisor passed 14 failure/inventory controls. These are focused
+development results, not either native acceptance policy.
+
+| Consumer | Flash load extent, bytes across profiles | Static RAM, bytes | Observed painted stack, bytes |
+|---|---:|---:|---:|
+| CPU, final operand-control oracle | 7,144–7,704 | 28 | 544 |
+| Pool | 28,784–31,432 | 84 | 1,184–1,192 |
+| Zero-sized vector | 23,180–24,916 | 8 | 992–1,000 |
+| Vector failure/rollback | 27,376–29,468 | 100 | 1,120–1,128 |
+| DMA | 9,584–10,528 | 20 | not measured in this lane |
+| Allocators | 14,336–15,176 | 4 | 1,120–1,128 |
+| Arena boundaries | 24,404–25,872 | 4 | 1,512–1,520 |
+| Raw storage | 25,420–26,492 | 60 | 1,632 |
+
+Flash includes vectors, reset, immutable images, load images and linked helper
+code. Static RAM excludes the separately reserved 4 KiB stack. Paint records
+observed writes, not a proved high-water bound, recursion limit or full driver
+measurement. The pool has limited remaining flash headroom; this is a recorded
+composition limit, not permission to enlarge the selected board.
+
+`core-cpu-effects-1` strengthens the CPU probe with an independently observed
+write from discarded-result assembly and a counter requiring exactly one
+operand evaluation. All six profiles and 30 fresh artifact comparisons passed;
+its copied result SHA-256 is
+`222836b7d60dfb5c42d7ed41eab7a45d864c2e909351fd97f48fa81201a66947`,
+with all 213 artifact hashes verified. `core-cpu-control-1` then adds an early
+return during operand evaluation: neither the later operand call nor the
+assembly may execute. Lowering preserves the terminated-path guard used by
+other evaluated call operands. Its six profiles/30 comparisons pass, with
+copied result SHA-256
+`f9aef7de0c8c2566443477347583a1361f1eb9afbd9d0d95110bc07d93652b58`
+and all 213 hashes verified. The table uses this final CPU program; the other
+seven consumers are unchanged. The old firmware lane also passed its focused
+none/off regression in `firmware-regression-1`, including the independent
+C/assembly control and all four peripheral consumers. Full `python3 check.py`
+and verified site rendering pass for the increment; the new core guide is
+included in both the live-document inventory and rendered site.
+
+This increment does not close R6.70. D11/[1670] panic-handler selection,
+check-kind/site mapping and deterministic optional source maps, and [0890]'s
+`noreturn` signatures/control flow remain required implementation within this
+item. Their hosted compatibility, generic/evidence identity, optimizer roots,
+cleanup/failure choices and independent executable oracles must be completed
+before exact-revision closure. Existing named `noreturn` refusals and current
+trap behavior remain in force meanwhile. R551-31 is not discharged by the
+CPU/library probes. Appropriate routine debugger-risk scope must be explicitly
+selected and committed before the final candidate, then both native policies
+must accept the identical archive before approval/promotion/publication.
+
+R6.80 retains checked-in generated-device fixtures; R6.90 retains the complete
+derived driver and DMA consumption/overrun protocol; R6.100 retains Landin
+source debugging, complete measured firmware/stack evidence and freestanding
+milestone closure. General SVD generation, package/build orchestration,
+scheduling/cache/resume work, broader libraries, resource/evidence limitations
+and deferred Nix retain their R5.20/R5.51 owners. No successor gate is closed
+by bounded observations here.
 
 ### R6.80 — Establish checked-in generated device fixtures
 

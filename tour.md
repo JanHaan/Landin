@@ -3648,13 +3648,28 @@ before reading them. Interrupt masking alone does not stop DMA.
 
 ### [1630] Inline assembly, for what has no builtin
 
-`assembler.block` takes one fixed quoted or raw text literal in a Cortex-M0
-routine body. It is opaque to the compiler: memory knowledge is invalidated
+`assembler.block` takes a fixed quoted or raw text literal in a Cortex-M0
+routine body. With only that argument it returns `none`. An optional second
+positional `u32` argument enters in r0; the final r0 becomes its `u32` result.
+This scalar form is available in ordinary and interrupt bodies. For example,
+the ordinary target module `core/cpu` saves the previous interrupt mask with
+`assembler.block("mrs r0, primask\ncpsid i", zero)`, where `zero` is a `u32`.
+The argument is evaluated once, and discarding the result still executes the
+assembly. Naked bodies retain their single literal and programmer-owned state.
+It is opaque to the compiler: memory knowledge is invalidated
 and memory accesses cannot be reordered across it. It is not itself a hardware
 barrier. An ordinary block can clobber r0–r7 and flags; live compiler values
 have stack homes, while frame, stack, reserved and high registers are excluded.
 Ordinary blocks are straight-line code with no labels or calls. [1990] gives
 the exact instruction, system-register, text and programmer-obligation limits.
+
+`core/cpu.disable_interrupts()` returns the prior PRIMASK value;
+`restore_interrupts(previous)` restores it, so nested critical sections do not
+enable interrupts prematurely. These functions can run in thread or handler
+mode. They do not stop DMA or mask NMI/HardFault. `wait_for_interrupt()` issues
+DSB then WFI; waking is a reason to check the device condition again, not proof
+of completion. `compiler_barrier`, `device_barrier` and `completion_barrier`
+expose the existing distinct boundaries without a cache or scheduler API.
 
 A naked body owns its control flow. For example, this selected entry runs
 after compiler reset has initialized data and stacks:

@@ -927,3 +927,13 @@ compiler-generated firmware and independent machine controls live in the
 those QEMU/Renode results are not hosted fixture passes or source-debugging
 acceptance. Existing runtime/ABI fixtures and their Cortex dispositions remain
 unchanged.
+
+D230's `positive/r670-scalar-assembly` pins the target-fixed syntax without
+enabling hosted assembly. `cortex ABI/scalar assembly IR` independently corrupts carrier,
+ordering, operation and target metadata. The machine-directive cases check
+source operands, registers, arity, naked restrictions and hosted refusals.
+The [freestanding library lane](../../environments/cortex-m/README.md#r670-freestanding-library-consumers)
+executes CPU, allocation, pool, vector and ordinary-slice DMA consumers through
+compiler-owned firmware. It retains the original shared fixture oracles and
+the reviewed raw-storage 32-bit counterpart. This is additional target evidence;
+it neither removes a shared verdict nor asserts completion of R6.70.

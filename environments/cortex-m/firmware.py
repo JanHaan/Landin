@@ -192,6 +192,11 @@ def dma(run, refine, optimize="none", specialize="off"):
     here = Path(__file__).resolve().parent
     source = here / 'probes/firmware-dma.ldn'
     elf = build(run, refine, source.read_text(), optimize, specialize)
+    dma_execute(run, elf)
+
+
+def dma_execute(run, elf):
+    here = Path(__file__).resolve().parent
     text = run.command('dma-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {parts[2]: int(parts[0],16) for line in text.splitlines()
                if len(parts := line.split()) == 3}

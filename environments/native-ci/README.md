@@ -339,3 +339,13 @@ ELF/object/map/disassembly, scripts, commands, identities, results and explicit
 physical-limit records. Existing R6.10/R6.20/R6.30/R6.40 evidence and Renode lock
 cleanup remain required. These artifacts belong to the accepted archive;
 development selectors cannot approve a revision.
+
+R6.60's compiler-owned startup lane retains `artifacts/cortex-m/firmware`.
+R6.70's active library increment additionally retains
+`artifacts/cortex-m/freestanding`, including explicit module/linker closure,
+CPU and allocator consumers, ordinary-slice DMA traces and fresh artifact
+comparisons. `run.py` executes these after every inherited lane and the existing
+recursive export hashes bind them to the accepted archive. The old corpus,
+firmware counts and Renode lock-cleanup obligations remain mandatory. These
+additional controls do not by themselves close the remaining R6.70 panic and
+noreturn obligations.

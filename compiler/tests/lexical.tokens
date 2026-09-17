@@ -18616,6 +18616,76 @@ file positive/r660-machine-directives/program.ldn tokens 112
   475 476 =
   477 480 end
   481 486 start
+file positive/r670-scalar-assembly/program.ldn tokens 69
+  0 5 fixed
+  6 8 if
+  9 17 compiler
+  17 18 .
+  18 22 arch
+  23 25 ==
+  26 35 cortex_m0
+  36 40 then
+  45 49 mask
+  49 50 :
+  51 52 (
+  52 53 )
+  54 56 ->
+  57 58 (
+  58 63 value
+  63 64 :
+  65 68 u32
+  68 69 )
+  70 71 =
+  80 84 zero
+  84 85 :
+  86 89 u32
+  90 91 =
+  92 93 0
+  102 107 value
+  108 109 =
+  110 119 assembler
+  119 120 .
+  120 125 block
+  125 126 (
+  126 152 "mrs r0, primask\ncpsid i"
+  152 153 ,
+  154 158 zero
+  158 159 )
+  164 167 end
+  168 172 mask
+  177 184 restore
+  184 185 :
+  186 187 (
+  187 192 value
+  192 193 :
+  194 197 u32
+  197 198 )
+  199 201 ->
+  202 206 none
+  207 208 =
+  217 218 _
+  219 220 =
+  221 230 assembler
+  230 231 .
+  231 236 block
+  236 237 (
+  237 262 "msr primask, r0\nisb sy"
+  262 263 ,
+  264 269 value
+  269 270 )
+  275 278 end
+  279 286 restore
+  287 290 end
+  291 293 if
+  294 299 start
+  299 300 :
+  301 302 (
+  302 303 )
+  304 306 ->
+  307 311 none
+  312 313 =
+  314 317 end
+  318 323 start
 file positive/range-subtype-exit-before-the-check/program.ldn tokens 317
   353 360 percent
   360 361 :

@@ -1,0 +1,43 @@
+import core/mem
+import core/vec
+
+mut backing: [96]u8 = zeroed
+mut observed: u32 = 0
+
+exercise: () -> (result: u32) ! mem.out_of_memory =
+    result = 1
+    mut state := mem.fail_over(addr backing[0], lenof backing, 1)
+    mut values := vec.new_list(item: u32)
+    try vec.reserve(values, state, usize(2))
+    try vec.push(values, state, u32(17))
+    try vec.push(values, state, u32(25))
+    mut failed: bool = false
+    vec.reserve(values, state, usize(4)) else (problem)
+        _ = problem
+        failed = true
+    end
+    return when not failed or state.allocations <> 1 or state.frees <> 0
+    return when vec.length(values) <> 2 or vec.capacity(values) <> 2
+    saved: u32 = begin
+        view := vec.used(values)
+        view[0] + view[1]
+    end
+    return when saved <> 42
+    maximum: usize = 0 -% 1
+    failed = false
+    vec.reserve(values, state, maximum) else (problem)
+        _ = problem
+        failed = true
+    end
+    return when not failed or state.allocations <> 1
+    return when vec.length(values) <> 2 or vec.capacity(values) <> 2
+    vec.release(values, state)
+    return when state.frees <> 1 or vec.length(values) <> 0
+    vec.release(values, state)
+    return when state.frees <> 1
+    result = 42
+end exercise
+
+start: () -> none =
+    observed = exercise() else 1
+end start

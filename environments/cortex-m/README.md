@@ -4,6 +4,8 @@ ROADMAP.md owns selection, implementation and completion evidence. R6.10-R6.40
 retain their independent C/assembly, memory-model and hosted transport controls.
 R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
 access. R6.60 adds the separate compiler-owned startup and firmware-linking lane.
+R6.70's active library increment adds rooted `core/mem`, `core/vec`, `core/pool`
+and `core/cpu` consumers through that compiler-owned firmware path.
 
 ## Selected lanes and pins
 
@@ -528,3 +530,47 @@ they do not generalize to another core, board, real peripheral or timing model.
 R6.70 owns core/CPU-library packaging and noreturn, R6.80 generated fixtures,
 R6.90 the complete driver, and R6.100 source debugging and complete measured
 stack/firmware evidence. General SVD generation remains companion-tool work.
+
+## R6.70 freestanding library consumers
+
+`freestanding.py` compiles rooted ordinary modules through the same generated
+reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
+its own `artifacts/cortex-m/freestanding` export directory. The old 533-fixture
+backend corpus and R6.60's 37 QEMU/24 Renode sessions and 270 comparisons are
+unchanged. This additional lane has eight consumers at six profiles: 42 QEMU
+sessions, six Renode runs and 240 ELF/object/assembly/linker-script/map byte
+comparisons from fresh directories.
+
+| Consumer | Independent observation |
+|---|---|
+| `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; scalar assembly preserves live values, generic/discarded operations execute, PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
+| `core-pool.ldn` | Misaligned caller backing yields aligned slots; zero-size allocation consumes one slot, an oversize request preserves state, exact free permits address reuse, exhaustion preserves live values and valid frees restore zero live slots. Raw writes initialize bytes before reading them. |
+| `core-zero.ldn` | Zero-sized vector elements retain maximum u32 `usize` capacity, one logical element and zero arena byte consumption; release follows the existing provider contract. |
+| `core-vec.ldn` | Successful reserve/push followed by injected exhaustion preserves capacity, length and values. Byte-count overflow refuses before allocation and release remains idempotent. |
+| Inherited `core-mem-allocators`, `core-mem-arena-boundaries`, `core-mem-raw-storage` | Original status-42 oracles run from compiler startup; only the already-reviewed Cortex raw-storage counterpart supplies its 32-bit expected pointer extent. The complete original corpus inventory is checked before using these sources. |
+| Library-derived DMA | The unchanged R6.60 peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
+
+The runner copies only its declared `core/mem`, `core/vec`, `core/pool` and
+`core/cpu` import closure. Maps must list the generated object and pinned
+`thumb/v6-m/nofp/libgcc.a`, with optional GNU linker stubs and no other LOAD
+input. Closure records include source hashes, selected archive members, all
+symbols and decoded image extents. Undefined symbols and hosted runtime names
+fail. This permits private compiler/toolchain helpers, not general C source.
+Per-command timeouts, process cleanup, independent failure markers and Renode
+lock removal use the existing supervisor unchanged. Standalone failures retain
+their logs, artifacts and failed result record.
+
+For development on the supported Linux host:
+
+```sh
+python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --case cpu
+python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
+```
+
+PRIMASK/WFI premises follow the official Arm architecture and M0 guides cited
+above; argument/result and linker-stub obligations retain the cited AAPCS32,
+AAELF32 and GNU contracts. Actual controls run on ARMv6-M. WFI is not a
+completion proof and masking does not stop DMA. The selected profile remains
+32 KiB flash/16 KiB RAM/4 KiB reserved stack. Stack paint measures observed
+writes only. [The core guide](../../core/README.md) documents the public surface;
+ROADMAP.md owns the remaining panic/noreturn implementation and acceptance.

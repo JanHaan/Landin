@@ -3956,15 +3956,24 @@ package body Landin.IR is
    function Emit_Assembly
      (Into : in out Unit; Item : Item_Id;
       Text : Landin.Source.Names.Name_Id;
-      Site : Landin.Provenance.Origin) return Value_Id is
+      Site : Landin.Provenance.Origin;
+      Operand : Value_Id := No_Value) return Value_Id
+   is
+      Made : Instruction :=
+        (Op => Memory_Access, Memory_Op => Landin.Memory.Compiler_Barrier,
+         Assembly_Name => Text, Site => Site, others => <>);
    begin
       if Text = Landin.Source.Names.No_Name then
          raise Compiler_Defect with "empty assembly identity";
       end if;
-      return Append
-        (Into, Item, (Op => Memory_Access,
-         Memory_Op => Landin.Memory.Compiler_Barrier,
-         Assembly_Name => Text, Site => Site, others => <>));
+      if Operand /= No_Value then
+         Made.Result := Landin.Types.U32;
+         Made.Memory_Type := Landin.Types.U32;
+         Made.First_Arg := Natural (Into.Operands.Length);
+         Made.Args := 1;
+         Into.Operands.Append (Operand);
+      end if;
+      return Append (Into, Item, Made);
    end Emit_Assembly;
 
    function Assembly_Text

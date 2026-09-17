@@ -6282,8 +6282,13 @@ package body Landin.IR.Verifier is
                         declare
                            Expect : constant Natural :=
                              (case Op is
-                                 when Memory_Access => Landin.Memory.Operands
-                                   (Memory_Operation (Of_Unit, Id, V)),
+                                 when Memory_Access =>
+                                   (if Assembly_Text (Of_Unit, Id, V)
+                                      /= Landin.Source.Names.No_Name
+                                      and then Result_Of (Of_Unit, Id, V)
+                                        = Landin.Types.U32
+                                    then 1 else Landin.Memory.Operands
+                                      (Memory_Operation (Of_Unit, Id, V))),
                                  when Call =>
                                     Signature_Carrier_Count
                                       (Call_Signature (Of_Unit, Id, V)),
@@ -6761,6 +6766,9 @@ package body Landin.IR.Verifier is
                                    /= Landin.Source.Names.No_Name
                                    and then
                                      (M /= Landin.Memory.Compiler_Barrier
+                                     or else (Operand_Count
+                                       (Of_Unit, Id, V) = 1
+                                       and then S /= Landin.Types.U32)
                                      or else (Check_Image and then
                                        Landin.Targets.Architecture_Of (Facts)
                                          /= Landin.Targets.Cortex_M0))
@@ -6779,7 +6787,12 @@ package body Landin.IR.Verifier is
                                        (Facts, M, Landin.Types.Storage_Size
                                          (S, Facts)))
                                    or else Result_Of (Of_Unit, Id, V) /=
-                                     (if Landin.Memory.Returns_Value (M)
+                                     (if Assembly_Text (Of_Unit, Id, V)
+                                        /= Landin.Source.Names.No_Name
+                                        and then Operand_Count
+                                          (Of_Unit, Id, V) = 1
+                                      then Landin.Types.U32
+                                      elsif Landin.Memory.Returns_Value (M)
                                       then S else Landin.Types.Not_Typed)
                                  then
                                     return (Result_Disagrees, Id, Block, V);
@@ -6789,7 +6802,10 @@ package body Landin.IR.Verifier is
                                  loop
                                     if Result_Of (Of_Unit, Id,
                                       Nth_Operand (Of_Unit, Id, V, I)) /=
-                                        (if I = 1 then Landin.Types.Usize
+                                        (if Assembly_Text (Of_Unit, Id, V)
+                                           /= Landin.Source.Names.No_Name
+                                         then Landin.Types.U32
+                                         elsif I = 1 then Landin.Types.Usize
                                          else S)
                                     then
                                        return

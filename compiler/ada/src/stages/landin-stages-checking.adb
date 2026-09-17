@@ -19015,9 +19015,16 @@ package body Landin.Stages.Checking is
                      then
                         Fault := Ada.Strings.Unbounded.To_Unbounded_String
                           ("assembler.block is enabled only on Cortex-M0");
-                     elsif Syn.Argument_Count (Of_Tree, Node) /= 1 then
+                     elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
                         Fault := Ada.Strings.Unbounded.To_Unbounded_String
-                          ("assembler.block requires one fixed text literal");
+                          ("assembler.block cannot declare checked failure");
+                     elsif Syn.Argument_Count (Of_Tree, Node) not in 1 .. 2
+                       or else (Naked and then
+                         Syn.Argument_Count (Of_Tree, Node) /= 1)
+                     then
+                        Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                          ("assembly needs fixed text and optionally one u32;"
+                           & " naked assembly permits only fixed text");
                      else
                         Argument := Syn.Nth_Argument (Of_Tree, Node, 1);
                         if Syn.Kind (Of_Tree, Argument)
@@ -19033,6 +19040,17 @@ package body Landin.Stages.Checking is
                                     Of_Tree, Argument), Naked));
                         end if;
                      end if;
+                     if Ada.Strings.Unbounded.Length (Fault) = 0
+                       and then Syn.Argument_Count (Of_Tree, Node) = 2
+                     then
+                        if Synthesise
+                          (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2))
+                            /= Ty.U32
+                        then
+                           Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                             ("assembly scalar transport requires u32");
+                        end if;
+                     end if;
                      if Ada.Strings.Unbounded.Length (Fault) /= 0 then
                         Bad.Report
                           (Item => Bad.Type_Mismatch,
@@ -19045,7 +19063,9 @@ package body Landin.Stages.Checking is
                            Because => "this assembly block", Into => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;
-                     return Kept (Ty.No_Value);
+                     return Kept
+                       (if Syn.Argument_Count (Of_Tree, Node) = 2
+                        then Ty.U32 else Ty.No_Value);
                   end;
                end if;
 

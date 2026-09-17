@@ -1283,6 +1283,7 @@ positive/r491-writable-return-explicit-sources | linux-x86-64, macos-arm64, synt
 positive/r630-memory-scalars | linux-x86-64, macos-arm64
 positive/r640-packed-representations | linux-x86-64, macos-arm64
 positive/r660-machine-directives | linux-x86-64, macos-arm64, synthetic-32
+positive/r670-scalar-assembly | linux-x86-64, macos-arm64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
