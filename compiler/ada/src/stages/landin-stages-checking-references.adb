@@ -2090,6 +2090,12 @@ package body Landin.Stages.Checking.References is
                      end if;
                      Check_Escaping_Arguments (Tree, Node, Known);
                      Check_Borrows (Tree, Node, Known);
+                     if Landin.Checking.Signature_Never_Returns
+                       (Types.all, Called)
+                     then
+                        Falls_Through := False;
+                        return No_Value_Edge;
+                     end if;
                      if Landin.Checking.Holds (Types.all, Called) then
                         for Returned in
                           1 .. Landin.Checking.Signature_Result_Count

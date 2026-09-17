@@ -102,7 +102,7 @@
 0860   tour        accepted emitted executed refused  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
-0890   tour        accepted emitted executed refused refused-by-name Nothing returned
+0890   tour        accepted emitted executed          Nothing returned
 0900   tour        accepted emitted executed refused  Three parameter conventions
 0910   tour        accepted emitted executed refused  sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns

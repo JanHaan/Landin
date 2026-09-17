@@ -102,7 +102,6 @@ package Landin.Diagnostics.Syntactic is
       --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
       --  enabled expression grammar.
       Struct_All_Of,
-      Nonreturning_Function,
       Volatile_Reference,
       Shared_Declaration,
       --  D212 withdraws [0820]'s lexical arena block by its shape.  The
@@ -124,8 +123,7 @@ package Landin.Diagnostics.Syntactic is
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
             when Arena_Block           => "[0820]",
-            when Volatile_Reference    => "[0850]",
-            when Nonreturning_Function => "[0890]")
+            when Volatile_Reference    => "[0850]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -168,7 +166,6 @@ private
             when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter => "R2.40",
-            when Nonreturning_Function => "R6.70",
             when Volatile_Reference    => "R6.80",
             when Shared_Declaration    => "R7.20");
 

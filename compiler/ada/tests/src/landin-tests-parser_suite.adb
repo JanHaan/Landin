@@ -3697,10 +3697,10 @@ package body Landin.Tests.Parser_Suite is
          "f: () -> none = begin = 10 end f");
    end Control_Words_Are_Reserved;
 
-   procedure Noreturn_Has_A_Named_Refusal
+   procedure Noreturn_Is_A_Return_Form
      (Item : in out Landin.Testing.Context);
 
-   procedure Noreturn_Has_A_Named_Refusal
+   procedure Noreturn_Is_A_Return_Form
      (Item : in out Landin.Testing.Context)
    is
       procedure Check (Text : String);
@@ -3720,49 +3720,26 @@ package body Landin.Tests.Parser_Suite is
               Landin.Syntax.Parser.Parse (Stream, Names, Reports);
          begin
             Landin.Testing.Check_Equal
-              (Item, Landin.Diagnostics.Count (Reports), 1,
-               "noreturn has one named refusal");
+              (Item, Landin.Diagnostics.Count (Reports), 0,
+               "noreturn is an enabled return form");
             Landin.Testing.Check_Equal
               (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
-               "the refused signature preserves the next declaration");
+               "the return form preserves the next declaration");
             if Landin.Syntax.Declaration_Count (Parsed) = 2 then
                Landin.Testing.Check_Equal
                  (Item, Landin.Source.Names.Spelling
                     (Names, Landin.Syntax.Name
                        (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))),
-                  "sentinel", "recovery retains the following name");
+                  "sentinel", "parsing retains the following name");
             end if;
          end;
-         if Landin.Diagnostics.Count (Reports) = 1 then
-            declare
-               Report : constant Landin.Diagnostics.Diagnostic :=
-                 Landin.Diagnostics.Get (Reports, 1);
-            begin
-               Landin.Testing.Check_Equal
-                 (Item, Landin.Diagnostics.Code (Report), "L0010",
-                  "the deferred construct owns the diagnostic code");
-               Landin.Testing.Check_Equal
-                 (Item, Landin.Diagnostics.Note_Count (Report), 2,
-                  "the refusal names both the construct and its work");
-               if Landin.Diagnostics.Note_Count (Report) = 2 then
-                  Landin.Testing.Check
-                    (Item, Contains
-                       (Landin.Diagnostics.Nth_Note (Report, 1), "[0890]"),
-                     "the first note names the tour's return form");
-                  Landin.Testing.Check
-                    (Item, Contains
-                       (Landin.Diagnostics.Nth_Note (Report, 2), "R6.70"),
-                     "the second note names the existing enabling work");
-               end if;
-            end;
-         end if;
       end Check;
    begin
       Check ("f: () -> noreturn = end f");
       Check ("f: () -> noreturn = loop do end loop end f");
       Check ("callback: type = () -> noreturn");
       Check ("extern (c) f: () -> noreturn");
-   end Noreturn_Has_A_Named_Refusal;
+   end Noreturn_Is_A_Return_Form;
 
    procedure Shared_Declarations_Have_A_Named_Refusal
      (Item : in out Landin.Testing.Context);
@@ -4112,8 +4089,8 @@ package body Landin.Tests.Parser_Suite is
         (Into, "parser", "fixed inputs keep canonical trees and reports",
          Fixed_Inputs_Keep_Canonical_Trees_And_Reports'Access);
       Landin.Testing.Register
-        (Into, "parser", "noreturn has a named refusal",
-         Noreturn_Has_A_Named_Refusal'Access);
+        (Into, "parser", "noreturn is a return form",
+         Noreturn_Is_A_Return_Form'Access);
       Landin.Testing.Register
         (Into, "parser", "control words are reserved",
          Control_Words_Are_Reserved'Access);

@@ -445,6 +445,13 @@ start: () -> noreturn =
 end start
 
 ```
+D231 makes the `noreturn` entry and nonreturning failure recovery concrete.
+`core-noreturn.ldn` exercises those edges through compiler-owned startup, and
+`abi/r670-noreturn` checks the same generic/evidence and cleanup contracts on
+both hosted targets. The return form does not relax escaping-buffer origins
+or establish DMA completion. These are bounded derivative tests, not the
+complete driver.
+
 What the escape rule rejects, and the reason the prototype was
 worth writing:
 

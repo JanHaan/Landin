@@ -58,9 +58,16 @@ terms describe its executable structure:
 | slot | Typed storage belonging to a routine, used for parameters, named results, locals and lowering's temporary storage. |
 
 A terminator jumps to another block, chooses between two blocks, returns
-successfully or exits with a declared failure. A loop is represented with
+successfully, exits with a declared failure, or traps with `Halt`. A loop is represented with
 blocks and a backward edge. There is no separate loop instruction for the
 backend to interpret.
+
+Signature identity includes D231's `noreturn` return form. A direct or
+indirect nonreturning call must be the penultimate instruction of its block,
+followed immediately by `Halt`. That guard traps if an invalid callee returns.
+It has control and trap effects, and the verifier refuses a returning body
+with a nonreturning signature. Generic and erased evidence signatures retain
+the same flag; it never becomes an ordinary IR value type.
 
 An instruction produces at most one value. Its position within its item is
 also its value identity, so there is no separate register-like namespace to

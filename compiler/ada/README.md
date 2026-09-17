@@ -954,10 +954,10 @@ injects bounded failures at ownership/traversal boundaries; ordinary compiler
 instances have no probe. This repair does not change declaration-by-field
 storage growth or claim recovery from arbitrary host exhaustion.
 
-The parser also recognises [0890]'s `noreturn` return position and gives its
-named refusal with the R6.70 owner while retaining the body and following
-declarations for recovery. The spelling remains an ordinary identifier in
-types and bindings.
+The parser recognises [0890]'s `noreturn` return position as a distinct
+return form (D231). Checking and IR retain its infallible signature identity
+through generic and evidence calls, and flow removes its continuation.
+The spelling remains an ordinary identifier outside the return position.
 
 The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is

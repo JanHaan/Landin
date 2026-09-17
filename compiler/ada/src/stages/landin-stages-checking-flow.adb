@@ -2600,6 +2600,40 @@ package body Landin.Stages.Checking.Flow is
 
                if Edges.Falls_Through
                  and then (Syn.Kind (Of_Tree, Node) = Syn.Call
+                   or else Res.Class_Of (Meanings.all, Of_Tree, Node)
+                     = Res.Function_Call)
+               then
+                  declare
+                     Target : constant Landin.Checking.Routine_Instance_Id :=
+                       Landin.Checking.Routine_Target_Of
+                         (Types.all, Of_Tree, Node);
+                     Callee : constant Syn.Node_Id :=
+                       Syn.Callee_Of (Of_Tree, Node);
+                     Signature : Landin.Checking.Signature_Id :=
+                       Landin.Checking.Signature_Of
+                         (Types.all, Of_Tree, Callee);
+                  begin
+                     if Target /= Landin.Checking.No_Routine_Instance then
+                        Signature := Landin.Checking.Routine_Signature_Of
+                          (Types.all, Target);
+                     elsif Signature = Landin.Checking.No_Signature
+                       and then Res.Verdict_Of
+                         (Meanings.all, Of_Tree, Callee) = Res.Bound
+                     then
+                        Signature := Landin.Checking.Signature_Of
+                          (Types.all, Res.Bound_To
+                             (Meanings.all, Of_Tree, Callee));
+                     end if;
+                     if Landin.Checking.Signature_Never_Returns
+                       (Types.all, Signature)
+                     then
+                        Edges.Falls_Through := False;
+                     end if;
+                  end;
+               end if;
+
+               if Edges.Falls_Through
+                 and then (Syn.Kind (Of_Tree, Node) = Syn.Call
                            or else Res.Class_Of
                              (Meanings.all, Of_Tree, Node)
                                = Res.Function_Call)
@@ -3448,7 +3482,9 @@ package body Landin.Stages.Checking.Flow is
                                 (Syn.Anchor (Of_Tree, Item), Return_State);
                            end if;
 
-                           Step.Returns := True;
+                           Step.Returns := Step.Returns
+                             or Cleanup_Edges.Returns
+                             or Cleanup_Edges.Falls_Through;
                            Step.Falls_Through := Guarded;
                         end;
                      end if;
@@ -3550,6 +3586,18 @@ package body Landin.Stages.Checking.Flow is
       else
          Flow_Expression
            (Of_Tree, Body_Node, Result_Id, State, Edges);
+      end if;
+
+      if Syn.Never_Returns (Of_Tree, Function_Node)
+        and then (Edges.Falls_Through or else Edges.Returns)
+      then
+         Bad.Report
+           (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+            Where => Syn.Anchor (Of_Tree, Function_Node),
+            Message => "a noreturn body can return or fall through",
+            Note => "[0890]: every reachable path must diverge",
+            Related => Syn.Origin (Of_Tree, Function_Node),
+            Because => "this return form", Into => Sink.all);
       end if;
 
       if Syn.Kind (Of_Tree, Body_Node) = Syn.Block

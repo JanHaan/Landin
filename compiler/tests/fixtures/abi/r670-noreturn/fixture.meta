@@ -1,0 +1,9 @@
+class: abi
+profiles: specialization
+summary: Native nonreturning calls preserve generic and erased dispatch and cleanup edges and guard a returning foreign callee
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+status: 42
+constructs: 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960
+targets: linux-x86-64, macos-arm64

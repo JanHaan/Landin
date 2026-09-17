@@ -537,13 +537,15 @@ stack/firmware evidence. General SVD generation remains companion-tool work.
 reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
 its own `artifacts/cortex-m/freestanding` export directory. The old 533-fixture
 backend corpus and R6.60's 37 QEMU/24 Renode sessions and 270 comparisons are
-unchanged. This additional lane has eight consumers at six profiles: 42 QEMU
-sessions, six Renode runs and 240 ELF/object/assembly/linker-script/map byte
-comparisons from fresh directories.
+unchanged. The shared inventory adds one explicitly restricted hosted C peer
+for D231; it does not replace an inherited case. This additional lane has nine
+consumers at six profiles: 78 QEMU sessions, six Renode runs and 270
+ELF/object/assembly/linker-script/map byte comparisons from fresh directories.
 
 | Consumer | Independent observation |
 |---|---|
 | `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; scalar assembly preserves live values, generic/discarded operations execute, PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
+| `core-noreturn.ldn` | Six cold boots select direct, generic, static/erased evidence, deferred and recovery paths; independent memory assertions check completed stores, skipped later actions/cleanup and retained kept data. The expected frame-chain depth and each previous-r11/incoming-LR record are checked at every selected nonreturning path. Nonreturning entry and 200–376-byte observed stack writes execute in the fixed profile. |
 | `core-pool.ldn` | Misaligned caller backing yields aligned slots; zero-size allocation consumes one slot, an oversize request preserves state, exact free permits address reuse, exhaustion preserves live values and valid frees restore zero live slots. Raw writes initialize bytes before reading them. |
 | `core-zero.ldn` | Zero-sized vector elements retain maximum u32 `usize` capacity, one logical element and zero arena byte consumption; release follows the existing provider contract. |
 | `core-vec.ldn` | Successful reserve/push followed by injected exhaustion preserves capacity, length and values. Byte-count overflow refuses before allocation and release remains idempotent. |
@@ -573,4 +575,4 @@ AAELF32 and GNU contracts. Actual controls run on ARMv6-M. WFI is not a
 completion proof and masking does not stop DMA. The selected profile remains
 32 KiB flash/16 KiB RAM/4 KiB reserved stack. Stack paint measures observed
 writes only. [The core guide](../../core/README.md) documents the public surface;
-ROADMAP.md owns the remaining panic/noreturn implementation and acceptance.
+ROADMAP.md owns the remaining panic implementation and exact-revision acceptance.

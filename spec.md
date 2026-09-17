@@ -43,7 +43,7 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
-'align', 'section', 'keep', 'vector', 'interrupt', 'naked'
+'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn'
 and 'distinct' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
@@ -465,7 +465,7 @@ parameters         ::= parameter ("," parameter)*
 parameter          ::= "caller" identifier ":" type
                      | "escaping"? parameter_convention? identifier ":" type
 parameter_convention ::= "in" | "inout" | "sink"
-returns     ::= "(" named_return ("," named_return)* ")" | "none"
+returns     ::= "(" named_return ("," named_return)* ")" | "none" | "noreturn"
 named_return ::= identifier ":" type
                  ("from" identifier ("," identifier)*)?
 body        ::= block
@@ -1734,8 +1734,9 @@ zero.
 D229 enables the constrained Cortex-M0 firmware path. The request selects
 `--target=cortex-m0 --firmware-entry=NAME` and an assembly or executable output.
 NAME is a source declaration in the entry module, not a linker symbol or a
-hosted `main` convention. It must identify one defined, nongeneric ordinary or
-naked `() -> none` routine with no declared error outcome. Source duplicate
+hosted `main` convention. It must identify one defined, nongeneric ordinary
+`() -> none` or `() -> noreturn` routine, or a naked `() -> none` routine,
+with no declared error outcome. Source duplicate
 names, missing entries, invalid signatures and duplicate request options are
 errors. Entry selection does not require `public`. A different explicit
 `link(symbol: text)` does not change which source declaration is selected.
@@ -1763,7 +1764,7 @@ initialized storage before reset has completed it. Ordinary entry return,
 naked fallthrough and a failed runtime check execute the selected undefined
 instruction trap. Hardware fault dispatch applies; no failure is returned to
 a nonexistent hosted caller. `none` remains absence of a result, not the
-separate deferred `noreturn` feature.
+distinct `noreturn` return form (D231).
 
 `extern(interrupt)` and `extern(naked)` are distinct structural function
 conventions, separate from ordinary and C functions. Definitions are
@@ -2127,11 +2128,11 @@ every freestanding target must supply.
 mechanism a failed check eventually uses — a call to a fixed never-returning
 `panic_handler`, taking an atom for the kind and a compiler-assigned `site`
 number, with file and line in a side table a constrained build omits. That is
-not an alternative this decision declined; it is a paragraph the kernel cannot
-reach. `panic_kind` is a `type` over atoms and `noreturn` is a return form,
-and [1790]'s type rule enables none of the three, so there is nothing to call
-and no way to spell it. `ud2` is what a compiler that cannot write [1670] can
-do, and R6.70 is where panic behaviour is implemented; the alternative
+not an alternative this decision declined. At D11's original kernel, atom
+sets and `noreturn` could not spell the contract. Atom sets and D231's return
+form are now enabled, while the fixed handler selection and check-site
+mechanism still require implementation. The existing undefined-instruction
+trap remains until that mechanism is enabled. R6.70 owns it; the alternative
 declined above is calling a runtime routine _instead of_ [1670]'s, not
 [1670] itself.
 
@@ -14328,3 +14329,77 @@ ROADMAP.md owns actual results and the remaining R6.70 obligations.
 **Pinned by:** `positive/r670-scalar-assembly`, the Cortex source/IR cases and
 the compiler-generated `core-cpu.ldn` and ordinary-slice DMA execution in
 `environments/cortex-m/freestanding.py`.
+
+### D231 — Nonreturning calls and signature identity
+
+**From** [0890], [0940], [0960], [1000], [1050], [1100], [1110], [1240],
+[1290], [1370], [1670], D11, D124, D148, D187 and prototype 1's `start`.
+
+**Decision:** `noreturn` is an infallible return form. It is not an ordinary
+value type, a spelling of `none`, or an atom containing private call status
+zero. Ordinary declarations, anonymous functions, function types and concept
+entries may use it. Concrete and inferred error sets are refused: checked
+failure returns control to a caller and therefore contradicts this form.
+Generic instances and erased evidence signatures preserve the return form.
+Structural compatibility requires identical return form, parameters and
+calling convention; there is no implicit or explicit conversion between
+`noreturn` and `none` functions, or between either and result-bearing functions.
+
+A call evaluates its callee and arguments in their existing order. If that
+evaluation reaches the call, the continuation ends. Existing local origin,
+sink and escaping-argument obligations still apply at call entry. Definite
+assignment merges only continuing edges. A nonreturning call can terminate a
+value-producing branch or recovery expression without contributing a value;
+other continuing branches must supply the context's complete value shape.
+Such a call does not provide a type for an otherwise unconstrained inferred
+binding. Ordinary `none` calls do not terminate control flow.
+
+A definition must have no reachable successful return or body fallthrough.
+Flow analysis recognizes unconditional `loop` with no reachable exit, calls
+with this return form, and combinations of these with structured control.
+A conditional loop is not assumed to diverge from a runtime condition, even
+if the programmer expects it never to end. Unreachable source remains subject
+to ordinary name/type checking. Code after a proven terminating edge is not
+executed. Optimization neither invents divergence nor makes a returning
+signature nonreturning from its current implementation.
+
+Calling such a routine does not unwind registered cleanup. A deferred
+nonreturning call is allowed and is evaluated only on its applicable cleanup
+edge, in the existing reverse registration order. It prevents remaining
+cleanup and the original transfer from executing. Consequently a written
+`return` whose cleanup necessarily diverges does not produce a successful
+return edge. `undo` still runs only on failure; it cannot by itself establish
+that an ordinary successful fallthrough diverges. Recovery handles declared
+failures, never divergence or a runtime trap.
+
+C declarations and C function types may use this return form within each
+target's existing C surface. It promises that the external implementation
+never returns. Cortex retains its general C source refusals; no toolchain
+helper becomes source-callable through this rule. Interrupt and naked
+signatures remain exactly `() -> none`, with their separate machine return
+obligations. An ordinary nongeneric firmware entry can be `() -> noreturn`;
+a `none` entry retains R6.60's return trap. Hosted entry selection remains
+`public main: () -> (code: i32)` and the established linkage rules.
+
+IR represents the return form in signature identity and a nonreturning call
+followed immediately by a terminal `Halt`. Verification rejects a continuation
+following that call, a returning body with this signature, or an evidence
+entry that loses the return form. `Halt` is a control/trap effect; it is not a
+value and cannot disappear as dead arithmetic. It traps if an external or
+otherwise invalid implementation violates the promise by returning. Linux
+and Darwin use their established undefined-instruction guards; Cortex uses
+its selected undefined instruction. D11's existing observable trap guarantee
+continues while the separate [1670] handler mechanism is implemented.
+
+**Alternatives and rationale:** interpreting every result-free routine as
+nonreturning would break `none` callers. Treating `noreturn` as an ordinary
+value introduces values that cannot exist. Allowing checked failures would
+require a second continuation contract and ambiguous cleanup/dispatch rules.
+Inferring a promise from arbitrary loops or assembly would make source
+compatibility depend on optimization or programmer-written instruction text.
+These alternatives are declined.
+
+**Pinned by:** `checking/nonreturning control and identity` checks all three target
+descriptions through verified IR; `positive/r491-noreturn-signatures` retains
+the former refusal's exact source as accepted syntax. R6.70 owns executable
+acceptance, the panic mechanism and the remaining integration evidence.

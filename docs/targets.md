@@ -205,6 +205,13 @@ disabled. The independent external startup/linker harness remains distinct
 from the compiler-owned firmware path.
 `core/c` and the header generator still accept only their two hosted ABIs.
 
+D231's infallible `noreturn` is shared across target descriptions. Its signature
+identity survives ordinary function values, generics and erased evidence. An
+ordinary Cortex firmware entry may use it; interrupt/naked signatures remain
+`()->none`. A violated nonreturning-call promise traps after the call on every
+backend. Hosted C signatures support it within their existing ABI; Cortex
+continues to refuse the general C source surface.
+
 The existing scalar and recursive shape machinery supplies all byte placement;
 there is no separate Cortex layout algorithm in checking or neutral IR.
 

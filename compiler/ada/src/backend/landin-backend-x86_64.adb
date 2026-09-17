@@ -906,6 +906,8 @@ package body Landin.Backend.X86_64 is
              /= Landin.IR.Signature_Uses_C_ABI (Of_Unit, Right)
            or else Landin.IR.Signature_Has_Erased_Self (Of_Unit, Left)
              /= Landin.IR.Signature_Has_Erased_Self (Of_Unit, Right)
+           or else Landin.IR.Signature_Never_Returns (Of_Unit, Left)
+             /= Landin.IR.Signature_Never_Returns (Of_Unit, Right)
            or else Landin.IR.Signature_Is_Variadic (Of_Unit, Left)
              /= Landin.IR.Signature_Is_Variadic (Of_Unit, Right)
            or else Landin.IR.Signature_Parameter_Count (Of_Unit, Left)
@@ -4783,6 +4785,9 @@ package body Landin.Backend.X86_64 is
                   end if;
                   Emit_Epilogue (Value);
 
+               when Landin.IR.Halt =>
+                  Emit ("ud2");
+
                when Landin.IR.Fail =>
                   Emit ("movl " & Value_Operand (Operand (1)) & ", %r10d");
                   Emit_Epilogue (Value);
@@ -5560,7 +5565,7 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
                         | Landin.IR.Jump | Landin.IR.Branch
-                        | Landin.IR.Fail =>
+                        | Landin.IR.Fail | Landin.IR.Halt =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
                         raise Compiler_Defect

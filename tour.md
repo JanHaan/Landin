@@ -1722,6 +1722,18 @@ halt_it: () -> noreturn = loop do end loop end halt_it
 
 ```
 
+`none` returns normally without a value. `noreturn` never returns normally
+and has no checked error set. It is part of function-type identity: a
+`()->none` function cannot stand in for a `()->noreturn` function or vice
+versa. Calls end the continuation, so a branch that calls `halt_it()` needs
+no joined value. A body must diverge on every reachable path; a conditional
+loop is not enough merely because it is expected to run forever.
+
+A call does not unwind `defer`. A deferred nonreturning call, when its cleanup
+edge runs, stops later cleanup and the original transfer. Ordinary and C
+signatures may use this form within the target's supported surface; interrupt
+and naked signatures retain `()->none`. D231 specifies the detailed contract.
+
 ### [0900] Three parameter conventions
 
 Three parameter conventions, and they are about the value
@@ -3743,8 +3755,9 @@ work merely because `core/io` is linked, and no ordinary export or callback
 initializes or resets the root. Those views derive from the resulting world; a
 caller that must mutate the same backing-aware provider while retaining one
 first copies what it needs into its own storage. Freestanding there is no
-`main`; the explicit compiler request names an ordinary or naked, infallible
-`() -> none` source definition in the entry module. Compiler reset initializes
+`main`; the explicit compiler request names an infallible ordinary
+`() -> none` or `() -> noreturn` definition, or a naked `() -> none`
+definition, in the entry module. Compiler reset initializes
 RAM before calling it. Both normal return and failed checks trap without a
 hosted exit service. [1990] defines this constrained firmware path; general
 build/package orchestration is outside it.

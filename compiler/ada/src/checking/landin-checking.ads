@@ -968,7 +968,8 @@ package Landin.Checking is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -995,7 +996,8 @@ package Landin.Checking is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -1032,6 +1034,9 @@ package Landin.Checking is
       Node     : Landin.Syntax.Node_Id) return Signature_Part
      with Pre => Is_Prepared (Of_Table) and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Signature_Never_Returns
+     (Of_Table : Table; Signature : Signature_Id) return Boolean;
 
    function Signature_Machine
      (Of_Table : Table; Signature : Signature_Id)
@@ -2550,6 +2555,7 @@ private
      (Index_Type => Positive, Element_Type => Return_Source_Association);
 
    type Signature_Record is record
+      Nonreturning : Boolean := False;
       Parameters : Run;
       Results    : Run;
       Sources    : Run;

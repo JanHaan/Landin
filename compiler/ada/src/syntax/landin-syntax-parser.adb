@@ -4412,16 +4412,10 @@ package body Landin.Syntax.Parser is
                   return No_Node;
                end if;
 
-               --  [0890]'s never-returning signature remains a named
-               --  freestanding deferral. This position cannot be an
-               --  ordinary type/name expression; keep the body in hand.
                if Peek = Tok.Identifier and then Named_Here = Noreturn_Id
                then
-                  Refuse
-                    (Syn.Nonreturning_Function, Here,
-                     "the `noreturn` return form is not enabled");
                   Advance;
-                  return No_Node;
+                  return Add (Return_List, Start);
                end if;
 
                if not Expect

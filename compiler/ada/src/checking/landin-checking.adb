@@ -2797,7 +2797,8 @@ package body Landin.Checking is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
    is
       Made : Signature_Record :=
@@ -2808,6 +2809,7 @@ package body Landin.Checking is
          Errors     => Errors,
          Error_Form => Error_Form,
          Machine    => Machine,
+         Nonreturning => Nonreturning,
          C_ABI      => C_ABI,
          Variadic   => Variadic);
 
@@ -2852,19 +2854,26 @@ package body Landin.Checking is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature
            (Into, Parameters, No_Signature_Parts, Site,
-            Errors, Error_Form, Sources, C_ABI, Variadic, Machine);
+            Errors, Error_Form, Sources, C_ABI, Variadic, Machine,
+            Nonreturning);
       end if;
       return Add_Signature
         (Into, Parameters, Signature_Part_Array'[1 => Result], Site,
-         Errors, Error_Form, Sources, C_ABI, Variadic, Machine);
+         Errors, Error_Form, Sources, C_ABI, Variadic, Machine, Nonreturning);
    end Add_Signature;
+
+   function Signature_Never_Returns
+     (Of_Table : Table; Signature : Signature_Id) return Boolean
+     is (Holds (Of_Table, Signature)
+         and then Of_Table.Signatures (Positive (Signature)).Nonreturning);
 
    function Signature_Machine
      (Of_Table : Table; Signature : Signature_Id)
@@ -3165,7 +3174,9 @@ package body Landin.Checking is
          return True;
       end if;
 
-      if Signature_Machine (Of_Table, Left)
+      if Signature_Never_Returns (Of_Table, Left)
+           /= Signature_Never_Returns (Of_Table, Right)
+        or else Signature_Machine (Of_Table, Left)
            /= Signature_Machine (Of_Table, Right)
         or else Signature_Uses_C_ABI (Of_Table, Left)
            /= Signature_Uses_C_ABI (Of_Table, Right)
@@ -3544,7 +3555,9 @@ package body Landin.Checking is
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
    is
    begin
-      if Signature_Result_Count (Of_Table, Left)
+      if Signature_Never_Returns (Of_Table, Left)
+        /= Signature_Never_Returns (Of_Table, Right)
+        or else Signature_Result_Count (Of_Table, Left)
            /= Signature_Result_Count (Of_Table, Right)
       then
          return False;

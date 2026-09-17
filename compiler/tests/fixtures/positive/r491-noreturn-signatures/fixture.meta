@@ -1,0 +1,5 @@
+class: positive
+summary: nonreturning signatures retain the former named-refusal source unchanged
+program: main.ldn
+constructs: 0890, 1130, 1830
+targets: linux-x86-64, macos-arm64, synthetic-32

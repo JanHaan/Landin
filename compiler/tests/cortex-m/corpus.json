@@ -156,6 +156,11 @@
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r640-reserved-trap/fixture.meta"
     },
+    "abi/r670-noreturn": {
+      "mode": "restriction",
+      "reason": "Hosted C peers exercise external noreturn and returning-callee guards. Cortex keeps the general C surface refused; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware.",
+      "witness": "compiler/tests/fixtures/abi/r670-noreturn/fixture.meta"
+    },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute"
     },

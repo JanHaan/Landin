@@ -37,6 +37,7 @@ abi/r630-native-memory | linux-x86-64, macos-arm64
 abi/r640-dma-packed | linux-x86-64, macos-arm64
 abi/r640-exhaustive-encodings | linux-x86-64, macos-arm64
 abi/r640-reserved-trap | linux-x86-64, macos-arm64
+abi/r670-noreturn | linux-x86-64, macos-arm64
 end-to-end/r430-option-override-range | linux-x86-64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, macos-arm64
@@ -803,7 +804,6 @@ negative/r491-loop-assignment | linux-x86-64
 negative/r491-malformed-public-start | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-colon | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-paren | linux-x86-64, macos-arm64, synthetic-32
-negative/r491-noreturn-signatures | linux-x86-64
 negative/r491-operand-diagnostic-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-option-compiler-atom | linux-x86-64, synthetic-32
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
@@ -1271,6 +1271,7 @@ positive/r491-generic-pointee-layout | linux-x86-64
 positive/r491-local-type-scope | linux-x86-64, macos-arm64
 positive/r491-loop-assignment | linux-x86-64
 positive/r491-noreturn-name | linux-x86-64
+positive/r491-noreturn-signatures | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-ordinary-iterable | linux-x86-64
 positive/r491-range-endpoint-context | linux-x86-64, macos-arm64
 positive/r491-sink-call-entry | linux-x86-64, macos-arm64, synthetic-32

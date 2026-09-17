@@ -125,7 +125,7 @@ package body Landin.Driver is
       & "  -o PATH             where to write it" & LF
       & "  --toolchain=NAME    the assembler and linker driver to run" & LF
       & "  --linker=NAME       pass -fuse-ld=NAME to that driver" & LF
-      & "  --firmware-entry=NAME  Cortex entry-module routine () -> none"
+      & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
       & LF
       & LF
       & "Source files are scanned, parsed, resolved and checked as one"
@@ -462,7 +462,7 @@ package body Landin.Driver is
                      "firmware requires --firmware-entry="
                      & (if Selected = "" then "NAME" else Selected)
                      & " naming a nongeneric entry-module definition"
-                     & " () -> none with an empty error set"
+                     & " () -> none or noreturn with an empty error set"
                    else "a hosted program needs "
                      & Landin.Backend.Entry_Point.Required_Shape)));
          end Note_No_Entry;

@@ -764,7 +764,8 @@ package body Landin.IR is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
    is
       Made : Signature_Record :=
@@ -773,6 +774,7 @@ package body Landin.IR is
          Sources    => (First => 0, Count => 0),
          Errors     => Errors,
          Machine    => Machine,
+         Nonreturning => Nonreturning,
          C_ABI      => C_ABI,
          Variadic   => Variadic,
          Erased_Self => False);
@@ -811,19 +813,25 @@ package body Landin.IR is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature_With_Results
            (Into, Parameters, No_Signature_Parts, Errors, Sources,
-            C_ABI, Variadic, Machine);
+            C_ABI, Variadic, Machine, Nonreturning);
       end if;
       return Add_Signature_With_Results
         (Into, Parameters, Signature_Part_Array'[1 => Result], Errors,
-         Sources, C_ABI, Variadic, Machine);
+         Sources, C_ABI, Variadic, Machine, Nonreturning);
    end Add_Signature;
+
+   function Signature_Never_Returns
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     is (Holds (Of_Unit, Signature)
+         and then Of_Unit.Signatures (Positive (Signature)).Nonreturning);
 
    function Signature_Machine
      (Of_Unit : Unit; Signature : Signature_Id)
@@ -1027,6 +1035,8 @@ package body Landin.IR is
    begin
       if Signature_Has_Erased_Self (Of_Unit, Left)
            /= Signature_Has_Erased_Self (Of_Unit, Right)
+        or else Signature_Never_Returns (Of_Unit, Left)
+          /= Signature_Never_Returns (Of_Unit, Right)
         or else Signature_Machine (Of_Unit, Left)
            /= Signature_Machine (Of_Unit, Right)
         or else Signature_Uses_C_ABI (Of_Unit, Left)
@@ -1159,7 +1169,8 @@ package body Landin.IR is
             end loop;
             Dispatch := Add_Signature_With_Results
               (Into, Parameters, Results, Concrete.Errors, Sources,
-               Concrete.C_ABI, Concrete.Variadic, Concrete.Machine);
+               Concrete.C_ABI, Concrete.Variadic, Concrete.Machine,
+               Concrete.Nonreturning);
             Into.Signatures (Positive (Dispatch)).Erased_Self := True;
          end;
       end if;
@@ -5134,6 +5145,15 @@ package body Landin.IR is
       Where := Append (Into, Item, Made);
       pragma Assert (Where /= No_Value);
    end Emit_Branch;
+
+   procedure Emit_Halt
+     (Into : in out Unit; Item : Item_Id; Site : Landin.Provenance.Origin)
+   is
+      Where : constant Value_Id := Append
+        (Into, Item, (Op => Halt, Site => Site, others => <>));
+   begin
+      pragma Assert (Where /= No_Value);
+   end Emit_Halt;
 
    procedure Emit_Fail
      (Into  : in out Unit;

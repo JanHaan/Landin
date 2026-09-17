@@ -1,0 +1,54 @@
+extern(c) finish: (value: u32) -> noreturn
+extern(c) wrongly_returns: () -> noreturn
+extern(c) mark: (value: u32) -> none
+
+invoke: (t: type, value: t, stop: (value: t) -> noreturn) -> noreturn =
+    stop(value)
+end invoke
+
+stop: (value: u32) -> noreturn = finish(value) end stop
+
+stopper: type = concept (t: type)
+    stop: (self: ptr t) -> noreturn
+end stopper
+thing: type = struct value: u32 end thing
+stop_thing: (self: ptr thing) -> noreturn = stop(self.val.value) end stop_thing
+thing is stopper (stop: stop_thing)
+evidence: (t: type is stopper, value: ptr t) -> noreturn = t.stop(value) end evidence
+
+deferred: () -> noreturn =
+    defer mark(99)
+    defer stop(42)
+    defer mark(7)
+    return
+end deferred
+
+bad: atom
+failure: () -> (value: u32) ! bad = fail bad end failure
+
+recovered: () -> noreturn =
+    _ = failure() else stop(42)
+    stop(2)
+end recovered
+
+public extern(c) run_path: (mode: u32) -> noreturn =
+    defer mark(99)
+    item: thing = (value: 42)
+    if mode == 0 then
+        stop(42)
+    elsif mode == 1 then
+        invoke(u32(42), stop)
+    elsif mode == 2 then
+        evidence(addr item)
+    elsif mode == 3 then
+        erased: any stopper = any(addr item)
+        erased.stop()
+    elsif mode == 4 then
+        deferred()
+    elsif mode == 5 then
+        recovered()
+    else
+        wrongly_returns()
+        mark(99)
+    end if
+end run_path
