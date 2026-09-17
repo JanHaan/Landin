@@ -398,10 +398,13 @@ package body Landin.Driver is
                   Message => Text));
          end Note_Failure;
 
-         procedure Note_No_Entry;
+         procedure Note_No_Entry (For_Firmware : Boolean := False);
 
-         procedure Note_No_Entry is
+         procedure Note_No_Entry (For_Firmware : Boolean := False) is
             package Res renames Landin.Resolution;
+            Selected : constant String :=
+              (if For_Firmware then Unbounded.To_String (Firmware_Name)
+               else "main");
             Grouped : Landin.Modules.Table renames
               Landin.Stages.Modules (Context).all;
             Meanings : Res.Table renames
@@ -440,7 +443,7 @@ package body Landin.Driver is
                       = Landin.Modules.Entry_Module
                     and then Landin.Source.Names.Spelling
                       (Landin.Stages.Identities (Context).all,
-                       Res.Name_Of (Meanings, Id)) = "main"
+                       Res.Name_Of (Meanings, Id)) = Selected
                     and then Landin.Configuration.Is_Active
                       (Landin.Stages.Configurations (Context).all, From, Node)
                   then
@@ -455,8 +458,13 @@ package body Landin.Driver is
             Landin.Stages.Report
               (Context, Landin.Diagnostics.Make
                  (Code_No_Entry, Landin.Diagnostics.Error, Source, Where,
-                  "a hosted program needs "
-                  & Landin.Backend.Entry_Point.Required_Shape));
+                  (if For_Firmware then
+                     "firmware requires --firmware-entry="
+                     & (if Selected = "" then "NAME" else Selected)
+                     & " naming a nongeneric entry-module definition"
+                     & " () -> none with an empty error set"
+                   else "a hosted program needs "
+                     & Landin.Backend.Entry_Point.Required_Shape)));
          end Note_No_Entry;
 
          --  L0500 owes a note, because it is the one diagnostic here a
@@ -1018,10 +1026,7 @@ package body Landin.Driver is
                   Landin.Stages.Identities (Context).all,
                   Unbounded.To_String (Firmware_Name));
                if Firmware_Entry = Landin.IR.No_Item then
-                  Note_Failure
-                    (Code_No_Entry, "firmware requires --firmware-entry=NAME"
-                     & " naming an entry-module routine () -> none"
-                     & " with an empty error set");
+                  Note_No_Entry (For_Firmware => True);
                   return;
                end if;
                if not Landin.Backend.Firmware.Materialization_Fits
