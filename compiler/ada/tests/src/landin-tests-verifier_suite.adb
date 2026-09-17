@@ -8033,8 +8033,82 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Variant_Slice_Images_Are_Checked;
 
+   procedure Nonreturning_Calls_End_Their_Block
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nonreturning_Calls_End_Their_Block
+     (Item : in out Landin.Testing.Context) is
+   begin
+      for Scenario in 0 .. 3 loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+            Never, Ordinary : IR.Signature_Id;
+            Callee, Caller : IR.Item_Id;
+            Block : IR.Block_Id;
+            Value : IR.Value_Id;
+            pragma Unreferenced (Value);
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Never := IR.Add_Signature_With_Results
+              (Unit, IR.No_Signature_Parts, IR.No_Signature_Parts,
+               Nonreturning => True);
+            Ordinary := IR.Add_Signature_With_Results
+              (Unit, IR.No_Signature_Parts, IR.No_Signature_Parts);
+            Landin.Testing.Check
+              (Item, not IR.Signatures_Agree (Unit, Never, Ordinary),
+               "none and noreturn retain distinct identity");
+            Callee := IR.Add_Item
+              (Unit, IR.Routine, IR.No_Declaration,
+               Landin.Types.No_Value, Site);
+            Caller := IR.Add_Item
+              (Unit, IR.Routine, IR.No_Declaration,
+               Landin.Types.No_Value, Site);
+            IR.Set_Signature (Unit, Callee, Never);
+            IR.Set_Signature (Unit, Caller, Ordinary);
+            Block := IR.Add_Block
+              (Unit, Callee, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Callee, Block);
+            if Scenario = 3 then
+               IR.Emit_Leave (Unit, Callee, IR.No_Value, Site);
+            else
+               IR.Emit_Halt (Unit, Callee, Site);
+            end if;
+            IR.Leave_Block (Unit, Callee);
+            Block := IR.Add_Block
+              (Unit, Caller, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Caller, Block);
+            Value := IR.Emit_Call
+              (Unit, Caller, Callee, Landin.Types.No_Value, Site);
+            if Scenario = 1 then
+               IR.Emit_Leave (Unit, Caller, IR.No_Value, Site);
+            else
+               if Scenario = 2 then
+                  Value := IR.Emit_Number
+                    (Unit, Caller, Landin.Types.U32, 1, False, Site);
+               end if;
+               IR.Emit_Halt (Unit, Caller, Site);
+            end if;
+            IR.Leave_Block (Unit, Caller);
+            Expect
+              (Item, V.Check (Unit),
+               (case Scenario is
+                  when 0 => V.Nothing_Wrong,
+                  when 3 => V.Leave_Disagrees_With_Item,
+                  when others => V.Terminator_Inside_A_Block),
+               "nonreturning calls have no continuing action");
+         end;
+      end loop;
+   end Nonreturning_Calls_End_Their_Block;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "nonreturning calls end their block",
+         Nonreturning_Calls_End_Their_Block'Access);
       Landin.Testing.Register
         (Into, "verifier", "raw words do not restore pointees",
          Raw_Words_Do_Not_Restore_Pointees'Access);

@@ -33,6 +33,8 @@ package body Landin.IR.Effects is
          when Call | Indirect_Call | Memory_Access =>
             return (Reads => True, Writes => True, Calls => True,
                     Traps => True, others => False);
+         when Halt =>
+            return (Control => True, Traps => True, others => False);
          when Jump | Branch | Leave | Fail =>
             return (Control => True, others => False);
       end case;

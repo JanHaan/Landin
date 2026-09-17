@@ -998,7 +998,9 @@ package body Landin.IR.Dump is
                       " extern(interrupt)",
                     when Landin.Machine.Naked_Routine => " extern(naked)")
                & " (" & Unbounded.To_String (Parameters) & ") -> "
-               & (if Signature_Result_Count (Of_Unit, Id) = 0
+               & (if Signature_Never_Returns (Of_Unit, Id)
+                  then "noreturn"
+                  elsif Signature_Result_Count (Of_Unit, Id) = 0
                   then "none"
                   elsif Signature_Result_Count (Of_Unit, Id) = 1
                   then Unbounded.To_String (Results)

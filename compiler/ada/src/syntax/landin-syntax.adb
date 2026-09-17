@@ -533,6 +533,10 @@ package body Landin.Syntax is
    function Returns_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
+   function Never_Returns (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Returns_Of (Of_Tree, Id) /= No_Node
+         and then Run_Length (Of_Tree, Returns_Of (Of_Tree, Id)) = 0);
+
    function Return_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (if Returns_Of (Of_Tree, Id) = No_Node then 0
          else Run_Length (Of_Tree, Returns_Of (Of_Tree, Id)));

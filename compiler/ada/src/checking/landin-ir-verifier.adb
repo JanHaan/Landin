@@ -244,6 +244,7 @@ package body Landin.IR.Verifier is
             when Jump          => 0,
             when Branch        => 1,
             when Leave         => 0,
+            when Halt          => 0,
             when Fail          => 1);
 
    function Check
@@ -1642,6 +1643,7 @@ package body Landin.IR.Verifier is
               or else Concrete.Results.Count /= Dispatch.Results.Count
               or else Concrete.Sources.Count /= Dispatch.Sources.Count
               or else Concrete.Errors /= Dispatch.Errors
+              or else Concrete.Nonreturning /= Dispatch.Nonreturning
               or else Concrete.C_ABI /= Dispatch.C_ABI
               or else Concrete.Variadic /= Dispatch.Variadic
             then
@@ -3038,6 +3040,13 @@ package body Landin.IR.Verifier is
                Held : constant Signature_Record :=
                  Of_Unit.Signatures (Which);
             begin
+               if Held.Nonreturning
+                 and then (Held.Results.Count /= 0
+                   or else Held.Errors /= No_Atom_Set
+                   or else Held.Machine /= Landin.Machine.Ordinary)
+               then
+                  return (Kind => Signature_Part_Malformed, others => <>);
+               end if;
                if Held.Errors /= No_Atom_Set
                  and then not Holds (Of_Unit, Held.Errors)
                then
@@ -6175,6 +6184,21 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
+                                 if Signature_Never_Returns
+                                   (Of_Unit, Signature)
+                                   and then
+                                     (Position + 1 /= Last
+                                      or else Op_Of
+                                        (Of_Unit, Id, Nth_Value
+                                           (Of_Unit, Id, Block, Last))
+                                          /= Halt)
+                                 then
+                                    return
+                                      (Kind => Terminator_Inside_A_Block,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
                                  if Signature_Machine (Of_Unit, Signature)
                                    /= Landin.Machine.Ordinary
                                  then
@@ -7843,7 +7867,18 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
+                           when Halt =>
+                              if Is_Datum then
+                                 return (Result_Disagrees, Id, Block, V);
+                              end if;
+
                            when Leave =>
+                              if Signature_Never_Returns
+                                (Of_Unit, Signature_Of (Of_Unit, Id))
+                              then
+                                 return (Leave_Disagrees_With_Item,
+                                         Id, Block, V);
+                              end if;
                               --  Aggregate results use caller storage.  Every
                               --  scalar carrier, including a function code
                               --  address, is carried by the leave itself.

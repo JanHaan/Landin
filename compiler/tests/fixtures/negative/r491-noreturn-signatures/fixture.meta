@@ -1,6 +1,0 @@
-class: negative
-summary: never-returning signatures have the named freestanding refusal without swallowing later declarations
-program: main.ldn
-codes: L0010, L0010
-constructs: 0890, 1130, 1830
-targets: linux-x86-64

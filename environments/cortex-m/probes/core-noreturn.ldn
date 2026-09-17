@@ -1,0 +1,76 @@
+import core/cpu
+
+mut initialized: u32 = 0x670
+mut cleared: u32 = 0
+mut mode: u32 = 0
+mut observed: u32 = 0
+link(keep) mut later: u32 = 0
+mut cleanup_order: u32 = 0
+
+finished: () -> noreturn =
+    loop do
+        cpu.wait_for_interrupt()
+    end loop
+end finished
+
+finish: (value: u32) -> noreturn =
+    observed = value
+    finished()
+    later = 1
+end finish
+
+after: () -> none = later = 2 end after
+mark: () -> none = cleanup_order = 7 end mark
+
+deferred: () -> noreturn =
+    defer after()
+    defer finish(42)
+    defer mark()
+    return
+end deferred
+
+invoke: (t: type, value: t, stop: (value: t) -> noreturn) -> noreturn =
+    stop(value)
+end invoke
+
+stopper: type = concept (t: type)
+    stop: (self: ptr t) -> noreturn
+end stopper
+
+thing: type = struct
+    value: u32
+end thing
+
+stop_thing: (self: ptr thing) -> noreturn =
+    finish(self.val.value)
+end stop_thing
+
+thing is stopper (stop: stop_thing)
+
+evidence: (t: type is stopper, value: ptr t) -> noreturn =
+    t.stop(value)
+end evidence
+
+bad: atom
+failure: () -> (value: u32) ! bad = fail bad end failure
+
+start: () -> noreturn =
+    defer after()
+    if initialized <> 0x670 or cleared <> 0 then finish(1) end if
+    item: thing = (value: 42)
+    if mode == 0 then
+        finish(42)
+    elsif mode == 1 then
+        invoke(u32(42), finish)
+    elsif mode == 2 then
+        evidence(addr item)
+    elsif mode == 3 then
+        erased: any stopper = any(addr item)
+        erased.stop()
+    elsif mode == 4 then
+        deferred()
+    else
+        _ = failure() else finish(42)
+        finish(2)
+    end if
+end start

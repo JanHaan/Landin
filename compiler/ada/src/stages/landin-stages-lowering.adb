@@ -969,6 +969,8 @@ package body Landin.Stages.Lowering is
                 (Landin.Checking.Signature_Errors (Types.all, Source)),
               (if Source_Count = 0 then IR.No_Return_Sources
                else Sources (1 .. Source_Count)),
+              Nonreturning => Landin.Checking.Signature_Never_Returns
+                (Types.all, Source),
               Machine => Landin.Checking.Signature_Machine
                 (Types.all, Source),
               C_ABI => Landin.Checking.Signature_Uses_C_ABI
@@ -1033,6 +1035,7 @@ package body Landin.Stages.Lowering is
               IR.Signature_Errors (Unit.all, Source),
               (if Source_Count = 0 then IR.No_Return_Sources
                else Sources (1 .. Source_Count)),
+              Nonreturning => IR.Signature_Never_Returns (Unit.all, Source),
               Machine => IR.Signature_Machine (Unit.all, Source),
               C_ABI => IR.Signature_Uses_C_ABI (Unit.all, Source),
               Variadic => IR.Signature_Is_Variadic (Unit.all, Source));
@@ -5127,6 +5130,15 @@ package body Landin.Stages.Lowering is
          for Which in 1 .. Actual_Count loop
             IR.Add_Argument (Unit.all, Filling, Made, Given (Which));
          end loop;
+
+         if Landin.Checking.Signature_Never_Returns
+           (Types.all, Source_Signature)
+         then
+            IR.Emit_Halt (Unit.all, Filling, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            return IR.No_Value;
+         end if;
 
          if Error_Set = IR.No_Atom_Set then
             return Made;

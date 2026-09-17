@@ -835,6 +835,22 @@ package body Landin.Stages.Checking is
                        and then Landin.Targets.Capabilities.C_Variadic_Calls
                          (Facts)));
       begin
+         if Syn.Never_Returns (Of_Tree, Node)
+           and then (Syn.Error_Set_Of (Of_Tree, Node) /= Syn.No_Node
+             or else Syn.Machine_Convention (Of_Tree, Node)
+               /= Landin.Machine.Ordinary)
+         then
+            Bad.Report
+              (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Node),
+               Message => "noreturn requires an infallible ordinary signature",
+               Note => "[0890]: checked failure and machine returns have"
+                 & " distinct continuations", Related => Syn.Origin
+                   (Of_Tree, Node), Because => "this return form",
+               Into => Found);
+            Valid := False;
+            return;
+         end if;
          if Syn.Machine_Convention (Of_Tree, Node)
            /= Landin.Machine.Ordinary
          then
@@ -3795,6 +3811,7 @@ package body Landin.Stages.Checking is
                      (if Source_Count = 0
                       then Landin.Checking.No_Return_Sources
                       else Sources (1 .. Source_Count)),
+                     Nonreturning => Syn.Never_Returns (Of_Tree, Written),
                      Machine => Syn.Machine_Convention (Of_Tree, Written),
                      C_ABI => Syn.Uses_C_ABI (Of_Tree, Written),
                      Variadic => Syn.Is_Variadic (Of_Tree, Written)),
@@ -7148,6 +7165,7 @@ package body Landin.Stages.Checking is
                  (if Source_Count = 0
                   then Landin.Checking.No_Return_Sources
                   else Sources (1 .. Source_Count)),
+                 Nonreturning => Syn.Never_Returns (Of_Tree, Node),
                  Machine => Syn.Machine_Convention (Of_Tree, Node),
                  C_ABI => Syn.Uses_C_ABI (Of_Tree, Node),
                  Variadic => Syn.Is_Variadic (Of_Tree, Node));
@@ -9454,6 +9472,9 @@ package body Landin.Stages.Checking is
                     or else Syn.Machine_Convention (Pattern_Tree, Pattern)
                       /= Landin.Checking.Signature_Machine
                         (Types.all, Signature)
+                    or else Syn.Never_Returns (Pattern_Tree, Pattern)
+                      /= Landin.Checking.Signature_Never_Returns
+                        (Types.all, Signature)
                     or else Syn.Is_Variadic (Pattern_Tree, Pattern)
                        /= Landin.Checking.Signature_Is_Variadic
                          (Types.all, Signature)
@@ -10360,6 +10381,8 @@ package body Landin.Stages.Checking is
                         (if Source_Count = 0
                          then Landin.Checking.No_Return_Sources
                          else Sources (1 .. Source_Count)),
+                        Nonreturning => Syn.Never_Returns
+                          (Template_Tree.all, Function_Node),
                         Machine => Syn.Machine_Convention
                           (Template_Tree.all, Function_Node),
                         C_ABI => Syn.Uses_C_ABI
@@ -13719,7 +13742,9 @@ package body Landin.Stages.Checking is
             Syn.Origin (Concept_Tree.all, Entry_Node), Errors, Error_Form,
             (if Source_Count = 0
              then Landin.Checking.No_Return_Sources
-             else Sources (1 .. Source_Count)));
+             else Sources (1 .. Source_Count)),
+            Nonreturning => Syn.Never_Returns
+              (Concept_Tree.all, Entry_Node));
       end Exact_Concept_Entry_Signature;
 
       --  A provider signature is also the runtime target signature, but its
@@ -14259,6 +14284,20 @@ package body Landin.Stages.Checking is
                      Errors : constant Syn.Node_Id :=
                        Syn.Error_Set_Of (Of_Tree, Requirement_Node);
                   begin
+                     if Errors /= Syn.No_Node
+                       and then Syn.Never_Returns
+                         (Of_Tree, Requirement_Node)
+                     then
+                        Bad.Report
+                          (Item => Bad.Type_Mismatch,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Where (Of_Tree, Errors),
+                           Message => "a noreturn entry is infallible",
+                           Note => "[0890]: checked failure returns control",
+                           Related => Syn.Origin
+                             (Of_Tree, Requirement_Node),
+                           Because => "the concept entry", Into => Found);
+                     end if;
                      if Errors /= Syn.No_Node
                        and then Syn.Kind (Of_Tree, Errors)
                                   = Syn.Inferred_Error_Set
@@ -15894,7 +15933,11 @@ package body Landin.Stages.Checking is
                                                      then Landin.Checking
                                                        .No_Return_Sources
                                                      else Sources
-                                                       (1 .. Source_Count)));
+                                                       (1 .. Source_Count)),
+                                                    Nonreturning =>
+                                                      Syn.Never_Returns
+                                                        (Concept_Tree.all,
+                                                         Requirement_Node));
                                           begin
                                              if not Landin.Checking
                                                .Signatures_Agree
@@ -16819,7 +16862,10 @@ package body Landin.Stages.Checking is
                                             then Landin.Checking
                                               .No_Return_Sources
                                             else Sources
-                                              (1 .. Source_Count)));
+                                              (1 .. Source_Count)),
+                                           Nonreturning => Syn.Never_Returns
+                                             (Concept_Tree.all,
+                                              Requirement_Node));
                                     Actual_Signature : constant
                                       Landin.Checking.Signature_Id :=
                                         Landin.Checking.Signature_Of
@@ -25257,6 +25303,56 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Block;
 
+      --  A nonreturning call is a control edge, never a value of type none.
+      --  Synthesis still checks its callee and every argument before flow
+      --  removes the continuation.
+      function Nonreturning_Call
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Nonreturning_Call
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Signature : Landin.Checking.Signature_Id;
+         Target : Landin.Checking.Routine_Instance_Id;
+         Callee : Syn.Node_Id;
+         Got : Ty.Type_Kind;
+      begin
+         if Node = Syn.No_Node
+           or else Syn.Kind (Of_Tree, Node) not in
+             Syn.Call | Syn.Labeled_Application
+           or else (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
+             and then Res.Class_Of (Meanings.all, Of_Tree, Node)
+               /= Res.Function_Call)
+         then
+            return False;
+         end if;
+         --  A recovery call is necessarily fallible and cannot have this
+         --  return form. Leave its contextual result checking in place;
+         --  prematurely synthesizing it can lose a recovery's result shape.
+         if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+            return False;
+         end if;
+         Got := Synthesise (Of_Tree, Node);
+         if Got /= Ty.No_Value then
+            return False;
+         end if;
+         Target := Landin.Checking.Routine_Target_Of
+           (Types.all, Of_Tree, Node);
+         Callee := Syn.Callee_Of (Of_Tree, Node);
+         Signature := Landin.Checking.Signature_Of
+           (Types.all, Of_Tree, Callee);
+         if Target /= Landin.Checking.No_Routine_Instance then
+            Signature := Landin.Checking.Routine_Signature_Of
+              (Types.all, Target);
+         elsif Signature = Landin.Checking.No_Signature
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+         then
+            Signature := Landin.Checking.Signature_Of
+              (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
+         end if;
+         return Landin.Checking.Signature_Never_Returns (Types.all, Signature);
+      end Nonreturning_Call;
+
       --  The first syntactic answer is enough to infer a control value's
       --  context.  Missing answers are deliberately skipped: flow decides
       --  whether that block can fall through, and an early return is a
@@ -25390,7 +25486,9 @@ package body Landin.Stages.Checking is
                           Syn.Body_Of
                             (Of_Tree, Syn.Nth_Arm (Of_Tree, Node, Arm)));
                   begin
-                     if Value /= Syn.No_Node then
+                     if Value /= Syn.No_Node
+                       and then not Nonreturning_Call (Of_Tree, Value)
+                     then
                         return Value;
                      end if;
                   end;
@@ -25412,7 +25510,9 @@ package body Landin.Stages.Checking is
                             (Of_Tree,
                              Syn.Nth_Match_Arm (Of_Tree, Node, Arm)));
                   begin
-                     if Value /= Syn.No_Node then
+                     if Value /= Syn.No_Node
+                       and then not Nonreturning_Call (Of_Tree, Value)
+                     then
                         return Value;
                      end if;
                   end;
@@ -25717,6 +25817,10 @@ package body Landin.Stages.Checking is
       is
       begin
          if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Nonreturning_Call (Of_Tree, Node) then
             return;
          end if;
 
@@ -31834,6 +31938,19 @@ package body Landin.Stages.Checking is
                Check_Operands (Of_Tree, Syn.Value_Of (Of_Tree, Node),
                                Whole_Fold => True);
             when Syn.Function_Declaration =>
+               if Syn.Generic_Formal_Count (Of_Tree, Node) > 0
+                 and then Syn.Never_Returns (Of_Tree, Node)
+                 and then Syn.Error_Set_Of (Of_Tree, Node) /= Syn.No_Node
+               then
+                  Bad.Report
+                    (Item => Bad.Type_Mismatch,
+                     Source => Syn.Source_Of (Of_Tree),
+                     Where => Syn.Where (Of_Tree, Node),
+                     Message => "a noreturn generic is infallible",
+                     Note => "[0890]: checked failure returns control",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "this return form", Into => Found);
+               end if;
                if Syn.Uses_C_ABI (Of_Tree, Node)
                  or else Syn.Link_Symbol_Span (Of_Tree, Node)
                    /= Landin.Source.Empty_Span

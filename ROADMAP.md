@@ -10873,16 +10873,75 @@ C/assembly control and all four peripheral consumers. Full `python3 check.py`
 and verified site rendering pass for the increment; the new core guide is
 included in both the live-document inventory and rendered site.
 
+D231's subsequent increment enables an infallible, structurally distinct
+`noreturn` return form on all three targets. It preserves function, generic
+and erased-evidence identity; terminates call continuations; rejects reachable
+return/fallthrough, checked error sets and interrupt/naked use; and permits
+ordinary nonreturning firmware entry. `none` keeps its existing behavior.
+Deferred nonreturning calls stop the current cleanup/transfer; direct calls
+do not unwind. A verified terminal IR guard traps if a foreign callee violates
+the promise by returning. Source/IR changes preserve ordinary frames and all
+private success/failure carriers. Alternatives—treating none as divergence,
+adding a value type or admitting a failure continuation—are rejected in D231.
+
+The exact source of `negative/r491-noreturn-signatures` moves unchanged to
+`positive/r491-noreturn-signatures`; its former two parser refusals are now
+accepted syntax. Historical J15/R551-31 findings remain historical. The shared
+runtime/ABI inventory grows from 533 to 534 with `abi/r670-noreturn`, explicitly
+classified as a general-C restriction on Cortex. All original 533 dispositions,
+2,012 executions/435 programs, 50 source refusals, 31 C restrictions, 72 capacity
+verdicts/17 programs and 72 generated controls remain; the added hosted peer
+does not replace one. The R6.60 37/24-session, 270-comparison lane is unchanged.
+
+`core-noreturn.ldn` adds six real call paths at six profiles: 36 QEMU sessions
+and 30 fresh-directory artifact comparisons. The retained development run
+`core-noreturn-2` passed with 2,572–2,732 flash bytes, 28 static RAM bytes and
+200–376 observed stack bytes within the inherited 4 KiB reservation. Its
+copied result SHA-256 is
+`b98959bb8dec65ada9ed77ca810ecdfc833a43113c11e286453ddeac4c895108`;
+all 336 artifact hashes verified. The first exploratory run correctly found
+that unreferenced observation storage was removed; explicit `link(keep)` now
+retains that storage and tests retention alongside absence of later stores.
+The mandatory freestanding inventory is now nine consumers: 78 QEMU sessions,
+six Renode runs and 270 deterministic comparisons when run in full.
+
+The native C peer independently checks six nonreturning paths and a deliberately
+returning foreign callee. Linux's filtered native fixture run passed all six
+profiles (14 harness assertions); Darwin's filtered run verified six outcomes
+in `noreturn-darwin-3`. The returning peer must produce SIGILL on Linux and
+SIGTRAP on Darwin without later source actions, while successful paths exit
+42 with independently observed cleanup markers. These are implementation
+controls, not a stronger general signal promise than D11. Mac compiler-host
+checking passed 112 cases/3,403 assertions before additional labelled/convention
+controls. The independent malformed-IR case passed eight assertions. A broad
+parser run exposed premature synthesis of contextual recovery calls; their
+original diagnostic oracles were preserved while classification was corrected.
+The final focused control-flow case passes 204 assertions across all three
+target descriptions, including labelled calls, convention refusals, evidence
+mismatch and failure-only cleanup. The repaired parser diagnostic case passes
+all 1,947 assertions unchanged. Both native peers pass all six profiles again
+after that correction (`noreturn-darwin-final` on the Mac). The strengthened
+`core-noreturn-frames-1` run independently walks every previous-r11/incoming-LR
+eight-byte record, checks the exact expected call depth for each path, and
+passes all 36 QEMU sessions/30 comparisons. Its copied result SHA-256 is
+`b35ea67f718fe9492dfa367af08cdea8200c24d43825793e6eed15dde0b8fec7`;
+all 336 artifact hashes verify. Image and stack extents are unchanged.
+Full `python3 check.py` and verified rendering pass for this increment.
+All this is development evidence, not exact-revision approval.
+
 This increment does not close R6.70. D11/[1670] panic-handler selection,
-check-kind/site mapping and deterministic optional source maps, and [0890]'s
-`noreturn` signatures/control flow remain required implementation within this
-item. Their hosted compatibility, generic/evidence identity, optimizer roots,
-cleanup/failure choices and independent executable oracles must be completed
-before exact-revision closure. Existing named `noreturn` refusals and current
-trap behavior remain in force meanwhile. R551-31 is not discharged by the
-CPU/library probes. Appropriate routine debugger-risk scope must be explicitly
-selected and committed before the final candidate, then both native policies
-must accept the identical archive before approval/promotion/publication.
+check-kind/site mapping and deterministic optional source maps remain required.
+The panic mechanism must integrate hosted behavior, generic/evidence identity,
+optimizer roots, cleanup/failure decisions and independent executable oracles.
+D231's `noreturn` implementation and bounded execution are development evidence;
+current trap behavior remains until panic integration. R551-31 is not
+discharged by these increments.
+`python3 scripts/ci/policy.py routine --debugger` explicitly reselected the
+compatible Linux/Darwin routine debugger-risk policies. Both tracked policy
+files already contain those selected values. Their full native release
+GDB/LLDB scope is required for the final candidate, including panic/control
+flow and source-site risk. Both policies must accept the identical archive
+before approval/promotion/publication.
 
 R6.80 retains checked-in generated-device fixtures; R6.90 retains the complete
 derived driver and DMA consumption/overrun protocol; R6.100 retains Landin

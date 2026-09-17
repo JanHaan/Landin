@@ -140,12 +140,50 @@ def memory(run, elf):
         'print("R670_CORE_MEMORY_PASS")', 'end'], 'R670_CORE_MEMORY_PASS')
 
 
+def nonreturning(run, elf):
+    # The same cold image selects six real call paths after initialization.
+    # Stop at a callee reached only after the store; no source debugger or
+    # instruction-text oracle is substituted for execution.
+    for mode in range(6):
+        lane = run.out / ('path-'+str(mode))
+        lane.mkdir()
+        execute(Run(lane, run.tools), elf, [
+            'set *(unsigned*)&initialized = 0xaaaaaaaa',
+            'set *(unsigned*)&cleared = 0xbbbbbbbb',
+            'break *start', 'continue', 'delete breakpoints', 'python',
+            'assert v("*(unsigned*)&initialized") == 0x670',
+            'assert v("*(unsigned*)&cleared") == 0',
+            'assert v("$sp") == 0x20004000 and v("$r11") == 0',
+            'gdb.selected_inferior().write_memory(0x20003000, bytes([0xa5])*4096)',
+            'end', 'set *(unsigned*)&mode = '+str(mode),
+            'break *finished', 'continue', 'python',
+            'assert v("*(unsigned*)&observed") == 42',
+            'assert v("*(unsigned*)&later") == 0',
+            'assert v("*(unsigned*)&cleanup_order") == '+str(7 if mode == 4 else 0),
+            'assert v("$sp") % 8 == 0 and v("$sp") >= 0x20003000',
+            'assert v("$r9") == 0',
+            'frame = v("$r11")', 'depth = 0',
+            'while frame:',
+            '    assert frame % 8 == 0 and 0x20003000 <= frame < 0x20004000',
+            '    prior = v("*(unsigned*)%d" % frame)',
+            '    incoming = v("*(unsigned*)%d" % (frame+4))',
+            '    assert incoming & 1 and incoming < 0x8000',
+            '    assert prior == 0 or prior > frame',
+            '    frame = prior', '    depth += 1', '    assert depth <= 16',
+            'assert depth == '+str([2, 3, 4, 3, 3, 2][mode]),
+            'paint = bytes(gdb.selected_inferior().read_memory(0x20003000,4096))',
+            'assert paint[:256] == bytes([0xa5])*256',
+            'print("R670_STACK_OBSERVED", 4096-next(i for i,b in enumerate(paint) if b != 0xa5))',
+            'print("R670_NORETURN_PASS")', 'end'], 'R670_NORETURN_PASS')
+
+
 def programs():
     corpus_inventory()
     result = {'cpu': (HERE / 'probes/core-cpu.ldn').read_text(),
               'pool': (HERE / 'probes/core-pool.ldn').read_text(),
               'zero': (HERE / 'probes/core-zero.ldn').read_text(),
-              'vec': (HERE / 'probes/core-vec.ldn').read_text()}
+              'vec': (HERE / 'probes/core-vec.ldn').read_text(),
+              'noreturn': (HERE / 'probes/core-noreturn.ldn').read_text()}
     dma = (HERE / 'probes/firmware-dma.ldn').read_text()
     changes = {
         'assembler.block("cpsid i")': 'saved_mask := cpu.disable_interrupts()',
@@ -193,7 +231,8 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
             out.mkdir()
             run = Run(out, parent.tools)
             elf = build(run, refine, program, optimize, specialize)
-            (cpu if name == 'cpu' else dma_execute if name == 'dma' else memory)(run, elf)
+            (cpu if name == 'cpu' else dma_execute if name == 'dma' else
+             nonreturning if name == 'noreturn' else memory)(run, elf)
             fresh = out / 'fresh'
             fresh.mkdir()
             build(Run(fresh, parent.tools), refine, program, optimize, specialize)

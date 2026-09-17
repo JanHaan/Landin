@@ -12,12 +12,14 @@ with Ada.Strings.Unbounded;
 with Landin.Checking;
 with Landin.Diagnostics;
 with Landin.IR;
+with Landin.IR.Verifier;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
+with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Syntax;
@@ -29,6 +31,7 @@ with Landin.Types;
 package body Landin.Tests.Checking_Suite is
 
    use type Landin.IR.Item_Id;
+   use type Landin.IR.Verifier.Fault_Kind;
    use type Landin.IR.Nominal_Type_Id;
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Span;
@@ -13602,8 +13605,207 @@ package body Landin.Tests.Checking_Suite is
       end loop;
    end Writable_Returns_Keep_All_Destinations;
 
+   procedure Nonreturning_Control_And_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nonreturning_Control_And_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Lowerer : Landin.Stages.Lowering.Instance;
+      Targets : constant array (Positive range 1 .. 3) of
+        Landin.Targets.Target_Facts :=
+          [Landin.Targets.Linux_X86_64, Landin.Targets.Darwin_Arm64,
+           Landin.Targets.Cortex_M];
+      procedure Check_Source
+        (Label : String; Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label : String; Text : String; Accepted : Boolean) is
+      begin
+         for Target of Targets
+         loop
+            declare
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Target);
+               Order : Landin.Stages.Pipeline;
+               Ran : Natural;
+               Outcome : Landin.Stages.Stage_Outcome;
+               Src : Landin.Source.Source_Id;
+               pragma Unreferenced (Src);
+            begin
+               Src := Landin.Stages.Add_Source
+                 (Work, "noreturn.ldn", Text);
+               Landin.Stages.Append (Order, Frontend'Access);
+               Landin.Stages.Append (Order, Configurer'Access);
+               Landin.Stages.Append (Order, Names'Access);
+               Landin.Stages.Append (Order, Checker'Access);
+               Ran := Landin.Stages.Run (Order, Work);
+               Landin.Testing.Check_Equal
+                 (Item, Ran, 4, Label & ": reaches checking");
+               Landin.Testing.Check
+                 (Item, Landin.Stages.Failed (Work) /= Accepted,
+                  Label & ": control and signature verdict");
+               if Accepted and then not Landin.Stages.Failed (Work) then
+                  Landin.Stages.Lowering.Run (Lowerer, Work, Outcome);
+                  Landin.Testing.Check
+                    (Item, Landin.IR.Verifier.Check
+                       (Landin.Stages.Code (Work).all).Kind
+                         = Landin.IR.Verifier.Nothing_Wrong,
+                     Label & ": verified control graph");
+               end if;
+            end;
+         end loop;
+      end Check_Source;
+   begin
+      Check_Source
+        ("loop",
+         "halt: () -> noreturn = loop do end loop end halt",
+         Accepted => True);
+      Check_Source
+        ("labelled branch",
+         "halt: (n: i32) -> noreturn = _ = n loop do end loop end halt "
+         & "f: (b: bool) -> (r: i32) = "
+         & "r = if b then halt(n: 1) else 42 end if end f",
+         Accepted => True);
+      Check_Source
+        ("empty",
+         "halt: () -> noreturn = end halt",
+         Accepted => False);
+      Check_Source
+        ("return",
+         "halt: () -> noreturn = return end halt",
+         Accepted => False);
+      Check_Source
+        ("break",
+         "halt: () -> noreturn = loop do break end loop end halt",
+         Accepted => False);
+      Check_Source
+        ("while",
+         "halt: (b: bool) -> noreturn = while b do end while end halt",
+         Accepted => False);
+      Check_Source
+        ("call",
+         "halt: () -> noreturn = loop do end loop end halt f: () -> "
+         & "noreturn = halt() end f",
+         Accepted => True);
+      Check_Source
+        ("indirect",
+         "halt: () -> noreturn = loop do end loop end halt f: (stop: "
+         & "() -> noreturn) -> noreturn = stop() end f",
+         Accepted => True);
+      Check_Source
+        ("branch",
+         "halt: () -> noreturn = loop do end loop end halt f: (b: "
+         & "bool) -> (r: i32) = r = if b then halt() else 42 end if end "
+         & "f",
+         Accepted => True);
+      Check_Source
+        ("infer-branch",
+         "halt: () -> noreturn = loop do end loop end halt f: (b: "
+         & "bool) -> (r: i32) = v := if b then halt() else 42 end if r = "
+         & "v end f",
+         Accepted => True);
+      Check_Source
+        ("recovery",
+         "halt: () -> noreturn = loop do end loop end halt bad: atom "
+         & "leaf: () -> (r: i32) ! bad = fail bad end leaf f: () -> (r: "
+         & "i32) = r = leaf() else halt() end f",
+         Accepted => True);
+      Check_Source
+        ("defer",
+         "halt: () -> noreturn = loop do end loop end halt f: () -> "
+         & "noreturn = defer halt() end f",
+         Accepted => True);
+      Check_Source
+        ("defer-return",
+         "halt: () -> noreturn = loop do end loop end halt f: () -> "
+         & "noreturn = defer halt() return end f",
+         Accepted => True);
+      Check_Source
+        ("error",
+         "bad: atom halt: () -> noreturn ! bad = loop do end loop end "
+         & "halt",
+         Accepted => False);
+      Check_Source
+        ("inferred-error",
+         "halt: () -> noreturn ! ... = loop do end loop end halt",
+         Accepted => False);
+      Check_Source
+        ("none-to-noret",
+         "stop: type = () -> noreturn f: () -> none = end f bad: stop "
+         & "= f",
+         Accepted => False);
+      Check_Source
+        ("noret-to-none",
+         "halt: () -> noreturn = loop do end loop end halt stop: type "
+         & "= () -> none bad: stop = halt",
+         Accepted => False);
+      Check_Source
+        ("unassigned",
+         "halt: () -> noreturn = loop do end loop end halt f: (b: "
+         & "bool) -> (r: i32) = mut x: i32 if b then halt() else x = 42 "
+         & "end if r = x end f",
+         Accepted => True);
+      Check_Source
+        ("evidence",
+         "stopper: type = concept (t: type) stop: (self: ptr t) -> "
+         & "noreturn end stopper thing: type = struct x: i32 end thing "
+         & "stop_thing: (self: ptr thing) -> noreturn = _ = self loop do "
+         & "end loop end stop_thing thing is stopper (stop: stop_thing) "
+         & "g: (t: type is stopper, self: ptr t) -> noreturn = "
+         & "t.stop(self) end g erased: (self: any stopper) -> noreturn = "
+         & "self.stop() end erased f: () -> noreturn = x: thing = (x: 1) "
+         & "g(addr x) end f",
+         Accepted => True);
+      Check_Source
+        ("generic",
+         "halt: () -> noreturn = loop do end loop end halt f: (t: "
+         & "type, x: t, stop: () -> noreturn) -> noreturn = _ = x stop() "
+         & "end f g: () -> noreturn = f(t: i32, x: 1, stop: halt) end g",
+         Accepted => True);
+      Check_Source
+        ("while-true",
+         "halt: () -> noreturn = while true do end while end halt",
+         Accepted => False);
+      Check_Source
+        ("concept-error",
+         "bad: atom c: type = concept (t: type) stop: (self: ptr t) -> "
+         & "noreturn ! bad end c",
+         Accepted => False);
+      Check_Source
+        ("uninstantiated-error",
+         "bad: atom halt: (t: type, x: t) -> noreturn ! bad = _ = x "
+         & "loop do end loop end halt",
+         Accepted => False);
+      Check_Source
+        ("none is not divergence",
+         "g: () -> none = end g f: () -> noreturn = g() end f",
+         Accepted => False);
+      Check_Source
+        ("interrupt return form",
+         "extern(interrupt) f: () -> noreturn = loop do end loop end f",
+         Accepted => False);
+      Check_Source
+        ("naked return form",
+         "extern(naked) f: () -> noreturn = loop do end loop end f",
+         Accepted => False);
+      Check_Source
+        ("evidence cannot change return form",
+         "c: type = concept (t: type) stop: (x: t) -> noreturn end c "
+         & "f: (x: i32) -> none = _ = x end f i32 is c (stop: f)",
+         Accepted => False);
+      Check_Source
+        ("undo does not stop successful fallthrough",
+         "halt: () -> noreturn = loop do end loop end halt "
+         & "f: () -> noreturn = undo halt() end f",
+         Accepted => False);
+   end Nonreturning_Control_And_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "nonreturning control and identity",
+         Nonreturning_Control_And_Identity'Access);
       Landin.Testing.Register
         (Into, "checking", "writable returns keep all destinations",
          Writable_Returns_Keep_All_Destinations'Access);

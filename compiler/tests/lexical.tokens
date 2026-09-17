@@ -16239,6 +16239,33 @@ file positive/r491-noreturn-name/main.ldn tokens 48
   166 167 )
   168 171 end
   172 175 use
+file positive/r491-noreturn-signatures/main.ldn tokens 26
+  0 4 halt
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 20 noreturn
+  21 22 =
+  27 31 loop
+  32 34 do
+  39 42 end
+  43 47 loop
+  48 51 end
+  52 56 halt
+  58 66 callback
+  66 67 :
+  68 72 type
+  73 74 =
+  75 76 (
+  76 77 )
+  78 80 ->
+  81 89 noreturn
+  91 99 sentinel
+  99 100 :
+  101 104 i32
+  105 106 =
+  107 108 1
 file positive/r491-ordinary-iterable/main.ldn tokens 439
   0 8 iterable
   8 9 :
@@ -64293,33 +64320,6 @@ file negative/r491-match-extra-paren/main.ldn tokens 71
   274 276 42
   277 280 end
   281 286 later
-file negative/r491-noreturn-signatures/main.ldn tokens 26
-  0 4 halt
-  4 5 :
-  6 7 (
-  7 8 )
-  9 11 ->
-  12 20 noreturn
-  21 22 =
-  27 31 loop
-  32 34 do
-  39 42 end
-  43 47 loop
-  48 51 end
-  52 56 halt
-  58 66 callback
-  66 67 :
-  68 72 type
-  73 74 =
-  75 76 (
-  76 77 )
-  78 80 ->
-  81 89 noreturn
-  91 99 sentinel
-  99 100 :
-  101 104 i32
-  105 106 =
-  107 108 1
 file negative/r491-operand-diagnostic-cascades/main.ldn tokens 50
   0 1 f
   1 2 :

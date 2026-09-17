@@ -332,7 +332,9 @@ package Landin.IR is
       Leave,
       --  [0940]'s orthogonal failure exit.  Its one operand is an atom
       --  identity; no successful result is carried on this edge.
-      Fail);
+      Fail,
+      --  A defined trap, including a violated noreturn call contract.
+      Halt);
 
    subtype Constant_Kind is Opcode range Number .. Atom;
 
@@ -344,7 +346,7 @@ package Landin.IR is
 
    subtype Binary_Kind is Opcode range Multiply .. Greater_Or_Equal;
 
-   subtype Terminator_Kind is Opcode range Jump .. Fail;
+   subtype Terminator_Kind is Opcode range Jump .. Halt;
 
    --  Which opcodes never define a value.  A Call is not one of them: it
    --  defines a value exactly when its callee has a result [1920], so the
@@ -687,7 +689,8 @@ package Landin.IR is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
@@ -703,7 +706,8 @@ package Landin.IR is
       Sources    : Return_Source_Array := No_Return_Sources;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary)
+      Machine    : Landin.Machine.Convention := Landin.Machine.Ordinary;
+      Nonreturning : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
@@ -768,6 +772,9 @@ package Landin.IR is
    function Nth_Nominal_Field
      (Of_Unit : Unit; Id : Nominal_Type_Id; Index : Positive)
       return Field_Shape;
+
+   function Signature_Never_Returns
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean;
 
    function Signature_Machine
      (Of_Unit : Unit; Signature : Signature_Id)
@@ -3728,6 +3735,11 @@ package Landin.IR is
                            or else Holds (Into, Item, Value))
                  and then Landin.Provenance.Is_Known (Site);
 
+   procedure Emit_Halt
+     (Into : in out Unit; Item : Item_Id; Site : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
    procedure Emit_Fail
      (Into  : in out Unit;
       Item  : Item_Id;
@@ -4020,6 +4032,7 @@ private
      (Index_Type => Positive, Element_Type => Return_Source_Association);
 
    type Signature_Record is record
+      Nonreturning : Boolean := False;
       Parameters : Run;
       Results    : Run;
       Sources    : Run;

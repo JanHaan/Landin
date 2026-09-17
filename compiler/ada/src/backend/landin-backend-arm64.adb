@@ -2655,6 +2655,9 @@ package body Landin.Backend.Arm64 is
                   end if;
                   Emit ("mov w8, #0");
                   Epilogue;
+               when Landin.IR.Halt =>
+                  Emit ("brk #1");
+
                when Landin.IR.Fail =>
                   Load_Value (Operand (1), "x8");
                   Epilogue;
@@ -3248,7 +3251,7 @@ package body Landin.Backend.Arm64 is
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
                         | Landin.IR.Jump | Landin.IR.Branch
-                        | Landin.IR.Fail =>
+                        | Landin.IR.Fail | Landin.IR.Halt =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
                         raise Compiler_Defect

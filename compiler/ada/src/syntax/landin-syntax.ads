@@ -1002,6 +1002,13 @@ package Landin.Syntax is
                             in Function_Declaration | Anonymous_Function
                                | Function_Type | Concept_Entry;
 
+   --  An empty present Return_List denotes noreturn, never none.
+   function Never_Returns (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Function_Declaration | Anonymous_Function
+                      | Function_Type | Concept_Entry;
+
    function Return_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)

@@ -65,5 +65,7 @@ linker stubs. The map records selected private helper members. There is no libc,
 hosted startup, heap provider or scheduler. ELF/map/assembly/linker inputs and
 fresh-directory comparisons are retained. The profile remains 32 KiB flash,
 16 KiB RAM and a 4 KiB stack reservation. Observed watermarks describe those
-runs, not a complete maximum-depth proof. ROADMAP.md records panic/noreturn
-and milestone status.
+runs, not a complete maximum-depth proof. D231 enables infallible `noreturn`
+without changing allocator errors into traps. A direct nonreturning call does
+not run a pending deferred mask restoration; a nonreturning cleanup stops
+later cleanups. ROADMAP.md records panic implementation and milestone status.
