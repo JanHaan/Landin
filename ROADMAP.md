@@ -11387,7 +11387,8 @@ Literal expectations independently assert GPIO override preservation, UART
 divisors/control/echo, timer deadline/acknowledgment, byte DMA stores, word MMIO
 counts/order/traces and application state. The protocol executes no-data,
 partial, short/zero destination, exact-full, wrap and repeated reads;
-half/completion/error hints; one coalesced delivery after more than two wraps
+separately delivered half/completion/error hints with literal interrupt counts
+and DMA state; one coalesced delivery after more than two wraps
 with interrupts masked; sticky overrun; explicit discard/restart; error and
 external repair; finite-budget exhaustion; in-flight completion during drain;
 eight-poll timeout, later stop acknowledgment and CPU storage reuse. Application
@@ -11456,6 +11457,15 @@ failed its run; it was not whitelisted. Complete subsequent runs passed the
 unchanged warning guard. Broader checking/lowering caught the incomplete first
 recovery repair; their previously failing controls now pass. Logs and failed
 remote evidence remain under `.scratch/r690` and `/home/landin/r690-evidence`.
+The first candidate `6c57e2dda22b68cef66121860abb9d89e80e1be8` began Linux
+`20260918T133957Z-e860019d3201` and Darwin `20260918T133957Z-e6d8d8e53a0d`
+acceptance. Both were deliberately interrupted before approval to strengthen
+separate half/completion/error interrupt assertions; their retained incomplete
+records cannot approve any revision. The strengthened six-profile protocol
+runs are retained at `/home/landin/r690-evidence/notifications-final` and
+its `notifications-size-off`, `notifications-size-auto`,
+`notifications-speed-auto`, `notifications-none-all`,
+`notifications-speed-all` siblings.
 
 R5.20's target/resource/runtime/evidence/tooling dispositions and R5.51's
 retained-debt ledger were audited, especially R551-31/33. This closes only the
