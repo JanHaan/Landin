@@ -257,3 +257,16 @@ and protocol run on native Linux, while Mac development uses `--host`.
 The exact accepted archive binds the source, model premises, literal oracles,
 firmware/linker artifacts and bounded resource observations. None supplies
 R6.100's later source-debugging or complete measured firmware/stack closure.
+
+R6.100 selects compatible **milestone** policies on both native hosts before
+the closure candidate. They retain debug/release compiler-host, hosted execution,
+quality and native debugger coverage plus every inherited embedded lane.
+The mandatory embedded entry now also invokes `evidence.py`: complete-driver
+resource scenarios, Cortex source sessions, source/debug selection refusals
+and independent stack/exception controls. Cortex remote GDB is distinct from
+native Linux GDB and native Darwin LLDB. An isolated development function call
+does not replace execution through this mandatory entry or exact-revision
+acceptance. Failed/interrupted resource runs remain failed evidence. R6.100
+cannot close until both native archives and all of its embedded gates pass;
+delivery promotes precisely that shared revision, without a later bookkeeping
+commit. Nix and all companion-tool/release programmes retain their dispositions.

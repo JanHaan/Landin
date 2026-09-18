@@ -5,6 +5,12 @@ are reproducibly generated ordinary Landin modules, not a general SVD importer
 or a supported RP2040 board port. The compiler consumes the checked-in `.ldn`
 files without Python, network access, package acquisition or generator tooling.
 
+R6.100's source/resource evidence uses these unchanged modules through the
+complete derived driver. Source breakpoints can enter generated accessors;
+the line/function debugger exposes no device-variable display and performs no
+hidden register reads. Generator provenance and source snapshots remain off
+target. No additional device semantics or companion-tool capability follows.
+
 ## Inputs and provenance
 
 [fixture.json](fixture.json) records every input SHA-256, upstream identity,

@@ -34,7 +34,12 @@ def validate(text):
                 'missing activation or completion obligation for ' + label)
         require(disposition != 'successor' or owner in re.findall(r'^- \*\*([^:]+):\*\*', successors, re.M),
                 'successor disposition requires a named successor')
-        require(kind != 'normative' or disposition == 'scheduled', 'normative work cannot be transferred')
+        require(kind != 'normative' or disposition in {'scheduled', 'implemented'},
+                'normative work cannot be transferred')
+        if kind == 'normative' and disposition == 'implemented':
+            require(re.search(r'^### ' + re.escape(owner) + r' — [^\n]+\n\nStatus: complete$',
+                              text, re.M),
+                    'implemented normative work needs a complete owner: ' + label)
     expected = {f'R551-{i:02}' for i in range(1, 37)}
     require(seen == expected, 'intake inventory differs from the 36-record plan')
     intake = text.split('#### Do now: R5.51 implementation scope\n')[1].split('#### Source-to-disposition crosswalk')[0]

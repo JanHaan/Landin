@@ -4076,6 +4076,15 @@ def check_coverage_registers(full_run):
                         encoding="utf-8").read()
     if "driver_execute(self, refine)" not in mandatory:
         out.append((ROADMAP, 1, "driver evidence is not in the mandatory lane"))
+    if "evidence_execute(self, refine)" not in mandatory:
+        out.append((ROADMAP, 1, "freestanding closure evidence is not in the mandatory lane"))
+    for evidence in ("environments/cortex-m/evidence.py",
+                     "environments/cortex-m/source_debug.py",
+                     "environments/cortex-m/resources.py",
+                     "environments/cortex-m/stack_control.py",
+                     "scripts/cortex_debug.py"):
+        if not os.path.isfile(os.path.join(ROOT, evidence)):
+            out.append((ROADMAP, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
     known_targets = {"linux-x86-64", "macos-arm64", "cortex-m",

@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.100 — Close freestanding evidence (planned).**
+**Next roadmap item: R7.10 — Audit every normative construct (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -307,7 +307,7 @@ R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
 ABI planning, with independent C/assembly execution evidence agreeing with
 synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
 That [contract](environments/cortex-m/README.md) preceded R6.50 emission;
-R6.60 adds compiler-owned startup/linking; source debugging remains R6.100.
+R6.60 adds compiler-owned startup/linking; R6.100 adds line/function debugging.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
@@ -331,7 +331,9 @@ generated-device fixtures.
 verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
 assembly, and
 can assemble and link hosted executables checked by each native target gate.
-Cortex-M source debugging and the broader standard library remain successor
+R6.100 closes Cortex line/function debugging and bounded resource evidence
+through its exact-revision dual-native milestone binding;
+the broader standard library remains successor
 work. D229 enables compiler-owned firmware startup, vectors and linking. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end

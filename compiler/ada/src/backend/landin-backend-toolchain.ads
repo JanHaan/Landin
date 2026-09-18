@@ -90,7 +90,8 @@ package Landin.Backend.Toolchain is
    --  shape of the invocation.  The empty string leaves the driver's own
    --  default alone.
    function Assemble_Arguments
-     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts)
+     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
+      Debug : Boolean := False)
       return Landin.Platform.Path_List;
 
    function Link_Arguments

@@ -48,13 +48,16 @@ package body Landin.Backend.Firmware is
      (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both));
 
    function Startup
-     (Entry_Symbol : String; Returned : String := "udf #1") return String is
+     (Entry_Symbol : String; Returned : String := "udf #1";
+      Debug : Boolean := False) return String is
      (".section .text.landin_firmware_reset,""ax"",%progbits" & LF
       & ".balign 2" & LF
       & ".globl _landin_firmware_reset" & LF
       & ".type _landin_firmware_reset,%function" & LF
       & ".thumb_func" & LF
       & "_landin_firmware_reset:" & LF
+      & (if Debug then ".cfi_startproc simple" & LF
+         & ".cfi_def_cfa sp, 0" & LF & ".cfi_undefined lr" & LF else "")
       & "cpsid i" & LF
       & "movs r0, #0" & LF
       & "mov r9, r0" & LF
@@ -102,6 +105,7 @@ package body Landin.Backend.Firmware is
       & Returned & LF
       & "b _landin_firmware_returned" & LF
       & ".ltorg" & LF
+      & (if Debug then ".cfi_endproc" & LF else "")
       & ".size _landin_firmware_reset, .-_landin_firmware_reset" & LF
       & ".section .text.landin_firmware_unhandled,""ax"",%progbits" & LF
       & ".balign 2" & LF
@@ -109,10 +113,13 @@ package body Landin.Backend.Firmware is
       & ".type _landin_firmware_unhandled,%function" & LF
       & ".thumb_func" & LF
       & "_landin_firmware_unhandled:" & LF
+      & (if Debug then ".cfi_startproc simple" & LF
+         & ".cfi_def_cfa sp, 0" & LF & ".cfi_undefined lr" & LF else "")
       & "cpsid i" & LF
       & "5:" & LF
       & "wfi" & LF
       & "b 5b" & LF
+      & (if Debug then ".cfi_endproc" & LF else "")
       & ".size _landin_firmware_unhandled, .-_landin_firmware_unhandled" & LF);
 
    function Linker_Script return String is

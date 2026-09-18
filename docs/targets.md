@@ -159,6 +159,67 @@ Platform references, checked against the pinned Apple tools:
 [Arm DWARF register assignments](https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst),
 and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging.html).
 
+## Cortex source debugging
+
+`refine --target=cortex-m0 --firmware-entry=start --emit=exe --debug=lines`
+adds DWARF 4 line tables, source function identities and ordinary-frame CFI.
+The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane or the
+separate synthetic Renode peripheral lane. Native Linux GDB and Darwin LLDB
+acceptance remain separate. R6.100 in ROADMAP.md owns milestone acceptance.
+
+`--debug=full` remains refused on Cortex. `lines` advertises no source locals,
+arguments, types, expression evaluation or optimized-value locations. It emits
+no variable/type DIEs or location lists. A source line removed by optimization
+has no guaranteed stopping address; emitted generic specializations retain
+the template's source name/coordinates, and a source breakpoint can select
+multiple instances. Hosted targets retain their existing `full` contract and
+refuse `lines`, rather than silently substituting a different interface.
+
+Ordinary routine CFI describes the existing previous-r11/incoming-lr record,
+callee saves and changing CFA through prologue/epilogue. Interrupt and naked
+routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
+EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
+padding, nested exception records and restoration have independent executable
+controls. Naked assembly has a source function/declaration boundary, not
+line-by-line locations inside its assembly string or an inferred stack frame.
+Linker veneers have no Landin source line. Use an explicit callee breakpoint
+when source stepping across a veneer skips the callee; call stacks in the
+Landin caller/callee and returns through flash/RAM veneers are tested.
+
+The shared DWARF encoder consumes existing source provenance; Cortex register
+numbers and CFI stay in the backend, outside target-neutral IR. Reset and
+unhandled-exception CFI terminate unwinding. Copied RAM code carries its RAM
+execution address, while resource accounting includes its flash load image.
+
+Before attachment, `scripts/cortex_debug.py` checks the selected ELF32 ARM
+load image against the symbol ELF, their nonallocated `.landin_id` against
+the source table, the assembly digest and every source snapshot digest. The
+reference runner fails on missing debug sections, a changed executable, stale
+assembly/table or changed source. A stripped deployment image can use matching
+separate symbols; ordinary debug stripping retains the nonallocated identity.
+This is artifact matching, not authentication against forged
+inputs or protection against concurrent filesystem replacement.
+
+```sh
+python3 scripts/cortex_debug.py firmware.elf --symbols firmware.elf \
+  --sources firmware.elf.sources.json --assembly firmware.elf.s \
+  --source-root BUILD_DIRECTORY
+```
+
+Debug sections, source snapshots, optional panic maps and generator provenance
+are off target. Acceptance compares complete ELF LOAD images between `none`
+and `lines`, including zero-fill extents, and checks that debug sections neither
+allocate storage nor overlap load payloads. No debugger helper dereferences a
+source device pointer or reads destructive registers to display a value.
+
+The decisions use [GNU CFI directives](https://sourceware.org/binutils/docs/as/CFI-directives.html),
+[GDB ARM behavior](https://sourceware.org/gdb/current/onlinedocs/gdb.html/ARM.html),
+[DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf),
+[Arm DWARF32 2025Q4](https://github.com/ARM-software/abi-aa/blob/2025Q4/aadwarf32/aadwarf32.rst)
+and [Renode's GDB interface](https://renode.readthedocs.io/en/latest/debugging/gdb.html),
+consulted on 2026-09-18. The acceptance tool versions remain pinned; no network
+access is needed to repeat these tests.
+
 ## Hosted parity and physical limits
 
 The shared [target applicability matrix](../compiler/tests/targets.matrix)
@@ -200,8 +261,9 @@ little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly against these facts. The toolchain
 identity is `arm-none-eabi`. Executable requests require the explicit
 `--firmware-entry=NAME` source identity (D229); missing or invalid entries report
-L0502. C signatures, records, varargs and object/source-debug output remain
-disabled. The independent external startup/linker harness remains distinct
+L0502. C signatures, records, varargs and standalone object output remain
+disabled; the explicit `lines` source-debug contract is described above.
+The independent external startup/linker harness remains distinct
 from the compiler-owned firmware path.
 `core/c` and the header generator still accept only their two hosted ABIs.
 
@@ -427,7 +489,7 @@ with `-lgcc`. General runtime/CPU-library packaging remains R6.70.
 
 The [execution guide](../environments/cortex-m/README.md#r650-compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical
-limits. Compiler-owned startup is D229; Landin source debugging remains R6.100.
+limits. Compiler-owned startup is D229; R6.100 supplies the bounded Landin source-debugging contract above.
 
 
 ## Cortex-M0 firmware images

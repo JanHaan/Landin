@@ -300,7 +300,7 @@ package body Landin.Tests.Cortex_Suite is
          and then T.Capabilities.Backend_For (T.Cortex_M)
            = T.Capabilities.Cortex_M0_ELF
          and then T.Capabilities.Debug_Format_Of (T.Cortex_M)
-           = T.Capabilities.No_Debug_Format
+           = T.Capabilities.ELF_DWARF_Lines
          and then T.Capabilities.Triplet (T.Cortex_M) = "arm-none-eabi",
          "assembly does not advertise C or source debugging");
       for Kind in Ty.Scalar_Name loop
@@ -555,6 +555,49 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Driver_Boundaries;
+
+   procedure Source_Debugging (Item : in out Landin.Testing.Context);
+
+   procedure Source_Debugging (Item : in out Landin.Testing.Context) is
+   begin
+      for Mode in 1 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("p.ldn", "start: () -> none = end start");
+            Args.Append
+              (if Mode = 3 then "--target=linux-x86-64"
+               elsif Mode = 4 then "--target=darwin-arm64"
+               else "--target=cortex-m0");
+            Args.Append (if Mode = 2 then "--debug=full"
+                         else "--debug=lines");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status,
+                  (if Mode = 1 then Landin.Driver.Status_Success
+                   else Landin.Driver.Status_Reported),
+                  "explicit source-debug contract" & Mode'Image & ": "
+                  & U.To_String (Result.Report));
+               if Mode /= 1 then
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "unsupported debug interface refuses before writes");
+               end if;
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "assembly runs no debugger");
+            end;
+         end;
+      end loop;
+   end Source_Debugging;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
 
@@ -977,6 +1020,8 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "scalar assembly IR", Assembly_IR'Access);
       Landin.Testing.Register

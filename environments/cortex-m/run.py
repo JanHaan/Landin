@@ -87,12 +87,12 @@ class Run:
         require(record['exit'] == 0, name + ' failed; inspect retained log')
         return (self.out / (name + '.log')).read_text(errors='replace')
 
-    def renode_script(self, name, lines, marker, stock=False):
+    def renode_script(self, name, lines, marker, stock=False, timeout=30):
         script = self.out / (name + '.resc')
         script.write_text('\n'.join(lines + ['quit']) + '\n')
         try:
             text = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
-                                      '--config', self.out / 'renode.config', script], timeout=30)
+                                      '--config', self.out / 'renode.config', script], timeout=timeout)
         finally:
             remove_renode_lock(self.out)
         oracle(text, marker, stock)
@@ -223,6 +223,8 @@ class Run:
         devices_execute(self, refine)
         from driver import execute_suite as driver_execute
         driver_execute(self, refine)
+        from evidence import execute_suite as evidence_execute
+        evidence_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

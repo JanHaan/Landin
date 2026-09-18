@@ -56,7 +56,8 @@ package body Landin.Targets.Capabilities is
      (case Backend_For (Facts) is
          when Linux_X86_64_ELF => ELF_DWARF,
          when Darwin_Arm64_Mach_O => Mach_O_DWARF,
-         when No_Backend | Cortex_M0_ELF => No_Debug_Format);
+         when Cortex_M0_ELF => ELF_DWARF_Lines,
+         when No_Backend => No_Debug_Format);
 
    function Link_Symbol (Facts : Target_Facts; Name : String) return String is
    begin

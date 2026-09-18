@@ -302,6 +302,14 @@ failed native session into a pass by automatically falling back to emulation.
 
 ## Native report identity and build inventory
 
+Cortex source debugging is a separate mandatory embedded lane under
+`environments/cortex-m/evidence.py`, invoked by `run.py` on native Linux.
+It uses `--debug=lines`, source/function/ordinary-frame assertions and fail-closed
+artifact selection, with no advertised variable/type interface. Complete-driver
+Renode execution, QEMU CPU/startup and independent exception/stack controls stay
+distinct. See the [embedded evidence guide](../../environments/cortex-m/README.md#freestanding-evidence-r6100)
+and [target contract](../../docs/targets.md#cortex-source-debugging).
+
 `python3 compiler/tests/test_native_report_identity.py --refine ABSOLUTE_PATH`
 checks real destination identities without substituting the fake filesystem.
 It retains the original collision/refusal and successful-output oracles for

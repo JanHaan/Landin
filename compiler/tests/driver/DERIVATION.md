@@ -271,3 +271,11 @@ The drain acknowledgment, finite non-reloading epoch, half-ring hint, UART
 readiness and test-controlled timer are **synthetic model premises**, not
 architectural or vendor facts. Physical-device integration, general SVD tools,
 package acquisition and sandboxed orchestration retain ROADMAP's owners.
+
+R6.100 consumes this unchanged complete application and protocol through
+`environments/cortex-m/evidence.py`. Its source-debug and resource assertions
+do not redefine the public driver, synthetic drain protocol, service bound or
+vendor adaptation above. Debugger source snapshots include the imported driver,
+core and generated device modules; host-side stack observations never display
+device registers. Actual measurements, bounded claims and milestone closure
+remain solely in ROADMAP.md; this mapping is not a second work authority.

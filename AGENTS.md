@@ -251,8 +251,9 @@ regeneration and generated-firmware consumers; its exact-revision dual-native
 binding owns closure. R6.90 implements the complete derived driver/application,
 with explicit synthetic device adaptation, DMA consumption/overrun/recovery,
 compiler-owned boot and independent peripheral evidence. Its exact-revision
-dual-native binding owns closure. R6.100 is next dependency-ready, retaining
-source debugging and complete measured firmware/stack evidence. R6.80
+dual-native binding owns closure. R6.100 closes Cortex line/function debugging
+and complete measured firmware/stack evidence within its explicit bounds; its exact-revision dual-native milestone
+binding owns closure. R7.10 is next dependency-ready. R6.80
 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

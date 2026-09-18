@@ -10,6 +10,62 @@ from run import Run, oracle, remove_renode_lock
 
 
 class ProbeFailures(unittest.TestCase):
+    def test_mandatory_runner_keeps_every_embedded_lane(self):
+        from contextlib import ExitStack
+        import importlib
+        from unittest.mock import patch
+        from run import HERE
+        from setup import sha
+        calls=[]
+        lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
+               ('packed_native','execute'),('backend_acceptance','execute'),
+               ('firmware','execute_suite'),('freestanding','execute_suite'),
+               ('devices','execute_suite'),('driver','execute_suite'),
+               ('evidence','execute_suite')]
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root=Path(directory)
+            (root/'installation.json').write_text(json.dumps({
+                'lock_sha256':sha(HERE/'tools.lock.json'),
+                'files':{'root':{},'renode':{}}}))
+            stack.enter_context(patch('run.supported_host'))
+            stack.enter_context(patch('run.inventory',return_value={}))
+            stack.enter_context(patch.object(Run,'command',return_value=
+                '10.0.13 14.2.1 20241119 2.44 16.3 1.17.0+20260907gitf1dd1b4af'))
+            stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
+            stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
+            for name, entry in lanes:
+                stack.enter_context(patch.object(importlib.import_module(name),entry,
+                    side_effect=lambda *args,n=name:calls.append(n)))
+            Run(root,root).execute(Path('relative/refine'))
+        self.assertEqual(calls,['qemu','peripheral']+[n for n,_ in lanes])
+
+    def test_stack_observation_sites(self):
+        from resources import hook_addresses
+        sites, changes = hook_addresses('''000000c0 <reset>:
+  c0: b4f0       push {r4, r5, r6, r7}
+  c2: b084       sub sp, #16
+  c4: 4695       mov sp, r2
+  c6: f380 8808  msr MSP, r0
+  ca: 4770       bx lr
+  cc: 00000000   .word 0x00000000
+''')
+        self.assertEqual(sites, [0xc0,0xc2,0xc4,0xc6,0xca])
+        self.assertEqual(len(changes), 4)
+        with self.assertRaises(RuntimeError):
+            hook_addresses('00000000 <empty>:\n  0: 4770 bx lr\n')
+
+    def test_debug_selector_rejects_malformed_elf(self):
+        import source_debug
+        from cortex_debug import Image
+        self.assertTrue(callable(source_debug.checked))
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'bad.elf'
+            for data in (b'', b'\x7fELF\x01\x02'+bytes(100),
+                         b'\x7fELF\x01\x01\x01'+bytes(100)):
+                path.write_bytes(data)
+                with self.assertRaises(ValueError):
+                    Image(path)
+
     def test_freestanding_module_and_linker_closure(self):
         from freestanding import imports, linker_closure, programs
         self.assertEqual(imports('import core/mem\nimport core/cpu\n'), {'mem', 'cpu'})

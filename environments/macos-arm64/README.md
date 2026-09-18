@@ -202,3 +202,10 @@ and independent ABI controls. Packed DWARF exposes a single unsigned `raw`
 member and its true size; named bitfield/array presentation is not claimed.
 The routine debugger-risk policy retains full release LLDB scope. Embedded
 QEMU/Renode probes continue to run only on the supported native Linux host.
+
+R6.100 selects milestone scope: debug/release compiler-host, complete hosted
+parity and native LLDB. The Linux archive independently retains all inherited
+embedded lanes plus Cortex source-debugging and complete firmware/resource
+evidence. `--debug=lines` is a Cortex interface; native Darwin keeps its full
+DWARF/dSYM/UUID contract. Matching successful native archives are required for
+approval of the identical revision. The Mac does not emulate this Linux lane.

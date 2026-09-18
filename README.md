@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.100 — Close freestanding evidence (planned).**
+**Next roadmap item: R7.10 — Audit every normative construct (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -273,7 +273,7 @@ layouts and external AAPCS/internal Landin ABI planning, checked independently
 by native Linux C/assembly execution controls and the existing synthetic-32
 goldens. Its closure has the same dual-native binding. R6.50 subsequently adds
 Cortex assembly; R6.60 adds compiler-owned startup/linking, while source
-debugging remains R6.100.
+debugging is enabled by R6.100.
 
 R6.30 defines D227's concurrency memory model and implements scalar atomics,
 volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
@@ -353,5 +353,7 @@ with optional source maps. Its closure is bound to the containing revision’s d
 guarded delivery in ROADMAP.md. R6.80 adds [generated device fixtures](devices/README.md):
 30 RP2040 registers with retained vendor inputs, deterministic regeneration and
 compiler-generated firmware/peripheral consumers. R6.90 adds the [complete derived driver](compiler/tests/driver/DERIVATION.md),
-including its explicit synthetic DMA loss/stop/recovery protocol; R6.100 is next dependency-ready;
-the complete driver and R6.100 measurement/debugging gate remain separate.
+including its explicit synthetic DMA loss/stop/recovery protocol. R6.100
+adds Cortex `--debug=lines` and complete firmware/resource evidence; its
+exact-revision dual-native milestone binding closes the R6 gate within the
+measured bounds recorded in ROADMAP.md.

@@ -127,7 +127,7 @@ different responsibilities.
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
-| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations and ELF assembly from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or claim Landin source debugging |
+| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations, ELF assembly and line/function CFI from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or promise full variable/type debugging |
 | `Landin.Backend.Darwin_ABI` | Apple arm64 C classification and argument/result placement from neutral shapes and target facts | infer layout from the host, reuse SysV transport or change source semantics |
 | `Landin.Backend.Arm64` | Darwin assembly, stack homes, frame records, native/C calls, hosted runtime and Mach-O data/symbol rendering | parse/check source, put physical transport in IR, write files or run tools |
 | `Landin.Backend.Dispatch` | backend selection for frame preflight and assembly/debug emission | choose language semantics or discover host tools |
@@ -1039,8 +1039,9 @@ with independent executable controls under that environment. The existing
 neutral shape machinery supplies storage. R6.50 adds `Backend.Cortex_M` assembly
 emission and compiler-generated QEMU/Renode execution. `--target=cortex-m0`
 accepts checking, `--emit=asm` and D229 firmware linking with explicit
-`--firmware-entry=NAME`. General C source and Landin source debugging remain
-refused. `Backend.Firmware` owns reset/script generation; the older external
+`--firmware-entry=NAME`. General C source remains refused. Cortex
+`--debug=lines` enables the explicit [line/function contract](../../docs/targets.md#cortex-source-debugging);
+`--debug=full` remains refused. `Backend.Firmware` owns reset/script generation; the older external
 startup/linker probes remain independently identified test harnesses. See
 [target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
 
@@ -1070,7 +1071,7 @@ The native debugger gates include a D231/D232 program that enters a selected
 handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
-source line; this does not enable Cortex source debugging.
+source line; those native sessions remain separate from Cortex line/function debugging.
 
 R6.80's [device modules](../../devices/README.md) use the existing frontend,
 packed/volatile IR and Cortex firmware path without compiler changes. Vendor
@@ -1084,4 +1085,4 @@ to the enclosing routine walk, so inferred bindings can recover with existing
 loop transfers. Firmware BSS has an explicit RAM LMA and no load payload.
 These repairs add no syntax, register metadata semantics, IR operation or
 general C support. Routine debugger-risk policy covers both native backends;
-Cortex Landin source-debugging closure remains R6.100.
+R6.100 closes the explicit Cortex line/function source-debugging contract.

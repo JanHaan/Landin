@@ -19,7 +19,18 @@ package Landin.Backend.Dwarf is
       Site : Landin.Provenance.Origin) return String;
    function Preamble
      (Info : Landin.Debugging.Information; Prefix : String;
-      Mach_O : Boolean := False) return String;
+      Mach_O : Boolean := False; Arm : Boolean := False) return String;
+   --  Lines and subprogram identity only: no variable, type, or location
+   --  promise. Frame instructions remain the concrete emitter's authority.
+   function Line_Sections
+     (Of_Unit : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names : Landin.Source.Names.Table;
+      Facts : Landin.Targets.Target_Facts;
+      Info : Landin.Debugging.Information;
+      Prefix : String;
+      Symbol : not null access function
+        (Item : Landin.IR.Item_Id) return String) return String;
    generic
       type Placement (<>) is private;
       with function Make

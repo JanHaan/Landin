@@ -120,7 +120,8 @@ package body Landin.Driver is
       & "  --optimize=NAME     none, size (default), or speed" & LF
       & "  --specialize=NAME   off, auto (default), or all" & LF
       & "  --panic-map         emit off-target check-site mapping" & LF
-      & "  --debug=NAME        none (default) or full source debugging" & LF
+      & "  --debug=NAME        none (default), full (hosted),"
+      & " lines (Cortex-M0)" & LF
       & "  --build-report=PATH write deterministic build evidence JSON" & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
@@ -186,7 +187,8 @@ package body Landin.Driver is
       Optimization : Landin.Optimization.Options :=
         Landin.Optimization.Default_Options;
       Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
-      Debug_Seen, Full_Debug : Boolean := False;
+      Debug_Seen, Debug_Enabled : Boolean := False;
+      Lines_Debug : Boolean := False;
       Panic_Map : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
       Index     : Positive := 1;
@@ -262,13 +264,16 @@ package body Landin.Driver is
 
             elsif Starts_With (Argument, "--debug=") then
                if Debug_Seen
-                 or else After (Argument, "--debug=") not in "none" | "full"
+                 or else After (Argument, "--debug=")
+                   not in "none" | "full" | "lines"
                then
                   Unknowns.Append (Argument);
                   Bad_Use := True;
                end if;
                Debug_Seen := True;
-               Full_Debug := After (Argument, "--debug=") = "full";
+               Lines_Debug := After (Argument, "--debug=") = "lines";
+               Debug_Enabled := Lines_Debug
+                 or else After (Argument, "--debug=") = "full";
 
             elsif Starts_With (Argument, "--build-report=") then
                if Report_Seen
@@ -881,7 +886,7 @@ package body Landin.Driver is
             Map_Path : constant String := Source_Map_Beside (Product_Path);
             Report_Path : constant String :=
               Unbounded.To_String (Build_Report_Path);
-            Emit_Map : constant Boolean := Full_Debug or else Panic_Map
+            Emit_Map : constant Boolean := Debug_Enabled or else Panic_Map
               or else Landin.IR.Caller_Source_Count
                 (Landin.Stages.Code (Context).all) > 0;
             Destinations : Landin.Platform.Path_List;
@@ -919,7 +924,7 @@ package body Landin.Driver is
                   Destinations.Append (Product_Path & ".ld");
                   Destinations.Append (Product_Path & ".map");
                end if;
-               if Full_Debug then
+               if Debug_Enabled then
                   for Path of Landin.Backend.Toolchain.Debug_Artifacts
                     (Product_Path, Facts, Host)
                   loop
@@ -980,7 +985,7 @@ package body Landin.Driver is
                        (Landin.Stages.Source
                           (Context,
                            Landin.Stages.Nth_Source (Context, Source))))
-                    or else (Emit = Emit_Executable and then Full_Debug
+                    or else (Emit = Emit_Executable and then Debug_Enabled
                       and then Landin.Backend.Toolchain.Debug_Overwrites
                         (Product_Path, Landin.Source.Name
                            (Landin.Stages.Source (Context,
@@ -997,13 +1002,16 @@ package body Landin.Driver is
                end loop;
             end loop;
 
-            if Full_Debug and then
-              Landin.Targets.Capabilities.Debug_Format_Of (Facts)
-                = Landin.Targets.Capabilities.No_Debug_Format
+            if Debug_Enabled and then
+              (Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                 = Landin.Targets.Capabilities.No_Debug_Format
+               or else Lines_Debug /= Cortex)
             then
                Note_No_Toolchain
-                 ("no source debugger emission for target "
-                  & Landin.Targets.Name (Facts), "drop --debug=full");
+                 ("unsupported source debugger mode for target "
+                  & Landin.Targets.Name (Facts),
+                  (if Cortex then "use --debug=lines or --debug=none"
+                   else "use --debug=full or --debug=none"));
                return;
             end if;
 
@@ -1169,7 +1177,7 @@ package body Landin.Driver is
                Debug : aliased Landin.Debugging.Information
                  (Landin.Stages.Trees (Context));
             begin
-               if Full_Debug then
+               if Debug_Enabled then
                   Landin.Debugging.Set_Directory
                     (Debug, Host.Working_Directory);
                   for Index in 1 .. Landin.Stages.Source_Count (Context) loop
@@ -1214,14 +1222,14 @@ package body Landin.Driver is
                      Landin.Stages.Meanings (Context).all,
                      Landin.Stages.Modules (Context).all,
                      Landin.Stages.Identities (Context).all),
-                  Debug => (if Full_Debug then Debug'Access else null),
+                  Debug => (if Debug_Enabled then Debug'Access else null),
                   Firmware_Entry => Firmware_Entry, Panic => Panic'Access);
                if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
                        Landin.Source_Maps.Create
                          (Context, Unbounded.To_String (Emitted),
-                          All_Sources => Full_Debug,
+                          All_Sources => Debug_Enabled,
                           Panic => (if Panic_Map then Panic'Access else null));
                   begin
                      Emitted := Map.Assembly;
@@ -1296,7 +1304,8 @@ package body Landin.Driver is
                      Tools.Run
                        (Driver,
                         Landin.Backend.Toolchain.Assemble_Arguments
-                          (Assembly_Path, Product_Path & ".o", Facts),
+                          (Assembly_Path, Product_Path & ".o", Facts,
+                           Debug => Debug_Enabled),
                         Ran, Landin.Platform.Merged);
                      if Ran.Ended /= Landin.Platform.Exited
                        or else Ran.Exit_Code /= 0
@@ -1325,7 +1334,7 @@ package body Landin.Driver is
                           Output   => Target_Path,
                           Linker   => Unbounded.To_String (Linker),
                           Build_Id => Unbounded.To_String (Map_Id),
-                          Full_Debug => Full_Debug,
+                          Full_Debug => Debug_Enabled,
                           Libraries => Libraries, Facts => Facts),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);

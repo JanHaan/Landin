@@ -82,3 +82,10 @@ requires no allocator, hosted initialization or reporting storage. Successful
 device drain precedes ordinary reads and storage reuse; failed stop retains
 the caller's manual lifetime obligation. The allocator, initialized-prefix,
 origin, rollback and broader-library contracts above are unchanged.
+
+R6.100's separate Cortex line/function debugger controls execute the real pool
+and vector consumers, generic/specialized allocation calls and noreturn/panic
+paths. The complete driver's resource lane continues to use its static,
+caller-owned storage. Debugger snapshots and stack instrumentation are host
+artifacts, never an allocator capability or hidden target storage. These
+controls do not broaden the library or manual lifetime guarantees.

@@ -78,22 +78,27 @@ package body Landin.Backend.Dwarf is
       end;
    end Source_Line;
 
-   function Section (Name : String; Mach_O : Boolean) return String is
+   function Section
+     (Name : String; Mach_O : Boolean; Arm : Boolean := False)
+      return String is
      (HT & (if Mach_O then ".section __DWARF,__debug_" & Name
               & ",regular,debug"
-            else ".section .debug_" & Name & ","""",@progbits"));
+            else ".section .debug_" & Name & ","""","
+              & (if Arm then "%" else "@") & "progbits"));
 
    function Preamble
      (Info : Landin.Debugging.Information; Prefix : String;
-      Mach_O : Boolean := False) return String
+      Mach_O : Boolean := False; Arm : Boolean := False) return String
    is
       Result : US.Unbounded_String;
    begin
       if not Mach_O then
          US.Append (Result, HT & ".cfi_sections .debug_frame" & LF);
       end if;
-      US.Append (Result, Section ("line", Mach_O) & LF);
-      US.Append (Result, Prefix & "debug_line:" & LF & HT & ".text" & LF);
+      if not Arm then
+         US.Append (Result, Section ("line", Mach_O) & LF);
+         US.Append (Result, Prefix & "debug_line:" & LF & HT & ".text" & LF);
+      end if;
       if Mach_O then
          US.Append (Result, Prefix & "debug_text:" & LF);
       end if;
@@ -104,6 +109,90 @@ package body Landin.Backend.Dwarf is
       end loop;
       return US.To_String (Result);
    end Preamble;
+
+   function Line_Sections
+     (Of_Unit : Unit;
+      Meanings : Landin.Resolution.Table;
+      Names : Landin.Source.Names.Table;
+      Facts : Landin.Targets.Target_Facts;
+      Info : Landin.Debugging.Information;
+      Prefix : String;
+      Symbol : not null access function (Item : Item_Id) return String)
+      return String
+   is
+      Result : US.Unbounded_String;
+      CU : constant String := Prefix & "debug_info";
+      Width : constant Positive := Landin.Targets.Bytes
+        (Landin.Targets.Pointer_Size (Facts));
+      Address : constant String := (if Width = 4 then ".long " else ".quad ");
+      procedure Put (Text : String);
+      procedure Put (Text : String) is
+      begin
+         US.Append (Result, Text & LF);
+      end Put;
+   begin
+      --  Declare ARM debug sections after all loadable input sections. GNU
+      --  ld's veneer ordering depends on input section identities.
+      Put (Section ("line", False, Arm => True));
+      Put (Prefix & "debug_line:");
+      Put (Section ("abbrev", False, Arm => True));
+      Put (Prefix & "debug_abbrev:");
+      Put (HT & ".uleb128 1,0x11,1");
+      Put (HT & ".uleb128 0x25,0x08,0x13,0x05,0x03,0x08,"
+        & "0x1b,0x08,0x10,0x17,0,0");
+      Put (HT & ".uleb128 2,0x2e,0");
+      Put (HT & ".uleb128 0x03,0x08,0x11,0x01,0x12,0x01,"
+        & "0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0,0,0");
+      Put (Section ("info", False, Arm => True));
+      Put (CU & ":");
+      Put (HT & ".long " & CU & "_end-" & CU & "-4");
+      Put (HT & ".short 4");
+      Put (HT & ".long " & Prefix & "debug_abbrev");
+      Put (HT & ".byte " & N (Width));
+      Put (HT & ".uleb128 1");
+      Put (HT & ".asciz ""Landin refine (lines)""");
+      Put (HT & ".short 0x0002");
+      Put (HT & ".asciz " & Quoted
+        (Landin.Source.Name (Landin.Debugging.Source (Info, 1))));
+      Put (HT & ".asciz " & Quoted (Landin.Debugging.Directory (Info)));
+      Put (HT & ".long " & Prefix & "debug_line");
+      for Index in 1 .. Item_Count (Of_Unit) loop
+         declare
+            Item : constant Item_Id := Item_Id (Index);
+            Decl : constant Declaration_Id :=
+              (if Generic_Template_Of (Of_Unit, Item) /= No_Declaration
+               then Generic_Template_Of (Of_Unit, Item)
+               else Declares (Of_Unit, Item));
+         begin
+            if Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+              and then not Is_External (Of_Unit, Item)
+            then
+               declare
+                  Site : constant Landin.Provenance.Origin :=
+                    Origin_Of (Of_Unit, Item);
+                  Pos : constant Landin.Source.Position :=
+                    Landin.Source.Position_Of
+                      (Landin.Debugging.Source (Info, Site.Source),
+                       Site.Where.First);
+               begin
+                  Put (HT & ".uleb128 2");
+                  Put (HT & ".asciz " & Quoted
+                    (if Decl = No_Declaration then Symbol (Item)
+                     else Landin.Source.Names.Spelling
+                       (Names, Landin.Resolution.Name_Of (Meanings, Decl))));
+                  Put (HT & Address & Label_Name (Prefix, "begin", Item));
+                  Put (HT & Address & Label_Name (Prefix, "end", Item));
+                  Put (HT & ".uleb128 " & N (Natural (Site.Source)) & ","
+                    & N (Natural (Pos.Line)) & ","
+                    & N (Natural (Pos.Column)));
+               end;
+            end if;
+         end;
+      end loop;
+      Put (HT & ".uleb128 0");
+      Put (CU & "_end:");
+      return US.To_String (Result);
+   end Line_Sections;
 
    function Sections
      (Of_Unit : Unit;

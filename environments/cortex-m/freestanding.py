@@ -40,7 +40,7 @@ def linker_closure(mapping, helper):
     return loads, members
 
 
-def build(run, refine, program, optimize, specialize):
+def build(run, refine, program, optimize, specialize, debug='none'):
     source = run.out / 'source'
     (source / 'app').mkdir(parents=True)
     (source / 'app/main.ldn').write_text(program)
@@ -60,7 +60,7 @@ def build(run, refine, program, optimize, specialize):
     (run.out / 'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')
     elf = run.out / 'core.elf'
     run.command('compile', [refine, '--root=source', '--target=cortex-m0',
-        '--firmware-entry=start', '--emit=exe',
+        '--firmware-entry=start', '--emit=exe', '--debug='+debug,
         '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
         *(['--panic-map'] if 'import core/panic' in program else []),
