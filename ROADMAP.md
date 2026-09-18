@@ -11478,6 +11478,18 @@ Linux, native Darwin and Cortex profiles. Checking/lowering and the complete
 unoptimized driver rerun pass after that repair; evidence is retained under
 `callee-*` in the same development directories. No inherited oracle or verdict
 was changed to obtain these results.
+The third candidate `52125c5c2566213f4c8e22a17a50356f29b4f647` passed every
+Linux native job in `20260918T142435Z-3d45ac11609e`, including 737 release
+cases/207790 checks and GDB. Its complete Cortex corpus and inherited
+R6.10–R6.80 lanes passed, but entry to the new driver lane failed because its
+compiler path was relative to the repository rather than each artifact
+working directory. The standalone CLI had resolved it; the mandatory entry
+had not. Resolve it once at `execute_suite`'s boundary. A direct invocation
+with the same relative-path form passes the complete unoptimized driver at
+`/home/landin/r690-evidence/relative-runner`. Darwin
+`20260918T142435Z-3331980e8e17` was interrupted after its computed-callee
+profiles passed. These records do not approve the revised runner or replace
+fresh exact-revision dual-native acceptance.
 
 R5.20's target/resource/runtime/evidence/tooling dispositions and R5.51's
 retained-debt ledger were audited, especially R551-31/33. This closes only the
