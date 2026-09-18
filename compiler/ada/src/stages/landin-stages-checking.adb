@@ -17991,6 +17991,10 @@ package body Landin.Stages.Checking is
                  (Syn.Source_Of (Of_Tree), Below,
                   Landin.Checking.Current_Routine_View (Types.all)))
             then
+               --  Check_Call visits arguments and recovery, but its supplied
+               --  signature bypasses the computed callee. Replay that child
+               --  first: an indexed callee can itself contain a recovery.
+               Replay_Contextual_Recovery (Syn.Callee_Of (Of_Tree, Below));
                declare
                   Checked : constant Ty.Type_Kind := Check_Call
                     (Of_Tree, Below,

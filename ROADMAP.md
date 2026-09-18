@@ -11337,7 +11337,7 @@ mandatory runner connection, without admitting it to the hosted harness.
 | R690-7: loss and recovery | Unread progress above capacity latches `overrun`, discards all unread data logically and returns none of the overwritten interval. Device error/impossible count/progress latches `transfer_error`. Empty after budget completion reports `exhausted`. Restart first proves quiescence, refuses still-faulted hardware, rewrites destination/count, acknowledges pending hints and deliberately discards unread data. Synthetic `Repair` is explicit external maintenance; no ambiguous vendor error-clear accessor is invented. Failed stop never permits storage reuse/release. |
 | R690-8: complete application | Static 256-byte DMA ring and 64-byte scratch; GPIO indicator commands `1`/`0`, UART echo, timer polling for partial transfers, immediate draining of full scratch chunks, IRQ0/IRQ1 vector placement and masked predicate/WFI. Notification is a latch, not a producer count. Overrun/exhaustion recover by restart; unrepaired device errors and stop timeout enter observable nonreturning halt while retaining storage. Foreseeable driver conditions use declared atoms, not panic. |
 | R690-9: language/library boundary | Derive into enabled source with existing packed-image/raw-value/register and ordinary CPU interfaces. No new syntax, metadata semantics, scheduler, ownership system or allocator. `rx from buf`, escaping admission and precise refusals preserve prototype 3's origin/initialized-storage obligations. Manual stop, aliasing, pointer validity and external-writer obligations remain non-guarantees. D202/D227/D228/D231/D232 and all ordinary/C/optimal layouts remain unchanged. |
-| R690-10: checking repair | Initializer inference exposed a recovery `continue` before its enclosing loop existed. Settle recovery bindings during inference, but check bodies in their routine/view context. Replay deferred descendants of cached compound expressions and re-establish cached value-control contexts; anonymous bodies keep their own walks. Keep existing inferred-error fixed-point processing. Tests require exact rejection of wrong recovery arguments and execution of break/continue/value-loop cleanup edges. Merely skipping the premature check was rejected: a broader lowering case and a new compound negative control caught missing recovery metadata/diagnostics in the first repair. |
+| R690-10: checking repair | Initializer inference exposed a recovery `continue` before its enclosing loop existed. Settle recovery bindings during inference, but check bodies in their routine/view context. Replay deferred descendants of cached compound expressions, including computed callees, and re-establish cached value-control contexts; anonymous bodies keep their own walks. Keep existing inferred-error fixed-point processing. Tests require exact rejection of wrong recovery arguments and execution of break/continue/value-loop cleanup edges. Merely skipping the premature check was rejected: a broader lowering case and a new compound negative control caught missing recovery metadata/diagnostics in the first repair. |
 | R690-11: BSS load address | GNU ld inherited the preceding RAM-code VMA/LMA delta for NOLOAD BSS. Near full flash, Renode attempted zero-fill beyond the mapped flash despite no BSS file payload. Give BSS an explicit RAM LMA with `AT(ADDR(.bss))`; preserve compiler reset clearing, RAM-code/data flash load images and the original map. Independent ELF headers and poisoned boot check the correction. Enlarging the board or ignoring the loader warning was rejected. |
 
 The existing fixture contract remains six RP2040 modules/30 registers, with
@@ -11424,7 +11424,7 @@ or hosted startup/libc/core/heap/I/O/scheduler closure. Generated source data
 and reached symbols are inventoried. Source identities/provenance/build reports
 remain off target except explicit programme data; no general C surface opens.
 
-Focused Mac compiler-host checking passed 112 cases/3454 checks; lowering
+Focused Mac compiler-host checking passed 112 cases/3456 checks; lowering
 passed 134 cases/2991 checks; Cortex ABI passed nine cases/487 checks. The
 new shared `runtime/r690-recovery-loop-context` executes compound recovery,
 plain break and value-loop continue with literal cleanup/result expectations:
@@ -11466,6 +11466,18 @@ runs are retained at `/home/landin/r690-evidence/notifications-final` and
 its `notifications-size-off`, `notifications-size-auto`,
 `notifications-speed-auto`, `notifications-none-all`,
 `notifications-speed-all` siblings.
+The second candidate `5e8bd22f6e9d93834ea09bb596b9bcfc22bf5eff` failed Linux
+`20260918T135457Z-4a8eb38bbb35`: all six `runtime/r491-callee-errors` profiles
+exposed a skipped recovery in the computed callee of a cached recovered call.
+The runner canceled its incomplete embedded lane; Darwin
+`20260918T135457Z-8d93188a5a37` was deliberately interrupted. Neither run
+supplies approval. Replaying the computed callee before the outer call fixes
+the missing type metadata; a new checking refusal pins the nested recovery's
+exact diagnostic, and the unchanged runtime fixture passes all six native
+Linux, native Darwin and Cortex profiles. Checking/lowering and the complete
+unoptimized driver rerun pass after that repair; evidence is retained under
+`callee-*` in the same development directories. No inherited oracle or verdict
+was changed to obtain these results.
 
 R5.20's target/resource/runtime/evidence/tooling dispositions and R5.51's
 retained-debt ledger were audited, especially R551-31/33. This closes only the
