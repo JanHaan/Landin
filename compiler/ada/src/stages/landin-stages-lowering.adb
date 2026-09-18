@@ -4233,6 +4233,17 @@ package body Landin.Stages.Lowering is
          Ignored : IR.Value_Id;
          pragma Unreferenced (Ignored);
       begin
+         if Landin.Checking.Text_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Text_Conversion
+         then
+            if Destination_Field /= 0 or else Destination_Path'Length /= 0
+            then
+               raise Landin.Compiler_Defect with
+                 "a nested text conversion reached direct lowering";
+            end if;
+            Lower_Slice_Into (Of_Tree, Node, Scope, Destination);
+            return;
+         end if;
          if Landin.Checking.Distinct_Conversion_Of
            (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
            or else Is_Struct_Construction (Of_Tree, Node)
@@ -4577,7 +4588,7 @@ package body Landin.Stages.Lowering is
                         end if;
                         Guard := IR.Emit_Range_Check
                           (Unit.all, Filling, Tested, Scalar,
-                           Required, Required, Site);
+                           Required, Required, Site, Representation => True);
                      end if;
                   end;
                end if;
@@ -5835,7 +5846,7 @@ package body Landin.Stages.Lowering is
                     (Unit.all, Filling,
                      IR.Emit_Number
                        (Unit.all, Filling, Ty.U8, 1, False, Site),
-                     Ty.U8, 0, 0, Site);
+                     Ty.U8, 0, 0, Site, Representation => True);
                begin
                   pragma Unreferenced (Traps);
                   Close_With_Jump (Done, Site);
@@ -7409,7 +7420,8 @@ package body Landin.Stages.Lowering is
                   return IR.Emit_Range_Check
                     (Unit.all, Filling, Address, Ty.Usize, 1,
                      Ty.Folded
-                       (Landin.Targets.Maximum_Object_Size (Facts)), Site);
+                       (Landin.Targets.Maximum_Object_Size (Facts)), Site,
+                     Representation => True);
                end;
 
             when Syn.Address_Of =>
@@ -9444,7 +9456,7 @@ package body Landin.Stages.Lowering is
                     (Unit.all, Filling,
                      IR.Emit_Number
                        (Unit.all, Filling, Ty.U8, 1, False, Site),
-                     Ty.U8, 0, 0, Site);
+                     Ty.U8, 0, 0, Site, Representation => True);
                begin
                   pragma Unreferenced (Traps);
                   Close_With_Jump (Done, Site);
@@ -13795,7 +13807,8 @@ package body Landin.Stages.Lowering is
                   Answer := IR.Emit_Range_Check
                     (Unit.all, Filling, Answer, Ty.Usize, 1,
                      Ty.Folded
-                       (Landin.Targets.Maximum_Object_Size (Facts)), Site);
+                       (Landin.Targets.Maximum_Object_Size (Facts)), Site,
+                     Representation => True);
                end if;
                IR.Set_Pointee
                  (Unit.all, Filling, Answer, Pointee_For

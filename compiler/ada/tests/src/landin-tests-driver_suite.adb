@@ -3331,8 +3331,111 @@ package body Landin.Tests.Driver_Suite is
              "", "assertion is false");
    end Darwin_Contracts;
 
+   procedure Panic_Contracts (Item : in out Landin.Testing.Context);
+
+   procedure Panic_Contracts (Item : in out Landin.Testing.Context) is
+      Core : constant String :=
+        "public out_of_range: atom public overflow: atom "
+        & "public bad_conversion: atom public unreachable: atom "
+        & "public panic_kind: type = out_of_range | overflow | "
+        & "bad_conversion | unreachable" & LF;
+
+      procedure Check (Target, Handler : String; Good : Boolean);
+      procedure Check (Target, Handler : String; Good : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_Directory ("app");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/core");
+         Host.Add_Directory ("root/core/panic");
+         Host.Add_File ("root/core/panic/panic.ldn", Core);
+         Host.Add_File ("app/main.ldn", "import core/panic" & LF
+           & Handler & LF & "f: (x: u8) -> (y: u8) = y = x + 1 end f" & LF);
+         Args.Append ("--root=root");
+         Args.Append ("--target=" & Target);
+         Args.Append ("app");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, (if Good then Landin.Driver.Status_Success
+            else Landin.Driver.Status_Reported),
+            "panic signature checked without requesting emission: " & Target);
+         if not Good then
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Result.Report), "L0506"),
+               "malformed handler has its named panic-contract diagnostic");
+         end if;
+         Args.Append ("--emit=asm");
+         Args.Append ("--panic-map");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, (if Good then Landin.Driver.Status_Success
+            else Landin.Driver.Status_Reported),
+            "the same contract gates emitted artifacts: " & Target);
+         if Good then
+            Landin.Testing.Check
+              (Item, Contains (Host.Written ("a.s"), "panic_active"),
+               "selected handler owns a private reentry guard");
+            Landin.Testing.Check
+              (Item, Contains (Host.Written ("a.s.sources.json"),
+                               """panic_base"": 1"),
+               "optional source map carries deterministic first-byte space");
+         else
+            Landin.Testing.Check
+              (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "invalid panic contracts have no artifact or tool effects");
+         end if;
+      end Check;
+      Targets : constant Landin.Platform.Path_List :=
+        Both ("linux-x86-64", "darwin-arm64");
+      All_Targets : Landin.Platform.Path_List := Targets;
+   begin
+      All_Targets.Append ("cortex-m0");
+      for Target of All_Targets loop
+         Check (Target, "public panic_handler: (kind: panic.panic_kind, "
+           & "site: u32) -> noreturn = loop do end loop end panic_handler",
+           True);
+         Check (Target, "public panic_handler: (kind: panic.panic_kind, "
+           & "site: u32) -> none = end panic_handler", False);
+         Check (Target, "panic_handler: (kind: panic.panic_kind, "
+           & "site: u32) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "public panic_handler: (kind: u32, "
+           & "site: u32) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "public panic_handler: (kind: panic.panic_kind, "
+           & "site: u16) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "public panic_handler: (site: u32, "
+           & "kind: panic.panic_kind) -> noreturn = loop do end loop "
+           & "end panic_handler", False);
+         Check (Target, "public panic_handler: (inout kind: panic.panic_kind, "
+           & "site: u32) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "public panic_handler: (t: type, "
+           & "kind: panic.panic_kind, site: u32) -> noreturn = "
+           & "loop do end loop end panic_handler", False);
+         Check (Target, "public panic_handler: u32 = 7", False);
+         Check (Target, "index: type = u32 range 0..7 "
+           & "public panic_handler: (kind: panic.panic_kind, "
+           & "site: index) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "index: type = distinct u32 "
+           & "public panic_handler: (kind: panic.panic_kind, "
+           & "site: index) -> noreturn = loop do end loop end panic_handler",
+           False);
+         Check (Target, "index: type = u32 reason: type = panic.panic_kind "
+           & "public panic_handler: (kind: reason, site: index) -> noreturn = "
+           & "loop do end loop end panic_handler", True);
+      end loop;
+   end Panic_Contracts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "panic handler contracts", Panic_Contracts'Access);
       Landin.Testing.Register
         (Into, "driver", "tool start failures keep their cause",
          Tool_Start_Failures_Keep_Their_Cause'Access);

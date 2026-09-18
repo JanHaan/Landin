@@ -1,3 +1,4 @@
+with Landin.Panics;
 --  Select concrete emission without exposing target choices to the driver.
 with Ada.Strings.Unbounded;
 
@@ -29,6 +30,7 @@ package Landin.Backend.Dispatch is
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
-      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item);
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
+      Panic : access constant Landin.Panics.Plan := null);
 
 end Landin.Backend.Dispatch;

@@ -1,0 +1,4 @@
+public panic_handler: (kind: u32, site: u32) -> noreturn =
+    loop do
+    end loop
+end panic_handler

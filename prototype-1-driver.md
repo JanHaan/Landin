@@ -450,7 +450,12 @@ D231 makes the `noreturn` entry and nonreturning failure recovery concrete.
 `abi/r670-noreturn` checks the same generic/evidence and cleanup contracts on
 both hosted targets. The return form does not relax escaping-buffer origins
 or establish DMA completion. These are bounded derivative tests, not the
-complete driver.
+complete driver. D232 adds the canonical `core/panic` hook: bounded
+`core-panic.ldn` derivatives exercise its ordinary two-scalar calls at failed
+checks, inside a real interrupt and after entry return. The default requires
+no reporting storage. These changes do not alter the ordinary-slice DMA
+completion protocol or add an allocator to a collection; prototype 3's explicit
+capability and failure contracts continue to apply.
 
 What the escape rule rejects, and the reason the prototype was
 worth writing:

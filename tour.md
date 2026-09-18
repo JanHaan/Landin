@@ -3864,18 +3864,29 @@ contains `argv[0]`.
 
 A failed check calls a fixed, never-returning symbol.
 Two scalars, no strings: 'site' is a number the compiler
-assigns per check, and the file and line for it live in a
-side table that constrained builds simply omit.
+assigns to the source operation and check family. The file
+and line live in an optional off-target table; constrained
+builds need no filenames or reporting storage. D232 fixes
+selection and numbering for all three emitting targets.
 
 ```landin
-panic_kind: type = out_of_range | overflow | bad_conversion | unreachable
+import core/panic
 
-public panic_handler: (kind: panic_kind, site: u32) -> noreturn =
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
     loop do
     end loop
 end panic_handler
 
 ```
+
+The entry module's public ordinary `panic_handler` replaces the compiler's
+terminal default. It must have this exact infallible return form and canonical
+atom domain; a same-spelled linker symbol is not replacement. Checks do not
+unwind the failed computation's cleanup. A second handler entry traps, including
+a check inside the handler. `--panic-map` emits a build-bound source map;
+`source-location.py --panic-site` requires matching artifact identity. Caller
+coordinates remain a separate value. Hardware faults and naked assembly retain
+their machine obligations.
 
 ## THE PRINCIPLES BEHIND THE DECISIONS
 

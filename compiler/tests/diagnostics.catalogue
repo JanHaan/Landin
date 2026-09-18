@@ -64,3 +64,4 @@ L0502  Live     [1970] [1990]: a missing or invalid hosted main or explicitly se
 L0503  Retired  retired: the register-only internal calling limit
 L0504  Live     a verified frame outside x86-64's signed displacement encoding
 L0505  Live     [1640]: firmware static images exceed the bounded assembler materialization budget
+L0506  Live     [1670]: invalid panic handler or unrepresentable site space

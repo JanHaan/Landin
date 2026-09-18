@@ -21,6 +21,10 @@
 
 package Landin.IR.Testing_Support is
 
+   procedure Overwrite_Representation_Check
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id)
+     with Pre => Holds (Into, Item, Value);
+
    procedure Overwrite_Encoding_Run
      (Into : in out Unit; Set_Id : Atom_Set_Id; First, Bits : Natural)
      with Pre => Holds (Into, Set_Id);

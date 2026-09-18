@@ -1,3 +1,4 @@
+with Landin.Panics;
 --  Native Darwin arm64 assembly from verified IR.
 with Ada.Strings.Unbounded;
 
@@ -26,6 +27,7 @@ package Landin.Backend.Arm64 is
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null);
+      Debug : access constant Landin.Debugging.Information := null;
+      Panic : access constant Landin.Panics.Plan := null);
 
 end Landin.Backend.Arm64;

@@ -161,6 +161,11 @@
       "reason": "Hosted C peers exercise external noreturn and returning-callee guards. Cortex keeps the general C surface refused; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware.",
       "witness": "compiler/tests/fixtures/abi/r670-noreturn/fixture.meta"
     },
+    "abi/r670-panic": {
+      "mode": "restriction",
+      "reason": "Hosted C peers observe panic contracts; the general Cortex C source surface remains refused. freestanding.py executes the selected and default panic paths through compiler-owned firmware.",
+      "witness": "compiler/tests/fixtures/abi/r670-panic/fixture.meta"
+    },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute"
     },

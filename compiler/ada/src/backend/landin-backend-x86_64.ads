@@ -1,3 +1,4 @@
+with Landin.Panics;
 --  Linux x86-64 assembly for a verified unit.
 --
 --  Text, not objects.  `tour.md` [1550] says Landin keeps its own native
@@ -135,6 +136,7 @@ package Landin.Backend.X86_64 is
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null);
+      Debug : access constant Landin.Debugging.Information := null;
+      Panic : access constant Landin.Panics.Plan := null);
 
 end Landin.Backend.X86_64;

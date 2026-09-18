@@ -47,7 +47,8 @@ package body Landin.Backend.Firmware is
    function Number (Value : Landin.Targets.Byte_Count) return String is
      (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both));
 
-   function Startup (Entry_Symbol : String) return String is
+   function Startup
+     (Entry_Symbol : String; Returned : String := "udf #1") return String is
      (".section .text.landin_firmware_reset,""ax"",%progbits" & LF
       & ".balign 2" & LF
       & ".globl _landin_firmware_reset" & LF
@@ -98,7 +99,7 @@ package body Landin.Backend.Firmware is
       & "bl " & Entry_Symbol & "" & LF
       & ".globl _landin_firmware_returned" & LF
       & "_landin_firmware_returned:" & LF
-      & "udf #1" & LF
+      & Returned & LF
       & "b _landin_firmware_returned" & LF
       & ".ltorg" & LF
       & ".size _landin_firmware_reset, .-_landin_firmware_reset" & LF

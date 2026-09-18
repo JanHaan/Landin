@@ -3842,6 +3842,7 @@ def check_coverage_registers(full_run):
             "memory.eligibility", "memory.alignment",
             "memory.external-writers",
             "firmware.surface", "firmware.return",
+            "functions.nonreturning", "panic.contract", "panic.dispatch",
             "firmware.assembly-obligations",
             "packed.extraction", "packed.image", "packed.register",
             "packed.insertion", "packed.reserved", "packed.device",
@@ -3922,6 +3923,22 @@ def check_coverage_registers(full_run):
                             "0xde01")) and all(pin in runner_text for pin in (
                             "from firmware import execute_suite as firmware_execute",
                             "firmware_execute(self, refine)"))
+                if key == "panic.dispatch":
+                    probe = "environments/cortex-m/freestanding.py"
+                    peer = "compiler/tests/fixtures/abi/r670-panic/peer.c"
+                    runner = "environments/cortex-m/run.py"
+                    if probe in row["Evidence"] and os.path.isfile(peer):
+                        probe_text = io.open(probe, encoding="utf-8").read()
+                        peer_text = io.open(peer, encoding="utf-8").read()
+                        runner_text = io.open(runner, encoding="utf-8").read()
+                        firmware_trap = all(pin in probe_text for pin in (
+                            "R670_PANIC_PASS", "0xde01",
+                            "'panic-default'")) and all(
+                                pin in peer_text for pin in (
+                                    "WIFSIGNALED(status)", "SIGILL",
+                                    "SIGTRAP", "events[2] != sites[selected]"))
+                        firmware_trap &= (
+                            "freestanding_execute(self, refine)" in runner_text)
                 if not firmware_trap and not any(
                         fixtures.get(name, (None, {}))[1].get("traps")
                         == "yes" for name in names):
@@ -5422,6 +5439,7 @@ def check_phase_handoff(full_run):
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")],
                 [sys.executable, "-m", "unittest", "discover", "-s",
                  os.path.join(ROOT, "scripts/tests"), "-p", "test_darwin*.py"]):
             result = subprocess.run(command, capture_output=True, text=True, timeout=20)

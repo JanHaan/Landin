@@ -1,0 +1,9 @@
+class: negative
+summary: Entry panic handlers must use the canonical core panic atom domain
+program: main.ldn
+codes: L0506
+expect: expected.txt
+constructs: 0890, 1670
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: ../tests/fixtures/negative/r670-panic-handler/main.ldn
+status: 1

@@ -1468,7 +1468,9 @@ the zero and the negative amount are what a reader changes.
 A trap is synchronous with the operation that causes it and
 happens at that operation's point in [0410]'s order. It does
 not return. The operation produces no value, and no later
-Landin action occurs; actions before it are not undone.
+action of the failed computation occurs; actions before it are not undone.
+D232 permits the selected panic handler's terminal computation, without
+resuming that failed computation or unwinding its cleanup.
 How the surrounding system reports the trap is not Landin
 program behaviour. An operating system's signal, exception,
 status or other encoding is not stable across targets or
@@ -1478,8 +1480,8 @@ For example, an index expression runs before the selected element is read and,
 on the left of an assignment, before its right-hand expression [0410]. If that
 index returns, neither later action occurs; facts from that edge do not reach a
 join.
-The Linux x86-64 backend deliberately emits `ud2` when it
-must trap. It does not inherit the accidental fault or value
+The default Linux x86-64 handler deliberately emits `ud2`; D232
+defines selected-handler dispatch. It does not inherit the accidental fault or value
 of the machine instruction used for the operation.
 
 ### [1970] The first hosted path has one entry shape
@@ -1760,10 +1762,10 @@ selected entry. It does not call user module initializers [1460]/[1940],
 construct a hosted environment, allocate memory or run a scheduler. This reset
 contract assumes execution through the hardware reset vector, with no NMI or
 fault during initialization; a custom NMI/HardFault handler cannot assume
-initialized storage before reset has completed it. Ordinary entry return,
-naked fallthrough and a failed runtime check execute the selected undefined
-instruction trap. Hardware fault dispatch applies; no failure is returned to
-a nonexistent hosted caller. `none` remains absence of a result, not the
+initialized storage before reset has completed it. D232 routes ordinary entry return and failed language checks to the selected
+panic handler, or the terminal default. Naked fallthrough retains its
+undefined-instruction guard. Hardware faults retain hardware fault dispatch;
+no failure is returned to a nonexistent hosted caller. `none` remains absence of a result, not the
 distinct `noreturn` return form (D231).
 
 `extern(interrupt)` and `extern(naked)` are distinct structural function
@@ -2113,7 +2115,7 @@ follows it, or whether the host's report is program behaviour.
 
 **Chosen:** [1960]. A trap happens at the operation's point in evaluation
 order, never returns, and permits no later Landin action. Its operating-system
-encoding is not stable. The Linux x86-64 backend uses a deliberate `ud2`, so
+encoding is not stable. The default Linux x86-64 handler uses a deliberate `ud2`, so
 the language does not inherit whichever fault or value an arithmetic
 instruction happens to provide.
 
@@ -2124,17 +2126,13 @@ of the lowest signed value by -1 on x86-64. The second can give a stable report,
 but makes that report an interface the language must preserve and a runtime
 every freestanding target must supply.
 
-**What the tour also said, and this does not yet do:** [1670] states the
-mechanism a failed check eventually uses — a call to a fixed never-returning
-`panic_handler`, taking an atom for the kind and a compiler-assigned `site`
-number, with file and line in a side table a constrained build omits. That is
-not an alternative this decision declined. At D11's original kernel, atom
-sets and `noreturn` could not spell the contract. Atom sets and D231's return
-form are now enabled, while the fixed handler selection and check-site
-mechanism still require implementation. The existing undefined-instruction
-trap remains until that mechanism is enabled. R6.70 owns it; the alternative
-declined above is calling a runtime routine _instead of_ [1670]'s, not
-[1670] itself.
+**The deferred obligation:** [1670] promised the fixed two-scalar,
+never-returning handler when the original kernel could not express its atom
+set or return form. D231 supplies `noreturn`; D232 now supplies source handler
+selection, check dispatch and optional site mapping on all three emitting
+targets. The original default trap remains the constrained default. The
+alternative declined above was a mandatory reporting runtime instead of that
+contract, not [1670] itself.
 
 **Evidence:** `runtime/checked-overflow-traps` and
 `runtime/a-zero-divisor-traps` run on Linux x86-64 and are held to having
@@ -9317,8 +9315,11 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
+| `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
+| `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
+| `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1950, 1960 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls |
 | `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
-| `firmware.return` | trap | 1550, 1570, 1650, 1990 | D229 entry return and naked fallthrough execute an undefined instruction; hardware fault dispatch applies without a hosted caller | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
+| `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
 | `packed.image` | static | 0540, 0730, 0750 | Explicit disjoint positions, one target-sized carrier and packed-only unsigned widths; ordinary storage retains its existing representation | `runtime/r640-packed-fields`, `runtime/r640-packed-construction`, `runtime/r640-packed-static` |
@@ -12041,10 +12042,9 @@ value solves its cost problem with existing aggregate machinery. Accepting any
 three words without field names was declined because their interpretation would
 then be unstated. Privileging a particular core type was unnecessary.
 
-[1670]'s future compiler-check handler still takes its stated site number;
-this decision does not implement that handler. Both features follow its
-no-mandatory-filename rule. Its implementation remains R6.70's, while this
-caller parameter is complete in R4.10.
+D232's compiler-check handler takes its separate site number. Both features
+follow [1670]'s no-mandatory-filename rule and share optional source/build
+identity packaging, without changing this R4.10 caller-value contract.
 
 **Pinned by** `positive/caller-parameters`, `runtime/caller-parameters`,
 `runtime/caller-is-an-ordinary-name`, the `negative/caller-parameter-*` corpus,
@@ -14402,4 +14402,124 @@ These alternatives are declined.
 **Pinned by:** `checking/nonreturning control and identity` checks all three target
 descriptions through verified IR; `positive/r491-noreturn-signatures` retains
 the former refusal's exact source as accepted syntax. R6.70 owns executable
-acceptance, the panic mechanism and the remaining integration evidence.
+acceptance and remaining integration evidence; D232 supplies panic dispatch.
+
+### D232 — Compiler-check panic dispatch and optional site identity
+
+**Chosen:** [1670] is a source-level hook on all three emitting targets.
+`core/panic` declares public atoms `out_of_range`, `overflow`,
+`bad_conversion`, `unreachable`, and their union `panic_kind`. They use the
+ordinary nonzero u32 atom ABI, in declaration-identity order across the final
+compilation; their integers are not fixed enumerator encodings. Zero remains
+private call success and is not admitted into this source atom domain.
+
+A module-level declaration named `panic_handler` in the entry module selects
+replacement. It must be a public, defined, nongeneric, ordinary Landin routine
+with two by-value parameters, the exact canonical four-atom domain and plain
+u32, and infallible `noreturn`. Equivalent aliases of that domain are accepted;
+independently declared same-spelled atoms are different. Parameter names are
+not part of identity. C, interrupt, naked, external, generic, failing, returning,
+inout/sink, constrained or distinct site types, caller-inserted parameters,
+extra-parameter and explicit-link-symbol forms are refused. Normal
+resolution rejects duplicates. A declaration with that name in another module
+or a local scope is not the entry hook. These rules also apply to checking
+requests; L0506 identifies an invalid handler contract. Source replacement is
+supported by this selection, not by weak symbols or accidental link ordering.
+The handler remains an ordinary D231 function value for calls and evidence.
+
+No selected declaration means the compiler supplies the terminal default:
+Linux `ud2`, Darwin `brk #1`, Cortex `udf #1`. Calling this known terminal
+implementation is folded to that instruction, with no mandatory thunk, data,
+strings or allocation. A selected handler receives exactly `(kind, site)`
+at the check's failed edge, through the unchanged ordinary target ABI. The
+failed computation never resumes: its later stores, argument evaluations,
+recovery, `defer` and `undo` actions do not run. The handler's own terminal
+computation may perform ordinary actions. This is D11's evaluation-point and
+no-continuation guarantee, not unwinding or a checked error outcome.
+Foreseeable allocator exhaustion remains `out_of_memory` under D193.
+
+The complete enabled check disposition is:
+
+| Check family | Kind and site |
+|---|---|
+| Checked integer add/subtract/multiply/negation; zero divisor for division or remainder; signed division overflow | `overflow` at the arithmetic operation. Wrapping operations and D187's suppressed overflow checks do not acquire a panic. The defined lowest-signed remainder by minus one remains zero. |
+| Fixed-array and slice bounds/order; range-subtype membership; negative shift count | `out_of_range` at the indexing, slicing, range check or shift. Large nonnegative shifts retain their defined result. |
+| Integer, bool, float and pointer-address conversion fit; nonnull pointer construction; malformed text decoding | `bad_conversion` at the conversion/decoding operation, with D187's existing exceptions unchanged. Ordinary floating arithmetic retains its existing IEEE behavior. |
+| Volatile/atomic scalar address alignment; atom-domain validation; packed encoded membership, packed field-width fit or reserved-bit pattern validation | `bad_conversion` at the operation that validates the value. Raw packed copying still preserves every bit without extracting or validating fields. |
+| A callee returns despite `noreturn` | `unreachable` at the call, before any continuation. |
+| Compiler-owned firmware entry returns; invalid/uninitialized hosted argument-root bridge or legacy bridge contract | `unreachable`, synthetic site zero. Normal entry cleanup runs before an ordinary entry return reaches this guard. |
+| Recursive/concurrent panic entry, or a selected handler somehow returns | Terminal default instruction; no second handler invocation. |
+| Naked assembly fallthrough | Terminal default instruction: the programmer has not supplied the required machine transfer or a safe ordinary-call frame. |
+
+Hardware faults, invalid raw-pointer/lifetime assertions, foreign ABI violations
+other than the explicit `noreturn` guard, assembler faults and private Arm
+helper faults do not become language checks. They keep their machine or
+programmer obligations. The compiler does not catch faults and reinterpret
+them as bounds/alignment panics, split volatile accesses, or synthesize atomics
+on Cortex. Startup's unhandled-exception loop remains a separate hardware
+fault sink. There is no user-code module initialization.
+
+Each selected image has one private four-byte zero-initialized panic-entry
+latch. The handler claims it before executing source actions. A second entry
+traps, including a check in a transitively called helper and an explicit
+recursive call. Linux uses a locked exchange and Darwin an exclusive
+acquire/release loop for this private latch; the scope is the whole process
+image, not one thread. Cortex uses ordinary word accesses: on its single core,
+an interrupt before publication takes over the nonreturning computation;
+after publication it sees the latch and traps. This introduces neither
+exclusive accesses nor hidden interrupt masking on ARMv6-M. No latch is needed
+for the inlined default. The selected handler must establish any desired
+reporting capability itself and locally handle any declared failure; no
+reporting library or heap is imported automatically.
+
+The compiler-owned reset initializes the latch with other BSS before enabling
+configurable interrupts and calling firmware entry. Panics in an interrupt
+use the same handler on the interrupted stack and do not return through
+EXC_RETURN. The existing [1990] assumption of no NMI/fault during reset
+initialization remains: a custom early NMI/HardFault cannot assume initialized
+storage or this latch before BSS has been cleared. This is not a new promise
+about reset-time hardware faults. All ordinary frames, including the handler,
+retain the previous-frame/incoming-return record and target alignment.
+
+Site zero is reserved for synthetic guards without a source operation. Other
+sites use a deterministic, collision-free compilation-local space. In canonical
+source order, each source byte position, including its one-past-end position,
+reserves four numbers in the above atom-name order. The first source begins
+at one; the next begins after the previous source's complete range. A site's
+number is `base + 4 * first_byte_offset + family_offset`, where family offsets
+are zero through three. Multiple machine guards for one source operation and
+family share a site. Distinct families at that position have different sites.
+Unused positions cost no image bytes. A source-space total that cannot fit u32
+is refused as L0506, never truncated or hashed. Sites are not persistent across
+changed source inputs, even comment-only changes.
+
+Numbering precedes and is independent of optimization. Specialization and
+inlining retain the originating source operation, not the clone's allocation
+order or the caller's coordinates. Dead operations leave gaps. Body sharing
+must preserve observable kind/site immediates; the existing native-body and
+atom-domain/shape equality checks therefore cannot merge differently numbered
+selected-handler edges. Default terminal checks may retain their established
+body sharing. Kept data and selected handler references remain reachable.
+
+`--panic-map` adds optional fields to `<output>.sources.json`: source-byte
+ranges and line-start offsets alongside D192's exact path bytes, source hashes
+and assembly/build identity. It requires emission. `scripts/source-location.py
+--panic-site NUMBER` resolves a nonzero site only with matching assembly,
+ELF build identity or Mach-O identity. Zero is explicitly synthetic, not a
+filename guess. Stripping source/debug tables does not change the scalar site;
+constrained builds need no map, filenames, formatting, heap or reporting storage.
+The optional identity section is accounted for in an image that requests it.
+Caller coordinates remain their separate three-scalar D192 contract; they do
+not become panic numbers. Cortex source-debugging acceptance remains R6.100.
+
+**Alternatives declined:** linker interposition does not validate a source
+signature; a new panic intrinsic namespace is unnecessary; per-emission dense
+numbering changes with optimization; address-based sites change with placement;
+hashes admit collisions; mandatory filenames or a runtime lookup table impose
+cost on every constrained image. The byte-position scheme spends unused u32
+numbers to remove a mutable check-discovery ordering and needs no runtime table.
+A returning or failing handler would contradict D11 and [1670].
+
+**Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
+`core-panic.ldn`, the off-target identity refusal tests, and the inherited
+default-trap fixtures. ROADMAP.md owns results and remaining acceptance work.

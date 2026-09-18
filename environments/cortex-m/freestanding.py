@@ -15,7 +15,7 @@ from setup import DEFAULT, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-MODULES = ('mem', 'cpu', 'vec', 'pool')
+MODULES = ('mem', 'cpu', 'vec', 'pool', 'panic')
 
 
 def imports(program):
@@ -63,6 +63,7 @@ def build(run, refine, program, optimize, specialize):
         '--firmware-entry=start', '--emit=exe',
         '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
+        *(['--panic-map'] if 'import core/panic' in program else []),
         'source/app', '-o', elf.name], timeout=60)
     run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
     run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
@@ -177,13 +178,106 @@ def nonreturning(run, elf):
             'print("R670_NORETURN_PASS")', 'end'], 'R670_NORETURN_PASS')
 
 
+
+def panic(run, elf):
+    program = (run.out / 'source/app/main.ldn').read_bytes()
+    names = json.loads((run.out / 'closure.json').read_text())['symbols']
+    latches = [name for name in names if name.endswith('landin_panic_active')]
+    require(len(latches) == 1, 'selected handler has no unique private latch')
+    # Expected sites come from the input expression's byte position, never
+    # the compiler map, generated instructions, or the observed panic value.
+    tokens = [b'high += u8(input)', b'u8(input)', b'items[usize(input)]',
+              b'42 / input', b'42 << input', b'bool(input)', b'never()',
+              b'high += u8(input)', b'a / b', b'high += u8(input)', None,
+              b'73 / input', b'compiler.volatile_load(port)', b'value.bits',
+              b'ptr(usize(read_input()))', b'compiler.register_write(addr later',
+              b'utf8(bytes[0..<1])']
+    kinds = [2, 3, 1, 2, 1, 3, 4, 2, 2, 2, 4, 2, 3, 3, 3, 3, 3]
+    values = [1, 256, 2, 0, -1, 2, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 255]
+    for mode, (token, kind, value) in enumerate(zip(tokens, kinds, values)):
+        after = program.index(b'elsif mode == 1 then') if mode == 1 else 0
+        site = 0 if token is None else 4 * program.index(token, after) + kind
+        lane = run.out / ('panic-'+str(mode))
+        lane.mkdir()
+        prefix = [
+            'set *(unsigned*)&'+latches[0]+' = 0xcccccccc',
+            'set *(unsigned*)&initialized = 0xaaaaaaaa',
+            'set *(unsigned*)&cleared = 0xbbbbbbbb',
+            'break *start', 'continue', 'delete breakpoints', 'python',
+            'assert v("*(unsigned*)&initialized") == 0x670',
+            'assert v("*(unsigned*)&cleared") == 0',
+            'assert v("$sp") == 0x20004000 and v("$r11") == 0',
+            'gdb.selected_inferior().write_memory(0x20003000, bytes([0xa5])*4096)',
+            'end', 'set *(unsigned*)&mode = '+str(mode),
+            'set *(int*)&input = '+str(value)]
+        if mode == 6:
+            # Deliberately violate an ordinary noreturn promise at its ABI
+            # boundary. This is debugger fault injection, not a C surface.
+            prefix += ['break *never', 'continue', 'delete breakpoints',
+                       'set $pc = $lr & ~1']
+        target = '_landin_firmware_unhandled' if mode == 9 else 'finished'
+        execute(Run(lane, run.tools), elf, prefix + [
+            'break *'+target, 'continue', 'python',
+            'assert v("*(unsigned*)&entries") == 1',
+            'assert v("*(unsigned*)&observed_kind") == '+str(kind),
+            'assert v("*(unsigned*)&observed_site") == '+str(site),
+            'assert v("*(unsigned*)&later") == '+str(99 if mode == 10 else 0),
+            'assert v("$xpsr") & 511 == '+str(3 if mode == 9 else 16 if mode == 11 else 0),
+            'assert v("$sp") % 8 == 0 and v("$sp") >= 0x20003000',
+            'assert v("$r9") == 0',
+            'paint = bytes(gdb.selected_inferior().read_memory(0x20003000,4096))',
+            'assert paint[:256] == bytes([0xa5])*256',
+            'print("R670_STACK_OBSERVED", 4096-next(i for i,b in enumerate(paint) if b != 0xa5))',
+            'print("R670_PANIC_PASS")', 'end'], 'R670_PANIC_PASS')
+        if site:
+            import sys
+            output = run.command('site-'+str(mode), [sys.executable,
+                ROOT / 'scripts/source-location.py', str(elf)+'.sources.json',
+                '--panic-site', str(site), '--assembly', str(elf)+'.s'])
+            offset = (site-kind)//4
+            line = program[:offset].count(b'\n')+1
+            column = offset-program.rfind(b'\n', 0, offset)
+            reason = ('out_of_range', 'overflow', 'bad_conversion', 'unreachable')[kind-1]
+            require(output.strip() == f'source/app/main.ldn:{line}:{column} ({reason})',
+                    'panic source map disagrees with independent input coordinates')
+
+
+
+def panic_default(run, elf):
+    require(not Path(str(elf)+'.sources.json').exists(), 'mandatory panic map')
+    require('panic_active' not in Path(str(elf)+'.s').read_text(),
+            'default panic unexpectedly needs retained state')
+    for mode, value in ((0, 1), (6, 0), (10, 0)):
+        lane = run.out / ('default-'+str(mode))
+        lane.mkdir()
+        prefix = ['break *start', 'continue', 'delete breakpoints',
+                  'set *(unsigned*)&mode = '+str(mode),
+                  'set *(int*)&input = '+str(value)]
+        if mode == 6:
+            prefix += ['break *never', 'continue', 'delete breakpoints',
+                       'set $pc = $lr & ~1']
+        execute(Run(lane, run.tools), elf, prefix + [
+            'break _landin_firmware_unhandled', 'continue', 'python',
+            'assert v("$xpsr") & 511 == 3',
+            'assert v("*(unsigned short*)*(unsigned*)($sp+24)") == 0xde01',
+            'assert v("*(unsigned*)&later") == '+str(99 if mode == 10 else 0),
+            'assert v("$sp") % 8 == 0 and v("$sp") >= 0x20003000',
+            'assert v("$r9") == 0',
+            'print("R670_PANIC_DEFAULT_PASS")', 'end'], 'R670_PANIC_DEFAULT_PASS')
+
+
 def programs():
     corpus_inventory()
     result = {'cpu': (HERE / 'probes/core-cpu.ldn').read_text(),
               'pool': (HERE / 'probes/core-pool.ldn').read_text(),
               'zero': (HERE / 'probes/core-zero.ldn').read_text(),
               'vec': (HERE / 'probes/core-vec.ldn').read_text(),
-              'noreturn': (HERE / 'probes/core-noreturn.ldn').read_text()}
+              'noreturn': (HERE / 'probes/core-noreturn.ldn').read_text(),
+              'panic': (HERE / 'probes/core-panic.ldn').read_text()}
+    default = result['panic']
+    first = default.index('public panic_handler:')
+    last = default.index('end panic_handler', first)+len('end panic_handler')
+    result['panic-default'] = (default[:first]+default[last:]).replace('import core/panic\n', '')
     dma = (HERE / 'probes/firmware-dma.ldn').read_text()
     changes = {
         'assembler.block("cpsid i")': 'saved_mask := cpu.disable_interrupts()',
@@ -232,17 +326,22 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
             run = Run(out, parent.tools)
             elf = build(run, refine, program, optimize, specialize)
             (cpu if name == 'cpu' else dma_execute if name == 'dma' else
-             nonreturning if name == 'noreturn' else memory)(run, elf)
+             nonreturning if name == 'noreturn' else
+             panic if name == 'panic' else
+             panic_default if name == 'panic-default' else memory)(run, elf)
             fresh = out / 'fresh'
             fresh.mkdir()
             build(Run(fresh, parent.tools), refine, program, optimize, specialize)
-            for suffix in ('', '.o', '.s', '.ld', '.map'):
+            suffixes = ('', '.o', '.s', '.ld', '.map')
+            if name == 'panic':
+                suffixes += ('.sources.json',)
+            for suffix in suffixes:
                 require((out / ('core.elf'+suffix)).read_bytes() ==
                         (fresh / ('core.elf'+suffix)).read_bytes(),
                         'nondeterministic freestanding artifact '+suffix)
             controls.append({'profile': profile.name, 'kind': name, 'status': 'passed',
                              'lane': 'renode' if name == 'dma' else 'qemu',
-                             'artifact_comparisons': 5})
+                             'artifact_comparisons': len(suffixes)})
             print('freestanding core: '+profile.name+'/'+name+' passed', flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash,

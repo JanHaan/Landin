@@ -1,3 +1,5 @@
+with Ada.Containers.Vectors;
+with Landin.Provenance;
 with Landin.Layouts;
 with Landin.Packed;
 with Landin.Memory;
@@ -21,6 +23,7 @@ package body Landin.Backend.Arm64 is
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Item_Id;
+   use type Landin.IR.Value_Id;
    use type Landin.IR.Opcode;
    use type Landin.IR.Parameter_Convention;
    use type Landin.IR.Signature_Id;
@@ -289,7 +292,8 @@ package body Landin.Backend.Arm64 is
       Assembly : out Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null)
+      Debug : access constant Landin.Debugging.Information := null;
+      Panic : access constant Landin.Panics.Plan := null)
    is
       Out_Text : Unbounded.Unbounded_String;
       Serial : Natural := 0;
@@ -910,8 +914,47 @@ package body Landin.Backend.Arm64 is
            (Of_Unit, Item, Facts, 16#7fff_ffff#);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
-         Trap : constant String := Label (Item, 1) & "_trap";
+         Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+         type Panic_Edge is record
+            Reason : Landin.Panics.Kind;
+            Site : Landin.Panics.Site_Number;
+            Origin : Landin.Provenance.Origin;
+            Label : Unbounded.Unbounded_String;
+         end record;
+         package Edge_Vectors is new Ada.Containers.Vectors
+           (Positive, Panic_Edge);
+         Edges : Edge_Vectors.Vector;
+
+         function Trap (Reason : Landin.Panics.Kind) return String;
+         function Trap return String;
+
+         function Trap (Reason : Landin.Panics.Kind) return String is
+         begin
+            if Panic = null or else Landin.Panics.Handler (Panic.all)
+              = Landin.IR.No_Item
+            then
+               return Hard_Trap;
+            end if;
+            declare
+               Origin : constant Landin.Provenance.Origin :=
+                 (if Current_Value = Landin.IR.No_Value
+                  then Landin.IR.Origin_Of (Of_Unit, Item)
+                  else Landin.IR.Origin_Of (Of_Unit, Item, Current_Value));
+               Site : constant Landin.Panics.Site_Number :=
+                 Landin.Panics.Site (Panic.all, Origin, Reason);
+               Name : constant String := Fresh;
+            begin
+               Edges.Append (Panic_Edge'
+                 (Reason, Site, Origin, Unbounded.To_Unbounded_String (Name)));
+               return Name;
+            end;
+         end Trap;
+
+         function Trap return String is
+           (Trap (Landin.Panics.For_Value
+              (Of_Unit, Item, Current_Value)));
+
 
          function Kind (Value : Landin.IR.Value_Id)
            return Landin.Types.Scalar_Name
@@ -964,7 +1007,7 @@ package body Landin.Backend.Arm64 is
                      Emit ("cmp " & Register & ", x14");
                      Emit ("b.eq " & Done);
                   end loop;
-                  Emit ("b " & Trap);
+                  Emit ("b " & Trap (Landin.Panics.Bad_Conversion));
                   Put (Done & ":");
                end;
             end if;
@@ -1730,7 +1773,7 @@ package body Landin.Backend.Arm64 is
                      Put (Next & ":");
                   end;
                end loop;
-               Emit ("b " & Trap);
+               Emit ("b " & Trap (Landin.Panics.Bad_Conversion));
                Put (Done & ":");
             end Packed_Atom;
 
@@ -1970,7 +2013,8 @@ package body Landin.Backend.Arm64 is
                            if Shape.Packing.Bits < 64 then
                               Emit ("lsr x11, x9, #" & Trimmed
                                 (Natural'Image (Shape.Packing.Bits)));
-                              Emit ("cbnz x11, " & Trap);
+                              Emit ("cbnz x11, "
+                                & Trap (Landin.Panics.Bad_Conversion));
                            end if;
                            Memory (False, Landin.Targets.Packed.Carrier
                              (Shape.Packing.Storage), "x11", "x10");
@@ -2031,7 +2075,8 @@ package body Landin.Backend.Arm64 is
                            Packed_Atom (Landin.IR.Array_Element_Shape
                              (Of_Unit, Shape).Atoms, Encode => True);
                            Emit ("bic x11, x9, x12");
-                           Emit ("cbnz x11, " & Trap);
+                           Emit ("cbnz x11, "
+                                & Trap (Landin.Panics.Bad_Conversion));
                            Emit ("lsl x9, x9, x13");
                            Emit ("lsl x12, x12, x13");
                            Memory (False, Landin.Targets.Packed.Carrier
@@ -2656,7 +2701,13 @@ package body Landin.Backend.Arm64 is
                   Emit ("mov w8, #0");
                   Epilogue;
                when Landin.IR.Halt =>
-                  Emit ("brk #1");
+                  if Panic = null or else Landin.Panics.Handler (Panic.all)
+                    = Landin.IR.No_Item
+                  then
+                     Emit ("brk #1");
+                  else
+                     Emit ("b " & Trap (Landin.Panics.Unreachable));
+                  end if;
 
                when Landin.IR.Fail =>
                   Load_Value (Operand (1), "x8");
@@ -2690,6 +2741,20 @@ package body Landin.Backend.Arm64 is
             Emit ("bl " & Bridge_Symbol (Initialize_Arguments));
          end if;
          Reserve (Extent (Layout));
+         if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
+         then
+            declare
+               Retry : constant String := Fresh;
+            begin
+               Address ("x16", Local_Prefix & "landin_panic_active");
+               Put (Retry & ":");
+               Emit ("ldaxr w17, [x16]");
+               Emit ("cbnz w17, " & Hard_Trap);
+               Emit ("mov w17, #1");
+               Emit ("stlxr w15, w17, [x16]");
+               Emit ("cbnz w15, " & Retry);
+            end;
+         end if;
          if Is_C_Item (Item) then
             C_Entry;
          else
@@ -2739,7 +2804,18 @@ package body Landin.Backend.Arm64 is
                end if;
             end loop;
          end loop;
-         Put (Trap & ":");
+         for Edge of Edges loop
+            Put (Unbounded.To_String (Edge.Label) & ":");
+            if Debug /= null then
+               Put (Dwarf.Source_Line (Debug.all, Edge.Origin));
+            end if;
+            Immediate ("x0", Pattern (Landin.Panics.Code
+              (Panic.all, Edge.Reason)));
+            Immediate ("x1", Pattern (Edge.Site));
+            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            Emit ("brk #1");
+         end loop;
+         Put (Hard_Trap & ":");
          Emit ("brk #1");
          if Debug /= null then
             Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
@@ -4040,6 +4116,14 @@ package body Landin.Backend.Arm64 is
          Emit ("b.ne " & Invalid);
          Finish;
          Put (Invalid & ":");
+         if Panic /= null and then Landin.Panics.Handler (Panic.all)
+           /= Landin.IR.No_Item
+         then
+            Immediate ("x0", Pattern (Landin.Panics.Code
+              (Panic.all, Landin.Panics.Unreachable)));
+            Emit ("mov w1, #0");
+            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+         end if;
          Emit ("brk #1");
          Start (Argument_Count);
          Address ("x9", Argv);
@@ -4152,6 +4236,12 @@ package body Landin.Backend.Arm64 is
       end loop;
       Validate_Linkage;
       Allocate_Symbols;
+      if Panic /= null and then Landin.Panics.Handler (Panic.all)
+        /= Landin.IR.No_Item
+      then
+         Emit (".zerofill __DATA,__bss," & Local_Prefix
+           & "landin_panic_active,4,2");
+      end if;
       Emit (".text");
       if Debug /= null then
          Unbounded.Append (Out_Text, Dwarf.Preamble

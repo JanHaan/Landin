@@ -28,7 +28,7 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 linker_closure(bad, helper)
         self.assertEqual(set(programs()), {
-            'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'core-mem-allocators',
+            'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'})
 
     def test_oracle_refuses_false_pass(self):

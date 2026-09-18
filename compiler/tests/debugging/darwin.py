@@ -70,6 +70,9 @@ def main():
         if args.workload:
             print('FILTERED derived debugger development passed')
             return
+    import panic
+    panic_evidence = panic.measure(args.refine, output / 'panic',
+        debugger=tools['lldb']['path'], profile=args.profile)
     for opt, spec in PROFILES:
         key = opt + '-' + spec
         if args.profile and args.profile != key:
@@ -221,6 +224,7 @@ def main():
         assert digest(tool['path']) == tool['sha256'], 'tool changed during acceptance'
     summary = {'scope': 'R5.40', 'status': 'passed', 'filtered': args.profile is not None,
                'refine_sha256': digest(args.refine), 'tools': tools, 'results': results,
+               'panic': panic_evidence,
                'sources': {str(s.relative_to(ROOT)): digest(s) for s in all_sources}}
     (output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 

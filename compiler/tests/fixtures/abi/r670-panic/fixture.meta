@@ -1,0 +1,10 @@
+class: abi
+profiles: specialization
+summary: Selected panic handlers observe compiler check kinds and stable sites and prevent later actions and recursive reporting
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+c-args: -O2
+status: 42
+constructs: 0300, 0470, 0570, 0890, 1100, 1240, 1670, 1950
+targets: linux-x86-64, macos-arm64

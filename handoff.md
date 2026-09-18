@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Current roadmap work: R6.70 — Implement the freestanding Landin core slice.**
+**Next roadmap item: R6.80 — Establish checked-in generated device fixtures (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -367,4 +367,6 @@ fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
 checks generated boot, nested exceptions, PSP return, veneers and peripheral
 traces alongside independent C/assembly controls. Its exact-revision dual-native
 binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
-core, CPU-library packaging and noreturn; R6.80 retains generated-device fixtures.
+core and adds ordinary CPU support, nonreturning signatures and panic dispatch
+with optional source maps. Its closure is bound to the containing revision’s dual-native approval and
+guarded delivery in ROADMAP.md; R6.80 retains generated-device fixtures.

@@ -1,0 +1,6 @@
+class: negative
+summary: A nonreturning body must have no reachable successful fallthrough
+program: main.ldn
+codes: L0301
+constructs: 0890, 1930
+targets: linux-x86-64, macos-arm64, synthetic-32

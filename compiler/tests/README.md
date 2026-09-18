@@ -937,3 +937,13 @@ executes CPU, allocation, pool, vector and ordinary-slice DMA consumers through
 compiler-owned firmware. It retains the original shared fixture oracles and
 the reviewed raw-storage 32-bit counterpart. This is additional target evidence;
 it neither removes a shared verdict nor asserts completion of R6.70.
+
+D232 adds `abi/r670-panic` on both native hosts, with independently pinned kinds
+and source-byte sites, no later actions/cleanup, recursion and hosted-root
+controls across specialization profiles. `negative/r670-panic-handler` pins
+L0506 and the driver suite checks malformed hooks on all targets. Cortex uses
+`core-panic.ldn` and its default-handler derivative in the mandatory freestanding
+lane, including real interrupt delivery and separately labelled debugger fault
+injection. Optional map mismatch tests run under full `check.py`. These remain
+additional evidence and preserve the inherited fixture verdicts and lane
+boundaries.

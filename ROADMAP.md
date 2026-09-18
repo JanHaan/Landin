@@ -10744,7 +10744,7 @@ with its separate checked-in generated-device fixture gate.
 
 ### R6.70 — Implement the freestanding Landin core slice
 
-Status: active
+Status: complete
 Depends on: R3.30, R3.40, R6.30, R6.50, R6.60
 
 Implement the minimal freestanding memory, collections, panic, CPU and device
@@ -10929,13 +10929,145 @@ all 336 artifact hashes verify. Image and stack extents are unchanged.
 Full `python3 check.py` and verified rendering pass for this increment.
 All this is development evidence, not exact-revision approval.
 
-This increment does not close R6.70. D11/[1670] panic-handler selection,
-check-kind/site mapping and deterministic optional source maps remain required.
-The panic mechanism must integrate hosted behavior, generic/evidence identity,
-optimizer roots, cleanup/failure decisions and independent executable oracles.
-D231's `noreturn` implementation and bounded execution are development evidence;
-current trap behavior remains until panic integration. R551-31 is not
-discharged by these increments.
+D232's following increment implements `core/panic`, canonical entry-module
+handler selection and every enabled backend check edge on Linux, Darwin and
+Cortex. The ordinary two-scalar hook is infallible `noreturn`; malformed hooks
+are refused during checking as L0506. The default remains the existing terminal
+instruction and needs no latch, module import or reporting runtime. Selected
+handlers claim a private four-byte latch, so recursive/concurrent entry stops
+without repeated reporting. Cortex uses ordinary word operations, with no
+exclusive instruction or interrupt masking. Hosted entry-root bridge guards
+and compiler firmware return use `unreachable`/site zero. Naked fallthrough and
+hardware faults retain separate machine obligations.
+
+Sites reserve four check-family numbers per canonical source byte position.
+This trades unused u32 numbers, which consume no target storage, for numbering
+independent of dead-code removal, inlining or specialization order. Exact source
+origins and kind immediates remain part of observable native bodies. The optional
+`--panic-map` source-byte ranges/line offsets reuse D192's hash-bound artifact
+identity, without conflating caller coordinates or admitting runtime filenames.
+The source-location tool refuses absent/out-of-range sites and mismatched maps.
+Canonical atom codes are refreshed after specialization exposes any domains.
+This preserves the existing enum-domain and stored-shape sharing constraints.
+D232 records alternatives, full check-family classification, scope and limits.
+
+Focused Mac compiler-host validation passes 54 driver cases/1,979 assertions,
+including 108 new handler-contract assertions, and nine Cortex ABI cases/487
+assertions. `abi/r670-panic` passes six profiles on both native hosts: eleven
+forked paths independently pin source-byte site numbers, atom identities,
+absence of later actions/cleanup, a returned foreign nonreturning callee,
+recursive panic and an uninitialized hosted authority root. The source map is
+not used as the kind/site oracle. Native Darwin evidence is retained as
+`panic-darwin-2`; Linux development transcripts retain the same fixture verdict.
+The shared inventory is now 535 (the original 533 plus these two R6.70 hosted
+C peers). The original 31 C restrictions and all inherited verdicts remain;
+the two new peers add two explicit restrictions, not fewer executable controls.
+
+`core-panic-3` passes 84 cold-boot compiler-generated QEMU sessions and 36
+fresh-directory comparisons across six profiles. Fourteen paths include actual
+NVIC interrupt execution, malformed packed membership, misaligned scalar MMIO,
+ordinary arithmetic/conversions/bounds, entry-return dispatch, recursion, and
+GDB fault injection of a returning ordinary nonreturning callee. The latter is
+explicit debugger fault injection, not an enabled general C surface. Input-byte
+coordinates and scalar kinds are independently computed before comparing the
+handler's stored values; optional maps are checked separately. An initial probe
+omitted live uses of boot-observation globals, so section GC removed them; the
+corrected program consumes those globals before the tested operation. Another
+initial run exposed a missing pointer-address classification; it was added,
+without weakening an oracle. Failed logs remain retained.
+
+The selected-handler image loads 7,988–8,372 flash bytes, occupies 40 static RAM
+bytes including its latch, and observes 256–448 stack bytes within the inherited
+4 KiB reservation. Its closure is only app, `core/cpu`, `core/panic`, generated
+startup/vectors/object/linker script and pinned thumb/v6-m/nofp libgcc members;
+no hosted support or general C surface enters it. The result SHA-256 is
+`7e39281ef0c3c1a23ac6cd52916a185a3fb375edf827e2e48f68c64cddf803d3`.
+All 630 copied artifact hashes verify. `core-panic-default-1` additionally
+passes 18 QEMU sessions/30 comparisons with the hook removed, retaining neither
+latch nor source map. Its copied result SHA-256 is
+`31d658af1b6498cc3f3c4f596ff87e79531265d63403d5742d7b42256e22d975`;
+all 264 artifact hashes verify. The mandatory freestanding inventory now has
+eleven consumers; at this checkpoint the full lane has 180 QEMU sessions,
+six Renode runs and 336 comparisons. The separate R6.50/R6.60 lanes and their oracles are unchanged.
+The host backend suite also passes 104 cases/653 assertions. The optional map
+decoder has retained wrong-identity/out-of-range refusal controls in full
+`check.py`. A new negative source fixture pins L0506 rather than leaving that
+live diagnostic covered only by a harness case.
+The subsequent complete `core-integrated-1` run passes all eleven consumers
+at six profiles: 180 QEMU sessions, six real synthetic-device Renode runs and
+336 fresh-directory comparisons. Its copied result SHA-256 is
+`a2e74bab9b3708c7f4ae9723eca59df24d47db8b1681b30973836415a7c49b03`;
+all 3,168 artifact hashes verify. The added latch-poison control also passes
+all 84 selected-handler boots: reset must clear the private latch before the
+first panic, as well as restoring initialized data and ordinary BSS.
+
+Native debugger controls now run in the mandatory GDB/LLDB acceptance path.
+The small ordinary Landin program crosses erased evidence and a generic
+nonreturning callback before overflowing; three profiles on each host verify
+source breakpoints, initialized caller/handler variables, independently expected
+kind/site, five source frames and the failed operation's caller line, then
+exit with status 42. Darwin out-of-line check stubs now emit their own origin line records so
+unwinding reports that operation. `panic-lldb-1` and `panic-gdb-2` retain focused
+passes. Their copied manifests verify 43 GDB and 61 LLDB artifacts, with result
+SHA-256 values `633279295238eda2e5a48e00d6a2c7ef6184ac4ba9a27eddfad5fa394d74bbbd`
+and `f5722c9b08a1456d5187d7af9a2bcd7b7aefbacd4816046b688fd08523415fc0`.
+The initial GDB attempt discovered that the pinned GDB has no Python
+scripting; the replacement uses its existing CLI-transcript mechanism with the
+same independent value/frame/line assertions. This is a retained tool failure,
+not a skipped debugger requirement. Thirty-five debugger-supervisor tests pass.
+The final parser report control also passes all 1,949 assertions; full
+`check.py` and verified rendering pass before the subsequent guarantee-register
+and native-debugger additions, which are checked again with the final candidate.
+
+The final check-family audit found that the existing `Range_Check` IR opcode
+also represents null-pointer, malformed-text and reserved-pattern validation.
+D232 now carries a bounded representation flag for those checks, preserved by
+rewriting/specialization, cleared with proved constant replacements and refused
+by verification on other opcodes. Subtype checks remain `out_of_range`; these
+representation checks are `bad_conversion`. Three verifier assertions pass.
+New selected-handler execution paths cover all three cases, including a
+reserved-bit refusal before any write. The first text probe exposed an existing
+lowering defect for discarded text conversions; stored-expression lowering now
+routes them through validation instead of treating them as routine calls. The
+first Cortex forms also correctly refused known-zero pointer/reserved images;
+an ordinary input-reading function supplies genuinely runtime operands without
+changing the independently expected values. Those failed attempts are retained.
+The expanded hosted peer passes all six Darwin profiles with fourteen forked
+paths. The embedded inventory becomes 198 QEMU sessions (102 selected-handler
+boots), six Renode runs and 336 comparisons across the same eleven consumers.
+Recorded IR was regenerated and inspected: eight pointer guards gain the reason
+flag, and the two previously added positive R6.70 fixtures enter the corpus;
+no prior program or check is removed. The other 133 lowering cases pass.
+
+The subsequent `core-integrated-2` run passes all eleven consumers at all six
+profiles: 198 QEMU sessions, six Renode executions and 336 fresh-directory
+artifact comparisons. All 3,258 copied artifact hashes verify; result SHA-256
+is `7990fd838e4e16f3d59c8caf5350298f46bb5a6563ebc426f5d3b11c940593fe`.
+The expanded selected-panic image uses 15,820–16,516 flash bytes, 40 static RAM
+bytes and 360–552 observed stack bytes; the default derivative uses
+12,236–12,868 flash bytes and 24 static RAM bytes. Other consumers retain the
+measurements recorded above. No image changes the 32 KiB/16 KiB/4 KiB profile.
+The focused expanded panic export independently verifies 720 hashes with result
+SHA-256 `785521993f73ea34cb9b00664ebb71da5954f0bfcfa81c972f954c0c4a98a722`.
+The fourteen-path hosted peer also passes all six Linux profiles. The final
+handler contract checks pass 144 assertions across three targets, including
+constrained/distinct site refusals and equivalent plain aliases. Seven
+catalogue cases pass 4,017 assertions after recording the new L0506 row; the
+regenerated complete IR corpus passes its exact comparison. Verified rendering
+caught a prose line beginning `42.` as an unintended list; the sentence was
+reflowed without weakening the page-content comparison.
+
+Cross-prototype effects preserve prototype 2's foreseeable diagnostic/failure
+channels, prototype 3's explicit allocator/raw-storage contracts and prototype
+4's hosted capability roots. The only new hosted-root behavior is the selected
+terminal panic hook; no resource acquisition or cleanup policy changes. D148's
+register now explicitly classifies nonreturning flow, hook validation and panic
+dispatch, while preserving D187/D227/D228's existing guarantee boundaries.
+These runs are development evidence. The containing closure tree's complete
+status becomes authoritative only through the exact-revision binding below.
+R551-31's freestanding core and nonreturning obligations are implemented here;
+its generated-device, complete driver and firmware milestone obligations retain
+their successors.
 `python3 scripts/ci/policy.py routine --debugger` explicitly reselected the
 compatible Linux/Darwin routine debugger-risk policies. Both tracked policy
 files already contain those selected values. Their full native release
@@ -10950,6 +11082,26 @@ milestone closure. General SVD generation, package/build orchestration,
 scheduling/cache/resume work, broader libraries, resource/evidence limitations
 and deferred Nix retain their R5.20/R5.51 owners. No successor gate is closed
 by bounded observations here.
+
+Exact-revision completion and delivery binding:
+
+The identical containing committed archive must pass both selected native
+policies, including all mandatory R6.10–R6.60 probes and the expanded R6.70
+lane. `artifacts/cortex-m/freestanding` retains declared module/source inputs,
+compiler startup/linker inputs, pinned private helper closure, ELF/map/assembly,
+relocations/disassembly, independent assertions, timeouts, deterministic
+comparisons and actual device/CPU results. The existing Renode cleanup and
+verified export paths remain mandatory. Native Linux GDB and Darwin LLDB
+include panic source-site and five-frame unwinding acceptance; no Cortex
+source-debugging claim follows.
+
+Verified exports and the annotated dual-native `ci/accepted/FULL_COMMIT` bind
+actual results to the exact revision and archive. Approval, atomic canonical
+promotion, matching remote commit/annotation and GitHub mirror, and successful
+guarded Pages publication are required. A failed candidate has no completion
+binding; a later bookkeeping revision cannot replace the accepted archive.
+R6.80 is next dependency-ready. R6.90 waits for its device fixtures; R6.100
+continues to own the full freestanding milestone and measurement programme.
 
 ### R6.80 — Establish checked-in generated device fixtures
 

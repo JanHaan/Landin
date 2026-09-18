@@ -1,3 +1,4 @@
+with Ada.Containers.Vectors;
 with Landin.Backend.Firmware;
 with Landin.Machine;
 with Landin.Layouts;
@@ -22,6 +23,7 @@ package body Landin.Backend.Cortex_M is
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Item_Id;
+   use type Landin.IR.Value_Id;
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
@@ -279,7 +281,8 @@ package body Landin.Backend.Cortex_M is
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
-      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
+      Panic : access constant Landin.Panics.Plan := null)
    is
       Out_Text : Unbounded.Unbounded_String;
       Serial : Natural := 0;
@@ -835,8 +838,45 @@ package body Landin.Backend.Cortex_M is
          Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
          Homes : constant Landin.Targets.Byte_Count := Extent (Layout) + 16;
-         Trap : constant String := Label (Item, 1) & "_trap";
+         Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+         type Panic_Edge is record
+            Reason : Landin.Panics.Kind;
+            Site : Landin.Panics.Site_Number;
+            Label : Unbounded.Unbounded_String;
+         end record;
+         package Edge_Vectors is new Ada.Containers.Vectors
+           (Positive, Panic_Edge);
+         Edges : Edge_Vectors.Vector;
+
+         function Trap (Reason : Landin.Panics.Kind) return String;
+         function Trap return String;
+
+         function Trap (Reason : Landin.Panics.Kind) return String is
+         begin
+            if Panic = null or else Landin.Panics.Handler (Panic.all)
+              = Landin.IR.No_Item
+            then
+               return Hard_Trap;
+            end if;
+            declare
+               Site : constant Landin.Panics.Site_Number := Landin.Panics.Site
+                 (Panic.all, (if Current_Value = Landin.IR.No_Value
+                  then Landin.IR.Origin_Of (Of_Unit, Item)
+                  else Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)),
+                  Reason);
+               Name : constant String := Fresh;
+            begin
+               Edges.Append (Panic_Edge'
+                 (Reason, Site, Unbounded.To_Unbounded_String (Name)));
+               return Name;
+            end;
+         end Trap;
+
+         function Trap return String is
+           (Trap (Landin.Panics.For_Value
+              (Of_Unit, Item, Current_Value)));
+
          function Kind (Value : Landin.IR.Value_Id)
            return Landin.Types.Scalar_Name
            is (Landin.IR.Result_Of (Of_Unit, Item, Value));
@@ -920,7 +960,7 @@ package body Landin.Backend.Cortex_M is
                      Emit ("cmp " & Register & ", r4");
                      Branch ("eq", Done);
                   end loop;
-                  Jump (Trap);
+                  Jump (Trap (Landin.Panics.Bad_Conversion));
                   Put (Done & ":");
                end;
             end if;
@@ -1466,7 +1506,7 @@ package body Landin.Backend.Cortex_M is
                      Put (Next & ":");
                   end;
                end loop;
-               Jump (Trap);
+               Jump (Trap (Landin.Panics.Bad_Conversion));
                Put (Done & ":");
             end Packed_Atom;
 
@@ -1509,9 +1549,9 @@ package body Landin.Backend.Cortex_M is
                   Immediate ("r4", (not Bits) and 16#FFFF_FFFF#);
                   Immediate ("r5", (not Bits) / 2 ** 32);
                   Emit ("tst r0, r4");
-                  Branch ("ne", Trap);
+                  Branch ("ne", Trap (Landin.Panics.Bad_Conversion));
                   Emit ("tst r1, r5");
-                  Branch ("ne", Trap);
+                  Branch ("ne", Trap (Landin.Panics.Bad_Conversion));
                   Emit ("ldr r2, [sp, #4]");
                   Shift_Pair (True);
                   Emit ("push {r0, r1}");
@@ -2712,7 +2752,13 @@ package body Landin.Backend.Cortex_M is
                   Emit ("mov r12, r4");
                   Epilogue;
                when Landin.IR.Halt =>
-                  Emit ("udf #1");
+                  if Panic = null or else Landin.Panics.Handler (Panic.all)
+                    = Landin.IR.No_Item
+                  then
+                     Emit ("udf #1");
+                  else
+                     Jump (Trap (Landin.Panics.Unreachable));
+                  end if;
 
                when Landin.IR.Fail =>
                   Load_Value (Operand (1));
@@ -2761,6 +2807,15 @@ package body Landin.Backend.Cortex_M is
          Emit ("push {r4, r5}");
          Emit ("mov r11, sp");
          Reserve (Homes);
+         if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
+         then
+            Address ("r6", Local_Prefix & "landin_panic_active");
+            Emit ("ldr r7, [r6]");
+            Emit ("cmp r7, #0");
+            Branch ("ne", Hard_Trap);
+            Emit ("movs r7, #1");
+            Emit ("str r7, [r6]");
+         end if;
          Emit ("mov r6, sp");
          Emit ("stmia r6!, {r0, r1, r2, r3}");
          if Plan.Result.Shape.Indirect then
@@ -2807,7 +2862,15 @@ package body Landin.Backend.Cortex_M is
                Instruction (Current_Value);
             end loop;
          end loop;
-         Put (Trap & ":");
+         for Edge of Edges loop
+            Put (Unbounded.To_String (Edge.Label) & ":");
+            Immediate ("r0", Pattern (Landin.Panics.Code
+              (Panic.all, Edge.Reason)));
+            Immediate ("r1", Pattern (Edge.Site));
+            Emit ("bl " & Symbol (Landin.Panics.Handler (Panic.all)));
+            Emit ("udf #1");
+         end loop;
+         Put (Hard_Trap & ":");
          Emit ("udf #1");
          Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
          Landin.Build_Reports.Append (Report,
@@ -4028,13 +4091,29 @@ package body Landin.Backend.Cortex_M is
          raise Compiler_Defect with "Cortex emission needs ARMv6-M";
       end if;
       Allocate_Symbols;
+      if Panic /= null and then Landin.Panics.Handler (Panic.all)
+        /= Landin.IR.No_Item
+      then
+         Emit (".section .bss.landin_panic,""aw"",%nobits");
+         Emit (".balign 4");
+         Put (Local_Prefix & "landin_panic_active:");
+         Emit (".space 4");
+      end if;
       Emit (".syntax unified");
       Emit (".cpu cortex-m0");
       Emit (".thumb");
       Emit (".text");
       if Firmware_Entry /= Landin.IR.No_Item then
          Emit_Vectors;
-         Put (Landin.Backend.Firmware.Startup (Symbol (Firmware_Entry)));
+         Put (Landin.Backend.Firmware.Startup
+           (Symbol (Firmware_Entry),
+            (if Panic = null or else Landin.Panics.Handler (Panic.all)
+               = Landin.IR.No_Item then "udf #1"
+             else "ldr r0, =" & Trimmed (Positive'Image
+               (Landin.Panics.Code (Panic.all, Landin.Panics.Unreachable)))
+               & LF & "movs r1, #0" & LF & "bl "
+               & Symbol (Landin.Panics.Handler (Panic.all))
+               & LF & "udf #1")));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
