@@ -43,7 +43,7 @@ the unchanged IR golden and traversal execution checks in both compiler modes;
 that delivery used routine scope without GDB. R5.51 changes debugger selection
 and verification, so its closure uses routine scope with full release GDB/LLDB.
 
-R6.70's planned noreturn/panic control flow, frames and source-site identity
+R6.70's noreturn/panic control flow, frames and source-site identity
 require native debugger-risk coverage at closure. Focused CPU/library firmware
 development is recorded separately and cannot approve the still-active item.
 

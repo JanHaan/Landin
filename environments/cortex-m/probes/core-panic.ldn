@@ -1,0 +1,103 @@
+import core/cpu
+import core/panic
+
+mut initialized: u32 = 0x670
+mut cleared: u32 = 0
+mut mode: u32 = 0
+mut input: i32 = 0
+mut observed_kind: u32 = 0
+mut observed_site: u32 = 0
+mut entries: u32 = 0
+link(keep) mut later: u32 = 0
+
+finished: () -> noreturn =
+    loop do cpu.wait_for_interrupt() end loop
+end finished
+never: () -> noreturn = finished() end never
+mark: () -> none = later = 99 end mark
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    entries = entries + 1
+    observed_site = site
+    if kind == panic.out_of_range then observed_kind = 1
+    elsif kind == panic.overflow then observed_kind = 2
+    elsif kind == panic.bad_conversion then observed_kind = 3
+    elsif kind == panic.unreachable then observed_kind = 4
+    end if
+    if mode == 9 then
+        mut high: u8 = 255
+        high += 1
+    end if
+    finished()
+end panic_handler
+
+quotient: (t: type, a: t, b: t) -> (answer: t) = answer = a / b end quotient
+
+link(vector: 16)
+extern(interrupt) irq: () -> none =
+    _ = 73 / input
+    later = 98
+end irq
+
+a: atom
+b: atom
+encoded: type = (a = 0 | b = 1)
+image: type = layout(packed) struct
+    bits: encoded at 0..1
+end image
+
+read_input: () -> (value: i32) = value = input end read_input
+
+start: () -> none =
+    if initialized <> 0x670 or cleared <> 0 then
+        later = 96
+        return
+    end if
+    defer mark()
+    if mode == 0 or mode == 7 or mode == 9 then
+        mut high: u8 = 255
+        high += u8(input)
+    elsif mode == 1 then
+        _ = u8(input)
+    elsif mode == 2 then
+        items: [2]i32 = [7, 9]
+        _ = items[usize(input)]
+    elsif mode == 3 then
+        _ = 42 / input
+    elsif mode == 4 then
+        _ = 42 << input
+    elsif mode == 5 then
+        _ = bool(input)
+    elsif mode == 6 then
+        never()
+    elsif mode == 8 then
+        _ = quotient(42, input)
+    elsif mode == 10 then
+        return
+    elsif mode == 11 then
+        enable: ptr mut u32 = ptr(0xe000e100)
+        pending: ptr mut u32 = ptr(0xe000e200)
+        compiler.volatile_store(enable, 1)
+        compiler.volatile_store(pending, 1)
+        cpu.completion_barrier()
+        finished()
+    elsif mode == 12 then
+        port: ptr u32 = ptr(0x20000001)
+        _ = compiler.volatile_load(port)
+    elsif mode == 14 then
+        address: ptr u32 = ptr(usize(read_input()))
+        _ = address.val
+    elsif mode == 15 then
+        compiler.register_write(addr later, u32(read_input()), compiler.normal_write,
+                                compiler.write_one, 0xff)
+    elsif mode == 16 then
+        bytes: [1]u8 = [u8(input)]
+        _ = utf8(bytes[0..<1])
+    else
+        mut value: image = zeroed
+        raw: ptr mut u8 = ptr(usize(addr value))
+        raw.val = 2
+        _ = value.bits
+    end if
+    later = 97
+end start

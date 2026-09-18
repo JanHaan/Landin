@@ -102,7 +102,7 @@
 0860   tour        accepted emitted executed refused  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
-0890   tour        accepted emitted executed          Nothing returned
+0890   tour        accepted emitted executed refused  Nothing returned
 0900   tour        accepted emitted executed refused  Three parameter conventions
 0910   tour        accepted emitted executed refused  sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns
@@ -180,7 +180,7 @@
 1640   tour        accepted emitted refused           Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed refused  Entry point
 1660   tour        accepted emitted executed refused  And this is where capabilities come from
-1670   tour        accepted emitted executed          A failed check calls a fixed, never-returning symbol
+1670   tour        accepted emitted executed refused  A failed check calls a fixed, never-returning symbol
 1680   tour        accepted emitted executed refused  Require a capability, do not track an effect
 1690   tour        accepted emitted executed refused  One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear

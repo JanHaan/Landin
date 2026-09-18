@@ -131,7 +131,8 @@ package Landin.Diagnostics.Catalogue is
       Entry_Point_Missing,
       Argument_Not_In_A_Register,
       Frame_Not_Addressable,
-      Image_Materialization_Limit);
+      Image_Materialization_Limit,
+      Panic_Contract_Invalid);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -199,7 +200,8 @@ package Landin.Diagnostics.Catalogue is
             when Entry_Point_Missing       => "L0502",
             when Argument_Not_In_A_Register => "L0503",
             when Frame_Not_Addressable      => "L0504",
-            when Image_Materialization_Limit => "L0505");
+            when Image_Materialization_Limit => "L0505",
+            when Panic_Contract_Invalid    => "L0506");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -222,7 +224,7 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal => Error,
-            when No_Toolchain .. Image_Materialization_Limit => Error);
+            when No_Toolchain .. Panic_Contract_Invalid => Error);
 
    --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
    --  convention now places every argument after the sixth in an aligned
@@ -254,7 +256,8 @@ package Landin.Diagnostics.Catalogue is
                .. Malformed_Raw_Literal => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
-            when Frame_Not_Addressable | Image_Materialization_Limit => Live);
+            when Frame_Not_Addressable | Image_Materialization_Limit
+               | Panic_Contract_Invalid => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -396,7 +399,9 @@ package Landin.Diagnostics.Catalogue is
                & " encoding",
             when Image_Materialization_Limit =>
                "[1640]: firmware static images exceed the bounded"
-               & " assembler materialization budget");
+               & " assembler materialization budget",
+            when Panic_Contract_Invalid =>
+               "[1670]: invalid panic handler or unrepresentable site space");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -432,7 +437,7 @@ package Landin.Diagnostics.Catalogue is
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
-            when No_Toolchain .. Image_Materialization_Limit => False);
+            when No_Toolchain .. Panic_Contract_Invalid => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -463,7 +468,7 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal =>
                True,
-            when No_Toolchain .. Image_Materialization_Limit => False);
+            when No_Toolchain .. Panic_Contract_Invalid => False);
 
    --  The admitted secondary-label interval. Every code except L0300 and
    --  L0306 has one exact count. Those two semantic rules point only at the

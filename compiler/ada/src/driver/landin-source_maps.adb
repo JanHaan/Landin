@@ -7,6 +7,7 @@ with Landin.Backend.Toolchain;
 
 package body Landin.Source_Maps is
    package US renames Ada.Strings.Unbounded;
+   use type Landin.Source.Line_Number;
    LF : constant Character := Character'Val (10);
 
    function Hex (Value : String) return String
@@ -15,19 +16,21 @@ package body Landin.Source_Maps is
    function Create
      (Context : in out Landin.Stages.Compilation;
       Assembly : String;
-      All_Sources : Boolean := False) return Artifact
+      All_Sources : Boolean := False;
+      Panic : access constant Landin.Panics.Plan := null) return Artifact
    is
       Files : US.Unbounded_String;
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : Artifact;
    begin
-      for Index in 1 .. (if All_Sources
+      for Index in 1 .. (if All_Sources or Panic /= null
                          then Landin.Stages.Source_Count (Context)
                          else Landin.IR.Caller_Source_Count (Unit))
       loop
          declare
             Id : constant Landin.Source.Source_Id :=
-              (if All_Sources then Landin.Stages.Nth_Source (Context, Index)
+              (if All_Sources or Panic /= null
+               then Landin.Stages.Nth_Source (Context, Index)
                else Landin.IR.Caller_Source (Unit, Index));
             Snap : constant Landin.Source.Snapshot :=
               Landin.Stages.Source (Context, Id);
@@ -41,7 +44,25 @@ package body Landin.Source_Maps is
               & Landin.Source.Source_Id'Image (Id)
               & ",""path_hex"":""" & Hex (Landin.Source.Name (Snap))
               & """,""source_sha256"":"""
-              & GNAT.SHA256.Digest (Landin.Source.Text (Snap)) & """}");
+              & GNAT.SHA256.Digest (Landin.Source.Text (Snap)) & """");
+            if Panic /= null then
+               US.Append (Files, ",""panic_base"":"
+                 & Landin.Panics.Site_Number'Image
+                   (Landin.Panics.Base (Panic.all, Id))
+                 & ",""byte_length"":"
+                 & Landin.Source.Byte_Offset'Image
+                   (Landin.Source.Length (Snap))
+                 & ",""line_offsets"":[");
+               for Line in 1 .. Landin.Source.Line_Count (Snap) loop
+                  if Line > 1 then
+                     US.Append (Files, ",");
+                  end if;
+                  US.Append (Files, Landin.Source.Byte_Offset'Image
+                    (Landin.Source.Line_Span (Snap, Line).First));
+               end loop;
+               US.Append (Files, "]");
+            end if;
+            US.Append (Files, "}");
          end;
       end loop;
       Result.Build_Id := GNAT.SHA256.Digest

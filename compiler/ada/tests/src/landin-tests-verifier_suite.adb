@@ -8033,6 +8033,45 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Variant_Slice_Images_Are_Checked;
 
+   procedure Representation_Check_Is_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Representation_Check_Is_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Routine : IR.Item_Id;
+      Block : IR.Block_Id;
+      Value, Checked : IR.Value_Id;
+   begin
+      Ready (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      Block := IR.Add_Block
+        (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      IR.Enter (Unit, Routine, Block);
+      Value := IR.Emit_Number
+        (Unit, Routine, Landin.Types.U8, 1, False, Site);
+      Checked := IR.Emit_Range_Check
+        (Unit, Routine, Value, Landin.Types.U8, 0, 0, Site,
+         Representation => True);
+      IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+      IR.Leave_Block (Unit, Routine);
+      Landin.Testing.Check
+        (Item, IR.Checks_Representation (Unit, Routine, Checked),
+         "a failing representation guard retains its reason");
+      Expect (Item, V.Check (Unit), V.Nothing_Wrong,
+              "a representation range guard is verified");
+      IR.Testing_Support.Overwrite_Representation_Check
+        (Unit, Routine, Value);
+      Expect (Item, V.Check (Unit), V.Result_Disagrees,
+              "a literal cannot masquerade as a representation guard");
+   end Representation_Check_Is_Bounded;
+
    procedure Nonreturning_Calls_End_Their_Block
      (Item : in out Landin.Testing.Context);
 
@@ -8106,6 +8145,9 @@ package body Landin.Tests.Verifier_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "representation check is bounded",
+         Representation_Check_Is_Bounded'Access);
       Landin.Testing.Register
         (Into, "verifier", "nonreturning calls end their block",
          Nonreturning_Calls_End_Their_Block'Access);

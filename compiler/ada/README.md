@@ -15,7 +15,8 @@ restrictions as result-free assembly. `core/cpu` uses this ordinary source
 surface; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
 Linux freestanding lane executes the generated firmware. ROADMAP.md owns the
-active R6.70 work, including the still-required noreturn and panic contracts.
+R6.70 implementation and its exact-revision closure binding. D231/D232 now implement
+nonreturning control and selected panic handlers on all three backends.
 
 ## Layout
 
@@ -113,6 +114,7 @@ different responsibilities.
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
 | `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Control_Flow` | linear-space adjacency and entry reachability of structurally checked IR | assume reachability or store represented object bytes |
+| `Landin.Panics` | canonical entry-hook validation, source-byte site spaces and final nonzero atom codes | runtime reporting or allocation |
 | `Landin.IR.Effects` | conservative opcode effects and policy weights, including observable traps | infer alias permissions from unchecked regions |
 | `Landin.IR.Rewriting` | shared arena compaction for verified transforms | change slot, signature, shape, image or semantic instance identities |
 | `Landin.IR.Shape_Measurement` | memoized represented extents under target facts and an explicit size limit | choose machine placement or allocate work per represented array element |
@@ -958,6 +960,13 @@ The parser recognises [0890]'s `noreturn` return position as a distinct
 return form (D231). Checking and IR retain its infallible signature identity
 through generic and evidence calls, and flow removes its continuation.
 The spelling remains an ordinary identifier outside the return position.
+D232 validates an entry-module `panic_handler` against `core/panic` before any
+output. Checked backend edges transport two ordinary scalar arguments; the
+handler's private reentry latch prevents recursive reporting. `--panic-map`
+adds byte ranges and line offsets to the existing build-bound source map.
+Neither that map nor source filenames enter a default constrained image.
+Private startup/host-root guards use site zero, and hardware/naked obligations
+remain distinct. All targets preserve the default terminal trap instructions.
 
 The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is
@@ -1056,3 +1065,9 @@ existing volatile IR boundary with retained reserved-bit guards. General
 register wrappers remain deferred; the Cortex emitter preserves the same raw
 image and validation contracts. ROADMAP.md owns the
 remaining audits, evidence and closure obligations.
+
+The native debugger gates include a D231/D232 program that enters a selected
+handler through erased evidence and a generic nonreturning callback. Source
+breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
+at three profiles. Darwin out-of-line panic edges carry their originating
+source line; this does not enable Cortex source debugging.

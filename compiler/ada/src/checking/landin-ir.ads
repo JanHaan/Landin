@@ -3080,13 +3080,19 @@ package Landin.IR is
       Result : Landin.Types.Integer_Name;
       Lower  : Landin.Types.Folded;
       Upper  : Landin.Types.Folded;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Representation : Boolean := False) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Value)
                   and then Lower <= Upper
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
                     (Into, Item, Emit_Range_Check'Result, Range_Check);
+
+   --  D232 distinguishes representation validation from subtype bounds.
+   function Checks_Representation
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value);
 
    function Range_Lower
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -3890,6 +3896,7 @@ private
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
       --  D188's two folded bounds, on a Range_Check and nowhere else.
+      Representation_Check : Boolean := False;
       Lower_Bound : Landin.Types.Folded       := 0;
       Upper_Bound : Landin.Types.Folded       := 0;
       --  D187: this instruction sits lexically inside [1120]'s region

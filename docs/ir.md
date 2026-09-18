@@ -64,7 +64,7 @@ backend to interpret.
 
 Signature identity includes D231's `noreturn` return form. A direct or
 indirect nonreturning call must be the penultimate instruction of its block,
-followed immediately by `Halt`. That guard traps if an invalid callee returns.
+followed immediately by `Halt`. D232 dispatches that guard as `unreachable` if an invalid callee returns.
 It has control and trap effects, and the verifier refuses a returning body
 with a nonreturning signature. Generic and erased evidence signatures retain
 the same flag; it never becomes an ordinary IR value type.
@@ -202,7 +202,12 @@ The operation vocabulary preserves distinctions that affect behavior.
 Ordinary integer addition and wrapping addition are different operations.
 A checked conversion and a range-subtype check are different too: conversion
 can change the integer type, while a range check passes a value of the same
-type through only if it satisfies the bounds. A signed right shift describes
+type through only if it satisfies the bounds. D232 marks range checks used
+for representation validation separately: null pointer construction, malformed
+text and reserved-bit patterns report `bad_conversion`; subtype bounds report
+`out_of_range`. Rewriting and specialization preserve this flag, and proved
+constant replacements remove it with the check. The verifier refuses it on
+other opcodes. A signed right shift describes
 the language's shift semantics; the x86 emitter is responsible for handling
 counts that the hardware would otherwise mask.
 
@@ -492,3 +497,20 @@ source entry. Neither module-image lowering nor startup executes user module
 initializers. Target ELF relocations distinguish Thumb code pointers from data
 addresses. The generated firmware probes test these boundaries through actual
 QEMU and Renode execution; source-level Cortex debugging remains R6.100.
+
+D232's panic plan is compilation metadata beside the verified IR. It validates
+the entry hook before emission and binds byte-position sites to canonical
+source snapshots. Backends classify each checked edge and retain the operation's
+origin; clones therefore retain sites, and selected-handler immediates prevent
+unsafe native body sharing. The failed edge cannot continue or unwind, so the
+existing observable trap effects remain barriers. The selected source routine
+is public and backend references retain it and its reachable data. Physical
+atom codes are refreshed after specialization exposes any additional domains.
+The optional source map shares D192 build identity but does not change caller
+coordinates. No map or reporting code is required at runtime.
+
+The native debugger gates include a D231/D232 program that enters a selected
+handler through erased evidence and a generic nonreturning callback. Source
+breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
+at three profiles. Darwin out-of-line panic edges carry their originating
+source line; this does not enable Cortex source debugging.

@@ -377,7 +377,8 @@ package body Landin.Backend.X86_64 is
       Assembly : out Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Debug : access constant Landin.Debugging.Information := null)
+      Debug : access constant Landin.Debugging.Information := null;
+      Panic : access constant Landin.Panics.Plan := null)
    is
       Out_Text : Unbounded.Unbounded_String;
       Optimized : constant Boolean :=
@@ -2247,6 +2248,29 @@ package body Landin.Backend.X86_64 is
 
             function Operand (Index : Positive) return Landin.IR.Value_Id
               is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
+            procedure Emit_Panic (Reason : Landin.Panics.Kind);
+            procedure Emit_Panic;
+
+            procedure Emit_Panic (Reason : Landin.Panics.Kind) is
+            begin
+               if Panic /= null and then Landin.Panics.Handler (Panic.all)
+                 /= Landin.IR.No_Item
+               then
+                  Emit ("movl $" & Trimmed (Positive'Image
+                    (Landin.Panics.Code (Panic.all, Reason))) & ", %edi");
+                  Emit ("movl $" & Trimmed (Landin.Panics.Site_Number'Image
+                    (Landin.Panics.Site (Panic.all, Landin.IR.Origin_Of
+                      (Of_Unit, Item, Value), Reason))) & ", %esi");
+                  Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+               end if;
+               Emit ("ud2");
+            end Emit_Panic;
+
+            procedure Emit_Panic is
+            begin
+               Emit_Panic (Landin.Panics.For_Value (Of_Unit, Item, Value));
+            end Emit_Panic;
+
             procedure Packed_Atom
               (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
 
@@ -2278,7 +2302,7 @@ package body Landin.Backend.X86_64 is
                      Put (Next & ":");
                   end;
                end loop;
-               Emit ("ud2");
+               Emit_Panic (Landin.Panics.Bad_Conversion);
                Put (Done & ":");
             end Packed_Atom;
          begin
@@ -2427,7 +2451,7 @@ package body Landin.Backend.X86_64 is
                                  & ", %rdx");
                               Emit ("cmpq %rdx, %rax");
                               Emit ("jb " & Safe);
-                              Emit ("ud2");
+                              Emit_Panic;
                               Put (Safe & ":");
                            end if;
                            if Machine.Fits_Arithmetic_Immediate (Stride) then
@@ -2512,7 +2536,7 @@ package body Landin.Backend.X86_64 is
                                  Emit ("andq %rax, %rcx");
                                  Emit ("cmpq %rax, %rcx");
                                  Emit ("je " & Safe);
-                                 Emit ("ud2");
+                                 Emit_Panic;
                                  Put (Safe & ":");
                                  Emit
                                    ("movss %xmm0, " & Value_Operand (Value));
@@ -2648,7 +2672,7 @@ package body Landin.Backend.X86_64 is
                                  & ", %rcx");
                               Emit ("cmpq %rcx, %rax");
                               Emit ("je " & True_Value);
-                              Emit ("ud2");
+                              Emit_Panic;
                               Put (False_Value & ":");
                               Emit ("movq $0, %rax");
                               Emit ("jmp " & Store);
@@ -2673,7 +2697,7 @@ package body Landin.Backend.X86_64 is
                                     & Accumulator (From_Size));
                               Emit ("cmpq $1, %rax");
                               Emit ("jbe " & Safe);
-                              Emit ("ud2");
+                              Emit_Panic;
                               Put (Safe & ":");
                               Emit
                                 ("movb %al, " & Value_Operand (Value));
@@ -2873,7 +2897,7 @@ package body Landin.Backend.X86_64 is
                                  & Value_Operand (Value));
                            Emit ("jmp " & Done);
                            Put (Trap & ":");
-                           Emit ("ud2");
+                           Emit_Panic;
                            Put (Done & ":");
                         end;
                      else
@@ -2929,7 +2953,7 @@ package body Landin.Backend.X86_64 is
                                        & ", %rcx");
                                     Emit ("cmpq %rcx, %rax");
                                     Emit ("jge " & Safe_Lower);
-                                    Emit ("ud2");
+                                    Emit_Panic;
                                     Put (Safe_Lower & ":");
                                  end if;
                                  Emit
@@ -2943,13 +2967,13 @@ package body Landin.Backend.X86_64 is
                                    ((if Landin.Types.Is_Signed (From)
                                      then "jle " else "jbe ")
                                     & Safe_Upper);
-                                 Emit ("ud2");
+                                 Emit_Panic;
                                  Put (Safe_Upper & ":");
                               end;
                            elsif Landin.Types.Is_Signed (From) then
                               Emit ("testq %rax, %rax");
                               Emit ("jns " & Safe_Lower);
-                              Emit ("ud2");
+                              Emit_Panic;
                               Put (Safe_Lower & ":");
                            end if;
 
@@ -2969,7 +2993,7 @@ package body Landin.Backend.X86_64 is
                                     & ", %rcx");
                                  Emit ("cmpq %rcx, %rax");
                                  Emit ("jbe " & Safe_Upper);
-                                 Emit ("ud2");
+                                 Emit_Panic;
                                  Put (Safe_Upper & ":");
                               end;
                            end if;
@@ -3026,7 +3050,7 @@ package body Landin.Backend.X86_64 is
                         & ", %rcx");
                      Emit ("cmpq %rcx, %rax");
                      Emit ((if Signed then "jge " else "jae ") & Safe_Lower);
-                     Emit ("ud2");
+                     Emit_Panic;
                      Put (Safe_Lower & ":");
 
                      Emit
@@ -3035,7 +3059,7 @@ package body Landin.Backend.X86_64 is
                         & ", %rcx");
                      Emit ("cmpq %rcx, %rax");
                      Emit ((if Signed then "jle " else "jbe ") & Safe_Upper);
-                     Emit ("ud2");
+                     Emit_Panic;
                      Put (Safe_Upper & ":");
 
                      Emit ("mov" & Suffix (Width) & " "
@@ -3072,7 +3096,7 @@ package body Landin.Backend.X86_64 is
                           ((if Landin.IR.Slice_Is_Inclusive
                                  (Of_Unit, Item, Value)
                             then "jb " else "jbe ") & Safe_Upper);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Safe_Upper & ":");
                      end if;
                      Emit ("movq " & Value_Operand (Operand (3)) & ", %rcx");
@@ -3080,7 +3104,7 @@ package body Landin.Backend.X86_64 is
                         Emit
                           ("cmpq " & Value_Operand (Operand (4)) & ", %rcx");
                         Emit ("jbe " & Safe_Lower);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Safe_Lower & ":");
                      end if;
                      if Stride > 1 then
@@ -3146,7 +3170,7 @@ package body Landin.Backend.X86_64 is
                            Emit ("testq $" & Trimmed (Positive'Image
                              (Landin.Targets.Bytes (Size) - 1)) & ", %rcx");
                            Emit ("jz " & Ready);
-                           Emit ("ud2");
+                           Emit_Panic;
                            Put (Ready & ":");
                         end if;
                         if M not in Volatile_Load | Volatile_Store then
@@ -3294,7 +3318,7 @@ package body Landin.Backend.X86_64 is
                         Emit ("cmp" & Suffix (Held) & " $0, "
                               & Accumulator (Held));
                         Emit ("jge " & Not_Negative);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Not_Negative & ":");
                      end if;
 
@@ -3389,7 +3413,7 @@ package body Landin.Backend.X86_64 is
                         Emit ((if Landin.Types.Is_Signed
                                       (Landin.Types.Integer_Name (Kind))
                                then "jno " else "jnc ") & Next);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Next & ":");
                      end if;
                      Emit ("mov" & Suffix (Held) & " "
@@ -3830,7 +3854,7 @@ package body Landin.Backend.X86_64 is
                              (Landin.IR.Element_Total'Image (Length))
                              & ", %rcx");
                            Emit ("jb " & Safe);
-                           Emit ("ud2");
+                           Emit_Panic;
                            Put (Safe & ":");
                            Emit ("imulq $" & Trimmed
                              (Natural'Image (Shape.Packing.Bits))
@@ -3860,7 +3884,7 @@ package body Landin.Backend.X86_64 is
                                    (Natural'Image (Shape.Packing.Bits))
                                    & ", %rdx");
                                  Emit ("je " & Fit);
-                                 Emit ("ud2");
+                                 Emit_Panic (Landin.Panics.Bad_Conversion);
                                  Put (Fit & ":");
                               end if;
                               Emit ("shlq %cl, %rax");
@@ -3890,7 +3914,7 @@ package body Landin.Backend.X86_64 is
                            & ", %rdx");
                         Emit ("cmpq %rdx, %rax");
                         Emit ("jb " & Safe);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Safe & ":");
                      end if;
                      --  An `imul` immediate is a signed 32-bit field, and
@@ -3999,7 +4023,7 @@ package body Landin.Backend.X86_64 is
                                    (Natural'Image (Shape.Packing.Bits))
                                    & ", %rdx");
                                  Emit ("je " & Fit);
-                                 Emit ("ud2");
+                                 Emit_Panic (Landin.Panics.Bad_Conversion);
                                  Put (Fit & ":");
                               end if;
                               Emit ("shlq $" & Shift & ", %rax");
@@ -4211,7 +4235,7 @@ package body Landin.Backend.X86_64 is
                         Emit ((if Landin.Types.Is_Signed
                                       (Landin.Types.Integer_Name (Kind))
                                then "jno " else "jnc ") & Next);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Next & ":");
                      end if;
                      Emit ("mov" & Suffix (Held) & " "
@@ -4275,7 +4299,7 @@ package body Landin.Backend.X86_64 is
                         Emit ("cmp" & Suffix (Held) & " $0, "
                               & Value_Operand (Operand (2)));
                         Emit ("jne " & Nonzero);
-                        Emit ("ud2");
+                        Emit_Panic;
                         Put (Nonzero & ":");
 
                         if Signed then
@@ -4292,7 +4316,7 @@ package body Landin.Backend.X86_64 is
                                  & Accumulator (Held));
                            Emit ("jne " & Divide);
                            if Op = Landin.IR.Divide then
-                              Emit ("ud2");
+                              Emit_Panic;
                            else
                               Emit ("mov" & Suffix (Held) & " $0, "
                                     & Value_Operand (Value));
@@ -4376,7 +4400,7 @@ package body Landin.Backend.X86_64 is
                         if not Unchecked then
                            Emit
                              ((if Signed then "jno " else "jnc ") & Next);
-                           Emit ("ud2");
+                           Emit_Panic;
                            Put (Next & ":");
                         end if;
                         Emit ("mov" & Suffix (Held) & " "
@@ -4786,7 +4810,7 @@ package body Landin.Backend.X86_64 is
                   Emit_Epilogue (Value);
 
                when Landin.IR.Halt =>
-                  Emit ("ud2");
+                  Emit_Panic;
 
                when Landin.IR.Fail =>
                   Emit ("movl " & Value_Operand (Operand (1)) & ", %r10d");
@@ -4819,7 +4843,7 @@ package body Landin.Backend.X86_64 is
                           & ", " & Value_Operand (Value));
                         Emit ("je " & Done);
                      end loop;
-                     Emit ("ud2");
+                     Emit_Panic (Landin.Panics.Bad_Conversion);
                      Put (Done & ":");
                   end;
                end if;
@@ -4864,6 +4888,17 @@ package body Landin.Backend.X86_64 is
          end if;
 
          Reserve_Stack (Extent (Layout), "frame");
+         if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
+         then
+            Emit ("movl $1, %eax");
+            Emit ("xchgl %eax, " & Local_Prefix
+              & "landin_panic_active(%rip)");
+            Emit ("testl %eax, %eax");
+            Emit ("jz " & Label (Item, 1) & "_panic_first");
+            Emit ("ud2");
+            Put (Label (Item, 1) & "_panic_first:");
+         end if;
+
          for Register in Allocation.Saved_Register loop
             if Allocation_Plan.Used (Register) then
                Emit ("movq "
@@ -6588,6 +6623,18 @@ package body Landin.Backend.X86_64 is
          Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
          Put (Local_Prefix & "landin_host_arguments_invalid:");
+         if Panic /= null and then Landin.Panics.Handler (Panic.all)
+           /= Landin.IR.No_Item
+         then
+            --  This private C bridge arrives with its incoming return
+            --  address on the stack. Establish a conventional call frame.
+            Emit ("pushq %rbp");
+            Emit ("movq %rsp, %rbp");
+            Emit ("movl $" & Trimmed (Positive'Image (Landin.Panics.Code
+              (Panic.all, Landin.Panics.Unreachable))) & ", %edi");
+            Emit ("xorl %esi, %esi");
+            Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
+         end if;
          Emit ("ud2");
          Put (Character'Val (9)
               & ".size " & Bridge_Symbol (Initialize_Arguments) & ", "
@@ -6807,6 +6854,15 @@ package body Landin.Backend.X86_64 is
       --  and nothing this compiler emits needs one.
       Put (Character'Val (9)
            & ".section .note.GNU-stack,"""",@progbits");
+      if Panic /= null and then Landin.Panics.Handler (Panic.all)
+        /= Landin.IR.No_Item
+      then
+         Emit (".pushsection .bss.landin_panic,""aw"",@nobits");
+         Emit (".balign 4");
+         Put (Local_Prefix & "landin_panic_active:");
+         Emit (".zero 4");
+         Emit (".popsection");
+      end if;
       Assembly := Out_Text;
    end Emit;
 

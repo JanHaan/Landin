@@ -5,7 +5,7 @@ retain their independent C/assembly, memory-model and hosted transport controls.
 R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
 access. R6.60 adds the separate compiler-owned startup and firmware-linking lane.
 R6.70's active library increment adds rooted `core/mem`, `core/vec`, `core/pool`
-and `core/cpu` consumers through that compiler-owned firmware path.
+and `core/cpu`/`core/panic` consumers through that compiler-owned firmware path.
 
 ## Selected lanes and pins
 
@@ -537,14 +537,17 @@ stack/firmware evidence. General SVD generation remains companion-tool work.
 reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
 its own `artifacts/cortex-m/freestanding` export directory. The old 533-fixture
 backend corpus and R6.60's 37 QEMU/24 Renode sessions and 270 comparisons are
-unchanged. The shared inventory adds one explicitly restricted hosted C peer
-for D231; it does not replace an inherited case. This additional lane has nine
-consumers at six profiles: 78 QEMU sessions, six Renode runs and 270
-ELF/object/assembly/linker-script/map byte comparisons from fresh directories.
+unchanged. The shared inventory adds two explicitly restricted hosted C peers
+for D231/D232; neither replaces an inherited case. The declared additional lane
+has eleven consumers at six profiles: 198 QEMU sessions, six Renode runs and 336
+fresh-directory comparisons. Panic consumers additionally compare optional
+source-map bytes. ROADMAP.md distinguishes focused runs from complete acceptance.
 
 | Consumer | Independent observation |
 |---|---|
 | `core-cpu.ldn` | Poisoned initialized data/BSS are repaired by compiler reset; scalar assembly preserves live values, generic/discarded operations execute, PRIMASK restoration handles enabled/disabled entry, nesting and deferred early return. Masked pending IRQ wakes WFI before handler entry; exception return restores volatile/callee registers, flags, stack alignment, r11 and private status. |
+| Default panic derivative | The same source with the hook removed traps on arithmetic, violated nonreturning return and firmware entry return. It retains neither a panic latch nor a source map; the independent hardware exception frame points at UDF. |
+| `core-panic.ldn` | Seventeen independently expected kind/site paths per profile, including conversion/bounds/arithmetic, alignment, packed membership, nonnull pointer construction, reserved bits, UTF-8 decoding, recursive panic, forced nonreturning-callee return, normal firmware-entry return and a real NVIC handler. Poisoned data/BSS, no later actions, stack bounds and off-target source lookup are checked. |
 | `core-noreturn.ldn` | Six cold boots select direct, generic, static/erased evidence, deferred and recovery paths; independent memory assertions check completed stores, skipped later actions/cleanup and retained kept data. The expected frame-chain depth and each previous-r11/incoming-LR record are checked at every selected nonreturning path. Nonreturning entry and 200–376-byte observed stack writes execute in the fixed profile. |
 | `core-pool.ldn` | Misaligned caller backing yields aligned slots; zero-size allocation consumes one slot, an oversize request preserves state, exact free permits address reuse, exhaustion preserves live values and valid frees restore zero live slots. Raw writes initialize bytes before reading them. |
 | `core-zero.ldn` | Zero-sized vector elements retain maximum u32 `usize` capacity, one logical element and zero arena byte consumption; release follows the existing provider contract. |
@@ -553,7 +556,7 @@ ELF/object/assembly/linker-script/map byte comparisons from fresh directories.
 | Library-derived DMA | The unchanged R6.60 peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
 
 The runner copies only its declared `core/mem`, `core/vec`, `core/pool` and
-`core/cpu` import closure. Maps must list the generated object and pinned
+`core/cpu`/`core/panic` import closure. Maps must list the generated object and pinned
 `thumb/v6-m/nofp/libgcc.a`, with optional GNU linker stubs and no other LOAD
 input. Closure records include source hashes, selected archive members, all
 symbols and decoded image extents. Undefined symbols and hosted runtime names

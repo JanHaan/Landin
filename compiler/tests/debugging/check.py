@@ -1414,6 +1414,12 @@ def main() -> None:
                     measurements[profile[0]] = measure(
                         refine, tools, gdb, runner, qemu,
                         args.output, scratch, profile)
+            panic_evidence = None
+            if args.workload is None and runner == "native":
+                import panic
+                panic_evidence = panic.measure(
+                    refine, args.output / "panic", debugger=gdb,
+                    toolchain=tool(home, "gcc"))
             workloads = measure_workloads(
                 lambda name, profile: measure(
                     refine, tools, gdb, runner, qemu, args.output, scratch, profile,
@@ -1432,6 +1438,7 @@ def main() -> None:
         "debugger_cwd_is_distinct": True,
         "specialization_fallback_used": "size-all" in measurements,
         "measurements": measurements,
+        "panic": panic_evidence,
         "parser_measurements": workloads.get("parser", {}),
         "container_measurements": workloads.get("containers", {}),
         "hosted_measurements": workloads.get("hosted", {}),

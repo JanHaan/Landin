@@ -1,0 +1,7 @@
+--  Compiler-check reasons. The representation is the ordinary nonzero
+--  atom carrier; callers compare identities, never assumed integer codes.
+public out_of_range: atom
+public overflow: atom
+public bad_conversion: atom
+public unreachable: atom
+public panic_kind: type = out_of_range | overflow | bad_conversion | unreachable

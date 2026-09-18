@@ -5375,6 +5375,12 @@ package body Landin.IR.Verifier is
                         Op : constant Opcode := Op_Of (Of_Unit, Id, V);
                         Ends : constant Boolean := Op in Terminator_Kind;
                      begin
+                        if Checks_Representation (Of_Unit, Id, V)
+                          and then Op /= Range_Check
+                        then
+                           return (Kind => Result_Disagrees,
+                                   Item => Id, Block => Block, Value => V);
+                        end if;
                         if Assembly_Text (Of_Unit, Id, V)
                           /= Landin.Source.Names.No_Name
                           and then Op /= Memory_Access

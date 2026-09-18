@@ -1,0 +1,61 @@
+import core/panic
+import core/io
+
+extern(c) record: (kind: u32, site: u32) -> none
+extern(c) finish: () -> noreturn
+extern(c) mark: (value: u32) -> none
+extern(c) recurse: () -> (yes: bool)
+extern(c) wrongly_returns: () -> noreturn
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    mut code: u32 = 0
+    if kind == panic.out_of_range then code = 1
+    elsif kind == panic.overflow then code = 2
+    elsif kind == panic.bad_conversion then code = 3
+    elsif kind == panic.unreachable then code = 4
+    end if
+    record(code, site)
+    if recurse() then
+        mut high: u8 = 255
+        high += 1
+    end if
+    finish()
+end panic_handler
+
+quotient: (t: type, a: t, b: t) -> (answer: t) = answer = a / b end quotient
+
+public extern(c) run_path: (mode: u32, value: i32) -> none =
+    defer mark(99)
+    if mode == 0 or mode == 7 or mode == 9 then
+        mut high: u8 = 255
+        high += u8(value)
+    elsif mode == 1 then
+        _ = u8(value)
+    elsif mode == 2 then
+        items: [2]i32 = [7, 9]
+        _ = items[usize(value)]
+    elsif mode == 3 then
+        _ = 42 / value
+    elsif mode == 4 then
+        _ = 42 << value
+    elsif mode == 5 then
+        _ = bool(value)
+    elsif mode == 6 then
+        wrongly_returns()
+    elsif mode == 10 then
+        _ = io.host()
+    elsif mode == 11 then
+        address: ptr u32 = ptr(usize(value))
+        _ = address.val
+    elsif mode == 12 then
+        mut word: u32 = 0
+        compiler.register_write(addr word, u32(value), compiler.normal_write,
+                                compiler.write_one, 0xff)
+    elsif mode == 13 then
+        bytes: [1]u8 = [u8(value)]
+        _ = utf8(bytes[0..<1])
+    else
+        _ = quotient(42, value)
+    end if
+    mark(98)
+end run_path

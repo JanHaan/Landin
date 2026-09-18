@@ -1,5 +1,16 @@
 package body Landin.IR.Testing_Support is
 
+   procedure Overwrite_Representation_Check
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+      Held : Instruction := Into.Code (Position);
+   begin
+      Held.Representation_Check := True;
+      Into.Code (Position) := Held;
+   end Overwrite_Representation_Check;
+
    procedure Overwrite_Encoding_Run
      (Into : in out Unit; Set_Id : Atom_Set_Id; First, Bits : Natural)
    is

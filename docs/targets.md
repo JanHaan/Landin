@@ -461,3 +461,13 @@ refuse rather than silently changing requested placement. Section retention
 is independent of calling convention, and a kept vector image retains its
 referenced handlers. Linker symbols are private fixed assembly inputs, not
 user-code module initialization or general static address arithmetic.
+
+D232 enables the same canonical `core/panic` handler contract on Linux, Darwin
+and Cortex. Default checks retain UD2/BRK/UDF termination. A selected handler
+uses the ordinary two-scalar ABI and a four-byte private entry latch, with
+process-wide exchange/exclusive synchronization on hosted targets and ordinary
+single-core word accesses on ARMv6-M. No source atomics, FPU, cache, VTOR or
+interrupt-masking helper are added on Cortex. Compiler startup clears the latch;
+synthetic entry/root violations use site zero. Naked fallthrough and hardware
+faults retain separate machine obligations. `--panic-map` is optional off-target
+mapping, not Cortex source-debugger acceptance.

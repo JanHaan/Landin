@@ -15,6 +15,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/mem` | `allocator`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
 | `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider over caller bytes and initialized slot metadata. Exact frees reclaim aligned slots for lowest-index reuse. No backing allocation or fallback heap. |
+| `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one

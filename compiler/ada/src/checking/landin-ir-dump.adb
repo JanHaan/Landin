@@ -873,7 +873,9 @@ package body Landin.IR.Dump is
                  & " .. "
                  & Trimmed
                      (Landin.Types.Folded'Image
-                        (Range_Upper (Of_Unit, Item, Value)));
+                        (Range_Upper (Of_Unit, Item, Value)))
+                 & (if Checks_Representation (Of_Unit, Item, Value)
+                    then " representation" else "");
 
             when others =>
                return Lead & Operands (Item, Value);

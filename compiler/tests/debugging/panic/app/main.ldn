@@ -1,0 +1,40 @@
+import core/panic
+
+link(symbol: "_exit") extern(c) stop: (status: i32) -> noreturn
+mut later: u32 = 0
+mut observed_site: u32 = 0
+
+mark: () -> none = later = 99 end mark
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    observed_site = site
+    if kind <> panic.overflow or later <> 0 then stop(1) end if
+    stop(42)
+end panic_handler
+
+crash: (value: u8) -> noreturn =
+    defer mark()
+    mut high: u8 = 255
+    high += value
+    stop(2)
+end crash
+
+invoke: (t: type, value: t, action: (value: t) -> noreturn) -> noreturn =
+    action(value)
+end invoke
+
+thing: type = struct value: u8 end thing
+runner: type = concept (t: type)
+    run: (self: ptr t) -> noreturn
+end runner
+run_thing: (self: ptr thing) -> noreturn =
+    invoke(self.val.value, crash)
+end run_thing
+thing is runner (run: run_thing)
+
+public main: () -> (code: i32) =
+    value: thing = (value: 1)
+    erased: any runner = any(addr value)
+    erased.run()
+    code = 2
+end main

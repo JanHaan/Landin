@@ -14,6 +14,7 @@ with Landin.Debugging;
 with Landin.IR.Simplification;
 with Landin.IR.Specialization;
 with Landin.Optimization;
+with Landin.Panics;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Modules;
@@ -118,6 +119,7 @@ package body Landin.Driver is
       & "  --build-mode=NAME   debug (default) or release" & LF
       & "  --optimize=NAME     none, size (default), or speed" & LF
       & "  --specialize=NAME   off, auto (default), or all" & LF
+      & "  --panic-map         emit off-target check-site mapping" & LF
       & "  --debug=NAME        none (default) or full source debugging" & LF
       & "  --build-report=PATH write deterministic build evidence JSON" & LF
       & "  --root=DIR          append an ordered module import root" & LF
@@ -185,6 +187,7 @@ package body Landin.Driver is
         Landin.Optimization.Default_Options;
       Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
       Debug_Seen, Full_Debug : Boolean := False;
+      Panic_Map : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
       Index     : Positive := 1;
    begin
@@ -249,6 +252,13 @@ package body Landin.Driver is
                   end if;
                   Specialize_Seen := True;
                end;
+
+            elsif Argument = "--panic-map" then
+               if Panic_Map then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Panic_Map := True;
 
             elsif Starts_With (Argument, "--debug=") then
                if Debug_Seen
@@ -346,9 +356,10 @@ package body Landin.Driver is
 
       --  Compilation controls do not modify informational actions, and a
       --  build report describes an emitted artifact, not a checking request.
-      if ((Optimize_Seen or Specialize_Seen or Report_Seen or Debug_Seen)
+      if ((Optimize_Seen or Specialize_Seen or Report_Seen
+           or Debug_Seen or Panic_Map)
           and then (Wants_Usage or Wants_Identity))
-        or else ((Report_Seen or Debug_Seen or Firmware_Seen)
+        or else ((Report_Seen or Debug_Seen or Firmware_Seen or Panic_Map)
                  and then Emit = Emit_Nothing)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
@@ -380,6 +391,8 @@ package body Landin.Driver is
       declare
          Context : Landin.Stages.Compilation :=
            Landin.Stages.Create (Facts);
+         Panic : aliased Landin.Panics.Plan;
+         Panic_Problem : Unbounded.Unbounded_String;
 
          procedure Note_Failure
            (Code : Landin.Diagnostics.Code_String; Text : String);
@@ -868,7 +881,7 @@ package body Landin.Driver is
             Map_Path : constant String := Source_Map_Beside (Product_Path);
             Report_Path : constant String :=
               Unbounded.To_String (Build_Report_Path);
-            Emit_Map : constant Boolean := Full_Debug
+            Emit_Map : constant Boolean := Full_Debug or else Panic_Map
               or else Landin.IR.Caller_Source_Count
                 (Landin.Stages.Code (Context).all) > 0;
             Destinations : Landin.Platform.Path_List;
@@ -1084,6 +1097,14 @@ package body Landin.Driver is
               (Landin.Stages.Code (Context).all, Facts,
                Optimization.Optimize);
 
+            --  Specialization can expose an additional atom domain. The
+            --  selected source identity and source-byte spaces stay fixed;
+            --  refresh physical atom codes against the final unit.
+            Landin.Panics.Prepare (Context, Panic, Panic_Problem);
+            if Unbounded.Length (Panic_Problem) /= 0 then
+               raise Compiler_Defect with "panic plan changed after checking";
+            end if;
+
             for Index in 1 .. Landin.IR.Nominal_Type_Count
               (Landin.Stages.Code (Context).all)
             loop
@@ -1194,13 +1215,14 @@ package body Landin.Driver is
                      Landin.Stages.Modules (Context).all,
                      Landin.Stages.Identities (Context).all),
                   Debug => (if Full_Debug then Debug'Access else null),
-                  Firmware_Entry => Firmware_Entry);
+                  Firmware_Entry => Firmware_Entry, Panic => Panic'Access);
                if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
                        Landin.Source_Maps.Create
                          (Context, Unbounded.To_String (Emitted),
-                          All_Sources => Full_Debug);
+                          All_Sources => Full_Debug,
+                          Panic => (if Panic_Map then Panic'Access else null));
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
@@ -1544,6 +1566,15 @@ package body Landin.Driver is
                     with "the frontend pipeline did not run";
                end if;
             end;
+
+            if not Landin.Stages.Failed (Context) then
+               Landin.Panics.Prepare (Context, Panic, Panic_Problem);
+               if Unbounded.Length (Panic_Problem) /= 0 then
+                  Note_Failure
+                    (Rows.Code (Rows.Panic_Contract_Invalid),
+                     Unbounded.To_String (Panic_Problem));
+               end if;
+            end if;
 
             --  The backend runs on nothing that was refused, for the same
             --  reason the lowering does: an unaccepted program has no Unit

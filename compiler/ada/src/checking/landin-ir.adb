@@ -3899,11 +3899,13 @@ package body Landin.IR is
       Result : Landin.Types.Integer_Name;
       Lower  : Landin.Types.Folded;
       Upper  : Landin.Types.Folded;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Representation : Boolean := False) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op => Range_Check, Result => Result, Site => Site,
                      Lower_Bound => Lower, Upper_Bound => Upper,
+                     Representation_Check => Representation,
                      others => <>);
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
@@ -3911,6 +3913,10 @@ package body Landin.IR is
       Into.Operands.Append (Value);
       return Append (Into, Item, Made);
    end Emit_Range_Check;
+
+   function Checks_Representation
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Held (Of_Unit, Item, Value).Representation_Check);
 
    function Range_Lower
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)

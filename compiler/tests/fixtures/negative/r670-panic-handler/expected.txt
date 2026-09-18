@@ -1,0 +1,2 @@
+error[L0506]: panic_handler must be public, ordinary, non-generic and infallible: (core/panic.panic_kind, u32) -> noreturn
+  --> <unknown source>
