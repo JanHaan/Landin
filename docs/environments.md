@@ -369,3 +369,8 @@ independent C/assembly probes remain separate evidence. See the
 [firmware execution contract](../environments/cortex-m/README.md#r660-compiler-owned-firmware).
 The Mac remains the native compiler-host/Darwin/LLDB lane; no local Linux
 container or Nix CI path is introduced.
+
+R6.80's generated-device lane is also mandatory in the native Linux documents
+job, after the inherited R6.10–R6.70 probes. It exports separate `devices`
+artifacts; vendor-input and regeneration checks run offline on both hosts.
+The selected vendor is provenance, not a replacement QEMU board.

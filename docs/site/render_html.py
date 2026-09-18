@@ -961,6 +961,10 @@ GUIDES = [
          nav="the core modules", group="the implementation",
          blurb="Explicit allocator capabilities, collections and the "
                "constrained CPU library, with their module boundaries."),
+    dict(key="devices", src="devices/README.md", out="devices.html",
+         nav="generated device fixtures", group="the implementation",
+         blurb="Pinned vendor sources, deterministic Landin modules and "
+               "independent device-consumer evidence."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "

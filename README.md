@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R6.80 — Establish checked-in generated device fixtures (planned).**
+**Next roadmap item: R6.90 — Complete and run the derived driver program (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -350,4 +350,7 @@ traces alongside independent C/assembly controls. Its exact-revision dual-native
 binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
 core and adds ordinary CPU support, nonreturning signatures and panic dispatch
 with optional source maps. Its closure is bound to the containing revision’s dual-native approval and
-guarded delivery in ROADMAP.md; R6.80 retains generated-device fixtures.
+guarded delivery in ROADMAP.md. R6.80 adds [generated device fixtures](devices/README.md):
+30 RP2040 registers with retained vendor inputs, deterministic regeneration and
+compiler-generated firmware/peripheral consumers. R6.90 is next dependency-ready;
+the complete driver and R6.100 measurement/debugging gate remain separate.

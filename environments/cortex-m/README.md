@@ -4,7 +4,7 @@ ROADMAP.md owns selection, implementation and completion evidence. R6.10-R6.40
 retain their independent C/assembly, memory-model and hosted transport controls.
 R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
 access. R6.60 adds the separate compiler-owned startup and firmware-linking lane.
-R6.70's active library increment adds rooted `core/mem`, `core/vec`, `core/pool`
+R6.70 adds rooted `core/mem`, `core/vec`, `core/pool`
 and `core/cpu`/`core/panic` consumers through that compiler-owned firmware path.
 
 ## Selected lanes and pins
@@ -578,4 +578,30 @@ AAELF32 and GNU contracts. Actual controls run on ARMv6-M. WFI is not a
 completion proof and masking does not stop DMA. The selected profile remains
 32 KiB flash/16 KiB RAM/4 KiB reserved stack. Stack paint measures observed
 writes only. [The core guide](../../core/README.md) documents the public surface;
-ROADMAP.md owns the remaining panic implementation and exact-revision acceptance.
+ROADMAP.md owns exact-revision completion and the successor measurement gates.
+
+## R6.80 checked-in generated devices
+
+[The device guide](../../devices/README.md) records pinned RP2040 provenance,
+manual corrections, regeneration, public interfaces and unsupported metadata.
+`devices.py` follows all inherited probes in `run.py`, retaining its own
+`artifacts/cortex-m/devices` evidence. Five firmware consumers at the six
+inherited profiles supply six QEMU sessions, 24 generated Renode runs and 168
+deterministic artifact comparisons; a separate C/assembly control adds one
+Renode run. Seven precise source refusals and independent vendor-header/literal
+oracles run without network or companion tooling. The 30 selected registers
+are vendor data, not a faithful RP2040 model or a larger execution board.
+
+```sh
+python3 environments/cortex-m/devices.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --case images
+python3 environments/cortex-m/devices.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
+```
+
+Compiler-owned reset/vectors/linker scripts remain distinct from the independent
+C/assembly startup. The new synthetic model asserts exact word transaction
+traces, FIFO reads, commands and bounded interrupt/DMA handoff. Its feeds and
+half notification are explicit premises; no circular-buffer or physical timing
+claim follows. Linker closure, stack paint and optional panic maps are retained
+with the fixed map and runtime contract. The new runner uses unchanged process
+and Renode lock cleanup. R6.90 owns the complete derived driver; R6.100 retains
+source debugging, full measurements and milestone closure.

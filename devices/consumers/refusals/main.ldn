@@ -1,0 +1,25 @@
+-- Runtime failure inputs come from the synthetic device, not constant folding.
+import rp2040/io_bank0
+import rp2040/uart0
+import core/cpu
+import core/panic
+
+mut observed_kind: u32 = 0
+mut observed_site: u32 = 0
+mut entries: u32 = 0
+link(keep) mut later: u32 = 0
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    entries += 1
+    observed_site = site
+    if kind == panic.bad_conversion then observed_kind = 3 end if
+    loop do cpu.wait_for_interrupt() end loop
+end panic_handler
+
+start: () -> none =
+    image := io_bank0.gpio0_ctrl_decode(io_bank0.gpio0_ctrl_read(0x40070000))
+    unchecked begin
+        _ = image.f_funcsel
+    end unchecked
+    later = 99
+end start

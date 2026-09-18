@@ -1,0 +1,240 @@
+{
+  "schema": 1,
+  "vendor": "Raspberry Pi",
+  "device": "RP2040",
+  "svd_version": "0.1",
+  "sdk_tag": "2.2.0",
+  "sdk_commit": "a1438dff1d38bd9c65dbd693f0e5db4b9ae91779",
+  "svd_url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/RP2040.svd",
+  "inputs": {
+    "LICENSE.pico-sdk": "483f865953435b66c443dee7558debe3cc3cf8fcbb6a112fd9fc6a795d53f1f6",
+    "RP2040.svd": "49f53398e0496b6de0849faf17a9f4e58565af311b98b727e4ebeee964619bc6",
+    "io_bank0.h": "1a17be1e3e721d8e74bd31d5ef46e23691db52d23147a92cf31219a108949990",
+    "sio.h": "362bab775397e8c886a33adc010f76bec24701bf753d17dab1d95accc5a259e5",
+    "timer.h": "6ff25121664b3a3057c4271b48b2980d31f2ab3ea74bc4310eea8183bad35def",
+    "uart.h": "da0efa09d5130e0584a50a75694d28a64311d5435656ef3e02c15e33ce259f98",
+    "dma.h": "bf7892e0df82439f896ffae07eca3e08181800fd3b537c04450192c31ce9144f"
+  },
+  "selection": {
+    "IO_BANK0": [
+      "GPIO0_CTRL",
+      "GPIO1_CTRL"
+    ],
+    "SIO": [
+      "GPIO_IN",
+      "GPIO_OUT",
+      "GPIO_OUT_SET",
+      "GPIO_OUT_CLR"
+    ],
+    "TIMER": [
+      "ALARM0",
+      "ALARM1",
+      "ALARM2",
+      "ALARM3",
+      "TIMERAWL",
+      "INTR"
+    ],
+    "UART0": [
+      "UARTDR",
+      "UARTRSR",
+      "UARTFR",
+      "UARTIBRD",
+      "UARTFBRD",
+      "UARTLCR_H",
+      "UARTICR",
+      "UARTDMACR"
+    ],
+    "UART1": [
+      "UARTFR"
+    ],
+    "DMA": [
+      "CH0_READ_ADDR",
+      "CH0_WRITE_ADDR",
+      "CH0_TRANS_COUNT",
+      "CH0_CTRL_TRIG",
+      "CH1_READ_ADDR",
+      "CH1_CTRL_TRIG",
+      "CH0_AL1_CTRL",
+      "INTR",
+      "INTE0"
+    ]
+  },
+  "policies": {
+    "IO_BANK0.GPIO0_CTRL": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "IO_BANK0.GPIO1_CTRL": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "SIO.GPIO_IN": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "SIO.GPIO_OUT": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "preserve"
+    },
+    "SIO.GPIO_OUT_SET": {
+      "read": "refused",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "SIO.GPIO_OUT_CLR": {
+      "read": "refused",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "TIMER.ALARM0": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "TIMER.ALARM1": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "TIMER.ALARM2": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "TIMER.ALARM3": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "TIMER.TIMERAWL": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "TIMER.INTR": {
+      "read": "normal",
+      "write": "one_clears",
+      "reserved": "zero"
+    },
+    "UART0.UARTDR": {
+      "read": "modify",
+      "write": "normal",
+      "reserved": "zero",
+      "write_mask": "0x000000ff"
+    },
+    "UART0.UARTRSR": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "UART0.UARTFR": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "UART0.UARTIBRD": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "UART0.UARTFBRD": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "UART0.UARTLCR_H": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "UART0.UARTICR": {
+      "read": "refused",
+      "write": "one_clears",
+      "reserved": "zero"
+    },
+    "UART0.UARTDMACR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "UART1.UARTFR": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "DMA.CH0_READ_ADDR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "DMA.CH0_WRITE_ADDR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "DMA.CH0_TRANS_COUNT": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "DMA.CH0_CTRL_TRIG": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero",
+      "write_mask": "0x00ffffff"
+    },
+    "DMA.CH1_READ_ADDR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "DMA.CH1_CTRL_TRIG": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero",
+      "write_mask": "0x00ffffff"
+    },
+    "DMA.CH0_AL1_CTRL": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "DMA.INTR": {
+      "read": "normal",
+      "write": "one_clears",
+      "reserved": "zero"
+    },
+    "DMA.INTE0": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    }
+  },
+  "numeric_enums": [
+    "DMA.CH0_CTRL_TRIG.RING_SIZE",
+    "DMA.CH1_CTRL_TRIG.RING_SIZE"
+  ],
+  "manual": {
+    "url": "https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf",
+    "build_date": "2025-02-20",
+    "build_version": "3184e62-clean",
+    "sha256": "be56fbb75ba0ae9e26558a73c93ac3e75c2ad4e6878d3b6703de2a76d886ea8c"
+  },
+  "header_url_pattern": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/{name}.h",
+  "reset_mask_overrides": {
+    "UART0.UARTDR": "0x0",
+    "UART0.UARTICR": "0x0",
+    "UART0.UARTFR": "0xf8",
+    "UART1.UARTFR": "0xf8"
+  },
+  "cmsis_svd_spec": {
+    "url": "https://open-cmsis-pack.github.io/svd-spec/main/index.html",
+    "repository": "https://github.com/Open-CMSIS-Pack/svd-spec",
+    "commit": "250e414da502885efc7c7ef96b0a19bac9abf8da",
+    "consulted": "2026-09-18"
+  }
+}
