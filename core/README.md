@@ -70,3 +70,8 @@ runs, not a complete maximum-depth proof. D231 enables infallible `noreturn`
 without changing allocator errors into traps. A direct nonreturning call does
 not run a pending deferred mask restoration; a nonreturning cleanup stops
 later cleanups. ROADMAP.md records panic implementation and milestone status.
+
+R6.80's [generated device fixtures](../devices/README.md) import no core module.
+Their consumers explicitly import `core/cpu` and optionally `core/panic`;
+ordinary DMA slices retain the completion/boundary/lifetime obligations above.
+No allocator, heap, scheduler or hosted initialization enters that closure.

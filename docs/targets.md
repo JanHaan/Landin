@@ -471,3 +471,9 @@ interrupt-masking helper are added on Cortex. Compiler startup clears the latch;
 synthetic entry/root violations use site zero. Naked fallthrough and hardware
 faults retain separate machine obligations. `--panic-map` is optional off-target
 mapping, not Cortex source-debugger acceptance.
+
+R6.80's [device fixture interface](../devices/README.md) preserves vendor
+32-bit transaction sizes independently of field masks. Its real RP2040 address
+constants are data, not a target/board selection. Execution explicitly remaps
+a bounded peripheral subset while retaining the accepted M0 map and ABI;
+RP2040's dual M0+ hardware is not claimed as an executable target.

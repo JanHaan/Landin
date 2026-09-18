@@ -1,0 +1,55 @@
+-- Vendor image/address evidence executes in ordinary RAM on the M0 CPU lane.
+import rp2040/io_bank0
+import rp2040/sio
+import rp2040/timer
+import rp2040/uart0
+import rp2040/uart1
+import rp2040/dma
+import core/cpu
+
+mut initialized: u32 = 0x680
+mut cleared: u32 = 0
+mut observed: u32 = 0
+link(keep)
+immutable: [2]u32 = [0x40014004, 0x5000004c]
+
+-- Retain the inherited RAM-code copy/veneer path in this small consumer.
+link(section: ".ramtext.fixture")
+ram_check: (raw: u32) -> (result: u32) =
+    image := dma.ch0_ctrl_trig_decode(raw)
+    result = u32(image.f_ring_size)
+end ram_check
+
+start: () -> none =
+    observed = 1
+    if initialized <> 0x680 or cleared <> 0 then return end if
+    if io_bank0.gpio0_ctrl_address <> 0x40014004 then return end if
+    if io_bank0.gpio1_ctrl_address - io_bank0.gpio0_ctrl_address <> 8 then return end if
+    if uart0.uartfr_address <> 0x40034018 or uart1.uartfr_address <> 0x40038018 then return end if
+    if timer.alarm3_offset - timer.alarm0_offset <> 12 then return end if
+    if dma.ch1_ctrl_trig_address - dma.ch0_ctrl_trig_address <> 64 then return end if
+    if dma.ch0_al1_ctrl_reset_mask <> 0 or uart0.uartdr_reset_mask <> 0 then return end if
+    if sizeof io_bank0.gpio0_ctrl_image <> 4 or alignof io_bank0.gpio0_ctrl_image <> 4 then return end if
+    if sizeof [2]dma.ch0_ctrl_trig_image <> 8 then return end if
+    if sio.gpio_in_named_mask <> 0x3fffffff then return end if
+    mut gpio := io_bank0.gpio0_ctrl_decode(0x8000001f)
+    gpio.f_funcsel = io_bank0.gpio0_ctrl_funcsel_uart0_tx
+    if io_bank0.gpio0_ctrl_encode(gpio) <> 0x80000002 then return end if
+    -- A raw invalid encoding is copyable; do not extract it on this path.
+    raw_copy := io_bank0.gpio0_ctrl_decode(8)
+    if io_bank0.gpio0_ctrl_encode(raw_copy) <> 8 then return end if
+    mut channel := dma.ch0_ctrl_trig_decode(0)
+    channel.f_data_size = dma.ch0_ctrl_trig_data_size_size_halfword
+    channel.f_ring_size = 15
+    if dma.ch0_ctrl_trig_encode(channel) <> 0x3c4 then return end if
+    if ram_check(dma.ch0_ctrl_trig_encode(channel)) <> 15 then return end if
+    mut backing: u32 = 0
+    timer.alarm0_write(usize(addr backing) - timer.alarm0_offset, 0x12345678)
+    if backing <> 0x12345678 then return end if
+    outer := cpu.disable_interrupts()
+    inner := cpu.disable_interrupts()
+    cpu.restore_interrupts(inner)
+    if cpu.interrupt_mask() <> 1 then return end if
+    cpu.restore_interrupts(outer)
+    observed = initialized + cleared
+end start

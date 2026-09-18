@@ -47,6 +47,11 @@ R6.70's noreturn/panic control flow, frames and source-site identity
 require native debugger-risk coverage at closure. Focused CPU/library firmware
 development is recorded separately and cannot approve the still-active item.
 
+R6.80 preserves routine debugger-risk scope for its new debugger-controlled
+boot/stack assertions and independent panic-site evidence checks. It adds
+fixture provenance/regeneration and embedded consumers without changing the
+compiler or claiming a freestanding milestone.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.

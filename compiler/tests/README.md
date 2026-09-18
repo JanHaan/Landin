@@ -947,3 +947,10 @@ lane, including real interrupt delivery and separately labelled debugger fault
 injection. Optional map mismatch tests run under full `check.py`. These remain
 additional evidence and preserve the inherited fixture verdicts and lane
 boundaries.
+
+R6.80 generated-device source fixtures live under `devices/`, outside the
+shared runtime corpus. `devices/test.py` verifies offline provenance and fresh
+regeneration; `devices/check_sources.py` records seven exact diagnostic-code
+refusals. The mandatory Cortex device lane compiles all six generated modules
+and executes five consumers at six profiles, with its own retained independent
+oracles. No shared fixture is removed or reclassified by this addition.

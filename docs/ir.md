@@ -514,3 +514,11 @@ handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
 source line; this does not enable Cortex source debugging.
+
+R6.80's [generated device consumers](../devices/README.md) add no IR operation.
+Constant addresses and image arithmetic use existing folding; retained data,
+volatile accesses, encoded extraction traps and opaque CPU assembly keep their
+existing effects. The six optimization/specialization profiles independently
+check identical device traces and D232 failure sites, including discarded
+extraction under `unchecked`. Existing enum-domain-sensitive body sharing,
+array-versus-struct stored-shape and private call-status rules are unchanged.

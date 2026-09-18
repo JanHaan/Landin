@@ -349,3 +349,8 @@ recursive export hashes bind them to the accepted archive. The old corpus,
 firmware counts and Renode lock-cleanup obligations remain mandatory. These
 additional controls do not by themselves close the remaining R6.70 panic and
 noreturn obligations.
+
+R6.80 adds `devices.py` after the inherited Cortex lanes. Its checked-in vendor
+inputs, regeneration checks, source refusals, compiler-owned firmware and
+independent C/assembly peripheral control are mandatory; recursive artifact
+hashes bind `artifacts/cortex-m/devices` to the same accepted archive.

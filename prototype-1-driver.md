@@ -31,8 +31,18 @@ extracted from it. A copied hardware image may contain unnamed encodings;
 reading an encoded field checks membership. Configuration updates preserve
 unselected image bits, while a one-clears command starts from a zero image.
 The R6.40 record in ROADMAP.md owns source/compiler and bounded peripheral
-evidence; this sketch's complete generated device modules remain R6.80 work.
-The ordinary-slice DMA and D227 barrier contract are unchanged.
+evidence. R6.80's [device fixtures](devices/README.md) derive a bounded real
+RP2040 surface into explicit D228 images, encoded unions and D227/D228 scalar
+accesses. The conceptual map below is not an RP2040 description: pin count,
+DMA stream/count geometry and addresses differ. Separate modules preserve
+GPIO control/SIO commands, timer alarms, UART FIFO/flags and DMA channel images;
+explicit synthetic bases adapt only the execution lane. Automatic `set(X)` and
+`register` sketch forms are not newly admitted syntax. The historical findings
+below remain historical. R6.90 owns the complete driver and its full derivation
+mapping, consumption and overrun protocol. Prototype 3's caller-backed storage,
+explicit allocator capabilities and local origin obligations remain unchanged;
+these fixtures acquire no allocator. The ordinary-slice DMA and D227 barrier
+contract are unchanged.
 
 ## chip/vendor/gpio  —  generated from the SVD
 

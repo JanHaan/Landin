@@ -12796,7 +12796,10 @@ Inactive directives add no arguments. D227 enables scalar atomic operations;
 D229 enables Cortex-M0 body assembly, placement annotations and explicit
 firmware requests. Other targets refuse those uses. `assembler.block` is a
 body operation, not a module initializer; Cortex firmware refuses
-`linker.library`. No fourth namespace or general build language is introduced.
+`linker.library`. No fourth namespace or general build language is introduced. R6.80's vendor
+provenance and fixture policies are off-target generator inputs/comments, not
+compiler-recognized directives. Its checked-in declarations derive into D228
+images and D227/D228 scalar accesses without enabling new syntax.
 
 **The alternatives:** conditional switch declarations make switch discovery
 depend on their own values. Last-override-wins hides repeated configuration;

@@ -219,6 +219,8 @@ class Run:
         firmware_execute(self, refine)
         from freestanding import execute_suite as freestanding_execute
         freestanding_execute(self, refine)
+        from devices import execute_suite as devices_execute
+        devices_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

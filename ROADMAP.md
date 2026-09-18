@@ -11105,15 +11105,189 @@ continues to own the full freestanding milestone and measurement programme.
 
 ### R6.80 — Establish checked-in generated device fixtures
 
-Status: planned
+Status: complete
 Depends on: R6.10, R6.40
 
-Provide deterministic checked-in `.ldn` modules representing the ugly vendor
-SVD pressure. Transfer the SVD generator and general sandboxed generator
-orchestration to the companion-tool roadmap.
+The fixture gate is implemented by `devices/fixture.json`, retained vendor
+inputs, six checked-in generated `.ldn` modules and the mandatory
+`environments/cortex-m/devices.py` lane. `devices/README.md` documents the full
+provenance, transformations, public API, source-feature audit and reproduction
+contract. No language/compiler extension or general SVD importer is introduced.
+R6.40's hand-authored model remains separate evidence.
 
-Exit evidence: fixture provenance and regeneration requirements are documented;
-the compiler gate does not depend on an unbuilt package ecosystem.
+Decisions and alternatives:
+
+- Select Raspberry Pi RP2040 from official pico-sdk 2.2.0 commit
+  `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`: GPIO0/1 control, SIO input/output
+  and SET/CLR, four timer alarms/low counter/interrupt status, UART0 data/error/
+  flags/divisor/control/clear/DMA registers, inherited UART1 flags, and selected
+  DMA channel 0/1/alias/interrupt registers. Thirty registers in six modules
+  exercise real inherited defaults, distinct domains, sparse offsets, mixed
+  access and incomplete metadata. A second arbitrary device family would add
+  acquisition surface without needed executable pressure. This bounded choice
+  does not claim every CMSIS-SVD feature or complete RP2040 support.
+- Preserve prototype 1 as a conceptual device, not an identified vendor part.
+  RP2040 has 30 GPIOs, twelve DMA channels, 32-bit counts and M0+ CPUs; the
+  sketch's 16-pin banks/eight streams/16-bit count and addresses are not copied
+  as vendor facts. Explicit base arguments adapt a selected subset to a new
+  synthetic peripheral map; literal vendor addresses remain checked. Renode
+  is not faithful RP2040 emulation. QEMU remains the unchanged M0 microbit
+  CPU lane with 32 KiB flash, 16 KiB RAM and 4 KiB stack reservation.
+- Retain the original BSD-3-Clause SVD (device version 0.1/schema 1.1), upstream
+  license and five separately shipped register headers. Input hashes/URLs are
+  in the manifest, including SVD SHA-256
+  `49f53398e0496b6de0849faf17a9f4e58565af311b98b727e4ebeee964619bc6`.
+  The manual review uses official RP2040 datasheet build 2025-02-20,
+  `3184e62-clean`, precisely hashed in the manifest; that CC BY-ND document is
+  acquired separately, not redistributed. Current official CMSIS-SVD docs
+  were consulted at commit `250e414da502885efc7c7ef96b0a19bac9abf8da`.
+  Architectural/exception/ABI/ELF facts retain DDI0419E, DUI0497A,
+  AAPCS32/AAELF32 2025Q4 and the pinned GNU tool contracts; vendor facts and
+  synthetic premises have separate records.
+- Use a bounded standard-library Python projection over pinned sources plus
+  explicit reviewed policies. Manual work is selecting registers, recording
+  policies/reset corrections and independent expected values, not editing
+  generated declarations. Fresh equivalent input trees reproduce every byte;
+  stale hashes, widths/dimensions, output bytes and inventory have refusal
+  controls. `outputs.json` records generated hashes. The compiler gate needs
+  neither network nor an unavailable companion tool. A general SVD generator,
+  package acquisition and sandboxed generator/build orchestration stay with
+  R551-33's companion-tool owner.
+- Preserve explicit 32-bit transaction width from SVD properties, separately
+  from field masks and packed images. Device/peripheral inheritance is bounded
+  to the selected source, including UART1 derivedFrom UART0. Flattened GPIO,
+  alarm and channel repetitions retain names/strides; the source has no XML
+  dimensions/clusters. General array/cluster/alternate expansion is not enabled.
+  CH0_AL1_CTRL retains its own address/type and unknown reset; its write helper
+  is absent. Overlapping fields, normalized name collisions, duplicate values
+  and unsupported selected structures refuse. No alias is silently collapsed.
+- Preserve GPIO FUNCSEL and DMA DATA_SIZE/TREQ_SEL holes as checked encoded
+  domains. Numeric RING_SIZE 0–15 is an explicit normalization of the partial
+  enum list, justified by vendor prose/manual. Prefixes distinguish register/
+  field atoms and reserved vocabulary. Raw copies retain every bit; discarded
+  encoded extraction still validates, including inside `unchecked`.
+- Do not convert unknown reset bits to zero. Correspondence records original
+  SVD reset claims alongside public known-bit masks independently checked
+  against vendor headers: UARTDR/UARTICR and DMA alias control are unknown,
+  UARTFR knows only `0xf8`, and unnamed reserved bits remain unknown. UARTDR's
+  modify-on-read FIFO uses one volatile read. RO/WO helpers are omitted.
+  UARTRSR/UARTECR's contradictory clear metadata gets no writer. DMA control
+  writes admit configuration bits only, never acknowledge mixed W1C errors.
+  Explicit one-clears commands and reserved policies use D228 primitives,
+  without hidden RMW or extra reads. Manual errata E12/E13 prohibit inferring
+  general completion from addresses or abort notification; no abort driver is
+  provided here.
+- Translate the sketch's register, volatile-pointer and set forms into existing
+  D227/D228 scalar pointers, packed images, explicit fields and encoded unions.
+  Automatic `set(X)` remains outside the kernel. D202 metadata stays off target
+  in JSON/comments; an invented compiler metadata directive precisely refuses.
+  Ordinary/C/optimal layout, D187 transaction limits, D231 noreturn and D232
+  panic kind/site/evaluation point are unchanged. No allocator, module
+  initializer, reporting storage, ownership system, fibres or scheduler enters
+  the generated modules. Prototype 3's storage/origin/capability contracts and
+  prototypes 2/4's failure/hosted roots are unaffected.
+
+Executable pins and results:
+
+`devices/test.py` independently compares all selected addresses/offsets, field
+geometry, encodings and known reset bits with vendor headers and literal
+stride/DREQ controls, then checks two fresh regenerations and precise stale/
+unsupported-input failures. Seven source cases retain exact codes: missing
+RO/WO/ambiguous/alias accessors, unsupported compiler metadata, eight-byte MMIO
+and atomic RMW. All six generated modules compile as ordinary rooted sources.
+
+The five generated-firmware consumers run at inherited profiles `none/off`,
+`size/off`, `size/auto`, `speed/auto`, `none/all`, `speed/all`. Focused Linux run
+`/home/landin/r680-evidence/full-1` passed six QEMU sessions, 24 generated Renode
+runs and 168 fresh ELF/object/assembly/linker/map/optional-source-map comparisons.
+One independent C/assembly control passed the same literal peripheral trace,
+for 25 Renode runs total. Its external startup remains independent evidence.
+Mac filtered checking passed 112 cases/3,442 assertions; offline source checks
+and provenance controls passed. These are development results, not approval.
+
+QEMU poisons and verifies initialized data/BSS across compiler reset, checks
+flash immutable data, RAM-code load/copy, kept storage, raw/encoded images,
+stride/layout facts and nested CPU mask restoration. Renode asserts ordered
+word transactions, FIFO reads, command writes, reserved/encoded/alignment
+failures and zero later actions after panic. D232 kind/site is independently
+computed from D150 source import order, without reading the compiler map.
+The first development oracle sorted paths and therefore mispredicted a site;
+its failed transcript is retained in `.scratch/r680/refusals-1.log`. Correcting
+that oracle to normative import order made all failure consumers pass; no
+compiler behavior or success criterion was weakened. Early slot artifacts were
+transient; the complete subsequent run is retained outside the synchronized
+slot and copied locally. No failed run is acceptance evidence.
+
+The interrupt/DMA consumer separates a synthetic half notification from count-zero
+completion, explicit CPU/device boundaries, externally written ordinary storage
+and subsequent slice reads. DMA progresses while PRIMASK blocks notification;
+restoration delivers completion. Stopped-time model feeds, four bytes and a
+stored timer alarm do not establish a full circular protocol or physical timing.
+
+| Generated consumer | Flash load extent, bytes | Static RAM extent, bytes | Private helper members |
+|---|---|---|---|
+| Images/cold boot | 7,784–8,240 | 256–264, including RAM code | `_muldi3.o` |
+| Peripheral/interrupt/DMA | 22,260–23,932 | 32 | none |
+| Encoded hole | 2,768–2,816 | 20 | none |
+| Reserved command bits | 2,248–2,368 | 20 | none |
+| Misaligned access | 1,508–1,556 | 20 | none |
+
+These are linker extents across six profiles, not aggregate source sizes. The
+image consumer observed 408 stack bytes written in each profile, preserving
+its guard and frame/register return assertions. This is a bounded observation,
+not a worst-case stack proof. All maps permit only the generated object, pinned
+`thumb/v6-m/nofp/libgcc.a` and applicable linker stubs; undefined symbols and
+hosted startup/libc/heap names fail. Metadata/optional source maps remain off
+target. The ordinary previous-r11/incoming-LR record, r9 reservation, call
+alignment, r12 private status, IRQ state/EXC_RETURN and naked obligations are
+unchanged. Six-profile traces/failure sites exercise folding, reachability,
+specialization and sharing through existing effect and enum-domain rules;
+array-versus-struct and private-status repairs remain intact.
+
+Inherited acceptance was verified before relying on counts. Base
+`333457fd3a40644fb06584271176ba1394d1e4a5` had annotated approval object
+`03c9cc2edb0cd76d407d037a9d54e8e2c206a1f6`, Linux run
+`20260918T085736Z-77e1f7238115`, Darwin run
+`20260918T085736Z-f9149e04e975` and matching archive SHA-256
+`60885c04d651785a07d23f7af4f4c072b461d8875f885fceca3c7aaef1bdc853`.
+Both bundles validated; canonical/mirror refs matched; Pages 1890807 and mirror
+1890808 were successful. Accepted artifacts confirm 535 shared programs
+(original 533 plus two R6.70 restrictions), 2,012 QEMU executions across 435
+programs, 50 source refusals, 33 C restrictions (original 31 plus two), 72
+capacity verdicts across 17 programs and 72 generated backend controls. R6.60
+retains 37 QEMU sessions, 24 Renode runs and 270 comparisons; R6.70 retains
+198 QEMU sessions, six Renode runs and 336 comparisons. No verdict, oracle or
+artifact expectation is removed by R6.80. The mandatory runner appends this
+lane, retaining existing supervision, timeouts and Renode lock cleanup.
+
+R5.20 target/resource/runtime/evidence/tooling dispositions and R5.51's retained
+debt ledger were audited, particularly R551-31/33. This closes only R551-31's
+checked-in device-fixture responsibility. General generation/ecosystem,
+resource/scale limits, broader standard library, competitive optimization,
+physical evidence and deferred Nix retain their recorded owners. R6.90 owns
+the complete derived driver, full derivation mapping and DMA consumption/
+overrun protocol. R6.100 owns Landin source debugging, complete measured
+firmware/stack evidence and freestanding milestone closure.
+
+Exact-revision completion and delivery binding:
+
+Compatible `policy.py routine --debugger` scope was explicitly reselected
+before the closure candidate; both tracked policies already held those values.
+The new debugger-controlled boot/stack assertions and independent panic-source
+identity checks justify retaining release GDB/LLDB risk coverage. Fixture work
+is not a milestone policy. Full document checks, generated coverage/diagnostic
+matrices and verified rendering precede acceptance. Both native policies must
+accept the identical containing committed archive, including every mandatory
+inherited lane and the new `artifacts/cortex-m/devices` evidence. Recursive
+exports bind vendor/consumer/tool inputs, startup/linker scripts, ELF/map/
+disassembly/relocations, runtime closure, assertions and actual results.
+
+Verified native exports and the annotated dual-native `ci/accepted/FULL_COMMIT`
+bind completion to that exact archive. Atomic canonical promotion, identical
+remote commit and annotation, matching GitHub mirror and successful guarded
+Pages publication are required. A failed or later bookkeeping revision cannot
+supply this binding. With that binding R6.90 is next dependency-ready; R6.100
+and all successor dispositions above remain open.
 
 ### R6.90 — Complete and run the derived driver program
 

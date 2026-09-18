@@ -1220,9 +1220,10 @@ divider_sel: type = u4 (by_1 = 0 | by_2 = 1)   -- four bits, as given
 ```
 
 The enabled D228 kernel accepts the explicit named-boolean expansion below
-that generator form; automatic `set(X)` and generated-register surfaces remain
-with the complete device-fixture slice. Their expansion does not change the
-raw-image or validation contract.
+that generator form. R6.80's checked-in vendor fixtures use explicit fields and
+encoded unions through existing constructs; automatic `set(X)` remains outside
+the enabled kernel. General SVD generation retains the companion-tool owner.
+The expansion does not change the raw-image or validation contract.
 
 A set is not a kind of its own. set(X) generates a packed
 struct of bool, one field per member of X, each sitting at

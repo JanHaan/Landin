@@ -1,0 +1,86 @@
+-- Explicit synthetic bases. This is not an RP2040 board or vendor emulator.
+import rp2040/io_bank0
+import rp2040/sio
+import rp2040/uart0
+import rp2040/timer
+import rp2040/dma
+import core/cpu
+
+gpio_base: usize = 0x40070000
+sio_base: usize = 0x40070100
+uart_base: usize = 0x40070200
+timer_base: usize = 0x40070300
+dma_base: usize = 0x40071000
+mut initialized: u32 = 0x680
+mut cleared: u32 = 0
+mut buffer: [4]u8 = zeroed
+mut notifications: u32 = 0
+mut completed: u32 = 0
+mut result: u32 = 0
+mut stage: u32 = 0
+
+link(vector: 16)
+extern(interrupt) device_irq: () -> none =
+    pending := dma.intr_decode(dma.intr_read(dma_base))
+    notifications += 1
+    if pending.f_intr <> 0 then
+        remaining := dma.ch0_trans_count_decode(dma.ch0_trans_count_read(dma_base))
+        cpu.device_barrier()
+        if remaining.f_ch0_trans_count == 0 then completed = 1 end if
+    end if
+    dma.intr_write(dma_base, 1)
+    cpu.completion_barrier()
+end device_irq
+
+receive: (buf: []mut u8) -> (value: u32) =
+    if buf[0] <> 0 or buf[1] <> 0 or buf[2] <> 0 or buf[3] <> 0 then
+        value = 1
+        return
+    end if
+    dma.ch0_read_addr_write(dma_base, u32(uart_base))
+    dma.ch0_write_addr_write(dma_base, u32(usize(addr buf[0])))
+    dma.ch0_trans_count_write(dma_base, u32(lenof buf))
+    mut cfg := dma.ch0_ctrl_trig_decode(0)
+    cfg.f_data_size = dma.ch0_ctrl_trig_data_size_size_byte
+    cfg.f_treq_sel = dma.ch0_ctrl_trig_treq_sel_uart0_rx
+    cfg.f_incr_write = 1
+    dma.ch0_ctrl_trig_write(dma_base, dma.ch0_ctrl_trig_encode(cfg))
+    dma.inte0_write(dma_base, 1)
+    cpu.device_barrier()
+    cfg.f_en = 1
+    dma.ch0_ctrl_trig_write(dma_base, dma.ch0_ctrl_trig_encode(cfg))
+    stage = 1
+    while stage == 1 do cpu.compiler_barrier() end while
+    saved := cpu.disable_interrupts()
+    stage = 3
+    while stage == 3 do cpu.compiler_barrier() end while
+    cpu.restore_interrupts(saved)
+    while completed == 0 do cpu.compiler_barrier() end while
+    cpu.device_barrier()
+    value = u32(buf[0]) + u32(buf[1]) + u32(buf[2]) + u32(buf[3])
+end receive
+
+start: () -> none =
+    if initialized <> 0x680 or cleared <> 0 then return end if
+    mut gpio := io_bank0.gpio0_ctrl_decode(io_bank0.gpio0_ctrl_read(gpio_base))
+    gpio.f_funcsel = io_bank0.gpio0_ctrl_funcsel_uart0_tx
+    io_bank0.gpio0_ctrl_write(gpio_base, io_bank0.gpio0_ctrl_encode(gpio))
+    sio.gpio_out_set_write(sio_base, 0x12)
+    sio.gpio_out_clr_write(sio_base, 2)
+    if sio.gpio_out_read(sio_base) <> 0x10 then return end if
+    first := uart0.uartdr_decode(uart0.uartdr_read(uart_base))
+    second := uart0.uartdr_decode(uart0.uartdr_read(uart_base))
+    if first.f_data <> 0x41 or second.f_data <> 0x42 then return end if
+    uart0.uartdr_write(uart_base, 0x55)
+    uart0.uarticr_write(uart_base, 0x10)
+    if uart0.uartfr_read(uart_base) <> 0x90 then return end if
+    timer.alarm0_write(timer_base, 7)
+    timer.intr_write(timer_base, 1)
+    timer.intr_write(timer_base, 0)
+    if timer.intr_read(timer_base) <> 2 then return end if
+    enable: ptr mut u32 = ptr(0xe000e100)
+    compiler.volatile_store(enable, 1)
+    result = receive(buffer[0..<lenof buffer])
+    stage = 5
+    loop do cpu.wait_for_interrupt() end loop
+end start

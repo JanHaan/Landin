@@ -1071,3 +1071,7 @@ handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
 source line; this does not enable Cortex source debugging.
+
+R6.80's [device modules](../../devices/README.md) use the existing frontend,
+packed/volatile IR and Cortex firmware path without compiler changes. Vendor
+metadata is off target; the compiler does not parse SVD or run generators.

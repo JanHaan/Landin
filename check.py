@@ -62,6 +62,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/targets.md",
                      "compiler/ada/README.md",
                      "core/README.md",
+                     "devices/README.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
                      "compiler/tests/harness-cases/README.md",
@@ -5439,6 +5440,7 @@ def check_phase_handoff(full_run):
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
+                [sys.executable, os.path.join(ROOT, "devices/test.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")],
                 [sys.executable, "-m", "unittest", "discover", "-s",
                  os.path.join(ROOT, "scripts/tests"), "-p", "test_darwin*.py"]):
