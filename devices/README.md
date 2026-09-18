@@ -89,7 +89,9 @@ unchanged; no width is inferred from an eight-bit data field. Errata E12 warns
 against inferring DMA progress from channel addresses (including ring cases);
 these consumers use TRANS_COUNT. E13's abort/completion limitation is not
 resolved by an interrupt or barrier; no abort convenience or complete recovery
-protocol is offered. The full driver/protocol remains R6.90.
+protocol is offered by these small consumers. R6.90's separate
+[complete driver](../compiler/tests/driver/DERIVATION.md) uses the unchanged
+public accessors under an explicitly different synthetic protocol.
 
 ## Reproduction and public use
 
@@ -189,6 +191,6 @@ pinned `thumb/v6-m/nofp/libgcc.a` and applicable linker stubs. Undefined symbols
 hosted startup/libc/heap dependencies fail. Optional panic maps stay off target;
 JSON provenance is never linked. Existing Renode process/lock cleanup remains
 mandatory. R6.100 owns complete firmware/stack measurement and source debugging;
-R6.90 owns the complete driver; R551-33 retains the general SVD generator,
+R6.90 owns the [complete driver derivation](../compiler/tests/driver/DERIVATION.md); R551-33 retains the general SVD generator,
 package acquisition and sandboxed generator orchestration; the broader standard
 library retains its own disposition. This guide creates no additional work owner.

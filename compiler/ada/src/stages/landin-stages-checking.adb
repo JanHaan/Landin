@@ -1300,7 +1300,8 @@ package body Landin.Stages.Checking is
          Site         : Landin.Provenance.Origin;
          Because      : String;
          Static_Image : Boolean := False;
-         Optional_Value : Boolean := False);
+         Optional_Value : Boolean := False;
+         Replay_Control : Boolean := False);
       function Synthesise_Control
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
@@ -1336,6 +1337,8 @@ package body Landin.Stages.Checking is
       Pending_Selections : Selection_Lists.Vector;
       Deferred_Error_Calls : Selection_Lists.Vector;
       Checked_Recovery_Calls : Selection_Lists.Vector;
+      Contextual_Recovery_Calls : Selection_Lists.Vector;
+      Checking_Routine_Body : Boolean := False;
       Blocked_Error_Calls : Selection_Lists.Vector;
       type Discovery_Parent is record
          Child, Parent : Landin.Checking.Routine_Instance_Id;
@@ -12751,6 +12754,23 @@ package body Landin.Stages.Checking is
          end if;
 
          if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+           and then not Checking_Routine_Body
+         then
+            declare
+               Pending : constant Pending_Selection :=
+                 (Syn.Source_Of (Of_Tree), Node,
+                  Landin.Checking.Current_Routine_View (Types.all));
+            begin
+               if not Checked_Recovery_Calls.Contains (Pending)
+                 and then not Contextual_Recovery_Calls.Contains (Pending)
+               then
+                  Contextual_Recovery_Calls.Append (Pending);
+               end if;
+            end;
+         end if;
+
+         if Checking_Routine_Body
+           and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
            and then Landin.Checking.Signature_Error_Form
              (Types.all, Signature) /= Landin.Checking.Inferred
            and then not Checked_Recovery_Calls.Contains
@@ -12794,6 +12814,17 @@ package body Landin.Stages.Checking is
                  (Pending_Selection'
                     (Syn.Source_Of (Of_Tree), Node,
                      Landin.Checking.Current_Routine_View (Types.all)));
+               declare
+                  Position : constant Natural :=
+                    Contextual_Recovery_Calls.Find_Index
+                      (Pending_Selection'
+                         (Syn.Source_Of (Of_Tree), Node,
+                          Landin.Checking.Current_Routine_View (Types.all)));
+               begin
+                  if Position /= Selection_Lists.No_Index then
+                     Contextual_Recovery_Calls.Delete (Position);
+                  end if;
+               end;
                if Errors = Landin.Checking.No_Atom_Set then
                   Bad.Report
                     (Item    => Bad.Type_Mismatch,
@@ -17918,8 +17949,81 @@ package body Landin.Stages.Checking is
                return Kept (Held);
             end;
          end Bound_Value;
+
+         function Has_Contextual_Recovery (Below : Syn.Node_Id)
+           return Boolean;
+         procedure Replay_Contextual_Recovery (Below : Syn.Node_Id);
+
+         function Has_Contextual_Recovery (Below : Syn.Node_Id)
+           return Boolean
+         is
+         begin
+            if Below = Syn.No_Node
+              or else Contextual_Recovery_Calls.Is_Empty
+              or else Syn.Kind (Of_Tree, Below) = Syn.Anonymous_Function
+            then
+               return False;
+            end if;
+            if Contextual_Recovery_Calls.Contains
+              (Pending_Selection'
+                 (Syn.Source_Of (Of_Tree), Below,
+                  Landin.Checking.Current_Routine_View (Types.all)))
+            then
+               return True;
+            end if;
+            for Position in 1 .. Syn.Slot_Count (Of_Tree, Below) loop
+               if Has_Contextual_Recovery
+                 (Syn.Slot (Of_Tree, Below, Position))
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Has_Contextual_Recovery;
+
+         procedure Replay_Contextual_Recovery (Below : Syn.Node_Id) is
+         begin
+            if not Has_Contextual_Recovery (Below) then
+               return;
+            end if;
+            if Contextual_Recovery_Calls.Contains
+              (Pending_Selection'
+                 (Syn.Source_Of (Of_Tree), Below,
+                  Landin.Checking.Current_Routine_View (Types.all)))
+            then
+               declare
+                  Checked : constant Ty.Type_Kind := Check_Call
+                    (Of_Tree, Below,
+                     Effective_Call_Signature (Of_Tree, Below),
+                     (if Below = Node then Expected_Reference
+                      else Landin.Checking.No_Reference));
+               begin
+                  pragma Unreferenced (Checked);
+               end;
+            elsif Is_Value_Control (Of_Tree, Below) then
+               --  A cached control expression must establish its own loop
+               --  and value context before visiting any nested recovery.
+               declare
+                  Checked : constant Ty.Type_Kind :=
+                    Synthesise_Control (Of_Tree, Below);
+               begin
+                  pragma Unreferenced (Checked);
+               end;
+            else
+               for Position in 1 .. Syn.Slot_Count (Of_Tree, Below) loop
+                  Replay_Contextual_Recovery
+                    (Syn.Slot (Of_Tree, Below, Position));
+               end loop;
+            end if;
+         end Replay_Contextual_Recovery;
       begin
          if Already /= Ty.Undecided then
+            --  Cached compound values also retain deferred children. The
+            --  routine walk supplies their actual enclosing loop context;
+            --  anonymous bodies are checked separately in their own view.
+            if Checking_Routine_Body then
+               Replay_Contextual_Recovery (Node);
+            end if;
             return Already;
          end if;
 
@@ -25813,7 +25917,8 @@ package body Landin.Stages.Checking is
          Site         : Landin.Provenance.Origin;
          Because      : String;
          Static_Image : Boolean := False;
-         Optional_Value : Boolean := False)
+         Optional_Value : Boolean := False;
+         Replay_Control : Boolean := False)
       is
       begin
          if Node = Syn.No_Node then
@@ -25849,10 +25954,14 @@ package body Landin.Stages.Checking is
          end if;
 
          if Is_Value_Control (Of_Tree, Node)
-           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
-             = Ty.Undecided
+           and then (Replay_Control
+             or else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+               = Ty.Undecided)
          then
-            if not Optional_Value then
+            if not Optional_Value
+              and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                = Ty.Undecided
+            then
                Note_Context (Of_Tree, Node, Expected);
             end if;
 
@@ -26656,8 +26765,13 @@ package body Landin.Stages.Checking is
          First : constant Syn.Node_Id := First_Control_Value (Of_Tree, Node);
          Got   : Ty.Type_Kind;
          Expected : Value_Context;
+         Previous_Body_Check : constant Boolean := Checking_Routine_Body;
       begin
+         --  Infer the answer's shape before installing this control's loop
+         --  context. Recovery transfers must wait for the contextual walk.
+         Checking_Routine_Body := False;
          if First = Syn.No_Node then
+            Checking_Routine_Body := Previous_Body_Check;
             return Ty.Not_Typed;
          end if;
 
@@ -26682,6 +26796,7 @@ package body Landin.Stages.Checking is
                   if Element_Type /= Ty.Ill_Typed then
                      Refuse_Inferred_Array_Element (Of_Tree, Element_Node);
                   end if;
+                  Checking_Routine_Body := Previous_Body_Check;
                   return Ty.Ill_Typed;
                end if;
 
@@ -26700,6 +26815,7 @@ package body Landin.Stages.Checking is
                Nominal => Construction_Body (Of_Tree, First),
                others => <>);
             if Expected.Nominal = Landin.Checking.No_Nominal_Type then
+               Checking_Routine_Body := Previous_Body_Check;
                return Ty.Ill_Typed;
             end if;
          else
@@ -26716,6 +26832,7 @@ package body Landin.Stages.Checking is
             if Got in Ty.Untyped_Integer | Ty.Untyped_Float
               or else Needs_Value_Context (Of_Tree, First, Got)
             then
+               Checking_Routine_Body := Previous_Body_Check;
                return Got;
             end if;
 
@@ -26752,13 +26869,20 @@ package body Landin.Stages.Checking is
          end if;
 
          if not Decidable (Expected.Kind) then
+            Checking_Routine_Body := Previous_Body_Check;
             return Ty.Ill_Typed;
          end if;
 
+         Checking_Routine_Body := Previous_Body_Check;
          Check_Contextual_Value
            (Of_Tree, Node, Expected, Syn.Origin (Of_Tree, Node),
-            "the first value-producing edge");
+            "the first value-producing edge",
+            Replay_Control => Checking_Routine_Body);
          return Expected.Kind;
+      exception
+         when others =>
+            Checking_Routine_Body := Previous_Body_Check;
+            raise;
       end Synthesise_Control;
 
       ------------------------------------------------------------
@@ -31197,6 +31321,7 @@ package body Landin.Stages.Checking is
          Signature : constant Landin.Checking.Signature_Id :=
            Landin.Checking.Signature_Of (Types.all, Of_Tree, Node);
          Expected : Value_Context := (Kind => Gives, others => <>);
+         Previous_Body_Check : constant Boolean := Checking_Routine_Body;
          Result_Site : constant Landin.Provenance.Origin :=
            (if Syn.Returns_Of (Of_Tree, Node) = Syn.No_Node
             then Syn.Origin (Of_Tree, Node)
@@ -31263,6 +31388,7 @@ package body Landin.Stages.Checking is
                Declaration_At (Syn.Source_Of (Of_Tree), Result));
          end if;
 
+         Checking_Routine_Body := True;
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
             if Gives = Ty.No_Value then
                Check_Block (Of_Tree, Runs, Gives);
@@ -31307,7 +31433,11 @@ package body Landin.Stages.Checking is
            (Context, Of_Tree, Node, Runs, Found, Item.Probe);
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
-
+         Checking_Routine_Body := Previous_Body_Check;
+      exception
+         when others =>
+            Checking_Routine_Body := Previous_Body_Check;
+            raise;
       end Check_Routine_Body;
 
       --  Check before lowering: neutral pointer carriers erase referent,

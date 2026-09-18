@@ -354,3 +354,10 @@ R6.80 adds `devices.py` after the inherited Cortex lanes. Its checked-in vendor
 inputs, regeneration checks, source refusals, compiler-owned firmware and
 independent C/assembly peripheral control are mandatory; recursive artifact
 hashes bind `artifacts/cortex-m/devices` to the same accepted archive.
+
+R6.90 appends `driver.py` to the same mandatory embedded runner and recursive
+export. Its complete application, API client and separate layout control
+retain compiler-owned firmware, independent assertions and every inherited
+lane. Matching routine debugger-risk policies cover the checker/context and
+BSS ELF load-address repairs. See the [derivation](../../compiler/tests/driver/DERIVATION.md);
+R6.100 still owns full Cortex source-debugging and measured-stack closure.

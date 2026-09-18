@@ -8510,6 +8510,60 @@ package body Landin.Tests.Checking_Suite is
          & "holder: type = struct view: []i32 end holder" & LF;
    begin
       Check_Source
+        ("cached value loop establishes recovery target", Prefix
+         & "f: () -> none =" & LF
+         & "value := loop do" & LF
+         & "mut input: i32 = 1" & LF
+         & "break with (fallible(input) else (problem)" & LF
+         & "_ = problem continue end)" & LF
+         & "end loop" & LF
+         & "observe(value) end f" & LF, Accepted => True);
+      Check_Source
+        ("cached compound retains recovery context", Prefix
+         & "f: () -> none =" & LF
+         & "for index in 0..<3 do" & LF
+         & "mut input: i32 = index" & LF
+         & "value := 1 + (fallible(input) else (problem)" & LF
+         & "_ = problem continue end)" & LF
+         & "observe(value)" & LF
+         & "end for end f" & LF, Accepted => True);
+      Check_Source
+        ("cached compound checks recovery body", Prefix
+         & "f: () -> none =" & LF
+         & "loop do" & LF
+         & "mut input: i32 = 0" & LF
+         & "value := 1 + (fallible(input) else (problem)" & LF
+         & "_ = problem observe(true) break end)" & LF
+         & "observe(value)" & LF
+         & "end loop end f" & LF, Accepted => False, Code => "L0301");
+      Check_Source
+        ("inferred recovery continues enclosing loop", Prefix
+         & "f: () -> none =" & LF
+         & "for index in 0..<3 do" & LF
+         & "mut input: i32 = index" & LF
+         & "value := fallible(input) else (problem)" & LF
+         & "_ = problem continue end" & LF
+         & "observe(value)" & LF
+         & "end for end f" & LF, Accepted => True);
+      Check_Source
+        ("inferred recovery breaks enclosing loop", Prefix
+         & "f: () -> none =" & LF
+         & "loop do" & LF
+         & "mut input: i32 = 0" & LF
+         & "value := fallible(input) else (problem)" & LF
+         & "_ = problem break end" & LF
+         & "observe(value)" & LF
+         & "end loop end f" & LF, Accepted => True);
+      Check_Source
+        ("deferred recovery still checks its body", Prefix
+         & "f: () -> none =" & LF
+         & "loop do" & LF
+         & "mut input: i32 = 0" & LF
+         & "value := fallible(input) else (problem)" & LF
+         & "_ = problem observe(true) break end" & LF
+         & "observe(value)" & LF
+         & "end loop end f" & LF, Accepted => False, Code => "L0301");
+      Check_Source
         ("labelled read", Prefix
          & "f: () -> (r: i32) =" & LF
          & "later: i32" & LF

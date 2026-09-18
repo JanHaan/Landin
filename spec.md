@@ -14009,8 +14009,10 @@ count observation supplies the device premise only for that model. A circular
 counter is not a stable snapshot: the caller must ensure the consumed interval
 cannot be overwritten during the copy, and must prevent/latch overrun rather
 than confusing a full wrap with empty. A concurrently overwritten byte has the
-external-write/race limit above. R6.90 must make this protocol and its failure
-controls concrete in the complete driver. Ordinary slices are retained.
+external-write/race limit above. R6.90 instantiates these obligations in the complete derived driver; its
+explicit synthetic drain/count contract and failure evidence are indexed in
+`compiler/tests/driver/DERIVATION.md`. That device protocol is not an additional
+language guarantee. Ordinary slices are retained.
 
 For noncoherent cached RAM, receive handoff must remove dirty CPU copies
 (clean as needed to preserve unrelated data, then invalidate), complete that

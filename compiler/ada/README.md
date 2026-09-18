@@ -1075,3 +1075,13 @@ source line; this does not enable Cortex source debugging.
 R6.80's [device modules](../../devices/README.md) use the existing frontend,
 packed/volatile IR and Cortex firmware path without compiler changes. Vendor
 metadata is off target; the compiler does not parse SVD or run generators.
+
+R6.90's complete [prototype-1 derivation](../tests/driver/DERIVATION.md) compiles
+through `--target=cortex-m0 --firmware-entry=start --emit=exe`. Its external
+CPU/peripheral runner is mandatory in native Linux acceptance. Initializer
+inference settles recovery bindings while deferring concrete recovery bodies
+to the enclosing routine walk, so inferred bindings can recover with existing
+loop transfers. Firmware BSS has an explicit RAM LMA and no load payload.
+These repairs add no syntax, register metadata semantics, IR operation or
+general C support. Routine debugger-risk policy covers both native backends;
+Cortex Landin source-debugging closure remains R6.100.

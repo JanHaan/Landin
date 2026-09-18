@@ -954,3 +954,11 @@ regeneration; `devices/check_sources.py` records seven exact diagnostic-code
 refusals. The mandatory Cortex device lane compiles all six generated modules
 and executes five consumers at six profiles, with its own retained independent
 oracles. No shared fixture is removed or reclassified by this addition.
+
+The complete Cortex driver lives in [`driver/`](driver/DERIVATION.md), outside
+the hosted fixture runner. Its `fixture.json` supplies the explicitly named
+`firmware/derived-driver` prototype-matrix row; `check.py` checks the source/
+mapping paths and mandatory runner connection. Native Linux documents/tooling
+acceptance runs its QEMU and Renode evidence through compiler-owned firmware.
+The shared `runtime/r690-recovery-loop-context` fixture separately checks
+inferred recovery break/continue and cleanup on both hosted targets and Cortex.

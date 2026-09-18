@@ -248,8 +248,11 @@ R6.70 adds ordinary CPU/panic modules and nonreturning signatures over the
 existing caller-backed memory/collections. Its exact-revision dual-native
 binding owns closure. R6.80 adds pinned RP2040 device fixtures, deterministic
 regeneration and generated-firmware consumers; its exact-revision dual-native
-binding owns closure. R6.90 is next dependency-ready. Source
-debugging and complete measured firmware evidence remain R6.100. R6.80
+binding owns closure. R6.90 implements the complete derived driver/application,
+with explicit synthetic device adaptation, DMA consumption/overrun/recovery,
+compiler-owned boot and independent peripheral evidence. Its exact-revision
+dual-native binding owns closure. R6.100 is next dependency-ready, retaining
+source debugging and complete measured firmware/stack evidence. R6.80
 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

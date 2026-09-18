@@ -1,0 +1,10 @@
+{
+  "constructs": "0730, 0740, 0760, 0780, 0830, 0850, 0940, 1030, 1100, 1620, 1630, 1640, 1990",
+  "targets": "cortex-m",
+  "source": "compiler/tests/driver/app/main.ldn",
+  "protocol": "compiler/tests/driver/protocol/main.ldn",
+  "driver": "compiler/tests/driver/drivers/uart/uart.ldn",
+  "mapping": "compiler/tests/driver/DERIVATION.md",
+  "runner": "environments/cortex-m/driver.py",
+  "layout": "compiler/tests/driver/layout/main.ldn"
+}

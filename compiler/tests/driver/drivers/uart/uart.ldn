@@ -1,0 +1,174 @@
+-- R6.90 synthetic driver. DERIVATION.md states the device/lifetime premises.
+-- Vendor images/accessors are unchanged; this is not an RP2040 board port.
+import rp2040/io_bank0
+import rp2040/uart0
+import rp2040/dma
+import core/cpu
+
+public busy: atom
+public bad_baud: atom
+public buffer_empty: atom
+public buffer_too_big: atom
+public bad_buffer: atom
+public overrun: atom
+public transfer_error: atom
+public exhausted: atom
+public stop_timeout: atom
+public receive_error: type = overrun | transfer_error | exhausted | stop_timeout
+public gpio_base: usize = 0x40070000
+public uart_base: usize = 0x40070200
+public dma_base: usize = 0x40071000
+
+public rx: type = struct
+    buf: []u8
+    consumed: u32
+    budget: u32
+    config: u32
+    active: bool
+    quiet: bool
+    lost: bool
+    broken: bool
+end rx
+
+-- All software validation precedes the first device write. The caller owns
+-- exclusive device authority and must not copy this descriptor to drive DMA.
+public open: (rate: u32, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+    size := lenof buf
+    fail buffer_empty when size == 0
+    fail buffer_too_big when size > 256
+    fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
+    fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
+    fail bad_buffer when budget < u32(size) or budget > 65535
+    fail bad_baud when rate <> 115200
+    status := dma.ch0_ctrl_trig_read(dma_base)
+    fail busy when (status & 0x61000001) <> 0
+    -- FUNCSEL occupies the low five bits in both generated image types.
+    -- Explicit normal RMW preserves every override/reserved image bit.
+    tx := io_bank0.gpio0_ctrl_read(gpio_base)
+    io_bank0.gpio0_ctrl_write(gpio_base, (tx & 0xffffffe0) | 2)
+    pin := io_bank0.gpio1_ctrl_read(gpio_base)
+    io_bank0.gpio1_ctrl_write(gpio_base, (pin & 0xffffffe0) | 2)
+    uart0.uartibrd_write(uart_base, 26)
+    uart0.uartfbrd_write(uart_base, 3)
+    uart0.uartlcr_h_write(uart_base, 0x70)
+    uart0.uartdmacr_write(uart_base, 1)
+    mut bits: u8 = 0
+    mut extent := size
+    while extent > 1 do
+        extent = extent >> 1
+        bits = bits +% 1
+    end while
+    -- Public raw-image writer: byte, UART0_RX, write increment/ring, CHAIN_TO
+    -- self. Only ring geometry varies; all named encodings are pinned by the
+    -- independent vendor-header oracle and the executable model.
+    image: u32 = 0x000a8420 | (u32(bits) << 6)
+    dma.ch0_ctrl_trig_write(dma_base, image)
+    dma.ch0_read_addr_write(dma_base, u32(uart_base))
+    dma.ch0_write_addr_write(dma_base, u32(usize(addr buf[0])))
+    dma.ch0_trans_count_write(dma_base, budget)
+    dma.intr_write(dma_base, 1)
+    dma.inte0_write(dma_base, 1)
+    cpu.device_barrier()
+    dma.ch0_ctrl_trig_write(dma_base, image | 1)
+    r = (buf: buf, consumed: 0, budget: budget, config: image,
+         active: true, quiet: false, lost: false, broken: false)
+end open
+
+-- Synthetic premise: EN-clear requests drain; BUSY-clear acknowledges all
+-- outstanding writes. RP2040 EN-clear does NOT have this BUSY contract.
+freeze: (inout r: rx) -> none ! stop_timeout =
+    r.quiet = false
+    dma.ch0_ctrl_trig_write(dma_base, r.config)
+    mut attempts: u32 = 0
+    loop do
+        status := dma.ch0_ctrl_trig_read(dma_base)
+        if (status & 0x01000000) == 0 then
+            cpu.device_barrier()
+            r.quiet = true
+            return
+        end if
+        attempts += 1
+        fail stop_timeout when attempts == 8
+    end loop
+end freeze
+
+public stop: (inout r: rx) -> none ! stop_timeout =
+    r.active = false
+    try freeze(r)
+end stop
+
+-- Count never reloads in an epoch. Notification is neither this observation
+-- nor a wrap count. Failure latches until explicit restart after quiescence.
+snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted =
+    status := dma.ch0_ctrl_trig_read(dma_base)
+    remaining := dma.ch0_trans_count_read(dma_base)
+    cpu.device_barrier()
+    if remaining == 0 then r.active = false end if
+    if (status & 0x60000000) <> 0 or remaining > r.budget then
+        r.broken = true
+    end if
+    fail transfer_error when r.broken
+    produced := r.budget -% remaining
+    if produced < r.consumed then r.broken = true end if
+    fail transfer_error when r.broken
+    have := produced -% r.consumed
+    backing := r.buf
+    capacity := lenof backing
+    if have > u32(capacity) then
+        r.lost = true
+        r.consumed = produced
+    end if
+    fail overrun when r.lost
+    fail exhausted when remaining == 0 and have == 0
+    count = usize(have)
+end snapshot
+
+resume: (inout r: rx) -> none =
+    -- Called only after a successful snapshot or a fully repaired restart.
+    if r.active then
+        cpu.device_barrier()
+        dma.ch0_ctrl_trig_write(dma_base, r.config | 1)
+        r.quiet = false
+    end if
+end resume
+
+public available: (inout r: rx) -> (count: usize) ! receive_error =
+    try freeze(r)
+    count = try snapshot(r)
+    resume(r)
+end available
+
+public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
+    try freeze(r)
+    have := try snapshot(r)
+    count = have
+    if lenof out_buf < count then count = lenof out_buf end if
+    backing := r.buf
+    capacity := lenof backing
+    -- snapshot bounds count by both initialized extents; consumed <= 65535,
+    -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
+    unchecked begin
+        for i in 0..<count do
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+        end for
+    end unchecked
+    r.consumed = r.consumed +% u32(count)
+    resume(r)
+end read
+
+-- Discards unread bytes deliberately; may be called after error or exhaustion.
+-- Failure to stop retains the descriptor and its physical lifetime obligation.
+public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
+    try stop(r)
+    status := dma.ch0_ctrl_trig_read(dma_base)
+    fail transfer_error when (status & 0x60000000) <> 0
+    dma.ch0_write_addr_write(dma_base, u32(usize(addr r.buf[0])))
+    dma.ch0_trans_count_write(dma_base, r.budget)
+    dma.intr_write(dma_base, 1)
+    r.consumed = 0
+    r.lost = false
+    r.broken = false
+    r.active = true
+    resume(r)
+end restart

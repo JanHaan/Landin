@@ -221,6 +221,8 @@ class Run:
         freestanding_execute(self, refine)
         from devices import execute_suite as devices_execute
         devices_execute(self, refine)
+        from driver import execute_suite as driver_execute
+        driver_execute(self, refine)
         require(before == {area: inventory(self.tools / area) for area in before}, 'tools changed during probes')
 
 

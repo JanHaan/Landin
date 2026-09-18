@@ -374,3 +374,9 @@ R6.80's generated-device lane is also mandatory in the native Linux documents
 job, after the inherited R6.10–R6.70 probes. It exports separate `devices`
 artifacts; vendor-input and regeneration checks run offline on both hosts.
 The selected vendor is provenance, not a replacement QEMU board.
+
+R6.90 appends the complete [derived driver](../compiler/tests/driver/DERIVATION.md)
+to mandatory native Linux embedded execution. Its QEMU boot, separate Renode
+protocol model and independent layout control retain their distinct evidence
+roles. Native GDB/LLDB routine risk coverage validates the checking and linker
+repairs; full Cortex source debugging and measured stack closure remain R6.100.

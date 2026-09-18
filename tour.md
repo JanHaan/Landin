@@ -1679,6 +1679,13 @@ aliasing assumption. Hardware routinely needs several typed
 windows on one address — a byte view and a word view of the
 same register — and that is legal, deliberately.
 
+The complete prototype-1 [driver derivation](compiler/tests/driver/DERIVATION.md)
+uses these ordinary slices with an explicit synthetic device completion
+contract. Its memory barrier follows acknowledged drain; neither an interrupt
+nor interrupt masking grants permission to reuse active DMA storage.
+ROADMAP.md R6.90 owns that executable library protocol, not a new language
+lifetime guarantee.
+
 ### [0860] What this does not catch
 
 What this does not catch, said plainly: two different
