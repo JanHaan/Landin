@@ -8510,6 +8510,19 @@ package body Landin.Tests.Checking_Suite is
          & "holder: type = struct view: []i32 end holder" & LF;
    begin
       Check_Source
+        ("cached computed callee checks nested recovery", Prefix
+         & "handler: type = (v: i32) -> (r: i32) ! unavailable" & LF
+         & "identity: (v: i32) -> (r: i32) ! unavailable = v" & LF
+         & "end identity" & LF
+         & "handlers: [1]handler = [identity]" & LF
+         & "pick: () -> (r: usize) ! unavailable =" & LF
+         & "fail unavailable end pick" & LF
+         & "f: () -> none =" & LF
+         & "value := handlers[pick() else (problem)" & LF
+         & "_ = problem observe(true) 0 end](1)" & LF
+         & "else 0" & LF
+         & "observe(value) end f" & LF, Accepted => False, Code => "L0301");
+      Check_Source
         ("cached value loop establishes recovery target", Prefix
          & "f: () -> none =" & LF
          & "value := loop do" & LF
