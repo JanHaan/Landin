@@ -380,6 +380,7 @@ def capacity_boundaries(run, elf, s):
 
 
 def execute_suite(parent,refine,profiles=PROFILES,cases=None):
+    refine=refine.resolve()
     root=parent.out/'driver';root.mkdir()
     controls=[]
     compiler_hash=sha(refine)
