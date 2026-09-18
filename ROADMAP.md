@@ -2739,6 +2739,7 @@ finding labels, so moving prose cannot stale a hand-copied location.
 
 | Fixture | Prototype | Findings | Pressure |
 | --- | --- | --- | --- |
+| `firmware/derived-driver` | P1 | X1, X2, X3, X4, X5, X6, X7, X8, X9 | complete driver/application and explicit declaration/finding adaptations in `compiler/tests/driver/DERIVATION.md`; compiler-owned QEMU reset and independent synthetic Renode protocol execution |
 | `negative/r630-frame-dma` | P1 | X6, X8 | tracked frame buffer cannot escape through a DMA descriptor |
 | `abi/r630-dma-slice` | P1 | X6, X8 | escaping ordinary slice, serialized external byte writes, completion boundary and ordinary reads/copy |
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
@@ -11291,7 +11292,7 @@ and all successor dispositions above remain open.
 
 ### R6.90 — Complete and run the derived driver program
 
-Status: planned
+Status: complete
 Depends on: R6.60, R6.70, R6.80
 
 Turn prototype 1 into a complete `.ldn` program with derivation mapping. Run
@@ -11300,6 +11301,190 @@ peripheral lane.
 
 Exit evidence: register images, volatile access, interrupts, vector placement,
 DMA handoff/visibility and failure behavior execute with recorded outcomes.
+
+Implementation, decisions and derivation:
+
+The intake was clean on `r680-device-fixtures` at accepted R6.80
+`e0502e41c10a2ea771d56f669aa31efbd44ee3f8`. Canonical main, annotated approval
+`df698192b1577877644f85a44a9392405c648727`, and the complete 22-ref GitHub
+branch/tag namespace matched. Both retained native exports validated: Linux
+`20260918T112100Z-58655a71c34c`, Darwin `20260918T112100Z-1d723fc08925`,
+archive SHA-256 `fb9c67871124640782817b23e72c3f80b69c1206961ffdebaf3abe275a14e26a`.
+The publication guard passed; Pages 1890933, mirror 1890934 and lock-pruning
+refresh 1890937 succeeded. Both domains' device guides matched fresh verified
+rendering byte for byte. Implementation uses `r690-derived-driver`.
+
+The complete programme is `compiler/tests/driver/app/main.ldn` plus
+`drivers/uart/uart.ldn`, existing generated device modules and `core/cpu`.
+The subordinate [derivation index](compiler/tests/driver/DERIVATION.md) maps
+all prototype modules/declarations, operations, omissions and X1-X9 findings
+to source, executable controls, explicit adaptations or the successor owners
+below. `protocol/main.ldn` calls the same public driver; `layout/main.ldn` is a
+separate target-fact control. Neither the sketch, this index nor fixture
+metadata becomes a second work authority. Historical findings and rejected
+syntax remain unchanged. The prototype matrix explicitly names
+`firmware/derived-driver`; mechanical checks require its source/mapping and
+mandatory runner connection, without admitting it to the hosted harness.
+
+| Decision | Selected behavior, alternative and rationale |
+|---|---|
+| R690-1: executable device | Use the unchanged real RP2040 fixture images/accessors at explicit synthetic bases, with a separately named Renode model. QEMU retains the microbit CPU/startup profile. The prototype's conceptual GPIO/USART2/stream-5 map is not silently relabeled RP2040. General vendor-board integration or a faithful RP2040 emulator is not required to make this complete synthetic programme executable. |
+| R690-2: bounded configuration | Fixed GPIO0/1 UART function 2, UART0 RX, DMA channel 0, 115200 baud at the declared synthetic 48 MHz clock; divisors 26/3, eight data bits and FIFO image. Other rates return `bad_baud`. The selected model supplies clock/enabled UART/TX readiness and explicit alarm stimuli; missing conceptual electrical-speed/pad/clock registers are not invented. A general baud/configuration library adds no needed gate evidence and exceeded this programme's constrained image budget. |
+| R690-3: public admission | Caller-owned initialized mutable byte slice, power-of-two capacity 2..256, absolute address aligned to capacity, finite budget capacity..65535. Empty, oversized, bad geometry/budget, unsupported baud and unavailable/faulted channel fail before any device write or descriptor publication. Exact errors are `buffer_empty`, `buffer_too_big`, `bad_buffer`, `bad_baud`, `busy`, in that check order. The first, second, fourth and fifth retain prototype names; the additional geometry outcome makes the adaptation explicit. |
+| R690-4: production and consumption | Device count decreases monotonically and never reloads within an epoch; addresses alone wrap. Production is budget minus remaining, consumption is absolute, and unread difference distinguishes empty from exact-full and multiple wraps. Modulo tail plus interrupt counting was rejected because wrapped counters/coalesced hints cannot recover lost progress. No interrupt-service bound is needed to detect loss within the finite epoch; avoiding loss requires service before unread progress exceeds capacity. Exhaustion stops new requests rather than erasing evidence by count reload. |
+| R690-5: ordinary storage visibility | EN-clear requests drain; synthetic BUSY-clear acknowledges all admitted writes and prevents further access until re-enable. At most eight status observations are attempted, then `stop_timeout` retains the descriptor/lifetime obligation. A device/compiler boundary follows acknowledgment, before ordinary reads. Interrupt notification, device completion, compiler knowledge and hardware ordering remain different facts. Masking interrupts cannot stop DMA. |
+| R690-6: read contract | `available(inout r)` takes a quiescent non-consuming snapshot; `read(inout r, out_buf)` copies the shorter initialized interval in stream order, supports zero/short destinations and wrap, advances consumption exactly, then resumes only an active non-exhausted epoch. Destination validity/disjointness and exclusive descriptor/device authority remain explicit manual obligations. A stopped descriptor may drain unread data without restarting. The narrow unchecked copy uses proved capacity/index bounds; checked register/encoding/alignment operations remain checked. |
+| R690-7: loss and recovery | Unread progress above capacity latches `overrun`, discards all unread data logically and returns none of the overwritten interval. Device error/impossible count/progress latches `transfer_error`. Empty after budget completion reports `exhausted`. Restart first proves quiescence, refuses still-faulted hardware, rewrites destination/count, acknowledges pending hints and deliberately discards unread data. Synthetic `Repair` is explicit external maintenance; no ambiguous vendor error-clear accessor is invented. Failed stop never permits storage reuse/release. |
+| R690-8: complete application | Static 256-byte DMA ring and 64-byte scratch; GPIO indicator commands `1`/`0`, UART echo, timer polling for partial transfers, immediate draining of full scratch chunks, IRQ0/IRQ1 vector placement and masked predicate/WFI. Notification is a latch, not a producer count. Overrun/exhaustion recover by restart; unrepaired device errors and stop timeout enter observable nonreturning halt while retaining storage. Foreseeable driver conditions use declared atoms, not panic. |
+| R690-9: language/library boundary | Derive into enabled source with existing packed-image/raw-value/register and ordinary CPU interfaces. No new syntax, metadata semantics, scheduler, ownership system or allocator. `rx from buf`, escaping admission and precise refusals preserve prototype 3's origin/initialized-storage obligations. Manual stop, aliasing, pointer validity and external-writer obligations remain non-guarantees. D202/D227/D228/D231/D232 and all ordinary/C/optimal layouts remain unchanged. |
+| R690-10: checking repair | Initializer inference exposed a recovery `continue` before its enclosing loop existed. Settle recovery bindings during inference, but check bodies in their routine/view context. Replay deferred descendants of cached compound expressions and re-establish cached value-control contexts; anonymous bodies keep their own walks. Keep existing inferred-error fixed-point processing. Tests require exact rejection of wrong recovery arguments and execution of break/continue/value-loop cleanup edges. Merely skipping the premature check was rejected: a broader lowering case and a new compound negative control caught missing recovery metadata/diagnostics in the first repair. |
+| R690-11: BSS load address | GNU ld inherited the preceding RAM-code VMA/LMA delta for NOLOAD BSS. Near full flash, Renode attempted zero-fill beyond the mapped flash despite no BSS file payload. Give BSS an explicit RAM LMA with `AT(ADDR(.bss))`; preserve compiler reset clearing, RAM-code/data flash load images and the original map. Independent ELF headers and poisoned boot check the correction. Enlarging the board or ignoring the loader warning was rejected. |
+
+The existing fixture contract remains six RP2040 modules/30 registers, with
+unchanged retained SVD/header hashes, terms, metadata corrections, access
+refusals and deterministic offline regeneration. Physical word transaction
+width does not follow field coverage; DMA payload writes are bytes. GPIO
+normal RMW preserves unselected override bits; command writes do not read.
+Existing RO/WO, destructive-read, one-clears, reserved-bit, raw-image,
+encoded-membership and alignment controls stay mandatory. The application
+requires no additional device declaration or unavailable generator tooling.
+
+Vendor facts use the retained RP2040 datasheet build 2025-02-20,
+`3184e62-clean`, and R6.80's exact SVD/header inputs. Official CMSIS-SVD register
+documentation and GNU output-section LMA/NOLOAD documentation were consulted
+on 2026-09-18; exact sources and ARMv6-M DDI 0419E/retained ABI/ELF/tool contracts
+are linked in the derivation/environment guides. RP2040 EN-clear pauses while
+BUSY stays high; its trigger/reload and E12/E13 restrictions are not the
+synthetic drain rule. Address advancement, barriers and abort interrupts are
+not substituted for vendor completion. The model is explicit about finite
+requests rejected while stopped/exhausted/faulted and makes no physical UART
+FIFO, serial-loss, electrical, timing or cache-maintenance guarantee.
+
+Execution and independent oracles:
+
+`environments/cortex-m/driver.py` is appended to the mandatory R6.10–R6.80
+runner/evidence export. Every image uses
+`--target=cortex-m0 --firmware-entry=start --emit=exe`, with compiler-generated
+reset, vectors, linker script, data/RAM-code copies, BSS and retained flash
+images. No backend-start.S/backend-memory.ld or C startup is substituted.
+The separate old harnesses, hosted-to-Renode transport and independent
+C/assembly controls retain their original evidence identities.
+
+The complete development matrix is retained at
+`/home/landin/r690-evidence/complete-9` and its hash-verified local copy
+`.scratch/r690/complete-9`. Six profiles (`none/off`, `size/off`, `size/auto`,
+`speed/auto`, `none/all`, `speed/all`) execute 18 QEMU sessions, 96 Renode runs
+and 90 deterministic artifact comparisons. Twelve QEMU sessions each execute
+two poisoned resets of the app/API client; six execute independent target
+layout observations. Per profile, Renode executes the complete application,
+one 33-command public-protocol sequence, twelve configuration refusals and
+two successful minimum/maximum-capacity controls. Three additional compiler
+source refusals require exact `L0314`, `L0301`, `L0316` for frame escape,
+readonly backing and missing return derivation respectively.
+
+The C# model reads neither generated declarations nor generator metadata.
+Literal expectations independently assert GPIO override preservation, UART
+divisors/control/echo, timer deadline/acknowledgment, byte DMA stores, word MMIO
+counts/order/traces and application state. The protocol executes no-data,
+partial, short/zero destination, exact-full, wrap and repeated reads;
+half/completion/error hints; one coalesced delivery after more than two wraps
+with interrupts masked; sticky overrun; explicit discard/restart; error and
+external repair; finite-budget exhaustion; in-flight completion during drain;
+eight-poll timeout, later stop acknowledgment and CPU storage reuse. Application
+execution itself enters overrun recovery and the declared timeout halt.
+Every unexpected warning remains fatal; exited Renode lock cleanup is retained.
+
+The separate layout programme requires literal results: usize 4; receiver
+size/alignment 24/4; two-receiver extent 48; consumed/budget/config/active/quiet/
+lost/broken offsets 8/12/16/20/21/22/23, computed from actual target addresses.
+Ordinary, C and optimal layouts are unchanged. QEMU asserts vector identities,
+reserved zero slots, immutable flash, initialized/BSS bytes, copied RAM code,
+initial SP/r9/r11 and the ordinary caller record. Inherited generated and
+independent controls still own veneers, r12 private failure status, all ordinary
+leaf frames, callee-save/call alignment, EXC_RETURN/nesting/naked obligations,
+Thumb/v6-M/nofp helper compatibility, volatile widths and encoded-domain sharing.
+
+| Image/control | Flash load extent, bytes | Static RAM extent, bytes | Private helper members |
+|---|---|---|---|
+| Complete application | 29,744–32,704 | 1,556, including RAM code and alignment | none |
+| Public API protocol client | 29,080–31,360 | 1,060 | none |
+| Separate layout control | 1,988–2,180 | 52 | `_muldi3.o` |
+
+Actual ELF LOAD headers, maps and symbol closure establish these extents.
+The largest unoptimized application has only 64 flash bytes spare; this is
+bounded viability for this configuration, not expansion headroom or a release
+budget. All three retain the 4 KiB stack reservation. Application stack paint
+observed 888 bytes written with the low guard intact, including the tested
+recovery/timeout paths; reported individual frames are at most 352 bytes.
+Neither quantity is a worst-case stack proof. No board limit was enlarged.
+All maps permit only the generated object, pinned
+`thumb/v6-m/nofp/libgcc.a` and applicable linker stubs, with no undefined symbols
+or hosted startup/libc/core/heap/I/O/scheduler closure. Generated source data
+and reached symbols are inventoried. Source identities/provenance/build reports
+remain off target except explicit programme data; no general C surface opens.
+
+Focused Mac compiler-host checking passed 112 cases/3454 checks; lowering
+passed 134 cases/2991 checks; Cortex ABI passed nine cases/487 checks. The
+new shared `runtime/r690-recovery-loop-context` executes compound recovery,
+plain break and value-loop continue with literal cleanup/result expectations:
+native Linux, native Darwin and all six Cortex profiles pass. The final checker
+also reruns the driver with unchanged literal oracles before the closure
+candidate. Full document checks, generated matrices and verified rendering
+precede exact-revision acceptance. Development checks do not approve a revision.
+
+The accepted R6.80 artifacts were inspected before relying on inherited
+counts: 535 shared runtime/ABI fixtures, 2,012 QEMU executions across 435
+programs, 50 source refusals, 33 C restrictions, 72 capacity verdicts across
+17 oversized programs and 72 generated backend controls. R6.60 retains
+37 QEMU sessions/24 Renode runs/270 comparisons; R6.70 retains 198/six/336;
+R6.80 retains six QEMU sessions, 24 generated Renode runs plus one independent
+C/assembly control, seven source refusals and 168 comparisons. R6.90 adds
+one shared six-profile regression: 536 shared fixtures and 2,018 corpus QEMU
+executions across 436 programmes. No inherited source/target/image verdict,
+independent oracle, probe lane or comparison is removed. The BSS ELF load
+addresses change by the explicit correction above; fresh comparisons and
+inherited boot execution still apply to each containing revision.
+
+Development failures remain failures. Early source variants exceeded flash;
+the bounded configuration and proved arithmetic/copy bounds made the actual
+program fit. A layout-observation array added to the API client exceeded its
+image, so layout is an explicit separate control, never hidden in its budget.
+An initial QEMU assertion incorrectly required a valid unassigned external IRQ
+slot to be zero; the corrected oracle distinguishes the compiler's unhandled
+entry from architectural reserved slots. One early Renode host-thread warning
+failed its run; it was not whitelisted. Complete subsequent runs passed the
+unchanged warning guard. Broader checking/lowering caught the incomplete first
+recovery repair; their previously failing controls now pass. Logs and failed
+remote evidence remain under `.scratch/r690` and `/home/landin/r690-evidence`.
+
+R5.20's target/resource/runtime/evidence/tooling dispositions and R5.51's
+retained-debt ledger were audited, especially R551-31/33. This closes only the
+complete prototype-1 derivation/driver/protocol part of R551-31. R6.100 retains
+Landin source debugging, complete measured firmware/stack evidence and the
+freestanding milestone. General SVD generation, package acquisition, immutable
+publication/concurrent consumers and sandboxed orchestration stay R551-33;
+the broader standard library stays R551-34. Scale/self-hosting, competitive
+optimization, physical-board integration and release-readiness limitations keep
+their existing owners. No scheduler, ownership or ecosystem programme and no
+release/version change is introduced. Nix CI remains deferred.
+
+Exact-revision completion and delivery binding:
+
+Compatible `policy.py routine --debugger` scope was explicitly reselected;
+both tracked native policies already contained it. Recovery/control-flow and
+firmware load-address repairs require release GDB/LLDB risk coverage. This
+slice does not claim milestone scope. Both native policies must accept the
+identical containing committed archive, preserving every inherited lane and
+new `artifacts/cortex-m/driver` evidence. Recursive exports bind source/model/
+assertion/tool/compiler identities, startup/linker inputs, ELF/map/assembly/
+disassembly/relocations, runtime closure, timeouts, comparisons and results.
+
+Verified native exports and the annotated dual-native `ci/accepted/FULL_COMMIT`
+bind completion to that exact archive. Atomic canonical promotion, identical
+remote commit and approval object, complete matching GitHub mirror and guarded
+Pages publication are required. A later bookkeeping revision cannot supply
+that binding. With this binding R6.100 is next dependency-ready; its milestone
+and all successor limitations above remain open.
 
 ### R6.100 — Close freestanding evidence
 

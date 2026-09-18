@@ -1,0 +1,39 @@
+unavailable: atom
+select: (value: i32) -> (result: i32) ! unavailable =
+    fail unavailable when value == 2
+    result = value
+end select
+cleanup: (inout count: i32) -> none =
+    inc count
+end cleanup
+public main: () -> (code: i32) =
+    mut observed: i32 = 0
+    mut cleanups: i32 = 0
+    for index in 0..<4 do
+        defer cleanup(cleanups)
+        value := 1 + (select(i32(index)) else (problem)
+            _ = problem
+            continue
+        end)
+        observed += value
+    end for
+    loop do
+        defer cleanup(cleanups)
+        value := select(2) else (problem)
+            _ = problem
+            break
+        end
+        observed += value
+    end loop
+    mut attempts: i32 = 1
+    final := loop do
+        defer cleanup(cleanups)
+        inc attempts
+        break with (select(attempts) else (problem)
+            _ = problem
+            continue
+        end)
+    end loop
+    observed += final
+    code = if observed == 10 and cleanups == 7 then 42 else 1 end if
+end main

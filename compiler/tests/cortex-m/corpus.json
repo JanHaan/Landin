@@ -1602,6 +1602,9 @@
     "runtime/r640-volatile-hole": {
       "mode": "execute"
     },
+    "runtime/r690-recovery-loop-context": {
+      "mode": "execute"
+    },
     "runtime/range-subtype-checks": {
       "mode": "execute"
     },

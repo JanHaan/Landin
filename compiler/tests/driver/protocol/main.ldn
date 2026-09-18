@@ -1,0 +1,98 @@
+-- Executable client of the actual public driver. Host commands and assertions
+-- are test transport only; they never compute producer/consumer state.
+import drivers/uart
+import rp2040/dma
+import core/cpu
+
+link(align: 256)
+mut storage: [512]u8 = zeroed
+mut destination: [256]u8 = zeroed
+mut capacity: u32 = 8
+mut offset: u32 = 0
+mut rate: u32 = 115200
+mut budget: u32 = 32
+mut limit: u32 = 256
+mut command: u32 = 0
+mut stage: u32 = 0
+mut result: u32 = 0
+mut outcome: u32 = 0
+mut events: u32 = 0
+mut saved_mask: u32 = 0
+mut quiet: u32 = 0
+mut consumed: u32 = 0
+
+link(vector: 16)
+extern(interrupt) irq: () -> none =
+    pending := dma.intr_read(uart.dma_base)
+    events += 1
+    dma.intr_write(uart.dma_base, pending & 1)
+    cpu.completion_barrier()
+end irq
+
+record: (problem: uart.receive_error) -> none =
+    match problem
+        uart.overrun: outcome = 6
+        uart.transfer_error: outcome = 7
+        uart.exhausted: outcome = 8
+        uart.stop_timeout: outcome = 9
+    end match
+end record
+
+start: () -> noreturn =
+    stage = 1
+    while command == 0 do cpu.compiler_barrier() end while
+    mut receiver := uart.open(rate, budget, storage[usize(offset)..<usize(offset + capacity)]) else (problem)
+        match problem
+            uart.busy: outcome = 1
+            uart.bad_baud: outcome = 2
+            uart.buffer_empty: outcome = 3
+            uart.buffer_too_big: outcome = 4
+            uart.bad_buffer: outcome = 5
+        end match
+        stage = 99
+        loop do cpu.wait_for_interrupt() end loop
+    end
+    enable: ptr mut u32 = ptr(0xe000e100)
+    compiler.volatile_store(enable, 1)
+    command = 0
+    stage = 2
+    loop do
+        while command == 0 do cpu.compiler_barrier() end while
+        operation := command
+        outcome = 0
+        result = 0
+        if operation == 1 then
+            result = u32(uart.available(receiver) else (problem)
+                record(problem)
+                0
+            end)
+        elsif operation == 2 then
+            result = u32(uart.read(receiver, destination[0..<usize(limit)]) else (problem)
+                record(problem)
+                0
+            end)
+        elsif operation == 3 then
+            (uart.stop(receiver) else (problem)
+                record(problem)
+            end)
+        elsif operation == 4 then
+            (uart.restart(receiver) else (problem)
+                record(problem)
+            end)
+        elsif operation == 5 then
+            saved_mask = cpu.disable_interrupts()
+        elsif operation == 6 then
+            cpu.restore_interrupts(saved_mask)
+        elsif operation == 7 then
+            if receiver.quiet then
+                -- Explicit origin erasure in this lifetime control only.
+                place: ptr mut u8 = ptr(usize(addr storage[0]))
+                place.val = 0xa5
+            end if
+        end if
+        quiet = if receiver.quiet then 1 else 0 end if
+        consumed = receiver.consumed
+        command = 0
+        stage += 1
+    end loop
+end start

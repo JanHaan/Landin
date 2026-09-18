@@ -522,3 +522,19 @@ existing effects. The six optimization/specialization profiles independently
 check identical device traces and D232 failure sites, including discarded
 extraction under `unchecked`. Existing enum-domain-sensitive body sharing,
 array-versus-struct stored-shape and private call-status rules are unchanged.
+
+R6.90's [complete driver](../compiler/tests/driver/DERIVATION.md) likewise adds
+no IR operation. It exposed a checking defect: initializer inference visited
+a concrete call's recovery `continue` before its enclosing loop existed.
+Recovery bindings settle during inference, but body checking waits for the
+routine walk and replays cached calls in their source/routine view. The shared
+`r690-recovery-loop-context` execution fixture checks break/continue cleanup
+edges through lowering, verification, optimization and both native backends.
+The full Cortex application executes the same recovered-continue path on
+overrun. Volatile transactions, opaque barriers, frame records, private r12
+status and retained data keep their existing effects and sharing rules.
+
+The firmware linker now explicitly gives NOLOAD BSS its RAM load address,
+avoiding GNU ld's inherited RAM-code VMA/LMA delta. BSS has no file payload;
+reset still clears it. A nearly full driver image executes under the original
+flash limit, with independent ELF load-header and poisoned-reset assertions.

@@ -605,3 +605,44 @@ claim follows. Linker closure, stack paint and optional panic maps are retained
 with the fixed map and runtime contract. The new runner uses unchanged process
 and Renode lock cleanup. R6.90 owns the complete derived driver; R6.100 retains
 source debugging, full measurements and milestone closure.
+
+## Complete derived driver (R6.90)
+
+[`compiler/tests/driver/DERIVATION.md`](../../compiler/tests/driver/DERIVATION.md)
+is the subordinate declaration/finding map and public driver contract.
+`driver.py` runs the complete application and a public-API client through the
+compiler-owned firmware path, across the six inherited profiles. QEMU executes
+two poisoned resets per linked program, checking data/BSS, vectors, immutable
+flash and application RAM-code copying. Renode's separate `driver.repl` and
+`DriverPeripheral.cs` execute GPIO, timer, UART, interrupts and ordinary-slice
+DMA consumption, loss detection, stop and recovery. Existing models and
+C/assembly/hosted transport controls retain their separate identities.
+
+The model uses unchanged R6.80 RP2040 images/accessors at explicit synthetic
+bases. Its finite, non-reloading count and EN-clear/BUSY-clear drain protocol
+are not RP2040 hardware claims. Masked/coalesced notifications cannot hide
+producer progress. More-than-capacity unread data fails with sticky `overrun`
+and explicit discard/restart. Device faults require external maintenance; an
+eight-poll stop timeout preserves the storage lifetime obligation. The
+application executes echo/GPIO commands, periodic partial-data polling, overrun
+recovery and observable terminal policy. Detailed premises and limitations are
+in the derivation; ROADMAP.md alone owns completion and successor disposition.
+
+Evidence under `artifacts/cortex-m/driver` retains compiler/tool identities,
+source roots, assertions, timeouts, QEMU/GDB and Renode scripts, startup/linker
+inputs, ELF/map/assembly/object/disassembly/relocations, private runtime closure
+and fresh-build comparisons. NOLOAD BSS has a RAM LMA, checked independently
+from ELF headers; the original memory map is unchanged. Stack paint is an
+observation, not a worst-case bound. The shared runner still rejects unexpected
+model warnings and removes only the exited Renode process's empty lock.
+
+For focused development on the supported Linux host:
+
+```sh
+python3 environments/cortex-m/driver.py --refine PATH/TO/refine \
+  --output /ABSOLUTE/NEW/EVIDENCE --profile size-auto --case protocol
+```
+
+Use `--all-profiles` for this complete lane. Normal acceptance invokes it
+through `run.py`, preserving every mandatory R6.10–R6.80 lane. Source refusal
+checks are also safe compiler-host feedback via `compiler/tests/driver/check_sources.py`.

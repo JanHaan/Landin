@@ -44,6 +44,12 @@ explicit allocator capabilities and local origin obligations remain unchanged;
 these fixtures acquire no allocator. The ordinary-slice DMA and D227 barrier
 contract are unchanged.
 
+The complete executable derivation is indexed in
+[`compiler/tests/driver/DERIVATION.md`](compiler/tests/driver/DERIVATION.md).
+It maps every module, omission and X1-X9 finding to source, execution or an
+explicit device adaptation. ROADMAP.md R6.90 owns its acceptance; this sketch
+and its historical syntax remain unchanged.
+
 ## chip/vendor/gpio  —  generated from the SVD
 
 How a pin is driven. The encoding is the datasheet's, not ours.

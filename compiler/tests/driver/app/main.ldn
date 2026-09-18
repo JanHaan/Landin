@@ -1,0 +1,94 @@
+-- Complete prototype-1 application: UART echo, GPIO commands and timer wakeups.
+import drivers/uart
+import rp2040/sio
+import rp2040/uart0
+import rp2040/timer
+import rp2040/dma
+import core/cpu
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+mut initialized: u32 = 0x690
+mut cleared: u32 = 0
+link(keep)
+immutable: [2]u32 = [0x690, 256]
+mut notification: u32 = 0
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut app_state: u32 = 0
+
+link(vector: 16)
+extern(interrupt) dma_irq: () -> none =
+    pending := dma.intr_read(uart.dma_base)
+    if (pending & 1) <> 0 then notification = 1 end if
+    dma.intr_write(uart.dma_base, pending & 1)
+    cpu.completion_barrier()
+end dma_irq
+
+link(vector: 17)
+extern(interrupt) timer_irq: () -> none =
+    timer.intr_write(0x40070300, 1)
+    notification = 1
+    cpu.completion_barrier()
+end timer_irq
+
+-- The latch is a wakeup hint, never a producer count. Masked check/WFI avoids
+-- losing a wakeup between the predicate and sleep. DMA itself remains active.
+take_events: () -> none =
+    saved := cpu.disable_interrupts()
+    defer cpu.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+link(section: ".ramtext.handle")
+handle: (bytes: []u8) -> none =
+    for byte in bytes do
+        if byte == 49 then sio.gpio_out_set_write(0x40070100, 1) end if
+        if byte == 48 then sio.gpio_out_clr_write(0x40070100, 1) end if
+        uart0.uartdr_write(uart.uart_base, u32(byte))
+        handled = handled +% 1
+    end for
+end handle
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    loop do cpu.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Observable pre-open state; the independent cold-boot control poisons
+    -- both regions and checks the compiler's reset copies before this runs.
+    app_state = initialized +% cleared
+    mut receiver := uart.open(115200, 65535, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    mut scratch: [64]u8 = zeroed
+    enable: ptr mut u32 = ptr(0xe000e100)
+    compiler.volatile_store(enable, 3)
+    app_state = 2
+    loop do
+        -- Periodic modeled alarm supplies wakeups for partial transfers too.
+        now := timer.timerawl_read(0x40070300)
+        timer.alarm0_write(0x40070300, now +% 1000)
+        take_events()
+        n := uart.read(receiver, scratch[0..<64]) else (error)
+            if error == uart.stop_timeout then
+                -- Retain storage forever: a failed stop proves no release.
+                halt(3)
+            end if
+            recoveries = recoveries +% 1
+            uart.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handle(scratch[0..<n])
+        -- Continue draining a short read without needing another DMA event.
+        if n == 64 then continue end if
+        saved := cpu.disable_interrupts()
+        if notification == 0 then cpu.wait_for_interrupt() end if
+        cpu.restore_interrupts(saved)
+    end loop
+end start

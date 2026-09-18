@@ -1740,6 +1740,7 @@ runtime/r640-reserved-value | linux-x86-64, macos-arm64
 runtime/r640-software-hole | linux-x86-64, macos-arm64
 runtime/r640-static-hole | linux-x86-64, macos-arm64
 runtime/r640-volatile-hole | linux-x86-64, macos-arm64
+runtime/r690-recovery-loop-context | linux-x86-64, macos-arm64
 runtime/range-subtype-checks | linux-x86-64, macos-arm64
 runtime/range-subtype-conversion-traps | linux-x86-64, macos-arm64
 runtime/range-subtype-store-traps | linux-x86-64, macos-arm64

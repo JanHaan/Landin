@@ -965,6 +965,10 @@ GUIDES = [
          nav="generated device fixtures", group="the implementation",
          blurb="Pinned vendor sources, deterministic Landin modules and "
                "independent device-consumer evidence."),
+    dict(key="driver", src="compiler/tests/driver/DERIVATION.md", out="driver.html",
+         nav="the derived driver", group="the implementation",
+         blurb="Prototype 1's executable application, public DMA contract, "
+               "device adaptations and independent execution evidence."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "

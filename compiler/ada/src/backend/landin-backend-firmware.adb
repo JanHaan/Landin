@@ -153,7 +153,7 @@ package body Landin.Backend.Firmware is
       & "    _landin_firmware_ramtext_end = .;" & LF
       & "  } > RAM AT> FLASH" & LF
       & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
-      & "  .bss (NOLOAD) : ALIGN(8) {" & LF
+      & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
       & "    _landin_firmware_bss_start = .;" & LF
       & "    *(.bss .bss.* COMMON)" & LF
       & "    _landin_firmware_bss_end = .;" & LF

@@ -477,3 +477,12 @@ R6.80's [device fixture interface](../devices/README.md) preserves vendor
 constants are data, not a target/board selection. Execution explicitly remaps
 a bounded peripheral subset while retaining the accepted M0 map and ABI;
 RP2040's dual M0+ hardware is not claimed as an executable target.
+
+R6.90's [driver evidence](../compiler/tests/driver/DERIVATION.md) uses the same
+32 KiB flash, 16 KiB RAM and 4 KiB stack reservation. Compiler-owned firmware
+links NOLOAD BSS with an explicit RAM LMA; initialized data and RAM code retain
+flash load images. This prevents a zero-fill ELF segment inheriting a spurious
+flash address. QEMU checks poisoned reset and vector/frame state; a separately
+named Renode model executes the complete program's GPIO/timer/UART/DMA path.
+Its finite count and drain acknowledgment are synthetic premises, not RP2040
+or microbit peripheral behavior. No target layout, MMIO width or ABI changes.

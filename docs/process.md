@@ -248,3 +248,12 @@ routine acceptance **with debugger risk**: full release Linux GDB and Darwin
 LLDB, debug compiler-host checks and complete release hosted execution. This
 is not R6.100 milestone/source-debugging closure. Both policies are committed
 before the closure candidate; all embedded artifacts bind to that archive.
+
+R6.90 retains routine debugger-risk scope because the complete driver exposed
+a checking control-flow defect and a firmware ELF load-address defect. Both
+native policies must match; the mandatory embedded lane includes every
+inherited probe plus `environments/cortex-m/driver.py`. Its complete program
+and protocol run on native Linux, while Mac development uses `--host`.
+The exact accepted archive binds the source, model premises, literal oracles,
+firmware/linker artifacts and bounded resource observations. None supplies
+R6.100's later source-debugging or complete measured firmware/stack closure.

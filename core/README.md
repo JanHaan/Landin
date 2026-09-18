@@ -75,3 +75,10 @@ R6.80's [generated device fixtures](../devices/README.md) import no core module.
 Their consumers explicitly import `core/cpu` and optionally `core/panic`;
 ordinary DMA slices retain the completion/boundary/lifetime obligations above.
 No allocator, heap, scheduler or hosted initialization enters that closure.
+
+R6.90's [derived driver](../compiler/tests/driver/DERIVATION.md) uses caller-owned
+initialized static byte storage and the ordinary `core/cpu` interface. It
+requires no allocator, hosted initialization or reporting storage. Successful
+device drain precedes ordinary reads and storage reuse; failed stop retains
+the caller's manual lifetime obligation. The allocator, initialized-prefix,
+origin, rollback and broader-library contracts above are unchanged.
