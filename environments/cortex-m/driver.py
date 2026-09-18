@@ -20,7 +20,7 @@ MODULES = ('drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
            'rp2040/sio', 'rp2040/timer', 'core/cpu')
 
 
-def build(run, refine, name, optimize, specialize):
+def build(run, refine, name, optimize, specialize, debug='none'):
     source = run.out / 'source'
     source.mkdir()
     shutil.copytree(SOURCE / name, source / 'app')
@@ -30,7 +30,7 @@ def build(run, refine, name, optimize, specialize):
         shutil.copytree(origin / module, source / module)
     elf = run.out / 'core.elf'
     run.command('compile', [refine, '--root=source', '--target=cortex-m0',
-        '--firmware-entry=start', '--emit=exe',
+        '--firmware-entry=start', '--emit=exe', '--debug='+debug,
         '--toolchain='+str(run.bin / 'arm-none-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize, '--build-report=build.json',
         'source/app', '-o', elf.name], timeout=60)

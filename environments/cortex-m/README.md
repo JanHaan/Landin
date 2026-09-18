@@ -236,7 +236,7 @@ These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
 physical hardware behavior nor a Cortex-M compiler backend. R6.50 must consume
 the plans with native selection and frame code; R6.60 must implement image
-placement/startup; R6.100 must establish Landin debugging and stack evidence.
+placement/startup; R6.100 establishes the bounded Landin debugging and stack evidence below.
 R6.30/R6.40 retain concurrency and invalid packed encodings. Existing resource,
 evidence, scheduling, Nix and general-generator dispositions are unchanged.
 
@@ -397,7 +397,7 @@ not reset or interrupt entries. The map remains 32 KiB flash, 16 KiB RAM and
 recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
 sentinels and a bottom watermark are asserted. The lowest changed watermark
 word is retained as an observation, explicitly not a proved stack bound.
-R6.100 still owns measured stack/firmware and source-debugging acceptance.
+R6.100 records measured stack/firmware and source-debugging acceptance below.
 
 QEMU uses exactly `microbit`, single-threaded TCG and a loopback-only GDB port.
 Each program has a bounded startup wait and a 20-second debugger deadline;
@@ -646,3 +646,67 @@ python3 environments/cortex-m/driver.py --refine PATH/TO/refine \
 Use `--all-profiles` for this complete lane. Normal acceptance invokes it
 through `run.py`, preserving every mandatory R6.10–R6.80 lane. Source refusal
 checks are also safe compiler-host feedback via `compiler/tests/driver/check_sources.py`.
+
+## Freestanding evidence (R6.100)
+
+The mandatory `run.py` entry invokes `evidence.py` after every inherited lane.
+It builds the complete application, protocol client and layout control with
+`--target=cortex-m0 --firmware-entry=start --emit=exe --debug=lines` in all six
+optimization/specialization profiles. The [Cortex debugging contract](../../docs/targets.md#cortex-source-debugging)
+is line/function debugging with ordinary-frame CFI; full variable/type debug
+remains refused. QEMU and Renode run source breakpoints, stepping and call-stack
+assertions, including imported core/device code, copied RAM code, veneers,
+interrupts, generic/specialized allocation, noreturn and panic paths. Separate
+symbol selection refuses stale executable, assembly, table and source inputs.
+
+`scripts/cortex_debug.py` reads ELF32 headers directly. Flash is the highest
+physical end of a nonempty PT_LOAD payload, measured from flash address zero,
+including vectors, gaps, immutable data, private helpers, veneers, initialized
+RAM and RAM-code load images. Static RAM is the highest RAM PT_LOAD memory end
+minus `0x20000000`, including alignment and zero-fill. Segment payload sums and
+section/symbol extents are retained separately, so neither ELF file size nor a
+sum that omits alignment substitutes for the occupied extents. Linker maps
+retain the exact compiler object, pinned private archive members and linker
+stubs. Section flags and file ranges establish that debug metadata is not
+loaded. Debug and nondebug LOAD contents/addresses/zero-fill extents must match.
+
+`resources.py` executes the unchanged complete application through cold boot,
+partial and wrapped reads, coalesced half/full notifications, delayed drain,
+overrun/discard/restart, later successful echo, timeout, open failure, external
+repair-required failure and a complete finite 65535-byte epoch. The epoch
+services each 256-byte batch before the next, checks every cumulative count,
+echoes the final short read and then observes exhaustion/restart. The separate
+protocol client preserves its independent exact transaction and unsafe-source
+oracles; these application scenarios do not replace it.
+
+Stack paint reports the lowest changed byte, not a worst-case bound. A retained
+disassembly-derived hook list observes every emitted SP-changing instruction's
+successor and every function entry, including private helpers and veneers.
+`StackObserver.cs` reads SP, frame/LR and IPSR on the host; it adds no firmware
+instructions, storage or device reads. Its minimum retains the actual ordinary
+frame records and stops following an EXC_RETURN record. Guards, written extent,
+reserved extent, scenario and sample counts are retained. Hardware exception
+stacking is observed at handler entry. The independent `stack-control.S` uses
+external startup, deliberately reserves 256 unwritten bytes, then exercises
+36-byte aligned exception entry, 8 software-save bytes and 32-byte nested
+entry. QEMU register assertions and the Renode observer independently distinguish
+256 reserved bytes from 80 painted bytes. Application measurements do not
+claim every possible interrupt arrival, nesting, future input or stack bound.
+
+The observer selects one-instruction Renode translation blocks and samples
+the retained address set through a block-begin callback. This observes the
+successor of every decoded SP mutation without inserting breakpoint hooks
+into copied RAM code. The fixed Cortex profile and firmware bytes are
+unchanged; these are emulator observation settings, not target cache or
+scheduler interfaces. Every process has a bounded timeout and failure record;
+Renode lock cleanup remains mandatory.
+
+Artifacts under `artifacts/cortex-m/evidence` retain sources, identities,
+commands/assertions/timeouts, ELF/object/assembly/linker/map/disassembly/debug
+records, closure and resource JSON, source-selection failures, measured SP/frame
+snapshots and repeat-emission comparisons. Debug CUs retain their compilation
+directory, so deterministic debug comparisons repeat within that directory;
+relocation does not imply identical source identity. Acceptance binds the
+entire artifact tree to its committed archive. ROADMAP.md alone owns completion,
+actual milestone measurements, limitations and successor handoffs. Physical
+board testing remains supplemental and is not claimed by these emulator lanes.

@@ -513,7 +513,7 @@ The native debugger gates include a D231/D232 program that enters a selected
 handler through erased evidence and a generic nonreturning callback. Source
 breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
-source line; this does not enable Cortex source debugging.
+source line; those native sessions remain separate from Cortex source debugging.
 
 R6.80's [generated device consumers](../devices/README.md) add no IR operation.
 Constant addresses and image arithmetic use existing folding; retained data,
@@ -538,3 +538,14 @@ The firmware linker now explicitly gives NOLOAD BSS its RAM load address,
 avoiding GNU ld's inherited RAM-code VMA/LMA delta. BSS has no file payload;
 reset still clears it. A nearly full driver image executes under the original
 flash limit, with independent ELF load-header and poisoned-reset assertions.
+
+R6.100's Cortex line/function debugger consumes the existing source origins and
+generic-template identities. It introduces no target register, DWARF record or
+debugger artifact into the IR. `Backend.Dwarf.Line_Sections` emits the bounded
+ELF32 function/line contract; `Backend.Cortex_M` describes its own physical CFI,
+including explicit unwind termination for interrupt/naked routines. No Cortex
+variable location plan is advertised or inferred from storage homes. Existing
+optimization, volatile transaction and private call-status effects remain
+unchanged; executable LOAD-image comparisons verify that adding debug metadata
+does not change firmware execution or initialization. See the
+[target debugger contract](targets.md#cortex-source-debugging).

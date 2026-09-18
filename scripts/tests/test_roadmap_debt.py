@@ -29,6 +29,14 @@ class DebtTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate(self.text.replace('| normative | scheduled |', '| normative | successor |'))
 
+    def test_normative_completion_requires_completed_owner(self):
+        line = next(l for l in self.text.splitlines()
+                    if l.startswith('| R551-29 | normative |'))
+        completed = line.replace('| scheduled | R7.20 |', '| implemented | R5.51 |')
+        self.assertEqual(len(validate(self.text.replace(line, completed))), 36)
+        with self.assertRaisesRegex(ValueError, 'complete owner'):
+            validate(self.text.replace(line, line.replace('| scheduled |', '| implemented |')))
+
 
 if __name__ == '__main__':
     unittest.main()

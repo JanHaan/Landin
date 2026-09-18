@@ -9435,7 +9435,7 @@ caching, parallel workload scheduling and Darwin resume remain separate work.
 |---|---|---|
 | R551-29 | Range-subtype composition and references (D188), multi-atom pointer unions (D189), shared-name binding/field/parameter/result forms, u128/i128 and f16 (D190). | Scheduled R7.20 after R7.10. These are pending normative decisions/implementation, not successor debt discharged by R5 parity. Specify all applicable hosted and selected freestanding carriers, conversions, ABI/debug and diagnostics; the inherited x86 cost discussion is not a Darwin implementation plan. Amend spec/tour and derived tests together if the language changes. |
 | R551-30 | Repeated follow-on diagnostics after refused selected imports. | Scheduled R7.40 after its existing dependencies. Retain the original import refusal and suppress only dependent reports; exact diagnostics and an independent valid-use control prove completion. |
-| R551-31 | Packed encodings, concurrency memory model, device/startup/backend/core behavior, the named `noreturn` refusal and complete prototype 1. | Scheduled R6.10-R6.100. R6.10 first selects reproducible CPU/peripheral lanes; R6.50/R6.60 own target reach, map and startup behavior; R6.70 owns `noreturn`. R6.80 owns checked-in device fixtures, not an unbuilt general SVD generator. No Cortex-M implementation enters R5.51. |
+| R551-31 | Packed encodings, concurrency memory model, device/startup/backend/core behavior, the named `noreturn` refusal and complete prototype 1. | Implemented through R6.100's exact milestone binding for the selected profile; broader tooling/library/debugger-presentation limits remain R551-33/34/26. R6.10 first selects reproducible CPU/peripheral lanes; R6.50/R6.60 own target reach, map and startup behavior; R6.70 owns `noreturn`. R6.80 owns checked-in device fixtures, not an unbuilt general SVD generator. No Cortex-M implementation enters R5.51. |
 | R551-32 | Stable separate compilation/interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting (inherited B3). | Scale and self-hosting. Activate at successor planning after the current roadmap endpoint or an explicit scope decision. Preserve the tested seams, whole-program behavior and complete interface identity; no serialized IR freeze or self-hosting implementation now. |
 | R551-33 | Package acquisition/version solving, manifests/locks, naming authority, deterministic roots, generators/SVD tooling and sandboxing (B4/B6/D3/D6). The binding generator's four-file replacement recovers failures but is not atomic for concurrent readers; compiler path preflight does not prevent concurrent filesystem replacement. | Companion tool and ecosystem. Before acquisition/general generation or concurrent build consumers are offered. Specify declared inputs/outputs, immutable publication/consumption, reproducible roots and single-package-version conflicts; preserve existing rollback/refusal evidence. R3.10/R4.30/R6.60/R6.80 keep their thin in-scope responsibilities. No adversarial filesystem guarantee follows from current preflight. |
 | R551-34 | Library facilities beyond the complete prototype slices (B5). | Broader standard library. A concrete program needs an omitted facility. Preserve capability-passed allocation/I/O, hosted/freestanding separation and constrained-target costs; require complete derived consumers and failure oracles. |
@@ -9546,7 +9546,7 @@ activation condition. R7.30 and R7.70 preserve this ledger through phase handoff
 | R551-28 | observation | watch | Language evolution | Valid counterexample or explicit semantic proposal | Present-contract defects return to implementation owner; semantic changes need specification and tests. |
 | R551-29 | normative | scheduled | R7.20 | After R7.10 under existing dependencies | Decisions and implementations for D188/D189/D190 and shared-name forms across applicable targets, with spec/tour and tests. |
 | R551-30 | defect | scheduled | R7.40 | After existing R7.40 dependencies | Original import refusal, suppressed dependent reports and exact diagnostics with independent valid use. |
-| R551-31 | normative | scheduled | R6.10 | R6.10 entry and each R6.20-R6.100 dependency gate | Selected CPU/peripheral lanes, packed/concurrency rules, map/startup/backend/core/noreturn and complete prototype 1 evidence. |
+| R551-31 | normative | implemented | R6.100 | Exact R6 milestone acceptance and delivery binding | R6.10-R6.100 selected CPU/peripheral, packed/concurrency, map/startup/backend/core/noreturn, complete prototype 1 and bounded source/resource evidence; R551-33/34 and R551-26 limits remain separate. |
 | R551-32 | observation | successor | Scale and self-hosting | Successor planning after R7.70 or explicit scope decision | Tested seams and complete interface/package identity; preserve whole-program semantics. |
 | R551-33 | supported-limit | successor | Companion tool and ecosystem | Before acquisition/general generation or concurrent build consumers | Declared inputs/outputs, immutable publication, reproducible roots and single-package-version conflicts. |
 | R551-34 | supported-limit | successor | Broader standard library | Concrete program needs an omitted facility | Capability-passed allocation/I/O, constrained costs, complete consumers and failure oracles. |
@@ -11522,7 +11522,7 @@ and all successor limitations above remain open.
 
 ### R6.100 — Close freestanding evidence
 
-Status: planned
+Status: complete
 Depends on: R6.90
 
 Retain firmware map, flash/RAM size, bounded stack, line/function debug and
@@ -11532,7 +11532,249 @@ supplemental evidence.
 Exit evidence: emulator and peripheral lanes are reproducible in CI; artifacts
 show the implementation remains viable for the selected constrained profile.
 
+Completion is bound to the exact-revision milestone acceptance and delivery
+below. Failed/interrupted candidates and development transcripts cannot supply
+that binding. No physical-board validation is claimed.
+
+Repository and inherited evidence audit:
+
+The starting checkout was clean on `r690-derived-driver`, at accepted R6.90
+`b91cdf5dc3e5c7a2defae6916e597ba759b16b35`. Its annotated approval object
+`c43d238b6ced527d2fd766c0006ac04149723501` binds Linux
+`20260918T150652Z-71c3415684fa` and Darwin
+`20260918T150652Z-79173ff96af7` to archive SHA-256
+`704d51eca379c08753f421d900a8316289b8995de6efa7f4d09baae4db2f1d57`.
+Both exported bundles were recursively verified against their approval fields.
+Canonical and GitHub namespaces matched all 23 logical refs/45 peeled rows;
+no publication lock remained. Guarded Pages 1891124 and mirror 1891125/1891127
+succeeded; driver, device and roadmap pages on both domains matched verified
+rendering. The scratch delivery record was corroboration, not an authority.
+
+The accepted driver artifacts independently confirm the inherited measurements
+below, including 888 painted bytes and a largest reported individual frame of
+352 bytes. The accepted Cortex corpus has 2173 verdict rows: 2018 executions
+across 436 programmes, 50 source refusals, 33 general-C restrictions and 72
+capacity verdicts across 17 oversized programmes. All 2167 R6.80 rows retain
+their verdict/reason/witness/status; the six R6.90 additions are the loop-recovery
+regression. The shared runtime/ABI inventory remains 536 fixtures. The mandatory
+runner retains 72 generated backend controls; R6.60's 37 QEMU sessions,
+24 generated Renode runs and 270 comparisons; R6.70's 198 QEMU sessions,
+six Renode runs and 336 comparisons; R6.80's six QEMU sessions, 24 generated
+Renode runs plus one independent control, seven source refusals and 168
+comparisons; and R6.90's 18 QEMU sessions, 96 Renode runs, three precise unsafe
+source refusals and 90 comparisons. No inherited lane or oracle is removed.
+
+Source-debugging decision and executed contract:
+
+- Cortex enables explicit `--debug=lines`: DWARF 4 file/line tables, source
+  function identities and ordinary-frame CFI. Hosted `full` remains unchanged;
+  Cortex refuses `full`, and hosted targets refuse `lines`. Advertising full
+  locals/types without implementing their locations was rejected. This enabled
+  interface promises no source variables, arguments, type presentation or
+  expression evaluation; GDB's no-locals/no-arguments responses are checked.
+  Optimized-away source lines need not have stopping addresses. Specialized
+  routines retain template names/coordinates and may produce multiple locations.
+- The existing provenance/source-map path and shared DWARF encoder are reused.
+  The Cortex emitter owns target registers, CFA and the previous-r11/incoming-lr
+  record, callee saves and epilogue transitions. No register number, DWARF record
+  or debugger packaging is added to target-neutral IR. Linux GDB and Darwin LLDB
+  retain their separate native contracts and milestone checks.
+- Actual source-file/line breakpoints, function names, stepping, finish and
+  ordinary call stacks execute in the complete application, imported UART,
+  core/cpu and generated device code, generic/specialized core/mem and core/vec,
+  noreturn and panic controls. QEMU checks compiler-generated cold/reset startup
+  with poisoned RAM; Renode checks the application's copied RAM handler, both
+  flash/RAM call directions, timer interrupt and timeout-to-halt path. Separate
+  controls cover RAM interrupt code, ordinary handler calls, nested interrupt
+  entry and naked/PSP code with a generic opaque-assembly call.
+- Interrupt/naked CFI makes incoming LR undefined. Backtraces terminate at that
+  boundary, rather than interpreting EXC_RETURN as an ordinary source caller.
+  Reset/unhandled roots terminate too. Hardware exception frames, alignment and
+  restoration are separate register/memory execution controls; automatic source
+  unwinding across an exception is not promised. Naked bodies have a declaration
+  boundary, not line locations within an assembly string. Veneers have no Landin
+  lines; when stepping skips a callee, an explicit callee breakpoint is required
+  and tested. These are executable presentation limits, not successful-attach
+  evidence relabelled as source debugging.
+- The reference runner verifies ARM ELF32 executable/symbol LOAD identities,
+  their nonallocated 64-byte `.landin_id`, source-map identity, assembly digest
+  and every source digest before attachment. Matching separate symbols execute
+  with a debug-stripped deployment ELF. Seven negative selections per profile
+  reject missing debug, changed load bytes, same-code stale identity, missing
+  executable identity, mismatched map, changed assembly and stale source.
+  This is matching, not forged-input authentication or concurrent-filesystem
+  protection. Source snapshots, optional panic maps and generator provenance
+  remain off target. No debugger display hook reads device registers.
+
+The supported Linux-hosted tools remain GDB multiarch 16.3, Arm GCC
+14.2.1 20241119, binutils 2.44, QEMU 10.0.13 and Renode
+1.17.0+20260907gitf1dd1b4af, with package hashes in the unchanged lock.
+The implementation uses current official ARMv6-M DDI0419E, Arm DWARF32
+2025Q4, DWARF 4, GNU assembler/linker/GDB and Renode documentation cited in
+`docs/targets.md` and the environment guide. Architecture/ABI facts remain
+separate from vendor facts and the explicit synthetic peripheral premises.
+Normal acceptance uses the pinned local installation, without network access.
+
+Firmware accounting and measured limits:
+
+Every application/protocol/layout image is built through
+`--target=cortex-m0 --firmware-entry=start --emit=exe`, with `--debug=lines`
+for source runs. All six optimization/specialization profiles are retained.
+Compiler-owned reset, vectors, linker scripts, initialized data, RAM-code copy,
+zero-fill and immutable flash storage remain unchanged; there is no user-code
+module initialization. QEMU remains the little-endian ARMv6-M/Thumb microbit
+CPU profile, with 32768 flash bytes, 16384 RAM bytes and the top 4096 RAM bytes
+reserved for stack. No Thumb-2, FPU, exclusive accesses, VTOR or cache hardware
+is assumed, and no board was enlarged.
+
+| Programme | Flash load extent, bytes | Static RAM extent, bytes | Private archive members |
+|---|---|---|---|
+| Complete application | 32704 with optimization `none`; 29744 with `size`/`speed` | 1556 | none |
+| Complete protocol client | 31360 with `none`; 29080 with `size`/`speed` | 1060 | none |
+| Layout control | 2180 with `none`; 1988 with `size`/`speed` | 52 | `_muldi3.o` |
+
+Flash is the highest physical end of a nonempty PT_LOAD payload from address
+zero, including gaps, vectors, immutable/generated data, private helpers,
+veneers/linker stubs and initialized-RAM/RAM-code load images. Static RAM is
+the highest RAM PT_LOAD memory end minus RAM base, including alignment and
+zero-fill. Section headers and independent linker-symbol address checks agree;
+segment payload sums, per-section sizes, symbol extents and complete linker
+maps are retained separately. ELF file size is not a target footprint.
+
+The application retains 192 vector bytes, 92 immutable-data bytes, four
+initialized data bytes, 1184/1088 copied RAM-code bytes and 276 zero-fill bytes;
+alignment makes static RAM 1556 in both cases. Protocol data is 16 initialized
+and 804 zero-fill bytes, with alignment included in 1060. Layout has 52 zero-fill
+bytes. The application has four 16-byte linker veneers: one in flash text and
+three in copied RAM code, already included in both relevant extents. Protocol
+has no veneers; layout retains the 90-byte `__muldi3` body from `_muldi3.o`.
+The largest application has only 64 flash bytes spare: this is a measured
+fit, not a production budget or expansion guarantee. The pinned
+`thumb/v6-m/nofp/libgcc.a` is private compiler support, not general C source.
+Maps and undefined-symbol/module checks exclude hosted startup, libc, core/heap,
+hosted I/O and scheduler dependencies.
+
+Debug section flags and file ranges prove that metadata is nonallocated and
+does not overlap PT_LOAD payloads; its host bytes are recorded per ELF, separately
+from the 64-byte nonallocated identity. Full debug/nondebug load bytes,
+addresses, zero-fill extents and entry identity must match. Development initially
+found that early debug-section declarations changed GNU ld veneer order without
+changing size. Discarded disjoint debug labels and debug sections emitted after
+loadable sections restore exact equality; the test retains that stronger oracle.
+Debug compilation-directory paths remain part of source identity, so 108
+six-artifact comparisons repeat emission in the same directory. Inherited
+nondebug fresh-directory comparisons remain separate.
+
+Stack method, independent controls and bounded claims:
+
+Paint records the lowest changed byte and can miss unwritten reservations or
+a write equal to the paint value. The host-side observer independently reads
+SP at each function entry and after each disassembly-decoded SP mutation,
+including helper/veneer code; handler entry captures hardware stacking. It
+retains the hook list, sample counts, minimum PC/SP/FP/LR/IPSR, ordinary frame
+records and a 256-byte low guard. One-instruction Renode translation blocks
+supply observation boundaries without modifying firmware or reading MMIO.
+Paint must not exceed observed SP use. No target instrumentation is inserted.
+
+Across all six profiles, the application's cold boot, partial consumption,
+wraparound, coalesced notifications, delayed drain, overrun/discard/restart,
+post-recovery echo, timeout retaining busy storage, transfer failure and complete
+finite-epoch exhaustion reach 888 observed/painted bytes; the separate initial
+open-failure path reaches 816. The maximum observed ordinary chain is
+`start -> read -> snapshot -> ch0_ctrl_trig_read`: its SP/frame deltas account
+for 384 + 208 + 232 + 64 = 888 bytes, including saves and frame records.
+The largest reported individual compiler frame is 352, not a maximum stack
+bound. All measured application guards remain intact within the 4096-byte
+reservation. A complete 65535-byte epoch services every 256-byte batch, checks
+all cumulative counts and exact echoed bytes, then observes exhaustion/restart.
+This covers the bounded driver state transitions and service-bound violation;
+it does not enumerate every possible interrupt arrival or future input.
+
+Independent assembly with external startup reserves 256 bytes without writing
+any, then exercises a 4-byte-misaligned interrupted SP, 36 hardware entry bytes
+(including padding), eight software save bytes and a nested 32-byte frame.
+QEMU checks stacked PC/xPSR, EXC_RETURN and restored SP; Renode independently
+reports 256 reserved versus 80 painted bytes. Ordinary/naked/PSP and nested
+handler source controls preserve the explicit exception boundary. The private
+multiply-helper control measures 188 bytes, and flash/RAM veneer controls
+304/312 bytes including exercised handler/trap paths. These supplement the
+application; they do not imply the application exercised every control path.
+The results are scenario measurements plus statically explained frame deltas,
+not a universal worst-case stack proof, arbitrary nesting guarantee or ISR
+arrival analysis. Stronger bounds require a specified workload/interrupt model.
+
+Mandatory evidence and preserved conformance:
+
+`run.py` invokes the new evidence lane after every inherited lane. It adds 73
+QEMU sessions, 49 Renode runs, 42 failing artifact selections and 108 deterministic
+artifact comparisons: 18 complete-program/profile builds and 42 source-debug
+controls, plus independent stack calibration. Actual acceptance runs this
+mandatory entry; standalone development CLIs and mocked-entry tests cannot
+replace it. Bounded process waits, failure records and Renode lock cleanup are
+retained. Compiler-generated firmware, external backend harnesses, independent
+C/assembly controls, hosted transport and abstract models remain distinct.
+
+The complete R6.90 derivation, RP2040 images/accessors and synthetic drain
+contract are unchanged. Neither QEMU microbit nor synthetic Renode is a faithful
+RP2040 board emulator. Finite nonreloading DMA epochs, absolute consumption,
+partial/wrapped reads, empty/full distinction, sticky loss/error, exhaustion,
+discard/restart and external repair retain independent oracles. Notification
+is not completion; EN-clear requests drain, BUSY-clear acknowledges no further
+writes, and timeout retains storage lifetime. Barriers/masking do not stop DMA.
+D187/D227/D228 exact scalar transactions and refusals, packed membership/alignment
+and register policies remain unchanged. Core allocator initialization,
+rollback/exhaustion, alignment/overflow and manual lifetime/origin obligations,
+ordinary CPU capability functions, constrained assembly, D231/D232 nonreturning
+and panic identities/recursion/no-later-actions retain their inherited evidence.
+The ordinary ABI, reserved r9, r12 call status across helpers/veneers, eight-byte
+frame record, alignment, no red zone and interrupt/naked obligations are preserved.
+
+Deferred-recovery, cached value-control and computed-callee repairs remain
+covered by `r491-callee-errors` and `r690-recovery-loop-context` in applicable
+hosted and Cortex profiles. BSS keeps its explicit RAM LMA; the driver runner
+still resolves a relative compiler path before artifact-directory commands.
+No corpus verdict change is intended. Cortex optional source-map artifacts now
+also carry the nonallocated identity; command records explicitly spell the
+selected debug option. Those host-artifact changes do not change load bytes.
+
+Disposition and exact-revision completion/delivery binding:
+
+R5.20's target, resource, runtime, evidence and tooling transfers and the R5.51
+ledger were re-audited. R551-31 closes for the selected R6 normative/backend/core,
+complete prototype-1 derivation and bounded emulator/source/resource gate.
+It does not close general SVD generation, immutable generator publication,
+package acquisition or sandboxed orchestration (R551-33), nor the broader
+standard library (R551-34). Fuller debugger presentation retains R551-26's
+explicit-proposal trigger. Compiler scale/self-hosting, competitive optimization,
+physical-board integration and release-readiness limits keep their owners.
+There is no scheduler/fibre/ownership programme or release/version change.
+Nix CI remains deferred. Historical prototype findings and rejected syntax
+remain historical; no language-semantic extension was needed.
+
+Compatible dual-native `milestone` policies were selected and committed before
+the closure candidate. Linux requires both complete debug/release hosted suites,
+quality and GDB, bindings and documents/tooling with every embedded lane;
+Darwin requires both compiler-host modes, complete hosted parity, bindings and
+LLDB. Full `check.py`, generated coverage/diagnostic matrices and verified
+rendering are part of the gate. Recursive evidence exports retain source/input
+and tool/compiler identities, provenance, commands/assertions/timeouts,
+startup/linker inputs, source/debug matching, assembly/object/ELF/map/disassembly/
+relocations, runtime/module closure, measurements and results under
+`artifacts/cortex-m/evidence` alongside inherited artifacts.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` close this exact containing archive. Atomic canonical
+promotion, identical remote commit/approval object, complete matching GitHub
+namespace and successful guarded Pages publication with byte-matched relevant
+pages on both domains are required. Transient publication locks use the existing
+mirror workflow. A later bookkeeping revision cannot supply the binding.
+With that binding R6 closes and R7.10 is next dependency-ready under its explicit
+R5.50/R6.100 dependencies; R7 work is not implemented by this milestone.
+
 ### R6 gate
+
+Closed through R6.100's exact-revision milestone binding, within its explicit
+source-debugging, synthetic-peripheral and measured-resource limits.
 
 - The complete derived driver runs against reproducible CPU and peripheral
   evidence.

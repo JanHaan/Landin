@@ -92,7 +92,7 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
 
 
-def build(run, refine, program=None, optimize="none", specialize="off"):
+def build(run, refine, program=None, optimize="none", specialize="off", debug='none'):
     source = run.out / 'boot.ldn'
     source.write_text(program if program is not None else '''mut initialized: u32 = 0x12345678
 mut cleared: u32 = 0
@@ -104,7 +104,7 @@ end start
 ''')
     elf = run.out / 'firmware.elf'
     run.command('compile', [refine, '--target=cortex-m0', '--firmware-entry=start',
-        '--emit=exe', '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
+        '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.bin / 'arm-none-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize, source.name, '-o', elf.name], timeout=60)
     run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', '-l', '-r', elf])
     run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])

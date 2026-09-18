@@ -361,3 +361,11 @@ retain compiler-owned firmware, independent assertions and every inherited
 lane. Matching routine debugger-risk policies cover the checker/context and
 BSS ELF load-address repairs. See the [derivation](../../compiler/tests/driver/DERIVATION.md);
 R6.100 still owns full Cortex source-debugging and measured-stack closure.
+
+R6.100 uses compatible dual-native milestone policies. The documents job's
+mandatory embedded entry includes `evidence.py` after the complete driver:
+Cortex line/function GDB, complete measured application scenarios, debug/load
+identity checks and independent stack/exception controls. Its recursive export
+includes the new `evidence` tree. Native GDB runs in both Ada modes as well;
+Cortex remote debugging does not replace it. Failed or interrupted embedded
+commands cannot be approved or substituted by development artifacts.

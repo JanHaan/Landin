@@ -18,6 +18,13 @@ package body Landin.Backend.Toolchain is
          --  retained even when optional debugger information is stripped.
          return ".section __TEXT,__landin_id,regular,no_dead_strip" & LF
            & ".ascii """ & Build_Id & """" & LF;
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Cortex_M0_ELF
+      then
+         --  Build identity belongs to the off-target debugger artifact.
+         --  It must not consume the constrained firmware's load image.
+         return ".section .landin_id,"""",%progbits" & LF
+           & ".ascii """ & Build_Id & """" & LF;
       end if;
       return "";
    end Identity_Section;
@@ -159,7 +166,8 @@ package body Landin.Backend.Toolchain is
       then "./" & Path else Path);
 
    function Assemble_Arguments
-     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts)
+     (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
+      Debug : Boolean := False)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -174,6 +182,9 @@ package body Landin.Backend.Toolchain is
       List.Append ("-mfloat-abi=soft");
       List.Append ("-mabi=aapcs");
       List.Append ("-Wa,--fatal-warnings");
+      if Debug then
+         List.Append ("-Wa,--gdwarf-4");
+      end if;
       List.Append ("-x");
       List.Append ("assembler");
       List.Append ("-c");
@@ -205,7 +216,7 @@ package body Landin.Backend.Toolchain is
       if Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Cortex_M0_ELF
       then
-         if Full_Debug or else not Libraries.Is_Empty then
+         if not Libraries.Is_Empty then
             raise Compiler_Defect with "unsupported firmware link request";
          end if;
          List.Append ("-mcpu=cortex-m0");

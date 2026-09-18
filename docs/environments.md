@@ -380,3 +380,11 @@ to mandatory native Linux embedded execution. Its QEMU boot, separate Renode
 protocol model and independent layout control retain their distinct evidence
 roles. Native GDB/LLDB routine risk coverage validates the checking and linker
 repairs; full Cortex source debugging and measured stack closure remain R6.100.
+
+R6.100's mandatory `evidence.py` lane adds actual Cortex line/function GDB
+sessions and complete-application resource scenarios to that Linux documents
+job. It preserves the fixed board map and separate CPU/peripheral/control
+identities, and recursively exports source/debug matching, ELF load accounting,
+SP/paint/frame observations and bounded results. The dual-native milestone
+policies retain both compiler modes and native GDB/LLDB; no Cortex debugger
+session replaces a native one. See the [evidence contract](../environments/cortex-m/README.md#freestanding-evidence-r6100).

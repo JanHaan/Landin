@@ -1,5 +1,7 @@
 with Ada.Containers.Vectors;
 with Landin.Backend.Firmware;
+with Landin.Backend.Dwarf;
+with Landin.Provenance;
 with Landin.Machine;
 with Landin.Layouts;
 with Landin.Packed;
@@ -287,7 +289,7 @@ package body Landin.Backend.Cortex_M is
       Out_Text : Unbounded.Unbounded_String;
       Serial : Natural := 0;
       Instruction_Count : Natural := 0;
-      pragma Unreferenced (Options, Debug);
+      pragma Unreferenced (Options);
 
       function Fresh return String;
       procedure Put (Line : String);
@@ -482,11 +484,11 @@ package body Landin.Backend.Cortex_M is
 
       --  Pick a disjoint prefix for generated local labels. External source
       --  identities retain their ELF spelling at the rendering seam.
-      function Unused_Local_Prefix return String;
+      function Unused_Local_Prefix (First : String := "L") return String;
 
-      function Unused_Local_Prefix return String is
+      function Unused_Local_Prefix (First : String := "L") return String is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String ("L");
+           Unbounded.To_Unbounded_String (First);
          Collides : Boolean;
       begin
          loop
@@ -532,6 +534,9 @@ package body Landin.Backend.Cortex_M is
       end Unused_Local_Prefix;
 
       Local_Prefix : constant String := Unused_Local_Prefix;
+      --  ELF debug-only labels must not perturb ld's local-symbol hash table
+      --  and consequently the order of generated flash/RAM veneers.
+      Debug_Prefix : constant String := Unused_Local_Prefix (".Llandin_");
 
       function Fresh return String is
       begin
@@ -840,10 +845,14 @@ package body Landin.Backend.Cortex_M is
          Homes : constant Landin.Targets.Byte_Count := Extent (Layout) + 16;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Ordinary : constant Boolean := Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+             = Landin.Machine.Ordinary;
          type Panic_Edge is record
             Reason : Landin.Panics.Kind;
             Site : Landin.Panics.Site_Number;
             Label : Unbounded.Unbounded_String;
+            Origin : Landin.Provenance.Origin;
          end record;
          package Edge_Vectors is new Ada.Containers.Vectors
            (Positive, Panic_Edge);
@@ -868,7 +877,11 @@ package body Landin.Backend.Cortex_M is
                Name : constant String := Fresh;
             begin
                Edges.Append (Panic_Edge'
-                 (Reason, Site, Unbounded.To_Unbounded_String (Name)));
+                 (Reason, Site, Unbounded.To_Unbounded_String (Name),
+                  (if Current_Value = Landin.IR.No_Value
+                   then Landin.IR.Origin_Of (Of_Unit, Item)
+                   else Landin.IR.Origin_Of
+                     (Of_Unit, Item, Current_Value))));
                return Name;
             end;
          end Trap;
@@ -997,15 +1010,39 @@ package body Landin.Backend.Cortex_M is
 
          procedure Epilogue is
          begin
+            if Debug /= null then
+               Emit (".cfi_remember_state");
+            end if;
             Emit ("mov r6, r11");
             Emit ("mov sp, r6");
+            if Debug /= null then
+               Emit (".cfi_def_cfa sp, 24");
+            end if;
             Emit ("ldr r7, [r6, #4]");
             Emit ("ldr r6, [r6]");
             Emit ("mov lr, r7");
+            if Debug /= null and then Ordinary then
+               Emit (".cfi_restore lr");
+            end if;
             Emit ("mov r11, r6");
+            if Debug /= null then
+               Emit (".cfi_restore r11");
+            end if;
             Emit ("add sp, #8");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 16");
+            end if;
             Emit ("pop {r4, r5, r6, r7}");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 0");
+               for Reg in 4 .. 7 loop
+                  Emit (".cfi_restore r" & Trimmed (Reg'Image));
+               end loop;
+            end if;
             Emit ("bx lr");
+            if Debug /= null then
+               Emit (".cfi_restore_state");
+            end if;
          end Epilogue;
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
@@ -2773,6 +2810,19 @@ package body Landin.Backend.Cortex_M is
          Emit (".type " & Symbol (Item) & ", %function");
          Emit (".thumb_func");
          Put (Symbol (Item) & ":");
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Debug_Prefix, "begin", Item) & ":");
+            Put (Dwarf.Source_Line
+              (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            Emit (".cfi_startproc simple");
+            Emit (".cfi_return_column lr");
+            Emit (".cfi_def_cfa sp, 0");
+            if not Ordinary then
+               --  EXC_RETURN is not an ordinary source caller address.
+               --  Naked bodies own all machine-state transitions.
+               Emit (".cfi_undefined lr");
+            end if;
+         end if;
          if Landin.IR.Signature_Machine
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
              = Landin.Machine.Naked_Routine
@@ -2795,6 +2845,10 @@ package body Landin.Backend.Cortex_M is
             --  it traps; `none` does not promise nonreturning control flow.
             Emit ("udf #1");
             Emit (".ltorg");
+            if Debug /= null then
+               Put (Dwarf.Label_Name (Debug_Prefix, "end", Item) & ":");
+               Emit (".cfi_endproc");
+            end if;
             Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
             Landin.Build_Reports.Append (Report,
               Landin.Build_Reports.Routine_Statistics'
@@ -2802,10 +2856,27 @@ package body Landin.Backend.Cortex_M is
             return;
          end if;
          Emit ("push {r4, r5, r6, r7}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            for Reg in 4 .. 7 loop
+               Emit (".cfi_offset r" & Trimmed (Reg'Image) & ", -"
+                 & Trimmed (Integer'Image ((8 - Reg) * 4)));
+            end loop;
+         end if;
          Emit ("mov r4, r11");
          Emit ("mov r5, lr");
          Emit ("push {r4, r5}");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 24");
+            Emit (".cfi_offset r11, -24");
+            if Ordinary then
+               Emit (".cfi_offset lr, -20");
+            end if;
+         end if;
          Emit ("mov r11, sp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_register r11");
+         end if;
          Reserve (Homes);
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
@@ -2859,11 +2930,18 @@ package body Landin.Backend.Cortex_M is
             loop
                Current_Value := Landin.IR.Nth_Value
                  (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               if Debug /= null then
+                  Put (Dwarf.Source_Line (Debug.all,
+                    Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)));
+               end if;
                Instruction (Current_Value);
             end loop;
          end loop;
          for Edge of Edges loop
             Put (Unbounded.To_String (Edge.Label) & ":");
+            if Debug /= null then
+               Put (Dwarf.Source_Line (Debug.all, Edge.Origin));
+            end if;
             Immediate ("r0", Pattern (Landin.Panics.Code
               (Panic.all, Edge.Reason)));
             Immediate ("r1", Pattern (Edge.Site));
@@ -2872,6 +2950,10 @@ package body Landin.Backend.Cortex_M is
          end loop;
          Put (Hard_Trap & ":");
          Emit ("udf #1");
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Debug_Prefix, "end", Item) & ":");
+            Emit (".cfi_endproc");
+         end if;
          Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
@@ -4103,6 +4185,9 @@ package body Landin.Backend.Cortex_M is
       Emit (".cpu cortex-m0");
       Emit (".thumb");
       Emit (".text");
+      if Debug /= null then
+         Put (Dwarf.Preamble (Debug.all, Debug_Prefix, Arm => True));
+      end if;
       if Firmware_Entry /= Landin.IR.No_Item then
          Emit_Vectors;
          Put (Landin.Backend.Firmware.Startup
@@ -4113,7 +4198,7 @@ package body Landin.Backend.Cortex_M is
                (Landin.Panics.Code (Panic.all, Landin.Panics.Unreachable)))
                & LF & "movs r1, #0" & LF & "bl "
                & Symbol (Landin.Panics.Handler (Panic.all))
-               & LF & "udf #1")));
+               & LF & "udf #1"), Debug => Debug /= null));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
@@ -4202,6 +4287,11 @@ package body Landin.Backend.Cortex_M is
                end loop;
             end;
          end loop;
+      end if;
+      if Debug /= null then
+         Unbounded.Append (Out_Text, Dwarf.Line_Sections
+           (Of_Unit, Meanings, Names, Facts, Debug.all,
+            Debug_Prefix, Symbol'Access));
       end if;
       Emit (".section .note.GNU-stack,"""",%progbits");
       Assembly := Out_Text;
