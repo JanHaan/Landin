@@ -11762,6 +11762,13 @@ startup/linker inputs, source/debug matching, assembly/object/ELF/map/disassembl
 relocations, runtime/module closure, measurements and results under
 `artifacts/cortex-m/evidence` alongside inherited artifacts.
 
+Candidate `0b0a789d64cea5bfa01ded21568ae8e27f0a0ab2` failed Darwin run
+`20260918T185010Z-d661ff2e2753`: 735 of 736 compiler-host cases passed; the
+remaining help assertion still expected the old two-choice debugger wording.
+The assertion now checks the explicit hosted/full and Cortex/lines choices.
+Linux run `20260918T185010Z-e86663a48c32` was cancelled after that failure;
+both records remain failed/incomplete and cannot approve the corrected candidate.
+
 Only matching verified native exports and the annotated dual-native
 `ci/accepted/FULL_COMMIT` close this exact containing archive. Atomic canonical
 promotion, identical remote commit/approval object, complete matching GitHub

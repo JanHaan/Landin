@@ -106,7 +106,7 @@ package body Landin.Tests.Debugging_Suite is
          Landin.Testing.Check
            (Item, Contains (US.To_String (Result.Output), "--debug=NAME")
             and then Contains (US.To_String (Result.Output),
-              "none (default) or full source debugging"),
+              "none (default), full (hosted), lines (Cortex-M0)"),
             "help documents debug choices and the default");
       end;
    end Invalid_Requests;
