@@ -252,7 +252,9 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the thirteen scalar names, atom sets, fixed arrays,
+it is read [0080]. [0100]'s shared form writes several bindings, fields,
+parameters or named returns as one declaration, each name still one thing
+(D233). The kernel's types are the thirteen scalar names, atom sets, fixed arrays,
 pointers, slices, D145's `any C`, function types with their complete declared
 error sets, and what [1795] declares from them: aliases, named ordinary structs and D74's named
 variant-bearing structs. `mut` in a pointer or slice type records permission to
@@ -14538,6 +14540,58 @@ A returning or failing handler would contradict D11 and [1670].
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
 default-trap fixtures. ROADMAP.md owns results and remaining acceptance work.
+
+### D233 — A shared declaration is one declaration per name, with one initializer evaluation
+
+**The tour said** that several names may share one declaration, the same form
+field lists already use [0100], and showed `public red, green, blue: u8`
+beside an atom list. Atom lists were enabled; R4.91 refused shared bindings,
+fields, parameters and returns by name against R7.20, which was to decide the
+initializer and convention questions their implementation needs.
+
+**Chosen:** `binding`, `field`, `parameter` and `named_return` take [1740]'s
+`identifiers` list where they took one name. A shared declaration means the
+declarations written one per name, in written order, each carrying the
+complete written prefix — `public`, `mut`, `link(...)`, `caller`, `escaping`,
+`in`, `inout` or `sink` — the same type and the same suffix, `at` or `from`. A
+prefix applies only when written before the first name, so `(a, inout b: T)`
+is not a shared parameter. An initializer is evaluated once, as the first
+name's; each later name is initialized with a copy of the first name's value,
+so `mut low, high: u32 = next_seed()` calls once and leaves two independent
+places. A module declaration without a value holds zero for every name (D10);
+with one, the later names copy the first name's static image. The type, `at`
+bounds and `from` sources are written once and checked once: a type that names
+nothing is one report and two packed fields at one position are one overlap.
+Debug information lists every name as the ordinary variable, field or
+parameter it is.
+
+Two parsing rules follow from the list. A comma followed by names that reach
+`:` starts the next named return rather than extending a `from` list, because
+[0110] makes the name left of `:` the one being introduced. A run of names
+ending at `:` or `:=` begins a binding where [1800]'s one-token lookahead
+decides between a statement and a value.
+
+The shared form needs a written type. `a, b := e` stays L0010 citing [0100],
+because it reads as a destructuring [1810] and nothing written once could be
+shared. A condition binding (D185), a type declaration, a type or fixed
+formal, a function and a variant part keep one name each and meet the same
+L0010. These are recorded boundaries, and the second note says
+"ROADMAP.md R7.20 records this source-form boundary".
+
+**The alternatives:** evaluating the initializer once per name, as though the
+declaration were retyped, was declined: an expression written once runs once,
+as [0560]'s repeated expression already does, and duplicated side effects
+would be invisible at the one place they are written. Refusing initializers on
+shared declarations was declined as less useful for no less work. Applying a
+convention only to the name it precedes was declined because `(a, inout b: T)`
+would then hold two conventions in one list, while [0100]'s field-list reading
+gives every name the whole prefix. Admitting `a, b := e` with a copied inferred
+type was declined for the destructuring reading.
+
+**Pinned by** `positive/shared-declarations-every-position`,
+`runtime/shared-declarations-evaluate-once`, `negative/r491-shared-declaration`,
+`negative/shared-type-names-nothing`, `negative/shared-packed-fields-overlap`
+and `negative/shared-link-symbol-duplicates`.
 
 ### D236 — A range subtype constrains scalar positions only
 
