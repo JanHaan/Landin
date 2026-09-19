@@ -1,0 +1,7 @@
+class: runtime
+summary: R7.20's shared names, several-atom pointer union, inferred aggregate literal, whole discards and labelled block exit compose in one program
+profiles: standard
+program: main.ldn
+status: 42
+constructs: 0100, 0480, 0530, 1090, 1180
+targets: linux-x86-64, macos-arm64

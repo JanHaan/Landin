@@ -1953,6 +1953,9 @@
     },
     "runtime/written-function-values": {
       "mode": "execute"
+    },
+    "runtime/r720-feature-interactions": {
+      "mode": "execute"
     }
   }
 }
