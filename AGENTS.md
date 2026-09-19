@@ -260,8 +260,11 @@ shared names, labelled bare blocks, the several-atom pointer union and general
 aggregate values are implemented on all three targets, and the remaining forms
 are bounded, withdrawn or transferred to named successors by D233-D241; its
 exact-revision dual-native routine binding with debugger coverage owns closure.
-R7.30 is next dependency-ready. R6.80
-retains its separate generated-device fixture gate.
+R7.30 gives every inherited row and later discovery a terminal disposition:
+untriggered parked and watch items transfer to Language evolution with their
+triggers, and `check.py` refuses a row without one; its exact-revision
+dual-native routine binding owns closure. R7.40 is next dependency-ready.
+R6.80 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 

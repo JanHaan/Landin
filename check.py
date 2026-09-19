@@ -151,8 +151,12 @@ ROADMAP_REFERENCE = re.compile(r"R[0-7]\.[1-9]\d*")
 ROADMAP_REFERENCE_CANDIDATE = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_.])")
 MIGRATION_HEADING = "## Inherited review register and migration parity"
+#  Legacy item, preserved decision, owner, R7.30's terminal disposition and
+#  the evidence for it.  A transferred row's evidence also carries the
+#  activation and completion a successor needs.
 MIGRATION_ROW = re.compile(
-    r"^\| ([A-Z]\d+) — ([^|]+) \| ([^|]+) \| ([^|]+) \|$")
+    r"^\| ([A-Z]\d+) — ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$")
+MIGRATION_DISPOSITIONS = ("implemented", "rejected", "transferred")
 LEGACY_IDS = (["A%d" % n for n in range(1, 9)] +
               ["B%d" % n for n in range(1, 7)] +
               ["C%d" % n for n in range(1, 7)] +
@@ -1404,7 +1408,33 @@ def check_roadmap(path):
         if not state.get(work_id):
             visit(work_id, [])
 
-    #  The migration appendix must preserve all 32 legacy rows exactly once.
+    out += migration_problems("\n".join(lines))
+
+    return sorted(set(out))
+
+
+def migration_problems(text):
+    """The 32 inherited rows, each exactly once, each terminally disposed.
+
+    R5.51 made the retained debt a checked ledger; the appendix it links was
+    held only to its presence, format, anchors and owner, so nothing could
+    tell a row that had been decided from one that had merely been scheduled.
+    R7.30 gives every row one of three dispositions.  An implemented or
+    rejected row cites a finished item.  A transferred row names exactly one
+    successor, which must list it, and carries the activation and completion
+    evidence that successor inherits -- a category heading alone is not a
+    retained work record.
+    """
+    lines = text.splitlines()
+    out = []
+    statuses = dict(re.findall(r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
+                               text, re.M))
+    section = text.split("\n## Successor roadmaps\n", 1)
+    body = section[1].split("\n## ", 1)[0] if len(section) == 2 else ""
+    successors = {}
+    for found in re.finditer(r"^- \*\*([^:]+):\*\*(.*?)(?=^- \*\*|\Z)", body,
+                             re.M | re.S):
+        successors[found.group(1)] = found.group(2)
     legacy = collections.defaultdict(list)
     actual_ids = []
     appendix = [n for n, line in enumerate(lines, 1)
@@ -1432,9 +1462,12 @@ def check_roadmap(path):
             if not row:
                 out.append((n, "malformed legacy migration row %s" % legacy_id))
                 continue
+            #  The anchors are the preserved row's own sources: evidence
+            #  added by a disposition cannot stand in for one it lost.
+            preserved = " | ".join(row.group(number) for number in (2, 3, 4))
             missing_anchors = [
                 anchor for anchor in LEGACY_REQUIRED_ANCHORS.get(legacy_id, ())
-                if anchor not in line
+                if anchor not in preserved
             ]
             if missing_anchors:
                 out.append((n, "%s migration row omits required anchors: %s"
@@ -1442,13 +1475,48 @@ def check_roadmap(path):
             owner = row.group(4)
             owner_work = any(
                 ROADMAP_REFERENCE.fullmatch(match.group(1))
-                and match.group(1) in works
+                and match.group(1) in statuses
                 for match in ROADMAP_REFERENCE_CANDIDATE.finditer(owner)
             )
             owner_successor = any(name in owner for name in MIGRATION_OWNER_NAMES)
             if not owner_work and not owner_successor:
                 out.append((n, "%s migration row has no valid roadmap owner"
                             % legacy_id))
+
+            disposition = row.group(5).strip()
+            evidence = row.group(6).strip()
+            if disposition not in MIGRATION_DISPOSITIONS:
+                out.append((n, "%s has no terminal disposition: %r"
+                            % (legacy_id, disposition)))
+                continue
+            if evidence.lower().strip(".") in ("", "-", "tbd", "todo",
+                                               "pending", "none"):
+                out.append((n, "%s records no disposition evidence"
+                            % legacy_id))
+            if disposition == "transferred":
+                named = [name for name in successors if name in owner]
+                if len(named) != 1:
+                    out.append((n, "%s is transferred and its owner names %d"
+                                " successors, not one" % (legacy_id, len(named))))
+                for name in named:
+                    if not re.search(r"\b%s\b" % legacy_id, successors[name]):
+                        out.append((n, "%s is transferred to %s, whose entry"
+                                    " in Successor roadmaps does not name it"
+                                    % (legacy_id, name)))
+                activation = evidence.find("Activation:")
+                completion = evidence.find("Completion:")
+                if (activation < 0 or completion < activation
+                        or not evidence[activation + 11:completion].strip(" .;")
+                        or not evidence[completion + 11:].strip(" .;")):
+                    out.append((n, "%s is transferred without an Activation:"
+                                " and a Completion: for its successor"
+                                % legacy_id))
+            else:
+                cited = {match.group(1) for match in
+                         ROADMAP_REFERENCE_CANDIDATE.finditer(owner + " " + evidence)}
+                if not any(statuses.get(item) == "complete" for item in cited):
+                    out.append((n, "%s is %s and cites no finished roadmap item"
+                                % (legacy_id, disposition)))
 
     expected = collections.Counter(LEGACY_IDS)
     actual = collections.Counter(actual_ids)
@@ -1470,8 +1538,7 @@ def check_roadmap(path):
     for legacy_id in extra:
         out.append((legacy[legacy_id][0], "unexpected legacy migration row %s"
                     % legacy_id))
-
-    return sorted(set(out))
+    return out
 
 
 def check_project_status(full_run):
@@ -5850,13 +5917,16 @@ def check_phase_handoff(full_run):
     """Check roadmap-owned transfers and native policy refusal controls."""
     if not full_run:
         return []
-    from scripts.roadmap_debt import validate
+    from scripts.roadmap_debt import validate, validate_discoveries
     import subprocess
     try:
         with io.open(os.path.join(ROOT, "ROADMAP.md"), encoding="utf-8") as source:
-            validate(source.read())
+            text = source.read()
+        validate(text)
+        validate_discoveries(text)
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_migration_register.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_construct_inventory.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
                 [sys.executable, os.path.join(ROOT, "devices/test.py")],

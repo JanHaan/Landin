@@ -19,7 +19,7 @@
 #  disposition column explains every row; see ROADMAP.md R1.90
 #  and R7.10.
 #  201 constructs, 196 with fixture evidence, 5 with none.
-#  States: 192 executed, 4 compiled, 1 deferred, 1 transferred, 3 advisory.
+#  States: 192 executed, 4 compiled, 2 transferred, 3 advisory.
 #  14 rows name an open owner; 5 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
@@ -84,7 +84,7 @@
 0590 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fixed arrays are the vector type
 0600 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Text types are distinct views
 0610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the bytes of one
-0620 | tour | - | - | - | - | - | deferred | none | none | R7.30 | DEFERRED to a later version, kept here as a design record
+0620 | tour | - | - | - | - | - | transferred | none | none | Language evolution | DEFERRED to a later version, kept here as a design record
 0630 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
 0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
 0650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Distinct type

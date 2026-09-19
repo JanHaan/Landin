@@ -107,22 +107,51 @@ class Inventory(unittest.TestCase):
             targets["1400"]["linux-x86-64"] = "executed"
         self.refused(self.problems(targets=run), "executes, so compiled is stale")
 
-    def test_advisory_and_deferred_rows_carry_no_evidence(self):
+    def deferred(self):
+        """[0620] as it stood before R7.30 transferred it: the last deferred
+        construct, now a synthetic control for the deferral rules."""
+        row = self.row("0620")
+        return {row: "| `[0620]` | deferred | none | none | none | R7.40 |"
+                     " The tour keeps it DEFERRED and R7.40 owns the decision. |"}
+
+    def test_advisory_deferred_and_transferred_rows_carry_no_evidence(self):
         def claim(evidence):
             evidence["0490"] = {"accepted", "emitted"}
         self.refused(self.problems(evidence=claim),
                      "[0490] is advisory but fixtures claim it")
 
-        def claim_deferred(targets):
+        def claim_transferred(targets):
             targets["0620"] = {"linux-x86-64": "compiled"}
-        self.refused(self.problems(targets=claim_deferred),
+        self.refused(self.problems(targets=claim_transferred),
+                     "[0620] is transferred but fixtures claim it")
+        self.refused(self.problems(self.deferred(), targets=claim_transferred),
                      "[0620] is deferred but fixtures claim it")
 
     def test_deferral_and_transfer_are_the_tour_s_first(self):
+        #  No construct is deferred after R7.30, so a synthetic row keeps the
+        #  deferral rules exercised: it is clean as written, and refused once
+        #  the tour stops saying DEFERRED or no live item owns it.
+        self.assertEqual(self.problems(self.deferred()), [])
+
         def undefer(paragraphs):
             paragraphs["0620"] = paragraphs["0620"].replace("DEFERRED", "Deferred")
-        self.refused(self.problems(paragraphs=undefer),
+        self.refused(self.problems(self.deferred(), paragraphs=undefer),
                      "deferred but the tour does not say so")
+        (row, synthetic), = self.deferred().items()
+        self.refused(self.problems({row: synthetic.replace(
+            "| R7.40 | The tour keeps it DEFERRED and R7.40 owns the decision.",
+            "| none | The tour keeps it DEFERRED.")}),
+            "[0620] is deferred with no owning item")
+        self.refused(self.problems({row: synthetic.replace("| R7.40 |", "| R7.20 |")
+                                    .replace("and R7.40 owns", "and R7.20 owns")}),
+                     "still owned by finished R7.20")
+
+        #  R7.30's transfer is the tour's first: [0620] names its successor.
+        def unname(paragraphs):
+            paragraphs["0620"] = paragraphs["0620"].replace(
+                "Language evolution", "a later roadmap")
+        self.refused(self.problems(paragraphs=unname),
+                     "[0620] hands work to Language evolution")
 
         def unmark(paragraphs):
             for one in ("1470", "1420", "1480"):

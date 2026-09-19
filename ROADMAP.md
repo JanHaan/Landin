@@ -149,30 +149,39 @@ a forced consequence and should have been the former.
 
 ## Successor roadmaps
 
-R5.51's consolidated intake below makes the retained debt, activation triggers
-and completion evidence explicit. Its intake labels identify dispositions,
-not additional phases or a second work list. A named successor is a destination,
-not a claim that its implementation is scheduled in R0-R7. R7.30 reconciles
-these records with the inherited register; R7.70 must preserve every transfer.
+R5.51's consolidated intake below made the retained debt, activation triggers
+and completion evidence explicit, and R7.30 reconciled it with the inherited
+register and every later item record: each inherited row in the appendix and
+each later discovery in R7.30's ledger has a terminal disposition, and each
+transfer is a record with its own activation and completion evidence rather
+than a heading here. Intake labels identify dispositions, not additional
+phases or a second work list. A named successor is a destination, not a claim
+that its implementation is scheduled in R0-R7. R7.70 must preserve every
+transfer.
 
-- **Scale and self-hosting:** stable separate compilation and interface files,
-  scale-driven caching, explicit cross-language stage transport and
-  incremental replacement of tested Ada stages.
+- **Scale and self-hosting:** stable separate compilation and interface files
+  (inherited B3), scale-driven caching, explicit cross-language stage transport
+  and incremental replacement of tested Ada stages.
 - **Companion tool and ecosystem:** package acquisition, version solving,
   manifests, locks, publishing, naming authority, generator orchestration and
-  the still-unnamed user-facing build/package tool.
+  the still-unnamed user-facing build/package tool (inherited B4, B6 and D6).
 - **Broader standard library:** library layers beyond the core/runtime required
-  by the four prototype programs, including the atomic wrapper type R7.20's
-  D240 transfers from [1620].
+  by the four prototype programs (inherited B5), including the atomic wrapper
+  type R7.20's D240 transfers from [1620] and the Cortex-M C boundary R7.30
+  transfers.
 - **Competitive optimization:** optimization beyond correct deterministic
   baseline code generation and the specialization required by the amended
   specification.
-- **Language evolution:** parked and watch items whose implementation triggers
-  do not occur during this roadmap, and the u128, i128 and f16 scalars R7.20's
+- **Language evolution:** parked and watch items whose triggers do not occur
+  during this roadmap: inherited C1, C2, C3, C4 and C5, the E1, E2 and E3
+  watches and the stackful-fibre exploration, which R7.30 transfers with the
+  triggers they carry, C4 carrying none; the u128, i128 and f16 scalars R7.20's
   D237 transfers from [0150] and [0170], triggered by a program that needs
-  128-bit arithmetic or binary16 values.
+  128-bit arithmetic or binary16 values; and a call's recovery widening into a
+  several-atom pointer union, which D235 leaves refused.
 - **Release readiness:** licensing, distribution, production claims and every
-  release or version decision.
+  release or version decision, including the physical-board evidence and
+  worst-case firmware resource claims R7.30 transfers.
 
 ## Cross-cutting evidence
 
@@ -9237,7 +9246,7 @@ caching, parallel workload scheduling and Darwin resume remain separate work.
 | R551-32 | Stable separate compilation/interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting (inherited B3). | Scale and self-hosting. Activate at successor planning after the current roadmap endpoint or an explicit scope decision. Preserve the tested seams, whole-program behavior and complete interface identity; no serialized IR freeze or self-hosting implementation now. |
 | R551-33 | Package acquisition/version solving, manifests/locks, naming authority, deterministic roots, generators/SVD tooling and sandboxing (B4/B6/D3/D6). The binding generator's four-file replacement recovers failures but is not atomic for concurrent readers; compiler path preflight does not prevent concurrent filesystem replacement. | Companion tool and ecosystem. Before acquisition/general generation or concurrent build consumers are offered. Specify declared inputs/outputs, immutable publication/consumption, reproducible roots and single-package-version conflicts; preserve existing rollback/refusal evidence. R3.10/R4.30/R6.60/R6.80 keep their thin in-scope responsibilities. No adversarial filesystem guarantee follows from current preflight. |
 | R551-34 | Library facilities beyond the complete prototype slices (B5). | Broader standard library. A concrete program needs an omitted facility. Preserve capability-passed allocation/I/O, hosted/freestanding separation and constrained-target costs; require complete derived consumers and failure oracles. |
-| R551-35 | Parked C1-C5, watch E1-E3 and stackful-fibre exploration. | Scheduled disposition at R7.30, then Language evolution if still untriggered. Preserve each inherited trigger, including C4's explicit absence of one; the fibre trigger is a program needing two operations in flight. Stackless coroutines remain rejected, and a second I/O implementation is not promised by this roadmap. |
+| R551-35 | Parked C1-C5, watch E1-E3 and stackful-fibre exploration. | Dispositioned by R7.30 and closed by its exact acceptance and delivery binding. No trigger fired and no watch concluded in the four complete derived programs, `core` or the corpus, so C1-C5 and E1-E3 transfer to Language evolution with their inherited triggers, C4 still without one, and the appendix records each row's evidence, activation and completion. No derived program needed two operations in flight, so the stackful-fibre exploration transfers with that trigger. Stackless coroutines remain rejected, and a second I/O implementation is not promised by this roadmap. |
 | R551-36 | Licensing/distribution decisions, release/version designation, production claims and wider operational readiness. | Release readiness after R7.70 and explicit maintainer decisions. Feature-complete pre-v1 does not itself establish these claims. Preserve the current designation and distinguish current acceptance from all older evidence gaps. |
 
 R551-04 must also map every resolved or refuted intake entry to its existing
@@ -9264,7 +9273,7 @@ those original detailed repair/refutation rows as completion evidence.
 | R4.91 readiness CHK/LOW/BE and R520 rows | CHK-REF-3 moves from R5.20's retained limit to R551-02. CHK-FLOW-1/CHK-FE-2/CHK-FE-3 are R551-06; LOW-1 is R551-09; BE-1 is R551-07; LOW-3/BE-3 split into R551-06/R551-10. F5-F8 and CHK-H-1/2/3 retain R4.91 repairs; CHK-A-3 remains refuted and CHK-R491-1 remains its exact acceptance binding. CHK-R491-4/R520-5/CHK-15600-2 merge into the completed R5.20 symbol repair. R520-1/4/6/7 and BE-2 closed in R5.20; R520-2/3 closed through R5.30 ABI/linking and R5.40 identity. |
 | R5.20-R5.50 retained resource and operational contracts | Resource dimensions R551-06; image/branch reach R551-07; expansion R551-08/R551-09; lookup/planning/code quality R551-10/R551-11/R551-12; scheduling/reuse R551-13; Darwin resume R551-14; Nix R551-15; presentation/source deployment R551-26/R551-27; evidence retention R551-23; publication R551-24. R5.30's selected parity handoff and R5.40's derivative gap closed only at R5.50, whose limits remain. |
 | Inherited A1-A8, B1-B6 | A1/A5/A8 close their live evidence obligations at R7.40 (R551-17); A2/A3/A6/A7 retain R2/R3 closures; A4/B1 are R551-31; B2 retains R4.40 and R5.30 ABI contracts. B3 is R551-32, B4/B6 R551-33, B5 R551-34. |
-| Inherited C1-C6, D1-D6, E1-E3, F1-F3 | C1-C5/E1-E3 are R551-35 with every original trigger preserved, including no invented trigger for C4. C6 retains hosted closure and R6.100. D1/D2/D4 retain their implemented decisions and evidence conditions; D3/D6 link R551-33; D5 retains the rejected C/LLVM alternatives and R6.50 own-backend obligation. F1 retains R7.60; F2 is the continuing mechanical gate, exercised by R551-04; F3 retains R2.70/R2.80/R3.70 and R4.50. R7.30 dispositions every row; R7.70 preserves transfers. |
+| Inherited C1-C6, D1-D6, E1-E3, F1-F3 | C1-C5/E1-E3 are R551-35 with every original trigger preserved, including no invented trigger for C4; R7.30 transferred them to Language evolution. C6 retains hosted closure and R6.100. D1/D2/D4 retain their implemented decisions and evidence conditions; D3/D6 link R551-33; D5 retains the rejected C/LLVM alternatives and R6.50 own-backend obligation. F1 retains R7.60; F2 is the continuing mechanical gate, exercised by R551-04; F3 retains R2.70/R2.80/R3.70 and R4.50. R7.30 dispositioned every row in the appendix; R7.70 preserves transfers. |
 | Successor families and delayed normative work | Scale/self-hosting R551-06/07/08/13/14/15/16/32; competitive optimization R551-09/10/11/12; companion/ecosystem R551-33; broader library R551-34; language evolution R551-25/26/28/35; release readiness R551-19/20/21/22/23/24/27/36. R7.20 dispositioned spec [1830]'s R551-29 forms: D233/D235 implemented, D236 bounded and D237 transferred u128/i128/f16 to language evolution; selected-import recovery is R551-30/R7.40; device/concurrency/packed/noreturn obligations remain R551-31/R6. |
 
 Evidence inspected at accepted `51229dc368b2fec72a20bf912ae2c1a9996d62bd`:
@@ -9348,7 +9357,7 @@ activation condition. R7.30 and R7.70 preserve this ledger through phase handoff
 | R551-32 | observation | successor | Scale and self-hosting | Successor planning after R7.70 or explicit scope decision | Tested seams and complete interface/package identity; preserve whole-program semantics. |
 | R551-33 | supported-limit | successor | Companion tool and ecosystem | Before acquisition/general generation or concurrent build consumers | Declared inputs/outputs, immutable publication, reproducible roots and single-package-version conflicts. |
 | R551-34 | supported-limit | successor | Broader standard library | Concrete program needs an omitted facility | Capability-passed allocation/I/O, constrained costs, complete consumers and failure oracles. |
-| R551-35 | parked-watch | scheduled | R7.30 | Inherited C/E triggers or R7.30 disposition; C4 has no trigger | Preserve each original rationale; transfer untriggered items to Language evolution, including the fibre direction and rejected stackless alternative. |
+| R551-35 | parked-watch | successor | Language evolution | Each appendix row's inherited trigger (C1-C3, C5 and E1-E3; C4 has none and none is invented) or, for stackful fibres, a derived program needing two operations in flight | A tour amendment and register decision answering the item's preserved rationale before it enters the language; the fibre design keeps its stack-switch conditions, stackless coroutines stay rejected and no second I/O implementation is promised. |
 | R551-36 | supported-limit | successor | Release readiness | After R7.70 and explicit maintainer decisions | Separate distribution/licensing/version/production decisions with evidence; feature-complete pre-v1 is unchanged. |
 <!-- /r551-ledger -->
 
@@ -11900,7 +11909,7 @@ means the generated row's evidence is the whole explanation.
 | `[0590]` | executed | all | none | R4.50 | none | D209 and matrix evidence |
 | `[0600]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[0610]` | executed | all | none | R4.10 | none | matrix evidence |
-| `[0620]` | deferred | none | none | none | R7.30 | The tour declares structure-of-arrays DEFERRED and keeps it as a design record; nothing enables `soa`, which meets an ordinary parse error. R7.20 found C5's trigger unfired: no derived program is a simulation or needs one field contiguous, so no tour amendment was owed. R7.30 dispositions inherited C5 under R551-35 and transfers it to Language evolution if it is still untriggered. |
+| `[0620]` | transferred | none | none | none | Language evolution | The tour keeps structure-of-arrays as a DEFERRED design record and now says Language evolution holds it: R7.30 transfers inherited C5 there under R551-35, because none of the four derived programs is a simulation that needs one field contiguous. Nothing enables `soa`, which meets an ordinary parse error, and no named refusal is owed to a form the tour places outside the language. |
 | `[0630]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0640]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0650]` | executed | all | none | R2.20 | none | named refusal |
@@ -11956,7 +11965,7 @@ means the generated row's evidence is the whole explanation.
 | `[1150]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1160]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1170]` | executed | all | none | R4.10 | none | matrix evidence |
-| `[1180]` | executed | all | none | R4.10 | none | Loop labels and D234's bare-block labels are matrix evidence on all three targets; `continue` naming a block and `break with` targeting one are refused. The inherited E1 watch on labels is R7.30's. |
+| `[1180]` | executed | all | none | R4.10 | none | Loop labels and D234's bare-block labels are matrix evidence on all three targets; `continue` naming a block and `break with` targeting one are refused. R7.30 found inherited E1's watch inconclusive, since no derived program or `core` uses a label, `break with` or `complete`, and transferred the watch to Language evolution; the construct stays implemented. |
 | `[1190]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1200]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1210]` | executed | all | none | R2.20 | none | matrix evidence |
@@ -11985,7 +11994,7 @@ means the generated row's evidence is the whole explanation.
 | `[1440]` | executed | all | none | R4.30 | none | D201 selected imports retain original public declaration identities |
 | `[1450]` | executed | all | none | R3.10 | none | matrix evidence |
 | `[1460]` | executed | all | none | R1.60 | none | matrix evidence |
-| `[1470]` | transferred | none | none | R3.10 | Companion tool and ecosystem | Versions, origins, owner/package naming and the version-conflict error belong to Companion tool and ecosystem, which [1480] says arranges the roots so only one version is reachable; inherited D6 and R551-33 carry the transfer and R7.30 dispositions D6. The compiler's share is [1420]'s first-root rule from R3.10, covered by the driver and resolution suites rather than a fixture claim. |
+| `[1470]` | transferred | none | none | R3.10 | Companion tool and ecosystem | Versions, origins, owner/package naming and the version-conflict error belong to Companion tool and ecosystem, which [1480] says arranges the roots so only one version is reachable; inherited D6 and R551-33 carry the transfer, which R7.30 records as D6's terminal disposition. The compiler's share is [1420]'s first-root rule from R3.10, covered by the driver and resolution suites rather than a fixture claim. |
 | `[1480]` | executed | all | none | R4.30 | Companion tool and ecosystem | Explicit ordered roots are matrix evidence from R4.30. Root defaults for the project, user home and system, fetching, version solving, locks and naming authority are Companion tool and ecosystem's under R551-33, as the paragraph says. |
 | `[1490]` | executed | all | none | R2.40 | none | matrix evidence |
 | `[1500]` | executed | all | none | R2.40 | none | matrix evidence |
@@ -12006,10 +12015,10 @@ means the generated row's evidence is the whole explanation.
 | `[1650]` | executed | all | none | R1.80 | none | matrix evidence |
 | `[1660]` | executed | hosted | none | R3.50 | none | matrix evidence; the freestanding root is [0460]'s address literal |
 | `[1670]` | executed | all | none | R1.80 | none | matrix evidence |
-| `[1680]` | executed | hosted | none | R3.60 | none | Capabilities minted at the hosted entry and passed below it are matrix evidence. The freestanding root is [0460]'s address literal, which the paragraph states is a habit rather than an enforced rule; the parked C3 tightening is R7.30's. |
+| `[1680]` | executed | hosted | none | R3.60 | none | Capabilities minted at the hosted entry and passed below it are matrix evidence. The freestanding root is [0460]'s address literal, which the paragraph states is a habit rather than an enforced rule. R7.30 transferred inherited C3's tightening to Language evolution untriggered: no program here runs untrusted code. |
 | `[1690]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[1700]` | executed | all | none | R2.30 | none | matrix evidence |
-| `[1710]` | advisory | none | none | none | none | The admission test for a new language feature, a design-process rule. It adds no source behavior; the parked and watch items it governs are R7.30's to disposition. |
+| `[1710]` | advisory | none | none | none | none | The admission test for a new language feature, a design-process rule. It adds no source behavior; R7.30 dispositioned the parked and watch items it governs in the inherited register. |
 | `[1720]` | executed | all | none | R2.90 | none | matrix and guarantee evidence; its stated non-guarantees execute |
 | `[1730]` | compiled | all | cortex-m | R4.10 | R7.40 | `positive/range-subtypes`' recorded IR shows a range-subtype value carrying its proof with no check under D188, a hosted compile-time rule now in R4.90's audited register; R7.10 dropped two claims that could not observe elision. No Cortex-M verdict exists; R7.40 decides whether the target-neutral IR closes that target. |
 | `[1740]` | executed | all | none | R3.10 | none | matrix evidence |
@@ -12284,7 +12293,7 @@ R7.40 still needs R7.30.
 
 ### R7.30 — Disposition every inherited item
 
-Status: planned
+Status: complete
 Depends on: R7.10, R5.51
 
 Mark each inherited open, parked, held and watch item implemented, rejected with
@@ -12310,6 +12319,268 @@ R7.10's transfer rule requires. R7.20 also exercises E1's watch: D234 enables
 labelled bare blocks under E1's own rule that a program not needing a
 construct is evidence, not automatic removal.
 
+Completion is bound to the exact-revision routine acceptance and delivery
+below. Development runs and failed or interrupted candidates cannot supply that
+binding. This is a disposition and register item: no compiler source, grammar,
+diagnostic, backend, runtime oracle or language rule changes here.
+
+Repository and inherited evidence audit:
+
+The starting checkout was clean on `r720-deferred-normative` at accepted R7.20
+`f19951e606b4ce11f3755190f5c67f145d429968`, tree
+`37e3e91198fe1c5c76e120e8f5a1729fca34fdcd`. Its annotated approval object
+`32a3a93085c5d189de45f0d987604f13eb712af4` binds Linux routine run
+`20260919T135341Z-17a603a728ea` with debugger coverage (all six jobs passed)
+and Darwin run `20260919T135341Z-f5d96430c99a` to archive SHA-256
+`bb8a06e9fd73454dfb2362043e28734e178aefeb84458c45281185b66a9e7482`; the tag's
+annotation equals that recorded approval. Canonical and GitHub namespaces
+matched at 52 rows (26 logical refs excluding HEAD plus 25 peeled tags) with no
+publication lock. Guarded Pages 1891856, mirror 1891857 and tag jobs
+1891858/1891859 succeeded, and all 25 rendered pages on both domains matched
+verified rendering byte for byte. R7.10 and R5.51 are complete. This item's
+charter is the 32-row appendix, R5.51's intake and every retained limit, watch
+or observation that R6.10-R7.20 recorded after that intake.
+
+Decision method:
+
+Each inherited row and each later discovery was decided from recorded evidence
+in one order: the row's own trigger, watch rule or preserved rationale; the
+four complete derived programs (R3.70's parser, R4.70's containers, R4.80's
+hosted application and R6.90's driver), the sixteen `core` modules, the
+examples and the corpus; the tour and specification text the row cites; and
+[1710]'s admission test. A trigger fires only on the evidence its row names,
+and a watch concludes only when its own rule decides it. A transfer names one
+successor, carries the item's activation and completion evidence and cannot
+discharge normative work; a rejection cites the decision that settled it.
+
+Inherited register result:
+
+All 32 appendix rows now carry a terminal disposition: nineteen implemented
+(A1-A8, B1, B2, C6, D1-D5 and F1-F3) and thirteen transferred (B3-B6, C1-C5,
+D6 and E1-E3); none is rejected. A1, A5 and A8 are implemented with their final
+register closure R7.40's (R551-17), F1 with complete coverage R7.60's, and F2
+is the continuing mechanical gate. None of the six challenged positions D1-D6
+is reopened, because no evidence answering its preserved rationale arrived;
+what D6 transfers is the root arrangement that keeps its position, not the
+position. The implemented rows were checked against the items and decisions
+their evidence cites. B2's hosted C boundary is complete on both hosts, and
+the Cortex-M0 C surface it never covered is recorded below as R730-07.
+
+The parked and watch rows and the concurrency direction were decided as
+follows. None changes what a conforming implementation accepts, so none is a
+register decision: every transfer is of something the language does not
+contain, E1's constructs stay as they are, and D235 already records the one
+refused recovery form.
+
+- C1, affine values. Trigger unfired. Prototype 1, the peripheral prototype
+  the trigger names, runs complete on Cortex-M (R6.90) with existing
+  interfaces and no ownership system (R690-9), and X1-X9 raise nothing about
+  ownership. Its derivation instead states exclusive device authority,
+  descriptor linearity, correct stop and destination disjointness as manual
+  obligations, which [1720] already places outside the claim. That is the
+  strongest recorded pressure and R730-10 keeps it for a proposal to answer,
+  but no record calls the program unpleasant, and at-most-once values, which
+  may still leak, could stop a descriptor being copied but not ensure it is
+  ever stopped. [0910]
+  and the prototype sketches already say affine values are parked with their
+  condition in this register, which stays true.
+- C2, conformances as named values. Trigger unfired: no conformance collision
+  occurs across `core`'s six library concepts and the derived programs' three,
+  and nothing wraps a type in `distinct` or passes functions explicitly to
+  avoid one.
+- C3, restricting root minting. Trigger unfired: nothing here runs untrusted
+  code. The derived container program mints `heap.host()` inside three scenario
+  routines, so the restriction has a recorded cost as well as no consumer, and
+  [1680] already calls it a tightening available later rather than a repair
+  owed.
+- C4, generational observers and inferred uniqueness. The legacy item gave no
+  trigger and none is invented. `core`'s tree node ids are distinct ordinals
+  checked against the node count, and its map cursor documents that any
+  mutation invalidates it with no generation check; that is the discipline
+  the idea would automate, not a trigger for it.
+- C5, structure-of-arrays. As R7.20 found, no derived program is a simulation
+  or keeps one field of a collection contiguous. The transfer amends the tour
+  first: [0620] now says Language evolution holds the design record, and its
+  inventory row is `transferred`.
+- E1, control flow nobody used. Y4 and Z15 looked at two sketches; the watch
+  ran through all four complete derived programs, and none of them, nor
+  `core`, writes a label, `break with` or `complete`. The three apparent
+  matches in a text search are two match arms whose bodies are `begin` blocks
+  and an `if ... continue`. E1's own rule makes that evidence, not removal, and
+  nothing else argues for removal: D157, D158 and D234 implement all three on
+  every target, and D234's labelled blocks reuse loop exits with no IR of their
+  own. The watch is inconclusive and transfers; the constructs stay
+  implemented and the tour unchanged. Concluding it by removal was the
+  alternative, but non-use is its only evidence, which E1's rule forbids
+  treating as removal, and for bare-block labels it would reverse D234 one
+  item later on the evidence D234 already weighed.
+- E2, concept width. The watch names real libraries; this roadmap wrote one,
+  `core`, beside four programs, and they give one case each way. R4.80 kept
+  W4's destination concept free of an allocator by giving the counting
+  destination fixed counts, and `filter`, `drawable`, `mem.allocator`,
+  `io.world`, `map.equatable`, `map.hashable` and `sort.ordered` needed
+  nothing wider. D154's `diag.log`
+  went the other way: its `note` declares the streaming provider's `io_failed`
+  and takes an `escaping` message for the bounded provider's retention, so
+  every producer pays both, because prototype 2 requires the two sinks to be
+  interchangeable and [1260]'s two-concept answer would lose that. D154 did
+  not weigh [1260]; this record does. The watch is inconclusive and transfers
+  with both cases.
+- E3, source-generation count. Two programs in the repository write Landin
+  source: R6.80's SVD device generator, which is the SVD-bindings case, and
+  R4.40's C binding generator, which B2 required from the start and which
+  exists because `refine` deliberately parses no headers. Compile-time
+  execution would not replace a header reader, so the second is the
+  vendor-bindings price the tour's WHAT WAS TRIED AND DROPPED entry on
+  compile-time execution already names, not a new case. No program generated
+  a table or an SoA layout. No third case appeared, so D3 is not reviewed;
+  counted as a third, its review would still find nothing that answers D3's
+  rationale.
+- The concurrency execution model. The stackful-fibre trigger is the first
+  derived program that needs two operations in flight. Prototypes 2, 3 and 4
+  run sequentially over the one blocking Io; prototype 1's driver overlaps DMA
+  with the CPU through hardware and an interrupt-set latch with a masked wait,
+  and its derivation records no exclusive accesses, hidden atomics, scheduler
+  or fibres. The trigger has not fired, so the exploration transfers with
+  R551-35. The conditions that keep it reachable still hold: the frame pointer
+  is always present (on Cortex-M0, the r11 record every entry keeps), callee
+  saves are explicit on all three backends, and no capability rides in a
+  reserved register. Stackless coroutines remain a refusal, and no second Io
+  implementation is promised.
+
+Later discoveries:
+
+A later discovery is a retained limit, watch or observation that an item
+record after R5.51's intake (R6.10-R6.100, R7.10 and R7.20) left without a
+finished owner: a capability an item declined or bounded, an evidence claim it
+expressly did not make, or a watch. Handoffs to R6 items that later completed
+are closed by those items and are not repeated, and a selected scope that no
+successor needs to lift, such as the ARMv6-M reference profile or the
+six-profile matrix, is a decision recorded where it was made. R7.20's
+routed-row outcomes are terminal in its own table; only its two transfers need
+a successor record here.
+
+Two discoveries had no owner at all. R6.90 and R6.100 said their
+physical-board limits keep their owners, but none was ever recorded; R730-01
+gives them to Release readiness. R7.20 recorded that shared names and
+labelled blocks are absent from the tree-sitter editor grammar; measured with
+the pinned tree-sitter 0.26.9 and the checked-in parser, the drift is wider and
+predates R7.20 (R730-18), so R3.80's optional integration evidence no longer
+holds. No gate runs that pass, which is how the drift went unseen.
+
+The ledger uses R5.51's kinds. `implemented`, `rejected` and `superseded`
+cite a finished owner; `scheduled` a live item; `merged` an existing R5.51
+record or inherited row whose owner, trigger and completion it joins; and
+`successor`, `limit` and `watch` one named successor.
+
+<!-- r730-ledger -->
+| Discovery | Source and limit | Kind | Disposition | Owner | Activation | Completion evidence |
+|---|---|---|---|---|---|---|
+| R730-01 | R6.10, R6.30, R6.60, R6.80, R6.90 and R6.100: QEMU's microbit CPU lane and synthetic Renode peripherals establish ordered model interactions, not physical device timing, bus, electrical, baud, serial-loss, interrupt-arrival or cache behavior, nor a faithful RP2040. No physical-board validation is claimed, and the physical-board limits R6.90 and R6.100 said keep their owners had none recorded. | evidence-gap | successor | Release readiness | Before any claim about physical device, bus, timing or electrical behavior, or a production firmware claim | A pinned physical board and smoke procedure whose captured traces are checked against the same independent oracles, with retained artifacts; the emulator lanes stay mandatory and a board result never replaces them. |
+| R730-02 | R6.30 and R6.70: D227's cache model is not physical cache-maintenance evidence, and `core/cpu` provides only the cacheless M0 profile's primitives; a cached device profile must establish its maintenance, alias and visibility-point premises. | supported-limit | merged | R551-34 | A cached device profile, or a program that needs cache maintenance | Cache-maintenance providers with that profile's premises and independent controls, leaving D227's semantics unchanged. |
+| R730-03 | R6.30: native ordering trials and bounded store-buffer models are evidence, not a complete formal proof of D227, and no wait-free or timing bound is claimed. | evidence-gap | successor | Release readiness | Before a claim about D227 outcomes beyond the bounded models and trials, or any wait-free or timing bound | A stated proof or checked model of D227's orderings with its assumptions, agreeing with the retained native trials. |
+| R730-04 | R6.30: atomic and barrier lowering is correct baseline code, not competitive lowering. | observation | merged | R551-12 | Measured atomic or barrier code-quality pressure | Unchanged D227 events, orderings and effects, with native code-quality and debugger evidence. |
+| R730-05 | R6.50 and R6.70: seventeen shared programs exceed the selected 32 KiB flash, 16 KiB RAM and 4 KiB stack profile in every scheduled mode (72 capacity verdicts), and R6.70's exploratory pool composition exceeded flash by 10,152 bytes; no larger board replaces the profile. | supported-limit | merged | R551-07 | Before a larger Cortex-M image profile is admitted, or when a real firmware workload exceeds the selected map | A separately selected, measured profile that reruns every capacity verdict, with the 32 KiB reference profile and its verdicts retained. |
+| R730-06 | R6.60, R6.70 and R6.100: stack paint and SP observation are scenario measurements plus frame deltas, not a worst-case bound, arbitrary nesting guarantee or interrupt-arrival analysis; the largest application's 64 spare flash bytes are a measured fit, not a production budget; and compiler-owned reset assumes hardware vector entry and no NMI or fault in its initialization window. | evidence-gap | successor | Release readiness | Before a production firmware budget, a worst-case stack claim or a fault-tolerant reset claim | A specified workload and interrupt model with a bound checked over it, the paint and observer controls retained, and reset-window behavior stated with executable evidence. |
+| R730-07 | R6.20, R6.50 and R6.70: Cortex-M0 C source capabilities, `core/c` and header-generator support stay disabled, and 33 shared programs are general-C restrictions there; R6.20's AAPCS planner is validated only by independent C and assembly controls. | supported-limit | successor | Broader standard library | A freestanding program that must call C or be called from C | An ILP32 `core/c`, Cortex-M0 C signatures enabled over the validated AAPCS planner, binding-generator target facts and executable C-boundary fixtures, with the 33 restrictions re-decided. |
+| R730-08 | R6.80 and R6.90: the RP2040 fixture is a bounded six-module, 30-register selection; every CMSIS-SVD feature, general array, cluster and alternate expansion, read-only and write-only helpers and an abort driver are not provided. | supported-limit | merged | R551-33 | Before general SVD generation or another device family is offered | The general generator's declared inputs and outputs, with the selected fixtures regenerating byte for byte. |
+| R730-09 | R6.90: the driver supports one 115200 baud rate at its declared clock; a general UART configuration library was declined as adding no needed gate evidence and not fitting the image budget. | supported-limit | merged | R551-34 | A program that needs another rate or UART configuration | A configuration library with recoverable refusals, constrained-target costs and consumers. |
+| R730-10 | R6.90: local checks do not enforce the driver's exclusive device authority, descriptor linearity, correct stop, destination disjointness or external writers; the derivation states them as manual obligations. | observation | merged | C1 | C1's trigger, a peripheral or resource program unpleasant without affine values | A C1 proposal states which of these obligations it checks; at-most-once values alone cannot ensure a descriptor is ever stopped. |
+| R730-11 | R6.60: the compiler-owned firmware linker script and materialization budget are fixed supported limits, not a general linker-script language. | supported-limit | merged | R551-33 | Before general firmware build or linker-script configuration is offered | Declared build inputs and reproducible firmware artifacts, keeping compiler-owned startup and its refusals. |
+| R730-12 | R6.100 and R7.20: Cortex-M0 source debugging is lines and functions only, with no locals, arguments, types or expressions, D235's union included, no automatic source unwinding across an exception and no lines inside naked bodies or veneers. | supported-limit | merged | R551-26 | A concrete debugger-usability proposal | Truthful Cortex locations and types with remote GDB sessions for each new promise; the line and function contract stays mandatory. |
+| R730-13 | R6.100: source and debug identity selection is matching, not forged-input authentication or protection against concurrent filesystem replacement. | supported-limit | merged | R551-23 | Before stronger provenance or attestation claims | An attestation design with verified restore; the seven negative selections stay mandatory. |
+| R730-14 | R6.40: packed images carry at most 64 bits, array transfers snapshot at most 64 values, and signed, floating, pointer, callback, nested aggregate and variant packed fields are refused. | supported-limit | rejected | R6.40 | None; only an explicit register decision reopening D228 | D228's recorded boundary and its pinned negatives. |
+| R730-15 | R7.10: construct claims remain fixture authors' claims, not all re-read; per-target evidence is derived from committed records rather than replayed; evidence outside fixture metadata is recorded in dispositions. | evidence-gap | merged | R551-17 | Each diagnostic or coverage change and the R7.40 gate | Claim-appropriate oracles and derivation provenance, with the target-applicability register closed at R7.40. |
+| R730-16 | R7.10: Cortex-M source verdicts for [1270], [1400], [1730] and [1860], attributable Cortex-M evidence for [1610]'s link names, and boundary wording for the [1350] and [1580] notes. | evidence-gap | scheduled | R7.40 | R7.40's register closure | A verdict or recorded target-neutral argument for each row, attributed firmware evidence, and notes that name decided boundaries. |
+| R730-17 | R7.20: a call returning a plain pointer cannot fill a several-atom pointer union through an atom `else`; D235 keeps it L0301 because the recovery would need its own lowering, and binding the pointer first and then widening expresses it. | observation | successor | Language evolution | A program that needs a call's recovery to widen into a several-atom pointer union | D235 amended with a recovery lowering that writes the code cell, and positive, negative and runtime evidence on all three targets. |
+| R730-18 | R7.20, measured wider by R7.30: R3.80's structural editor grammar has drifted from the enabled kernel. With the pinned tree-sitter 0.26.9 and the checked-in parser, 48 of the 846 positive, runtime, ABI and `core` sources report an error or missing node, `core/io` and `core/tree` among them: `distinct` and parameterized type declarations, union aliases, inline struct declarations, `noreturn` signatures, a variant-case assignment, D233's shared names and D234's labelled blocks. | defect | scheduled | R7.40 | R7.40's grammar closure | The structural grammar transcribes those forms and R3.80's integration pass parses every positive, runtime, ABI and `core` source without an error node. |
+| R730-19 | R7.20: the lexical highlighters still colour withdrawn or transferred words such as `soa`, `register`, `volatile`, `big`, `little`, `u128` and `f16`. | observation | rejected | R7.30 | None; the tour's design records and the historical findings keep those spellings | The shared vocabulary stays a colour list apart from `check.py`'s legality list, as `highlight/README.md` states. |
+| R730-20 | R7.20: D237 transfers u128, i128 and f16 out of this slice. | parked-watch | successor | Language evolution | A program that needs 128-bit arithmetic or binary16 values | D237's recorded plan on all three targets: software 128-bit fold carriers, register pairs on the hosts and four words on Cortex-M0, compiler-emitted multiplication and division, and f16 through f32 with one rounding and a trapping integer-to-float conversion. |
+| R730-21 | R7.20: D240 transfers the atomic wrapper type out of `core`; Cortex-M0 has no read-modify-write atomics. | parked-watch | merged | R551-34 | A program that needs a portable atomic wrapper | A wrapper over D227's builtins that answers M0's missing read-modify-write explicitly, with consumers and failure oracles. |
+<!-- /r730-ledger -->
+
+Mechanical checks:
+
+`check.py` now holds every appendix row to a terminal disposition. The table
+gains two columns, so `MIGRATION_ROW` reads five cells while the legacy
+identities and their required anchors are unchanged. A disposition is
+`implemented`, `rejected` or `transferred`; an implemented or rejected row must
+cite a finished item; a transferred row must name exactly one successor from
+"Successor roadmaps", whose entry must name the row, and carry an
+`Activation:` and a `Completion:` for it. `scripts/roadmap_debt.py` validates
+the ledger above: contiguous labels, closed kinds and dispositions, a source
+item after R5.51's intake, an owner that fits the disposition and no
+transferred normative work. It also holds R5.51's ledger to the rule that
+`scheduled` names a live item, so R551-17 and R551-30 must move when R7.40
+completes, as R551-35 moved here. `scripts/tests/test_migration_register.py`
+and the extended `test_roadmap_debt.py` refuse each malformed control, and
+`test_construct_inventory.py` re-anchors its deferral controls on a synthetic
+deferred row, since [0620] was the last deferred construct, and adds a control
+for [0620]'s transfer marker. Full `check.py` runs all three.
+
+Inventory result:
+
+201 constructs. States: 192 executed, 4 compiled, 0 deferred, 2 transferred
+([0620] and [1470]) and 3 advisory. Rows naming an open owner: seven R7.40,
+three Companion tool and ecosystem ([0730], [1470], [1480]), three Language
+evolution ([0150], [0170], [0620]) and one Broader standard library ([1620]).
+No row names R7.30, and the five Cortex-M gaps are unchanged and R7.40's.
+[1180], [1470], [1680] and [1710] now record the terminal dispositions of the
+inherited rows they link. `constructs.matrix` regenerates with [0620]'s new
+state and owner, and no fixture, program, verdict, oracle or other generated
+matrix changes.
+
+Documents:
+
+`tour.md` changes in two places. [0620] says the Language evolution successor
+holds structure-of-arrays and what would bring it in, which the inventory's
+transfer rule requires. WHAT IS STILL OPEN says every inherited item has a
+terminal disposition and which parked designs Language evolution holds, and
+replaces its stale report that R4 was completing with the R0-R6 state. No
+`spec.md` register entry is owed, for the reason above, and no prototype text
+changes: the sketches' own words, that affine values are parked with a
+condition in this register, remain accurate, and their finding sections are
+historical. `handoff.md`, `README.md` and `AGENTS.md` move their status
+pointers to R7.40.
+
+Left to later items and successors:
+
+R7.40 keeps its register closure, the Cortex-M verdicts for [1270], [1400],
+[1730] and [1860], [1610]'s link names, the [1350] and [1580] note wording,
+R551-17 and R551-30, and now R730-18's editor grammar; R730-16 restates
+R7.10's routing. R7.50 keeps its determinism programme and R7.60 complete
+derived coverage (F1). R7.70 must preserve every transfer: the thirteen
+transferred appendix rows, R5.51's `successor`, `limit` and `watch` records,
+and this ledger's successor, merged and scheduled records. No successor work
+starts here: no scheduler, fibre, ownership system or package ecosystem, and
+no release or version change.
+
+Limits:
+
+The dispositions are judgments from recorded evidence, and the rows' own
+words decide them: "unpleasant" for C1, "inconclusive" for E1 and E2, "a third
+case" for E3. The E1 and E3 counts are text searches over the derived
+programs, `core`, the examples and the repository's scripts, with every match
+read. The editor-grammar measurement used the checked-in parser outside
+acceptance and changed nothing. A ledger row records where a limit was stated
+and who owns lifting it; it does not re-verify the original item's evidence.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies without debugger risk were selected
+with `scripts/ci/policy.py routine` and committed before the closure candidate.
+The changes are documents, the generated construct matrix, `check.py`,
+`scripts/roadmap_debt.py` and three test files; no compiler source, emission,
+DWARF, CFI, debugger script or acceptance selection or verification changes.
+Routine keeps the Linux debug host suite, complete release hosted suite,
+release quality, bindings and documents jobs, and Darwin's two compiler-host
+modes, complete release hosted parity and bindings. Only matching verified
+native exports and the annotated dual-native `ci/accepted/FULL_COMMIT`
+approval close this exact containing revision, with atomic canonical
+promotion, a complete matching GitHub namespace and guarded Pages publication
+byte-matched on both domains. A later bookkeeping revision cannot supply the
+binding. With it R7.40 is the next dependency-ready item.
+
 ### R7.40 — Close all evidence registers
 
 Status: planned
@@ -12332,6 +12603,13 @@ Cortex-M; attributable Cortex-M evidence for [1610]'s link names, which run
 only in R6.60's firmware probe; and boundary wording for the [1350] and [1580]
 notes, which still say finished R2.40 and R4.40 enable decided refusals. The
 inventory refuses this item's completion while a row still names it.
+
+R7.30's ledger routes one more repair here, R730-18. R3.80's structural
+editor grammar has drifted from the enabled kernel: its integration pass no
+longer parses 48 of the 846 positive, runtime, ABI and `core` sources. This
+item transcribes the missing forms into the grammar and records that pass
+clean. R730-16 restates R7.10's routing above, and R551-17 and R551-30 stay
+here; R5.51's ledger refuses a `scheduled` record whose owner has completed.
 
 Exit evidence: `spec.md` contains lexical, precedence, statement and expression
 grammar for every construct the tour still describes; no matrix contains a gap, stale
@@ -12418,14 +12696,19 @@ of them may be satisfied by inventing one.
   the Language evolution successor roadmap. Its trigger is the first derived
   program that needs two things in flight at once; the case to design
   against is a single-core freestanding target, where the honest answer to a
-  request for concurrency is that there is none.
+  request for concurrency is that there is none. R7.30 found that trigger
+  unfired in all four derived programs and transferred the exploration there
+  under R551-35.
 
 ## Inherited review register and migration parity
 
 This appendix preserves all 32 legacy backlog entries exactly once. It records
 why each exists, its sources and its roadmap owner. Parked and watch entries do
-not block phases unless their stated trigger fires. At R7 each row receives a
-terminal disposition.
+not block phases unless their stated trigger fires. R7.30 gave each row its
+terminal disposition, implemented, rejected with evidence or transferred to one
+named successor, with the evidence for it; a transferred row also carries the
+activation and completion its successor inherits, and the successor's entry
+under "Successor roadmaps" names it. `check.py` holds every row to that.
 
 The D1–D6 labels in this appendix name inherited review positions, not the
 specification's D1–D6 decisions. Elsewhere a D-number cites the specification
@@ -12436,40 +12719,40 @@ These six inherited positions were each challenged by an outside reader and
 deliberately retained. Reopen one only with new evidence that answers its preserved rationale,
 and record the reopening explicitly.
 
-| Legacy item | Preserved decision, trigger and sources | Roadmap owner or successor |
-| --- | --- | --- |
-| A1 — Normative grammar | Add lexical rules, an explicit precedence table, statement grammar and expression grammar. Sources: `H§P0.1`; `R` bottom line. | Incremental ownership starts in R1.10 and continues with each construct phase; complete normative grammar closes in R7.40. |
-| A2 — Raw storage as a type | `[0510]` withdrew `slice_from` as an honest answer. Track capacity apart from initialized count, admit one slot at a time and release only initialized values; derive the shape from containers. Sources: `[0510]`, Z8, `R§2`, `H§4`. | R3.20, R3.30 |
-| A3 — Full value layout | Decide variant tag width/position, payload alignment and spare-bit folding through implementation measurements. The legacy item had no tracked citation. | R2.10, R2.20 |
-| A4 — Invalid packed encodings | Decide trap, unknown/raw or other behavior for unnamed hardware patterns; distinguish raw image, validated value and reserved bits by access mode. Source: `R§6`. | R6.40 |
-| A5 — Guarantee table | Classify every operation as statically prevented, runtime trapped, permitted only beyond lifetime checking or outside guarantees. Sources: `[0310]`, `[0430]`, `[0470]`, `[0770]`, `[0910]`, `[1120]`, `[1720]`, `R§4`, `H§5`. | R2.90; closes R7.40 |
-| A6 — Compiler-supplied conformances | Reconcile compiler-supplied `zeroable` with declared conformances and collision errors; keep the supplied set closed and named to avoid reflection. Sources: `[0550]`, `[1280]`. | R2.60 |
-| A7 — Generic evidence ABI | Define physical layout, entry order and size/alignment positions; `any` needs the table in the first major milestone. Sources: `[1310]`, `R§12`. | R2.70, R2.80 |
-| A8 — Diagnostics | Maintain concrete codes and useful origin/borrow output. Source: `R§P1.5`. Codes may change pre-v1 only through synchronized updates. | R1.30; closes R7.40 |
-| B1 — Concurrency memory model | Define data races, atomic orderings, happens-before, volatile ordering/tearing, interrupt visibility, compiler/hardware barriers, DMA coherence and cache maintenance; preserve the ordinary-slice DMA case. Source: `R§5`. | R6.30 |
-| B2 — C ABI subset | Cover C scalar aliases and `char`, aggregates, enums, unions, bitfields, varargs, callbacks, TLS, `errno`, foreign ownership, failure boundaries and calling-convention identity; provide binding generation. Sources: `R§9`, `R§10`. | R4.40 |
-| B3 — Separate compilation | Preserve proposed interfaces containing declarations/layouts, concrete errors, `escaping`/`from`, conformances, evidence ABI, package identity, language version and hashes, plus an explicit `shared`/`specialized`/`auto` policy rather than heuristics. Source: `R§12`. | Whole-program choice in R0.60/R4.30; stable interfaces transfer to Scale and self-hosting. |
-| B4 — Package, build and generators | Preserve manifests, locks, hashes, deterministic roots, targets/sysroots, hosted/freestanding profiles, linker scripts, startup, firmware and sandboxed generators with declared inputs and outputs. Source: `R§13`. | Required thin pieces in R3.10/R4.30/R6.60; acquisition and general generator orchestration transfer to Companion tool and ecosystem. |
-| B5 — Standard library | Preserve hosted/freestanding layering, detailed allocator interface, raw-syscall/libc choice and deliberate omissions. The legacy item had no tracked citation. | Required slices in R3.40/R4.20/R6.70; remainder transfers to Broader standard library. |
-| B6 — Package naming authority | Keep project-first override and postpone global authority. Source: `[1480]`. | Companion tool and ecosystem. |
-| C1 — Affine values | Could support resource ownership, peripheral singletons and typestate, but would change `[0910]`'s non-ownership `sink`; affine is at-most-once and can still leak. Trigger: a peripheral/resource prototype unpleasant without it. Sources: `[0910]`, `R§3`, `H§3`. | Parked; transfer to Language evolution if R6 does not trigger it. |
-| C2 — Conformances as named values | Trigger: collisions hurting in real libraries. The legacy item had no tracked citation. | Parked; transfer to Language evolution if untriggered. |
-| C3 — Restrict root capability minting | Would make hosted subtrees checkable but cannot close freestanding address literals. Trigger: wanting to run untrusted code. Source: `[1680]`. | Parked; transfer to Language evolution if untriggered. |
-| C4 — Generational observers for graphs and inferred uniqueness | Preserve both parked ideas together. The legacy item gave no trigger or citation; do not invent one. | Parked; transfer to Language evolution unless later evidence supplies a trigger. |
-| C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. |
-| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Linux semantics implemented in R4.10 by D187; macOS hosted parity is R5.50; applicable freestanding conformance evidence is R6.100. What an optimizer may assume stays with R4.50. |
-| D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implemented in R4.10 by D182; reopen only with new program/measurement evidence. |
-| D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. |
-| D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. |
-| D4 — Write `escaping` and `from` | Preserve local compilation and the allocator counterexample to inferred `from`. Sources: `[0790]`, `[0900]`. | Implement in R2.50; reopen only with evidence preserving both properties. |
-| D5 — Own backend | Assembly out, with QBE as design influence; not LLVM due dependency size and not C due calling convention, traps and debug precision. The historical handoff proposed C/LLVM and was declined. Sources: archived `HANDOFF.md` (declined C/LLVM first-host proposal); current `handoff.md` and `[1550]` (settled native-backend position). | Implement across R1.80, R5.30 and R6.50. |
-| D6 — One package-name version per program | Preserve 32 KB code-size pressure, nominal types and one conformance register; a conflict is a hard error. Source: `[1470]`. | Companion tool and ecosystem: arrange the ordered roots supplied to `refine` so only one version is reachable; a conflict detected while arranging roots is a hard error requiring an upgrade. |
-| E1 — Control flow nobody used | Labels, `break with` and `complete` appeared in one of four prototypes. A fifth program not needing them is evidence, not automatic removal. Sources: Y4, Z15. | Watch through R7; transfer to Language evolution if inconclusive. |
-| E2 — Concept width | Resist widening concepts to the hungriest implementation; watch real libraries. Sources: `[1260]`, W4. | Watch R3/R4; transfer to Language evolution if inconclusive. |
-| E3 — Source-generation count | Two cases stand: generated tables and SVD bindings. A third triggers D3 review. The legacy item had no independent citation. | Watch R3-R6; transfer to Language evolution if no third case appears. |
-| F1 — Executable prototype conformance | Preserve positive and negative cases, especially formerly contradictory pre-0.0.17 examples; prose-only prototypes cost two patch releases. Sources: `R§P0.8`; `H` definition of success. | R0.30 and complete derived programs at R3.70/R4.70/R4.80/R6.90/R7.60. |
-| F2 — Grow `check.py` | Every cheap new rule and every defect once missed becomes a check; it found most 0.0.15-through-0.1.0 defects. The legacy item had no citation. | Roadmap-wide process and mechanical gate. |
-| F3 — First implementation amendment | Evidence tables and `any` belong in the first major subset; specialization does not. The table is the foundation and specialization the optimization; parser and hosted I/O need dispatch. Source: `[1310]`. | R2.70/R2.80 and R3.70; specialization starts only at R4.50. |
+| Legacy item | Preserved decision, trigger and sources | Roadmap owner or successor | R7.30 disposition | Evidence, activation and completion |
+| --- | --- | --- | --- | --- |
+| A1 — Normative grammar | Add lexical rules, an explicit precedence table, statement grammar and expression grammar. Sources: `H§P0.1`; `R` bottom line. | Incremental ownership starts in R1.10 and continues with each construct phase; complete normative grammar closes in R7.40. | implemented | `spec.md`'s enabled-kernel grammar, [1740]-[1830], has carried lexical rules, [1820]'s precedence table and the statement and expression productions since R1.10, and `check.py` derives every positive fixture from it and holds `Landin.Tokens` and `Landin.Syntax.Precedence` to it. R7.40's exit evidence closes it for every construct the tour still describes. |
+| A2 — Raw storage as a type | `[0510]` withdrew `slice_from` as an honest answer. Track capacity apart from initialized count, admit one slot at a time and release only initialized values; derive the shape from containers. Sources: `[0510]`, Z8, `R§2`, `H§4`. | R3.20, R3.30 | implemented | [0510], D151 and R3.30: `core/mem`'s private raw storage keeps capacity apart from the initialized prefix, admits one slot at a time and releases only initialized values, and R4.20's D198 map reuses it without forging spare capacity (Z8). |
+| A3 — Full value layout | Decide variant tag width/position, payload alignment and spare-bit folding through implementation measurements. The legacy item had no tracked citation. | R2.10, R2.20 | implemented | R2.10's target-parametric layout and R2.20's D74, one unfolded tag-first variant layout, measured on each target; spare-bit folding, tag-last placement, C-union layout and a target-sized tag were declined there, and R6.20 instantiates the same rules at 32 bits. |
+| A4 — Invalid packed encodings | Decide trap, unknown/raw or other behavior for unnamed hardware patterns; distinguish raw image, validated value and reserved bits by access mode. Source: `R§6`. | R6.40 | implemented | R6.40's D228: raw images, validated extraction, reserved-bit policies and per-access-mode behavior, executed on all three targets and against an independent Renode trace (R551-31). |
+| A5 — Guarantee table | Classify every operation as statically prevented, runtime trapped, permitted only beyond lifetime checking or outside guarantees. Sources: `[0310]`, `[0430]`, `[0470]`, `[0770]`, `[0910]`, `[1120]`, `[1720]`, `R§4`, `H§5`. | R2.90; closes R7.40 | implemented | R2.90's guarantee register, D148 and `compiler/tests/guarantees.matrix`, which each later operation entered as it was implemented. R7.40 closes the final matrix and R551-17's claim limits. |
+| A6 — Compiler-supplied conformances | Reconcile compiler-supplied `zeroable` with declared conformances and collision errors; keep the supplied set closed and named to avoid reflection. Sources: `[0550]`, `[1280]`. | R2.60 | implemented | R2.60's D143: `zeroable` is the one closed compiler-supplied concept family, collisions are errors across files and no reflection enters; `positive/compiler-zeroable-conformances` pins it. |
+| A7 — Generic evidence ABI | Define physical layout, entry order and size/alignment positions; `any` needs the table in the first major milestone. Sources: `[1310]`, `R§12`. | R2.70, R2.80 | implemented | R2.70's evidence tables and R2.80's `any`, shipped without specialization in R3.70's first milestone; D144 fixes the semantic entry order and target-derived layout, and R6.20 plans the same positions at 32 bits. |
+| A8 — Diagnostics | Maintain concrete codes and useful origin/borrow output. Source: `R§P1.5`. Codes may change pre-v1 only through synchronized updates. | R1.30; closes R7.40 | implemented | R1.30's diagnostic catalogue, with stable codes changed only by synchronized updates, grown by every item since. R7.40 closes the diagnostic matrix and R551-17's exact-oracle limits. |
+| B1 — Concurrency memory model | Define data races, atomic orderings, happens-before, volatile ordering/tearing, interrupt visibility, compiler/hardware barriers, DMA coherence and cache maintenance; preserve the ordinary-slice DMA case. Source: `R§5`. | R6.30 | implemented | R6.30's D227 defines races, orderings, happens-before, volatile access, barriers, interrupt visibility and the ordinary-slice DMA contract on all three targets, and R6.90's complete driver consumes it (R551-31). |
+| B2 — C ABI subset | Cover C scalar aliases and `char`, aggregates, enums, unions, bitfields, varargs, callbacks, TLS, `errno`, foreign ownership, failure boundaries and calling-convention identity; provide binding generation. Sources: `R§9`, `R§10`. | R4.40 | implemented | R4.40's hosted C boundary, D203-D205 and `bindings/generate.py`, and R5.30's Darwin transport, D226, execute or explicitly refuse each listed category on both hosts. Cortex-M0's general C surface stays disabled by R6.20 and is R730-07's. |
+| B3 — Separate compilation | Preserve proposed interfaces containing declarations/layouts, concrete errors, `escaping`/`from`, conformances, evidence ABI, package identity, language version and hashes, plus an explicit `shared`/`specialized`/`auto` policy rather than heuristics. Source: `R§12`. | Whole-program choice in R0.60/R4.30; stable interfaces transfer to Scale and self-hosting. | transferred | Whole-program checking is implemented (R0.60, R4.30); stable interfaces, package identity in interfaces and cross-language stage transport are R551-32's and untriggered. Activation: successor planning after R7.70 or an explicit scope decision (R551-32). Completion: tested seams, complete interface and package identity and unchanged whole-program semantics (R551-32). |
+| B4 — Package, build and generators | Preserve manifests, locks, hashes, deterministic roots, targets/sysroots, hosted/freestanding profiles, linker scripts, startup, firmware and sandboxed generators with declared inputs and outputs. Source: `R§13`. | Required thin pieces in R3.10/R4.30/R6.60; acquisition and general generator orchestration transfer to Companion tool and ecosystem. | transferred | The thin pieces are implemented: ordered roots (R3.10), explicit roots and options (R4.30), compiler-owned firmware startup and linking (R6.60) and checked-in device fixtures (R6.80). Acquisition, manifests, locks, general generators and sandboxing are R551-33's. Activation: before acquisition, general generation or concurrent build consumers are offered (R551-33). Completion: declared generator inputs and outputs, immutable publication, reproducible roots and single-version conflicts (R551-33). |
+| B5 — Standard library | Preserve hosted/freestanding layering, detailed allocator interface, raw-syscall/libc choice and deliberate omissions. The legacy item had no tracked citation. | Required slices in R3.40/R4.20/R6.70; remainder transfers to Broader standard library. | transferred | The required `core` slices are implemented (R3.40, R4.20, R6.70): sixteen modules serve the four derived programs. The rest is R551-34's. Activation: a concrete program needs an omitted facility (R551-34). Completion: capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles (R551-34). |
+| B6 — Package naming authority | Keep project-first override and postpone global authority. Source: `[1480]`. | Companion tool and ecosystem. | transferred | [1480] leaves naming authority to the companion tool; the compiler's project-first ordered roots are implemented (R3.10, R4.30). Activation: before acquisition or a naming authority is offered (R551-33). Completion: a naming policy that keeps the project-first override (R551-33). |
+| C1 — Affine values | Could support resource ownership, peripheral singletons and typestate, but would change `[0910]`'s non-ownership `sink`; affine is at-most-once and can still leak. Trigger: a peripheral/resource prototype unpleasant without it. Sources: `[0910]`, `R§3`, `H§3`. | Parked; transfer to Language evolution if R6 does not trigger it. | transferred | Trigger unfired. Prototype 1 runs complete without affine values (R6.90): R690-9 derived it with existing interfaces and no ownership system, X1-X9 raise no ownership question, and its derivation states exclusive device authority, descriptor linearity and correct stop as manual obligations, which [1720] already leaves outside the claim and at-most-once values could not wholly check, because they may still leak (R730-10). Activation: a peripheral or resource program unpleasant without affine values. Completion: [0910]'s non-ownership `sink` amended in the tour with a register decision that answers R730-10's obligations, and executable evidence on all three targets. |
+| C2 — Conformances as named values | Trigger: collisions hurting in real libraries. The legacy item had no tracked citation. | Parked; transfer to Language evolution if untriggered. | transferred | Trigger unfired: `core`'s six library concepts and the four derived programs declare their conformances without a collision, and no `distinct` wrapper or explicit-function workaround exists to avoid one ([1280]). Activation: conformance collisions hurting in real libraries. Completion: a register decision weighed against D2's retained position, with library consumers. |
+| C3 — Restrict root capability minting | Would make hosted subtrees checkable but cannot close freestanding address literals. Trigger: wanting to run untrusted code. Source: `[1680]`. | Parked; transfer to Language evolution if untriggered. | transferred | Trigger unfired: no program here runs untrusted code. [1680] calls the restriction a tightening available later, not a repair owed, and the complete container derivation mints `heap.host()` inside its scenario routines, which an entry-module restriction would refuse. Activation: wanting to run untrusted code. Completion: minting restricted to the entry module with [1680] amended and a register decision, leaving [0460]'s address literal open as [1680] says. |
+| C4 — Generational observers for graphs and inferred uniqueness | Preserve both parked ideas together. The legacy item gave no trigger or citation; do not invent one. | Parked; transfer to Language evolution unless later evidence supplies a trigger. | transferred | No trigger was given and none is invented. `core`'s tree node ids are distinct ordinals checked against the node count, its map cursor documents that any mutation invalidates it with no generation check, and no derived program asked for more. Activation: none until later evidence supplies a trigger, which is recorded first. Completion: that trigger recorded, then a design with its own evidence. |
+| C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. | transferred | Trigger unfired, as R7.20 also found: no derived program is a simulation or keeps one field of a collection contiguous, and [0620] now names Language evolution. Activation: a simulation program needing one field contiguous. Completion: [0620] enabled by a tour amendment and register decision covering aliasing, generics, slicing, `addr`, layout, debug information and the optimiser, with executable evidence. |
+| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Linux semantics implemented in R4.10 by D187; macOS hosted parity is R5.50; applicable freestanding conformance evidence is R6.100. What an optimizer may assume stays with R4.50. | implemented | D187 implements `unchecked` on Linux (R4.10), R5.50 adds Darwin parity and R6.100 the applicable Cortex-M0 evidence; R4.50's D211 keeps it granting an optimiser nothing ([1720]). |
+| D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implemented in R4.10 by D182; reopen only with new program/measurement evidence. | implemented | R4.10's D182 implements linear codepoint-ordinal indexing; no program or measurement since has brought the new evidence its reopening needs. |
+| D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. | implemented | R2.60 makes a collision an error across files, with no weak conformances and no orphan rule; no ecosystem-scale evidence arrived (C2). |
+| D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. | implemented | The grammar has had no compile-time execution or macro form since R1.10, and [1540] states the line. E3 found no third generated case, so no D3 review was triggered; generator orchestration is B4's. |
+| D4 — Write `escaping` and `from` | Preserve local compilation and the allocator counterexample to inferred `from`. Sources: `[0790]`, `[0900]`. | Implement in R2.50; reopen only with evidence preserving both properties. | implemented | R2.50 implements written `escaping` and `from` ([0790], [0900]); no evidence preserving both properties arrived. |
+| D5 — Own backend | Assembly out, with QBE as design influence; not LLVM due dependency size and not C due calling convention, traps and debug precision. The historical handoff proposed C/LLVM and was declined. Sources: archived `HANDOFF.md` (declined C/LLVM first-host proposal); current `handoff.md` and `[1550]` (settled native-backend position). | Implement across R1.80, R5.30 and R6.50. | implemented | Three native backends emit assembly: Linux x86-64 (R1.80), Darwin arm64 (R5.30) and Cortex-M0 (R6.50); C and LLVM remain rejected ([1550]). |
+| D6 — One package-name version per program | Preserve 32 KB code-size pressure, nominal types and one conformance register; a conflict is a hard error. Source: `[1470]`. | Companion tool and ecosystem: arrange the ordered roots supplied to `refine` so only one version is reachable; a conflict detected while arranging roots is a hard error requiring an upgrade. | transferred | The compiler's share, [1420]'s first-root rule, is implemented by R3.10; [1480] gives root arrangement to the companion tool, and the inventory transfers [1470]. Activation: before acquisition or root arrangement is offered (R551-33). Completion: roots arranged so one version of a package name is reachable, a conflict being a hard error (R551-33). |
+| E1 — Control flow nobody used | Labels, `break with` and `complete` appeared in one of four prototypes. A fifth program not needing them is evidence, not automatic removal. Sources: Y4, Z15. | Watch through R7; transfer to Language evolution if inconclusive. | transferred | Inconclusive under its own rule: none of the four complete derived programs (R3.70, R4.70, R4.80, R6.90) nor `core` writes a label, `break with` or `complete`, which E1 counts as evidence, not removal, while D157, D158 and D234 implement all three on every target and D234's blocks need no IR of their own. Activation: an explicit proposal to remove or reshape them, which must bring evidence beyond non-use. Completion: a tour amendment and register decision weighing that proposal against the four programs' record. |
+| E2 — Concept width | Resist widening concepts to the hungriest implementation; watch real libraries. Sources: `[1260]`, W4. | Watch R3/R4; transfer to Language evolution if inconclusive. | transferred | Inconclusive, one case each way. R4.80's application kept W4's destination concept narrow with fixed counts, and `filter`, `drawable` and the other `core` concepts needed nothing wider. In `core`, the one real library here, D154's `diag.log` instead carries both providers' needs, the streaming provider's `io_failed` and the bounded provider's `escaping` retention, because prototype 2 requires interchangeable sinks, which rules out [1260]'s two-concept answer. Activation: a real library whose concept must widen for its hungriest implementation or split in two ([1260]). Completion: [1260] confirmed or amended with that library's evidence, weighing D154's interchangeability case. |
+| E3 — Source-generation count | Two cases stand: generated tables and SVD bindings. A third triggers D3 review. The legacy item had no independent citation. | Watch R3-R6; transfer to Language evolution if no third case appears. | transferred | No third case: the repository's two Landin source generators are R6.80's SVD device generator, the SVD case, and R4.40's C binding generator, which B2 required and which reads the headers `refine` deliberately does not parse, so compile-time execution would not replace it; no program generated a table or an SoA layout. Activation: a third kind of generated source, which starts the D3 review. Completion: that review recorded against D3's preserved rationale. |
+| F1 — Executable prototype conformance | Preserve positive and negative cases, especially formerly contradictory pre-0.0.17 examples; prose-only prototypes cost two patch releases. Sources: `R§P0.8`; `H` definition of success. | R0.30 and complete derived programs at R3.70/R4.70/R4.80/R6.90/R7.60. | implemented | R0.30's corpus and the complete derived programs of R3.70, R4.70, R4.80 and R6.90 execute with positive and negative derivatives; R7.60 runs complete coverage by the applicability matrix. |
+| F2 — Grow `check.py` | Every cheap new rule and every defect once missed becomes a check; it found most 0.0.15-through-0.1.0 defects. The legacy item had no citation. | Roadmap-wide process and mechanical gate. | implemented | A continuing gate rather than a deliverable: R5.51's ledger checks, R7.10's inventory checks and R7.30's disposition checks each turned a textual rule into a mechanical one with malformed controls. |
+| F3 — First implementation amendment | Evidence tables and `any` belong in the first major subset; specialization does not. The table is the foundation and specialization the optimization; parser and hosted I/O need dispatch. Source: `[1310]`. | R2.70/R2.80 and R3.70; specialization starts only at R4.50. | implemented | Evidence tables and `any` shipped in R2.70, R2.80 and R3.70's first milestone without specialization, which R4.50's D211 adds as an optimization. |
 
 D225 follows the user's explicit J104 decision to reserve control words.
 The thirteen additional keywords join the scanner's reserved vocabulary;
