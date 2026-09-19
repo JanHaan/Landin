@@ -1,0 +1,6 @@
+-- [1560] once listed vector intrinsics; D240 withdrew them because fixed
+-- arrays are the vector type and D209 already gives them element-wise
+-- operators [0590].
+scale: (a: [4]f32) -> (b: [4]f32) =
+    b = compiler.vector_mul(a, a)
+end scale

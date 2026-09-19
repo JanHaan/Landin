@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.vector_mul
+  --> ../tests/fixtures/negative/r720-vector-intrinsic-withdrawn/main.ldn:5:18
+  |
+5 |     b = compiler.vector_mul(a, a)
+  |                  ^^^^^^^^^^
+  = note: [0590]/D240: R7.20 withdrew compiler.vector_mul; fixed arrays take element-wise operators

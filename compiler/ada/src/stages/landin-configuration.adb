@@ -156,7 +156,11 @@ package body Landin.Configuration is
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "vector_"
       then
-         return "[0590]: compiler." & Member & " is enabled by R4.50";
+         --  D240: fixed arrays are the vector type, so R7.20 withdrew the
+         --  vector intrinsics [1560] once listed rather than duplicate the
+         --  element-wise operators D209 implements.
+         return "[0590]/D240: R7.20 withdrew compiler." & Member
+           & "; fixed arrays take element-wise operators";
       elsif Namespace = "linker" and then Member in "section" | "entry" then
          return "[1640]/D229: use link(section: ...) or "
            & "--firmware-entry; linker." & Member

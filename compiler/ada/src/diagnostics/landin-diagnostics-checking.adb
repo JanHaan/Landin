@@ -36,6 +36,10 @@ package body Landin.Diagnostics.Checking is
             "ROADMAP.md " & Enabled_By (Refused)
             & (if Refused = Arena_Region
                then " withdraws this form; pass an ordinary allocator"
+               elsif Refused in Wide_Integer_Type | Narrow_Float_Type
+               then " transfers this to Language evolution"
+               elsif Refused in Constrained_Composition
+               then " records this source-form boundary"
                else " is where it is enabled"));
       elsif Note /= "" then
          Add_Note (Built, Note);

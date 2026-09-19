@@ -166,7 +166,10 @@ private
             when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter => "R2.40",
-            when Volatile_Reference    => "R6.80",
+            --  R7.20 withdraws the volatile pointer type: D227's scalar
+            --  accesses and D228's register operations are volatile by the
+            --  operation, over an ordinary pointer.
+            when Volatile_Reference    => "R7.20",
             when Shared_Declaration    => "R7.20");
 
 end Landin.Diagnostics.Syntactic;

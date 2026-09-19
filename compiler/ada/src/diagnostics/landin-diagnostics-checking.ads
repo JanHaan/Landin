@@ -172,10 +172,10 @@ package Landin.Diagnostics.Checking is
       --  `[]percent` and `[]u8` would be one type and a `[]u8` write of an
       --  excluded value would enter constrained storage unchecked.  A
       --  composite or reference position, `addr` of a constrained place and
-      --  a generic type argument therefore refuse one until R7.20 decides
-      --  how the check composes.  An `extern (c)` signature is not this
-      --  refusal: [1580]'s hosted-scalar boundary already refuses it and
-      --  keeps that report, which R4.40 owns.
+      --  a generic type argument therefore refuse one; D236 makes that the
+      --  recorded boundary rather than a pending promise.  An `extern (c)`
+      --  signature is not this refusal: [1580]'s hosted-scalar boundary
+      --  already refuses it and keeps that report, which R4.40 owns.
       Constrained_Composition,
       --  D189 enables [0480]'s one-atom pointer union as a plain pointer
       --  reserving zero.  Two or more atoms beside a pointer need the
@@ -246,11 +246,11 @@ private
    --  remaining general aggregate-value contexts.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
-            --  D190 re-owns these two.  R7.20 supplies the two-register
-            --  integer carrier u128 and i128 need and the third float
-            --  width f16 would add; R4.10 closes [0150] and [0170] as far
-            --  as the kernel enables them and deliberately does not
-            --  decide these.
+            --  D190 re-owned these two and D237 transfers them: R7.20
+            --  leaves u128, i128 and f16 to the Language evolution
+            --  successor, whose trigger is a program that needs them.
+            --  R4.10 closed [0150] and [0170] as far as the kernel
+            --  enables them.
             when Wide_Integer_Type
                | Narrow_Float_Type  => "R7.20",
             when Struct_Value
@@ -260,9 +260,10 @@ private
                | Zeroed_Value      => "R2.20",
             when Parameterized_Type_Alias => "R2.40",
             when External_C_ABI     => "R4.40",
-            --  R7.20 owns how a constraint composes with a reference,
-            --  element, field or foreign position; R4.10 closes [0660]
-            --  itself and deliberately does not decide that.
+            --  D236 records the composite, reference and generic
+            --  positions as [0660]'s permanent source-form boundary: a
+            --  constraint belongs to a scalar binding, parameter, return
+            --  or conversion.  R4.10 closed [0660] itself.
             when Constrained_Composition => "R7.20",
             --  R7.20 owns the tagged carrier a multi-atom pointer union
             --  needs; D189 closes [0480]'s one-atom form and deliberately

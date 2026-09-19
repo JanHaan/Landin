@@ -35,6 +35,10 @@ package body Landin.Diagnostics.Syntactic is
             "ROADMAP.md " & Enabled_By (Refused)
             & (if Refused = Arena_Block
                then " withdraws this form; pass an ordinary allocator"
+               elsif Refused = Volatile_Reference
+               then " withdraws this form; use compiler.volatile_load,"
+                    & " compiler.volatile_store, compiler.register_read or"
+                    & " compiler.register_write through an ordinary pointer"
                elsif Refused in Declared_Type | Struct_Type | Type_Parameter
                  | Array_Repetition | Indexing | Struct_All_Of
                then " records this source-form boundary"

@@ -2443,15 +2443,16 @@ package body Landin.Syntax.Parser is
                   C_ABI := Machine = Landin.Machine.Ordinary;
                end if;
 
-               --  [0850]'s qualifier is identified by its pointer shape.
-               --  A type or ordinary name spelled volatile stays legal.
+               --  [0850]'s withdrawn qualifier is identified by its pointer
+               --  shape and keeps a named migration report (R7.20).  A type
+               --  or ordinary name spelled volatile stays legal.
                if not C_ABI and then Peek = Tok.Identifier
                  and then Named_Here = Volatile_Id
                  and then Ahead (1) = Tok.Kw_Ptr
                then
                   Refuse
                     (Syn.Volatile_Reference, At_Type,
-                     "volatile pointer access is not enabled");
+                     "a volatile pointer type is not part of the language");
                   Advance;
                   declare
                      --  Consume the pointer for recovery; Error_Type has

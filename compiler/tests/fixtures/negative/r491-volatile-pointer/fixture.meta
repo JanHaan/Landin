@@ -1,6 +1,9 @@
 class: negative
-summary: volatile pointer access receives its named freestanding refusal
+summary: D238 withdraws the volatile pointer type; its shape keeps a named L0010 whose note points at the explicit D227 and D228 operations
 program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-volatile-pointer/program.ldn
 codes: L0010
+status: 1
 constructs: 0850, 1790, 1830
 targets: linux-x86-64, macos-arm64, synthetic-32
