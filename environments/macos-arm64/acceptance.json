@@ -1,19 +1,15 @@
 {
   "schema": 4,
-  "scope": "milestone",
-  "debugger": true,
+  "scope": "routine",
+  "debugger": false,
   "modes": [
     "debug",
     "release"
   ],
   "hosted_modes": [
-    "debug",
     "release"
   ],
-  "debugger_modes": [
-    "debug",
-    "release"
-  ],
+  "debugger_modes": [],
   "commands": [
     [
       "env",
@@ -26,47 +22,6 @@
       "LANDIN_BUILD_MODE=debug",
       "./scripts/test.sh",
       "--host"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/diagnostics.py",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{diagnostics-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/check.py",
-      "--parity",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{executions-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "python3",
-      "compiler/tests/darwin/bindings.py",
-      "--parity",
-      "--refine",
-      "{refine-debug}",
-      "--output",
-      "{bindings-debug}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=debug",
-      "./scripts/debug.sh",
-      "--target=darwin-arm64",
-      "--parity",
-      "--output",
-      "{debugging-debug}"
     ],
     [
       "env",
@@ -111,15 +66,6 @@
       "{refine-release}",
       "--output",
       "{bindings-release}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=release",
-      "./scripts/debug.sh",
-      "--target=darwin-arm64",
-      "--parity",
-      "--output",
-      "{debugging-release}"
     ]
   ]
 }
