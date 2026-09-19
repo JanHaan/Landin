@@ -61,24 +61,29 @@ class Inventory(unittest.TestCase):
                      "unknown targets")
 
     def test_an_owner_must_be_live_and_named(self):
-        row = self.row("0150")
-        self.refused(self.problems({row: row.replace("| R7.20 |", "| R2.20 |")}),
+        row = self.row("1860")
+        self.refused(self.problems({row: row.replace("| R7.40 |", "| R2.20 |")}),
                      "still owned by finished R2.20")
-        self.refused(self.problems({row: row.replace("| R7.20 |", "| none |")}),
-                     "refused pending R7.20 and the row does not name it")
-        self.refused(self.problems({row: row.replace("| R7.20 |", "| R9.90 |")}),
+        self.refused(self.problems({row: row.replace("| R7.40 |", "| R9.90 |")}),
                      "names missing owner R9.90")
-        self.refused(self.problems({row: row.replace("| R7.20 |", "| Somebody |")}),
+        self.refused(self.problems({row: row.replace("| R7.40 |", "| Somebody |")}),
                      "unknown owner")
 
+        def pending(refusals):
+            refusals.append(("1860", "R7.40", "pending", "table", "Probe"))
+        row = self.row("1860")
+        self.refused(self.problems({row: row.replace("| R7.40 |", "| none |")},
+                                   refusals=pending),
+                     "refused pending R7.40 and the row does not name it")
+
     def test_a_finished_owner_makes_the_row_stale(self):
-        heading = "### R7.20 — Close deferred normative behavior\n\nStatus: planned"
+        heading = "### R7.40 — Close all evidence registers\n\nStatus: planned"
         self.refused(self.problems({heading: heading.replace("planned", "complete")}),
-                     "still owned by finished R7.20")
+                     "still owned by finished R7.40")
 
     def test_phase_must_be_finished_implementation(self):
         row = self.row("0010")
-        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.20 |")}),
+        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.40 |")}),
                      "no finished implementing phase")
 
     def test_gaps_follow_the_corpus_both_ways(self):
@@ -136,14 +141,34 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems({row: row.replace("R4.80", "the withdrawal")}),
                      "does not explain its refusal recorded by R4.80")
 
-        row = self.row("0850")
-        self.refused(self.problems({row: row.replace("| R7.20 |", "| none |")}),
-                     "still promises finished R6.80")
+        row = self.row("1350")
+        self.refused(self.problems({row: row.replace("| R7.40 |", "| none |")}),
+                     "still promises finished R2.40")
 
         def boundary(refusals):
-            refusals.append(("0010", "R7.20", "boundary", "table", "Probe"))
+            refusals.append(("0010", "R7.40", "boundary", "table", "Probe"))
         self.refused(self.problems(refusals=boundary),
-                     "boundary refusal names unfinished R7.20")
+                     "boundary refusal names unfinished R7.40")
+
+    def test_a_transfer_names_its_successor(self):
+        #  R7.20's transfers: the tour names each successor, and a refusal
+        #  that says it transfers a form needs the row to hand it over.
+        def unmark(paragraphs):
+            paragraphs["0150"] = paragraphs["0150"].replace(
+                "Language evolution", "a later roadmap")
+        self.refused(self.problems(paragraphs=unmark),
+                     "[0150] hands work to Language evolution")
+
+        row = self.row("0170")
+        self.refused(self.problems({row: row.replace(
+            "| Language evolution |", "| none |")}),
+            "[0170]'s refusal transfers it and the row hands work to no"
+            " successor")
+
+        row = self.row("1620")
+        self.refused(self.problems({row: row.replace(
+            "| Broader standard library |", "| Somebody |")}),
+            "unknown owner")
 
     def test_owners_are_explained_in_the_row(self):
         row = self.row("0730")
@@ -163,10 +188,13 @@ class Inventory(unittest.TestCase):
         for expected in (("0100", "R7.20", "boundary"),
                          ("0120", "R2.20", "boundary"),
                          ("0820", "R4.80", "withdrawn"),
-                         ("0850", "R6.80", "pending"),
-                         ("0660", "R7.20", "pending")):
+                         ("0850", "R7.20", "withdrawn"),
+                         ("0150", "R7.20", "transferred"),
+                         ("0170", "R7.20", "transferred"),
+                         ("0660", "R7.20", "boundary"),
+                         ("1350", "R2.40", "pending")):
             self.assertIn(expected, wording)
-        self.assertEqual(len(self.inputs["refusals"]), 21)
+        self.assertEqual(len(self.inputs["refusals"]), 20)
 
     def test_target_records_decide_where_a_fixture_runs(self):
         held = self.inputs["targets"]
