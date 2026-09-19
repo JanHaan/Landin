@@ -2560,6 +2560,16 @@ package body Landin.Stages.Checking is
                      Reject (Member, "a packed image cannot contain"
                        & " a tagged variant");
                   end if;
+               elsif Syn.Shares_Declared_Type (Of_Tree, Member) then
+                  --  [0100]: the same written type and `at` bounds as the
+                  --  field before it, whose verdict was reached and reported
+                  --  there.  Two names at one position then overlap below.
+                  if Valid and then Syn.Bit_First (Of_Tree, Member)
+                                      /= Syn.No_Node
+                  then
+                     Parts (Index) := Parts (Index - 1);
+                     Fields (Index).Packing := Fields (Index - 1).Packing;
+                  end if;
                elsif Syn.Bit_First (Of_Tree, Member) = Syn.No_Node then
                   if Packed then
                      Reject (Member, "a packed field requires `at`");
@@ -3748,6 +3758,10 @@ package body Landin.Stages.Checking is
                   declare
                      Returned : constant Syn.Node_Id :=
                        Syn.Nth_Return (Of_Tree, Written, Index);
+                     --  [0100]: a later shared name's sources are the
+                     --  first name's nodes, and were reported there.
+                     Shared : constant Boolean :=
+                       Syn.Shares_Declared_Type (Of_Tree, Returned);
                   begin
                      Results (Index) := Part_At (Returned);
                      for Source_Index in
@@ -3762,10 +3776,12 @@ package body Landin.Stages.Checking is
                                (Meanings.all, Of_Tree, Source);
                         begin
                            if Position = 0 then
-                              Report_Application
-                                (Of_Tree, Source,
-                                 "this `from` source is not a runtime"
-                                 & " parameter of the signature");
+                              if not Shared then
+                                 Report_Application
+                                   (Of_Tree, Source,
+                                    "this `from` source is not a runtime"
+                                    & " parameter of the signature");
+                              end if;
                               Valid := False;
                            else
                               Source_Count := Source_Count + 1;
@@ -6959,6 +6975,12 @@ package body Landin.Stages.Checking is
             declare
                Returned : constant Syn.Node_Id :=
                  Syn.Nth_Return (Of_Tree, Node, Index);
+               --  [0100]: a later shared name's type and sources are the
+               --  first name's nodes.  It still records its own positions,
+               --  but whatever is wrong with that written text was already
+               --  reported for the first name, identically.
+               Shared : constant Boolean :=
+                 Syn.Shares_Declared_Type (Of_Tree, Returned);
             begin
                Results (Index) :=
                  Part_At (Returned, Syn.Origin (Of_Tree, Returned));
@@ -6967,19 +6989,23 @@ package body Landin.Stages.Checking is
                  and then not Landin.Checking.Contains_References
                    (Types.all, Results (Index))
                then
-                  Bad.Report
-                    (Item    => Bad.Type_Mismatch,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where
-                       (Of_Tree, Syn.Nth_Return_Source
-                          (Of_Tree, Returned, 1)),
-                     Message => "a `from` clause belongs only to a result"
-                                & " whose value contains references",
-                     Note    => "[0790]: `from` states what a returned"
-                                & " reference was derived from",
-                     Related => Syn.Origin (Of_Tree, Returned),
-                     Because => "this result type contains no reference",
-                     Into    => Found);
+                  if not Shared then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where
+                          (Of_Tree, Syn.Nth_Return_Source
+                             (Of_Tree, Returned, 1)),
+                        Message => "a `from` clause belongs only to a"
+                                   & " result whose value contains"
+                                   & " references",
+                        Note    => "[0790]: `from` states what a returned"
+                                   & " reference was derived from",
+                        Related => Syn.Origin (Of_Tree, Returned),
+                        Because => "this result type contains no"
+                                   & " reference",
+                        Into    => Found);
+                  end if;
                   Valid := False;
                end if;
                for Source_Index in
@@ -6995,17 +7021,21 @@ package body Landin.Stages.Checking is
                      First : Syn.Node_Id := Syn.No_Node;
                   begin
                      if Position = 0 then
-                        Bad.Report
-                          (Item    => Bad.Type_Mismatch,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Source),
-                           Message => "this `from` source is not a runtime"
-                                      & " parameter of the signature",
-                           Note    => "[0790]: a returned reference names"
-                                      & " the parameters it derives from",
-                           Related => Syn.Origin (Of_Tree, Returned),
-                           Because => "the named return",
-                           Into    => Found);
+                        if not Shared then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Source),
+                              Message => "this `from` source is not a"
+                                         & " runtime parameter of the"
+                                         & " signature",
+                              Note    => "[0790]: a returned reference"
+                                         & " names the parameters it"
+                                         & " derives from",
+                              Related => Syn.Origin (Of_Tree, Returned),
+                              Because => "the named return",
+                              Into    => Found);
+                        end if;
                         Valid := False;
                      else
                         for Prior in 1 .. Source_Count loop
@@ -7017,16 +7047,19 @@ package body Landin.Stages.Checking is
                            end if;
                         end loop;
                         if First /= Syn.No_Node then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Source),
-                              Message => "this `from` source is named twice",
-                              Note    => "[0790]: the clause is a set of"
-                                         & " borrowed parameters",
-                              Related => Syn.Origin (Of_Tree, First),
-                              Because => "first named here",
-                              Into    => Found);
+                           if not Shared then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Source),
+                                 Message => "this `from` source is named"
+                                            & " twice",
+                                 Note    => "[0790]: the clause is a set of"
+                                            & " borrowed parameters",
+                                 Related => Syn.Origin (Of_Tree, First),
+                                 Because => "first named here",
+                                 Into    => Found);
+                           end if;
                            Valid := False;
                         else
                            Source_Count := Source_Count + 1;

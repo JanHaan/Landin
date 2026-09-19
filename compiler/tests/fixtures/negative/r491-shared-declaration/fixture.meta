@@ -1,6 +1,6 @@
 class: negative
-summary: shared ordinary declaration names receive a named refusal
+summary: shared names in an inferred binding keep a named boundary refusal at module and local scope
 program: program.ldn
-codes: L0010
+codes: L0010, L0010
 constructs: 0100, 1790, 1830
 targets: linux-x86-64, macos-arm64, synthetic-32

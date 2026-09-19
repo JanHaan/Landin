@@ -31,7 +31,7 @@
 0070 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Two questions about a reference
 0080 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Declaration only
 0090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Exported from the module
-0100 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Several names may share one declaration
+0100 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Several names may share one declaration
 0110 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Left of ':' is always the name being introduced
 0120 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | Types are declared like any other value, with 'type'
 0130 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Order inside a module does not matter

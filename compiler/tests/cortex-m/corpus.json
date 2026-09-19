@@ -1665,6 +1665,9 @@
     "runtime/selection-sort": {
       "mode": "execute"
     },
+    "runtime/shared-declarations-evaluate-once": {
+      "mode": "execute"
+    },
     "runtime/shifts-fill-with-zeros-beyond-the-width": {
       "mode": "execute"
     },

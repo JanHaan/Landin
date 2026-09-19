@@ -1,0 +1,9 @@
+class: negative
+summary: shared packed fields each take the written `at` bounds, so two names at one position are one overlap refusal
+program: program.ldn
+constructs: 0100, 0730
+targets: linux-x86-64, macos-arm64
+codes: L0301
+args: ../tests/fixtures/negative/shared-packed-fields-overlap/program.ldn
+expect: expected.txt
+status: 1
