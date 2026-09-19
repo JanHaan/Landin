@@ -169,10 +169,34 @@ package body Landin.IR is
    is
    begin
       Into.Nominal_Templates.Append (Template);
+      Into.Nominal_Spellings.Append (Landin.Source.Names.No_Name);
       Into.Nominal_Shapes.Append (Nominal_Shape_Record'(others => <>));
       return Nominal_Identities.Nth
         (Into, Into.Nominal_Templates.Last_Index);
    end Add_Nominal_Type;
+
+   function Add_Pointer_Union_Type
+     (Into : in out Unit; Spelling : Landin.Source.Names.Name_Id)
+      return Nominal_Type_Id
+   is
+   begin
+      Into.Nominal_Templates.Append (No_Declaration);
+      Into.Nominal_Spellings.Append (Spelling);
+      Into.Nominal_Shapes.Append (Nominal_Shape_Record'(others => <>));
+      return Nominal_Identities.Nth
+        (Into, Into.Nominal_Templates.Last_Index);
+   end Add_Pointer_Union_Type;
+
+   function Is_Pointer_Union
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
+     is (Of_Unit.Nominal_Templates
+           (Nominal_Identities.Position (Of_Unit, Id)) = No_Declaration);
+
+   function Union_Spelling
+     (Of_Unit : Unit; Id : Nominal_Type_Id)
+      return Landin.Source.Names.Name_Id
+     is (Of_Unit.Nominal_Spellings
+           (Nominal_Identities.Position (Of_Unit, Id)));
 
    function Has_Nominal_Shape
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
@@ -2967,6 +2991,28 @@ package body Landin.IR is
       end loop;
       return False;
    end Is_Failure_Status_Load;
+
+   function Is_Union_Code_Load
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+   is
+   begin
+      if Op_Of (Of_Unit, Item, Value) /= Load_Field
+        or else not Reaches_A_Slot (Of_Unit, Item, Value)
+        or else Field_Of (Of_Unit, Item, Value) /= 1
+        or else Path_Depth_Of (Of_Unit, Item, Value) /= 0
+      then
+         return False;
+      end if;
+      declare
+         Slot : constant Slot_Id := Slot_Of (Of_Unit, Item, Value);
+      begin
+         return Holds (Of_Unit, Item, Slot)
+           and then Is_Aggregate (Of_Unit, Item, Slot)
+           and then Holds (Of_Unit, Nominal_Of (Of_Unit, Item, Slot))
+           and then Is_Pointer_Union
+             (Of_Unit, Nominal_Of (Of_Unit, Item, Slot));
+      end;
+   end Is_Union_Code_Load;
 
    function Origin_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Provenance.Origin

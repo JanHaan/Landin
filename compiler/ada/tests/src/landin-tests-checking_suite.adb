@@ -9323,6 +9323,85 @@ package body Landin.Tests.Checking_Suite is
    is
       Size : Landin.Targets.Byte_Count;
       Alignment : Landin.Targets.Byte_Alignment;
+
+      --  [0480]/[1870]: several atoms beside a pointer are the two-cell
+      --  aggregate, measured by the ordinary layout of its atom code and
+      --  pointer cells rather than by a reference-union arm of its own.
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Size_Wanted, Code_Wanted, Pointer_Wanted : Landin.Targets.Byte_Count;
+         Alignment_Wanted : Landin.Targets.Byte_Alignment);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Size_Wanted, Code_Wanted, Pointer_Wanted : Landin.Targets.Byte_Count;
+         Alignment_Wanted : Landin.Targets.Byte_Alignment)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+         Count : Natural := 0;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "pointer-union-layout.ldn",
+            "none_found: atom" & LF
+            & "denied: atom" & LF
+            & "many: type = none_found | denied | ptr mut u32" & LF
+            & "reordered: type = ptr mut u32 | denied | none_found" & LF
+            & "s: usize = sizeof many" & LF
+            & "r: usize = sizeof reordered" & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            "a union of two atoms and one pointer is accepted");
+         declare
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+         begin
+            for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all)
+            loop
+               declare
+                  Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+               begin
+                  if Landin.Checking.Is_Pointer_Union (Types.all, Nominal) then
+                     Count := Count + 1;
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Has_Layout (Types.all, Nominal)
+                        and then Landin.Checking.Layout_Field_Count
+                          (Types.all, Nominal) = 2
+                        and then Landin.Checking.Layout_Size
+                          (Types.all, Nominal) = Size_Wanted
+                        and then Landin.Checking.Layout_Alignment
+                          (Types.all, Nominal) = Alignment_Wanted
+                        and then Landin.Checking.Field_Offset
+                          (Types.all, Nominal, 1) = Code_Wanted
+                        and then Landin.Checking.Field_Offset
+                          (Types.all, Nominal, 2) = Pointer_Wanted,
+                        "the atom code precedes one target pointer carrier");
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Atom_Count
+                          (Types.all,
+                           Landin.Checking.Union_Atoms (Types.all, Nominal))
+                          = 2
+                        and then Landin.Checking.Contains_References
+                          (Types.all, Nominal),
+                        "the union keeps its atoms and reference origin");
+                  end if;
+               end;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Count, 1,
+            "both member orders intern one structural union identity");
+      end Check_Target;
    begin
       Landin.Checking.Reference_Union_Extent
         (1, Landin.Targets.Linux_X86_64, Size, Alignment);
@@ -9330,20 +9409,12 @@ package body Landin.Tests.Checking_Suite is
         (Item, Size = 8 and then Alignment = 8,
          "one atom and one pointer use the plain 64-bit pointer carrier");
       Landin.Checking.Reference_Union_Extent
-        (2, Landin.Targets.Linux_X86_64, Size, Alignment);
-      Landin.Testing.Check
-        (Item, Size = 16 and then Alignment = 8,
-         "two atoms and one pointer keep a 64-bit tag-plus-payload layout");
-      Landin.Checking.Reference_Union_Extent
         (1, Landin.Targets.Synthetic_32, Size, Alignment);
       Landin.Testing.Check
         (Item, Size = 4 and then Alignment = 4,
          "one atom and one pointer use the plain 32-bit pointer carrier");
-      Landin.Checking.Reference_Union_Extent
-        (2, Landin.Targets.Synthetic_32, Size, Alignment);
-      Landin.Testing.Check
-        (Item, Size = 8 and then Alignment = 4,
-         "two atoms and one pointer keep a 32-bit tag-plus-payload layout");
+      Check_Target (Landin.Targets.Linux_X86_64, 16, 0, 8, 8);
+      Check_Target (Landin.Targets.Synthetic_32, 8, 0, 4, 4);
    end Reference_Unions_Follow_Target_Layout;
 
    procedure Array_Reference_Fields_Follow_Target
