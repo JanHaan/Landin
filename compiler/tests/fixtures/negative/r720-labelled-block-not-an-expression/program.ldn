@@ -1,0 +1,7 @@
+-- [1180]'s labelled block is a statement.  Only the unlabelled `begin`
+-- block also occupies an expression position.
+f: () -> (r: i32) =
+    r = outer: begin
+        1
+    end outer
+end f

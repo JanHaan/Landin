@@ -130,7 +130,7 @@
 1060 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Every construct has a one-line form
 1070 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A declaration is allowed in a condition
 1080 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A block has the value of its last expression
-1090 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | R7.20 | Bare block, for scoping
+1090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Bare block, for scoping
 1100 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | defer runs at the end of its block, in reverse order
 1110 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | undo is the same machinery under a condition
 1120 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Checks may be switched off for a region, visibly

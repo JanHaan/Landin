@@ -1,0 +1,82 @@
+-- [1090]'s scoping block may carry [1180]'s label.  Before R7.20 the parser
+-- read `scope: begin` as a binding and let `end scope` close the function
+-- (J40); the statements after it and the next declaration show it does not.
+demo: (x: i32) -> (out: i32) =
+    out = 0
+    scope: begin
+        tmp := x * 2
+        out = out + tmp
+    end scope
+    out = out + 1
+end demo
+
+-- Nested labelled blocks, a guarded break of the outer block from the inner
+-- one, and a plain break of the inner one.
+nested: (x: i32) -> (out: i32) =
+    out = x
+    outer: begin
+        inner: begin
+            break outer when out > 10
+            out = out + 1
+            break inner
+        end inner
+        out = out * 2
+    end outer
+end nested
+
+-- A break from inside a loop nested in a labelled block leaves both.
+first_even: (items: []i32) -> (found: i32) =
+    found = -1
+    search: begin
+        for item in items do
+            if item % 2 == 0 then
+                found = item
+                break search
+            end if
+        end for
+    end search
+end first_even
+
+-- Origin facts join the break edge and the fallthrough: each carries a
+-- parameter the result is declared to come from.
+keep: (cell: ptr u32, other: ptr u32, early: bool)
+        -> (result: ptr u32 from cell, other) =
+    mut held: ptr u32 = cell
+    pick: begin
+        if early then
+            held = other
+            break pick
+        end if
+    end pick
+    result = held
+end keep
+
+-- The labelled block is a statement in a match arm and in a value prefix.
+first, second: atom
+kind: type = first | second
+
+arm: (which: kind) -> (out: i32) =
+    out = 0
+    match which
+        first: early: begin
+            out = 1
+            break early
+        end early
+        second: out = 2
+    end match
+end arm
+
+prefix: () -> (out: i32) =
+    ready: begin
+        break ready
+    end ready
+    3
+end prefix
+
+-- A name spelled like a label is still an ordinary binding.
+block_value: type = i32
+
+typed: () -> (result: block_value) =
+    scope: block_value = 3
+    result = scope
+end typed

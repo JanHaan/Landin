@@ -1605,6 +1605,9 @@
     "runtime/r690-recovery-loop-context": {
       "mode": "execute"
     },
+    "runtime/r720-labelled-block-transfers": {
+      "mode": "execute"
+    },
     "runtime/range-subtype-checks": {
       "mode": "execute"
     },

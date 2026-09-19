@@ -1,0 +1,20 @@
+error[L0302]: `value` is read here and no path that arrives assigned it
+  --> ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn:9:9
+  |
+9 |     r = value
+  |         ^^^^^
+  --> ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn:4:9
+  |
+4 |     mut value: i32
+  |         ^^^^^ declared here with no value
+  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+error[L0302]: `first` is read here and no path that arrives assigned it
+  --> ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn:23:9
+   |
+23 |     r = first
+   |         ^^^^^
+  --> ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn:14:9
+   |
+14 |     mut first: i32
+   |         ^^^^^ declared here with no value
+  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it

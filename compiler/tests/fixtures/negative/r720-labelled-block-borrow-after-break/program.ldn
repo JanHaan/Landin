@@ -1,0 +1,40 @@
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+-- The mutating call's continuation leaves through `break done`, which
+-- resumes after the block's `end`, where the borrower is read.
+direct: () -> none =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    done: begin
+        increment(value)
+        break done
+    end done
+    _ = view.val
+end direct
+
+-- A labelled block later in the continuation does not end it: its own
+-- `break` resumes after its `end`, where the borrower is read.
+later: () -> none =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    increment(value)
+    done: begin
+        break done
+    end done
+    _ = view.val
+end later
+
+-- The same edge taken from a loop nested inside the block.
+nested: () -> none =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    done: begin
+        loop do
+            increment(value)
+            break done
+        end loop
+    end done
+    _ = view.val
+end nested

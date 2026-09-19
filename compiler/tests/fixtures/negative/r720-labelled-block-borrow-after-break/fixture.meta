@@ -1,0 +1,9 @@
+class: negative
+summary: a borrow mutated before a break naming a labelled block is still live at a read after the block's end
+program: program.ldn
+codes: L0315, L0315, L0315
+constructs: 0830, 1090, 1130, 1180
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn
+status: 1

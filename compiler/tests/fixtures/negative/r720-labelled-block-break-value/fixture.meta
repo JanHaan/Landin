@@ -1,0 +1,9 @@
+class: negative
+summary: a break naming a labelled bare block cannot carry a value because the block is a statement
+program: program.ldn
+codes: L0301
+constructs: 1090, 1180, 1190
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-labelled-block-break-value/program.ldn
+status: 1

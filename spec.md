@@ -476,7 +476,7 @@ value_statement ::= binding | destructuring_binding | assignment
                   | "return" "when" expression
                   | "fail" expression "when" expression
                   | break | continue | loop | while | for
-                  | if | match | bare_block
+                  | if | match | bare_block | labeled_block
 destructuring_binding ::= "(" destructured_field
                           ("," destructured_field)* ")" ":=" expression
 destructured_field ::= identifier (":" (identifier | "_"))? | "_"
@@ -629,7 +629,7 @@ statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | labeled_application | defer | undo | try
               | return | fail
               | break | continue | loop | while | for | if | match
-              | unchecked | bare_block
+              | unchecked | bare_block | labeled_block
 assignment  ::= place assignment_operator expression
 assignment_operator ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
                       | "&=" | "|=" | "^=" | "<<=" | ">>="
@@ -670,6 +670,7 @@ match_arm   ::= (declaration_reference | "ptr" | "_")
 match_binding ::= "inout"? identifier
 unchecked   ::= "unchecked" "begin" block "end" "unchecked"
 bare_block  ::= "begin" block "end"
+labeled_block ::= identifier ":" "begin" block "end" identifier
 place       ::= indexed
 
 ```

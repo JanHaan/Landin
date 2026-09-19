@@ -379,7 +379,9 @@ package body Landin.Stages.Checking.Flow is
       --  One loop being analysed.  Its `break` edges are joined into
       --  Exit_State and its `continue` edges into Back_State; the loop
       --  handler joins the latter with the body's fallthrough to form the
-      --  back edge.
+      --  back edge.  [1180]'s labelled bare block is an entry too: only a
+      --  `break` naming it selects it, and its Exit_State meets the
+      --  block's fallthrough after its `end`.
       type Loop_Cleanup_Entry is record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
@@ -388,6 +390,7 @@ package body Landin.Stages.Checking.Flow is
          Exit_State   : Assigned_Set := Nothing_Assigned;
          Continues    : Boolean := False;
          Back_State   : Assigned_Set := Nothing_Assigned;
+         Is_Block     : Boolean := False;
       end record;
 
       package Loop_Cleanup_Entries is new Ada.Containers.Vectors
@@ -408,8 +411,9 @@ package body Landin.Stages.Checking.Flow is
            Syn.Name (Of_Tree, Node);
       begin
          for Index in reverse 1 .. Loop_Cleanup_Stack.Last_Index loop
-            if Target = Landin.Source.Names.No_Name
-              or else Loop_Cleanup_Stack (Index).Label = Target
+            if (if Target = Landin.Source.Names.No_Name
+                then not Loop_Cleanup_Stack (Index).Is_Block
+                else Loop_Cleanup_Stack (Index).Label = Target)
             then
                return Index;
             end if;
@@ -2413,9 +2417,39 @@ package body Landin.Stages.Checking.Flow is
                end;
 
             when Syn.Bare_Block =>
-               Flow_Block
-                 (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
-                  Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
+               if Syn.Name (Of_Tree, Node) = Landin.Source.Names.No_Name then
+                  Flow_Block
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
+                     Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
+               else
+                  --  [1180]: after a labelled block's `end`, a fact holds
+                  --  only if it holds on the fallthrough and on every
+                  --  `break` naming the block, each taken after the
+                  --  cleanups it runs.  Unlike a loop, no body fact is
+                  --  withheld: every edge here has run the body once.
+                  declare
+                     Frame : Loop_Cleanup_Entry;
+                  begin
+                     Loop_Cleanup_Stack.Append
+                       (Loop_Cleanup_Entry'
+                          (Label        => Syn.Name (Of_Tree, Node),
+                           Cleanup_Base => Natural (Cleanup_Stack.Length),
+                           Is_Block     => True,
+                           others       => <>));
+                     Flow_Block
+                       (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
+                        Syn.Origin (Of_Tree, Node), State, Edges,
+                        Needs_Value);
+                     Frame := Loop_Cleanup_Stack.Last_Element;
+                     Loop_Cleanup_Stack.Delete_Last;
+                     if Frame.Exits then
+                        Merge
+                          (State, First => not Edges.Falls_Through,
+                           Branch => Frame.Exit_State);
+                        Edges.Falls_Through := True;
+                     end if;
+                  end;
+               end if;
 
             when Syn.Call | Syn.Labeled_Application =>
                declare

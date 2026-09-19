@@ -1,0 +1,10 @@
+error[L0102]: a labelled bare block is a statement, not an expression
+  --> ../tests/fixtures/negative/r720-labelled-block-not-an-expression/program.ldn:4:8
+  |
+4 |     r = outer: begin
+  |        ^
+  --> ../tests/fixtures/negative/r720-labelled-block-not-an-expression/program.ldn:4:7
+  |
+4 |     r = outer: begin
+  |       ^ required by this
+  = note: [1180]: only an unlabelled `begin` block also gives a value

@@ -878,6 +878,11 @@ negative/r660-hosted-assembly | linux-x86-64, macos-arm64, synthetic-32
 negative/r660-materialization | linux-x86-64, macos-arm64
 negative/r670-noreturn-fallthrough | linux-x86-64, macos-arm64, synthetic-32
 negative/r670-panic-handler | linux-x86-64, macos-arm64, synthetic-32
+negative/r720-labelled-block-borrow-after-break | linux-x86-64, macos-arm64
+negative/r720-labelled-block-break-origin | linux-x86-64, macos-arm64
+negative/r720-labelled-block-break-value | linux-x86-64, macos-arm64
+negative/r720-labelled-block-not-an-expression | linux-x86-64, macos-arm64
+negative/r720-labelled-block-partial-assignment | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1288,6 +1293,7 @@ positive/r630-memory-scalars | linux-x86-64, macos-arm64
 positive/r640-packed-representations | linux-x86-64, macos-arm64
 positive/r660-machine-directives | linux-x86-64, macos-arm64, synthetic-32
 positive/r670-scalar-assembly | linux-x86-64, macos-arm64, synthetic-32
+positive/r720-labelled-bare-blocks | linux-x86-64, macos-arm64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -1741,6 +1747,7 @@ runtime/r640-software-hole | linux-x86-64, macos-arm64
 runtime/r640-static-hole | linux-x86-64, macos-arm64
 runtime/r640-volatile-hole | linux-x86-64, macos-arm64
 runtime/r690-recovery-loop-context | linux-x86-64, macos-arm64
+runtime/r720-labelled-block-transfers | linux-x86-64, macos-arm64
 runtime/range-subtype-checks | linux-x86-64, macos-arm64
 runtime/range-subtype-conversion-traps | linux-x86-64, macos-arm64
 runtime/range-subtype-store-traps | linux-x86-64, macos-arm64

@@ -1,0 +1,5 @@
+class: positive
+summary: J40 labelled bare blocks close with their label, nest, take guarded breaks, are left from a nested loop, join break-edge origins, and stand as match-arm and value-prefix statements
+constructs: 0770, 1090, 1180, 1800, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
