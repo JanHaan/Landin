@@ -924,6 +924,9 @@ negative/selection-from-a-call | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar-element | linux-x86-64, macos-arm64
 negative/several-independent-errors | linux-x86-64, macos-arm64
+negative/shared-link-symbol-duplicates | linux-x86-64, macos-arm64
+negative/shared-packed-fields-overlap | linux-x86-64, macos-arm64
+negative/shared-type-names-nothing | linux-x86-64, macos-arm64, synthetic-32
 negative/shift-amount-is-negative | linux-x86-64, macos-arm64
 negative/shift-amount-is-negative-in-a-body | linux-x86-64, macos-arm64
 negative/shift-amount-takes-the-left-type | linux-x86-64, macos-arm64
@@ -1297,6 +1300,7 @@ positive/return-when | linux-x86-64, macos-arm64
 positive/scalar-from-view-is-not-a-borrow | linux-x86-64, macos-arm64
 positive/scalar-subobject-zeroed-assignment | linux-x86-64, macos-arm64
 positive/scalar-zeroed-assignment | linux-x86-64, macos-arm64
+positive/shared-declarations-every-position | linux-x86-64, macos-arm64
 positive/shift-amount-is-not-known | linux-x86-64, macos-arm64
 positive/sink-restored-before-back-edge | linux-x86-64, macos-arm64
 positive/sink-restored-each-iteration | linux-x86-64, macos-arm64
@@ -1761,6 +1765,7 @@ runtime/scalar-subobject-zeroed-computed-index-traps | linux-x86-64, macos-arm64
 runtime/scalar-traversal-values | linux-x86-64, macos-arm64
 runtime/scalar-zeroed-assignment-clears-values | linux-x86-64, macos-arm64
 runtime/selection-sort | linux-x86-64, macos-arm64
+runtime/shared-declarations-evaluate-once | linux-x86-64, macos-arm64
 runtime/shifts-fill-with-zeros-beyond-the-width | linux-x86-64, macos-arm64
 runtime/sieve-of-eratosthenes | linux-x86-64, macos-arm64
 runtime/signed-division-overflow-traps | linux-x86-64, macos-arm64

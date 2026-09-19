@@ -102,6 +102,16 @@ package body Landin.Syntax.Parser is
 
    No_Slots : constant Slot_List (1 .. 0) := [];
 
+   --  [0100]: a name after the first in a shared declaration, with the
+   --  span it is written at.
+   type Later_Name is record
+      Named   : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      At_Name : Landin.Source.Span := Landin.Source.Empty_Span;
+   end record;
+
+   package Later_Name_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Later_Name);
+
    --  What the enclosing function is, for the diagnostics that can only be
    --  read next to it: a `public` inside a body, a `return` carrying a
    --  value, an `end` whose name does not match.
@@ -184,6 +194,13 @@ package body Landin.Syntax.Parser is
             --  reading on would report the struct literal three more
             --  times -- so the declaration ends at the refusal.
             Type_Refused : Boolean := False;
+
+            --  [0100]: a shared declaration is one node per name.  The
+            --  production that read one returns the last of them and leaves
+            --  the whole run here, in written order, so the list collecting
+            --  it takes every name (Append_Parsed) and a prefix read before
+            --  the production reaches every name (Parsed_Run).
+            Shared_Run : Slot_Vectors.Vector;
 
             Noreturn_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "noreturn");
@@ -269,6 +286,9 @@ package body Landin.Syntax.Parser is
             function Named_Here return Landin.Source.Names.Name_Id;
             function Named_Ahead (Distance : Tok.Token_Index)
               return Landin.Source.Names.Name_Id;
+            function Kind_At (Distance : Natural) return Tok.Token_Kind;
+            function Past_Names (Distance : Natural) return Natural;
+            function Starts_Shared_Binding return Boolean;
             procedure Advance;
             procedure Mark_Reported;
 
@@ -304,10 +324,15 @@ package body Landin.Syntax.Parser is
                Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
-               Recovers  : Node_Id := No_Node) return Node_Id;
+               Recovers  : Node_Id := No_Node;
+               Shares    : Boolean := False) return Node_Id;
 
             function Extent_Of (Nodes : Slot_List)
               return Landin.Source.Span;
+
+            procedure Append_Parsed
+              (Into : in out Slot_Vectors.Vector; Parsed : Node_Id);
+            function Parsed_Run (Parsed : Node_Id) return Slot_List;
 
             ------------------------------------------------------------
             --  Reporting and recovering
@@ -372,7 +397,8 @@ package body Landin.Syntax.Parser is
                Compact : Boolean := False) return Node_Id;
             function Parse_Binding
               (Exported  : Boolean;
-               Public_At : Landin.Source.Span) return Node_Id;
+               Public_At : Landin.Source.Span;
+               Shareable : Boolean := True) return Node_Id;
             function Parse_Condition return Node_Id;
             function Parse_Destructuring return Node_Id;
             function Parse_Function
@@ -476,6 +502,34 @@ package body Landin.Syntax.Parser is
               is (if Index + Distance <= Last
                   then Tok.Kind (From, Index + Distance)
                   else Tok.End_Of_Input);
+
+            function Kind_At (Distance : Natural) return Tok.Token_Kind
+              is (if Distance = 0 then Peek
+                  else Ahead (Tok.Token_Index (Distance)));
+
+            --  [0100]: the distance of the first token after a run of
+            --  `, name` pairs beginning at Distance.  A run of none ends
+            --  where it began.
+            function Past_Names (Distance : Natural) return Natural is
+               Step : Natural := Distance;
+            begin
+               while Kind_At (Step) = Tok.Comma
+                 and then Kind_At (Step + 1) = Tok.Identifier
+               loop
+                  Step := Step + 2;
+               end loop;
+               return Step;
+            end Past_Names;
+
+            --  [0100]/[0110]: a run of names ending at `:` or `:=` is a
+            --  binding whose names are all being introduced, just as one
+            --  name there is.  No expression continues with `, name`.
+            function Starts_Shared_Binding return Boolean
+              is (Peek = Tok.Identifier
+                  and then Ahead (1) = Tok.Comma
+                  and then Ahead (2) = Tok.Identifier
+                  and then Kind_At (Past_Names (1))
+                             in Tok.Colon | Tok.Colon_Equal);
 
             --  What follows the selection [1820] beginning at the token
             --  in hand.  A name and a name with fields selected from it
@@ -638,15 +692,16 @@ package body Landin.Syntax.Parser is
                   return True;
                end if;
 
-               --  [1740]: an atom declaration may begin with several names.
+               --  [1740] [0100]: an atom declaration or a binding may begin
+               --  with several names, and so may the forms that refuse
+               --  them by name.  No closing name is followed by `, name`.
                while Ahead (Step) = Tok.Comma
                  and then Ahead (Step + 1) = Tok.Identifier
                loop
                   Step := Step + 2;
                end loop;
                if Step > 1 then
-                  return Ahead (Step) = Tok.Colon
-                    and then Ahead (Step + 1) = Tok.Kw_Atom;
+                  return Ahead (Step) in Tok.Colon | Tok.Colon_Equal;
                end if;
 
                --  A declaration reference or type application may begin a
@@ -864,7 +919,8 @@ package body Landin.Syntax.Parser is
                Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
-               Recovers  : Node_Id := No_Node) return Node_Id
+               Recovers  : Node_Id := No_Node;
+               Shares    : Boolean := False) return Node_Id
             is
                Total : Landin.Source.Span :=
                  Join (Join (Extent, At_Token), Extent_Of (Children));
@@ -912,6 +968,7 @@ package body Landin.Syntax.Parser is
                    Mutable    => Mutable,
                    Escaping   => Escapes,
                    Caller     => Caller,
+                   Shares     => Shares,
                    Unchecked  => Unchecked,
                    Convention => Convention,
                    Fill       => Fills,
@@ -919,6 +976,25 @@ package body Landin.Syntax.Parser is
 
                return Node_Id (Result.Items.Last_Index);
             end Add;
+
+            procedure Append_Parsed
+              (Into : in out Slot_Vectors.Vector; Parsed : Node_Id) is
+            begin
+               if not Shared_Run.Is_Empty
+                 and then Shared_Run.Last_Element = Parsed
+               then
+                  Into.Append (Shared_Run);
+                  Shared_Run.Clear;
+               else
+                  Into.Append (Parsed);
+               end if;
+            end Append_Parsed;
+
+            function Parsed_Run (Parsed : Node_Id) return Slot_List
+              is (if not Shared_Run.Is_Empty
+                    and then Shared_Run.Last_Element = Parsed
+                  then To_List (Shared_Run)
+                  else [1 => Parsed]);
 
             procedure Complain
               (Item    : Syn.Failure;
@@ -1090,6 +1166,7 @@ package body Landin.Syntax.Parser is
                             and then (Peek /= Tok.Identifier
                                       or else Ahead (1) in Tok.Colon
                                                 | Tok.Colon_Equal
+                                      or else Starts_Shared_Binding
                                       or else Starts_Conformance);
                end loop;
             end Resync_Declaration;
@@ -1106,6 +1183,7 @@ package body Landin.Syntax.Parser is
                     and then
                       (Opens_Arena_Block
                        or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else Starts_Shared_Binding
                        or else After_Selectors in Tok.Equal
                          | Tok.Compound_Assign | Tok.Left_Paren);
                end loop;
@@ -1206,7 +1284,7 @@ package body Landin.Syntax.Parser is
                        or else Peek not in Tok.Kernel_Kind
                        or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                      then
-                        Items.Append (Parse_Declaration);
+                        Append_Parsed (Items, Parse_Declaration);
                      else
                         --  L0110 is the only broad code, and it fires only
                         --  at a boundary: inside a construct the grammar
@@ -1432,10 +1510,14 @@ package body Landin.Syntax.Parser is
                then
                   Refuse_Link ("duplicate link annotation");
                else
-                  Result.Items (Positive (Parsed)).Attributes := Attr;
-                  Result.Items (Positive (Parsed)).Link_Name := Symbol;
-                  Result.Items (Positive (Parsed)).Extent := Join
-                    (Opened, Result.Items (Positive (Parsed)).Extent);
+                  --  [0100]: every name of a shared binding carries the
+                  --  written link prefix.
+                  for Each of Parsed_Run (Parsed) loop
+                     Result.Items (Positive (Each)).Attributes := Attr;
+                     Result.Items (Positive (Each)).Link_Name := Symbol;
+                     Result.Items (Positive (Each)).Extent := Join
+                       (Opened, Result.Items (Positive (Each)).Extent);
+                  end loop;
                end if;
                return Parsed;
             end Parse_Link_Declaration;
@@ -1615,7 +1697,9 @@ package body Landin.Syntax.Parser is
                      Parsed : constant Node_Id := Parse_Link_Declaration;
                   begin
                      if Exported then
-                        Result.Items (Positive (Parsed)).Exported := True;
+                        for Each of Parsed_Run (Parsed) loop
+                           Result.Items (Positive (Each)).Exported := True;
+                        end loop;
                      end if;
                      return Parsed;
                   end;
@@ -1642,6 +1726,19 @@ package body Landin.Syntax.Parser is
                      then
                         return Parse_Atom_Declaration
                           (Exported, Public_At);
+                     end if;
+
+                     --  [0100] shares names among bindings only.  A run
+                     --  before a signature or `type` is a function or a type
+                     --  declaration, which each name one thing; those
+                     --  productions refuse the later names by name.
+                     if Step > 1 and then Ahead (Step) = Tok.Colon then
+                        if Ahead (Step + 1) = Tok.Left_Paren then
+                           return Parse_Function (Exported, Public_At);
+                        elsif Ahead (Step + 1) = Tok.Kw_Type then
+                           return Parse_Type_Declaration
+                             (Exported, Public_At);
+                        end if;
                      end if;
                   end;
                end if;
@@ -1725,7 +1822,7 @@ package body Landin.Syntax.Parser is
                            if Pre.Begins_Declaration (Peek)
                              or else Peek = Tok.Kw_Fixed
                            then
-                              Items.Append (Parse_Declaration);
+                              Append_Parsed (Items, Parse_Declaration);
                            else
                               Complain
                                 (Item    => Syn.Stray_Token,
@@ -1770,7 +1867,7 @@ package body Landin.Syntax.Parser is
                            if Pre.Begins_Declaration (Peek)
                              or else Peek = Tok.Kw_Fixed
                            then
-                              Items.Append (Parse_Declaration);
+                              Append_Parsed (Items, Parse_Declaration);
                            else
                               Complain
                                 (Item    => Syn.Stray_Token,
@@ -1874,16 +1971,21 @@ package body Landin.Syntax.Parser is
                return At_Name;
             end Parse_Declared_Name;
 
-            procedure Refuse_Shared_Names (First : Landin.Source.Span);
+            --  [0100] enables shared names for bindings, fields, parameters
+            --  and named returns.  The forms that remain one name per
+            --  declaration -- an inferred binding, a condition declaration,
+            --  a type or fixed formal, a function, a type -- keep this named
+            --  refusal and read on as the first name alone.
+            procedure Refuse_Shared_Names
+              (First : Landin.Source.Span; Message : String);
 
-            procedure Refuse_Shared_Names (First : Landin.Source.Span) is
+            procedure Refuse_Shared_Names
+              (First : Landin.Source.Span; Message : String) is
             begin
                if Peek /= Tok.Comma or else Ahead (1) /= Tok.Identifier then
                   return;
                end if;
-               Refuse
-                 (Syn.Shared_Declaration, First,
-                  "multiple names in this declaration are not enabled");
+               Refuse (Syn.Shared_Declaration, First, Message);
                --  Consume each additional name once. There is no suffix
                --  lookahead to repeat on a damaged comma-separated run.
                while Peek = Tok.Comma and then Ahead (1) = Tok.Identifier loop
@@ -1891,6 +1993,29 @@ package body Landin.Syntax.Parser is
                   Advance;
                end loop;
             end Refuse_Shared_Names;
+
+            --  [0100]: the names after the first, which Parse_Declared_Name
+            --  has just read.  Only `, name` continues the run, so a prefix
+            --  written after the first name -- `(a, inout b: t)` -- is not
+            --  a shared declaration and keeps the first name's own error.
+            procedure Parse_Later_Names
+              (Into : in out Later_Name_Vectors.Vector);
+
+            procedure Parse_Later_Names
+              (Into : in out Later_Name_Vectors.Vector) is
+            begin
+               while Peek = Tok.Comma and then Ahead (1) = Tok.Identifier loop
+                  Advance;
+                  declare
+                     Named : Landin.Source.Names.Name_Id;
+                     At_Name : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Named);
+                  begin
+                     Into.Append
+                       (Later_Name'(Named => Named, At_Name => At_Name));
+                  end;
+               end loop;
+            end Parse_Later_Names;
 
             --  A module qualifier is the same left-to-right selection node
             --  in value, type and concept positions.  Resolution decides
@@ -2419,7 +2544,7 @@ package body Landin.Syntax.Parser is
                   declare
                      Before : constant Tok.Token_Index := Index;
                   begin
-                     Into.Append (Parse_Parameter (Allow_Static));
+                     Append_Parsed (Into, Parse_Parameter (Allow_Static));
                      exit when Index = Before;
                   end;
                   exit when Peek /= Tok.Comma;
@@ -2955,8 +3080,6 @@ package body Landin.Syntax.Parser is
                end if;
             end Parse_Type_Formals;
 
-            --  binding ::= "mut"? identifier ":" type ("=" expression)?
-            --            | "mut"? identifier ":=" expression      [1790]
             --  `identifier ":" "type" "=" type` [1795].  The name is
             --  parsed the way every declared name is, so [1760]'s two
             --  narrowings hold for a type name unchanged.
@@ -2973,6 +3096,9 @@ package body Landin.Syntax.Parser is
                Formals : Slot_Vectors.Vector;
                Formals_Closed : Boolean := True;
             begin
+               Refuse_Shared_Names
+                 (At_Name, "a type declaration names one type");
+
                --  The colon and the word are what brought us here.
                Advance;
                Advance;
@@ -3339,7 +3465,7 @@ package body Landin.Syntax.Parser is
                            declare
                               Before : constant Tok.Token_Index := Index;
                            begin
-                              Params.Append (Parse_Parameter);
+                              Append_Parsed (Params, Parse_Parameter);
                               exit when Index = Before;
                            end;
                            exit when Peek /= Tok.Comma;
@@ -3613,8 +3739,8 @@ package body Landin.Syntax.Parser is
             end Parse_Conformance;
 
             --  `"struct" field+ "end" identifier?` [1795], where a
-            --  field is `identifier ":" type` [0750].  The closing name
-            --  is checked the way a function's is, because a body that
+            --  field is `identifiers ":" type` [0750] [0100].  The closing
+            --  name is checked the way a function's is, because a body that
             --  ends with the wrong name is a reader's mistake worth
             --  naming rather than a parse that quietly succeeded.
             function Parse_Struct_Body
@@ -3752,8 +3878,10 @@ package body Landin.Syntax.Parser is
                                     Field_Name : Landin.Source.Names.Name_Id;
                                     At_Field : constant Landin.Source.Span :=
                                       Parse_Declared_Name (Field_Name);
+                                    Later : Later_Name_Vectors.Vector;
                                     Of_Type : Node_Id := No_Node;
                                  begin
+                                    Parse_Later_Names (Later);
                                     if Expect
                                          (Wanted  => Tok.Colon,
                                           Message => "a payload field names"
@@ -3770,14 +3898,30 @@ package body Landin.Syntax.Parser is
                                          (Error_Type, After_Previous);
                                     end if;
 
-                                    Payload.Append
-                                      (Add
-                                         (Of_Kind  => Field,
-                                          At_Token => At_Field,
-                                          Extent   => Join
-                                            (At_Field, After_Previous),
-                                          Children => [1 => Of_Type],
-                                          Named    => Field_Name));
+                                    declare
+                                       Extent : constant Landin.Source.Span
+                                         := Join (At_Field, After_Previous);
+                                    begin
+                                       Payload.Append
+                                         (Add
+                                            (Of_Kind  => Field,
+                                             At_Token => At_Field,
+                                             Extent   => Extent,
+                                             Children => [1 => Of_Type],
+                                             Named    => Field_Name));
+                                       --  [0100]: one payload field per
+                                       --  name, sharing the written type.
+                                       for Each of Later loop
+                                          Payload.Append
+                                            (Add
+                                               (Of_Kind  => Field,
+                                                At_Token => Each.At_Name,
+                                                Extent   => Extent,
+                                                Children => [1 => Of_Type],
+                                                Named    => Each.Named,
+                                                Shares   => True));
+                                       end loop;
+                                    end;
                                  end;
 
                                  exit when Peek /= Tok.Comma;
@@ -3871,10 +4015,11 @@ package body Landin.Syntax.Parser is
                      Field_Named : Landin.Source.Names.Name_Id;
                      At_Field    : constant Landin.Source.Span :=
                        Parse_Declared_Name (Field_Named);
+                     Later       : Later_Name_Vectors.Vector;
                      Of_Type     : Node_Id := No_Node;
                      Is_Variant_Part : Boolean := False;
                   begin
-                     Refuse_Shared_Names (At_Field);
+                     Parse_Later_Names (Later);
                      if Expect
                           (Wanted  => Tok.Colon,
                            Message => "a field names its type after `:`",
@@ -3911,6 +4056,13 @@ package body Landin.Syntax.Parser is
                                 and then Field_Named /= Named));
 
                         if Is_Variant_Part then
+                           --  [0100] shares names among fields; a variant
+                           --  part is one tagged member with one name.
+                           if not Later.Is_Empty then
+                              Refuse
+                                (Syn.Shared_Declaration, At_Field,
+                                 "a variant part names one part");
+                           end if;
                            Fields.Append
                              (Parse_Variant_Part (Field_Named, At_Field));
                            Had_Field := True;
@@ -3941,13 +4093,32 @@ package body Landin.Syntax.Parser is
                                  Parts.Append (Parse_Expression);
                               end if;
                            end if;
-                           Fields.Append
-                             (Add
-                                (Of_Kind  => Field,
-                                 At_Token => At_Field,
-                                 Extent   => Join (At_Field, After_Previous),
-                                 Children => To_List (Parts),
-                                 Named    => Field_Named));
+                           declare
+                              Extent : constant Landin.Source.Span :=
+                                Join (At_Field, After_Previous);
+                           begin
+                              Fields.Append
+                                (Add
+                                   (Of_Kind  => Field,
+                                    At_Token => At_Field,
+                                    Extent   => Extent,
+                                    Children => To_List (Parts),
+                                    Named    => Field_Named));
+                              --  [0100]: one field per name, in written
+                              --  order, sharing the written type and any
+                              --  `at` bounds.  Two names at one position
+                              --  are then [0730]'s overlap.
+                              for Each of Later loop
+                                 Fields.Append
+                                   (Add
+                                      (Of_Kind  => Field,
+                                       At_Token => Each.At_Name,
+                                       Extent   => Extent,
+                                       Children => To_List (Parts),
+                                       Named    => Each.Named,
+                                       Shares   => True));
+                              end loop;
+                           end;
                         end;
                         Had_Field := True;
                      end if;
@@ -4029,15 +4200,28 @@ package body Landin.Syntax.Parser is
                   Children => To_List (Fields));
             end Parse_Struct_Body;
 
+            --  binding ::= "mut"? identifiers ":" type ("=" expression)?
+            --             | "mut"? identifier ":=" expression   [1790]
+            --
+            --  [0100]: shared names are the separate bindings written one
+            --  per name, in order, each with the written `public`, `mut`
+            --  and link prefix and the one written type.  The value is
+            --  evaluated once, for the first name; each later name is
+            --  initialized with a copy of the first name's value, which is
+            --  a reference to it.  The inferred form infers one name's type
+            --  from one value and stays one name: a run ending at `:=` is a
+            --  recorded boundary, and so is any run in a condition.
             function Parse_Binding
               (Exported  : Boolean;
-               Public_At : Landin.Source.Span) return Node_Id
+               Public_At : Landin.Source.Span;
+               Shareable : Boolean := True) return Node_Id
             is
                Start : constant Landin.Source.Span :=
                  (if Exported then Public_At else Here);
                Mutable   : Boolean := False;
                Named     : Landin.Source.Names.Name_Id;
                At_Name   : Landin.Source.Span;
+               Later     : Later_Name_Vectors.Vector;
                Type_Node : Node_Id := No_Node;
                Value     : Node_Id := No_Node;
             begin
@@ -4047,7 +4231,17 @@ package body Landin.Syntax.Parser is
                end if;
 
                At_Name := Parse_Declared_Name (Named);
-               Refuse_Shared_Names (At_Name);
+               if not Shareable then
+                  Refuse_Shared_Names
+                    (At_Name, "a condition declaration names one binding");
+               elsif Kind_At (Past_Names (0)) = Tok.Colon_Equal then
+                  Refuse_Shared_Names
+                    (At_Name,
+                     "an inferred binding names one binding; shared names"
+                     & " write their type");
+               else
+                  Parse_Later_Names (Later);
+               end if;
 
                if Peek = Tok.Colon_Equal then
                   Advance;
@@ -4082,14 +4276,45 @@ package body Landin.Syntax.Parser is
                   end if;
                end if;
 
-               return Add
-                 (Of_Kind  => Binding,
-                  At_Token => At_Name,
-                  Extent   => Join (Start, After_Previous),
-                  Children => [Type_Node, Value],
-                  Named    => Named,
-                  Exported => Exported,
-                  Mutable  => Mutable);
+               declare
+                  Extent : constant Landin.Source.Span :=
+                    Join (Start, After_Previous);
+                  First  : constant Node_Id := Add
+                    (Of_Kind  => Binding,
+                     At_Token => At_Name,
+                     Extent   => Extent,
+                     Children => [Type_Node, Value],
+                     Named    => Named,
+                     Exported => Exported,
+                     Mutable  => Mutable);
+               begin
+                  if Later.Is_Empty then
+                     return First;
+                  end if;
+
+                  Shared_Run.Clear;
+                  Shared_Run.Append (First);
+                  for Each of Later loop
+                     declare
+                        Copied : constant Node_Id :=
+                          (if Value = No_Node then No_Node
+                           else Add (Name_Reference, At_Name,
+                                     Named => Named));
+                     begin
+                        Shared_Run.Append
+                          (Add
+                             (Of_Kind  => Binding,
+                              At_Token => Each.At_Name,
+                              Extent   => Extent,
+                              Children => [Type_Node, Copied],
+                              Named    => Each.Named,
+                              Exported => Exported,
+                              Mutable  => Mutable,
+                              Shares   => True));
+                     end;
+                  end loop;
+                  return Shared_Run.Last_Element;
+               end;
             end Parse_Binding;
 
             --  condition ::= expression | condition_declaration       [1070]
@@ -4121,7 +4346,8 @@ package body Landin.Syntax.Parser is
 
                declare
                   Declared : constant Node_Id :=
-                    Parse_Binding (False, Landin.Source.Empty_Span);
+                    Parse_Binding
+                      (False, Landin.Source.Empty_Span, Shareable => False);
                begin
                   if Value_Of (Result, Declared) = No_Node then
                      Complain
@@ -4256,9 +4482,9 @@ package body Landin.Syntax.Parser is
             --  Functions                                        [1800]
             ------------------------------------------------------------
 
-            --  parameter ::= "caller" identifier ":" type
+            --  parameter ::= "caller" identifiers ":" type
             --              | "escaping"? parameter_convention?
-            --                identifier ":" type             [1040/1800]
+            --                identifiers ":" type            [1040/1800]
             --  D140 fixes that modifier order and retains explicit `in`
             --  separately from the implicit default.  D138's type and fixed
             --  formals remain distinct nodes, so neither runtime modifier can
@@ -4286,6 +4512,7 @@ package body Landin.Syntax.Parser is
                Convention  : Parameter_Convention := Implicit_In;
                Named       : Landin.Source.Names.Name_Id;
                At_Name     : Landin.Source.Span;
+               Later       : Later_Name_Vectors.Vector;
                Type_Node   : Node_Id := No_Node;
                Constraint  : Node_Id := No_Node;
             begin
@@ -4325,7 +4552,19 @@ package body Landin.Syntax.Parser is
                end if;
 
                At_Name := Parse_Declared_Name (Named);
-               Refuse_Shared_Names (At_Name);
+               --  [0100] shares names among runtime parameters.  A static
+               --  formal -- `fixed n` or `t: type` -- keeps one name.
+               if Fixed
+                 or else
+                   (Allow_Static
+                    and then Kind_At (Past_Names (0)) = Tok.Colon
+                    and then Kind_At (Past_Names (0) + 1) = Tok.Kw_Type)
+               then
+                  Refuse_Shared_Names
+                    (At_Name, "a type or fixed formal names one formal");
+               else
+                  Parse_Later_Names (Later);
+               end if;
 
                if Expect
                     (Wanted  => Tok.Colon,
@@ -4379,22 +4618,52 @@ package body Landin.Syntax.Parser is
                      Named    => Named);
                end if;
 
-               return Add
-                 (Of_Kind   => Parameter,
-                  At_Token  => At_Name,
-                  Extent    => Join (Start, After_Previous),
-                  Children  => [Type_Node],
-                  Named     => Named,
-                  Escapes   => Escaping,
-                  Caller    => Caller,
-                  Convention => Convention);
+               --  [0100]: one Parameter per name, in order, each with the
+               --  written `caller`, `escaping` and convention and the one
+               --  written type.
+               declare
+                  Extent : constant Landin.Source.Span :=
+                    Join (Start, After_Previous);
+                  First : constant Node_Id := Add
+                    (Of_Kind   => Parameter,
+                     At_Token  => At_Name,
+                     Extent    => Extent,
+                     Children  => [Type_Node],
+                     Named     => Named,
+                     Escapes   => Escaping,
+                     Caller    => Caller,
+                     Convention => Convention);
+               begin
+                  if Later.Is_Empty then
+                     return First;
+                  end if;
+
+                  Shared_Run.Clear;
+                  Shared_Run.Append (First);
+                  for Each of Later loop
+                     Shared_Run.Append
+                       (Add
+                          (Of_Kind   => Parameter,
+                           At_Token  => Each.At_Name,
+                           Extent    => Extent,
+                           Children  => [Type_Node],
+                           Named     => Each.Named,
+                           Escapes   => Escaping,
+                           Caller    => Caller,
+                           Convention => Convention,
+                           Shares    => True));
+                  end loop;
+                  return Shared_Run.Last_Element;
+               end;
             end Parse_Parameter;
 
             --  returns ::= "(" named_return ("," named_return)* ")"
             --              | "none"                              [1800]
-            --  named_return ::= identifier ":" type
+            --  named_return ::= identifiers ":" type
             --                   ("from" identifier ("," identifier)*)?
             --
+            --  [0100]: shared names are one Named_Return per name, in
+            --  order, each with the one written type and `from` list.
             --  No_Node is `none`.  Every nonempty return list has its own
             --  node so signatures can carry [0920]'s ordered positions
             --  without confusing them with the trailing parameter run.
@@ -4434,12 +4703,13 @@ package body Landin.Syntax.Parser is
                      Named     : Landin.Source.Names.Name_Id;
                      At_Name   : constant Landin.Source.Span :=
                        Parse_Declared_Name (Named);
+                     Later : Later_Name_Vectors.Vector;
                      Kept : Boolean;
                      Type_Node : Node_Id;
                      Sources   : Slot_Vectors.Vector;
                   begin
                      pragma Unreferenced (Kept);
-                     Refuse_Shared_Names (At_Name);
+                     Parse_Later_Names (Later);
                      Kept := Expect
                        (Wanted  => Tok.Colon,
                         Message => "a named return names its type after"
@@ -4476,27 +4746,40 @@ package body Landin.Syntax.Parser is
                                       Named => Source_Name));
                            end;
 
-                           --  A comma followed by `name:` begins the next
-                           --  named return.  Any other comma continues this
+                           --  A comma followed by names that reach `:`
+                           --  begins the next named return, and [0110] is
+                           --  why: left of `:` is always what is being
+                           --  introduced.  Any other comma continues this
                            --  return's source list; the grammar deliberately
                            --  admits both uses and this is its local split.
                            exit when Peek /= Tok.Comma
-                             or else (Ahead (1) = Tok.Identifier
-                                      and then Ahead (2) = Tok.Colon);
+                             or else Kind_At (Past_Names (0)) = Tok.Colon;
                            Advance;
                         end loop;
                      end if;
 
                      declare
                         Head : constant Slot_List (1 .. 1) := [Type_Node];
+                        Extent : constant Landin.Source.Span :=
+                          Join (At_Name, After_Previous);
                      begin
                         Results.Append
                           (Add
                              (Of_Kind  => Named_Return,
                               At_Token => At_Name,
-                              Extent   => Join (At_Name, After_Previous),
+                              Extent   => Extent,
                               Children => Head & To_List (Sources),
                               Named    => Named));
+                        for Each of Later loop
+                           Results.Append
+                             (Add
+                                (Of_Kind  => Named_Return,
+                                 At_Token => Each.At_Name,
+                                 Extent   => Extent,
+                                 Children => Head & To_List (Sources),
+                                 Named    => Each.Named,
+                                 Shares   => True));
+                        end loop;
                      end;
                   end;
 
@@ -4814,6 +5097,7 @@ package body Landin.Syntax.Parser is
                   --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
+                    and then not Starts_Shared_Binding
                     and then After_Selectors
                                not in Tok.Equal | Tok.Compound_Assign
                   then
@@ -4918,6 +5202,7 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
                At_Name := Parse_Declared_Name (Named);
+               Refuse_Shared_Names (At_Name, "a function names one routine");
 
                if not Expect
                         (Wanted  => Tok.Colon,
@@ -5103,7 +5388,7 @@ package body Landin.Syntax.Parser is
                      declare
                         Before : constant Tok.Token_Index := Index;
                      begin
-                        Params.Append (Parse_Parameter);
+                        Append_Parsed (Params, Parse_Parameter);
                         exit when Index = Before;
                      end;
                      exit when Peek /= Tok.Comma;
@@ -5246,6 +5531,7 @@ package body Landin.Syntax.Parser is
 
                   return Opens_Arena_Block
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                    or else Starts_Shared_Binding
                     or else After_Selectors in Tok.Equal | Tok.Compound_Assign;
                end Clearly_A_Statement;
             begin
@@ -5325,7 +5611,7 @@ package body Landin.Syntax.Parser is
                        or else Peek = Tok.Kw_Public
                        or else Peek not in Tok.Kernel_Kind
                      then
-                        Items.Append (Parse_Statement (Context));
+                        Append_Parsed (Items, Parse_Statement (Context));
                      else
                         declare
                            From_Here : constant Landin.Source.Span := Here;
@@ -6548,6 +6834,7 @@ package body Landin.Syntax.Parser is
                                    and then
                                      (Ahead (1)
                                         in Tok.Colon | Tok.Colon_Equal
+                                      or else Starts_Shared_Binding
                                       or else After_Selectors
                                         in Tok.Equal | Tok.Compound_Assign))));
                      begin
@@ -6567,7 +6854,7 @@ package body Landin.Syntax.Parser is
                            end if;
                         else
                            Statement := Parse_Statement (Context);
-                           Body_Items.Append (Statement);
+                           Append_Parsed (Body_Items, Statement);
                         end if;
 
                         declare

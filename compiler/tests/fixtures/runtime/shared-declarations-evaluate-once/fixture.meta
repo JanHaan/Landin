@@ -1,0 +1,9 @@
+class: runtime
+profiles: standard
+summary: a shared declaration evaluates its value once for the first name, copies it into independent later names, and distributes type, fields, conventions and `from`
+# `mut first, second: i32` is R4.91's refused shared declaration, now module
+# state whose two names hold zero and change independently.
+constructs: 0060, 0100, 0670, 0680, 0790, 0900, 1790, 1795, 1800
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

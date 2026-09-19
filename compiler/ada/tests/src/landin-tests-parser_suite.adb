@@ -3744,12 +3744,15 @@ package body Landin.Tests.Parser_Suite is
    procedure Shared_Declarations_Have_A_Named_Refusal
      (Item : in out Landin.Testing.Context);
 
+   --  [0100] enables shared names for bindings, fields, parameters and
+   --  named returns.  Every form that still names one thing keeps one named
+   --  refusal, pointing at the first name, and reads on as that name alone.
    procedure Shared_Declarations_Have_A_Named_Refusal
      (Item : in out Landin.Testing.Context)
    is
-      procedure Check (Text : String);
+      procedure Check (Text : String; Message : String);
 
-      procedure Check (Text : String) is
+      procedure Check (Text : String; Message : String) is
          Sources : Landin.Source.Sets.Source_Set;
          Names : Landin.Source.Names.Table;
          Stream : Landin.Tokens.Token_Stream;
@@ -3768,7 +3771,7 @@ package body Landin.Tests.Parser_Suite is
                "shared names have one refusal: " & Text);
             Landin.Testing.Check_Equal
               (Item, Landin.Syntax.Declaration_Count (Parsed), 2,
-               "the shared declaration preserves the next declaration");
+               "the refused declaration preserves the next declaration");
             if Landin.Syntax.Declaration_Count (Parsed) = 2 then
                Landin.Testing.Check_Equal
                  (Item, Landin.Source.Names.Spelling
@@ -3785,7 +3788,7 @@ package body Landin.Tests.Parser_Suite is
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Message
                     (Landin.Diagnostics.Primary (Report)),
-                  "multiple names in this declaration are not enabled",
+                  Message,
                   "the primary diagnostic identifies the refused shape");
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Code (Report), "L0010",
@@ -3798,28 +3801,242 @@ package body Landin.Tests.Parser_Suite is
                     (Item, Contains
                        (Landin.Diagnostics.Nth_Note (Report, 1), "[0100]"),
                      "the first note names the shared declaration rule");
-                  Landin.Testing.Check
-                    (Item, Contains
-                       (Landin.Diagnostics.Nth_Note (Report, 2), "R7.20"),
-                     "the second note names the existing enabling work");
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Nth_Note (Report, 2),
+                     "ROADMAP.md R7.20 records this source-form boundary",
+                     "the second note records the boundary's owner");
                end if;
             end;
          end if;
       end Check;
+
+      Inferred : constant String :=
+        "an inferred binding names one binding; shared names write their"
+        & " type";
+      Condition : constant String :=
+        "a condition declaration names one binding";
    begin
-      Check ("mut first, second: i32");
-      Check ("public first, second, third: u32");
-      Check ("first, second: i32 = 1");
-      Check ("f: () -> none = mut first, second: i32 = 1 end f");
-      Check ("f: () -> none = first, second: i32 = 1 end f");
-      Check ("holder: type = struct first, second: i32 end holder");
+      Check ("first, second := 1", Inferred);
+      Check ("mut first, second := 1", Inferred);
+      Check ("f: () -> none = first, second := 1 end f", Inferred);
+      Check ("f: () -> none = mut first, second := 1 end f", Inferred);
+      Check ("f: () -> (r: i32) = first, second := 1 r = 2 end f", Inferred);
       Check ("f: () -> none = if mut first, second: bool = true "
-             & "then end if end f");
+             & "then end if end f", Condition);
       Check ("f: () -> none = if first, second: bool = true "
-             & "then end if end f");
-      Check ("f: (first, second: i32) -> none = end f");
-      Check ("f: () -> (first, second: i32) = end f");
+             & "then end if end f", Condition);
+      Check ("f: () -> none = while first, second := true "
+             & "do end while end f", Condition);
+      Check ("f: (first, second: type) -> none = end f",
+             "a type or fixed formal names one formal");
+      Check ("f: (fixed first, second: usize) -> none = end f",
+             "a type or fixed formal names one formal");
+      Check ("first, second: () -> none = end first",
+             "a function names one routine");
+      Check ("first, second: type = i32",
+             "a type declaration names one type");
+      Check ("holder: type = struct first, second: variant a | b end first"
+             & " end holder", "a variant part names one part");
    end Shared_Declarations_Have_A_Named_Refusal;
+
+   procedure Shared_Declarations_Are_One_Per_Name
+     (Item : in out Landin.Testing.Context);
+
+   --  [0100]: a shared declaration is the separate declarations written one
+   --  per name, in order, each with the whole written prefix.  The type and
+   --  the rest of the written suffix are the first name's own nodes, and a
+   --  later binding is initialized from a reference to the first name.
+   procedure Shared_Declarations_Are_One_Per_Name
+     (Item : in out Landin.Testing.Context)
+   is
+      package Syntax renames Landin.Syntax;
+
+      Sources : Landin.Source.Sets.Source_Set;
+      Names : Landin.Source.Names.Table;
+      Stream : Landin.Tokens.Token_Stream;
+      Reports : Landin.Diagnostics.Diagnostic_List;
+      Id : constant Landin.Source.Source_Id := Sources.Add
+        ("shared.ldn",
+         "public mut red, green: u8 = 3" & ASCII.LF
+         & "link(section: "".data"") tint, shade: u32" & ASCII.LF
+         & "holder: type = struct a, b: u8 at 0..3 end holder" & ASCII.LF
+         & "f: (inout x, y: i32, z: ptr u8) -> (p: ptr u8 from z, m,"
+         & " n: ptr u8 from z) =" & ASCII.LF
+         & "    mut u, v: i32 = 1" & ASCII.LF
+         & "    w, t: i32" & ASCII.LF
+         & "end f");
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Reports);
+      declare
+         Parsed : constant Syntax.Tree :=
+           Syntax.Parser.Parse (Stream, Names, Reports);
+
+         function Named (Node : Syntax.Node_Id) return String
+           is (Landin.Source.Names.Spelling
+                 (Names, Syntax.Name (Parsed, Node)));
+
+         --  The later name shares the earlier one's written type node.
+         procedure Shared_After
+           (Earlier, Later : Syntax.Node_Id; What : String);
+
+         procedure Shared_After
+           (Earlier, Later : Syntax.Node_Id; What : String) is
+         begin
+            Landin.Testing.Check
+              (Item, not Syntax.Shares_Declared_Type (Parsed, Earlier),
+               What & ": the first name owns what it was written with");
+            Landin.Testing.Check
+              (Item, Syntax.Shares_Declared_Type (Parsed, Later),
+               What & ": the later name shares it");
+            Landin.Testing.Check
+              (Item, Syntax.Declared_Type (Parsed, Earlier) /= Syntax.No_Node
+                 and then Syntax.Declared_Type (Parsed, Earlier)
+                   = Syntax.Declared_Type (Parsed, Later),
+               What & ": both names have the one written type");
+         end Shared_After;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Reports), 0,
+            "shared declarations parse without a report");
+         Landin.Testing.Check_Equal
+           (Item, Syntax.Declaration_Count (Parsed), 6,
+            "each shared module binding is one declaration per name");
+         if Syntax.Declaration_Count (Parsed) /= 6
+           or else Landin.Diagnostics.Count (Reports) /= 0
+         then
+            return;
+         end if;
+
+         declare
+            Red   : constant Syntax.Node_Id :=
+              Syntax.Nth_Declaration (Parsed, 1);
+            Green : constant Syntax.Node_Id :=
+              Syntax.Nth_Declaration (Parsed, 2);
+            Tint  : constant Syntax.Node_Id :=
+              Syntax.Nth_Declaration (Parsed, 3);
+            Shade : constant Syntax.Node_Id :=
+              Syntax.Nth_Declaration (Parsed, 4);
+         begin
+            Landin.Testing.Check
+              (Item, Named (Red) = "red" and then Named (Green) = "green",
+               "shared module bindings keep their written order");
+            Shared_After (Red, Green, "module binding");
+            Landin.Testing.Check
+              (Item, Syntax.Is_Public (Parsed, Green)
+                 and then Syntax.Is_Mutable (Parsed, Green),
+               "the later name carries `public` and `mut`");
+            Landin.Testing.Check
+              (Item, Syntax.Kind (Parsed, Syntax.Value_Of (Parsed, Red))
+                 = Syntax.Integer_Literal,
+               "the first name is initialized by the written value");
+            Landin.Testing.Check
+              (Item, Syntax.Kind (Parsed, Syntax.Value_Of (Parsed, Green))
+                 = Syntax.Name_Reference
+                 and then Named (Syntax.Value_Of (Parsed, Green)) = "red",
+               "a later name is initialized from the first name");
+            Shared_After (Tint, Shade, "linked binding");
+            Landin.Testing.Check
+              (Item, Syntax.Attributes (Parsed, Shade).Present
+                 and then Syntax.Value_Of (Parsed, Shade) = Syntax.No_Node,
+               "the later name carries the link prefix and no value");
+         end;
+
+         declare
+            Holder : constant Syntax.Node_Id :=
+              Syntax.Declared_Type
+                (Parsed, Syntax.Nth_Declaration (Parsed, 5));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Syntax.Field_Count (Parsed, Holder), 2,
+               "shared field names are one field each");
+            if Syntax.Field_Count (Parsed, Holder) = 2 then
+               Shared_After
+                 (Syntax.Nth_Field (Parsed, Holder, 1),
+                  Syntax.Nth_Field (Parsed, Holder, 2), "field");
+               Landin.Testing.Check
+                 (Item, Syntax.Bit_First
+                    (Parsed, Syntax.Nth_Field (Parsed, Holder, 2))
+                    = Syntax.Bit_First
+                        (Parsed, Syntax.Nth_Field (Parsed, Holder, 1))
+                    and then Syntax.Bit_First
+                      (Parsed, Syntax.Nth_Field (Parsed, Holder, 1))
+                      /= Syntax.No_Node,
+                  "a later field shares the written `at` bounds");
+            end if;
+         end;
+
+         declare
+            Routine : constant Syntax.Node_Id :=
+              Syntax.Nth_Declaration (Parsed, 6);
+            Runs : constant Syntax.Node_Id := Syntax.Body_Of (Parsed, Routine);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Syntax.Parameter_Count (Parsed, Routine), 3,
+               "shared parameter names are one parameter each");
+            Landin.Testing.Check_Equal
+              (Item, Syntax.Return_Count (Parsed, Routine), 3,
+               "names reaching `:` after a `from` list begin returns");
+            if Syntax.Parameter_Count (Parsed, Routine) = 3
+              and then Syntax.Return_Count (Parsed, Routine) = 3
+            then
+               Shared_After
+                 (Syntax.Nth_Parameter (Parsed, Routine, 1),
+                  Syntax.Nth_Parameter (Parsed, Routine, 2), "parameter");
+               Landin.Testing.Check
+                 (Item, Syntax.Convention_Of
+                    (Parsed, Syntax.Nth_Parameter (Parsed, Routine, 2))
+                    = Syntax.Inout_Convention,
+                  "the later parameter carries the written convention");
+               Landin.Testing.Check
+                 (Item, not Syntax.Shares_Declared_Type
+                    (Parsed, Syntax.Nth_Parameter (Parsed, Routine, 3))
+                    and then Syntax.Convention_Of
+                      (Parsed, Syntax.Nth_Parameter (Parsed, Routine, 3))
+                      = Syntax.Implicit_In,
+                  "a separately written parameter is its own");
+               Landin.Testing.Check_Equal
+                 (Item, Syntax.Return_Source_Count
+                    (Parsed, Syntax.Nth_Return (Parsed, Routine, 1)), 1,
+                  "the first return keeps its own `from` list");
+               Shared_After
+                 (Syntax.Nth_Return (Parsed, Routine, 2),
+                  Syntax.Nth_Return (Parsed, Routine, 3), "named return");
+               Landin.Testing.Check
+                 (Item, Syntax.Return_Source_Count
+                    (Parsed, Syntax.Nth_Return (Parsed, Routine, 3)) = 1
+                    and then Syntax.Nth_Return_Source
+                      (Parsed, Syntax.Nth_Return (Parsed, Routine, 3), 1)
+                      = Syntax.Nth_Return_Source
+                          (Parsed, Syntax.Nth_Return (Parsed, Routine, 2), 1),
+                  "a later return shares the written `from` sources");
+            end if;
+
+            Landin.Testing.Check_Equal
+              (Item, Syntax.Statement_Count (Parsed, Runs), 4,
+               "shared locals are one statement per name");
+            if Syntax.Statement_Count (Parsed, Runs) = 4 then
+               Shared_After
+                 (Syntax.Nth_Statement (Parsed, Runs, 1),
+                  Syntax.Nth_Statement (Parsed, Runs, 2), "local binding");
+               Landin.Testing.Check
+                 (Item, Named (Syntax.Value_Of
+                    (Parsed, Syntax.Nth_Statement (Parsed, Runs, 2)))
+                    = "u",
+                  "a later local is initialized from the first name");
+               Shared_After
+                 (Syntax.Nth_Statement (Parsed, Runs, 3),
+                  Syntax.Nth_Statement (Parsed, Runs, 4),
+                  "uninitialized local");
+               Landin.Testing.Check
+                 (Item, Syntax.Value_Of
+                    (Parsed, Syntax.Nth_Statement (Parsed, Runs, 4))
+                    = Syntax.No_Node,
+                  "an uninitialized later local has no value");
+            end if;
+         end;
+      end;
+   end Shared_Declarations_Are_One_Per_Name;
 
    procedure Volatile_Pointers_Have_A_Named_Refusal
      (Item : in out Landin.Testing.Context);
@@ -4076,6 +4293,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "shared declarations have a named refusal",
          Shared_Declarations_Have_A_Named_Refusal'Access);
+      Landin.Testing.Register
+        (Into, "parser", "shared declarations are one per name",
+         Shared_Declarations_Are_One_Per_Name'Access);
       Landin.Testing.Register
         (Into, "parser", "volatile pointers have a named refusal",
          Volatile_Pointers_Have_A_Named_Refusal'Access);

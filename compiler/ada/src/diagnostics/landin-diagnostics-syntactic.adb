@@ -37,6 +37,7 @@ package body Landin.Diagnostics.Syntactic is
                then " withdraws this form; pass an ordinary allocator"
                elsif Refused in Declared_Type | Struct_Type | Type_Parameter
                  | Array_Repetition | Indexing | Struct_All_Of
+                 | Shared_Declaration
                then " records this source-form boundary"
                else " is where it is enabled"));
       elsif Note /= "" then

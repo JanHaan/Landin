@@ -78,6 +78,15 @@ package body Landin.Stages.Resolution is
             Into => Found);
       end Report_Reserved;
 
+      --  [0100]: a later name of a shared declaration owns nothing it was
+      --  written with but a binding's value.  Its type, `at` bounds and
+      --  `from` sources are the first name's own nodes, resolved there once,
+      --  because a node resolved twice is a resolver that walked it twice.
+      function Owned_Type (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Syn.Node_Id
+        is (if Syn.Shares_Declared_Type (Of_Tree, Node) then Syn.No_Node
+            else Syn.Declared_Type (Of_Tree, Node));
+
       function File_Base (Of_Tree : Syn.Tree)
         return Landin.Resolution.Scope_Id
         is (Landin.Resolution.File_Scope_Of
@@ -211,7 +220,10 @@ package body Landin.Stages.Resolution is
             if Resolve_Declared
               and then Syn.Kind (Of_Tree, Node)
                        in Syn.Binding | Syn.Parameter | Syn.Named_Return
-                          | Syn.Type_Declaration
+            then
+               Resolve (Of_Tree, Owned_Type (Of_Tree, Node), Inside);
+            elsif Resolve_Declared
+              and then Syn.Kind (Of_Tree, Node) = Syn.Type_Declaration
             then
                Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
                         Inside);
@@ -231,10 +243,13 @@ package body Landin.Stages.Resolution is
             declare
                Returned : constant Syn.Node_Id :=
                  Syn.Nth_Return (Of_Tree, Signature_Node, Which);
+               --  [0100]: a later shared name's sources are the first
+               --  name's nodes, already associated.
+               Owned : constant Natural :=
+                 (if Syn.Shares_Declared_Type (Of_Tree, Returned) then 0
+                  else Syn.Return_Source_Count (Of_Tree, Returned));
             begin
-               for Source_Index in
-                 1 .. Syn.Return_Source_Count (Of_Tree, Returned)
-               loop
+               for Source_Index in 1 .. Owned loop
                   declare
                      Source : constant Syn.Node_Id :=
                        Syn.Nth_Return_Source
@@ -271,12 +286,12 @@ package body Landin.Stages.Resolution is
       begin
          for Which in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
             Resolve
-              (Of_Tree, Syn.Declared_Type
+              (Of_Tree, Owned_Type
                  (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which)), Inside);
          end loop;
          for Which in 1 .. Syn.Return_Count (Of_Tree, Node) loop
             Resolve
-              (Of_Tree, Syn.Declared_Type
+              (Of_Tree, Owned_Type
                  (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which)), Inside);
          end loop;
       end Resolve_Runtime_Signature_Types;
@@ -1114,6 +1129,19 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         --  [0100]: a later shared field, parameter or named return reached
+         --  through a struct body or a written signature has nothing of its
+         --  own to resolve, and a shared binding only its value.
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Field | Syn.Parameter | Syn.Named_Return | Syn.Binding
+           and then Syn.Shares_Declared_Type (Of_Tree, Node)
+         then
+            if Syn.Kind (Of_Tree, Node) = Syn.Binding then
+               Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Node), Inside);
+            end if;
+            return;
+         end if;
+
          for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
             Resolve (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Inside);
          end loop;
@@ -1138,8 +1166,7 @@ package body Landin.Stages.Resolution is
                      --  incoming scope, before this local shadows it.
                      Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Item),
                               Inside);
-                     Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Item),
-                              Inside);
+                     Resolve (Of_Tree, Owned_Type (Of_Tree, Item), Inside);
                      Declare_One
                        (Of_Tree, Item, Inside, Resolve_Declared => False);
 
@@ -1443,7 +1470,7 @@ package body Landin.Stages.Resolution is
                --  obey the same set rule.
                Resolve
                  (Of_Tree,
-                  Syn.Declared_Type (Of_Tree, Node),
+                  Owned_Type (Of_Tree, Node),
                   File_Base (Of_Tree));
                Resolve
                  (Of_Tree,

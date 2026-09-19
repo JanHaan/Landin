@@ -1,0 +1,84 @@
+public red, green, blue: u8
+mut first, second: i32 = 1
+limit, ceiling: u32 = 3 + 4
+
+site: type = struct
+    file_id, line, column: u32
+end site
+
+pair: type = struct
+    x, y: i32
+    tag: u8
+end
+spare, extra: u16
+
+inline: type = (left, right: u16, flag: bool)
+
+shape: type = struct
+    kind: variant
+        dot |
+        box: (width, height: i32)
+    end kind
+end shape
+
+callback: type = (x, y: i32) -> (low, high: i32)
+
+ordered: type = concept (t: type)
+    between: (low, high: t) -> (inside, outside: bool)
+end ordered
+
+swap: (inout a, b: i32) -> none =
+    held := a
+    a = b
+    b = held
+end swap
+
+total: (in a, b: i32, c: u8) -> (sum: i32) =
+    sum = a + b + i32(c)
+end total
+
+split: (source: []u8) -> (head, tail: []u8 from source) =
+    head = source[0..<1]
+    tail = source[1..<2]
+end split
+
+observe: (caller here, there: site) -> (lines: u32) =
+    lines = here.line + there.line
+end observe
+
+ends: (s: callback) -> (low, high: i32) =
+    (low: low_end, high: high_end) := s(1, 2)
+    low = low_end
+    high = high_end
+end ends
+
+rank: (x, y: i32) -> (low, high: i32) =
+    low = x
+    high = y
+end
+mut after, closing: i32
+
+value_first: () -> (sum: i32) =
+    left, right: i32 = 2
+    sum = left + right
+end value_first
+
+area: (s: shape) -> (r: i32) =
+    r = 0
+    match s.kind
+        dot: mut once, twice: i32 = 1
+        box(width, height): r = width * height
+    end match
+end area
+
+public main: () -> (code: i32) =
+    mut a, b: i32 = total(1, 2, 3)
+    swap(a, b)
+    mut xs, ys: [2]u8 = [1, 2]
+    (head: h, tail: t) := split(xs[0..<2])
+    ys[0] = h[0] + t[0]
+    add := (u, v: i32) -> (w: i32) = w = u + v end
+    (low: l, high: g) := ends(rank)
+    code = add(a, b) + l + g + i32(observe() - observe())
+    code = code + value_first() + first + second + i32(limit + ceiling)
+end main
