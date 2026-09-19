@@ -133,7 +133,8 @@ own storage and everything written around the list — `mut`, `public`, a
 parameter convention, `at` or `from`. A shared initializer runs once, for the
 first name, and the others start as copies of it. A shared declaration needs a
 written type, because `low, high := bounds()` would read as a destructuring
-[1810] (D233).
+[1810]. Type declarations, functions, type and fixed formals, variant parts and
+condition bindings keep one name each (D233).
 
 ```landin
 mut low, high: u32 = next_seed()     -- one call; high starts equal to low

@@ -11848,7 +11848,7 @@ means the generated row's evidence is the whole explanation.
 | `[0070]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0080]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[0090]` | executed | all | none | R3.10 | none | matrix evidence |
-| `[0100]` | executed | all | none | R1.50 | R7.20 | Atom name lists are matrix evidence. Shared binding, field, parameter and return names are refused by name pending R7.20 under R551-29, which owns their semantics. |
+| `[0100]` | executed | all | none | R1.50 | none | Atom name lists and D233's shared binding, field, parameter and return names are matrix evidence on all three targets. The inferred `a, b := e` shape and the declarations that keep one name are D233's recorded boundary, named by R7.20 in the refusal note. |
 | `[0110]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[0120]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named `type` source-form boundary |
 | `[0130]` | executed | all | none | R1.50 | none | matrix evidence |
