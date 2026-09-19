@@ -1,0 +1,7 @@
+error[L0304]: a variant part is a struct member and has no value of its own
+  --> ../tests/fixtures/negative/r720-variant-part-has-no-value/main.ldn:13:13
+   |
+13 |     part := h.kind
+   |             ^^^^^^
+  = note: the tour describes it at [0680]
+  = note: ROADMAP.md R7.20 records this source-form boundary

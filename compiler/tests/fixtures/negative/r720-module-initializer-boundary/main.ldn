@@ -1,0 +1,13 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+grid: [2][2]u32 = [[1, 2], [3, 4]]
+points: [2]point = zeroed
+
+--  [1940]: a module initializer is a static image.  It copies a name, or
+--  one field of one, and never reads an element or calls.
+copied: [2][2]u32 = grid
+row: [2]u32 = grid[0]
+corner: point = points[1]

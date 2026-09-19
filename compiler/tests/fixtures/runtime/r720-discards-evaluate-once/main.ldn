@@ -1,0 +1,64 @@
+--  [1930]: a discard evaluates its operand's effects once, in source order,
+--  and throws the value away.  Every mark below is written exactly once, so
+--  the trail reads 1..9 only when each index, element and call ran once and
+--  in the order written.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+holder: type = struct
+    row: [3]u8
+    corner: point
+end holder
+
+mut trail: u32 = 0
+mut state: holder
+
+mark: (step: u32, index: usize) -> (value: usize) =
+    trail = trail * 10 + step
+    value = index
+end mark
+
+mark_byte: (step: u32) -> (value: u8) =
+    trail = trail * 10 + step
+    value = 2
+end mark_byte
+
+make: (step: u32) -> (value: point) =
+    trail = trail * 10 + step
+    value = point(x: 7, y: 8)
+end make
+
+inspect: (row: [3]u8, whole: holder) -> none =
+    _ = row
+    _ = whole
+    _ = whole.corner
+end inspect
+
+public main: () -> (code: i32) =
+    grid: [2][3]u8 = [[1, 2, 3], [4, 5, 6]]
+    points: [2]point = [point(x: 1, y: 2), point(x: 3, y: 4)]
+    local: holder = holder(row: [9, 9, 9], corner: point(x: 1, y: 1))
+    _ = grid[mark(1, 1)]
+    _ = points[mark(2, 0)]
+    _ = local
+    _ = local.row
+    _ = local.corner
+    _ = state
+    _ = state.row
+    inspect(local.row, local)
+    _ = [mark(3, 0), mark(4, 1)]
+    _ = [2 of mark(5, 0)]
+    _ = point(x: mark_byte(6), y: 2)
+    _ = make(7)
+    _ = [make(8), make(9)]
+    _ = [grid[1], grid[0]]
+    _ = if trail == 0 then grid[0] else grid[1] end if
+    if trail == 123456789 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

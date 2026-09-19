@@ -1,0 +1,7 @@
+error[L0304]: an inferred module array takes a scalar element; write the array type for any other
+  --> ../tests/fixtures/negative/r720-inferred-module-array-scalar-element/main.ldn:11:12
+   |
+11 | points := [first, second]
+   |            ^^^^^
+  = note: the tour describes it at [0520]
+  = note: ROADMAP.md R7.20 records this source-form boundary

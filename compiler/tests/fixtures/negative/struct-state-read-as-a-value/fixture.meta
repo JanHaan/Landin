@@ -1,6 +1,6 @@
 class: negative
-summary: [1740]'s module state may have a struct type, while reading the whole of one as a general expression remains refused
-constructs: 0670, 1740, 1830
+summary: [1740]'s module state may have a struct type and [1930] discards the whole of one, while a whole struct is not a scalar value
+constructs: 0670, 1740, 1930
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

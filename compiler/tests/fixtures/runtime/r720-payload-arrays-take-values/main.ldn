@@ -1,0 +1,77 @@
+--  D84/R7.20: a fixed-array payload takes every value an ordinary array
+--  field takes.  An element, a call, `try`, array arithmetic, a control
+--  expression, a deeper field and a parameter each fill the payload, in
+--  construction and in case assignment, after the tag is selected.
+
+packet: type = struct
+    kind: variant
+        empty |
+        values: (row: [3]u16) |
+        pair: (left: [2]u8, right: [2]u8)
+    end kind
+end packet
+
+inner: type = struct
+    row: [3]u16
+end inner
+
+outer: type = struct
+    child: inner
+end outer
+
+missing: atom
+problems: type = missing
+
+mut calls: u32 = 0
+
+make: (base: u16) -> (row: [3]u16) =
+    inc calls
+    row = [base, base + 1, base + 2]
+end make
+
+maybe: (base: u16) -> (row: [3]u16) ! problems =
+    if base == 0 then
+        fail missing
+    end if
+    row = [base, base, base]
+end maybe
+
+total: (item: packet) -> (sum: u32) =
+    sum = 0
+    match item.kind
+        empty: sum = 1000
+        values(row): sum = u32(row[0]) + u32(row[1]) + u32(row[2])
+        pair(left, right): sum = u32(left[0]) + u32(left[1])
+            + u32(right[0]) + u32(right[1])
+    end match
+end total
+
+fill: (source: [3]u16, flag: bool) -> (sum: u32) ! problems =
+    grid: [2][3]u16 = [[1, 2, 3], [4, 5, 6]]
+    nested: outer = outer(child: inner(row: [7, 8, 9]))
+    bytes: [2]u8 = [3, 4]
+    i: usize = 1
+    mut item: packet = packet(kind: values(row: grid[i]))
+    sum = total(item)
+    item.kind = values(row: make(10))
+    sum = sum * 1000 + total(item)
+    item.kind = values(row: try maybe(20))
+    sum = sum + total(item)
+    item.kind = pair(left: bytes + bytes, right: bytes * bytes)
+    sum = sum + total(item)
+    item.kind = values(row: if flag then nested.child.row else source end if)
+    sum = sum + total(item)
+    built := packet(kind: values(row: source))
+    sum = sum + total(built)
+end fill
+
+public main: () -> (code: i32) =
+    code = 1
+    sum: u32 = fill([100, 200, 300], true) else 0
+    --  15 from the element, then 33 from the call, 60 from `try`, 14 + 25
+    --  from the arithmetic, 24 from the control expression and 600 from the
+    --  parameter.
+    if sum == 15 * 1000 + 33 + 60 + 39 + 24 + 600 and calls == 1 then
+        code = 42
+    end if
+end main

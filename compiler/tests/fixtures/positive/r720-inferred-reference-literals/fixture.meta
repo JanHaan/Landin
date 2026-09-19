@@ -1,0 +1,5 @@
+class: positive
+summary: D25 infers slice, text, pointer, function and atom-set arrays from the first element, and a local copies a whole parameter or named return
+constructs: 0050, 0430, 0440, 0520, 0530, 0570, 0600, 0640, 1000
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

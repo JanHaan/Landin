@@ -1,0 +1,17 @@
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+zero: i32 = 0
+
+--  [1210]: arms name atoms and cases.  A number or a whole struct is not
+--  a subject; numbers are compared with if and elsif.
+f: (x: i32, p: point) -> none =
+    match x
+        zero: _ = 1
+    end match
+    match p
+        zero: _ = 2
+    end match
+end f

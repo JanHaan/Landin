@@ -1,0 +1,17 @@
+child: type = struct
+    level: f16
+end child
+
+--  D74: the child already said why it has no layout.  Declared after it,
+--  the parent adds no second report, exactly as it would declared before.
+parent: type = struct
+    first: child
+end parent
+
+wrapper: type = struct
+    held: [2]zzz
+end wrapper
+
+outer: type = struct
+    inner: wrapper
+end outer

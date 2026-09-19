@@ -1605,6 +1605,18 @@
     "runtime/r690-recovery-loop-context": {
       "mode": "execute"
     },
+    "runtime/r720-discard-index-traps": {
+      "mode": "execute"
+    },
+    "runtime/r720-discards-evaluate-once": {
+      "mode": "execute"
+    },
+    "runtime/r720-inferred-arrays-hold-references": {
+      "mode": "execute"
+    },
+    "runtime/r720-payload-arrays-take-values": {
+      "mode": "execute"
+    },
     "runtime/range-subtype-checks": {
       "mode": "execute"
     },

@@ -1,4 +1,5 @@
---  D47 gives this type one local frame cell, but no bare whole-aggregate read.
+--  D47 gives this type one local frame cell, and [1930] reads the whole of it
+--  when it is discarded, so it must be assigned first.
 holder: type = struct
     row: [4]u8
     count: u32

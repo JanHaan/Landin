@@ -1,0 +1,5 @@
+class: positive
+summary: [1930] discards every value an inferred binding accepts: literals, counted repetition, constructions, calls, try, array arithmetic and control expressions
+constructs: 0520, 0530, 0560, 0670, 0700, 0960, 1930
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

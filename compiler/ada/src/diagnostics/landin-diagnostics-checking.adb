@@ -38,7 +38,9 @@ package body Landin.Diagnostics.Checking is
                then " withdraws this form; pass an ordinary allocator"
                elsif Refused in Wide_Integer_Type | Narrow_Float_Type
                then " transfers this to Language evolution"
-               elsif Refused in Constrained_Composition
+               elsif Refused in Constrained_Composition | Struct_Value
+                                | Variant_Value | Array_Value
+                                | Array_Element | Zeroed_Value
                then " records this source-form boundary"
                else " is where it is enabled"));
       elsif Note /= "" then
