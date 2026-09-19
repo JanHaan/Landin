@@ -1,0 +1,30 @@
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:11:19
+   |
+11 |         increment(value)
+   |                   ^^^^^
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:9:5
+  |
+9 |     view: ptr u32 = addr value
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:22:15
+   |
+22 |     increment(value)
+   |               ^^^^^
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:21:5
+   |
+21 |     view: ptr u32 = addr value
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:35:23
+   |
+35 |             increment(value)
+   |                       ^^^^^
+  --> ../tests/fixtures/negative/r720-labelled-block-borrow-after-break/program.ldn:32:5
+   |
+32 |     view: ptr u32 = addr value
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source

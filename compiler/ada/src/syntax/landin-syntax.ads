@@ -158,9 +158,11 @@ package Landin.Syntax is
       --  controls overlap statement syntax.
       If_Statement,
       Match_Statement,
-      --  [1080]'s unlabelled `begin` block.  Its one child is a Block, so
-      --  the lexical scope and the value-bearing fallthrough edge remain
-      --  distinct nodes.
+      --  [1080]'s `begin` block.  Its one child is a Block, so the lexical
+      --  scope and the value-bearing fallthrough edge remain distinct
+      --  nodes.  [1180]'s labelled statement form carries its label as
+      --  the node's name, the target of a `break` naming it; the
+      --  unlabelled form's name is No_Name.
       Bare_Block,
       --  An application with at least one labelled argument remains neutral
       --  until resolution has classified its complete callee.  Its first slot
@@ -431,7 +433,8 @@ package Landin.Syntax is
                     | Import_Segment | Import_Alias_Name
                     | Import_Selected_Name | Option_Declaration
                     | Call_Argument | Break_Statement | Continue_Statement
-                    | Loop_Statement | While_Statement | For_Statement);
+                    | Loop_Statement | While_Statement | For_Statement
+                    | Bare_Block);
 
    ------------------------------------------------------------------
    --  Trees

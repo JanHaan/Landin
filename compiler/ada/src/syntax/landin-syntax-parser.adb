@@ -176,11 +176,18 @@ package body Landin.Syntax.Parser is
             --  Keeping the transfer nesting
             --  count here lets a stray `break` or `continue` remain a source
             --  diagnostic instead of reaching lowering without a target.
-            Loop_Depth : Natural := 0;
-            Loop_Floor : Natural := 0;
-            Loop_Labels : array (1 .. Nesting_Limit)
+            --  Every enclosing loop and labelled bare block [1180] is one
+            --  entry, innermost last.  A labelled transfer selects the
+            --  nearest entry carrying its label; an unlabelled one selects
+            --  the nearest loop, so a block never captures it.  An
+            --  unlabelled block is not an entry because nothing can name it.
+            Target_Depth : Natural := 0;
+            Target_Floor : Natural := 0;
+            Target_Labels : array (1 .. Nesting_Limit)
               of Landin.Source.Names.Name_Id :=
                 [others => Landin.Source.Names.No_Name];
+            Target_Is_Block : array (1 .. Nesting_Limit) of Boolean :=
+              [others => False];
             --  A labelled RHS keeps direct positional applications neutral:
             --  their own arguments may recursively be type-only syntax.
             --  Outside that one parse, positional Call uses the unchanged
@@ -462,12 +469,16 @@ package body Landin.Syntax.Parser is
                Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
                Label   : Landin.Source.Names.Name_Id :=
                  Landin.Source.Names.No_Name) return Node_Id;
-            function Has_Loop_Label
-              (Named : Landin.Source.Names.Name_Id) return Boolean;
+            function Transfer_Target
+              (Named : Landin.Source.Names.Name_Id) return Natural;
             function Parse_Loop_Transfer return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
-            function Parse_Bare_Block (Context : Frame) return Node_Id;
+            function Parse_Bare_Block
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id;
             function Parse_Unchecked_Block (Context : Frame) return Node_Id;
             function Opens_Arena_Block return Boolean;
             function Parse_Expression
@@ -4950,6 +4961,13 @@ package body Landin.Syntax.Parser is
                            end loop;
                            return False;
                         when Bare_Block =>
+                           --  A block carrying the loop's label takes
+                           --  every `break` naming it [1180].
+                           if Target /= Landin.Source.Names.No_Name
+                             and then Name (Result, Statement) = Target
+                           then
+                              return False;
+                           end if;
                            return Loop_Block_Offers_Value
                              (Body_Of (Result, Statement), Target, Nested);
                         when others =>
@@ -5366,7 +5384,7 @@ package body Landin.Syntax.Parser is
                Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
-               Saved_Loop_Floor : constant Natural := Loop_Floor;
+               Saved_Target_Floor : constant Natural := Target_Floor;
                Saved_Complete : constant Boolean := Complete_Closes_Block;
                Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
@@ -5380,8 +5398,9 @@ package body Landin.Syntax.Parser is
                Depth := Depth + 1;
                Else_Closes_Arm := False;
                --  [1010]: this code address has its own control scope.
-               --  Keep outer loop labels intact for parsing after its end.
-               Loop_Floor := Loop_Depth;
+               --  Keep outer loop and block labels intact for parsing
+               --  after its end.
+               Target_Floor := Target_Depth;
                Complete_Closes_Block := False;
                Advance;
                if Peek /= Tok.Right_Paren then
@@ -5456,7 +5475,7 @@ package body Landin.Syntax.Parser is
                      Gate    => False);
                end if;
 
-               Loop_Floor := Saved_Loop_Floor;
+               Target_Floor := Saved_Target_Floor;
                Complete_Closes_Block := Saved_Complete;
                Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
@@ -5935,21 +5954,27 @@ package body Landin.Syntax.Parser is
                      end if;
 
                   when Tok.Identifier =>
+                     --  [1180]: a label rides on a loop or a bare block.
+                     --  D225 reserves `begin`, so `name: begin` was never
+                     --  a binding; the labelled block is a statement only.
                      if Ahead (1) = Tok.Colon
                        and then Ahead (2)
                          in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                            | Tok.Kw_Begin
                      then
                         declare
                            Label : constant Landin.Source.Names.Name_Id :=
                              Named_Here;
                            Label_At : constant Landin.Source.Span := Here;
-                           Is_For : constant Boolean :=
-                             Ahead (2) = Tok.Kw_For;
+                           Opener : constant Tok.Token_Kind := Ahead (2);
                         begin
                            Advance;
                            Advance;
-                           if Is_For then
+                           if Opener = Tok.Kw_For then
                               return Parse_For
+                                (Context, Starts => Label_At, Label => Label);
+                           elsif Opener = Tok.Kw_Begin then
+                              return Parse_Bare_Block
                                 (Context, Starts => Label_At, Label => Label);
                            else
                               return Parse_Loop
@@ -5957,7 +5982,7 @@ package body Landin.Syntax.Parser is
                            end if;
                         end;
                      --  Ordinary names retain declaration and assignment
-                     --  dispatch after the labelled-loop discriminator.
+                     --  dispatch after the labelled-construct discriminator.
                      elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal
                        or else (Ahead (1) = Tok.Comma
                                 and then Ahead (2) = Tok.Identifier)
@@ -6151,8 +6176,9 @@ package body Landin.Syntax.Parser is
                      Because => "this loop");
                end if;
 
-               Loop_Depth := Loop_Depth + 1;
-               Loop_Labels (Loop_Depth) := Label;
+               Target_Depth := Target_Depth + 1;
+               Target_Labels (Target_Depth) := Label;
+               Target_Is_Block (Target_Depth) := False;
                Complete_Closes_Block := True;
                Runs := Parse_Block (Context);
                Complete_Closes_Block := Saved_Complete;
@@ -6171,8 +6197,8 @@ package body Landin.Syntax.Parser is
                   Completed := Parse_Block (Context);
                end if;
 
-               Loop_Labels (Loop_Depth) := Landin.Source.Names.No_Name;
-               Loop_Depth := Loop_Depth - 1;
+               Target_Labels (Target_Depth) := Landin.Source.Names.No_Name;
+               Target_Depth := Target_Depth - 1;
 
                Kept := Expect
                  (Wanted  => Tok.Kw_End,
@@ -6323,8 +6349,9 @@ package body Landin.Syntax.Parser is
                      Because => "this traversal");
                end if;
 
-               Loop_Depth := Loop_Depth + 1;
-               Loop_Labels (Loop_Depth) := Label;
+               Target_Depth := Target_Depth + 1;
+               Target_Labels (Target_Depth) := Label;
+               Target_Is_Block (Target_Depth) := False;
                Complete_Closes_Block := True;
                Runs := Parse_Block (Context);
                Complete_Closes_Block := Saved_Complete;
@@ -6335,8 +6362,8 @@ package body Landin.Syntax.Parser is
                   Completed := Parse_Block (Context);
                end if;
 
-               Loop_Labels (Loop_Depth) := Landin.Source.Names.No_Name;
-               Loop_Depth := Loop_Depth - 1;
+               Target_Labels (Target_Depth) := Landin.Source.Names.No_Name;
+               Target_Depth := Target_Depth - 1;
 
                Kept := Expect
                  (Wanted  => Tok.Kw_End,
@@ -6376,21 +6403,32 @@ package body Landin.Syntax.Parser is
                   Fills    => Inclusive);
             end Parse_For;
 
-            function Has_Loop_Label
-              (Named : Landin.Source.Names.Name_Id) return Boolean
+            --  The entry a transfer selects in this code address, or zero.
+            --  A label names the nearest loop or labelled block carrying
+            --  it; no label names the nearest loop [1180].
+            function Transfer_Target
+              (Named : Landin.Source.Names.Name_Id) return Natural
             is
             begin
-               for Index in reverse Loop_Floor + 1 .. Loop_Depth loop
-                  if Loop_Labels (Index) = Named then
-                     return True;
+               for Index in reverse Target_Floor + 1 .. Target_Depth loop
+                  if (if Named = Landin.Source.Names.No_Name
+                      then not Target_Is_Block (Index)
+                      else Target_Labels (Index) = Named)
+                  then
+                     return Index;
                   end if;
                end loop;
-               return False;
-            end Has_Loop_Label;
+               return 0;
+            end Transfer_Target;
 
             --  transfer ::= "break" identifier? ("with" expression)?
             --               ("when" expression)?
             --             | "continue" identifier? ("when" expression)?
+            --
+            --  A labelled `break` may leave a labelled bare block [1180];
+            --  `continue` has no next iteration there.  A `break with`
+            --  that names a block parses and is refused by checking,
+            --  where every other misplaced loop value is refused.
             function Parse_Loop_Transfer return Node_Id is
                Starts : constant Landin.Source.Span := Here;
                Is_Break : constant Boolean :=
@@ -6399,7 +6437,7 @@ package body Landin.Syntax.Parser is
                Value : Node_Id := No_Node;
                Target : Landin.Source.Names.Name_Id :=
                  Landin.Source.Names.No_Name;
-               Targeted : Boolean;
+               Selected : Natural;
             begin
                Advance;
                if Peek = Tok.Identifier then
@@ -6422,20 +6460,34 @@ package body Landin.Syntax.Parser is
                   Guard := Parse_Expression;
                end if;
 
-               Targeted :=
-                 (if Target = Landin.Source.Names.No_Name
-                  then Loop_Depth > Loop_Floor else Has_Loop_Label (Target));
+               Selected := Transfer_Target (Target);
 
-               if not Targeted then
+               if Selected = 0 then
                   Complain
                     (Item    => Syn.Stray_Token,
                      Where   => Starts,
-                     Message => (if Is_Break
-                                 then "`break` has no matching enclosing loop"
-                                 else "`continue` has no matching enclosing"
-                                   & " loop"),
+                     Message =>
+                       (if not Is_Break
+                        then "`continue` has no matching enclosing loop"
+                        elsif Target = Landin.Source.Names.No_Name
+                        then "`break` has no matching enclosing loop"
+                        else "`break` has no matching enclosing loop or"
+                          & " labelled bare block"),
                      Note    => "[1180]/[1190]: a loop transfer targets"
                        & " an enclosing loop");
+                  return Add
+                    (Error_Statement, Starts, Join (Starts, After_Previous));
+               end if;
+
+               if not Is_Break and then Target_Is_Block (Selected) then
+                  Complain
+                    (Item    => Syn.Stray_Token,
+                     Where   => Starts,
+                     Message => "`continue` targets a loop; `"
+                       & Landin.Source.Names.Spelling (Names, Target)
+                       & "` labels a bare block",
+                     Note    => "[1180]: a labelled bare block has no next"
+                       & " iteration; `break` leaves it");
                   return Add
                     (Error_Statement, Starts, Join (Starts, After_Previous));
                end if;
@@ -6544,11 +6596,23 @@ package body Landin.Syntax.Parser is
             end Parse_If;
 
             --  bare_block ::= "begin" block "end"              [1080]
+            --  labeled_block ::= identifier ":" "begin" block
+            --                    "end" identifier              [1180]
             --
             --  D225 reserves the opener; the Block owns the lexical scope
-            --  and this wrapper owns the expression.
-            function Parse_Bare_Block (Context : Frame) return Node_Id is
-               At_Begin : constant Landin.Source.Span := Here;
+            --  and this wrapper owns the expression.  A labelled block is
+            --  a statement: the caller has consumed its label and colon,
+            --  and its closer repeats the label as a labelled loop's does.
+            function Parse_Bare_Block
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id
+            is
+               Labelled : constant Boolean :=
+                 Label /= Landin.Source.Names.No_Name;
+               At_Begin : constant Landin.Source.Span :=
+                 (if Starts = Landin.Source.Empty_Span then Here else Starts);
                Runs     : Node_Id;
                Saved_Else : constant Boolean := Else_Closes_Arm;
             begin
@@ -6556,21 +6620,55 @@ package body Landin.Syntax.Parser is
                   Advance;
                   Resync_Statement;
                   return Add
-                    (Error_Expression, At_Begin,
-                     Join (At_Begin, After_Previous));
+                    ((if Labelled then Error_Statement else Error_Expression),
+                     At_Begin, Join (At_Begin, After_Previous));
                end if;
 
                Depth := Depth + 1;
                Else_Closes_Arm := False;
                Advance;
+               if Labelled then
+                  Target_Depth := Target_Depth + 1;
+                  Target_Labels (Target_Depth) := Label;
+                  Target_Is_Block (Target_Depth) := True;
+               end if;
                Runs := Parse_Block (Context, Allow_Value => True);
+               if Labelled then
+                  Target_Labels (Target_Depth) := Landin.Source.Names.No_Name;
+                  Target_Is_Block (Target_Depth) := False;
+                  Target_Depth := Target_Depth - 1;
+               end if;
                Else_Closes_Arm := Saved_Else;
                Depth := Depth - 1;
+
+               if Labelled then
+                  if Expect
+                    (Wanted  => Tok.Kw_End,
+                     Message => "this labelled block is never closed",
+                     Note    => "[1180]: a labelled bare block closes with"
+                                & " `end` and its label",
+                     Related => At_Begin,
+                     Because => "opened here")
+                  then
+                     if Peek = Tok.Identifier and then Named_Here = Label then
+                        Advance;
+                     else
+                        Complain
+                          (Item    => Syn.Token_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "a labelled bare block closes with"
+                                      & " `end <label>`",
+                           Note    => "[1180]",
+                           Related => At_Begin,
+                           Because => "this block");
+                     end if;
+                  end if;
 
                --  Do not steal the two-word closer of an enclosing control
                --  construct when this block's own `end` is missing.  D187
                --  adds `end unchecked` to that set.
-               if Peek = Tok.Kw_End
+               elsif Peek = Tok.Kw_End
                  and then Ahead (1) /= Tok.Kw_If
                  and then not
                    (Ahead (1) in Tok.Kw_Match | Tok.Kw_Unchecked)
@@ -6591,7 +6689,8 @@ package body Landin.Syntax.Parser is
                  (Of_Kind  => Bare_Block,
                   At_Token => At_Begin,
                   Extent   => Join (At_Begin, After_Previous),
-                  Children => [Runs]);
+                  Children => [Runs],
+                  Named    => Label);
             end Parse_Bare_Block;
 
             --  unchecked ::= "unchecked" "begin" block
@@ -7642,14 +7741,30 @@ package body Landin.Syntax.Parser is
                   --  saying so here is what lets the rest of a file's
                   --  mistakes be reported instead of swallowed.
                   if Ahead (1) in Tok.Colon | Tok.Colon_Equal then
-                     Complain
-                       (Item    => Syn.Expression_Expected,
-                        Where   => After_Previous,
-                        Message => "an expression belongs here",
-                        Note    => "[1820]: a literal, a name, a call or"
-                                   & " a parenthesised expression",
-                        Related => Previous,
-                        Because => "required by this");
+                     --  [1180]'s labelled block is a statement.  Say so,
+                     --  and leave it for the statement that follows.
+                     if Ahead (1) = Tok.Colon
+                       and then Ahead (2) = Tok.Kw_Begin
+                     then
+                        Complain
+                          (Item    => Syn.Expression_Expected,
+                           Where   => After_Previous,
+                           Message => "a labelled bare block is a statement,"
+                                      & " not an expression",
+                           Note    => "[1180]: only an unlabelled `begin`"
+                                      & " block also gives a value",
+                           Related => Previous,
+                           Because => "required by this");
+                     else
+                        Complain
+                          (Item    => Syn.Expression_Expected,
+                           Where   => After_Previous,
+                           Message => "an expression belongs here",
+                           Note    => "[1820]: a literal, a name, a call or"
+                                      & " a parenthesised expression",
+                           Related => Previous,
+                           Because => "required by this");
+                     end if;
                      return Add (Error_Expression, Point);
                   end if;
 

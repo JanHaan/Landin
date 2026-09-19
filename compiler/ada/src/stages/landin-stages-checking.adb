@@ -1202,12 +1202,16 @@ package body Landin.Stages.Checking is
 
       No_Value_Context : constant Value_Context := (others => <>);
 
+      --  One enclosing transfer target: a loop, or [1180]'s labelled bare
+      --  block.  Only a labelled `break` selects a block, and a block is
+      --  a statement with no value to give.
       type Loop_Value_Entry is record
          Label : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
          Expected : Value_Context := No_Value_Context;
          Requires_Value : Boolean := False;
          Site : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+         Is_Block : Boolean := False;
       end record;
 
       package Loop_Value_Vectors is new Ada.Containers.Vectors
@@ -1283,8 +1287,9 @@ package body Landin.Stages.Checking is
             declare
                Candidate : constant Loop_Value_Entry := Loop_Values (Index);
             begin
-               if Target = Landin.Source.Names.No_Name
-                 or else Candidate.Label = Target
+               if (if Target = Landin.Source.Names.No_Name
+                   then not Candidate.Is_Block
+                   else Candidate.Label = Target)
                then
                   return Candidate;
                end if;
@@ -23930,7 +23935,8 @@ package body Landin.Stages.Checking is
               (Label          => Syn.Name (Of_Tree, Node),
                Expected       => Expected,
                Requires_Value => Requires_Value,
-               Site           => Syn.Origin (Of_Tree, Node)));
+               Site           => Syn.Origin (Of_Tree, Node),
+               Is_Block       => False));
          Check_Block (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Returns);
          if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
             Check_Block
@@ -25278,17 +25284,33 @@ package body Landin.Stages.Checking is
                            Commit_To (Of_Tree, Value, Ty.Default_Float);
                         end if;
                      end;
-                     Bad.Report
-                       (Item    => Bad.Type_Mismatch,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Value),
-                        Message => "this break gives a value to a statement"
-                          & " loop",
-                        Note    => "[1930]: discard a loop result explicitly"
-                          & " with `_ = loop ...`, or use a plain `break`",
-                        Related => Target.Site,
-                        Because => "this loop has no result consumer",
-                        Into    => Found);
+                     if Target.Is_Block then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "this break gives a value to a"
+                             & " labelled bare block",
+                           Note    => "[1180]/[1190]: a labelled bare block"
+                             & " is a statement; only a loop used as an"
+                             & " expression takes `break with`",
+                           Related => Target.Site,
+                           Because => "this block produces no value",
+                           Into    => Found);
+                     else
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "this break gives a value to a"
+                             & " statement loop",
+                           Note    => "[1930]: discard a loop result"
+                             & " explicitly with `_ = loop ...`, or use a"
+                             & " plain `break`",
+                           Related => Target.Site,
+                           Because => "this loop has no result consumer",
+                           Into    => Found);
+                     end if;
                   elsif Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
                     and then Target.Requires_Value
                   then
@@ -25334,8 +25356,24 @@ package body Landin.Stages.Checking is
                Check_Match (Of_Tree, Node, Returns);
 
             when Syn.Bare_Block =>
-               Check_Block
-                 (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+               --  [1180]: a labelled block is a `break` target for the
+               --  statements it encloses, never for an unlabelled one.
+               if Syn.Name (Of_Tree, Node) /= Landin.Source.Names.No_Name
+               then
+                  Loop_Values.Append
+                    (Loop_Value_Entry'
+                       (Label          => Syn.Name (Of_Tree, Node),
+                        Expected       => No_Value_Context,
+                        Requires_Value => False,
+                        Site           => Syn.Origin (Of_Tree, Node),
+                        Is_Block       => True));
+                  Check_Block
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+                  Loop_Values.Delete_Last;
+               else
+                  Check_Block
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+               end if;
 
             when Syn.Try_Expression =>
                declare
@@ -25596,8 +25634,14 @@ package body Landin.Stages.Checking is
                         end;
                      end loop;
                   when Syn.Bare_Block =>
-                     return In_Loop_Block
-                       (Syn.Body_Of (Of_Tree, Statement), Target, Nested);
+                     --  A block carrying the loop's label takes every
+                     --  `break` naming it [1180].
+                     if Target = Landin.Source.Names.No_Name
+                       or else Syn.Name (Of_Tree, Statement) /= Target
+                     then
+                        return In_Loop_Block
+                          (Syn.Body_Of (Of_Tree, Statement), Target, Nested);
+                     end if;
                   when others =>
                      null;
                end case;
@@ -29883,6 +29927,12 @@ package body Landin.Stages.Checking is
                   return;
                end if;
                Inside_Loop := True;
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Bare_Block
+              and then Target /= Landin.Source.Names.No_Name
+              and then Syn.Name (Of_Tree, Value) = Target
+            then
+               --  [1180]: this block takes every `break` naming it.
+               return;
             elsif Syn.Kind (Of_Tree, Value) = Syn.Break_Statement
               and then
                 (if Syn.Name (Of_Tree, Value) = Landin.Source.Names.No_Name
