@@ -798,6 +798,7 @@ package body Landin.Checking is
          end loop;
          Into.Nominal_Templates.Append (Template);
          Into.Distinct_Bases.Append (Signature_Part'(others => <>));
+         Into.Nominal_Spellings.Append (Landin.Source.Names.No_Name);
          Into.Nominal_Actual_Runs.Append (Members);
          Into.Layouts.Append (Aggregate_Layout'(others => <>));
       end;
@@ -821,6 +822,44 @@ package body Landin.Checking is
       end if;
       return Intern (Into, Template, Actuals);
    end Intern_Nominal_Instance;
+
+   function Intern_Pointer_Union
+     (Into    : in out Table;
+      Atoms   : Atom_Set_Id;
+      Pointer : Reference_Id) return Nominal_Type_Id
+   is
+      Key : Actual_Tuple := Empty_Actuals;
+   begin
+      Append_Actual (Key, Atom_Set_Type_Actual (Into, Atoms));
+      Append_Actual (Key, Reference_Type_Actual (Into, Pointer));
+      return Intern (Into, No_Declaration, Key);
+   end Intern_Pointer_Union;
+
+   function Is_Pointer_Union
+     (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
+     is (Template_Of (Of_Table, Id) = No_Declaration);
+
+   function Union_Atoms
+     (Of_Table : Table; Id : Nominal_Type_Id) return Atom_Set_Id
+     is (Nth_Instance_Actual (Of_Table, Id, 1).Atoms);
+
+   function Union_Pointer
+     (Of_Table : Table; Id : Nominal_Type_Id) return Reference_Id
+     is (Nth_Instance_Actual (Of_Table, Id, 2).Reference);
+
+   function Union_Spelling
+     (Of_Table : Table; Id : Nominal_Type_Id)
+      return Landin.Source.Names.Name_Id
+     is (Of_Table.Nominal_Spellings
+           (Nominal_Identities.Position (Of_Table, Id)));
+
+   procedure Note_Union_Spelling
+     (Into : in out Table;
+      Id   : Nominal_Type_Id;
+      Name : Landin.Source.Names.Name_Id) is
+   begin
+      Into.Nominal_Spellings (Nominal_Identities.Position (Into, Id)) := Name;
+   end Note_Union_Spelling;
 
    function Instance_Actual_Count
      (Of_Table : Table; Id : Nominal_Type_Id) return Natural
@@ -1478,31 +1517,14 @@ package body Landin.Checking is
       Size       : out Landin.Targets.Byte_Count;
       Alignment  : out Landin.Targets.Byte_Alignment)
    is
-      Pointer_Size : constant Landin.Targets.Scalar_Size :=
-        Landin.Targets.Pointer_Size (Facts);
    begin
-      if Atom_Count = 1 then
-         Size := Landin.Targets.Byte_Count
-           (Landin.Targets.Bytes (Pointer_Size));
-         Alignment := Landin.Targets.Pointer_Alignment (Facts);
-         return;
+      if Atom_Count /= 1 then
+         raise Landin.Compiler_Defect with
+           "a multi-atom pointer union is measured by its aggregate layout";
       end if;
-
-      declare
-         Cases : constant Natural := Atom_Count + 1;
-         Tag : constant Landin.Targets.Scalar_Size :=
-           (if Cases <= 2 ** 8 then Landin.Targets.Byte_1
-            elsif Cases <= 2 ** 16 then Landin.Targets.Byte_2
-            else Landin.Targets.Byte_4);
-         Placed : Landin.Targets.Placement :=
-           Landin.Targets.Empty_Placement;
-         Ignored : Landin.Targets.Byte_Count;
-      begin
-         Landin.Targets.Place (Placed, Tag, Facts, Ignored);
-         Landin.Targets.Place (Placed, Pointer_Size, Facts, Ignored);
-         Size := Landin.Targets.Size_Of (Placed);
-         Alignment := Landin.Targets.Alignment_Of (Placed);
-      end;
+      Size := Landin.Targets.Byte_Count
+        (Landin.Targets.Bytes (Landin.Targets.Pointer_Size (Facts)));
+      Alignment := Landin.Targets.Pointer_Alignment (Facts);
    end Reference_Union_Extent;
 
    ------------------------------------------------------------------

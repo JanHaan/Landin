@@ -1,0 +1,20 @@
+error[L0301]: this does not have the required pointer union type and shape
+  --> ../tests/fixtures/negative/pointer-union-many-permission-does-not-widen/program.ldn:7:9
+  |
+7 |     m = p
+  |         ^
+  --> ../tests/fixtures/negative/pointer-union-many-permission-does-not-widen/program.ldn:7:5
+  |
+7 |     m = p
+  |     ^ the place written here
+  = note: The value must match the complete type, shape and reference permissions required by this context
+error[L0301]: this does not have the required pointer union type and shape
+  --> ../tests/fixtures/negative/pointer-union-many-permission-does-not-widen/program.ldn:8:9
+  |
+8 |     m = r
+  |         ^
+  --> ../tests/fixtures/negative/pointer-union-many-permission-does-not-widen/program.ldn:8:5
+  |
+8 |     m = r
+  |     ^ the place written here
+  = note: The value must match the complete type, shape and reference permissions required by this context

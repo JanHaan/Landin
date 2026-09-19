@@ -250,6 +250,19 @@ package body Landin.Backend.Dwarf is
         (Landin.Source.Names.Spelling
            (Names, Landin.Resolution.Name_Of (Meanings, Decl)));
 
+      --  [0480]/[1870]: a union of several atoms and one pointer has no
+      --  template; it is presented as a structure named by its canonical
+      --  source spelling, whose members are `atom` and `ptr`.
+      function Is_Union (Nominal : Nominal_Type_Id) return Boolean is
+        (Nominal /= No_Nominal_Type
+         and then Is_Pointer_Union (Of_Unit, Nominal));
+
+      function Nominal_Name (Nominal : Nominal_Type_Id) return String is
+        (if Is_Union (Nominal)
+         then Landin.Source.Names.Spelling
+           (Names, Union_Spelling (Of_Unit, Nominal))
+         else Decl_Name (Template_Of (Of_Unit, Nominal)));
+
       function Intern (Input : Description) return Positive;
       function Intern (Input : Description) return Positive is
          Desc : Description := Input;
@@ -260,23 +273,25 @@ package body Landin.Backend.Dwarf is
             Desc := (Shape => (Kind => Aggregate_Field_Shape,
                               Nominal => Desc.Shape.Nominal, others => <>),
                      others => <>);
-            declare
-               Decl : constant Declaration_Id :=
-                 Template_Of (Of_Unit, Desc.Shape.Nominal);
-               Tree : constant access constant Landin.Syntax.Tree :=
-                 Landin.Syntax.Forest.Tree_Of
-                   (Info.Trees.all,
-                    Landin.Resolution.Source_Of (Meanings, Decl));
-               Node : constant Landin.Syntax.Node_Id :=
-                 Landin.Resolution.Node_Of (Meanings, Decl);
-            begin
-               if Landin.Syntax.Kind (Tree.all, Node)
-                 = Landin.Syntax.Type_Declaration
-               then
-                  Desc.Source := Landin.Syntax.Source_Of (Tree.all);
-                  Desc.Node := Landin.Syntax.Declared_Type (Tree.all, Node);
-               end if;
-            end;
+            if not Is_Union (Desc.Shape.Nominal) then
+               declare
+                  Decl : constant Declaration_Id :=
+                    Template_Of (Of_Unit, Desc.Shape.Nominal);
+                  Tree : constant access constant Landin.Syntax.Tree :=
+                    Landin.Syntax.Forest.Tree_Of
+                      (Info.Trees.all,
+                       Landin.Resolution.Source_Of (Meanings, Decl));
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Landin.Resolution.Node_Of (Meanings, Decl);
+               begin
+                  if Landin.Syntax.Kind (Tree.all, Node)
+                    = Landin.Syntax.Type_Declaration
+                  then
+                     Desc.Source := Landin.Syntax.Source_Of (Tree.all);
+                     Desc.Node := Landin.Syntax.Declared_Type (Tree.all, Node);
+                  end if;
+               end;
+            end if;
          elsif Desc.Shape.Kind = Scalar_Field_Shape then
             Desc.Source := Landin.Source.No_Source;
             Desc.Node := Landin.Syntax.No_Node;
@@ -373,7 +388,7 @@ package body Landin.Backend.Dwarf is
             --  DWARF4 2.13.1: an opaque pointee is a declaration, with no
             --  invented byte size or member layout.
             U (12);
-            Str (Decl_Name (Template_Of (Of_Unit, Shape.Nominal)));
+            Str (Nominal_Name (Shape.Nominal));
             Put (HT & ".byte 1");
             return;
          elsif Desc.Item /= No_Item then
@@ -390,7 +405,7 @@ package body Landin.Backend.Dwarf is
             --  Expose its complete carrier, including unnamed encodings,
             --  without fabricating ordinary-array strides for bit arrays.
             U (6);
-            Str (Decl_Name (Template_Of (Of_Unit, Shape.Nominal)));
+            Str (Nominal_Name (Shape.Nominal));
             U (Natural (Size));
             Member ("raw", Shape_Type
               ((Element => (case Size is
@@ -440,7 +455,7 @@ package body Landin.Backend.Dwarf is
                   end loop;
                   U (if Count = 0 then 13 else 6);
                   Str (if Shape.Nominal /= No_Nominal_Type then
-                         Decl_Name (Template_Of (Of_Unit, Shape.Nominal))
+                         Nominal_Name (Shape.Nominal)
                        else "aggregate");
                   Put (HT & ".uleb128 " & Landin.Targets.Byte_Count'Image
                     (Size));
@@ -463,11 +478,14 @@ package body Landin.Backend.Dwarf is
                                 (Info, Declares
                                    (Of_Unit, Desc.Item, Desc.Slot), Field));
                         begin
-                           Member (Node_Name (Node,
-                             (if Name = Landin.Source.Names.No_Name then
-                                "field_" & N (Field)
-                              else Landin.Source.Names.Spelling
-                                (Names, Name))),
+                           Member
+                             ((if Is_Union (Shape.Nominal)
+                               then (if Field = 1 then "atom" else "ptr")
+                               else Node_Name (Node,
+                                 (if Name = Landin.Source.Names.No_Name then
+                                    "field_" & N (Field)
+                                  else Landin.Source.Names.Spelling
+                                    (Names, Name)))),
                              Shape_Type (Fields (Field), Desc.Source, Node),
                              Placed.Offsets (Field));
                         end;

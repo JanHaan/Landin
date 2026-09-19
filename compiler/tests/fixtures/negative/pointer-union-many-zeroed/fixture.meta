@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] no zero or default atom exists and code zero is the pointer case, so `zeroed` names no case of the union
+constructs: 0480, 0540, 1870
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-zeroed/program.ldn
+status: 1

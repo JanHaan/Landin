@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: R7.20 [0480]/[1870] a union of several atoms and one pointer is built from atoms, pointers, a one-atom union and narrower unions, stored in fields, elements, payloads, generic boxes and module images, passed by every convention, matched by both arm kinds with a write through the bound pointer, and measured as the atom code before one pointer carrier
+constructs: 0370, 0380, 0430, 0440, 0480, 0520, 0630, 0640, 0670, 0680, 0790, 0900, 0910, 1210, 1350, 1795, 1870, 1940
+program: main.ldn
+status: 48
+targets: linux-x86-64, macos-arm64

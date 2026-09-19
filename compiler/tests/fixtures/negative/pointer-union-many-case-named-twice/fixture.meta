@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] each atom case of the union is named at most once, the rule an atom set already has
+constructs: 0480, 1210
+program: program.ldn
+codes: L0311
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-case-named-twice/program.ldn
+status: 1

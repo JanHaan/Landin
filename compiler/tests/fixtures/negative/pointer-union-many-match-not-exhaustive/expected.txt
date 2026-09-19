@@ -1,0 +1,6 @@
+error[L0312]: this match has no arm for `denied`
+  --> ../tests/fixtures/negative/pointer-union-many-match-not-exhaustive/program.ldn:6:11
+  |
+6 |     match m
+  |           ^
+  = note: [0480]: matching a pointer union names each of its atoms and `ptr`

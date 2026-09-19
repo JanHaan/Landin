@@ -63,6 +63,17 @@ package body Landin.IR.Dump is
         is (if Holds (Of_Unit, Id)
             then Named (Declares (Of_Unit, Id)) else "-");
 
+      --  A nominal's template spelling, or a pointer union's canonical
+      --  spelling in parentheses: that identity has no template.
+      function Nominal_Named (Id : Nominal_Type_Id) return String
+        is (if Holds (Of_Unit, Id) and then Is_Pointer_Union (Of_Unit, Id)
+              and then Landin.Source.Names.Is_Interned
+                (Names, Union_Spelling (Of_Unit, Id))
+            then "(" & Landin.Source.Names.Spelling
+              (Names, Union_Spelling (Of_Unit, Id)) & ")"
+            elsif Holds (Of_Unit, Id)
+            then Named (Template_Of (Of_Unit, Id)) else "-");
+
       function Atom_Set_Text (Set_Id : Atom_Set_Id) return String;
 
       function Atom_Set_Text (Set_Id : Atom_Set_Id) return String
@@ -94,7 +105,7 @@ package body Landin.IR.Dump is
             then " invalid nominal"
             else " nominal " & Trimmed (Positive'Image
               (Nominal_Identities.Position (Of_Unit, Id)))
-              & " " & Named (Template_Of (Of_Unit, Id)));
+              & " " & Nominal_Named (Id));
 
       function Shape_Text
         (Shape : Field_Shape; Budget : Natural := Natural'Last) return String;
@@ -105,7 +116,7 @@ package body Landin.IR.Dump is
                when Landin.Types.Scalar_Name =>
                   Shown (Part.Kind) & Atom_Set_Text (Part.Atoms),
                when Landin.Types.Aggregate =>
-                  "struct " & Named (Template_Of (Of_Unit, Part.Nominal)),
+                  "struct " & Nominal_Named (Part.Nominal),
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
                   & (if Part.Element_Shape.Kind = Array_Field_Shape
@@ -120,7 +131,7 @@ package body Landin.IR.Dump is
                      elsif Part.Nominal = No_Nominal_Type
                      then Landin.Types.Spelling (Part.Element)
                      else "struct "
-                       & Named (Template_Of (Of_Unit, Part.Nominal))),
+                       & Nominal_Named (Part.Nominal)),
                when Landin.Types.Function_Value =>
                   "function signature "
                   & Trimmed (Signature_Id'Image (Part.Signature)),
@@ -926,7 +937,7 @@ package body Landin.IR.Dump is
             if Has_C_Layout (Of_Unit, Id) then
                Put
                  ("nominal " & Trimmed (Natural'Image (Which))
-                  & " " & Named (Template_Of (Of_Unit, Id)) & " layout(c) "
+                  & " " & Nominal_Named (Id) & " layout(c) "
                   & Shape_Text
                     ((Kind => Aggregate_Field_Shape,
                       Nominal => Id, others => <>)));

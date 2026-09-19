@@ -1828,6 +1828,17 @@ package body Landin.Stages.Checking.References is
          then
             Result.Value.Invalid := True;
          end if;
+         --  [0480]/[1870]: an atom value carries no reference.  Where it
+         --  widens into a union of several atoms and a pointer it proves
+         --  absence exactly as D189's empty case does; its evaluation has
+         --  already contributed every effect it had.
+         if Node /= Syn.No_Node and then Falls_Through
+           and then Landin.Checking.Type_Of (Types.all, Tree, Node)
+             = Ty.Atom_Value
+           and then Result.Value.Presence /= No_Edge
+         then
+            Result.Value := (Presence => Empty_Optional, others => <>);
+         end if;
          --  A present reference with no local or parameter sources still
          --  names external storage.  Record that alternative before a join
          --  can hide it behind a frame or parameter bit.  Empty optionals
@@ -2368,9 +2379,16 @@ package body Landin.Stages.Checking.References is
                  and then not
                    (Fact.Presence = Empty_Optional
                     and then not Exposed (Positive (Id))
-                    and then Landin.Checking.Holds (Types.all, Part.Reference)
-                    and then Landin.Checking.Is_Optional_Pointer
-                      (Types.all, Part.Reference))
+                    and then
+                      ((Landin.Checking.Holds (Types.all, Part.Reference)
+                        and then Landin.Checking.Is_Optional_Pointer
+                          (Types.all, Part.Reference))
+                       or else
+                         (Part.Kind = Ty.Aggregate
+                          and then Landin.Checking.Holds
+                            (Types.all, Part.Nominal)
+                          and then Landin.Checking.Is_Pointer_Union
+                            (Types.all, Part.Nominal))))
                then
                   --  [0480]/D189: an empty result has no reference whose
                   --  sources could disagree.  A present or unknown result
@@ -2759,6 +2777,19 @@ package body Landin.Stages.Checking.References is
                   Subject_Reference : constant Landin.Checking.Reference_Id :=
                     Landin.Checking.Reference_Of
                       (Types.all, Tree, Subject_Node);
+                  Subject_Union : constant Landin.Checking.Nominal_Type_Id :=
+                    (if Landin.Checking.Type_Of (Types.all, Tree, Subject_Node)
+                          = Ty.Aggregate
+                       and then Landin.Checking.Nominal_Of
+                         (Types.all, Tree, Subject_Node)
+                           /= Landin.Checking.No_Nominal_Type
+                       and then Landin.Checking.Is_Pointer_Union
+                         (Types.all,
+                          Landin.Checking.Nominal_Of
+                            (Types.all, Tree, Subject_Node))
+                     then Landin.Checking.Nominal_Of
+                       (Types.all, Tree, Subject_Node)
+                     else Landin.Checking.No_Nominal_Type);
                   Referenced_Subject : constant Boolean :=
                     Syn.Kind (Tree, Subject_Node) = Syn.Member_Selection
                       and then Has_Reference_Storage
@@ -2792,15 +2823,28 @@ package body Landin.Stages.Checking.References is
                           and then not Exposed (Positive (Subject_Id))
                           and then Res.Sort_Of (Meanings.all, Subject_Id)
                             /= Res.Module_Binding
-                          and then Landin.Checking.Holds
-                            (Types.all, Subject_Reference)
-                          and then Landin.Checking.Is_Optional_Pointer
-                            (Types.all, Subject_Reference)
                           and then Res.Verdict_Of
                             (Meanings.all, Tree, Pattern) = Res.Bound
-                          and then Res.Bound_To (Meanings.all, Tree, Pattern)
-                            = Landin.Checking.Descriptor_Of
-                              (Types.all, Subject_Reference).Empty_Atom
+                          and then
+                            ((Landin.Checking.Holds
+                                (Types.all, Subject_Reference)
+                              and then Landin.Checking.Is_Optional_Pointer
+                                (Types.all, Subject_Reference)
+                              and then Res.Bound_To
+                                (Meanings.all, Tree, Pattern)
+                                = Landin.Checking.Descriptor_Of
+                                  (Types.all, Subject_Reference).Empty_Atom)
+                             --  [0480]/[1870]: an atom arm of a union of
+                             --  several atoms and a pointer reads none.
+                             or else
+                               (Subject_Union
+                                  /= Landin.Checking.No_Nominal_Type
+                                and then Landin.Checking.Contains_Atom
+                                  (Types.all,
+                                   Landin.Checking.Union_Atoms
+                                     (Types.all, Subject_Union),
+                                   Res.Bound_To
+                                     (Meanings.all, Tree, Pattern))))
                         then
                            --  This arm reads no reference, even when the
                            --  subject's present sibling has tracked sources.

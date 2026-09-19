@@ -995,6 +995,9 @@
     "runtime/pointer-to-small-integer-traps": {
       "mode": "execute"
     },
+    "runtime/pointer-union-many": {
+      "mode": "execute"
+    },
     "runtime/pointer-unions": {
       "mode": "execute",
       "counterpart": "pointer-unions",

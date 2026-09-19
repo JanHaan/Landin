@@ -1,0 +1,5 @@
+class: positive
+summary: R7.20 [0480]/[1870] a union of two or more atoms and a pointer type is the two-cell union [1870] describes, where D189 refused it by name
+constructs: 0480, 0640, 1870
+program: program.ldn
+targets: linux-x86-64, macos-arm64

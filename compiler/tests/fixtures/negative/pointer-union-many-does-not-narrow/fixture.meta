@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] the union never narrows to its atom set or to a union with fewer atoms
+constructs: 0480, 0640, 1870
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-does-not-narrow/program.ldn
+status: 1

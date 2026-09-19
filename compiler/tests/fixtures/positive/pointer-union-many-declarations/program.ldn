@@ -1,0 +1,57 @@
+--  [0480]/[1870]: a union of several atoms and a pointer is structural.
+--  Written order, repeated members and aliases do not change which union
+--  a declaration names, so every value below passes between spellings
+--  without widening.
+none_found: atom
+denied: atom
+closed: atom
+refusal: type = none_found | denied
+maybe_cell: type = none_found | ptr mut u32
+
+written: type = none_found | denied | ptr mut u32
+reversed: type = ptr mut u32 | denied | none_found
+repeated: type = denied | none_found | denied | ptr mut u32 | none_found
+through_set: type = refusal | ptr mut u32
+through_union: type = maybe_cell | denied
+alias: type = written
+grown: type = written | closed
+
+reversed_of: (w: written) -> (r: reversed from w) =
+    r = w
+end reversed_of
+
+repeated_of: (r: reversed) -> (x: repeated from r) =
+    x = r
+end repeated_of
+
+through_set_of: (x: repeated) -> (s: through_set from x) =
+    s = x
+end through_set_of
+
+through_union_of: (s: through_set) -> (u: through_union from s) =
+    u = s
+end through_union_of
+
+alias_of: (u: through_union) -> (a: alias from u) =
+    a = u
+end alias_of
+
+grown_of: (a: alias) -> (g: grown from a) =
+    g = a
+end grown_of
+
+roundtrip: (cell: ptr mut u32) -> (g: grown from cell) =
+    w: written = cell
+    g = grown_of(alias_of(through_union_of(through_set_of(repeated_of(
+        reversed_of(w))))))
+end roundtrip
+
+--  The pointer member's permission is part of the identity.
+reading: type = none_found | denied | ptr u32
+mutable_row: type = [2]written
+reading_row: type = [2]reading
+
+size_of: () -> (n: usize) =
+    n = sizeof written + sizeof reversed + sizeof grown + sizeof reading
+    n = n + sizeof mutable_row + sizeof reading_row + alignof alias
+end size_of
