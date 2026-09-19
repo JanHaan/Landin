@@ -185,8 +185,8 @@ An inner scope may shadow an outer name.
 Integers: u8 u16 u32 u64, i8 i16 i32 i64.
 u128 and i128 are not in this version. No derived program needed them, and
 no target here carries them natively: Cortex-M0 would hold one in four words
-with no multiply or divide to lean on, and its C toolchain refuses the type
-outright. The Language evolution successor roadmap owns them, and a program
+with no runtime helper for its multiplication or division, and its C
+toolchain refuses the type outright. The Language evolution successor roadmap owns them, and a program
 that needs 128-bit arithmetic is what brings them back (D237).
 Any other width exists as well — u4, u12, u23 — for the
 packed fields of [0730], where the datasheet decides how
