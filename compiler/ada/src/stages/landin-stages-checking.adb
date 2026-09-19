@@ -3234,8 +3234,8 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, At_Node),
-                     Message => "a generic type argument of a range subtype"
-                                & " is not enabled yet",
+                     Message => "a generic type argument cannot be a range"
+                                & " subtype",
                      Refused => Bad.Constrained_Composition,
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, At_Node);
@@ -5084,7 +5084,7 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Unsupported_Use,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Written),
-               Message => What & " of a range subtype is not enabled yet",
+               Message => What & " cannot be a range subtype",
                Refused => Bad.Constrained_Composition,
                Into    => Found);
          end if;
@@ -6488,7 +6488,8 @@ package body Landin.Stages.Checking is
                              (if Bad."=" (Named, Bad.Arena_Handle)
                               then "the builtin `arena` type is withdrawn"
                               else "`" & Spelled_Here
-                                   & "` is not enabled yet"),
+                                   & "` is not in this version of the"
+                                   & " language"),
                            Refused => Bad.Refusal (Named),
                            Into    => Found);
                      end if;
@@ -8402,8 +8403,8 @@ package body Landin.Stages.Checking is
                                        Where   => Syn.Where
                                          (Caller_Tree, Written_Type),
                                        Message => "a generic type argument"
-                                                  & " of a range subtype is"
-                                                  & " not enabled yet",
+                                                  & " cannot be a range"
+                                                  & " subtype",
                                        Refused =>
                                          Bad.Constrained_Composition,
                                        Into    => Found);
@@ -20138,8 +20139,8 @@ package body Landin.Stages.Checking is
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Place),
-                        Message => "the address of a range subtype place is"
-                                   & " not enabled yet",
+                        Message => "the address of a range subtype place"
+                                   & " cannot be taken",
                         Refused => Bad.Constrained_Composition,
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);

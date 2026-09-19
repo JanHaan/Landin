@@ -3866,8 +3866,8 @@ package body Landin.Tests.Parser_Suite is
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Message
                     (Landin.Diagnostics.Primary (Report)),
-                  "volatile pointer access is not enabled",
-                  "the primary diagnostic identifies the refused shape");
+                  "a volatile pointer type is not part of the language",
+                  "the primary diagnostic identifies the withdrawn shape");
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Code (Report), "L0010",
                   "the deferred construct owns the diagnostic code");
@@ -3881,8 +3881,14 @@ package body Landin.Tests.Parser_Suite is
                      "the first note names the tour's volatile access rule");
                   Landin.Testing.Check
                     (Item, Contains
-                       (Landin.Diagnostics.Nth_Note (Report, 2), "R6.80"),
-                     "the second note names the existing enabling work");
+                       (Landin.Diagnostics.Nth_Note (Report, 2),
+                        "R7.20 withdraws this form"),
+                     "the second note names the withdrawing work");
+                  Landin.Testing.Check
+                    (Item, Contains
+                       (Landin.Diagnostics.Nth_Note (Report, 2),
+                        "compiler.register_write"),
+                     "the second note names the explicit replacement");
                end if;
             end;
          end if;

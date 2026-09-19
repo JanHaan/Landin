@@ -3400,7 +3400,12 @@ INVENTORY_STATES = ("executed", "compiled", "deferred", "transferred",
 CLAIM_RANK = {"refused": 1, "compiled": 2, "executed": 3}
 #  A transfer out of this roadmap is legitimate only where the tour already
 #  says who owns the transferred part [1480]; the roadmap cannot overrule it.
-TRANSFER_MARKERS = {"Companion tool and ecosystem": r"companion[ -]tool"}
+#  R7.20 adds the two successors its amended paragraphs name: [0150] and
+#  [0170] leave u128, i128 and f16 to Language evolution, and [1620] leaves
+#  the atomic wrapper type to the Broader standard library.
+TRANSFER_MARKERS = {"Companion tool and ecosystem": r"companion[ -]tool",
+                    "Language evolution": r"language evolution",
+                    "Broader standard library": r"broader standard library"}
 REFUSAL_TABLES = (
     ("compiler/ada/src/diagnostics/landin-diagnostics-syntactic",
      "Refused_Construct"),
@@ -3427,11 +3432,12 @@ def refusal_entries():
     """Every named refusal: its construct, its item and what its note says.
 
     [1830] gives a refusal two facts, the paragraph and the work, and the
-    note says which of three things that work is: where the construct *is
-    enabled* (pending), where a source-form boundary *is recorded*, or where
-    a form *is withdrawn*.  Only the first is a promise, and a promise that
-    names a finished item is one nobody is left to keep -- which is why this
-    reads the wording out of each Report body and not only the item.
+    note says which of four things that work is: where the construct *is
+    enabled* (pending), where a source-form boundary *is recorded*, where
+    a form *is withdrawn*, or which successor roadmap it *is transferred*
+    to.  Only the first is a promise, and a promise that names a finished
+    item is one nobody is left to keep -- which is why this reads the
+    wording out of each Report body and not only the item.
     """
     out = []
     for stem, kind in REFUSAL_TABLES:
@@ -3449,15 +3455,19 @@ def refusal_entries():
             return None
         withdrawn = set(re.findall(
             r"Refused = (\w+)\s+then \" withdraws", body_text))
-        boundary = set()
-        found = re.search(r"elsif Refused in ([\w\s|]+?)\s+then"
-                          r" \" records this source-form boundary\"",
-                          body_text)
-        if found:
-            boundary = {name.strip() for name in found.group(1).split("|")}
+
+        def listed(phrase):
+            found = re.search(r"elsif Refused in ([\w\s|]+?)\s+then \" %s"
+                              % phrase, body_text)
+            return ({name.strip() for name in found.group(1).split("|")}
+                    if found else set())
+
+        boundary = listed("records this source-form boundary\"")
+        transferred = listed("transfers this to ")
         for name in sorted(constructs):
             wording = ("withdrawn" if name in withdrawn else
-                       "boundary" if name in boundary else "pending")
+                       "boundary" if name in boundary else
+                       "transferred" if name in transferred else "pending")
             out.append((constructs[name], items[name], wording,
                         os.path.basename(stem), name))
     return out
@@ -3767,6 +3777,9 @@ def inventory_problems(inputs):
             elif item not in disposition:
                 problem(line, "[%s] does not explain its refusal recorded by"
                         " %s" % (one, item))
+            elif wording == "transferred" and not handed:
+                problem(line, "[%s]'s refusal transfers it and the row hands"
+                        " work to no successor" % one)
 
     for one in sorted(known - set(seen)):
         problem(1, "construct [%s] has no inventory row" % one)
@@ -3875,8 +3888,9 @@ def construct_matrix():
              "#",
              "#  linux-x86-64, macos-arm64 and cortex-m are the strongest",
              "#  claim a target's own records make: executed, compiled or",
-             "#  refused.  Refusals are item:pending, item:boundary or",
-             "#  item:withdrawn, as their [1830] note says.  State, targets,",
+             "#  refused.  Refusals are item:pending, item:boundary,",
+             "#  item:withdrawn or item:transferred, as their [1830] note",
+             "#  says.  State, targets,",
              "#  gaps and owner come from ROADMAP.md R7.10, whose",
              "#  disposition column explains every row; see ROADMAP.md R1.90",
              "#  and R7.10.",
