@@ -1,0 +1,7 @@
+-- A labelled bare block is a statement: a `break` naming it carries no value.
+f: () -> (r: i32) =
+    r = 0
+    outer: begin
+        break outer with 1
+    end outer
+end f
