@@ -1,0 +1,10 @@
+mut first, second: missing = 1
+
+holder: type = struct
+    left, right: absent
+end holder
+
+take: (a, b: unknown) -> (c, d: nowhere) =
+    c = a
+    d = b
+end take

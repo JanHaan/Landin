@@ -1,0 +1,147 @@
+mut first, second: i32
+public red, green, blue: u8
+mut low, high: u16 = 0x1234
+
+mixed: type = struct
+    lo, hi: u8
+    wide: u16
+end mixed
+
+inline: type = (left, right: u16, flag: bool)
+
+shape: type = struct
+    kind: variant
+        dot |
+        box: (width, height: i32)
+    end kind
+end shape
+
+mut calls: i32 = 0
+
+bump: () -> (value: i32) =
+    calls = calls + 1
+    value = calls * 10
+end bump
+
+swap: (inout a, b: i32) -> none =
+    held := a
+    a = b
+    b = held
+end swap
+
+divide: (n, d: i32) -> (quotient, remainder: i32) =
+    quotient = n / d
+    remainder = n % d
+end divide
+
+both: (s, t: ptr mut i32, crossed: bool)
+      -> (one, other: ptr mut i32 from s, t) =
+    if crossed then
+        one = t
+        other = s
+    else
+        one = s
+        other = t
+    end if
+end both
+
+apply: (f: (x, y: i32) -> (r: i32), u, v: i32) -> (r: i32) =
+    r = f(u, v)
+end apply
+
+add: (x, y: i32) -> (r: i32) =
+    r = x + y
+end add
+
+area: (s: shape) -> (r: i32) =
+    r = 0
+    match s.kind
+        dot: r = 1
+        box(width, height): r = width * height
+    end match
+end area
+
+public main: () -> (code: i32) =
+    code = 1
+    mut a, b: i32 = bump()
+    if calls <> 1 or a <> 10 or b <> 10 then
+        return
+    end if
+    code = 2
+    a = a + 1
+    if a <> 11 or b <> 10 then
+        return
+    end if
+
+    code = 3
+    mut xs, ys: [3]u8 = [1, 2, 3]
+    xs[0] = 9
+    if xs[0] <> 9 or ys[0] <> 1 or ys[2] <> 3 then
+        return
+    end if
+
+    code = 4
+    if first <> 0 or second <> 0 then
+        return
+    end if
+    first = 5
+    if second <> 0 then
+        return
+    end if
+
+    code = 5
+    if red <> 0 or green <> 0 or blue <> 0 then
+        return
+    end if
+    code = 6
+    low = low + 1
+    if low <> 0x1235 or high <> 0x1234 then
+        return
+    end if
+
+    code = 7
+    if sizeof mixed <> 4 or sizeof inline <> 6 then
+        return
+    end if
+    code = 8
+    m: mixed = mixed(lo: 1, hi: 2, wide: 3)
+    if m.lo <> 1 or m.hi <> 2 or m.wide <> 3 then
+        return
+    end if
+
+    code = 9
+    mut x, y: i32 = 1
+    y = 2
+    swap(x, y)
+    if x <> 2 or y <> 1 then
+        return
+    end if
+
+    code = 10
+    (quotient: q, remainder: r) := divide(17, 5)
+    if q <> 3 or r <> 2 then
+        return
+    end if
+
+    code = 11
+    mut s, t: i32 = 20
+    t = 22
+    (one: p, other: o) := both(addr s, addr t, false)
+    p.val = p.val + 1
+    if s <> 21 or t <> 22 or o.val <> 22 then
+        return
+    end if
+
+    code = 12
+    if apply(add, s, 21) <> 42 then
+        return
+    end if
+
+    code = 13
+    mut boxed: shape = zeroed
+    boxed.kind = box(width: 6, height: 7)
+    if area(boxed) <> 42 then
+        return
+    end if
+    code = 42
+end main

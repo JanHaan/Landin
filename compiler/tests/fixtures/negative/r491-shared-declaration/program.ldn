@@ -1,1 +1,5 @@
-mut first, second: i32
+first, second := 1
+
+reader: () -> none =
+    mut left, right := 2
+end reader

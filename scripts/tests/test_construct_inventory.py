@@ -160,7 +160,7 @@ class Inventory(unittest.TestCase):
     def test_refusal_wording_is_read_from_each_report_body(self):
         wording = {(one, item, how) for one, item, how, _, _
                    in self.inputs["refusals"]}
-        for expected in (("0100", "R7.20", "pending"),
+        for expected in (("0100", "R7.20", "boundary"),
                          ("0120", "R2.20", "boundary"),
                          ("0820", "R4.80", "withdrawn"),
                          ("0850", "R6.80", "pending"),

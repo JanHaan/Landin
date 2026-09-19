@@ -208,6 +208,9 @@ package body Landin.Syntax is
    function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Caller);
 
+   function Shares_Declared_Type (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Shares);
+
    function Is_Unchecked (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Unchecked);
 

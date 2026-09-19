@@ -280,7 +280,7 @@ substitutes an alias during checking; D137 interns a struct application by its
 template and normalized actual tuple, then checks the substituted field shape.
 
 ```landin-grammar
-binding       ::= "mut"? identifier ":" type ("=" expression)?
+binding       ::= "mut"? identifiers ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
 type          ::= function_type | array_type | pointer_type | slice_type
                 | any_type | type_application | scalar_name | packed_unsigned | text_name
@@ -378,7 +378,7 @@ struct_body      ::= ("layout" "(" ("c" | "optimal"
                      ("struct" member+ "end" identifier?
                      | "(" field ("," field)* ")")
 member           ::= field | variant_part
-field            ::= identifier ":" type ("at" expression (".." expression)?)?
+field            ::= identifiers ":" type ("at" expression (".." expression)?)?
 variant_part     ::= identifier ":" "variant" variant_case
                    ("|" variant_case)* "end" identifier
 variant_case     ::= identifier (":" "(" field ("," field)* ")")?
@@ -462,11 +462,11 @@ routine_formal     ::= parameter | type_formal
 errors             ::= "!" (declaration_reference
                              ("|" declaration_reference)* | "...")
 parameters         ::= parameter ("," parameter)*
-parameter          ::= "caller" identifier ":" type
-                     | "escaping"? parameter_convention? identifier ":" type
+parameter          ::= "caller" identifiers ":" type
+                     | "escaping"? parameter_convention? identifiers ":" type
 parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none" | "noreturn"
-named_return ::= identifier ":" type
+named_return ::= identifiers ":" type
                  ("from" identifier ("," identifier)*)?
 body        ::= block
 block       ::= statement* | value_statement* expression

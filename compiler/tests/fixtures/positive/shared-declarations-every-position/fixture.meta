@@ -1,0 +1,5 @@
+class: positive
+summary: shared names are accepted for module and local bindings, block, inline and payload fields, caller and convention parameters, function-type, concept and anonymous signatures, and named returns with `from`
+constructs: 0100, 0670, 0680, 0790, 0900, 1040, 1790, 1795, 1800
+program: main.ldn
+targets: linux-x86-64, macos-arm64

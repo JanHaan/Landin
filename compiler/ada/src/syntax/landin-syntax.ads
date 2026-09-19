@@ -631,6 +631,22 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Parameter;
 
+   --  [0100]: a later name of a shared declaration.  The parser writes one
+   --  declaration node per name, in written order, each with the complete
+   --  written prefix, but the type is written once and every later name's
+   --  Declared_Type is the very node the first name owns.  The same holds
+   --  for the rest of the written suffix: a field's `at` bounds and a named
+   --  return's `from` sources.  Only a binding's value is its own: a
+   --  reference to the first name, which is how a later name is initialized
+   --  with a copy of the first name's value.  A stage that walks written
+   --  types therefore reaches the shared ones through the first name, and
+   --  skips them here, so a name in the type resolves once and a type that
+   --  names nothing is reported once.
+   function Shares_Declared_Type (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Binding | Parameter | Named_Return | Field;
+
    --  D187's [1120] region.  A Bare_Block that carries it is the same
    --  lexical block with the same scope; only the instructions lowered
    --  inside it lose the check edges D187 names.
@@ -1540,6 +1556,7 @@ private
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;
       Caller     : Boolean := False;
+      Shares     : Boolean := False;
       Unchecked  : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;
       Fill       : Boolean := False;
