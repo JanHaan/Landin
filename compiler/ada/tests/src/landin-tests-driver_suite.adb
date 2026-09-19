@@ -3432,8 +3432,134 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Panic_Contracts;
 
+   procedure R720_Labelled_Block_Refusals
+     (Item : in out Landin.Testing.Context);
+
+   --  [1180]'s labelled bare block.  Its closer's label and a transfer's
+   --  target are context the grammar does not carry, so the grammar derives
+   --  each program below and no negative fixture can hold these parser
+   --  refusals: this case does.  A missing or mismatched closer recovers
+   --  exactly as the same labelled loop does.
+   procedure R720_Labelled_Block_Refusals
+     (Item : in out Landin.Testing.Context)
+   is
+      function Report_Of (Source : String) return String;
+      function Codes (Report : String) return String;
+      procedure Refused (Source, Code, Message : String);
+      procedure Same_Recovery (Block, Looped, Message : String);
+
+      function Report_Of (Source : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("bad.ldn");
+      begin
+         Host.Add_File ("bad.ldn", Source);
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("--emit=asm");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "a labelled block refusal is an ordinary diagnostic");
+            Landin.Testing.Check
+              (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "a labelled block refusal has no output or tool effects");
+            return Unbounded.To_String (Result.Report);
+         end;
+      end Report_Of;
+
+      --  Every reported code in report order, which is what a labelled
+      --  loop and a labelled block must share.
+      function Codes (Report : String) return String is
+         Found : Unbounded.Unbounded_String;
+         From : Positive := Report'First;
+      begin
+         loop
+            declare
+               At_Next : constant Natural :=
+                 Ada.Strings.Fixed.Index
+                   (Report (From .. Report'Last), "error[");
+            begin
+               exit when At_Next = 0 or else At_Next + 10 > Report'Last;
+               Unbounded.Append
+                 (Found, Report (At_Next + 6 .. At_Next + 10) & " ");
+               From := At_Next + 11;
+            end;
+         end loop;
+         return Unbounded.To_String (Found);
+      end Codes;
+
+      procedure Refused (Source, Code, Message : String) is
+         Report : constant String := Report_Of (Source);
+      begin
+         Landin.Testing.Check
+           (Item, Codes (Report) = Code & " "
+              and then Contains (Report, "error[" & Code & "]: " & Message),
+            "one labelled-block refusal: " & Message);
+      end Refused;
+
+      procedure Same_Recovery (Block, Looped, Message : String) is
+         Block_Report : constant String := Report_Of (Block);
+         Loop_Report : constant String := Report_Of (Looped);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Block_Report, "error[L0103]: " & Message)
+              and then Codes (Block_Report) = Codes (Loop_Report)
+              and then Codes (Block_Report)'Length > 0,
+            "a labelled block's closer recovers as a labelled loop's does");
+      end Same_Recovery;
+   begin
+      Refused
+        ("f: () -> none = outer: begin continue outer end outer end f" & LF,
+         "L0110", "`continue` targets a loop; `outer` labels a bare block");
+      Refused
+        ("f: () -> none = loop do outer: begin continue outer end outer "
+         & "break end loop end f" & LF,
+         "L0110", "`continue` targets a loop; `outer` labels a bare block");
+      Refused
+        ("f: () -> none = outer: begin loop do continue outer end loop "
+         & "end outer end f" & LF,
+         "L0110", "`continue` targets a loop; `outer` labels a bare block");
+      --  A labelled block never captures an unlabelled transfer.
+      Refused
+        ("f: () -> none = outer: begin break end outer end f" & LF,
+         "L0110", "`break` has no matching enclosing loop");
+      Refused
+        ("f: () -> none = outer: begin continue end outer end f" & LF,
+         "L0110", "`continue` has no matching enclosing loop");
+      Refused
+        ("f: () -> none = outer: begin break other end outer end f" & LF,
+         "L0110",
+         "`break` has no matching enclosing loop or labelled bare block");
+      --  [1010]: an anonymous function is its own control scope.
+      Refused
+        ("f: () -> none = outer: begin callback := () -> none = break "
+         & "outer end end outer end f" & LF,
+         "L0110",
+         "`break` has no matching enclosing loop or labelled bare block");
+      Same_Recovery
+        ("f: () -> none = outer: begin break outer end end f" & LF
+         & "g: () -> none = end g" & LF,
+         "f: () -> none = outer: loop do break outer end end f" & LF
+         & "g: () -> none = end g" & LF,
+         "a labelled bare block closes with `end <label>`");
+      Same_Recovery
+        ("f: () -> none = outer: begin break outer end inner end f" & LF
+         & "g: () -> none = end g" & LF,
+         "f: () -> none = outer: loop do break outer end inner end f" & LF
+         & "g: () -> none = end g" & LF,
+         "a labelled bare block closes with `end <label>`");
+   end R720_Labelled_Block_Refusals;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "R7.20 labelled block refusals",
+         R720_Labelled_Block_Refusals'Access);
       Landin.Testing.Register
         (Into, "driver", "panic handler contracts", Panic_Contracts'Access);
       Landin.Testing.Register

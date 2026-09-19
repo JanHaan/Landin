@@ -1,0 +1,9 @@
+class: negative
+summary: a name assigned on some but not every edge to a labelled block's end is not definitely assigned after it
+program: program.ldn
+codes: L0302, L0302
+constructs: 1090, 1180, 1910
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-labelled-block-partial-assignment/program.ldn
+status: 1

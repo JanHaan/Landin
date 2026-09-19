@@ -1,0 +1,14 @@
+-- The facts after a labelled block join every `break` naming it with its
+-- fallthrough.  Only the break edge carries the frame address here, and
+-- that edge alone makes the returned pointer escape.
+leak: (cell: ptr u32, early: bool) -> (result: ptr u32 from cell) =
+    local: u32 = 42
+    mut held: ptr u32 = cell
+    pick: begin
+        if early then
+            held = addr local
+            break pick
+        end if
+    end pick
+    result = held
+end leak

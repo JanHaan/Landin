@@ -1,0 +1,9 @@
+class: negative
+summary: a labelled bare block is a statement and is refused where an expression belongs
+program: program.ldn
+codes: L0102
+constructs: 1090, 1180, 1820
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-labelled-block-not-an-expression/program.ldn
+status: 1

@@ -294,9 +294,13 @@ package body Landin.Stages.Checking.References is
       --  addresses only during traversal; growth copies no owned state.
       --  Exceptions propagate out of Check_Function, finalizing every frame
       --  and the vector, whose pointer elements need no dereference/cleanup.
+      --  [1180]'s labelled bare block is a frame too.  Only a `break`
+      --  naming it selects it; its exit edges join the block's
+      --  fallthrough after its `end`.
       type Loop_Frame is limited record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
+         Is_Block     : Boolean := False;
          Cleanup_Base : Natural := 0;
          Exits        : Boolean := False;
          Exit_State   : Transfer_States.Owner;
@@ -329,6 +333,7 @@ package body Landin.Stages.Checking.References is
                       Node : Syn.Node_Id) is
       begin
          Frame.Label := Syn.Name (Tree, Node);
+         Frame.Is_Block := Syn.Kind (Tree, Node) = Syn.Bare_Block;
          Frame.Cleanup_Base := Natural (Cleanup_Stack.Length);
          Checkpoint (Growing);
          Loop_Stack.Append (Frame);
@@ -338,10 +343,13 @@ package body Landin.Stages.Checking.References is
       --  Where the traversal is: the block being processed, the statement
       --  within it, and the loop whose body that block is, if any.  The
       --  borrow check reads the continuation of a call off this stack.
+      --  Labelled marks the body of [1180]'s labelled bare block, whose
+      --  `break` edges continue after its `end`.
       type Position_Frame is record
-         Block   : Syn.Node_Id := Syn.No_Node;
-         Index   : Natural := 0;
-         Of_Loop : Syn.Node_Id := Syn.No_Node;
+         Block    : Syn.Node_Id := Syn.No_Node;
+         Index    : Natural := 0;
+         Of_Loop  : Syn.Node_Id := Syn.No_Node;
+         Labelled : Boolean := False;
       end record;
 
       package Position_Frames is new Ada.Containers.Vectors
@@ -454,7 +462,8 @@ package body Landin.Stages.Checking.References is
         (Tree         : Syn.Tree;
          Block        : Syn.Node_Id;
          Fell_Through : out Boolean;
-         Of_Loop      : Syn.Node_Id := Syn.No_Node);
+         Of_Loop      : Syn.Node_Id := Syn.No_Node;
+         Labelled     : Boolean := False);
 
       procedure Join
         (Into_Fact : in out Reference_Fact; Other : Reference_Fact);
@@ -1298,8 +1307,21 @@ package body Landin.Stages.Checking.References is
                   end loop;
 
                when Syn.Bare_Block =>
-                  return Scan_Statements
-                    (Syn.Body_Of (Of_Tree, Node), 1, Since);
+                  declare
+                     Inner : Summary :=
+                       Scan_Statements (Syn.Body_Of (Of_Tree, Node), 1, Since);
+                  begin
+                     --  [1180]: a `break` may name this labelled block and
+                     --  continue after its `end`; taking every break to do
+                     --  so can only over-report.
+                     if Syn.Name (Of_Tree, Node)
+                          /= Landin.Source.Names.No_Name
+                       and then Inner.Breaks
+                     then
+                        Inner.Falls := True;
+                     end if;
+                     return Inner;
+                  end;
 
                when Syn.Loop_Statement | Syn.While_Statement
                   | Syn.For_Statement =>
@@ -1406,6 +1428,14 @@ package body Landin.Stages.Checking.References is
                   --  A later iteration establishes fresh arm bindings.
                   --  Loops inside this arm were already checked above.
                   return False;
+               end if;
+
+               if Frame.Labelled and then Pending.Breaks then
+                  --  [1180]: a `break` may name this labelled block and
+                  --  continue after its `end`.  The summary does not say
+                  --  which target a break took, so every one is taken to
+                  --  reach here as well; that can only over-report.
+                  Pending.Falls := True;
                end if;
 
                if Frame.Of_Loop /= Syn.No_Node then
@@ -2562,8 +2592,9 @@ package body Landin.Stages.Checking.References is
            Syn.Name (Tree, Node);
       begin
          for Index in reverse 1 .. Loop_Stack.Last_Index loop
-            if Target = Landin.Source.Names.No_Name
-              or else Loop_Stack (Index).Label = Target
+            if (if Target = Landin.Source.Names.No_Name
+                then not Loop_Stack (Index).Is_Block
+                else Loop_Stack (Index).Label = Target)
             then
                return Index;
             end if;
@@ -2829,7 +2860,33 @@ package body Landin.Stages.Checking.References is
                end;
 
             when Syn.Bare_Block =>
-               Process_Block (Tree, Syn.Body_Of (Tree, Node), Fell);
+               if Syn.Name (Tree, Node) = Landin.Source.Names.No_Name then
+                  Process_Block (Tree, Syn.Body_Of (Tree, Node), Fell);
+               else
+                  --  [1180]: the facts after a labelled block join its
+                  --  fallthrough with every `break` naming it, exactly as
+                  --  a loop joins its break edges.
+                  declare
+                     Frame : aliased Loop_Frame;
+                  begin
+                     Push (Frame'Unchecked_Access, Tree, Node);
+                     Process_Block
+                       (Tree, Syn.Body_Of (Tree, Node), Fell,
+                        Labelled => True);
+                     Checkpoint (Traversed);
+                     Loop_Stack.Delete_Last;
+                     if Frame.Exits then
+                        if Falls_Through then
+                           Join_Table (Origins, Frame.Exit_State.Data.all);
+                        else
+                           Origins := Frame.Exit_State.Data.all;
+                        end if;
+                        Falls_Through := True;
+                        Statement_Value := No_Origin;
+                     end if;
+                     Release (Frame);
+                  end;
+               end if;
 
             when Syn.Loop_Statement | Syn.While_Statement
                | Syn.For_Statement =>
@@ -3158,7 +3215,8 @@ package body Landin.Stages.Checking.References is
         (Tree         : Syn.Tree;
          Block        : Syn.Node_Id;
          Fell_Through : out Boolean;
-         Of_Loop      : Syn.Node_Id := Syn.No_Node)
+         Of_Loop      : Syn.Node_Id := Syn.No_Node;
+         Labelled     : Boolean := False)
       is
          Base : constant Natural := Natural (Cleanup_Stack.Length);
          Value : Origin_Fact := No_Origin;
@@ -3170,7 +3228,11 @@ package body Landin.Stages.Checking.References is
             return;
          end if;
          Positions.Append
-           (Position_Frame'(Block => Block, Index => 0, Of_Loop => Of_Loop));
+           (Position_Frame'
+              (Block    => Block,
+               Index    => 0,
+               Of_Loop  => Of_Loop,
+               Labelled => Labelled));
          for Position in 1 .. Syn.Statement_Count (Tree, Block) loop
             Positions (Positions.Last_Index).Index := Position;
             Process_Statement

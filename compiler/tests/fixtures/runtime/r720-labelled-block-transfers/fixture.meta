@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: a labelled-block break skips the rest of the block, runs left defers innermost first but no undo, leaves loops between it and the block, never captures unlabelled transfers, selects the nearest equal label, and meets assignment facts from every edge
+program: main.ldn
+status: 42
+constructs: 1090, 1100, 1110, 1130, 1140, 1170, 1180, 1810, 1910
+targets: linux-x86-64, macos-arm64

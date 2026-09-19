@@ -742,9 +742,13 @@ package body Landin.Stages.Lowering is
       package Stored_Path_Vectors is new Ada.Containers.Vectors
         (Index_Type => Positive, Element_Type => IR.Path_Step);
 
+      --  An enclosing transfer target.  [1180]'s labelled bare block is
+      --  one too, with no Head and no value destination: only a `break`
+      --  naming it selects it, and that break leaves for its Exit_Block.
       type Loop_Entry is record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
+         Is_Block     : Boolean := False;
          Head         : IR.Block_Id := IR.No_Block;
          Exit_Block   : IR.Block_Id := IR.No_Block;
          Exit_Scope   : Res.Scope_Id := Res.No_Scope;
@@ -773,8 +777,9 @@ package body Landin.Stages.Lowering is
             declare
                Candidate : constant Loop_Entry := Loop_Stack (Index);
             begin
-               if Target = Landin.Source.Names.No_Name
-                 or else Candidate.Label = Target
+               if (if Target = Landin.Source.Names.No_Name
+                   then not Candidate.Is_Block
+                   else Candidate.Label = Target)
                then
                   return Index;
                end if;
@@ -8789,9 +8794,31 @@ package body Landin.Stages.Lowering is
          --  outside it -- a later statement, or a separately filled item
          --  such as [1010]'s anonymous function body -- stays checked.
          Region : constant Boolean := Syn.Is_Unchecked (Of_Tree, Node);
+         --  [1180]: a labelled block is a `break` target.  Its exit is
+         --  created only once some edge reaches it, as a loop's is.  Its
+         --  cleanup base is taken before its body registers anything, so
+         --  a break also runs the block's own defers.
+         Labelled : constant Boolean :=
+           Syn.Name (Of_Tree, Node) /= Landin.Source.Names.No_Name;
+         Exit_Block : IR.Block_Id := IR.No_Block;
       begin
          Close_With_Jump (Start, Site);
          Open (Start);
+         if Labelled then
+            Loop_Stack.Append
+              (Loop_Entry'
+                 (Label        => Syn.Name (Of_Tree, Node),
+                  Is_Block     => True,
+                  Head         => IR.No_Block,
+                  Exit_Block   => IR.No_Block,
+                  Exit_Scope   => Scope,
+                  Exit_Site    => Site,
+                  Cleanup_Base => Natural (Cleanup_Stack.Length),
+                  Value_Destination => IR.No_Slot,
+                  Value_Destination_Field => 0,
+                  Value_Destination_Path =>
+                    Stored_Path_Vectors.Empty_Vector));
+         end if;
          if Region then
             IR.Begin_Unchecked (Unit.all, Filling);
          end if;
@@ -8801,7 +8828,18 @@ package body Landin.Stages.Lowering is
          if Region then
             IR.End_Unchecked (Unit.all, Filling);
          end if;
-         if Current /= IR.No_Block then
+         if Labelled then
+            Exit_Block := Loop_Stack.Last_Element.Exit_Block;
+            Loop_Stack.Delete_Last;
+         end if;
+         if Exit_Block /= IR.No_Block then
+            --  The fallthrough and every `break` naming this block meet
+            --  after its `end`.
+            if Current /= IR.No_Block then
+               Close_With_Jump (Exit_Block, Site);
+            end if;
+            Open (Exit_Block);
+         elsif Current /= IR.No_Block then
             declare
                Merge : constant IR.Block_Id :=
                  Fresh (Of_Tree, Node, Scope);
@@ -10098,6 +10136,7 @@ package body Landin.Stages.Lowering is
          declare
             Frame : Loop_Entry :=
               (Label        => Syn.Name (Of_Tree, Node),
+               Is_Block     => False,
                Head         => (if Is_For then Step_Block else Head),
                Exit_Block   => Exit_Block,
                Exit_Scope   => Scope,

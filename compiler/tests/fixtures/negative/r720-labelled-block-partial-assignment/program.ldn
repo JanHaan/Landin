@@ -1,0 +1,24 @@
+-- After a labelled block a name is assigned only if every edge to its `end`
+-- assigned it.  The taken guard leaves before `value` is written.
+pick: (early: bool) -> (r: i32) =
+    mut value: i32
+    chosen: begin
+        break chosen when early
+        value = 20
+    end chosen
+    r = value
+end pick
+
+-- Here the break assigns and the exhausted loop falls through without.
+search: (items: []i32) -> (r: i32) =
+    mut first: i32
+    found: begin
+        for item in items do
+            if item > 0 then
+                first = item
+                break found
+            end if
+        end for
+    end found
+    r = first
+end search

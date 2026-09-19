@@ -1,0 +1,162 @@
+bad: atom
+problem: type = bad
+
+mut trace: i32 = 0
+
+mark: (value: i32) -> none =
+    trace = trace * 10 + value
+end mark
+
+-- A taken `break outer` skips the rest of every block it leaves and runs
+-- their defers innermost first, exactly as a loop `break` does.
+nested_cleanups: () -> (result: i32) =
+    trace = 0
+    outer: begin
+        defer mark(1)
+        inner: begin
+            defer mark(2)
+            begin
+                defer mark(3)
+                break outer when trace == 0
+                mark(9)
+            end
+            mark(8)
+        end inner
+        mark(7)
+    end outer
+    mark(4)
+    result = trace
+end nested_cleanups
+
+-- An untaken guard continues with the next statement, and `break inner`
+-- leaves only the inner block.
+guarded: (leave: bool) -> (result: i32) =
+    trace = 0
+    outer: begin
+        defer mark(1)
+        inner: begin
+            defer mark(2)
+            break outer when leave
+            break inner
+            mark(9)
+        end inner
+        mark(3)
+    end outer
+    result = trace
+end guarded
+
+-- A block break leaves the loop between it and the block: the loop's
+-- `complete` and the rest of the block do not run.
+leaves_loop: () -> (result: i32) =
+    trace = 0
+    mut i: i32 = 0
+    found: begin
+        defer mark(1)
+        while i < 5 do
+            inc i
+            defer mark(2)
+            break found when i == 3
+        complete
+            mark(9)
+        end while
+        mark(8)
+    end found
+    result = trace * 10 + i
+end leaves_loop
+
+-- Unlabelled transfers inside a labelled block still target the loop.
+loop_keeps_unlabelled: () -> (result: i32) =
+    trace = 0
+    mut n: i32 = 0
+    loop do
+        inc n
+        guard: begin
+            defer mark(n)
+            break when n == 2
+            continue when n == 1
+            mark(9)
+        end guard
+        mark(8)
+    end loop
+    result = trace * 10 + n
+end loop_keeps_unlabelled
+
+-- A structured transfer never selects `undo`: leaving the block runs only
+-- its defer, and the undo is no longer registered after its `end`.
+undo_stays: () -> (result: i32) ! problem =
+    trace = 0
+    scope: begin
+        undo mark(5)
+        defer mark(6)
+        break scope
+    end scope
+    result = trace
+end undo_stays
+
+-- Every edge to the `end` assigns `value` and `first`, so both are
+-- definitely assigned after the blocks.
+assigned_on_every_edge: (early: bool) -> (result: i32) =
+    mut value: i32
+    chosen: begin
+        if early then
+            value = 10
+            break chosen
+        end if
+        value = 20
+    end chosen
+
+    mut first: i32
+    search: begin
+        for item in 0..<10 do
+            if item * item > 20 then
+                first = item
+                break search
+            end if
+        end for
+        first = -1
+    end search
+    result = value * 100 + first
+end assigned_on_every_edge
+
+-- An equal label is not refused, for blocks exactly as for loops: a
+-- transfer selects the nearest loop or block carrying its label.
+nearest_label: () -> (result: i32) =
+    trace = 0
+    same: begin
+        same: loop do
+            mark(1)
+            break same
+        end same
+        mark(2)
+        same: begin
+            mark(3)
+            break same
+        end same
+        mark(4)
+        break same
+    end same
+    result = trace
+end nearest_label
+
+public main: () -> (code: i32) =
+    code = 42
+    if nested_cleanups() <> 3214 then
+        code = 1
+    elsif guarded(false) <> 231 then
+        code = 2
+    elsif guarded(true) <> 21 then
+        code = 3
+    elsif leaves_loop() <> 22213 then
+        code = 4
+    elsif loop_keeps_unlabelled() <> 122 then
+        code = 5
+    elsif (undo_stays() else 0) <> 6 then
+        code = 6
+    elsif assigned_on_every_edge(true) <> 1005 then
+        code = 7
+    elsif assigned_on_every_edge(false) <> 2005 then
+        code = 8
+    elsif nearest_label() <> 1234 then
+        code = 9
+    end if
+end main
