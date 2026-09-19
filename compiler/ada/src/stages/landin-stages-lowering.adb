@@ -3484,15 +3484,22 @@ package body Landin.Stages.Lowering is
                         Built := Shaped_Temporary (Shape, Site);
                         IR.Emit_Store
                           (Unit.all, Filling, Saved, Pointer, Site);
-                        IR.Emit_Branch
-                          (Unit.all, Filling,
-                           IR.Emit_Binary
-                             (Unit.all, Filling, IR.Equal_To,
-                              IR.Emit_Load (Unit.all, Filling, Saved, Site),
-                              IR.Emit_Number
-                                (Unit.all, Filling, Ty.Usize, 0, False, Site),
-                              Ty.Bool, Site),
-                           Absent, Present, Site);
+                        declare
+                           --  Ada leaves argument evaluation order open, so
+                           --  both operands are emitted before the compare.
+                           Carrier : constant IR.Value_Id :=
+                             IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                           Zero    : constant IR.Value_Id :=
+                             IR.Emit_Number
+                               (Unit.all, Filling, Ty.Usize, 0, False, Site);
+                        begin
+                           IR.Emit_Branch
+                             (Unit.all, Filling,
+                              IR.Emit_Binary
+                                (Unit.all, Filling, IR.Equal_To,
+                                 Carrier, Zero, Ty.Bool, Site),
+                              Absent, Present, Site);
+                        end;
                         IR.Leave_Block (Unit.all, Filling);
                         Current := IR.No_Block;
                         Open (Absent);
