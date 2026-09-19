@@ -1337,7 +1337,10 @@ use a plain `break` when no result is intended.
 What may not is a call of a function returning none [1920]. Discarding is for
 a result, and that call has none. A call with a declared error is also refused
 when a discard would ignore that outcome; `try` propagates it and call-site
-`else` handles it explicitly.
+`else` handles it explicitly. D241 makes the rest mechanical: a discard takes
+every place and call, and every expression an inferred binding `x := e`
+takes; a whole aggregate place is discarded where it stands, after its
+indexes are evaluated and checked.
 
 ### [1940] A module value is known when the compiler reads it
 
@@ -2831,6 +2834,8 @@ expression is an untyped integer, [0200]'s `i32` is its context and therefore
 recorded. D23's existing lowering evaluates and stores the finite source run
 left to right, and the resulting local is wholly assigned.
 
+D241 later admits every non-scalar element in a local inferred literal;
+repetition keeps [0560]'s scalar element and the module form keeps D26's.
 D25 admits only the initializer in a local inferred binding. Its module
 counterpart remained refused until D26 connected the inferred shape to D24's
 separate [1940] static-image fold. A literal in general assignment,
@@ -6061,7 +6066,8 @@ is L0312, and a case from another part is D76's L0301 identity mismatch. This
 first boundary gives each arm exactly one statement, with an `if` usable as
 that statement when a nested run is needed. D78 adds [1220]'s parenthesized
 payload bindings. Wildcards, scalar or nested subjects and general variant
-values remain refused.
+values remain refused. D241 later makes a scalar subject a type error citing
+[1210]: an arm names an identity, and a number is compared with `if`.
 
 The subject is read once before any arm. Definite assignment therefore asks
 for the selected part's established-case fact on entry; D75's whole zero image
@@ -6425,7 +6431,9 @@ or local fixed-array name, or a directly selected ordinary fixed-array field.
 The value must have the payload leaf's exact D17 length and scalar element
 type. Length, count, element and copy-shape disagreements keep their existing
 L0301 owners. A tracked local source is read as a whole before the case write;
-payload expressions read the state arriving at the statement. A refused or
+payload expressions read the state arriving at the statement. D241 later
+gives a payload array every expression an ordinary array field takes, still
+selecting the case first. A refused or
 immutable destination is reported first and reads no payload.
 
 Selection remains one destination-first operation: it clears the complete
@@ -6493,7 +6501,8 @@ the complete variant part before its tag may be matched, and the binding exists
 only in the arm for the selected case. An `inout` write is observable through
 the original object after the match. A bare use of the binding remains L0304,
 as do whole-array assignment or initializer sources, arguments, returns,
-discards and operands. This is an indexed contextual alias, not a general
+discards and operands; D241 later admits the discard and records the others
+as a boundary. This is an indexed contextual alias, not a general
 fixed-array value.
 
 No new opcode is needed. `Load_Element` gains D84's containing-field, case and
@@ -7647,7 +7656,8 @@ nominal construction whose body has an ordinary child is admitted, because the
 labelled child value is already checked against that child's own body.
 
 The root binding decides mutability, and the child remains no general
-expression value: no operand and no discard. D132 later gives a module
+expression value: no operand and no discard. D241 later admits the discard
+[1930]. D132 later gives a module
 initializer the same contextual child forms by recursively folding their
 static image rather than turning the child into a general value.
 
@@ -14904,3 +14914,102 @@ refuse an unowned promise.
 **Pinned by** `negative/r720-vector-intrinsic-withdrawn`,
 `runtime/r450-array-arithmetic-composition`, `negative/r630-m0-rmw` and
 `runtime/r630-memory-scalars`.
+
+### D241 — A general aggregate value follows its destination, and a discard takes what a binding would
+
+**The tour said** that an array is a value [0520] whose length may be inferred
+from its literal [0530], that `zeroed` is an image its destination gives
+context [0540], that ordinary and variant-bearing structs are types [0670]
+[0680], that a case with no payload is an atom [0690] and that matching has
+constant patterns [1210]; [1930] says anything with a type may be thrown
+away. R2.20's increments admitted aggregate values position by position, and
+every position not yet admitted was one L0304 whose note said R2.20 enables
+it. At R7.10 thirty-four checker sites still carried that note, with R2.20
+complete.
+
+**Chosen:** each site was reproduced and classified against the text that
+governs it, and the construct that owns it now says one of three things.
+
+Implemented, where the normative text already says the form is language:
+
+- Discards. `_ = e` accepts every whole array or struct place — a binding,
+  parameter, named return, match alias, field at any depth, element, `.val`
+  target or slice element — and every expression an inferred local binding
+  `x := e` accepts. A place is discarded where it stands: its computed indexes
+  are evaluated and bounds-checked once and nothing is copied. Any other value
+  is checked and evaluated exactly as `x := e` would be, then dropped.
+  Discarding an unassigned local reads it and is L0302.
+- Inferred literals of any element shape. A local array literal takes its
+  element type from its first element — a slice, text view, pointer,
+  function, atom set, struct or array as much as a scalar — and every later
+  element must match it. An inferred local may likewise copy a whole array or
+  struct parameter or named return, which the typed form already could.
+  Counted repetition keeps [0560]'s scalar element, module images keep D26's
+  and an `any` element still needs a written array type.
+- Variant payload arrays. A fixed-array payload field takes every expression
+  an ordinary struct's array field takes — an element, a call, `try`, array
+  arithmetic, a control expression, a deeper field, a parameter, `.val` or a
+  slice element — as D84 said it should. The case is still selected before
+  its payload is evaluated (D76); a call fills a temporary that is then
+  copied, and no IR destination form is added.
+- Two defects found on the way: discarding an element of an array of slices
+  or text views crashed a later stage, and a struct whose field type had
+  already been refused received a second report.
+
+Reclassified as type errors (L0301), where the old report called a type error
+"not enabled": a value name used as a type, a type name used as a value, a
+whole struct, array, field or construction in a position that takes another
+type, a variant case where a whole struct belongs, a struct comparison (D200),
+`zeroed` as an operand, and a match on a number. The last follows [1210] as
+now written: a subject is an atom set, a variant part or a pointer union, and
+a number is compared with `if` rather than matched. The grammar has no literal
+arm, D77 left scalar subjects refused, and the derived parser needed none.
+
+Recorded as boundaries: the rest keep L0304 and their second note says
+"ROADMAP.md R7.20 records this source-form boundary". An untyped struct
+literal needs a named type from its destination [0670]. An array literal takes
+its shape from an array destination or an inferred binding, and an uncounted
+repetition its length from an array destination, so a count-less inferred
+initializer is refused [0560]. Mixed repetition needs an explicitly typed
+destination, repetition a nonzero length or count, and a counted repetition
+infers only a scalar element. A variant part is a member of its struct with no
+value of its own, written with a case rather than copied [0680]; a variant
+case is written where its part is the destination [0690]. A match alias of an
+array is not copied (D85). A construction is a value, not a statement. A module
+image folds only what [1940] knows. Five guards that no source reaches keep
+the same wording rather than becoming compiler defects.
+
+**The alternatives:** a bare case as a standalone atom value, as [0690]'s
+"It is an atom" could be read, was declined: a case identity belongs to its
+part (D74), and making it a first-class value would need a mapping from atoms
+to tags in both directions and a second widening path, for no program that
+wrote one. A variant part as a value of its own was declined because it is the
+general variant value D76 refused, a union with no struct around it. Copying a
+match alias of an array was declined for D85's reason. Matching numbers with
+literal arms was declined for the reasons above. Leaving the discards refused
+was declined because [1930] is kernel text. Keeping every site a pending
+promise was declined because R2.20 is complete and [1830] forbids a note that
+promises nobody's work.
+
+**Pinned by** `positive/r720-discard-aggregate-places`,
+`positive/r720-discard-inferred-values`,
+`positive/r720-inferred-reference-literals`,
+`positive/r720-inferred-aggregate-literals`,
+`positive/r720-payload-array-values`, `runtime/r720-discards-evaluate-once`,
+`runtime/r720-discard-index-traps`,
+`runtime/r720-inferred-arrays-hold-references`,
+`runtime/r720-payload-arrays-take-values`,
+`negative/r720-discard-untyped-struct-literal`,
+`negative/r720-variant-part-has-no-value`,
+`negative/r720-variant-case-needs-its-part`,
+`negative/r720-counted-repetition-scalar-element`,
+`negative/r720-inferred-module-array-scalar-element`,
+`negative/r720-any-element-needs-typed-array`,
+`negative/r720-match-alias-array-not-copied`,
+`negative/r720-module-initializer-boundary`,
+`negative/r720-case-is-not-a-whole-struct`,
+`negative/r720-aggregate-comparison-refused`,
+`negative/r720-match-subject-type`,
+`negative/r720-refused-field-adds-no-cascade`,
+`negative/r491-inferred-repetition-refusals` and
+`negative/array-repetition-countless-inferred-initializer-not-enabled`.
