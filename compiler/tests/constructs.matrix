@@ -20,7 +20,7 @@
 #  and R7.10.
 #  201 constructs, 196 with fixture evidence, 5 with none.
 #  States: 192 executed, 4 compiled, 1 deferred, 1 transferred, 3 advisory.
-#  22 rows name an open owner; 5 have target gaps.
+#  20 rows name an open owner; 5 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
@@ -74,9 +74,9 @@
 0490 | tour | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
 0500 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
 0510 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in
-0520 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | Array: a value
+0520 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Array: a value
 0530 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The length may be inferred from the literal
-0540 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | zeroed is the all-bits-zero image of a type
+0540 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | zeroed is the all-bits-zero image of a type
 0550 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The first of those two properties is also a concept
 0560 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | R7.20 | Repetition, for static patterns that live in flash
 0570 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | Slice: a view
@@ -89,8 +89,8 @@
 0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
 0650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Distinct type
 0660 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | none | Range subtype: checked at assignment and conversion
-0670 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary R2.20:pending | executed | all | none | R7.20 | Struct, block form and inline form
-0680 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | Struct with a variant part
+0670 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary R7.20:boundary | executed | all | none | R7.20 | Struct, block form and inline form
+0680 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Struct with a variant part
 0690 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A case with no payload is written bare
 0700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Construction and conversion use the same form
 0710 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A struct literal is untyped
@@ -131,7 +131,7 @@
 1060 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Every construct has a one-line form
 1070 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A declaration is allowed in a condition
 1080 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A block has the value of its last expression
-1090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Bare block, for scoping
+1090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Bare block, for scoping
 1100 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | defer runs at the end of its block, in reverse order
 1110 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | undo is the same machinery under a condition
 1120 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Checks may be switched off for a region, visibly
@@ -140,7 +140,7 @@
 1150 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Traversal
 1160 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There is no marker on a loop binding
 1170 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | complete runs when the loop finished without break
-1180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Labels use the ordinary name form
+1180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Labels use the ordinary name form
 1190 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | break carries a value with 'with'
 1200 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Because entries are registered where control reaches
 1210 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pattern matching

@@ -1,7 +1,7 @@
 class: negative
-summary: qualified array admission preserves import type rejection
+summary: qualified array admission preserves import type rejection: a type name is not a runtime value
 program: program.ldn
 root: root
-codes: L0304
+codes: L0301
 constructs: 0300, 0590, 1430, 1440, 1450, 1850
 targets: linux-x86-64, macos-arm64

@@ -1,0 +1,9 @@
+class: negative
+summary: D200 refuses a struct, a nested struct field and an array at a comparison with one type error each
+program: main.ldn
+codes: L0301, L0301, L0301
+constructs: 0350, 0520, 0670, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn
+status: 1

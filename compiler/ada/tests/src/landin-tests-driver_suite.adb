@@ -2646,27 +2646,29 @@ package body Landin.Tests.Driver_Suite is
             & "callback := () -> none = break completion end break "
             & "completion end completion end f" & ASCII.LF,
             "L0110", 1, Executable);
+         --  R7.20: a value, a scalar callee or a scalar written where a
+         --  type or a struct belongs is a type error, not a refusal.
          Check
            ("t: type = i32 f: (x: t, t: i32) -> none = end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("t: type = i32 f: (t: i32, x: t) -> none = end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("t: type = i32 f: () -> (x: t, t: i32) = x = 1 t = 2 end f"
             & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("t: type = i32 f: (x: t) -> (t: i32) = t = 1 end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("t: type = i32 f: () -> none = callback := (x: t, t: i32) "
             & "-> none = end end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("t: type = i32 f: () -> none = callback := (t: i32, x: t) "
             & "-> none = end end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: 1) "
             & "end f" & ASCII.LF,
@@ -2691,7 +2693,7 @@ package body Landin.Tests.Driver_Suite is
             "L0201", 1, Executable);
          Check
            ("f: () -> (r: u8) = u8(value: 1) end f" & ASCII.LF,
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: "
             & "missing) end f" & ASCII.LF,
@@ -3000,11 +3002,11 @@ package body Landin.Tests.Driver_Suite is
          Check
            ("box: type (t: type) = struct value: t end box "
             & "item: box(u8) = 5",
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("row: type (t: type, fixed n: usize) = [n]t "
             & "f: () -> none = item: row(u8, 2) = 5 end f",
-            "L0304", 1, Executable);
+            "L0301", 1, Executable);
          Check
            ("f: (value: u32) -> none = _ = value[0 .. 2] end f",
             "L0301", 1, Executable);

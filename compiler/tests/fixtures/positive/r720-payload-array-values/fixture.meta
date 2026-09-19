@@ -1,0 +1,5 @@
+class: positive
+summary: D84 fills a fixed-array payload from an element, call, try, array arithmetic, control expression, deep field, parameter, dereference or slice element
+constructs: 0430, 0520, 0570, 0680, 0690, 0700, 0960
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,13 @@
+error[L0304]: `f16` is not in this version of the language
+  --> ../tests/fixtures/negative/r720-refused-field-adds-no-cascade/main.ldn:2:12
+  |
+2 |     level: f16
+  |            ^^^
+  = note: the tour describes it at [0170]
+  = note: ROADMAP.md R7.20 transfers this to Language evolution
+error[L0201]: `zzz` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/r720-refused-field-adds-no-cascade/main.ldn:12:14
+   |
+12 |     held: [2]zzz
+   |              ^^^
+  = note: [1860]: a name that names nothing is refused

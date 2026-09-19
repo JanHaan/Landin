@@ -1,0 +1,14 @@
+--  [1930]/[1950]: discarding a whole array element still checks its computed
+--  index.  Without the check the program would return 7.
+
+mut rows: [2][4]u32
+
+at: (index: usize) -> (value: usize) =
+    value = index
+end at
+
+public main: () -> (code: i32) =
+    _ = rows[at(1)]
+    _ = rows[at(2)]
+    code = 7
+end main

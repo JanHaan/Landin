@@ -1,0 +1,20 @@
+packet: type = struct
+    kind: variant
+        empty |
+        box: (w: u8, h: u8)
+    end kind
+end packet
+
+take: (item: packet) -> none =
+    _ = item
+end take
+
+--  [0690]: a case forms the variant part it is written into.  Where a whole
+--  struct belongs it has the wrong type.
+f: () -> none =
+    mut item: packet = packet(kind: box(w: 1, h: 2))
+    item.kind = empty
+    typed: packet = box(w: 1, h: 2)
+    item = empty
+    take(box(w: 3, h: 4))
+end f

@@ -1,6 +1,6 @@
 class: negative
-summary: D87 keeps a nested ordinary field outside the general aggregate-value rules
-constructs: 0670, 0750, 1830
+summary: D87 lays out a nested ordinary field and [1930] discards it whole, while a whole struct is not a scalar value
+constructs: 0670, 0750, 1930
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

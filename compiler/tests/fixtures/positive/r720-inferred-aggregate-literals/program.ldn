@@ -1,0 +1,30 @@
+--  D25/[0530]: an inferred literal's first element may itself be a struct
+--  name, a construction, a call, an element, a nested literal or a counted
+--  repetition.  Its type becomes the element type and every later element
+--  is checked against it, as a typed array's elements are.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+holder: type = struct
+    corner: point
+    row: [2]u8
+end holder
+
+make: (x: u8) -> (result: point) =
+    result = point(x: x, y: x)
+end make
+
+f: (p: point, h: holder, points: [2]point, i: usize) -> (total: u8) =
+    names := [p, h.corner]
+    built := [point(x: 1, y: 2), p, make(3)]
+    called := [make(4), p]
+    elements := [points[i], points[0]]
+    fields := [h.row, [5, 6]]
+    grid := [[1, 2], [3, 4], [5, 6]]
+    counted := [[2 of 7], [8, 9]]
+    total = names[1].x + built[2].y + called[0].x + elements[1].y
+        + fields[1][0] + u8(grid[2][1]) + u8(counted[1][1])
+end f

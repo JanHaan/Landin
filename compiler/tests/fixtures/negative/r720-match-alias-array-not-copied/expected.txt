@@ -1,0 +1,7 @@
+error[L0304]: a match alias of an array is not copied; copy the matched struct or index the alias
+  --> ../tests/fixtures/negative/r720-match-alias-array-not-copied/main.ldn:17:21
+   |
+17 |             copy := values
+   |                     ^^^^^^
+  = note: the tour describes it at [0520]
+  = note: ROADMAP.md R7.20 records this source-form boundary

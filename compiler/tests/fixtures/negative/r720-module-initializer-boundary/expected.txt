@@ -1,0 +1,14 @@
+error[L0304]: a module array takes a literal, a repetition, `zeroed`, a name or one field of one, not an element index [1940]
+  --> ../tests/fixtures/negative/r720-module-initializer-boundary/main.ldn:12:1
+   |
+12 | row: [2]u32 = grid[0]
+   | ^^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0520]
+  = note: ROADMAP.md R7.20 records this source-form boundary
+error[L0304]: a module struct takes a construction, `zeroed` or a name, not an element index [1940]
+  --> ../tests/fixtures/negative/r720-module-initializer-boundary/main.ldn:13:1
+   |
+13 | corner: point = points[1]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: ROADMAP.md R7.20 records this source-form boundary

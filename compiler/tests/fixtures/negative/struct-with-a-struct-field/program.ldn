@@ -2,8 +2,8 @@ inner: type = struct
     q: u32
 end inner
 
---  D87 gives the containing type zeroed runtime storage.  The nested field
---  itself is still not a general aggregate value.
+--  D87 gives the containing type zeroed runtime storage.  [1930] discards
+--  the nested field whole, and a whole struct is still not a scalar.
 outer: type = struct
     part: inner
     count: u32
@@ -13,4 +13,5 @@ mut here: outer
 
 f: () -> none =
     _ = here.part
+    value: u32 = here.part
 end f

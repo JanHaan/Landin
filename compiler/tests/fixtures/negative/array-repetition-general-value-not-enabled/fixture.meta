@@ -1,6 +1,6 @@
 class: negative
-summary: array repetition is not a general array value
-constructs: 0040, 0050, 0520, 0560, 1740, 1810
+summary: [1930] discards a counted repetition, while an uncounted one takes its length from an array destination a discard does not supply
+constructs: 0040, 0050, 0520, 0560, 1740, 1810, 1930
 program: program.ldn
 codes: L0304
 targets: linux-x86-64, macos-arm64

@@ -1,0 +1,5 @@
+class: positive
+summary: [1930] discards every whole array and struct place, from a binding, parameter, return, field, element, dereference, slice element or match alias
+constructs: 0430, 0520, 0570, 0670, 0680, 1210, 1220, 1740, 1930
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

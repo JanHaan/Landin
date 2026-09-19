@@ -1,0 +1,56 @@
+--  [1930]: every whole array or struct place is discarded where it stands:
+--  local and module storage, a parameter, a named return, a field
+--  at any depth, an element, a dereference, a slice element and a match
+--  alias.  Computed indexes still run; nothing is copied.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+child: type = struct
+    corner: point
+    row: [2]u8
+end child
+
+holder: type = struct
+    row: [2]u8
+    inner: child
+    kind: variant
+        dot |
+        box: (w: [2]u8) |
+        pair: (p: point)
+    end kind
+end holder
+
+mut state: holder
+grid: [2][2]u8 = [[1, 2], [3, 4]]
+
+f: (row: [2]u8, p: point, q: ptr point, r: ptr [2]u8, s: [][2]u8,
+    i: usize) -> (result: point) =
+    h: holder = zeroed
+    points: [2]point = zeroed
+    result = p
+    _ = h
+    _ = h.row
+    _ = h.inner
+    _ = h.inner.corner
+    _ = h.inner.row
+    _ = row
+    _ = p
+    _ = result
+    _ = q.val
+    _ = r.val
+    _ = s[i]
+    _ = grid
+    _ = grid[i]
+    _ = points[i]
+    _ = points[0]
+    _ = state
+    _ = state.inner.row
+    match h.kind
+        dot: _ = 0
+        box(w): _ = w
+        pair(v): _ = v
+    end match
+end f

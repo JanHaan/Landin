@@ -1,6 +1,6 @@
 class: negative
-summary: D77 match requires a directly selected variant part
-constructs: 0680, 0690, 1210, 1810, 1830
+summary: [1210] a match subject is an atom set, a variant part or a pointer union, so a number is a type error
+constructs: 0680, 0690, 1210, 1810
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304
+codes: L0301
