@@ -4829,7 +4829,7 @@ package body Landin.Backend.X86_64 is
                   declare
                      Done : constant String := Value_Label (Value) & "_valid";
                   begin
-                     if Landin.IR.Is_Failure_Status_Load
+                     if Landin.IR.Admits_Reserved_Zero
                        (Of_Unit, Item, Value)
                      then
                         Emit ("cmpl $0, " & Value_Operand (Value));

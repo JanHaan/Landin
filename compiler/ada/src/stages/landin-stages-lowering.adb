@@ -441,6 +441,13 @@ package body Landin.Stages.Lowering is
          return Nominals (Position);
       end Nominal_For;
 
+      --  [0480]/[1870]: whether a checker identity is a union of two or
+      --  more atoms and one pointer.  No identity is not one.
+      function Is_Union_Nominal
+        (Source : Landin.Checking.Nominal_Type_Id) return Boolean
+      is (Source /= Landin.Checking.No_Nominal_Type
+          and then Landin.Checking.Is_Pointer_Union (Types.all, Source));
+
       subtype Source_Signature is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Signature_Count (Types.all));
@@ -1343,6 +1350,19 @@ package body Landin.Stages.Lowering is
       --  D189/[0480]: a pointer union's two cases are told apart by the
       --  reserved zero, so the whole form is one comparison against it.
       procedure Lower_Pointer_Union_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+
+      --  [0480]/[1870]: a union of two or more atoms and one pointer.  The
+      --  subject is held in its own two-cell frame cell; `ptr` is taken
+      --  when its code cell is the reserved zero, and an atom arm when the
+      --  code is that atom, exactly as an atom-set match compares it.
+      procedure Lower_Union_Match
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
@@ -3340,6 +3360,208 @@ package body Landin.Stages.Lowering is
          end if;
       end Copy_Shaped_Storage;
 
+      --  [0480]/[1870]: true when Node's own value is not already the union
+      --  the destination Shape holds, so writing it there widens: an atom, a
+      --  pointer, a one-atom union or a union with fewer atoms.  Checking
+      --  admitted exactly these; this only recognises which one arrived.
+      function Widens_Into_Union
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Shape : IR.Field_Shape)
+         return Boolean
+      is (Shape.Kind = IR.Aggregate_Field_Shape
+          and then Shape.Nominal /= IR.No_Nominal_Type
+          and then IR.Is_Pointer_Union (Unit.all, Shape.Nominal)
+          and then
+            (Type_At (Of_Tree, Node) in Ty.Atom_Value | Ty.Pointer_Value
+             or else
+               (Type_At (Of_Tree, Node) = Ty.Aggregate
+                and then Nominal_For
+                  (Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node))
+                    /= Shape.Nominal)));
+
+      --  [0480]/[1870]: build the two cells.  Cell 1 is the atom code and
+      --  cell 2 the pointer; code zero, which no atom has, is the pointer
+      --  case.  Every case is built in a union cell of its own that starts
+      --  cleared and is then copied whole, so the one place that writes the
+      --  reserved zero is that whole-storage clear, never a numeric store
+      --  into the atom-typed cell, and an atom case leaves its unread
+      --  pointer cell zero exactly as its static image does.  A one-atom
+      --  union and a smaller union branch on their own reserved zero and
+      --  copy whichever case they hold.
+      procedure Write_Union_Value
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Shape       : IR.Field_Shape;
+         Destination : Stored_Place);
+
+      procedure Write_Union_Value
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Shape       : IR.Field_Shape;
+         Destination : Stored_Place)
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Pointer_Shape : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit.all, Shape, 2);
+         Built : IR.Slot_Id := IR.No_Slot;
+
+         --  The cleared cell every case is built in.  Allocated on first
+         --  use so that an evaluation which never returns makes none.
+         procedure Clear_Built;
+
+         procedure Clear_Built is
+         begin
+            if Built = IR.No_Slot then
+               Built := Shaped_Temporary (Shape, Site);
+            end if;
+            IR.Emit_Array_Clear
+              (Unit.all, Filling, (Kind => IR.Frame_Slot, Slot => Built),
+               Site);
+         end Clear_Built;
+
+         procedure Write_Pointer (Pointer : IR.Value_Id);
+
+         procedure Write_Pointer (Pointer : IR.Value_Id) is
+         begin
+            Clear_Built;
+            IR.Emit_Store_Slot_Field
+              (Unit.all, Filling, Built, 2, Pointer, Site);
+         end Write_Pointer;
+
+         procedure Write_Code (Code : IR.Value_Id);
+
+         procedure Write_Code (Code : IR.Value_Id) is
+         begin
+            Clear_Built;
+            IR.Emit_Store_Slot_Field (Unit.all, Filling, Built, 1, Code, Site);
+         end Write_Code;
+      begin
+         case Type_At (Of_Tree, Node) is
+            when Ty.Atom_Value =>
+               declare
+                  Code : constant IR.Value_Id :=
+                    Lower_Expression (Of_Tree, Node, Scope);
+               begin
+                  if Current = IR.No_Block then
+                     return;
+                  end if;
+                  Write_Code (Code);
+               end;
+
+            when Ty.Pointer_Value =>
+               declare
+                  Reference : constant Landin.Checking.Reference_Id :=
+                    Landin.Checking.Reference_Of (Types.all, Of_Tree, Node);
+                  Empty : constant Res.Declaration_Id :=
+                    Landin.Checking.Descriptor_Of
+                      (Types.all, Reference).Empty_Atom;
+                  Pointer : constant IR.Value_Id :=
+                    Lower_Expression (Of_Tree, Node, Scope);
+               begin
+                  if Current = IR.No_Block then
+                     return;
+                  elsif Empty = Res.No_Declaration then
+                     Write_Pointer (Pointer);
+                  else
+                     --  D189's carrier: zero is its one atom.
+                     declare
+                        Saved : constant IR.Slot_Id := IR.Add_Slot
+                          (Unit.all, Filling, Ty.Usize, Res.No_Declaration,
+                           Site, Pointee => Pointer_Shape.Pointee);
+                        Absent : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Node, Scope);
+                        Present : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Node, Scope);
+                        Join : constant IR.Block_Id :=
+                          Fresh (Of_Tree, Node, Scope);
+                     begin
+                        Built := Shaped_Temporary (Shape, Site);
+                        IR.Emit_Store
+                          (Unit.all, Filling, Saved, Pointer, Site);
+                        IR.Emit_Branch
+                          (Unit.all, Filling,
+                           IR.Emit_Binary
+                             (Unit.all, Filling, IR.Equal_To,
+                              IR.Emit_Load (Unit.all, Filling, Saved, Site),
+                              IR.Emit_Number
+                                (Unit.all, Filling, Ty.Usize, 0, False, Site),
+                              Ty.Bool, Site),
+                           Absent, Present, Site);
+                        IR.Leave_Block (Unit.all, Filling);
+                        Current := IR.No_Block;
+                        Open (Absent);
+                        Write_Code
+                          (IR.Emit_Atom
+                             (Unit.all, Filling, Empty,
+                              Atom_Set_For
+                                (Landin.Checking.Atom_Set_Of
+                                   (Types.all, Empty)),
+                              Site));
+                        Close_With_Jump (Join, Site);
+                        Open (Present);
+                        Write_Pointer
+                          (IR.Emit_Load (Unit.all, Filling, Saved, Site));
+                        Close_With_Jump (Join, Site);
+                        Open (Join);
+                     end;
+                  end if;
+               end;
+
+            when Ty.Aggregate =>
+               declare
+                  Source_Shape : constant IR.Field_Shape :=
+                    Neutral_Value_Shape (Of_Tree, Node);
+                  Saved : constant IR.Slot_Id :=
+                    Shaped_Temporary (Source_Shape, Site);
+               begin
+                  Lower_Stored_Expression (Of_Tree, Node, Scope, Saved);
+                  if Current = IR.No_Block then
+                     return;
+                  end if;
+                  declare
+                     Is_Atom : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Is_Pointer : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Join : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                  begin
+                     Built := Shaped_Temporary (Shape, Site);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        IR.Emit_Failure_Test
+                          (Unit.all, Filling,
+                           IR.Emit_Load_Slot_Field
+                             (Unit.all, Filling, Saved, 1, Ty.U32, Site),
+                           Site),
+                        Is_Atom, Is_Pointer, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+                     Open (Is_Atom);
+                     Write_Code
+                       (IR.Emit_Load_Slot_Field
+                          (Unit.all, Filling, Saved, 1, Ty.U32, Site));
+                     Close_With_Jump (Join, Site);
+                     Open (Is_Pointer);
+                     Write_Pointer
+                       (IR.Emit_Load_Slot_Field
+                          (Unit.all, Filling, Saved, 2, Ty.Usize, Site));
+                     Close_With_Jump (Join, Site);
+                     Open (Join);
+                  end;
+               end;
+
+            when others =>
+               raise Landin.Compiler_Defect with
+                 "a value checking did not admit widened into a union";
+         end case;
+
+         Copy_Shaped_Storage
+           (Stored_At ((Kind => IR.Frame_Slot, Slot => Built)),
+            Destination, Shape, Site);
+      end Write_Union_Value;
+
       --  One contextual writer serves array children, call temporaries and
       --  ordinary constructors.  Counts of emitted operations follow source
       --  structure, never a target-sized repetition count.
@@ -3495,7 +3717,9 @@ package body Landin.Stages.Lowering is
          Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
          Kind : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
       begin
-         if Landin.Checking.Distinct_Conversion_Of
+         if Widens_Into_Union (Of_Tree, Node, Shape) then
+            Write_Union_Value (Of_Tree, Node, Scope, Shape, Destination);
+         elsif Landin.Checking.Distinct_Conversion_Of
            (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
            and then Shape.Kind /= IR.Scalar_Field_Shape
          then
@@ -4233,6 +4457,28 @@ package body Landin.Stages.Lowering is
          Ignored : IR.Value_Id;
          pragma Unreferenced (Ignored);
       begin
+         --  [0480]/[1870]: a union destination may receive a value of a
+         --  narrower type; Write_Union_Value builds its two cells.
+         if IR.Is_Aggregate (Unit.all, Filling, Destination) then
+            declare
+               Place : constant Stored_Place :=
+                 Stored_At
+                   ((Kind => IR.Frame_Slot, Slot => Destination),
+                    Destination_Field, Destination_Path);
+               Shape : constant IR.Field_Shape :=
+                 Stored_Shape
+                   (Place,
+                    (Kind    => IR.Aggregate_Field_Shape,
+                     Nominal => IR.Nominal_Of
+                       (Unit.all, Filling, Destination),
+                     others  => <>));
+            begin
+               if Widens_Into_Union (Of_Tree, Node, Shape) then
+                  Write_Union_Value (Of_Tree, Node, Scope, Shape, Place);
+                  return;
+               end if;
+            end;
+         end if;
          if Landin.Checking.Text_Conversion_Of
            (Types.all, Of_Tree, Node) /= Landin.Checking.No_Text_Conversion
          then
@@ -4759,6 +5005,29 @@ package body Landin.Stages.Lowering is
                            Field => Place.Base,
                            Nested => Stored_Steps (Place));
                      end if;
+                  end;
+               elsif Parameter.Kind = Ty.Aggregate
+                 and then Widens_Into_Union
+                   (Of_Tree, Argument, Neutral_Result_Part (Parameter))
+               then
+                  --  [0480]/[1870]: an atom, a pointer or a narrower union
+                  --  is built into the union parameter's own temporary
+                  --  where it is written, exactly as a constructed value.
+                  declare
+                     Shape : constant IR.Field_Shape :=
+                       Neutral_Result_Part (Parameter);
+                     Temporary : constant IR.Slot_Id := Shaped_Temporary
+                       (Shape, Site_Of (Of_Tree, Argument));
+                     Place : constant IR.Storage :=
+                       (Kind => IR.Frame_Slot, Slot => Temporary);
+                  begin
+                     Write_Shaped_Value
+                       (Of_Tree, Argument, Scope, Shape, Stored_At (Place));
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     Given (Formal_Position) := IR.Emit_Storage_Address
+                       (Unit.all, Filling, Place, Site_Of (Of_Tree, Argument));
                   end;
                elsif Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
@@ -8741,6 +9010,154 @@ package body Landin.Stages.Lowering is
          end if;
       end Lower_Pointer_Union_Match;
 
+      procedure Lower_Union_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Subject : constant Syn.Node_Id :=
+           Syn.Match_Subject (Of_Tree, Node);
+         Saved : constant IR.Slot_Id :=
+           Shaped_Temporary (Neutral_Value_Shape (Of_Tree, Subject), Site);
+         Merge : IR.Block_Id := IR.No_Block;
+
+         procedure Bind (Arm : Syn.Node_Id);
+         procedure Close_To_Merge;
+
+         --  The binding is cell 2, loaded only on the edge whose code cell
+         --  was the reserved zero.
+         procedure Bind (Arm : Syn.Node_Id) is
+         begin
+            if Syn.Kind (Of_Tree, Syn.Match_Pattern (Of_Tree, Arm))
+                 /= Syn.Pointer_Case
+              or else Syn.Match_Binding_Count (Of_Tree, Arm) = 0
+            then
+               return;
+            end if;
+            declare
+               Binding : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Binding (Of_Tree, Arm, 1);
+               Id : constant Res.Declaration_Id :=
+                 Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+            begin
+               if Id = Res.No_Declaration then
+                  return;
+               end if;
+               IR.Emit_Store
+                 (Unit.all, Filling, Slot_For (Of_Tree, Binding, Id),
+                  IR.Emit_Load_Slot_Field
+                    (Unit.all, Filling, Saved, 2, Ty.Usize, Site),
+                  Site);
+            end;
+         end Bind;
+
+         procedure Close_To_Merge is
+         begin
+            if Merge = IR.No_Block then
+               Merge := Fresh (Of_Tree, Node, Scope);
+            end if;
+            Close_With_Jump (Merge, Site);
+         end Close_To_Merge;
+      begin
+         Lower_Stored_Expression (Of_Tree, Subject, Scope, Saved);
+         if Current = IR.No_Block then
+            return;
+         end if;
+
+         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+            declare
+               Arm : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+               Pattern : constant Syn.Node_Id :=
+                 Syn.Match_Pattern (Of_Tree, Arm);
+               Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
+               Inside : constant Res.Scope_Id :=
+                 Res.Scope_At (Meanings.all, Of_Tree, Runs);
+               Taken : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Runs, Inside);
+               Present : constant Boolean :=
+                 Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case;
+               Wildcard : constant Boolean :=
+                 not Present
+                 and then Syn.Name (Of_Tree, Pattern)
+                            = Landin.Source.Names.No_Name;
+               Last : constant Boolean :=
+                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+            begin
+               if Wildcard or else Last then
+                  Close_With_Jump (Taken, Site);
+                  Open (Taken);
+                  Bind (Arm);
+                  Lower_Statements
+                    (Of_Tree, Runs, Inside, Result, Destination,
+                     Destination_Field, Destination_Path);
+                  if Current /= IR.No_Block then
+                     Close_To_Merge;
+                  end if;
+                  exit when Wildcard;
+               else
+                  declare
+                     Next : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Code : constant IR.Value_Id :=
+                       IR.Emit_Load_Slot_Field
+                         (Unit.all, Filling, Saved, 1, Ty.U32, Site);
+                  begin
+                     if Present then
+                        --  Failure_Test is true for a nonzero carrier, which
+                        --  here is an atom; zero is the pointer case.
+                        IR.Emit_Branch
+                          (Unit.all, Filling,
+                           IR.Emit_Failure_Test
+                             (Unit.all, Filling, Code, Site),
+                           Next, Taken, Site);
+                     else
+                        declare
+                           Means : constant Res.Declaration_Id :=
+                             Res.Bound_To (Meanings.all, Of_Tree, Pattern);
+                        begin
+                           IR.Emit_Branch
+                             (Unit.all, Filling,
+                              IR.Emit_Binary
+                                (Unit.all, Filling, IR.Equal_To, Code,
+                                 IR.Emit_Atom
+                                   (Unit.all, Filling, Means,
+                                    Atom_Set_For
+                                      (Landin.Checking.Atom_Set_Of
+                                         (Types.all, Means)), Site),
+                                 Ty.Bool, Site),
+                              Taken, Next, Site);
+                        end;
+                     end if;
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Taken);
+                     Bind (Arm);
+                     Lower_Statements
+                       (Of_Tree, Runs, Inside, Result, Destination,
+                        Destination_Field, Destination_Path);
+                     if Current /= IR.No_Block then
+                        Close_To_Merge;
+                     end if;
+
+                     Open (Next);
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if Merge /= IR.No_Block then
+            Open (Merge);
+         end if;
+      end Lower_Union_Match;
+
       procedure Lower_Match
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -8760,6 +9177,15 @@ package body Landin.Stages.Lowering is
                  = Ty.Pointer_Value
          then
             Lower_Pointer_Union_Match
+              (Of_Tree, Node, Scope, Result, Destination,
+               Destination_Field, Destination_Path);
+         elsif Type_At (Of_Tree, Syn.Match_Subject (Of_Tree, Node))
+                 = Ty.Aggregate
+           and then Is_Union_Nominal
+             (Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Syn.Match_Subject (Of_Tree, Node)))
+         then
+            Lower_Union_Match
               (Of_Tree, Node, Scope, Result, Destination,
                Destination_Field, Destination_Path);
          else
@@ -11703,6 +12129,16 @@ package body Landin.Stages.Lowering is
                         begin
                            pragma Unreferenced (Ignored);
                         end;
+                     elsif Held in Ty.Pointer_Value | Ty.Atom_Value
+                       and then Destination /= IR.No_Slot
+                       and then IR.Is_Aggregate
+                         (Unit.all, Filling, Destination)
+                     then
+                        --  [0480]/[1870]: an atom or a pointer answering a
+                        --  union destination widens into its two cells.
+                        Lower_Stored_Expression
+                          (Of_Tree, Stmt, Scope, Destination,
+                           Destination_Field, Destination_Path);
                      elsif Held in
                        Ty.Scalar_Name | Ty.Function_Value | Ty.Pointer_Value
                           | Ty.Atom_Value
@@ -12023,6 +12459,18 @@ package body Landin.Stages.Lowering is
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, Value, Scope, Where);
+                           elsif Is_Union_Nominal
+                             (Landin.Checking.Nominal_Of (Types.all, Id))
+                           then
+                              --  [0480]/[1870]: an atom, a pointer or a
+                              --  narrower union widens; a union is copied.
+                              Write_Shaped_Value
+                                (Of_Tree, Value, Scope,
+                                 Neutral_Body
+                                   (Landin.Checking.Nominal_Of
+                                      (Types.all, Id)),
+                                 Stored_At
+                                   ((Kind => IR.Frame_Slot, Slot => Where)));
                            elsif Is_Struct_Construction (Of_Tree, Value) then
                               Write_Struct_Literal
                                 (Value,
@@ -12473,6 +12921,46 @@ package body Landin.Stages.Lowering is
                                     Destination_Field => Destination.Base,
                                     Destination_Nested =>
                                       Stored_Steps (Destination));
+                              end;
+                           end if;
+                        end;
+
+                     --  [0480]/[1870]: a pointer union place.  [0410] reaches
+                     --  the place first; the value, which may widen, is then
+                     --  built in its own cell and copied whole, so a source
+                     --  that reads the place still sees its old contents.
+                     elsif Landin.Checking.Type_Of
+                          (Types.all, Of_Tree,
+                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
+                       and then Is_Union_Nominal
+                         (Landin.Checking.Nominal_Of
+                            (Types.all, Of_Tree,
+                             Syn.Target_Of (Of_Tree, Stmt)))
+                     then
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Shape : constant IR.Field_Shape :=
+                             Neutral_Value_Shape (Of_Tree, Place);
+                           Reached : constant Stored_Place :=
+                             Lower_Stored_Place (Of_Tree, Place, Scope);
+                        begin
+                           if Current /= IR.No_Block then
+                              declare
+                                 Temporary : constant IR.Slot_Id :=
+                                   Shaped_Temporary (Shape, Site);
+                                 Built : constant Stored_Place :=
+                                   Stored_At
+                                     ((Kind => IR.Frame_Slot,
+                                       Slot => Temporary));
+                              begin
+                                 Write_Shaped_Value
+                                   (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
+                                    Scope, Shape, Built);
+                                 if Current /= IR.No_Block then
+                                    Copy_Shaped_Storage
+                                      (Built, Reached, Shape, Site);
+                                 end if;
                               end;
                            end if;
                         end;
@@ -13882,7 +14370,14 @@ package body Landin.Stages.Lowering is
             Template : constant Res.Declaration_Id :=
               Landin.Checking.Template_Of (Types.all, Source);
          begin
-            Nominals (Position) := IR.Add_Nominal_Type (Unit.all, Template);
+            --  [0480]/[1870]: a pointer union is structural and has no
+            --  template; it carries its canonical spelling instead.
+            Nominals (Position) :=
+              (if Landin.Checking.Is_Pointer_Union (Types.all, Source)
+               then IR.Add_Pointer_Union_Type
+                 (Unit.all,
+                  Landin.Checking.Union_Spelling (Types.all, Source))
+               else IR.Add_Nominal_Type (Unit.all, Template));
          end;
       end loop;
 
@@ -15889,6 +16384,23 @@ package body Landin.Stages.Lowering is
                       Count  => 0,
                       Value  => 0,
                       others => <>));
+               elsif Shape.Nominal /= IR.No_Nominal_Type
+                 and then IR.Is_Pointer_Union (Unit.all, Shape.Nominal)
+                 and then Type_At (Of_Tree, Given) = Ty.Atom_Value
+               then
+                  --  [0480]/[1870]: an atom's static union image is its
+                  --  code beside a zero pointer cell that is never read.
+                  declare
+                     First : constant Positive :=
+                       Reserve_Children (Position, IR.Nested, 2);
+                  begin
+                     Build_Field
+                       (IR.Nth_Aggregate_Field (Unit.all, Shape, 1),
+                        Given, First);
+                     Build_Field
+                       (IR.Nth_Aggregate_Field (Unit.all, Shape, 2),
+                        Syn.No_Node, First + 1);
+                  end;
                elsif Landin.Checking.Distinct_Conversion_Of
                  (Types.all, Of_Tree, Given)
                    /= Landin.Checking.No_Nominal_Type
@@ -16106,6 +16618,18 @@ package body Landin.Stages.Lowering is
 
             if Array_Root then
                Build_Array (IR.Whole_Array_Shape (Unit.all, Item), Literal, 1);
+            elsif IR.Nominal_Of (Unit.all, Item) /= IR.No_Nominal_Type
+              and then IR.Is_Pointer_Union
+                (Unit.all, IR.Nominal_Of (Unit.all, Item))
+              and then Type_At (Of_Tree, Literal) = Ty.Atom_Value
+            then
+               --  [0480]/[1870]: an atom's code beside a zero pointer cell.
+               Build_Field
+                 (IR.Nth_Field_Shape (Unit.all, Item, 1), Literal, 1,
+                  Top_Field => 1);
+               Build_Field
+                 (IR.Nth_Field_Shape (Unit.all, Item, 2), Syn.No_Node, 2,
+                  Top_Field => 2);
             elsif Landin.Checking.Distinct_Conversion_Of
               (Types.all, Of_Tree, Literal)
                 /= Landin.Checking.No_Nominal_Type
@@ -17332,6 +17856,19 @@ package body Landin.Stages.Lowering is
                   /= Landin.Checking.No_Nominal_Type
               and then Landin.Checking.Type_Of (Types.all, Id)
                 in Ty.Aggregate | Ty.Fixed_Array
+            then
+               Set_Recursive_Image (Id, Their_Tree.all, Value);
+               Where (Id) := Resolved;
+               return;
+            end if;
+
+            --  [0480]/[1870]: a module union takes a static image from an
+            --  atom, or from another module union's image.
+            if Value /= Syn.No_Node
+              and then Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+              and then Is_Union_Nominal
+                (Landin.Checking.Nominal_Of (Types.all, Id))
+              and then Type_At (Their_Tree.all, Value) = Ty.Atom_Value
             then
                Set_Recursive_Image (Id, Their_Tree.all, Value);
                Where (Id) := Resolved;

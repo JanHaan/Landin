@@ -177,11 +177,6 @@ package Landin.Diagnostics.Checking is
       --  refusal: [1580]'s hosted-scalar boundary already refuses it and
       --  keeps that report, which R4.40 owns.
       Constrained_Composition,
-      --  D189 enables [0480]'s one-atom pointer union as a plain pointer
-      --  reserving zero.  Two or more atoms beside a pointer need the
-      --  tag-plus-pointer carrier [1870] describes, which is an IR pair,
-      --  storage, an ABI position and a backend of its own.
-      Tagged_Pointer_Union,
       --  D212 withdraws [0820]'s builtin type and lexical block.  Keep
       --  migration guidance for the unresolved type spelling; a declared
       --  ordinary type of that name has already resolved normally.
@@ -200,7 +195,6 @@ package Landin.Diagnostics.Checking is
             when Zeroed_Value       => "[0540]",
             when External_C_ABI     => "[1580]",
             when Constrained_Composition => "[0660]",
-            when Tagged_Pointer_Union => "[0480]",
             when Arena_Region       => "[0820]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -264,10 +258,6 @@ private
             --  element, field or foreign position; R4.10 closes [0660]
             --  itself and deliberately does not decide that.
             when Constrained_Composition => "R7.20",
-            --  R7.20 owns the tagged carrier a multi-atom pointer union
-            --  needs; D189 closes [0480]'s one-atom form and deliberately
-            --  does not decide that one.
-            when Tagged_Pointer_Union => "R7.20",
             --  D212 closes both forms with permanent withdrawal and
             --  explicit ordinary allocator migration guidance.
             when Arena_Region       => "R4.80");

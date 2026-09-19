@@ -1,3 +1,0 @@
-none_found: atom
-denied: atom
-maybe_ptr: type = none_found | denied | ptr mut u32
