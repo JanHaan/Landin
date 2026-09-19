@@ -9231,7 +9231,7 @@ caching, parallel workload scheduling and Darwin resume remain separate work.
 
 | Intake | Work retained | Scheduling and closure |
 |---|---|---|
-| R551-29 | Range-subtype composition and references (D188), multi-atom pointer unions (D189), shared-name binding/field/parameter/result forms, u128/i128 and f16 (D190). | Scheduled R7.20 after R7.10. These are pending normative decisions/implementation, not successor debt discharged by R5 parity. Specify all applicable hosted and selected freestanding carriers, conversions, ABI/debug and diagnostics; the inherited x86 cost discussion is not a Darwin implementation plan. Amend spec/tour and derived tests together if the language changes. |
+| R551-29 | Range-subtype composition and references (D188), multi-atom pointer unions (D189), shared-name binding/field/parameter/result forms, u128/i128 and f16 (D190). | Dispositioned by R7.20 and closed by its exact acceptance and delivery binding. D233 implements shared names and D235 the several-atom pointer union on all three targets with ABI, GDB/LLDB and diagnostics evidence; D236 records range-subtype composition as a permanent boundary; D237 amends [0150] and [0170] and transfers u128, i128 and f16 to Language evolution with a program that needs them as the trigger. The per-target cost R7.20 measured is recorded there, including the Cortex-M0 four-word plan. |
 | R551-30 | Repeated follow-on diagnostics after refused selected imports. | Scheduled R7.40 after its existing dependencies. Retain the original import refusal and suppress only dependent reports; exact diagnostics and an independent valid-use control prove completion. |
 | R551-31 | Packed encodings, concurrency memory model, device/startup/backend/core behavior, the named `noreturn` refusal and complete prototype 1. | Implemented through R6.100's exact milestone binding for the selected profile; broader tooling/library/debugger-presentation limits remain R551-33/34/26. R6.10 first selects reproducible CPU/peripheral lanes; R6.50/R6.60 own target reach, map and startup behavior; R6.70 owns `noreturn`. R6.80 owns checked-in device fixtures, not an unbuilt general SVD generator. No Cortex-M implementation enters R5.51. |
 | R551-32 | Stable separate compilation/interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting (inherited B3). | Scale and self-hosting. Activate at successor planning after the current roadmap endpoint or an explicit scope decision. Preserve the tested seams, whole-program behavior and complete interface identity; no serialized IR freeze or self-hosting implementation now. |
@@ -9265,7 +9265,7 @@ those original detailed repair/refutation rows as completion evidence.
 | R5.20-R5.50 retained resource and operational contracts | Resource dimensions R551-06; image/branch reach R551-07; expansion R551-08/R551-09; lookup/planning/code quality R551-10/R551-11/R551-12; scheduling/reuse R551-13; Darwin resume R551-14; Nix R551-15; presentation/source deployment R551-26/R551-27; evidence retention R551-23; publication R551-24. R5.30's selected parity handoff and R5.40's derivative gap closed only at R5.50, whose limits remain. |
 | Inherited A1-A8, B1-B6 | A1/A5/A8 close their live evidence obligations at R7.40 (R551-17); A2/A3/A6/A7 retain R2/R3 closures; A4/B1 are R551-31; B2 retains R4.40 and R5.30 ABI contracts. B3 is R551-32, B4/B6 R551-33, B5 R551-34. |
 | Inherited C1-C6, D1-D6, E1-E3, F1-F3 | C1-C5/E1-E3 are R551-35 with every original trigger preserved, including no invented trigger for C4. C6 retains hosted closure and R6.100. D1/D2/D4 retain their implemented decisions and evidence conditions; D3/D6 link R551-33; D5 retains the rejected C/LLVM alternatives and R6.50 own-backend obligation. F1 retains R7.60; F2 is the continuing mechanical gate, exercised by R551-04; F3 retains R2.70/R2.80/R3.70 and R4.50. R7.30 dispositions every row; R7.70 preserves transfers. |
-| Successor families and delayed normative work | Scale/self-hosting R551-06/07/08/13/14/15/16/32; competitive optimization R551-09/10/11/12; companion/ecosystem R551-33; broader library R551-34; language evolution R551-25/26/28/35; release readiness R551-19/20/21/22/23/24/27/36. Spec [1830], D188/D189/D190 and shared-name forms remain R551-29/R7.20; selected-import recovery is R551-30/R7.40; device/concurrency/packed/noreturn obligations remain R551-31/R6. |
+| Successor families and delayed normative work | Scale/self-hosting R551-06/07/08/13/14/15/16/32; competitive optimization R551-09/10/11/12; companion/ecosystem R551-33; broader library R551-34; language evolution R551-25/26/28/35; release readiness R551-19/20/21/22/23/24/27/36. R7.20 dispositioned spec [1830]'s R551-29 forms: D233/D235 implemented, D236 bounded and D237 transferred u128/i128/f16 to language evolution; selected-import recovery is R551-30/R7.40; device/concurrency/packed/noreturn obligations remain R551-31/R6. |
 
 Evidence inspected at accepted `51229dc368b2fec72a20bf912ae2c1a9996d62bd`:
 Linux bundle `20260915T150424Z-2e211b530e85`, debug attempt
@@ -9342,7 +9342,7 @@ activation condition. R7.30 and R7.70 preserve this ledger through phase handoff
 | R551-26 | supported-limit | limit | Language evolution | Concrete debugger-usability proposal | Truthful types/locations, source availability and native sessions for new promises. |
 | R551-27 | supported-limit | limit | Release readiness | Requested driver or distribution expansion | Pinned native producer/consumer, packaging and identity evidence before widening support. |
 | R551-28 | observation | watch | Language evolution | Valid counterexample or explicit semantic proposal | Present-contract defects return to implementation owner; semantic changes need specification and tests. |
-| R551-29 | normative | scheduled | R7.20 | After R7.10 under existing dependencies | Decisions and implementations for D188/D189/D190 and shared-name forms across applicable targets, with spec/tour and tests. |
+| R551-29 | normative | implemented | R7.20 | Exact R7.20 acceptance and delivery binding | D233/D235 implemented on all three targets, D236's recorded boundary and D237's tour-amended transfer of u128, i128 and f16 to Language evolution. |
 | R551-30 | defect | scheduled | R7.40 | After existing R7.40 dependencies | Original import refusal, suppressed dependent reports and exact diagnostics with independent valid use. |
 | R551-31 | normative | implemented | R6.100 | Exact R6 milestone acceptance and delivery binding | R6.10-R6.100 selected CPU/peripheral, packed/concurrency, map/startup/backend/core/noreturn, complete prototype 1 and bounded source/resource evidence; R551-33/34 and R551-26 limits remain separate. |
 | R551-32 | observation | successor | Scale and self-hosting | Successor planning after R7.70 or explicit scope decision | Tested seams and complete interface/package identity; preserve whole-program semantics. |
@@ -12043,7 +12043,7 @@ means the generated row's evidence is the whole explanation.
 
 ### R7.20 — Close deferred normative behavior
 
-Status: planned
+Status: complete
 Depends on: R4.50, R7.10
 
 Use measured compiler evidence to implement or amend remaining normative work,
@@ -12101,6 +12101,179 @@ f16, refused by name and re-owned here by D190.
 
 Exit evidence: `[1310]` and every other formerly delayed normative row have
 implementation and tests or an evidence-backed tour amendment.
+
+Completion is bound to the exact-revision routine acceptance with debugger
+coverage and the delivery below. Development runs and failed or interrupted
+candidates cannot supply that binding.
+
+Repository and inherited evidence audit:
+
+The starting checkout was clean on `r710-construct-inventory` at accepted
+R7.10 `6a8ead4525d5c9b32b6608114a519ec94d939637`, tree
+`59cb6417f694adcd50261e3d2025b062c1dfd8be`. Its annotated approval object
+`acb91ab8c580344ca00459baadf25354e0cf904a` binds Linux routine run
+`20260919T070145Z-c1c14ef22b3f` (all five jobs passed) and Darwin run
+`20260919T070143Z-d7b016ccdc1f` to archive SHA-256
+`5793dec5bb2fab865f98c1afc0a8e34e265792e56618ed2b798da251801ff213`; the tag's
+annotation equals that recorded approval. Canonical and GitHub namespaces
+matched at 50 rows (25 logical refs excluding HEAD plus 24 peeled tags) with no
+publication lock. Guarded Pages 1891674, mirror 1891675, tag jobs
+1891676/1891677 and lock-cleanup mirror 1891681 succeeded, and all 25 rendered
+pages on both domains matched verified rendering byte for byte. R4.50 and R7.10
+are complete. R7.10's inventory named R7.20 on twenty rows — [0100], [0150],
+[0170], [0480], [0520], [0540], [0560], [0620], [0660], [0670], [0680], [0730],
+[0740], [0750], [0760], [0850], [1090], [1180], [1560] and [1620] — which is
+this item's charter.
+
+Decision method:
+
+Each row was decided from evidence in one order: whether the tour describes
+the form as language or only the roadmap scheduled it; whether a complete
+derived program, a `core` module, an example or a fixture needs it; whether an
+existing mechanism already expresses it ([1710]); what it costs on each of the
+three targets, measured where the cost was a claim; and whether it keeps the
+existing guarantees without a second identity or relaxation. An implemented
+row has positive, negative and runtime evidence on Linux x86-64, Darwin arm64
+and Cortex-M0. An amended row has a tour amendment, a register decision with
+its alternative and pinning fixtures, and refusal wording that says what the
+refusal now is. `check.py` reads a fourth wording, a transfer to a named
+successor, and knows the two successors the amended tour names.
+
+Row outcomes:
+
+| Construct | Outcome | Decision and evidence |
+| --- | --- | --- |
+| `[0100]` | implemented | D233: shared binding, field, parameter and return names, one initializer evaluation, the prefix and suffix applied to every name; `a, b := e` and one-name declarations are a recorded boundary. `runtime/shared-declarations-evaluate-once` executes on all three targets. |
+| `[0150]`, `[0170]` | transferred | D237: u128, i128 and f16 leave this slice for Language evolution, triggered by a program that needs them; measured target and compiler costs below. |
+| `[0480]` | implemented | D235: the atom's own code beside the pointer, code zero the pointer case; 16/8 bytes on the hosts and 8/4 on Cortex-M0. `runtime/pointer-union-many` executes on all three targets; GDB and LLDB show both members in both cases. |
+| `[0520]`, `[0540]`, `[0560]`, `[0670]`, `[0680]` | implemented and bounded | D241: whole-aggregate discards, inferred literals of any element shape, general payload arrays; misfiled type errors become L0301 and the remaining forms are recorded boundaries. Four runtime fixtures execute on all three targets. |
+| `[0620]` | handed to R7.30 | C5's trigger has not fired: no derived program is a simulation or needs one field contiguous, so no amendment was owed. |
+| `[0660]` | amended | D236: a range subtype constrains scalar positions only; composite, reference, `addr` and generic positions are a permanent boundary. |
+| `[0730]`, `[0740]`, `[0850]` | withdrawn | D238: `set(X)`, `register(t, ...)` and `volatile ptr` give way to D227/D228's explicit operations, which the complete prototype-1 driver already executes on Cortex-M. |
+| `[0750]`, `[0760]` | withdrawn | D239: per-field byte order and `big`, `little`, `weak`, `inline` and `noinline`; D238 withdraws `volatile`. |
+| `[1090]`, `[1180]` | implemented | D234: labelled bare blocks left by `break name` with their cleanups. `runtime/r720-labelled-block-transfers` executes on all three targets. |
+| `[1560]` | amended | D240: vector operations are [0590]'s element-wise operators, not intrinsics. |
+| `[1620]` | transferred | D240: the atomic wrapper type goes to the Broader standard library (R551-34); Cortex-M0 has no read-modify-write atomics. |
+
+[1310] had no delayed part. Twenty-six fixtures claim it: R2.70's
+evidence-table programs (`runtime/generic-evidence-indirect`,
+`runtime/generic-composed-evidence`, `runtime/generic-parameterized-evidence`)
+and R4.50's D211 specialization programs
+(`runtime/r450-specialization-threshold`,
+`runtime/r450-specialization-recursive-errors`) execute on all three targets,
+and the matrix row names no refusal. Its exit clause cites that evidence.
+
+Measured evidence for the transfers and withdrawals:
+
+- On the native Linux host on 2026-09-19, the Cortex-M0 lane's pinned
+  `arm-none-eabi-gcc` 14.2.1 refused `__int128` and `_Float16` as not supported
+  on the target, and its pinned `thumb/v6-m/nofp/libgcc.a` (SHA-256
+  `137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`) exports
+  binary16 conversions but no 128-bit multiply, divide or shift helper. GCC
+  16.1 at the x86-64 baseline compiled binary16 addition to
+  `__extendhfsf2`/`__truncsfhf2` calls and 128-bit division to `__udivti3`.
+- The checker's fold carriers `Magnitude` and `Folded` occur 848 times in 21
+  source files, and every backend's `Held_Size` stops at eight bytes.
+- No prototype, derived program, `core` module or example writes u128, i128,
+  f16, `big`, `little`, `weak`, `noinline`, a multi-atom pointer union, a
+  labelled bare block or a composite range subtype. The complete derived driver
+  runs on Cortex-M through generated accessors and explicit bool fields rather
+  than `volatile ptr`, `register(...)` or `set(X)`, and replaced its one range
+  subtype with a plain `u32` and declared checks.
+
+Refusal audit:
+
+The two refusal tables now hold twenty entries: D235 removed the tagged-pointer
+refusal. Pending on a live item: [1350]'s malformed application (R2.40, owned
+by R7.40) and [1580]'s explicit C categories (R4.40, owned by R7.40). Recorded
+boundaries: the six source forms R2.20 and R2.40 recorded, and R7.20's
+shared-declaration, range
+composition and five aggregate refusals. Withdrawn: R4.80's two arena forms
+and R7.20's `volatile ptr`. Transferred: R7.20's u128/i128 and f16. The
+checker's aggregate reports that were type errors are L0301 now, and
+`compiler.vector_*`'s L0203 note names [0590]. The four transcription tables
+keep their checks: `Landin.Tokens`' keywords and the precedence table are
+unchanged, the thirteen scalar names are unchanged, and both refusal tables
+still spell tour words, cite existing paragraphs and name existing items.
+
+Inventory result:
+
+201 constructs. States: 192 executed, 4 compiled, 1 deferred ([0620], now
+R7.30's), 1 transferred ([1470]) and 3 advisory. No row names R7.20. Rows
+naming an open owner: seven R7.40, one R7.30, three Companion tool and
+ecosystem ([0730], [1470], [1480]), two Language evolution ([0150], [0170]) and
+one Broader standard library ([1620]). The five Cortex-M gaps are unchanged and
+R7.40's.
+
+Reconciliation with the accepted R7.10 artifacts:
+
+The corpus has 1912 fixture directories, 63 more than R7.10's 1849: 511
+runtime (+8), 33 ABI, 268 positive (+13), 1089 negative (+42), 3 end-to-end
+and 8 unit. Four negatives became positives when their form was enabled:
+`pointer-union-several-atoms`, `r490-union-alias-tagged-pointer`,
+`r490-union-alias-optional-widening` and `r490-union-concrete-optional-widening`.
+The shared runtime/ABI set grows from 536 to 544; the Cortex-M corpus inventory
+records the eight new runtime fixtures as executed (444 executed, 17
+selected-image limits, 50 source refusals, 33 general-C restrictions), with no
+existing row changed. Darwin's parity manifest is unchanged: the new runtime
+fixtures run under its default schedule. Fixture programs, verdicts and
+oracles of earlier fixtures are unchanged except where a refused form became
+legal or a type error was misfiled:
+
+- Construct claims changed only on negative (compile-time) fixtures:
+  `array-repetition-general-value-not-enabled` and
+  `r440-checker-callback-inference-boundary` gained [1930] or [0530]/[0560]
+  with an extended program that still ends in L0304;
+  `array-value-not-enabled`, `struct-with-an-array-field` and
+  `struct-array-field-local-selection-not-enabled` now claim [1910] and
+  [1930], because their discard is accepted and the unassigned read is L0302;
+  `construction-not-enabled`, `struct-array-field-selection-not-enabled`,
+  `struct-state-read-as-a-value` and `struct-with-a-struct-field` trade [1830]
+  for [1930] and now end in L0301; `variant-match-array-binding-not-enabled`
+  adds [1930]; `match-scalar-not-enabled`,
+  `r490-union-alias-application-reports` and
+  `r490-union-alias-unused-pointer-shapes` drop an unearned [1830].
+- Codes moved from L0304 to L0301 on sixteen negatives whose report was a type
+  error, from L0304 to L0302 on three whose discard is now legal, and
+  `r491-shared-declaration` pins two `:=` shapes (two L0010).
+- No runtime or ABI fixture's claim, program or oracle changed.
+
+`lowering.ir` gains only additions; `layout.targets` is unchanged. The token
+record, construct, target, prototype, guarantee and diagnostic matrices are
+regenerated. No lane, verdict or oracle is removed.
+
+Development evidence, not approval: the complete Mac host suite passes 739
+cases; each implementation passed its native Linux fixtures, native Darwin
+parity and Cortex-M0 backend execution at none, size and speed, and the
+pointer union's full Linux suite, full Darwin parity and GDB/LLDB runs passed;
+the combined `runtime/r720-feature-interactions` executes on all three targets.
+
+Limits:
+
+Cortex-M debugging remains R6.100's line/function contract, which refuses
+type and variable presentation; a pointer union adds no instruction selection,
+frame or line behaviour, and its Cortex evidence is execution. A call returning
+a plain pointer cannot fill a union through an atom `else` (L0301), which would
+need its own recovery lowering. Labelled blocks and shared names are not in the
+tree-sitter editor grammar, which is held only to its checked rules; the
+lexical highlighters still colour the withdrawn words the historical texts
+show. The transfers leave D237's and D240's forms to their successors'
+triggers, and C5 to R7.30.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies with debugger coverage were selected
+with `scripts/ci/policy.py routine --debugger` and committed before the
+closure candidate. The several-atom union is a new debugger-visible type with
+GDB and LLDB checks, and the debugger scripts changed. R7.20 is not a phase
+closure and adds no target, ABI convention or instruction selection, and
+routine keeps complete release Darwin parity, so milestone scope is not
+warranted. Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision, with
+atomic canonical promotion, a complete matching GitHub namespace and guarded
+Pages publication byte-matched on both domains. A later bookkeeping revision
+cannot supply the binding. With it R7.30 is the next dependency-ready item;
+R7.40 still needs R7.30.
 
 ### R7.30 — Disposition every inherited item
 

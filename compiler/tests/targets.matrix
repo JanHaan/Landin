@@ -1799,6 +1799,7 @@ runtime/r640-volatile-hole | linux-x86-64, macos-arm64
 runtime/r690-recovery-loop-context | linux-x86-64, macos-arm64
 runtime/r720-discard-index-traps | linux-x86-64, macos-arm64
 runtime/r720-discards-evaluate-once | linux-x86-64, macos-arm64
+runtime/r720-feature-interactions | linux-x86-64, macos-arm64
 runtime/r720-inferred-arrays-hold-references | linux-x86-64, macos-arm64
 runtime/r720-labelled-block-transfers | linux-x86-64, macos-arm64
 runtime/r720-payload-arrays-take-values | linux-x86-64, macos-arm64
