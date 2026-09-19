@@ -3,5 +3,5 @@ profiles: specialization
 summary: discarding an unchecked division result never erases its mandatory zero-divisor trap
 program: main.ldn
 traps: yes
-constructs: 0260, 0430, 1120, 1550
+constructs: 0260, 0430, 1120
 targets: linux-x86-64, macos-arm64

@@ -3383,22 +3383,153 @@ def construct_evidence():
     return evidence
 
 
-def construct_matrix():
-    """R1.90's construct matrix, generated from what the corpus says.
+#  R7.10's inventory vocabulary.  A product target is one the roadmap ends
+#  on; synthetic-32 is the model that preceded Cortex-M and applies to no
+#  construct.  A scope names the targets a construct must be accounted for
+#  on, and a state says what kind of evidence can account for it.
+PRODUCT_TARGETS = ("linux-x86-64", "macos-arm64", "cortex-m")
+TARGET_SCOPES = {"all": PRODUCT_TARGETS,
+                 "hosted": ("linux-x86-64", "macos-arm64"),
+                 "cortex-m": ("cortex-m",),
+                 "none": ()}
+INVENTORY_HEADING = "#### Construct inventory"
+INVENTORY_COLUMNS = ("Construct", "State", "Targets", "Gaps", "Phase",
+                     "Owner", "Disposition")
+INVENTORY_STATES = ("executed", "compiled", "deferred", "transferred",
+                    "advisory")
+CLAIM_RANK = {"refused": 1, "compiled": 2, "executed": 3}
+#  A transfer out of this roadmap is legitimate only where the tour already
+#  says who owns the transferred part [1480]; the roadmap cannot overrule it.
+TRANSFER_MARKERS = {"Companion tool and ecosystem": r"companion[ -]tool"}
+REFUSAL_TABLES = (
+    ("compiler/ada/src/diagnostics/landin-diagnostics-syntactic",
+     "Refused_Construct"),
+    ("compiler/ada/src/diagnostics/landin-diagnostics-checking",
+     "Refused_Use"))
 
-    Every `[NNNN]` either document defines, against the evidence there is
-    for it.  Three of the columns are three different claims and the
-    distinction is the point: a fixture that is *accepted* says the
-    compiler took the program, *emitted* says a backend was handed it, and
-    *executed* says a machine ran it.  R1.80's audit found four statement
-    forms with the first and not the second, so a matrix that folded them
-    together would have shown a row that looked covered.
 
-    A construct with no evidence is not automatically a gap: most of the
-    tour is not enabled, and a parser that refuses one by name and cites
-    the paragraph is an explanation.  What is left after both -- neither
-    exercised nor refused -- is what this item has to answer for.
+def case_table(text, header):
+    """One Ada `(case Item is when A | B => "x", ...)` expression, as a dict."""
+    found = re.search(re.escape(header) + r".*?is \(case Item is(.*?)\)"
+                      r"\s*(?:with Post|;)", text, re.S)
+    if not found:
+        return None
+    body = re.sub(r"--[^\n]*", "", found.group(1))
+    out = {}
+    for names, value in re.findall(r"when\s+([\w\s|]+?)\s*=>\s*\"([^\"]*)\"",
+                                   body):
+        for name in names.split("|"):
+            out[name.strip()] = value.strip("[]")
+    return out
+
+
+def refusal_entries():
+    """Every named refusal: its construct, its item and what its note says.
+
+    [1830] gives a refusal two facts, the paragraph and the work, and the
+    note says which of three things that work is: where the construct *is
+    enabled* (pending), where a source-form boundary *is recorded*, or where
+    a form *is withdrawn*.  Only the first is a promise, and a promise that
+    names a finished item is one nobody is left to keep -- which is why this
+    reads the wording out of each Report body and not only the item.
     """
+    out = []
+    for stem, kind in REFUSAL_TABLES:
+        paths = [os.path.join(ROOT, stem + suffix)
+                 for suffix in (".ads", ".adb")]
+        if not all(os.path.exists(path) for path in paths):
+            return None
+        spec_text, body_text = (io.open(path, encoding="utf-8").read()
+                                for path in paths)
+        constructs = case_table(spec_text,
+                                "function Construct (Item : %s)" % kind)
+        items = case_table(
+            spec_text, "function Enabled_By (Item : %s) return String" % kind)
+        if not constructs or not items or set(constructs) != set(items):
+            return None
+        withdrawn = set(re.findall(
+            r"Refused = (\w+)\s+then \" withdraws", body_text))
+        boundary = set()
+        found = re.search(r"elsif Refused in ([\w\s|]+?)\s+then"
+                          r" \" records this source-form boundary\"",
+                          body_text)
+        if found:
+            boundary = {name.strip() for name in found.group(1).split("|")}
+        for name in sorted(constructs):
+            wording = ("withdrawn" if name in withdrawn else
+                       "boundary" if name in boundary else "pending")
+            out.append((constructs[name], items[name], wording,
+                        os.path.basename(stem), name))
+    return out
+
+
+def construct_target_evidence():
+    """The strongest claim each product target makes about each construct.
+
+    `constructs:` says what a fixture is about and `targets:` where it
+    applies, but where it runs is decided by three records beside it:
+    Darwin's parity manifest swaps four fixtures for native counterparts,
+    changes some source verdicts and holds one as a platform limit; the
+    Cortex corpus executes, refuses or restricts every runtime/ABI fixture;
+    and the firmware driver runs outside the hosted harness altogether.
+    Reading metadata alone would overstate one target and understate
+    another, so this reads all four.  A claim is still a fixture's claim:
+    `executed` beats `compiled` beats `refused`, and none is a measurement.
+    """
+    parity_path = os.path.join(ROOT, "compiler/tests/darwin/parity.json")
+    corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
+    driver_path = os.path.join(ROOT, "compiler/tests/driver/fixture.json")
+    if not all(os.path.exists(path)
+               for path in (parity_path, corpus_path, driver_path)):
+        return None
+    parity = json.load(io.open(parity_path, encoding="utf-8"))
+    corpus = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
+    driver = json.load(io.open(driver_path, encoding="utf-8"))
+    best = {}
+
+    def claim(construct, target, what):
+        held = best.setdefault(construct, {})
+        if CLAIM_RANK[what] > CLAIM_RANK.get(held.get(target), 0):
+            held[target] = what
+
+    def listed(value):
+        return [one.strip() for one in value.split(",") if one.strip()]
+
+    for name, (_, fields) in fixture_records().items():
+        kind = name.split("/")[0]
+        targets = listed(fields.get("targets", ""))
+        for one in listed(fields.get("constructs", "")):
+            if kind in ("runtime", "abi"):
+                if "linux-x86-64" in targets:
+                    claim(one, "linux-x86-64", "executed")
+                change = parity["differences"].get(name, {})
+                if "replacement" in change or (
+                        "macos-arm64" in targets and "limit" not in change):
+                    claim(one, "macos-arm64", "executed")
+                row = corpus.get(name, {})
+                if row.get("mode") == "execute" and "profile_limit" not in row:
+                    claim(one, "cortex-m", "executed")
+                elif row.get("mode") == "refuse":
+                    claim(one, "cortex-m", "refused")
+            elif kind in ("positive", "negative", "end-to-end"):
+                verdict = "compiled" if kind == "positive" else "refused"
+                if "linux-x86-64" in targets:
+                    claim(one, "linux-x86-64", verdict)
+                #  Darwin's source verdicts are its positive and negative
+                #  fixtures with a program or arguments; the manifest may
+                #  make a fixed conditional select differently on arm64.
+                if (kind != "end-to-end" and "macos-arm64" in targets
+                        and (fields.get("program") or fields.get("args"))):
+                    status = parity["diagnostics"].get(name, {}).get("status")
+                    claim(one, "macos-arm64", verdict if status is None else
+                          "compiled" if status == "0" else "refused")
+    for one in listed(driver.get("constructs", "")):
+        claim(one, "cortex-m", "executed")
+    return best
+
+
+def construct_titles():
+    """Every `[NNNN]` either document defines, in order, with where and title."""
     ids = []
     for name in (TOUR_NAME, SPEC_NAME):
         path = os.path.join(ROOT, name)
@@ -3407,76 +3538,29 @@ def construct_matrix():
         text = io.open(path, encoding="utf-8").read()
         for found in re.finditer(r"^### \[(\d{4})\] (.+)$", text, re.M):
             ids.append((found.group(1), name, found.group(2).strip()))
-    ids.sort()
-
-    evidence = construct_evidence()
-
-    order = ("accepted", "emitted", "executed", "refused")
-    lines = ["#  Generated by check.py from the fixture corpus and the",
-             "#  compiler's named-refusal tables.  Do not edit; regenerate with",
-             "#  python3 check.py --matrix.",
-             "#",
-             "#  Evidence is what the fixtures *say* they are about, out of",
-             "#  their own `constructs:` lists.  A row is therefore a claim",
-             "#  by whoever wrote the fixture and not a measurement: a",
-             "#  runtime program full of literals says nothing about [1770]",
-             "#  unless it names it.  Under-claiming is the expected state",
-             "#  of a list seeded from prose, and correcting it is work.",
-             "#",
-             "#  A construct with no evidence and no refusal is this",
-             "#  item's to answer for; see ROADMAP.md R1.90.",
-             "#",
-             "#  id    defined in  evidence"]
-
-    bare = 0
-    for one, where, title in ids:
-        has = evidence.get(one, set())
-        if not has:
-            bare += 1
-        shown = " ".join(w for w in order if w in has)
-        if "refused by name" in has:
-            shown = (shown + " refused-by-name").strip()
-        lines.append("%-6s %-11s %-34s %s"
-                     % (one, where.replace(".md", ""),
-                        shown or "-", title))
-
-    lines.insert(13, "#  %d constructs, %d with evidence, %d with neither."
-                 % (len(ids), len(ids) - bare, bare))
-    return "\n".join(lines) + "\n"
+    return sorted(ids)
 
 
-def check_matrix(full_run):
-    """The matrix is generated, so it cannot drift from the corpus."""
-    if not full_run:
-        return []
-
-    recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
-    fresh = construct_matrix()
-    if fresh is None:
-        return []
-
-    if not os.path.exists(recorded):
-        return [("compiler/tests/constructs.matrix", 1,
-                 "the construct matrix is missing; regenerate it with "
-                 "python3 check.py --matrix")]
-    if io.open(recorded, encoding="utf-8").read() != fresh:
-        return [("compiler/tests/constructs.matrix", 1,
-                 "the construct matrix is stale; regenerate it with "
-                 "python3 check.py --matrix")]
-    return []
+def construct_paragraphs():
+    """Each construct's own text, heading to next heading, for marker checks."""
+    out = {}
+    for name in (TOUR_NAME, SPEC_NAME):
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        heads = list(re.finditer(r"^#{2,3} .*$", text, re.M))
+        for index, head in enumerate(heads):
+            found = re.match(r"### \[(\d{4})\] ", head.group(0))
+            if found:
+                end = (heads[index + 1].start() if index + 1 < len(heads)
+                       else len(text))
+                out[found.group(1)] = text[head.start():end]
+    return out
 
 
-def markdown_register(relative, heading, columns):
-    """Read one deliberately plain Markdown register table.
-
-    These tables are source, not rendered guesses: the heading is exact, the
-    first table after it owns fixed columns, and cells contain no unescaped
-    pipe.  check_table_shape separately guards their rendered width.
-    """
-    path = os.path.join(ROOT, relative)
-    if not os.path.exists(path):
-        return None
-    lines = io.open(path, encoding="utf-8").read().splitlines()
+def markdown_table(lines, heading, columns):
+    """The first plain table after an exact heading, as numbered row dicts."""
     try:
         at = lines.index(heading)
     except ValueError:
@@ -3501,6 +3585,350 @@ def markdown_register(relative, heading, columns):
             return None
         rows.append((number + 1, dict(zip(columns, values))))
     return rows
+
+
+def inventory_inputs():
+    """Everything R7.10's inventory is generated from, read once.
+
+    The corpus, the compiler's named-refusal tables and ROADMAP.md, and
+    nothing kept by hand beside them: the tests feed altered copies of these
+    to `inventory_problems` to show each refusal fires.
+    """
+    roadmap = os.path.join(ROOT, ROADMAP)
+    titles = construct_titles()
+    refusals = refusal_entries()
+    targets = construct_target_evidence()
+    if (titles is None or refusals is None or targets is None
+            or not os.path.exists(roadmap)):
+        return None
+    return {"roadmap": io.open(roadmap, encoding="utf-8").read(),
+            "titles": titles,
+            "paragraphs": construct_paragraphs(),
+            "evidence": construct_evidence(),
+            "targets": targets,
+            "refusals": refusals}
+
+
+def inventory_owners(value):
+    return [] if value == "none" else [one.strip() for one in value.split(",")]
+
+
+def inventory_problems(inputs):
+    """R7.10: no construct row is missing, unowned or unexplained.
+
+    The register in ROADMAP.md says what each row is and who owns what is
+    left of it; the corpus and the refusal tables say what is true.  Every
+    rule here holds the first to the second, so a row cannot stay put while
+    the evidence under it moves: a new fixture, a lost target, a refusal
+    that changes item, or an owner that completes all make it fail.
+    """
+    text = inputs["roadmap"]
+    lines = text.splitlines()
+    rows = markdown_table(lines, INVENTORY_HEADING, INVENTORY_COLUMNS)
+    if rows is None:
+        return [(ROADMAP, 1, "the construct inventory cannot be read")]
+    statuses = dict(re.findall(r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
+                               text, re.M))
+    section = text.split("## Successor roadmaps\n", 1)
+    successors = set(re.findall(r"^- \*\*([^:]+):\*\*",
+                                section[1].split("\n## ", 1)[0], re.M)
+                     if len(section) == 2 else ())
+    known = {one for one, _, _ in inputs["titles"]}
+    refusals = collections.defaultdict(list)
+    for construct, item, wording, _, _ in inputs["refusals"]:
+        refusals[construct].append((item, wording))
+    out = []
+    seen = {}
+
+    def problem(line, message):
+        out.append((ROADMAP, line, message))
+
+    for line, row in rows:
+        found = re.fullmatch(r"`\[(\d{4})\]`", row["Construct"])
+        if not found:
+            problem(line, "invalid construct inventory key")
+            continue
+        one = found.group(1)
+        if one in seen:
+            problem(line, "[%s] has two inventory rows" % one)
+            continue
+        seen[one] = (line, row)
+        if one not in known:
+            problem(line, "the inventory names unknown construct [%s]" % one)
+            continue
+        state, scope_name = row["State"], row["Targets"]
+        disposition = row["Disposition"]
+        if state not in INVENTORY_STATES:
+            problem(line, "[%s] has unknown state %r" % (one, state))
+            continue
+        if scope_name not in TARGET_SCOPES:
+            problem(line, "[%s] has unknown targets %r" % (one, scope_name))
+            continue
+        if not disposition:
+            problem(line, "[%s] has no disposition" % one)
+        scope = TARGET_SCOPES[scope_name]
+
+        owners = inventory_owners(row["Owner"])
+        planned = []
+        handed = []
+        for owner in owners:
+            if re.fullmatch(r"R\d+\.\d+", owner):
+                if owner not in statuses:
+                    problem(line, "[%s] names missing owner %s" % (one, owner))
+                elif statuses[owner] == "complete":
+                    problem(line, "[%s] is still owned by finished %s"
+                            % (one, owner))
+                else:
+                    planned.append(owner)
+            elif owner in successors:
+                handed.append(owner)
+            else:
+                problem(line, "[%s] names unknown owner %r" % (one, owner))
+            if owner not in disposition:
+                problem(line, "[%s] does not say what %s owns"
+                        % (one, owner))
+
+        phase = row["Phase"]
+        if state in ("executed", "compiled") or (
+                state == "transferred" and phase != "none"):
+            if statuses.get(phase) != "complete":
+                problem(line, "[%s] has no finished implementing phase: %s"
+                        % (one, phase))
+        elif phase != "none":
+            problem(line, "[%s] is %s and names phase %s"
+                    % (one, state, phase))
+
+        claims = inputs["evidence"].get(one, set()) - {"refused by name"}
+        held = inputs["targets"].get(one, {})
+        if state == "executed":
+            gaps = [t for t in scope if held.get(t) != "executed"]
+            if "executed" not in held.values():
+                problem(line, "[%s] is executed and nothing executes it"
+                        % one)
+        elif state == "compiled":
+            gaps = [t for t in scope if t not in held]
+            if "executed" in held.values():
+                problem(line, "[%s] executes, so compiled is stale" % one)
+            if not held:
+                problem(line, "[%s] is compiled and no fixture claims it"
+                        % one)
+        else:
+            gaps = []
+            if scope:
+                problem(line, "[%s] is %s and cannot apply to a target"
+                        % (one, state))
+            if claims or held:
+                problem(line, "[%s] is %s but fixtures claim it"
+                        % (one, state))
+            if state == "advisory" and (refusals.get(one) or owners):
+                problem(line, "[%s] is advisory and has a refusal or owner"
+                        % one)
+        recorded = inventory_owners(row["Gaps"])
+        if recorded != gaps:
+            problem(line, "[%s] records gaps %s; the corpus leaves %s"
+                    % (one, ", ".join(recorded) or "none",
+                       ", ".join(gaps) or "none"))
+        if gaps and not planned:
+            problem(line, "[%s] has target gaps and no owning item" % one)
+
+        paragraph = inputs["paragraphs"].get(one, "")
+        if state == "deferred":
+            if not planned:
+                problem(line, "[%s] is deferred with no owning item" % one)
+            if "DEFERRED" not in paragraph:
+                problem(line, "[%s] is deferred but the tour does not say so"
+                        % one)
+        if state == "transferred" and not handed:
+            problem(line, "[%s] is transferred to no successor" % one)
+        for owner in handed:
+            marker = TRANSFER_MARKERS.get(owner)
+            cited = [paragraph] + [
+                inputs["paragraphs"].get(other, "")
+                for other in re.findall(r"\[(\d{4})\]", disposition)]
+            if not marker or not any(re.search(marker, piece, re.I)
+                                     for piece in cited):
+                problem(line, "[%s] hands work to %s and neither its"
+                        " paragraph nor one it cites says so"
+                        % (one, owner))
+
+        for item, wording in refusals.get(one, ()):
+            finished = statuses.get(item) == "complete"
+            if wording == "pending" and not finished:
+                if item not in planned:
+                    problem(line, "[%s] is refused pending %s and the row"
+                            " does not name it" % (one, item))
+            elif wording == "pending":
+                if not planned or item not in disposition:
+                    problem(line, "[%s]'s refusal still promises finished %s"
+                            " and no open owner explains it" % (one, item))
+            elif not finished:
+                problem(line, "[%s]'s %s refusal names unfinished %s"
+                        % (one, wording, item))
+            elif item not in disposition:
+                problem(line, "[%s] does not explain its refusal recorded by"
+                        " %s" % (one, item))
+
+    for one in sorted(known - set(seen)):
+        problem(1, "construct [%s] has no inventory row" % one)
+
+    #  R4.90's audited compile-time rules are exactly the hosted rows that
+    #  cannot execute; one register is not allowed to disagree with the other.
+    static = markdown_table(lines, "#### Hosted compile-time evidence",
+                            ("Construct", "Accepted", "Refused", "Rationale"))
+    if static is None:
+        problem(1, "the hosted compile-time register cannot be read")
+    else:
+        listed = {row["Construct"].strip("`[]") for _, row in static}
+        compiled = {one for one, (_, row) in seen.items()
+                    if row["State"] == "compiled"
+                    and "linux-x86-64" in TARGET_SCOPES.get(row["Targets"], ())}
+        for one in sorted(compiled - listed):
+            problem(seen[one][0], "compiled hosted row [%s] has no audited"
+                    " compile-time oracle" % one)
+        for one in sorted(listed - compiled):
+            problem(1, "hosted compile-time register lists [%s], which the"
+                    " inventory does not call compiled" % one)
+    return out
+
+
+def inventory_applicability(rows):
+    """The inventory, in the shape R4.90's parity rule was written against."""
+    out = []
+    for line, row in rows or ():
+        scope = TARGET_SCOPES.get(row["Targets"], ())
+        if row["State"] in ("executed", "compiled"):
+            applicability = ("hosted-now" if "linux-x86-64" in scope
+                             else "freestanding")
+        else:
+            applicability = ("principle" if row["State"] == "advisory"
+                             else "deferred")
+        out.append((line, {"Construct": row["Construct"],
+                           "Applicability": applicability,
+                           "Owner": row["Phase"],
+                           "Disposition": row["Disposition"]}))
+    return out
+
+
+def construct_matrix():
+    """R1.90's construct matrix, completed by R7.10's inventory.
+
+    Every `[NNNN]` either document defines, against the evidence there is
+    for it.  The first three claims are the distinction R1.80's audit found:
+    a fixture that is *accepted* says the compiler took the program,
+    *emitted* says a backend was handed it, and *executed* says a machine
+    ran it.  The per-target columns say the same thing target by target,
+    from the records that decide where a fixture runs.  The named refusals
+    carry their item and what their note promises.  The state, targets,
+    gaps and owner are ROADMAP.md's; the reason for each is the
+    disposition beside it there, which is where a reader should look.
+    """
+    titles = construct_titles()
+    inputs = inventory_inputs()
+    if titles is None or inputs is None:
+        return None
+    evidence = inputs["evidence"]
+    held = inputs["targets"]
+    refused = collections.defaultdict(set)
+    for construct, item, wording, _, _ in inputs["refusals"]:
+        refused[construct].add("%s:%s" % (item, wording))
+    rows = markdown_table(inputs["roadmap"].splitlines(), INVENTORY_HEADING,
+                          INVENTORY_COLUMNS) or []
+    inventory = {}
+    for _, row in rows:
+        found = re.fullmatch(r"`\[(\d{4})\]`", row["Construct"])
+        if found:
+            inventory.setdefault(found.group(1), row)
+
+    order = ("accepted", "emitted", "executed", "refused")
+    states = collections.Counter()
+    owned = gapped = bare = 0
+    body = []
+    for one, where, title in titles:
+        has = evidence.get(one, set())
+        if not has:
+            bare += 1
+        shown = " ".join(w for w in order if w in has) or "-"
+        row = inventory.get(one, {})
+        states[row.get("State", "?")] += 1
+        owned += row.get("Owner", "none") != "none"
+        gapped += row.get("Gaps", "none") != "none"
+        body.append(" | ".join(
+            [one, where.replace(".md", ""), shown]
+            + [held.get(one, {}).get(target, "-")
+               for target in PRODUCT_TARGETS]
+            + [" ".join(sorted(refused.get(one, ()))) or "-"]
+            + [row.get(column, "?") for column in
+               ("State", "Targets", "Gaps", "Owner")]
+            + [title]))
+
+    lines = ["#  Generated by check.py from the fixture corpus, its target",
+             "#  records, the compiler's named-refusal tables and ROADMAP.md's",
+             "#  construct inventory.  Do not edit; regenerate with",
+             "#  python3 check.py --matrix.",
+             "#",
+             "#  Evidence is what the fixtures *say* they are about, out of",
+             "#  their own `constructs:` lists.  A row is therefore a claim",
+             "#  by whoever wrote the fixture and not a measurement: a",
+             "#  runtime program full of literals says nothing about [1770]",
+             "#  unless it names it.  Under-claiming is the expected state",
+             "#  of a list seeded from prose, and correcting it is work.",
+             "#",
+             "#  linux-x86-64, macos-arm64 and cortex-m are the strongest",
+             "#  claim a target's own records make: executed, compiled or",
+             "#  refused.  Refusals are item:pending, item:boundary or",
+             "#  item:withdrawn, as their [1830] note says.  State, targets,",
+             "#  gaps and owner come from ROADMAP.md R7.10, whose",
+             "#  disposition column explains every row; see ROADMAP.md R1.90",
+             "#  and R7.10.",
+             "#  %d constructs, %d with fixture evidence, %d with none."
+             % (len(titles), len(titles) - bare, bare),
+             "#  States: %s." % ", ".join(
+                 "%d %s" % (states[name], name)
+                 for name in INVENTORY_STATES + ("?",) if states[name]),
+             "#  %d rows name an open owner; %d have target gaps."
+             % (owned, gapped),
+             "#",
+             "#  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m |"
+             " refusals | state | targets | gaps | owner | title"]
+    return "\n".join(lines + body) + "\n"
+
+
+def check_matrix(full_run):
+    """The matrix is generated, and its inventory is held to the evidence."""
+    if not full_run:
+        return []
+
+    inputs = inventory_inputs()
+    out = inventory_problems(inputs) if inputs is not None else [
+        (ROADMAP, 1, "the construct inventory's inputs cannot be read")]
+    recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
+    fresh = construct_matrix()
+    if fresh is None:
+        return out
+
+    if not os.path.exists(recorded):
+        return out + [("compiler/tests/constructs.matrix", 1,
+                       "the construct matrix is missing; regenerate it with "
+                       "python3 check.py --matrix")]
+    if io.open(recorded, encoding="utf-8").read() != fresh:
+        return out + [("compiler/tests/constructs.matrix", 1,
+                       "the construct matrix is stale; regenerate it with "
+                       "python3 check.py --matrix")]
+    return out
+
+
+def markdown_register(relative, heading, columns):
+    """Read one deliberately plain Markdown register table.
+
+    These tables are source, not rendered guesses: the heading is exact, the
+    first table after it owns fixed columns, and cells contain no unescaped
+    pipe.  check_table_shape separately guards their rendered width.
+    """
+    path = os.path.join(ROOT, relative)
+    if not os.path.exists(path):
+        return None
+    return markdown_table(io.open(path, encoding="utf-8").read().splitlines(),
+                          heading, columns)
 
 
 def fixture_records():
@@ -3536,16 +3964,8 @@ def fixture_names(text):
 
 def implemented_constructs():
     """Constructs the current corpus says reach acceptance or emission."""
-    text = construct_matrix()
-    if text is None:
-        return set()
-    out = set()
-    for line in text.splitlines():
-        found = re.match(r"^(\d{4})\s", line)
-        if found and ("accepted" in line or "emitted" in line
-                      or "executed" in line):
-            out.add(found.group(1))
-    return out
+    return {one for one, has in construct_evidence().items()
+            if has & {"accepted", "emitted", "executed"}}
 
 
 def guarantee_rows():
@@ -3573,9 +3993,9 @@ def target_scope_rows():
 
 
 def construct_applicability_rows():
-    return markdown_register(
-        ROADMAP, "#### Construct applicability coverage",
-        ("Construct", "Applicability", "Owner", "Disposition"))
+    """R7.10's inventory, adapted for the rules written before it existed."""
+    rows = markdown_register(ROADMAP, INVENTORY_HEADING, INVENTORY_COLUMNS)
+    return None if rows is None else inventory_applicability(rows)
 
 
 def hosted_compile_time_rows():
@@ -3756,7 +4176,6 @@ def check_coverage_registers(full_run):
     roadmap_path = os.path.join(ROOT, ROADMAP)
     roadmap_text = (io.open(roadmap_path, encoding="utf-8").read()
                     if os.path.exists(roadmap_path) else "")
-    roadmap_items = set(re.findall(r"^### (R\d+\.\d+)", roadmap_text, re.M))
     r410 = re.search(
         r"^### R4\.10\b.*?^Status: (planned|active|blocked|complete)$",
         roadmap_text, re.M | re.S)
@@ -3767,78 +4186,28 @@ def check_coverage_registers(full_run):
     out += hosted_parity_problems(
         statuses, applicability, hosted_compile_time_rows(), fixtures)
 
+    #  R7.10's inventory replaced R4.10's applicability register; its
+    #  completeness, owners and evidence are check_matrix's.  What R4.10
+    #  itself promised still holds: no refusal may name it as enabling work.
     if applicability is None:
-        out.append((ROADMAP, 1,
-                    "the construct applicability register cannot be read"))
-    else:
-        registered = {}
-        classes = {"hosted-now", "later-r4", "freestanding", "deferred",
-                   "principle"}
-        for line, row in applicability:
-            found = re.fullmatch(r"`\[(\d{4})\]`", row["Construct"])
-            if not found:
-                out.append((ROADMAP, line,
-                            "invalid construct applicability key"))
+        out.append((ROADMAP, 1, "the construct inventory cannot be read"))
+    if r410_status is None:
+        out.append((ROADMAP, 1, "R4.10 has no readable status"))
+    elif r410_status != "active":
+        for relative in (
+                "compiler/ada/src/diagnostics/"
+                "landin-diagnostics-syntactic.ads",
+                "compiler/ada/src/diagnostics/"
+                "landin-diagnostics-checking.ads"):
+            path = os.path.join(ROOT, relative)
+            if not os.path.exists(path):
                 continue
-            one = found.group(1)
-            if one in registered:
-                out.append((ROADMAP, line,
-                            "duplicate construct applicability [%s]" % one))
-            registered[one] = line
-            if one not in known_constructs:
-                out.append((ROADMAP, line,
-                            "applicability names unknown construct [%s]" % one))
-            applicability_class = row["Applicability"]
-            if applicability_class not in classes:
-                out.append((ROADMAP, line,
-                            "[%s] has invalid applicability %r" %
-                            (one, applicability_class)))
-            owner = row["Owner"].strip("`")
-            if owner == "none":
-                if applicability_class != "principle":
-                    out.append((ROADMAP, line,
-                                "[%s] may have no owner only as a principle"
-                                % one))
-            elif owner not in roadmap_items:
-                out.append((ROADMAP, line,
-                            "[%s] names missing roadmap owner %s" %
-                            (one, owner)))
-            if not row["Disposition"]:
-                out.append((ROADMAP, line,
-                            "[%s] has no applicability disposition" % one))
-
-        for one in sorted(known_constructs - set(registered)):
-            out.append((ROADMAP, 1,
-                        "construct [%s] has no applicability row" % one))
-
-        if r410_status is None:
-            out.append((ROADMAP, 1, "R4.10 has no readable status"))
-        elif r410_status != "active":
-            evidence = construct_evidence()
-            for line, row in applicability:
-                found = re.fullmatch(r"`\[(\d{4})\]`", row["Construct"])
-                if found and row["Applicability"] == "hosted-now":
-                    one = found.group(1)
-                    if not evidence.get(one):
-                        out.append((ROADMAP, line,
-                                    "R4.10 cannot close: hosted-now [%s] has"
-                                    " neither matrix evidence nor a named"
-                                    " refusal" % one))
-
-            for relative in (
-                    "compiler/ada/src/diagnostics/"
-                    "landin-diagnostics-syntactic.ads",
-                    "compiler/ada/src/diagnostics/"
-                    "landin-diagnostics-checking.ads"):
-                path = os.path.join(ROOT, relative)
-                if not os.path.exists(path):
-                    continue
-                for line, text_line in enumerate(
-                        io.open(path, encoding="utf-8"), 1):
-                    if '"R4.10"' in text_line:
-                        out.append((relative, line,
-                                    "R4.10 cannot close while a refusal still"
-                                    " names it as enabling work"))
+            for line, text_line in enumerate(
+                    io.open(path, encoding="utf-8"), 1):
+                if '"R4.10"' in text_line:
+                    out.append((relative, line,
+                                "R4.10 cannot close while a refusal still"
+                                " names it as enabling work"))
 
     if guarantees is None:
         out.append((where, 1, "D148's guarantee register cannot be read"))
@@ -5474,6 +5843,7 @@ def check_phase_handoff(full_run):
             validate(source.read())
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_construct_inventory.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
                 [sys.executable, os.path.join(ROOT, "devices/test.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")],

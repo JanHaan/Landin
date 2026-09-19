@@ -1,5 +1,5 @@
 class: positive
 summary: D229 parses typed machine conventions and placement while target-fixed selection protects hosted programs
 program: program.ldn
-constructs: 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990
+constructs: 0760, 1000, 1460, 1500, 1560, 1570, 1630, 1640, 1650, 1990
 targets: linux-x86-64, macos-arm64, synthetic-32

@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.10 — Audit every normative construct (planned).**
+**Next roadmap item: R7.20 — Close deferred normative behavior (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -372,3 +372,11 @@ binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
 core and adds ordinary CPU support, nonreturning signatures and panic dispatch
 with optional source maps. Its closure is bound to the containing revision’s dual-native approval and
 guarded delivery in ROADMAP.md; R6.80 retains generated-device fixtures.
+
+R7.10 audits every normative construct into the generated construct
+inventory in `compiler/tests/constructs.matrix`: each of the 201 rows records
+its state, applicable targets, per-target evidence, named refusals and open
+owner, and `check.py` refuses a missing, stale, unowned or unexplained row.
+The described forms it found unfinished are routed to R7.20, target gaps and
+stale refusal notes to R7.40. Its exact-revision dual-native routine binding
+in ROADMAP.md owns closure.
