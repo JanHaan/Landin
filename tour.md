@@ -751,6 +751,9 @@ triple := [1.0, 2.0, 3.0]        -- [3]f32
 
 ```
 
+The first element supplies the element type, whether it is a number, a slice,
+a pointer or a struct, and every later element must be of that type (D241).
+
 ### [0540] zeroed is the all-bits-zero image of a type
 
 zeroed is the all-bits-zero image of a type. Two separate

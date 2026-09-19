@@ -11890,11 +11890,11 @@ means the generated row's evidence is the whole explanation.
 | `[0490]` | advisory | none | none | none | none | Usage guidance: pointers serve hardware, the C boundary and library internals, while everyday code uses slices, handles and indices. It states no rule the compiler enforces or a fixture could discriminate; the operations it points to are [0430]-[0480]'s rows. |
 | `[0500]` | executed | all | none | R4.20 | none | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
 | `[0510]` | executed | all | none | R3.30 | none | matrix evidence |
-| `[0520]` | executed | all | none | R2.20 | R7.20 | Array values, bounds and copies are matrix evidence. Checker refusals of the remaining general array-value and array-field positions still say R2.20 enables them, though R2.20 is complete. R7.20 decides which positions [0520] and [0560] describe as language and implements them, or amends the tour and records the boundary; the note follows. |
+| `[0520]` | executed | all | none | R2.20 | none | Array values, bounds and copies are matrix evidence; D241 adds whole-array discards and inferred literals of any element shape. Its checker refusals of the remaining forms are D241's recorded boundaries, named by R7.20 in the note, and genuine type errors among them are L0301. |
 | `[0530]` | executed | all | none | R2.20 | none | matrix evidence |
-| `[0540]` | executed | all | none | R2.20 | R7.20 | Zero images are matrix evidence. The checker's local-array `zeroed` refusal still says R2.20 enables it; R7.20 implements the shape or amends the tour and records the boundary, and the note follows. |
+| `[0540]` | executed | all | none | R2.20 | none | Zero images are matrix evidence. The local-array `zeroed` refusal is a guard no source reaches; D241 keeps it with R7.20's boundary wording, and `zeroed` as an operand is an L0301 type error. |
 | `[0550]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[0560]` | executed | all | none | R2.20 | R7.20 | Typed, counted and mixed repetition are matrix evidence; R2.20 records the named repetition source-form boundary. The paragraph still calls a count-less inferred initializer and other general array value positions later compiler slices with no owner: R7.20 implements or amends them. |
+| `[0560]` | executed | all | none | R2.20 | none | Typed, counted and mixed repetition are matrix evidence; R2.20 records the named repetition source-form boundary. D241, an R7.20 decision, records the count-less inferred initializer, non-scalar counted inference and zero lengths as the paragraph's boundary. |
 | `[0570]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named indexing source-form boundary, which requires a named place |
 | `[0580]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0590]` | executed | all | none | R4.50 | none | D209 and matrix evidence |
@@ -11905,8 +11905,8 @@ means the generated row's evidence is the whole explanation.
 | `[0640]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0650]` | executed | all | none | R2.20 | none | named refusal |
 | `[0660]` | executed | all | none | R4.10 | none | Scalar range subtypes are matrix evidence under D188. D236 records the struct-field, array-element, reference-target, `addr` and generic-argument positions as the paragraph's permanent boundary, and their named refusals say R7.20 records it. |
-| `[0670]` | executed | all | none | R2.20 | R7.20 | Both struct forms are matrix evidence; R2.20 records the named inline-struct source-form boundary. Checker refusals of the remaining general struct-value positions still say R2.20 enables them; R7.20 implements or amends each and the note follows. |
-| `[0680]` | executed | all | none | R2.20 | R7.20 | Variant declaration, storage, construction and matching are matrix evidence. Checker refusals of the remaining general variant-value positions still say R2.20 enables them; R7.20 implements or amends them and the note follows. |
+| `[0670]` | executed | all | none | R2.20 | none | Both struct forms are matrix evidence; R2.20 records the named inline-struct source-form boundary. D241 adds whole-struct discards and inferred struct copies, makes misused struct values L0301 type errors, and records the untyped literal and module-image forms as boundaries whose note names R7.20. |
+| `[0680]` | executed | all | none | R2.20 | none | Variant declaration, storage, construction and matching are matrix evidence, and D241 gives payload arrays every ordinary array-field expression. A variant part as a value, a case outside its part and a copied part are D241's recorded boundaries, named by R7.20 in the note. |
 | `[0690]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0700]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0710]` | executed | all | none | R2.20 | none | matrix evidence |
