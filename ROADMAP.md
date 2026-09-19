@@ -12242,11 +12242,18 @@ legal or a type error was misfiled:
 record, construct, target, prototype, guarantee and diagnostic matrices are
 regenerated. No lane, verdict or oracle is removed.
 
-Development evidence, not approval: the complete Mac host suite passes 739
-cases; each implementation passed its native Linux fixtures, native Darwin
-parity and Cortex-M0 backend execution at none, size and speed, and the
-pointer union's full Linux suite, full Darwin parity and GDB/LLDB runs passed;
-the combined `runtime/r720-feature-interactions` executes on all three targets.
+Development evidence, not approval: each implementation passed its native
+Linux fixtures, native Darwin parity and Cortex-M0 backend execution at none,
+size and speed, and the pointer union's full Linux suite, full Darwin parity
+and GDB/LLDB runs passed; the combined `runtime/r720-feature-interactions`
+executes on all three targets. The first complete Linux release run of the
+merged tree found the recorded IR differed by build mode at one comparison
+whose two operands were emitted as arguments of one call, which Ada leaves in
+either order; they are now emitted in a fixed order, and a scan of the new
+lowering code finds no other call with two emitting arguments. The complete
+Linux release suite then passed 741 cases, the complete Mac host suite 739
+cases in both compiler modes, and the eight new runtime fixtures Darwin parity
+with the release compiler.
 
 Limits:
 
