@@ -1,0 +1,23 @@
+shape: type = concept (t: type)
+    area: (self: ptr t) -> (result: u32)
+end shape
+
+square: type = struct
+    side: u32
+end square
+
+square_area: (self: ptr square) -> (result: u32) =
+    result = self.val.side * self.val.side
+end square_area
+
+square is shape (area: square_area)
+
+--  D179: an erased element carries its concept in the written array type;
+--  an inferred literal does not choose one.
+f: () -> none =
+    item: square = (side: 2)
+    erased: any shape = any(addr item)
+    written: [2]any shape = [erased, erased]
+    inferred := [erased, erased]
+    _ = written
+end f

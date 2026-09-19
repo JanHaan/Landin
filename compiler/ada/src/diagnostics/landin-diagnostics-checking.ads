@@ -150,15 +150,20 @@ package Landin.Diagnostics.Checking is
      (Wide_Integer_Type,
       Narrow_Float_Type,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
-      --  zero images and labelled literals but not a general aggregate
-      --  value.
+      --  zero images, labelled literals and constructions; R7.20 records
+      --  what is left as the form's boundary: an untyped literal with no
+      --  destination, a module image [1940] cannot fold, and a nested
+      --  body that could not be laid out.
       Struct_Value,
       --  D74 lays out and measures [0680]'s declaration, D75 gives it
-      --  storage and a zero image, and D76 admits contextual case writes;
-      --  a general variant value remains refused.
+      --  storage and a zero image, and D76 admits contextual case writes.
+      --  A variant part is a member of its struct and a case is written
+      --  where its part is the destination, so neither has a value of its
+      --  own; R7.20 records that boundary.
       Variant_Value,
-      --  [0520] declares one; a value of one waits, as a struct's did,
-      --  and so does an element the kernel cannot lay out end to end.
+      --  [0520] declares one.  An array literal or repetition takes its
+      --  shape from a destination or an inferred binding, and a module
+      --  image keeps [1940]'s boundary; R7.20 records both.
       Array_Value,
       Array_Element,
       --  D135's parameterized aliases are checked here, including an
@@ -242,8 +247,8 @@ package Landin.Diagnostics.Checking is
 
 private
 
-   --  Where the roadmap says each becomes available.  R2.20 owns the
-   --  remaining general aggregate-value contexts.
+   --  Where the roadmap says each becomes available, or which item
+   --  records its boundary, transfer or withdrawal.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
             --  D190 re-owned these two and D237 transfers them: R7.20
@@ -253,11 +258,16 @@ private
             --  enables them.
             when Wide_Integer_Type
                | Narrow_Float_Type  => "R7.20",
+            --  R2.20 enabled the aggregate values and R7.20 the discards,
+            --  inferred literals and payload arrays that were left.  What
+            --  remains is each form's permanent source boundary: a value
+            --  that needs a destination it was not given, a module image
+            --  [1940] cannot fold, or a guard no enabled source reaches.
             when Struct_Value
                | Variant_Value
                | Array_Value
                | Array_Element
-               | Zeroed_Value      => "R2.20",
+               | Zeroed_Value      => "R7.20",
             when Parameterized_Type_Alias => "R2.40",
             when External_C_ABI     => "R4.40",
             --  D236 records the composite, reference and generic

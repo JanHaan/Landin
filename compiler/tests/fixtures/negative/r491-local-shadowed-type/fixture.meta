@@ -3,4 +3,4 @@ summary: D218 the local shadows the enclosing type in following statements
 constructs: 0110, 0140, 1070, 1290, 1840, 1850
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304
+codes: L0301

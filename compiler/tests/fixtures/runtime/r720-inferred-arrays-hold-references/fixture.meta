@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D25 infers slice, text, pointer, function, struct and nested arrays from the first element, and a discarded slice element no longer stops the compiler
+constructs: 0050, 0430, 0440, 0520, 0530, 0570, 0600, 0670, 1000, 1930
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

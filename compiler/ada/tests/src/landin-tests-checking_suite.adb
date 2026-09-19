@@ -10996,15 +10996,21 @@ package body Landin.Tests.Checking_Suite is
         (Item, "bad: type = layout(c) struct" & LF
          & "    values: [2][0]i32" & LF & "end bad" & LF,
          "this layout(c) struct has a non-C representation");
+      --  R7.20: D25's first element supplies a callable element shape as
+      --  it supplies a scalar one; counted repetition keeps a scalar.
       R440_Check_Source
         (Item, Callbacks & "use: () -> none =" & LF
-         & "    values := [add, add]" & LF & "end use" & LF,
-         "a non-scalar array literal needs an explicit element type", "L0304");
+         & "    values := [add, add]" & LF
+         & "    _ = values[1](value: 2)" & LF & "end use" & LF);
       R440_Check_Source
         (Item, Callbacks & "use: (flag: bool) -> none =" & LF
          & "    values := if flag then [add, add] else [add, add] end if" & LF
-         & "end use" & LF,
-         "a non-scalar array literal needs an explicit element type", "L0304");
+         & "    _ = values" & LF
+         & "end use" & LF);
+      R440_Check_Source
+        (Item, Callbacks & "use: () -> none =" & LF
+         & "    values := [2 of add]" & LF & "end use" & LF,
+         "a counted repetition infers only a scalar element", "L0304");
       R440_Check_Source
         (Item, "record: type = layout(c) struct" & LF
          & "    values: [1][1]u8" & LF & "end record" & LF
@@ -11349,7 +11355,7 @@ package body Landin.Tests.Checking_Suite is
         ("module struct refusal",
          "box: type (t: type) = struct value: t end box" & LF
          & "item: box(u8) = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("module struct initializer",
          "box: type (t: type) = struct value: t end box" & LF
@@ -11361,7 +11367,7 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none =" & LF
          & "item: box(u8) = 5" & LF
          & "end f" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("local struct initializer",
          "box: type (t: type) = struct value: t end box" & LF
@@ -11374,7 +11380,7 @@ package body Landin.Tests.Checking_Suite is
          "box: type (t: type) = struct value: t end box" & LF
          & "outer: type (t: type) = struct child: box(t) end outer" & LF
          & "item: outer(u8) = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("module nested struct initializer",
          "box: type (t: type) = struct value: t end box" & LF
@@ -11388,7 +11394,7 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none =" & LF
          & "item: outer(u8) = 5" & LF
          & "end f" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("local nested struct initializer",
          "box: type (t: type) = struct value: t end box" & LF
@@ -11402,7 +11408,7 @@ package body Landin.Tests.Checking_Suite is
          "choice: type (t: type) = struct tag: variant empty "
          & "| value: (held: t) end tag end choice" & LF
          & "item: choice(u8) = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("module variant struct initializer",
          "choice: type (t: type) = struct tag: variant empty "
@@ -11416,7 +11422,7 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none =" & LF
          & "item: choice(u8) = 5" & LF
          & "end f" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("local variant struct initializer",
          "choice: type (t: type) = struct tag: variant empty "
@@ -11429,7 +11435,7 @@ package body Landin.Tests.Checking_Suite is
         ("module array refusal",
          "row: type (t: type, fixed n: usize) = [n]t" & LF
          & "item: row(u8, 2) = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("module array initializer",
          "row: type (t: type, fixed n: usize) = [n]t" & LF
@@ -11441,7 +11447,7 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none =" & LF
          & "item: row(u8, 2) = 5" & LF
          & "end f" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("local array initializer",
          "row: type (t: type, fixed n: usize) = [n]t" & LF
@@ -11454,17 +11460,17 @@ package body Landin.Tests.Checking_Suite is
          "box: type (t: type) = struct value: t end box" & LF
          & "alias: type = box(u8)" & LF
          & "item: alias = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("named array alias refusal",
          "row: type (t: type, fixed n: usize) = [n]t" & LF
          & "alias: type = row(u8, 2)" & LF
          & "item: alias = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("inline array refusal",
          "item: [2]u8 = 5" & LF,
-         Accepted => False);
+         Accepted => False, Code => "L0301");
       Check_Source
         ("integer slice",
          "f: (value: u32) -> none =" & LF

@@ -1,0 +1,9 @@
+class: negative
+summary: [1210] a match subject is an atom set, a variant part or a pointer union; a number or a whole struct is a type error
+program: main.ldn
+codes: L0301, L0301
+constructs: 0670, 1210, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-match-subject-type/main.ldn
+status: 1

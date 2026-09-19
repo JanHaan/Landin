@@ -13125,14 +13125,39 @@ package body Landin.Stages.Lowering is
                      --  unused scalar value and needs no opcode to say so.
                      --  D112 still gives a returned aggregate temporary
                      --  lifetime through the call before discarding it.
+                     --  A whole array or struct place is reached for its
+                     --  effects alone: each computed index is evaluated and
+                     --  bounds-checked once, and nothing is copied.  A
+                     --  reference or erased pair takes the path its binding
+                     --  would, so an element of a slice array is loaded
+                     --  exactly as `x := a[i]` loads it.
                      declare
                         Value : constant Syn.Node_Id :=
                           Syn.Value_Of (Of_Tree, Stmt);
+                        Held : constant Ty.Type_Kind :=
+                          Type_At (Of_Tree, Value);
                      begin
-                        if Type_At (Of_Tree, Value)
-                             in Ty.Aggregate | Ty.Fixed_Array
-                                | Ty.Slice_Value | Ty.Any_Value
+                        if Held in Ty.Aggregate | Ty.Fixed_Array
+                          and then Syn.Kind (Of_Tree, Value)
+                            in Syn.Name_Reference | Syn.Member_Selection
+                               | Syn.Element_Index
+                          and then not Is_Utf8_Index (Of_Tree, Value)
                         then
+                           declare
+                              Reached : constant Stored_Place :=
+                                Lower_Stored_Place (Of_Tree, Value, Scope);
+                           begin
+                              pragma Unreferenced (Reached);
+                           end;
+                        elsif Held in Ty.Slice_Value | Ty.Any_Value then
+                           declare
+                              Temporary : constant IR.Slot_Id :=
+                                Add_Value_Temporary (Of_Tree, Value);
+                           begin
+                              Lower_Slice_Into
+                                (Of_Tree, Value, Scope, Temporary);
+                           end;
+                        elsif Held in Ty.Aggregate | Ty.Fixed_Array then
                            declare
                               Temporary : constant IR.Slot_Id :=
                                 Add_Value_Temporary (Of_Tree, Value);

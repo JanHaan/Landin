@@ -1,0 +1,9 @@
+class: negative
+summary: D33 infers a counted repetition only from a scalar element; a struct element needs the written array type
+program: main.ldn
+codes: L0304
+constructs: 0520, 0560, 0670, 1830
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-counted-repetition-scalar-element/main.ldn
+status: 1

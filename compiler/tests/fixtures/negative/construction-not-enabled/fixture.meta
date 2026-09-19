@@ -1,6 +1,6 @@
 class: negative
-summary: D72 keeps construction contextual rather than making an ordinary struct a discard, operand or argument value
-constructs: 0700, 1810, 1830
+summary: D72 construction fills a discard or struct destination; as an operand or a scalar argument it is a type error
+constructs: 0700, 1810, 1930
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304, L0304, L0304
+codes: L0301, L0301

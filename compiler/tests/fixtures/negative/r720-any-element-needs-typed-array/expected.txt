@@ -1,0 +1,7 @@
+error[L0304]: an erased `any` element needs an explicitly typed array
+  --> ../tests/fixtures/negative/r720-any-element-needs-typed-array/main.ldn:21:18
+   |
+21 |     inferred := [erased, erased]
+   |                  ^^^^^^
+  = note: the tour describes it at [0520]
+  = note: ROADMAP.md R7.20 records this source-form boundary

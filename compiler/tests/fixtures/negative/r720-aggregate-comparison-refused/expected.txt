@@ -1,0 +1,30 @@
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not a struct
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:14:9
+   |
+14 |     _ = a == b
+   |         ^
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:14:9
+   |
+14 |     _ = a == b
+   |         ^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not a struct
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:15:9
+   |
+15 |     _ = h.corner <> a
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:15:9
+   |
+15 |     _ = h.corner <> a
+   |         ^^^^^^^^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not an array
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:16:9
+   |
+16 |     _ = h.row == h.row
+   |         ^^^^^
+  --> ../tests/fixtures/negative/r720-aggregate-comparison-refused/main.ldn:16:9
+   |
+16 |     _ = h.row == h.row
+   |         ^^^^^^^^^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own

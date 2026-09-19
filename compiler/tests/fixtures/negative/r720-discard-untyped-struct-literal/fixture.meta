@@ -1,0 +1,9 @@
+class: negative
+summary: [1930] discards a construction, while an untyped struct literal needs a named type from its destination
+program: main.ldn
+codes: L0304
+constructs: 0670, 0700, 0710, 1830, 1930
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-discard-untyped-struct-literal/main.ldn
+status: 1

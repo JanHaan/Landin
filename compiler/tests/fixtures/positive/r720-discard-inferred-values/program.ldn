@@ -1,0 +1,40 @@
+--  [1930]: a discard accepts every value an inferred binding would, and
+--  checks it the same way: a literal of any first-element type, a counted
+--  repetition, a construction, a call, `try`, array arithmetic and a control
+--  expression.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+missing: atom
+problems: type = missing
+
+make: () -> (result: point) =
+    result = point(x: 1, y: 2)
+end make
+
+row: () -> (result: [2]u8) =
+    result = [1, 2]
+end row
+
+maybe: () -> (result: [2]u8) ! problems =
+    result = [3, 4]
+end maybe
+
+f: (flag: bool, a: [2]u8, p: point, text: []u8) -> none ! problems =
+    _ = [1, 2]
+    _ = [3 of 1]
+    _ = [a, a]
+    _ = [p, point(x: 5, y: 6)]
+    _ = [text, text]
+    _ = point(x: 1, y: 2)
+    _ = make()
+    _ = row()
+    _ = try maybe()
+    _ = a + a
+    _ = -a
+    _ = if flag then a else row() end if
+    _ = if flag then p else make() end if
+end f

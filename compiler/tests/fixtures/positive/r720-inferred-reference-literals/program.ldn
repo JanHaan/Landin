@@ -1,0 +1,41 @@
+--  D25/[0530]: an inferred literal takes its element type from its first
+--  element, including a slice, a text view, a pointer, a function or an atom
+--  set, and every later element converts to that type.  A local also infers
+--  a whole array or struct from a parameter or its named return.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+red, green: atom
+colour: type = red | green
+
+double: (value: i32) -> (result: i32) =
+    result = value * 2
+end double
+
+f: (bytes: []u8, spare: []mut u8, text: utf8, row: [2]u8, p: point)
+    -> (result: point) =
+    mut local: [2]u8 = [1, 2]
+    views := [bytes, spare]
+    texts := [text, "literal"]
+    words := ["one", "two"]
+    places := [addr local, addr local]
+    steps := [double, double]
+    shades: colour = green
+    colours := [shades, red]
+    rows := row
+    point_copy := p
+    result = p
+    returned := result
+    _ = views
+    _ = texts
+    _ = words
+    _ = places
+    _ = steps
+    _ = colours
+    _ = rows
+    _ = point_copy
+    _ = returned
+end f

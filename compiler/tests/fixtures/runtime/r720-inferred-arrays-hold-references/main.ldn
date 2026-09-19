@@ -1,0 +1,57 @@
+--  D25/[0530]: an inferred literal takes its element type from its first
+--  element whatever that type is, and every later element converts to it.
+--  The arrays built here are then read, indexed and passed after they are
+--  formed.  A mutable view converts to the first element's read-only one,
+--  and the discards are the program that once stopped the compiler: a
+--  computed element of an array of slices.
+
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+first: (row: []u8) -> (value: u8) =
+    value = row[0]
+end first
+
+double: (value: u32) -> (result: u32) =
+    result = value * 2
+end double
+
+triple: (value: u32) -> (result: u32) =
+    result = value * 3
+end triple
+
+sum: (points: [3]point) -> (total: u32) =
+    total = u32(points[0].x) + u32(points[1].y) + u32(points[2].x)
+end sum
+
+public main: () -> (code: i32) =
+    mut left: [2]u8 = [3, 4]
+    right: [3]u8 = [5, 6, 7]
+    views := [right[0..<3], left[0..<2]]
+    words := ["ab", "cde"]
+    p := point(x: 10, y: 20)
+    points := [p, point(x: 1, y: 2), p]
+    places := [addr left, addr left]
+    steps := [double, triple]
+    grid := [[1, 2], [3, 4]]
+    i: usize = 1
+    _ = views[i]
+    typed: [2][]u8 = [left[0..<2], right[0..<3]]
+    _ = typed[i]
+    texts: [2]utf8 = ["a", "b"]
+    _ = texts[i]
+    places[0].val[1] = 9
+    word := words[1]
+    view := views[0]
+    mut total: u32 = u32(first(views[1])) + u32(left[1])
+    total = total + u32(lenof word) + u32(lenof view)
+    total = total + sum(points)
+    total = total + steps[i](value: 2) + u32(grid[1][0])
+    if total == 3 + 9 + 3 + 3 + 10 + 2 + 10 + 6 + 3 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

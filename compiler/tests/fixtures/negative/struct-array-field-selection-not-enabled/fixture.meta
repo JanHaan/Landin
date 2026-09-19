@@ -1,6 +1,6 @@
 class: negative
-summary: D48 admits an element place but keeps the module array field itself refused as a value
-constructs: 0520, 0670, 0750, 1740, 1820, 1830
+summary: D48 admits an element place and [1930] discards the module array field whole, while the field is not a scalar value
+constructs: 0520, 0670, 0750, 1740, 1820, 1930
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

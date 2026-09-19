@@ -1,0 +1,21 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        row: (values: [2]u8)
+    end kind
+end choice
+
+--  D85: a fixed-array payload alias names the matched storage by element.
+--  It is discarded where it stands and indexed, and never copied whole.
+f: (state: choice) -> (total: u8) =
+    total = 0
+    match state.kind
+        leaf: total = 1
+        row(values): if true then
+            _ = values
+            total = values[1]
+            copy := values
+            _ = copy
+        end if
+    end match
+end f

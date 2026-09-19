@@ -1,0 +1,11 @@
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+first: point = (x: 1, y: 2)
+second: point = (x: 3, y: 4)
+
+--  D26: an inferred module literal is a static image of scalar elements.
+bytes := [1, 2]
+points := [first, second]
