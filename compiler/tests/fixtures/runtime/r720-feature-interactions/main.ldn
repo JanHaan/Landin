@@ -1,0 +1,44 @@
+-- R7.20's constructs meeting each other: shared names of a several-atom
+-- pointer union (D233, D235), an inferred array of that union (D241), whole
+-- discards (D241), shared union fields (D233) and a labelled block left from
+-- inside a loop over the array (D234).  Exit 42 means every step agreed.
+none_found: atom
+denied: atom
+maybe: type = none_found | denied | ptr mut u32
+
+pair: type = struct
+    left, right: maybe
+end pair
+
+classify: (m: maybe) -> (code: i32) =
+    match m
+        none_found: code = 1
+        denied:     code = 2
+        ptr (p):    code = i32(p.val)
+    end match
+end classify
+
+public main: () -> (code: i32) =
+    mut cell: u32 = 40
+    mut first, second: maybe = none_found
+    second = addr cell
+    refused: maybe = denied
+    row := [first, second, refused]
+    _ = row[1]
+    _ = row
+    held: pair = (left: second, right: refused)
+    _ = held
+    mut total: i32 = 0
+    search: begin
+        for item in row do
+            total = total + classify(item)
+            break search when total > 40
+        end for
+        total = 0
+    end search
+    code = total + 1
+    if classify(first) <> 1 or classify(held.left) <> 40
+        or classify(held.right) <> 2 or sizeof maybe <> 2 * sizeof usize then
+        code = 3
+    end if
+end main
