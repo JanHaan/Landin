@@ -84,12 +84,29 @@ package body Landin.Stages.Checking.Flow is
         (Nominal : Landin.Checking.Nominal_Type_Id;
          Index   : Positive) return String;
 
+      function Template_Field_Named
+        (Wrote : Res.Declaration_Id;
+         Index : Positive) return String;
+
       function Field_Named
         (Nominal : Landin.Checking.Nominal_Type_Id;
          Index   : Positive) return String
       is
          Wrote : constant Res.Declaration_Id :=
            Landin.Checking.Template_Of (Types.all, Nominal);
+      begin
+         --  [0480]/[1870]: a pointer union has no template; its two cells
+         --  are named as a debugger presents them.
+         if Wrote = Res.No_Declaration then
+            return (if Index = 1 then "atom" else "ptr");
+         end if;
+         return Template_Field_Named (Wrote, Index);
+      end Field_Named;
+
+      function Template_Field_Named
+        (Wrote : Res.Declaration_Id;
+         Index : Positive) return String
+      is
          Field_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Wrote));
          Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
@@ -107,7 +124,7 @@ package body Landin.Stages.Checking.Flow is
                   (Syn.Name
                      (Field_Tree.all,
                       Syn.Nth_Field (Field_Tree.all, Declared, Index)));
-      end Field_Named;
+      end Template_Field_Named;
 
       function Is_Known_Index
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;

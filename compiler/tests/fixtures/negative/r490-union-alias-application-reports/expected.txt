@@ -48,14 +48,3 @@ error[L0301]: a union holds at most one pointer type
 3 | public with_pointer: type (t: type) = first | t | ptr u8
   |                                                   ^^^^^^ the template pointer member
   = note: [0480]: `maybe a pointer` is an atom beside one pointer type
-error[L0304]: a union of several atoms and a pointer is not enabled
-  --> ../tests/fixtures/negative/r490-union-alias-application-reports/main.ldn:9:23
-  |
-9 | several_atoms: type = unions.with_atoms(ptr u8)
-  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/r490-union-alias-application-reports/unions/unions.ldn:4:37
-  |
-4 | public with_atoms: type (t: type) = first | second | t
-  |                                     ^^^^^^^^^^^^^^^^^^ the template union
-  = note: the tour describes it at [0480]
-  = note: ROADMAP.md R7.20 is where it is enabled

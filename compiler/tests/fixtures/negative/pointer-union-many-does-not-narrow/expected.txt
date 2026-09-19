@@ -1,0 +1,20 @@
+error[L0301]: this is not an atom admitted by the set required here
+  --> ../tests/fixtures/negative/pointer-union-many-does-not-narrow/program.ldn:9:9
+  |
+9 |     a = m
+  |         ^
+  --> ../tests/fixtures/negative/pointer-union-many-does-not-narrow/program.ldn:9:5
+  |
+9 |     a = m
+  |     ^ the atom place written here
+  = note: [0640]: an atom value may widen only into a union that contains its identity
+error[L0301]: this does not have the required pointer union type and shape
+  --> ../tests/fixtures/negative/pointer-union-many-does-not-narrow/program.ldn:13:9
+   |
+13 |     m = b
+   |         ^
+  --> ../tests/fixtures/negative/pointer-union-many-does-not-narrow/program.ldn:13:5
+   |
+13 |     m = b
+   |     ^ the place written here
+  = note: The value must match the complete type, shape and reference permissions required by this context

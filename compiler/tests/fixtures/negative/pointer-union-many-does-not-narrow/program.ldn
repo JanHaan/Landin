@@ -1,0 +1,14 @@
+none_found: atom
+denied: atom
+closed: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+bigger: type = none_found | denied | closed | ptr mut u32
+pair: type = none_found | denied
+
+to_atoms: (m: maybe_ptr) -> (a: pair) =
+    a = m
+end to_atoms
+
+to_fewer: (b: bigger) -> (m: maybe_ptr) =
+    m = b
+end to_fewer

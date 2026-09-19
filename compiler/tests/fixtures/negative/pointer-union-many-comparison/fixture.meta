@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] comparing two unions of several atoms and a pointer would tell their cases apart without matching
+constructs: 0480, 1210, 1890
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-comparison/program.ldn
+status: 1

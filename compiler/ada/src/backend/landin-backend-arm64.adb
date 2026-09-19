@@ -996,7 +996,7 @@ package body Landin.Backend.Arm64 is
                declare
                   Done : constant String := Fresh;
                begin
-                  if Landin.IR.Is_Failure_Status_Load
+                  if Landin.IR.Admits_Reserved_Zero
                     (Of_Unit, Item, Value)
                   then
                      Emit ("cbz " & Register & ", " & Done);

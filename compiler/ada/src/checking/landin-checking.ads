@@ -359,14 +359,18 @@ package Landin.Checking is
    --  the particular target's byte-extent limit before one is recorded.
    type Element_Count is range 0 .. 2 ** 64 - 1;
 
-   --  [0480]'s target-parametric atom/pointer union representation.  The
-   --  one-atom case reserves zero and is exactly one pointer carrier; two
-   --  or more atoms use R2.20's ordinary tag-plus-payload placement.
+   --  [0480]'s one-atom pointer union reserves zero and is exactly one
+   --  pointer carrier.  Two or more atoms are no longer measured here: that
+   --  union is Intern_Pointer_Union's two-cell aggregate, whose atom code
+   --  and pointer cells Lay_Out places like any other field run, so the
+   --  former tag-plus-payload arm (a one-byte case tag) is retired rather
+   --  than kept as a second, disagreeing account of the same carrier.
    procedure Reference_Union_Extent
      (Atom_Count : Positive;
       Facts      : Landin.Targets.Target_Facts;
       Size       : out Landin.Targets.Byte_Count;
-      Alignment  : out Landin.Targets.Byte_Alignment);
+      Alignment  : out Landin.Targets.Byte_Alignment)
+     with Pre => Atom_Count = 1;
 
    ------------------------------------------------------------------
    --  Atom sets
@@ -1544,6 +1548,61 @@ package Landin.Checking is
                   and then Template_Of
                     (Into, Intern_Nominal_Instance'Result) = Template;
 
+   --  [0480]/[1870]: a union of two or more atoms and one pointer type is
+   --  a structural two-cell aggregate.  Its identity is interned here with
+   --  no source template, keyed by the complete atom set and the complete
+   --  plain pointer descriptor including its permission, so every
+   --  declaration and alias that flattens to the same members names one
+   --  identity.  Cell 1 is the atom set's ordinary carrier and cell 2 one
+   --  target pointer; code zero, which no atom has, is the pointer case.
+   --  A one-atom union keeps D189's pointer descriptor and is not this.
+   function Intern_Pointer_Union
+     (Into    : in out Table;
+      Atoms   : Atom_Set_Id;
+      Pointer : Reference_Id) return Nominal_Type_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Holds (Into, Atoms)
+                  and then Atom_Count (Into, Atoms) >= 2
+                  and then Holds (Into, Pointer)
+                  and then not Is_Optional_Pointer (Into, Pointer),
+          Post => Holds (Into, Intern_Pointer_Union'Result)
+                  and then Is_Pointer_Union
+                    (Into, Intern_Pointer_Union'Result);
+
+   --  True exactly for an identity Intern_Pointer_Union made; such an
+   --  identity has no template declaration.
+   function Is_Pointer_Union
+     (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
+     with Pre => Holds (Of_Table, Id);
+
+   function Union_Atoms
+     (Of_Table : Table; Id : Nominal_Type_Id) return Atom_Set_Id
+     with Pre  => Holds (Of_Table, Id)
+                  and then Is_Pointer_Union (Of_Table, Id),
+          Post => Holds (Of_Table, Union_Atoms'Result);
+
+   --  The plain pointer member; its Empty_Atom is always No_Declaration.
+   function Union_Pointer
+     (Of_Table : Table; Id : Nominal_Type_Id) return Reference_Id
+     with Pre  => Holds (Of_Table, Id)
+                  and then Is_Pointer_Union (Of_Table, Id),
+          Post => Holds (Of_Table, Union_Pointer'Result);
+
+   --  The canonical source spelling a debugger and a dump present, noted
+   --  once by the stage that interned the identity.  No_Name until then.
+   function Union_Spelling
+     (Of_Table : Table; Id : Nominal_Type_Id)
+      return Landin.Source.Names.Name_Id
+     with Pre => Holds (Of_Table, Id) and then Is_Pointer_Union (Of_Table, Id);
+
+   procedure Note_Union_Spelling
+     (Into : in out Table;
+      Id   : Nominal_Type_Id;
+      Name : Landin.Source.Names.Name_Id)
+     with Pre  => Holds (Into, Id) and then Is_Pointer_Union (Into, Id),
+          Post => Landin.Source.Names."="
+                    (Union_Spelling (Into, Id), Name);
+
    --  The generic-struct checker can reconstruct a formal binding tuple from
    --  only its canonical nominal identity.  Traversal is bounded
    --  by the stored count and returns the same opaque keys accepted above.
@@ -2712,6 +2771,9 @@ private
       Signatures   : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Distinct_Bases : Signature_Part_Vectors.Vector;
+      --  [0480]: a pointer union's canonical spelling, No_Name for every
+      --  other identity.  Parallel to Nominal_Templates.
+      Nominal_Spellings : Link_Name_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;

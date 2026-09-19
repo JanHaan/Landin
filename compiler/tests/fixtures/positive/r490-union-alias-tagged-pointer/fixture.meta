@@ -1,0 +1,5 @@
+class: positive
+summary: a substituted union of several atoms and a pointer is [1870]'s two-cell union, where it retained the named R7.20 refusal before R7.20 enabled it
+program: main.ldn
+constructs: 0480, 0630, 0640, 1290, 1350, 1795
+targets: linux-x86-64, macos-arm64

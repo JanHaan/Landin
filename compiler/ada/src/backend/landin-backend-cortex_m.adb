@@ -961,7 +961,7 @@ package body Landin.Backend.Cortex_M is
                declare
                   Done : constant String := Fresh;
                begin
-                  if Landin.IR.Is_Failure_Status_Load
+                  if Landin.IR.Admits_Reserved_Zero
                     (Of_Unit, Item, Value)
                   then
                      Emit ("cmp " & Register & ", #0");

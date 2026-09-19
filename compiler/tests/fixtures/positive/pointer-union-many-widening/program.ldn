@@ -1,0 +1,139 @@
+--  [0480]/[1870]: every narrower value widens into a union of several
+--  atoms and a pointer, in every position a value of it can take, and
+--  nothing narrows back out of it except through a match.
+none_found: atom
+denied: atom
+closed: atom
+unavailable: atom
+
+result: type = none_found | denied | ptr mut u32
+reading: type = none_found | denied | ptr u32
+bigger: type = result | closed
+refusal: type = none_found | denied
+maybe_cell: type = none_found | ptr mut u32
+
+holder: type = (tag: u32, slot: result)
+
+shape: type = struct
+    kind: variant
+        empty
+        | full: (at: result, weight: u32)
+    end kind
+end shape
+
+box: type (t: type) = (item: t)
+
+module_result: result = denied
+module_bigger: bigger = module_result
+mut module_state: result = none_found
+
+from_singleton: () -> (r: result) =
+    r = denied
+end from_singleton
+
+from_subset: (a: refusal) -> (r: result) =
+    r = a
+end from_subset
+
+from_pointer: (cell: ptr mut u32) -> (r: result from cell) =
+    r = cell
+end from_pointer
+
+relaxed: (cell: ptr mut u32) -> (r: reading from cell) =
+    r = cell
+end relaxed
+
+relaxed_union: (m: result) -> (r: reading from m) =
+    r = m
+end relaxed_union
+
+from_one_atom: (m: maybe_cell) -> (r: result from m) =
+    r = m
+end from_one_atom
+
+grown: (m: result) -> (r: bigger from m) =
+    r = m
+end grown
+
+chosen: (which: u32, cell: ptr mut u32) -> (r: result from cell) =
+    r = if which == 0 then none_found elsif which == 1 then cell
+        else denied end if
+end chosen
+
+matched: (a: refusal, cell: ptr mut u32) -> (r: result from cell) =
+    r = match a
+        none_found: cell
+        denied: denied
+    end match
+end matched
+
+looked: (cell: ptr mut u32) -> (r: result from cell) =
+    r = loop do
+        break with cell
+    end loop
+end looked
+
+fallible: (cell: ptr mut u32, reject: bool) -> (r: result from cell)
+        ! unavailable =
+    fail unavailable when reject
+    r = cell
+end fallible
+
+recovered: (cell: ptr mut u32, reject: bool) -> (r: result from cell) =
+    r = fallible(cell, reject) else denied
+end recovered
+
+stored: (cell: ptr mut u32) -> (h: holder from cell) =
+    h = holder(tag: 1, slot: cell)
+end stored
+
+in_row: (cell: ptr mut u32) -> (row: [3]result from cell) =
+    row = [none_found, cell, denied]
+end in_row
+
+in_payload: (cell: ptr mut u32) -> (s: shape from cell) =
+    s = shape(kind: full(at: cell, weight: 2))
+end in_payload
+
+--  Different unions are different generic actuals.
+boxed: (cell: ptr mut u32) -> (k: u32) =
+    b: box(result) = (item: cell)
+    k = weigh(b.item)
+end boxed
+
+boxed_reading: (cell: ptr u32) -> (read: bool) =
+    b: box(reading) = (item: cell)
+    read = match b.item
+        ptr: true
+        _: false
+    end match
+end boxed_reading
+
+argument: (cell: ptr mut u32) -> (k: u32) =
+    k = weigh(denied) + weigh(cell) + weigh(none_found)
+end argument
+
+weigh: (m: result) -> (k: u32) =
+    match m
+        none_found: k = 1
+        denied: k = 2
+        ptr (p): k = p.val
+    end match
+end weigh
+
+replace: (inout m: result, escaping cell: ptr mut u32) -> none =
+    m = cell
+    m = closed_free(m)
+end replace
+
+closed_free: (m: result) -> (r: result from m) =
+    r = m
+end closed_free
+
+consume: (sink m: result) -> (k: u32) =
+    k = weigh(m)
+end consume
+
+update: () -> none =
+    module_state = denied
+end update

@@ -1,0 +1,10 @@
+error[L0301]: this reference argument has a different type or insufficient permission
+  --> ../tests/fixtures/negative/pointer-union-many-is-not-a-pointer/program.ldn:12:18
+   |
+12 |     value = take(m)
+   |                  ^
+  --> ../tests/fixtures/negative/pointer-union-many-is-not-a-pointer/program.ldn:5:8
+  |
+5 | take: (p: ptr mut u32) -> (value: u32) =
+  |        ^^^^^^^^^^^^^^ this reference parameter
+  = note: [0430]/[0440]/[0570]: reference permission relaxes only from `mut` to read-only

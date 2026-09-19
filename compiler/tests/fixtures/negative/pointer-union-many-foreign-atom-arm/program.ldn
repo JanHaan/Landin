@@ -1,0 +1,13 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+closed: atom
+
+bad: (m: maybe_ptr) -> (value: u32) =
+    match m
+        none_found: value = 0
+        denied: value = 1
+        closed: value = 2
+        ptr: value = 3
+    end match
+end bad
