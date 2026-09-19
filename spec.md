@@ -924,29 +924,31 @@ identity, and assignment or argument passing may widen a singleton or smaller
 set into a set that contains it. No integer is an atom and no zero or default
 atom exists.
 With one atom, `atom | ptr T` uses zero for the atom and every nonzero pattern
-for the pointer, occupying one target pointer carrier [0480]. D189 enables
-that form and nothing else: [1795]'s `union_member` admits one written
-pointer type beside the atom names, a second pointer member is L0301, and two
-or more atoms beside a pointer would use the ordinary target-parametric
-tag-plus-pointer payload placement described here but is not enabled in the
-kernel and is L0304 against R7.20. The source spelling never assumes the
-one-word optimization.
+for the pointer, occupying one target pointer carrier [0480] (D189). With two
+or more atoms, D235 places the atom-set carrier and then one pointer carrier by
+ordinary natural alignment: the first holds the atom's own code, and zero,
+which no atom has, marks the present case whose pointer the second holds.
+[1795]'s `union_member` admits one written pointer type beside the atom names,
+and a second pointer member is L0301. The source spelling never assumes either
+representation.
 
 The union is not a pointer. `.val`, `addr` of a `.val` reached through one,
 an integer conversion of one, `any` construction from one, a comparison of
 one, and an argument or result position wanting `ptr T` are each L0301,
-because each would read the empty case as an address; `ptr(n)` cannot produce
-one for the same reason, and `zeroed` does not name its empty case because no
-zero or default atom exists. A plain `ptr T` widens into `atom | ptr T` and
-the atom's singleton widens into it, in the direction this paragraph already
-gives atom sets; neither direction reverses. `match` [1210] is the only way
-through, its two cases are the atom name and the reserved word `ptr` with an
-optional read-only binding of the plain pointer type, an `inout` binding on
-that arm is L0301 [1220], a case named twice is L0311, and a case named by
-neither an arm nor `_` is L0312 exactly as for an atom set. The bound pointer
-carries the subject's own origin [0770] [0780], and the empty case carries
-none, so a union built from a frame address still refuses an escaping use of
-the bound pointer.
+because each would read an atom case as an address; `ptr(n)` cannot produce
+one for the same reason, and `zeroed` does not name an atom case because no
+zero or default atom exists. A plain `ptr T` widens into a union whose
+pointer member it relaxes to, and an atom singleton or a contained atom set
+widens into it, in the direction this paragraph already gives atom sets; a
+smaller union widens into a larger one with the same pointer member, and
+neither direction reverses (D235). `match` [1210] is the only way through: its
+cases are the union's atom names and the reserved word `ptr` with an optional
+read-only binding of the plain pointer type, an `inout` binding on that arm is
+L0301 [1220], a case named twice is L0311, and a case named by neither an arm
+nor `_` is L0312 exactly as for an atom set. The bound pointer carries the
+subject's own origin [0770] [0780], and an atom case carries none, so a union
+built from a frame address still refuses an escaping use of the bound
+pointer.
 An origin names a kind of storage, not a lifetime: "allocated" says a
 reference came from an allocator, and nothing about whether that allocator
 has since released or reset it [0770] [0860]. Two arenas are one origin,
@@ -8484,8 +8486,10 @@ even in unused declarations. An invalid concrete substitution names its applicat
 as the primary source and its template member as the related source. The resulting alias participates in the
 ordinary error-set, assignment and generic-key rules. A one-atom pointer union
 uses D189's existing descriptor, including the empty atom of a substituted
-optional-pointer alias. Two pointer members are still refused, and two or more
-atoms beside a pointer retain the R7.20 refusal; no new carrier is introduced.
+optional-pointer alias. Two pointer members are still refused. Two or more
+atoms beside a pointer were refused against R7.20 here; D235 later gives them
+its two-cell union, including through a parameterized alias such as
+`opt(t) = a | b | ptr t`.
 
 A fully applied alias is normalized during checking. Its enabled result is a
 scalar, fixed-array, atom-set, pointer or nominal aggregate descriptor; an alias
@@ -8533,9 +8537,9 @@ requires substitution. All were declined.
 `negative/r490-union-alias-direct-array`,
 `negative/r490-union-alias-unused-nonatom`,
 `negative/r490-union-alias-two-pointers`,
-`negative/r490-union-alias-tagged-pointer`,
-`negative/r490-union-alias-optional-widening`,
-`negative/r490-union-concrete-optional-widening`,
+`positive/r490-union-alias-tagged-pointer`,
+`positive/r490-union-alias-optional-widening`,
+`positive/r490-union-concrete-optional-widening`,
 `negative/r490-union-alias-deduction-conflict`, the checking case
 `union aliases keep exact instance keys`, and the parameterized-alias and
 parameterized-struct parser and
@@ -11671,6 +11675,10 @@ and IR records, and the `subtype.range` guarantee row.
 
 ### D189 — A one-atom pointer union is a pointer whose empty case is zero
 
+D235 later gives two or more atoms beside a pointer a two-cell union and
+retires `Reference_Union_Extent`'s two-atom arm; the one-atom representation
+below is unchanged.
+
 **The tour said** that there is no null, that "maybe a pointer" is an ordinary
 union of an atom and a pointer type, that with one atom the compiler
 represents it as a plain pointer with 0 for the empty case, and that the
@@ -11762,7 +11770,7 @@ foreign-boundary work; ROADMAP.md records it against that item rather than
 leaving [0480] looking closed while its headline sentence is evadable.
 
 **Pinned by** `positive/pointer-unions`, `runtime/pointer-unions`,
-`negative/pointer-union-several-atoms`,
+`positive/pointer-union-several-atoms`,
 `negative/pointer-union-two-pointers`,
 `negative/pointer-union-dereference`,
 `negative/pointer-union-assignment-target`,
@@ -14662,6 +14670,94 @@ would change what every existing `break` inside a labelled block means.
 `negative/r720-labelled-block-not-an-expression`, the driver case
 `R7.20 labelled block refusals` for the closer and `continue` reports, and the
 `control.loops` guarantee row.
+
+### D235 — Several atoms beside a pointer store the atom's own code beside the pointer
+
+**The tour said** that "maybe a pointer" is an ordinary union of an atom and a
+pointer type, and that the spelling does not decide how a union of several
+atoms and a pointer is laid out [0480]; [1870] placed that form as a tag beside
+the pointer. D189 enabled the one-atom form as a pointer reserving zero and
+refused two or more atoms beside a pointer by name against R7.20, recording
+that the tagged form needs an IR pair, storage, an ABI position and a backend
+of its own.
+
+**Chosen:** a union that flattens — through aliases, parameterized aliases and
+member unions, ignoring order and repetition — to two or more atom identities
+and exactly one pointer type is one structural type: its atom set plus the
+pointer type, whose `mut` is part of the identity. It is a two-cell aggregate
+with no source declaration. The first cell is the atom-set carrier, holding
+the atom's own dense nonzero code exactly as a value of that set would; the
+second is one target pointer carrier. Code zero, which no atom has, marks the
+present case, whose non-null pointer the second cell holds. The cells take
+ordinary natural placement: 16 bytes aligned 8 on Linux x86-64 and Darwin
+arm64, 8 bytes aligned 4 on Cortex-M0. Every case is built in a cleared
+temporary and copied whole, so an atom case leaves its pointer cell zero, and
+a module image does the same. The union is passed, returned and copied as an
+ordinary aggregate, by address in the internal convention on all three
+targets.
+
+Widening never reverses. An atom singleton or an atom set contained in the
+union's set widens by copying its code. A pointer of the member type, or one
+that relaxes to it by [0440], widens as code zero and the pointer. A one-atom
+union whose atom is in the set and whose pointer relaxes to the member widens
+with its zero carrier becoming that atom's code; a smaller several-atom union
+copies both cells. An `inout` or `sink` parameter takes only a place of exactly
+the same union. Match is D189's: arms name the set's atoms or `ptr` with an
+optional read-only binding, exhaustiveness covers every atom and `ptr`, and an
+atom outside the set, a duplicate or a missing case, an `inout` `ptr` binding
+and a `ptr` arm on another subject keep their reports. Lowering loads the code;
+zero selects the `ptr` arm and binds the pointer, and any other code dispatches
+exactly as an atom-set match. The positions D189 refuses for the one-atom form
+are refused identically: `.val`, `addr` of a `.val`, an integer conversion,
+`any` construction, a comparison, a `ptr T` argument or result, `ptr(n)` into
+one, and `zeroed`, which is L0301 for both forms as the one-atom fixture has
+recorded since invalid `zeroed` contexts became type errors. The pointer case
+carries the stored pointer's origin and an atom case none, so a union built
+from `addr local` still refuses an escaping use of its bound pointer. A module
+union takes an atom or another module union as its static image; an address
+initializer is the one-atom form's L0305. A call returning a plain pointer
+cannot fill a union through an atom `else`: that recovery would need a new
+lowering, and remains L0301.
+
+No IR instruction, ABI position or instruction selection is added. The code
+cell is typed with the union's atom set, and every backend already traps an
+atom-typed load that finds a non-member; the call-failure status channel was
+the one load allowed to find the zero sentinel. `Landin.IR.Admits_Reserved_Zero`
+now names both — that channel and a union's code cell in a frame slot — and the
+three backends ask it instead, reaching the zero-skipping selection they
+already had. The verifier holds a union nominal to exactly its code and pointer
+cells. DWARF describes the union as a structure named by its canonical
+spelling — atoms by spelling, ties by declaration identity, then the pointer
+type, for example `denied | none_found | ptr mut u32` — with an `atom` member at
+offset zero and a `ptr` member at the pointer's offset. GDB and LLDB show both
+members in an atom case and in the pointer case.
+
+**The alternatives:** a tag holding a case index, as a variant part does, was
+declined because widening from an atom set or a smaller union would then
+renumber rather than copy, while the code costs nothing more: pointer
+alignment already rounds a one-byte tag up to the pointer's width. Storing
+atoms in the pointer's low bits was declined because it depends on the
+pointee's alignment exceeding the case count, which a byte pointer never does.
+Reserving small addresses for the atoms, as the one-atom form reserves zero,
+was declined because Cortex-M0 flash begins at address zero with the vector
+table, so small addresses are real pointers there. Lowering onto a hidden
+variant part was declined for the same renumbering. Keeping the form refused
+was declined: the representation needed no new backend machinery, and [1700]
+reads atoms as one idea wherever they appear.
+
+**Pinned by** `positive/pointer-union-several-atoms`,
+`positive/pointer-union-many-declarations`,
+`positive/pointer-union-many-widening`,
+`positive/r490-union-alias-tagged-pointer`, `runtime/pointer-union-many`,
+`runtime/r720-feature-interactions`,
+`negative/pointer-union-many-dereference`,
+`negative/pointer-union-many-comparison`,
+`negative/pointer-union-many-zeroed`,
+`negative/pointer-union-many-match-not-exhaustive`,
+`negative/pointer-union-many-frame-escape`,
+`negative/pointer-union-many-inout-is-exact`,
+`negative/pointer-union-many-two-pointers`, the GDB and LLDB union views in
+`compiler/tests/debugging`, and the `pointer.optional` guarantee row.
 
 ### D236 — A range subtype constrains scalar positions only
 

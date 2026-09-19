@@ -281,6 +281,7 @@ there is no separate Cortex layout algorithm in checking or neutral IR.
 |---|---|
 | enabled integer and float scalars | 1/2/4/8 bytes with equal natural alignment; bool occupies one byte |
 | `usize`, `isize`, references, optional atom/pointer, function address | four bytes, aligned four; semantic identities remain distinct |
+| several-atom pointer union (D235) | two four-byte cells, aligned four: the atom code, then the pointer; code zero is the pointer case |
 | slice, utf8/utf16 view, `any` | two four-byte cells, aligned four; slice base then length, any data then table |
 | cstring | one four-byte pointer |
 | natural structs, fixed arrays and instantiated generic records | shared source-order placement, element stride and final padding, bounded by target `usize` |
