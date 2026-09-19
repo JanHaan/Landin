@@ -84,23 +84,6 @@
       ]
     },
     {
-      "id": "debugger-release",
-      "mode": "release",
-      "commands": [
-        [
-          "./scripts/clean.sh",
-          "--all"
-        ],
-        [
-          "./scripts/build.sh",
-          "-j8"
-        ],
-        [
-          "./scripts/debug.sh"
-        ]
-      ]
-    },
-    {
       "id": "bindings",
       "mode": "debug",
       "commands": [
@@ -174,5 +157,5 @@
   ],
   "cortex_m": true,
   "scope": "routine",
-  "debugger": true
+  "debugger": false
 }

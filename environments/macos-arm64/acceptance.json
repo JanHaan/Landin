@@ -1,7 +1,7 @@
 {
   "schema": 4,
   "scope": "routine",
-  "debugger": true,
+  "debugger": false,
   "modes": [
     "debug",
     "release"
@@ -9,9 +9,7 @@
   "hosted_modes": [
     "release"
   ],
-  "debugger_modes": [
-    "release"
-  ],
+  "debugger_modes": [],
   "commands": [
     [
       "env",
@@ -68,15 +66,6 @@
       "{refine-release}",
       "--output",
       "{bindings-release}"
-    ],
-    [
-      "env",
-      "LANDIN_BUILD_MODE=release",
-      "./scripts/debug.sh",
-      "--target=darwin-arm64",
-      "--parity",
-      "--output",
-      "{debugging-release}"
     ]
   ]
 }
