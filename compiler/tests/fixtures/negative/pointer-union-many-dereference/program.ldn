@@ -1,0 +1,9 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+
+bad: () -> (value: u32) =
+    mut cell: u32 = 1
+    m: maybe_ptr = addr cell
+    value = m.val
+end bad

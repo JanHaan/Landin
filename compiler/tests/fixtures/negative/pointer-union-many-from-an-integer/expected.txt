@@ -1,0 +1,10 @@
+error[L0301]: `ptr` converts an integer into a pointer, and this position wants a union of atoms and one
+  --> ../tests/fixtures/negative/pointer-union-many-from-an-integer/program.ldn:6:9
+  |
+6 |     m = ptr(4096)
+  |         ^^^^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-from-an-integer/program.ldn:6:5
+  |
+6 |     m = ptr(4096)
+  |     ^ the place written here
+  = note: [0480]: an atom case is written as its atom and the pointer case only from a pointer

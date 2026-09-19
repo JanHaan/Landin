@@ -1,0 +1,10 @@
+error[L0301]: this argument has a different struct type
+  --> ../tests/fixtures/negative/pointer-union-many-inout-is-exact/program.ldn:13:12
+   |
+13 |     change(f)
+   |            ^
+  --> ../tests/fixtures/negative/pointer-union-many-inout-is-exact/program.ldn:7:10
+  |
+7 | change: (inout m: bigger) -> none =
+  |          ^^^^^^^^^^^^^^^ this parameter
+  = note: [0710]: ordinary structs are nominal

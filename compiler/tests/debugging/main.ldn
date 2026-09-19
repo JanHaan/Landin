@@ -167,3 +167,26 @@ debug_outer: (caller call_site: debug_site,
             then result = 42 end if
     end match
 end debug_outer
+
+debug_none: atom
+debug_denied: atom
+debug_union: type = debug_none | debug_denied | ptr mut i32
+
+--  [0480]/[1870]: one union local holds an atom case and one the pointer
+--  case; a debugger presents each as its atom code and pointer cells.
+debug_unions: (union_param: ptr mut i32) -> (result: i32) =
+    union_atom: debug_union = debug_denied
+    union_pointer: debug_union = union_param
+    union_ready: i32 = 1
+    result = 1
+    match union_atom
+        debug_denied:
+            match union_pointer
+                ptr (union_bound):
+                    if union_bound.val == 41 and union_ready == 1
+                    then result = 42 end if
+                _: result = 2
+            end match
+        _: result = 3
+    end match
+end debug_unions

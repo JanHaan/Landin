@@ -17,6 +17,8 @@ public main: () -> (code: i32) =
                                          generic_param: u32(1),
                                          generic_bound: u32(2))
     aliases: i32 = debug_aliases()
+    unions: i32 = debug_unions(pointer_value)
     if code == 42 and first_generic and second_generic and aliases == 42
+      and unions == 42
     then code = 42 else code = 1 end if
 end main

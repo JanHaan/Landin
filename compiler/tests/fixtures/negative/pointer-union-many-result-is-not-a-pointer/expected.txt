@@ -1,0 +1,10 @@
+error[L0301]: this does not have the required pointer type and shape
+  --> ../tests/fixtures/negative/pointer-union-many-result-is-not-a-pointer/program.ldn:6:9
+  |
+6 |     p = m
+  |         ^
+  --> ../tests/fixtures/negative/pointer-union-many-result-is-not-a-pointer/program.ldn:6:5
+  |
+6 |     p = m
+  |     ^ the reference place written here
+  = note: The value must match the complete type, shape and reference permissions required by this context

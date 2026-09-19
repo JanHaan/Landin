@@ -1,0 +1,188 @@
+--  [0480]/[1870]: two or more atoms beside one pointer type are a two-cell
+--  union: the atom code, then one target pointer carrier.  Code zero, which
+--  no atom has, is the pointer case.  Matching is the only way to the
+--  pointer, and every narrower value widens into the union.
+none_found: atom
+denied: atom
+closed: atom
+
+lookup_result: type = none_found | denied | ptr mut u32
+fewer: type = denied | none_found | ptr mut u32
+bigger: type = lookup_result | closed
+reading: type = ptr u32 | denied | none_found
+refusal: type = none_found | denied
+maybe_cell: type = none_found | ptr mut u32
+
+holder: type = struct
+    tag: u32
+    slot: lookup_result
+end holder
+
+shape: type = struct
+    kind: variant
+        empty
+        | full: (at: lookup_result, weight: u32)
+    end kind
+end shape
+
+box: type (t: type) = (item: t)
+opt: type (t: type) = none_found | denied | ptr t
+
+mut shared: u32 = 7
+module_refusal: lookup_result = denied
+module_copy: lookup_result = module_refusal
+mut module_state: lookup_result = none_found
+
+--  Every case reads back as a distinct number; the pointer case reads its
+--  referent.
+code_of: (m: lookup_result) -> (k: u32) =
+    match m
+        none_found: k = 1
+        denied: k = 2
+        ptr (p): k = p.val
+    end match
+end code_of
+
+code_of_bigger: (m: bigger) -> (k: u32) =
+    match m
+        ptr (p): k = p.val
+        closed: k = 3
+        _: k = 4
+    end match
+end code_of_bigger
+
+read_only: (m: reading) -> (k: u32) =
+    match m
+        ptr (p): k = p.val
+        none_found: k = 1
+        denied: k = 2
+    end match
+end read_only
+
+--  The pointer case leaves through a named return with its parameter's
+--  origin; an atom case has no origin to compare with `from`.
+lookup: (want: u32, cell: ptr mut u32) -> (found: lookup_result from cell) =
+    if want == 1 then
+        found = cell
+    elsif want == 2 then
+        found = denied
+    else
+        found = none_found
+    end if
+end lookup
+
+pass: (m: lookup_result) -> (r: lookup_result from m) =
+    r = m
+end pass
+
+from_set: (a: refusal) -> (r: lookup_result) =
+    r = a
+end from_set
+
+from_fewer: (f: fewer) -> (r: lookup_result from f) =
+    r = f
+end from_fewer
+
+from_maybe: (m: maybe_cell) -> (r: lookup_result from m) =
+    r = m
+end from_maybe
+
+to_bigger: (m: lookup_result) -> (r: bigger from m) =
+    r = m
+end to_bigger
+
+--  Writing through the bound pointer changes the referent, not the union.
+bump: (m: lookup_result) -> none =
+    match m
+        ptr (p): p.val = p.val + 1
+        _: _ = 0
+    end match
+end bump
+
+replace: (inout m: lookup_result, escaping cell: ptr mut u32) -> none =
+    m = cell
+end replace
+
+consume: (sink m: lookup_result) -> (k: u32) =
+    k = code_of(m)
+end consume
+
+identity: (t: type, x: t) -> (y: t from x) =
+    y = x
+end identity
+
+--  A parameterized union: each actual is its own union and instance key.
+pick: (t: type, value: ptr t, which: u32) -> (r: opt(t) from value) =
+    if which == 0 then
+        r = value
+    elsif which == 1 then
+        r = denied
+    else
+        r = none_found
+    end if
+end pick
+
+weigh_number: (m: opt(u32)) -> (k: u32) =
+    match m
+        ptr (p): k = p.val
+        none_found: k = 1
+        denied: k = 2
+    end match
+end weigh_number
+
+weigh_holder: (m: opt(holder)) -> (k: u32) =
+    match m
+        ptr (p): k = p.val.tag
+        _: k = 3
+    end match
+end weigh_holder
+
+public main: () -> (code: i32) =
+    mut cell: u32 = 40
+    mut other: u32 = 5
+    absent: lookup_result = none_found
+    refused: lookup_result = lookup(2, addr cell)
+    present: lookup_result = lookup(1, addr cell)
+    copied: lookup_result = pass(present)
+    h: holder = holder(tag: 1, slot: denied)
+    row: [3]lookup_result = [none_found, addr other, denied]
+    s: shape = shape(kind: full(at: addr cell, weight: 2))
+    w: box(lookup_result) = (item: addr other)
+    mut changed: lookup_result = absent
+    replace(changed, addr shared)
+    f: fewer = denied
+    g: maybe_cell = addr cell
+    empty_cell: maybe_cell = none_found
+    x: refusal = denied
+    view: reading = present
+    mut total: u32 = code_of(absent) + code_of(refused) + code_of(present)
+    total = total + code_of(copied) + code_of(h.slot) + code_of(row[0])
+    total = total + code_of(row[1]) + code_of(row[2]) + code_of(w.item)
+    total = total + code_of(changed) + code_of(from_fewer(f))
+    total = total + code_of(from_maybe(g)) + code_of(from_maybe(empty_cell))
+    total = total + code_of(from_set(x)) + read_only(view)
+    total = total + code_of_bigger(to_bigger(absent))
+    total = total + code_of_bigger(closed) + code_of(identity(present))
+    total = total + code_of(module_refusal) + code_of(module_copy)
+    total = total + code_of(module_state)
+    module_state = addr shared
+    total = total + code_of(module_state)
+    match s.kind
+        empty: total = total + 1000
+        full (at, weight): total = total + code_of(at) + weight
+    end match
+    bump(present)
+    total = total + cell + consume(refused)
+    number: u32 = 30
+    total = total + weigh_number(pick(addr number, u32(0)))
+    total = total + weigh_holder(pick(addr h, u32(2)))
+    --  [1870]: the atom code precedes one target pointer carrier.
+    if sizeof usize == 8 then
+        if sizeof lookup_result == 16 and alignof lookup_result == 8 then
+            total = total + 1
+        end if
+    elsif sizeof lookup_result == 8 and alignof lookup_result == 4 then
+        total = total + 1
+    end if
+    code = i32(total) - 320
+end main

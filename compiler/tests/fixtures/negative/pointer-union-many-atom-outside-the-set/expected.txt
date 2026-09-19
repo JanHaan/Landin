@@ -1,0 +1,10 @@
+error[L0301]: this is not an atom admitted by the union required here
+  --> ../tests/fixtures/negative/pointer-union-many-atom-outside-the-set/program.ldn:7:9
+  |
+7 |     m = closed
+  |         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-atom-outside-the-set/program.ldn:7:5
+  |
+7 |     m = closed
+  |     ^ the place written here
+  = note: [0480]/[0640]: an atom value may widen only into a union that contains its identity

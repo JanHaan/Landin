@@ -1,0 +1,10 @@
+error[L0301]: `.val` wants a pointer and this is a union of atoms and one
+  --> ../tests/fixtures/negative/pointer-union-many-address-of-referent/program.ldn:6:27
+  |
+6 |     p: ptr mut u32 = addr m.val
+  |                           ^
+  --> ../tests/fixtures/negative/pointer-union-many-address-of-referent/program.ldn:1:1
+  |
+1 | none_found: atom
+  | ^^^^^^^^^^^^^^^^ an atom case this union holds
+  = note: [0480]: a pointer union is matched before it is read

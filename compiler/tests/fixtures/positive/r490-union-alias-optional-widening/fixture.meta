@@ -1,6 +1,5 @@
-class: negative
-summary: flattening a substituted optional-pointer alias preserves its old empty atom before rejecting the larger tagged union
+class: positive
+summary: flattening a substituted optional-pointer alias preserves its old empty atom in the larger union of several atoms and a pointer
 program: main.ldn
-codes: L0304
 constructs: 0480, 0630, 0640, 1290, 1350, 1795
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,10 @@
+error[L0301]: an integer conversion wants a pointer and this is a union of atoms and one
+  --> ../tests/fixtures/negative/pointer-union-many-integer-conversion/program.ldn:6:21
+  |
+6 |     address = usize(m)
+  |                     ^
+  --> ../tests/fixtures/negative/pointer-union-many-integer-conversion/program.ldn:1:1
+  |
+1 | none_found: atom
+  | ^^^^^^^^^^^^^^^^ an atom case this union holds
+  = note: [0480]: a pointer union is matched before it is read

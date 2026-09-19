@@ -1,0 +1,27 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+
+bad: () -> (m: maybe_ptr) =
+    mut value: u32 = 1
+    m = addr value
+end bad
+
+also_bad: (flag: bool) -> (m: maybe_ptr) =
+    mut value: u32 = 1
+    local: maybe_ptr = addr value
+    if flag then
+        m = denied
+    else
+        m = local
+    end if
+end also_bad
+
+bound_escape: () -> (p: ptr mut u32) =
+    mut value: u32 = 1
+    local: maybe_ptr = addr value
+    match local
+        ptr (q): p = q
+        _: p = ptr(4096)
+    end match
+end bound_escape

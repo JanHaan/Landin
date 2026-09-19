@@ -1,0 +1,10 @@
+error[L0301]: a comparison wants a pointer and this is a union of atoms and one
+  --> ../tests/fixtures/negative/pointer-union-many-comparison/program.ldn:6:12
+  |
+6 |     same = left == right
+  |            ^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-comparison/program.ldn:1:1
+  |
+1 | none_found: atom
+  | ^^^^^^^^^^^^^^^^ an atom case this union holds
+  = note: [0480]: a pointer union is matched before it is read

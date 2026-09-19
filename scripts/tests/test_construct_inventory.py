@@ -166,7 +166,7 @@ class Inventory(unittest.TestCase):
                          ("0850", "R6.80", "pending"),
                          ("0660", "R7.20", "pending")):
             self.assertIn(expected, wording)
-        self.assertEqual(len(self.inputs["refusals"]), 21)
+        self.assertEqual(len(self.inputs["refusals"]), 20)
 
     def test_target_records_decide_where_a_fixture_runs(self):
         held = self.inputs["targets"]

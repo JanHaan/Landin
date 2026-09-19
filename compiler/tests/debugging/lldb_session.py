@@ -141,6 +141,19 @@ def run(debugger, config_path):
         values(f, 'destructuring', {'renamed_left': 15, 'renamed_right': 25})
         f = continued('loop-element', 'debug_aliases')
         values(f, 'loop alias', {'loop_element': 3, 'loop_sum': 0})
+        # [0480]/[1870]: a live union in an atom case and in the pointer case,
+        # presented as a structure named by its canonical source spelling.
+        f = continued('unions-ready', 'debug_unions')
+        union_type = f.FindVariable('union_atom').GetType()
+        record('union type', union_type.GetName(), 'debug_denied | debug_none | ptr mut i32')
+        record('union members', [union_type.GetFieldAtIndex(i).GetName()
+                                 for i in range(union_type.GetNumberOfFields())], ['atom', 'ptr'])
+        record('union offsets', [union_type.GetFieldAtIndex(i).GetOffsetInBytes()
+                                 for i in range(union_type.GetNumberOfFields())], [0, 8])
+        record('union bytes', union_type.GetByteSize(), 16)
+        record('union atom case code', value(f, 'union_atom.atom') > 0, True)
+        values(f, 'unions', {'union_atom.ptr': 0, 'union_pointer.atom': 0,
+                             'union_pointer.ptr.*': 41})
         process.Continue()
         record('inferior exited', process.GetState(), lldb.eStateExited)
         record('inferior status', process.GetExitStatus(), 42)
