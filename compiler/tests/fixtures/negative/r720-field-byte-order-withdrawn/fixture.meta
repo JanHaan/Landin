@@ -1,0 +1,8 @@
+class: negative
+summary: D239 withdraws per-field byte order, so `big u16` is an ordinary field parse error rather than a storage attribute or a pending refusal
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/r720-field-byte-order-withdrawn/main.ldn
+codes: L0103
+status: 1
+constructs: 0750, 0760

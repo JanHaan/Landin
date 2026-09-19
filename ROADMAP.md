@@ -162,12 +162,15 @@ these records with the inherited register; R7.70 must preserve every transfer.
   manifests, locks, publishing, naming authority, generator orchestration and
   the still-unnamed user-facing build/package tool.
 - **Broader standard library:** library layers beyond the core/runtime required
-  by the four prototype programs.
+  by the four prototype programs, including the atomic wrapper type R7.20's
+  D240 transfers from [1620].
 - **Competitive optimization:** optimization beyond correct deterministic
   baseline code generation and the specialization required by the amended
   specification.
 - **Language evolution:** parked and watch items whose implementation triggers
-  do not occur during this roadmap.
+  do not occur during this roadmap, and the u128, i128 and f16 scalars R7.20's
+  D237 transfers from [0150] and [0170], triggered by a program that needs
+  128-bit arithmetic or binary16 values.
 - **Release readiness:** licensing, distribution, production claims and every
   release or version decision.
 
@@ -11850,9 +11853,9 @@ means the generated row's evidence is the whole explanation.
 | `[0120]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named `type` source-form boundary |
 | `[0130]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[0140]` | executed | all | none | R1.50 | none | matrix evidence |
-| `[0150]` | executed | all | none | R4.10 | R7.20 | The enabled widths are matrix evidence; u128 and i128 are refused by name pending R7.20 under D190 and R551-29. Arbitrary packed widths are D228's, admitted only in packed fields [0730]. |
+| `[0150]` | executed | all | none | R4.10 | Language evolution | The enabled widths are matrix evidence. D237 transfers u128 and i128 to Language evolution, triggered by a program that needs 128-bit arithmetic; the checker's named refusal says R7.20 transfers them. Arbitrary packed widths are D228's, admitted only in packed fields [0730]. |
 | `[0160]` | executed | all | none | R2.10 | none | matrix evidence |
-| `[0170]` | executed | all | none | R4.10 | R7.20 | f32 and f64 are matrix evidence; f16 is refused by name pending R7.20 under D190 and R551-29. |
+| `[0170]` | executed | all | none | R4.10 | Language evolution | f32 and f64 are matrix evidence. D237 transfers f16 to Language evolution, triggered by a program that needs binary16 values; the checker's named refusal says R7.20 transfers it. |
 | `[0180]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[0190]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[0200]` | executed | all | none | R1.60 | none | matrix evidence |
@@ -11897,21 +11900,21 @@ means the generated row's evidence is the whole explanation.
 | `[0590]` | executed | all | none | R4.50 | none | D209 and matrix evidence |
 | `[0600]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[0610]` | executed | all | none | R4.10 | none | matrix evidence |
-| `[0620]` | deferred | none | none | none | R7.20 | The tour declares structure-of-arrays DEFERRED and keeps it as a design record; no program has proved it necessary and nothing enables `soa`, which meets an ordinary parse error. R7.20 owns whether its trigger forced a tour amendment; otherwise inherited C5 transfers to Language evolution at R7.30 under R551-35. |
+| `[0620]` | deferred | none | none | none | R7.30 | The tour declares structure-of-arrays DEFERRED and keeps it as a design record; nothing enables `soa`, which meets an ordinary parse error. R7.20 found C5's trigger unfired: no derived program is a simulation or needs one field contiguous, so no tour amendment was owed. R7.30 dispositions inherited C5 under R551-35 and transfers it to Language evolution if it is still untriggered. |
 | `[0630]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0640]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0650]` | executed | all | none | R2.20 | none | named refusal |
-| `[0660]` | executed | all | none | R4.10 | R7.20 | Scalar range subtypes are matrix evidence under D188; composite, reference, `addr` and generic-argument positions are refused by name pending R7.20 under R551-29. |
+| `[0660]` | executed | all | none | R4.10 | none | Scalar range subtypes are matrix evidence under D188. D236 records the struct-field, array-element, reference-target, `addr` and generic-argument positions as the paragraph's permanent boundary, and their named refusals say R7.20 records it. |
 | `[0670]` | executed | all | none | R2.20 | R7.20 | Both struct forms are matrix evidence; R2.20 records the named inline-struct source-form boundary. Checker refusals of the remaining general struct-value positions still say R2.20 enables them; R7.20 implements or amends each and the note follows. |
 | `[0680]` | executed | all | none | R2.20 | R7.20 | Variant declaration, storage, construction and matching are matrix evidence. Checker refusals of the remaining general variant-value positions still say R2.20 enables them; R7.20 implements or amends them and the note follows. |
 | `[0690]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0700]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0710]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0720]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named all-`of` literal source-form boundary |
-| `[0730]` | executed | all | none | R6.80 | R7.20, Companion tool and ecosystem | D228 packed images, encoded unions and the explicit named-boolean expansion are matrix evidence on all three targets, the derived driver on Cortex-M. Automatic `set(X)` is neither enabled nor refused by name, and meets L0304 as a parameterized alias: R7.20 implements or amends it. General SVD generation stays with Companion tool and ecosystem under R551-33, as the paragraph says. |
-| `[0740]` | executed | all | none | R6.80 | R7.20 | D228 access modes and explicit register-image policies are matrix evidence, including the generated RP2040 consumers and the derived driver. The generated `register(t, read:, write:, reset:)` wrapper the paragraph shows is outside the enabled kernel and meets a parse error rather than a named refusal: R7.20 implements or amends it. |
-| `[0750]` | executed | all | none | R2.20 | R7.20 | Source order, optimal and C layout are matrix evidence. Per-field byte order such as `big u16` is shown as language, called broader design and meets a parse error: R7.20 implements or amends it. |
-| `[0760]` | executed | all | none | R6.80 | R7.20 | The enabled attributes are matrix evidence, including Cortex-M placement. The `big` and `little` field words and `weak`, `inline` and `noinline` are listed but outside the enabled slice and not refused by name: R7.20 implements or amends them. |
+| `[0730]` | executed | all | none | R6.80 | Companion tool and ecosystem | D228 packed images, encoded unions and named-boolean set fields are matrix evidence on all three targets, the derived driver on Cortex-M. D238, an R7.20 decision, withdraws the `set(X)` former, whose unresolved application meets [1350]'s ordinary refusal. General SVD generation stays with Companion tool and ecosystem under R551-33, as the paragraph says. |
+| `[0740]` | executed | all | none | R6.80 | none | D228 access modes and register operations are matrix evidence, including the generated RP2040 consumers and the derived driver. D238, an R7.20 decision, withdraws the `register(t, read:, write:, reset:)` wrapper, which remains an ordinary parse error. |
+| `[0750]` | executed | all | none | R2.20 | none | Source order, optimal and C layout are matrix evidence. D239, an R7.20 decision, withdraws per-field byte order; `negative/r720-field-byte-order-withdrawn` pins that `big u16` is an ordinary field error. |
+| `[0760]` | executed | all | none | R6.80 | none | The enabled attributes are matrix evidence, including Cortex-M placement. R7.20 withdraws `volatile` with its pointer type (D238) and `big`, `little`, `weak`, `inline` and `noinline` (D239); `negative/r720-machine-attribute-words-withdrawn` pins `link(weak)`. |
 | `[0770]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0780]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0790]` | executed | all | none | R2.50 | none | matrix evidence |
@@ -11920,7 +11923,7 @@ means the generated row's evidence is the whole explanation.
 | `[0820]` | executed | all | none | R4.80 | none | D212 withdraws the lexical block and builtin parameter type, and R4.80 keeps their named withdrawal diagnostics; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
 | `[0830]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0840]` | executed | all | none | R2.50 | none | matrix evidence |
-| `[0850]` | executed | all | none | R6.80 | R7.20 | D227 volatile scalar access is matrix evidence on all three targets. The `volatile ptr` reference surface used by [0070], [0460], [0740] and [0850] is refused by name with a note saying R6.80 enables it, though R6.80 is complete and translated that surface to D227 and D228 forms: R7.20 implements or amends it and the note follows. |
+| `[0850]` | executed | all | none | R6.80 | none | D227 volatile scalar access is matrix evidence on all three targets. D238 withdraws the `volatile ptr` type; its named L0010 now says R7.20 withdraws it and names the explicit volatile and register operations. |
 | `[0860]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0870]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[0880]` | executed | all | none | R2.30 | none | matrix evidence |
@@ -11970,7 +11973,7 @@ means the generated row's evidence is the whole explanation.
 | `[1320]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1330]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1340]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[1350]` | executed | all | none | R2.40 | R7.40 | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, but the checker's note says R2.40 enables them though R2.40 is complete: R7.40 corrects the note. `set(X)` meets this refusal and [0730] owns it. |
+| `[1350]` | executed | all | none | R2.40 | R7.40 | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, but the checker's note says R2.40 enables them though R2.40 is complete: R7.40 corrects the note. `set(X)`, which D238 withdrew, meets this refusal as an unresolved application. |
 | `[1360]` | executed | all | none | R3.20 | none | matrix evidence |
 | `[1370]` | executed | all | none | R2.80 | none | matrix evidence |
 | `[1380]` | executed | all | none | R2.80 | none | matrix evidence |
@@ -11991,13 +11994,13 @@ means the generated row's evidence is the whole explanation.
 | `[1530]` | executed | all | none | R4.30 | none | D202 and deterministic typed option cases |
 | `[1540]` | executed | all | none | R2.40 | none | matrix evidence |
 | `[1550]` | advisory | none | none | none | none | Toolchain policy: Landin keeps its own native backends, not LLVM or C. R1.90 left the row bare because no fixture can discriminate it; four later claims were D211, D229 and D230 evidence and R7.10 removed them. Its concrete obligations are other rows' and lanes': the [1570] and [1650] conventions, [1990] firmware, the quality determinism rebuild and the native debugger frame checks. |
-| `[1560]` | executed | all | none | R4.30 | R7.20 | Compiler facts and assertions, `linker.library`, atomics and Cortex-M assembly and placement are matrix evidence; other tool operations meet named refusals. The `compiler` vector intrinsics the table lists are refused with a note saying R4.50 enables them though R4.50 is complete: R7.20 implements them or amends [1560] to [0590]'s element-wise operators. |
+| `[1560]` | executed | all | none | R4.30 | none | Compiler facts and assertions, `linker.library`, atomics, volatile and register operations and Cortex-M assembly and placement are matrix evidence; other tool operations meet named refusals. D240, an R7.20 decision, withdraws the `compiler` vector intrinsics in favour of [0590]'s element-wise operators, pinned by `negative/r720-vector-intrinsic-withdrawn`. |
 | `[1570]` | executed | all | none | R3.50 | none | `extern(c)`, `extern(interrupt)` and `extern(naked)` are matrix evidence; the derived driver's interrupt handlers execute on Cortex-M. `aapcs`, `sysv`, `win64`, Fortran and Swift are named as room for later conventions, not described constructs. |
 | `[1580]` | executed | hosted | none | R4.40 | R7.40 | The hosted C boundary is matrix evidence under D203--D205. The categories the paragraph lists are refused explicitly, a recorded boundary, but the checker note says R4.40 enables them though R4.40 is complete: R7.40 corrects the note. Cortex-M C signatures are not enabled, an R6.20 restriction. |
 | `[1590]` | executed | hosted | none | R4.30 | none | Hosted archive linkage: Linux runtime evidence and Darwin's native archive-selection replacement under R4.30 and R5.50; Cortex-M refuses the general C surface. |
 | `[1600]` | executed | hosted | none | R4.40 | none | Hosted C definitions from R4.40 are matrix evidence; Cortex-M C signatures are restricted. |
 | `[1610]` | executed | all | cortex-m | R4.40 | R7.40 | Native and C link names are matrix evidence on both hosts. Cortex-M module-data and function symbols execute in R6.60's firmware probe outside the fixture corpus, so no fixture claims them there: R7.40 attributes that evidence or adds a claim. |
-| `[1620]` | executed | all | none | R6.30 | R7.20 | D227 scalar atomics, orderings and barriers are matrix evidence on all three targets. The paragraph's library type wrapping them does not exist in `core`: R7.20 implements or amends the sentence; a broader-library facility would be R551-34's. |
+| `[1620]` | executed | all | none | R6.30 | Broader standard library | D227 scalar atomics, orderings and barriers are matrix evidence on all three targets. D240, an R7.20 decision, transfers the wrapper type to Broader standard library under R551-34, as the paragraph now says. |
 | `[1630]` | executed | cortex-m | none | R6.60 | none | Cortex-M0 `assembler.block` under D229 and D230 executes in the derived driver and firmware lanes; hosted targets refuse machine assembly by design. |
 | `[1640]` | executed | cortex-m | none | R6.60 | none | Cortex-M placement, vectors and keep under D229 execute in the derived driver; hosted targets refuse placement by design. |
 | `[1650]` | executed | all | none | R1.80 | none | matrix evidence |
@@ -12119,6 +12122,13 @@ R7.10's inventory links C5 to [0620], D6 to [1470], C3 to [1680], E1 to
 [1180] and the parked and watch items [1710] governs. [1470]'s row already
 names Companion tool and ecosystem because [1480] and D6 transfer it; the
 others name no successor until this item dispositions their inherited rows.
+R7.20 found C5's trigger unfired — no derived program is a simulation or needs
+one field contiguous — so [0620] needed no tour amendment, and its deferred
+inventory row now names this item. Dispositioning C5 closes that row: a
+transfer to Language evolution needs [0620]'s text to name that successor, as
+R7.10's transfer rule requires. R7.20 also exercises E1's watch: D234 enables
+labelled bare blocks under E1's own rule that a program not needing a
+construct is evidence, not automatic removal.
 
 ### R7.40 — Close all evidence registers
 

@@ -1,0 +1,9 @@
+-- D236: a range subtype constrains a binding, parameter, named return or
+-- conversion; an array element of one would let a whole-array write of the
+-- base type reach constrained storage unchecked.
+percent: type = u8 range 0..100
+
+levels: (first: percent) -> (total: u32) =
+    row: [4]percent = [first, first, first, first]
+    total = u32(row[0])
+end levels

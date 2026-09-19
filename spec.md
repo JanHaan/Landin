@@ -807,6 +807,11 @@ implementation. `arena` is not a keyword: a declared type, parameter, local,
 call or label with that spelling remains ordinary. Only the statement shape
 `arena name do` and an otherwise-unresolved builtin type spelling receive the
 migration diagnostic. No compiler rule recognizes the module `core/mem`.
+R7.20's notes are of the same permanent kind. D237's u128, i128 and f16 name
+their transfer to Language evolution; D238's `volatile ptr` names its
+withdrawal and the explicit operations that replace it; D236's constrained
+compositions and the shapes D233 and D241 leave outside their constructs name
+recorded boundaries.
 
 ### [1840] The kernel's scopes, outermost first
 
@@ -902,13 +907,12 @@ were, [0310] would refuse a program on one target and accept
 it on another for a reason no paragraph here could state.
 [1510]'s 'sizeof usize == 8' asks what a machine does; it
 does not say two names are one type.
-u128 and i128 [0150] and f16 [0170] are described in
-this tour and are not enabled yet. D162 enables f32 and f64 without making
-either an integer or one another. D190 says which work enables the rest: the
-wide integers and f16 are refused by name against R7.20, which owns the
-two-register carrier and the third float width they need, while the packed
-widths are enabled only in D228's packed-field positions [0730]. They are
-representations within an image, not new ordinary scalar or ABI types.
+D162 enables f32 and f64 without making either an integer or one another.
+u128 and i128 [0150] and f16 [0170] are not in this version: D237 transfers
+them to the Language evolution successor, and the checker refuses the three
+spellings by name. The packed widths are enabled only in D228's packed-field
+positions [0730]. They are representations within an image, not new ordinary
+scalar or ABI types.
 An atom declaration introduces one value and its singleton type. An atom union
 is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
@@ -9323,7 +9327,7 @@ classified failure boundary before the repository gate can pass.
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
 | `packed.image` | static | 0540, 0730, 0750 | Explicit disjoint positions, one target-sized carrier and packed-only unsigned widths; ordinary storage retains its existing representation | `runtime/r640-packed-fields`, `runtime/r640-packed-construction`, `runtime/r640-packed-static` |
-| `packed.register` | static | 0740, 0850 | L0301 rejects unavailable access modes, invalid masks and unsafe synthesized device field operations; a legal explicit image operation retains exactly its carrier width | `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, `runtime/r640-register-images` |
+| `packed.register` | static | 0740, 0850 | L0301 rejects unavailable access modes, invalid masks and unsafe synthesized device field operations; a legal explicit image operation retains exactly its carrier width; L0010 names D238's withdrawn volatile pointer type and the explicit operations that replace it | `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, `runtime/r640-register-images`, `negative/r491-volatile-pointer` |
 | `packed.insertion` | trap | 0730, 1120 | Dynamic field-width and packed-index checks remain enabled under unchecked; no silent truncation or machine shift masking | `runtime/r640-packed-value-fit`, `runtime/r640-packed-index-bound` |
 | `packed.reserved` | trap | 0740, 1120 | A dynamic write-zero/write-one violation traps before the single volatile store, including under unchecked | `runtime/r640-reserved-value`, `abi/r640-reserved-trap` |
 | `packed.device` | outside | 0740, 0850 | non-guarantee: a declared access mode, width and reserved policy do not prove that an arbitrary address implements that peripheral contract | `runtime/r640-register-images`, `abi/r640-dma-packed` |
@@ -9404,7 +9408,7 @@ classified failure boundary before the repository gate can pass.
 | `entry.point` | static | 1650, 1970 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code`, `negative/r440-native-renamed-entry` |
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1100, 1110, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays, and a [1100] `defer` or [1110] `undo` call keeps the edges of the place its registration is written rather than those of the exit that runs it | `positive/unchecked-regions`, `positive/unchecked-marks-only-the-edges-it-removes`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `runtime/unchecked-keeps-bool-conversion-traps`, `runtime/unchecked-keeps-float-conversion-traps`, `runtime/unchecked-pointer-conversion-truncates`, `runtime/unchecked-does-not-reach-an-outer-cleanup`, `runtime/unchecked-reaches-a-cleanup-written-inside`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
-| `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
+| `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge; L0304 records D236's boundary for a struct field, an array element, a reference target, `addr` of a constrained place and a generic argument | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice`, `negative/range-subtype-struct-field`, `negative/r720-range-subtype-array-element` |
 | `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding — and for a union of two pointer types; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for either case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/r440-parser-frame-arena`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
 | `configuration.fixed` | static | 1480, 1500, 1510, 1530, 1540, 1560, 1590, 1980 | L0200 for duplicate option names; L0203 for reserved tool names; L0300, L0301, L0305 or L0306 for invalid fixed configuration; L0324 for a false compiler assertion | `negative/fixed-conditional-evaluator`, `negative/r430-assertion-false`, `negative/r430-option-cycle`, `negative/r430-option-duplicate`, `negative/r430-option-reserved`, `negative/r430-library-injection`, `positive/r430-fixed-options`, `runtime/r430-fixed-tools`, `runtime/r430-static-library` |
 
@@ -11526,6 +11530,10 @@ records, and the `unchecked.region` guarantee row.
 
 ### D188 — A range subtype is its base type constrained, checked where it is stored
 
+D236 later records the composite, reference and generic positions refused
+below as [0660]'s permanent source-form boundary; their reports keep L0304
+and now say so.
+
 **The tour said** that [0660] declares `percent: type = u8 range 0..100` and
 that it is checked at assignment and conversion. It did not say what type an
 operator over one gives, whether an alias of one keeps the bounds, whether the
@@ -11762,8 +11770,10 @@ records, and the `pointer.optional` guarantee row.
 ### D190 — u128, i128 and f16 are refused by name against R7.20
 
 D228 subsequently enables packed unsigned field representations in R6.40;
-the historical quotation below records the earlier kernel boundary. The
-u128, i128 and f16 refusal remains unchanged.
+the historical quotation below records the earlier kernel boundary. D237
+later transfers u128, i128 and f16 to the Language evolution successor with
+new consumer, target and compiler evidence; the refusal below keeps its code
+and changes its note to that transfer.
 
 **The tour said** that the integers are u8, u16, u32, u64, u128, i8, i16,
 i32, i64 and i128 [0150], and that the floating-point types are f16, f32 and
@@ -13251,7 +13261,7 @@ different, and neither is implicitly interchangeable with its base. The base
 may be any enabled represented type, including another distinct identity,
 arrays, ordinary or variant-bearing structs, atoms, references, callable
 values and erased values. A range-constrained representation retains D188's
-existing constrained-composition refusal and R7.20 owner.
+constrained-composition refusal, which D236 records as a permanent boundary.
 
 `name(value)` constructs that identity from one value of its exact base.
 `base(value)` extracts that same base from a distinct value; an ordinary alias
@@ -14528,3 +14538,255 @@ A returning or failing handler would contradict D11 and [1670].
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
 default-trap fixtures. ROADMAP.md owns results and remaining acceptance work.
+
+### D236 — A range subtype constrains scalar positions only
+
+**The tour said** that [0660]'s range subtype is checked at assignment and
+conversion. D188 made a subtype its base type constrained rather than a new
+type, placed its one check where a value is stored into a place declared with
+the subtype, and refused by name the positions where that check could not
+hold: a struct field, a fixed-array element, a `ptr` or `[]` target, `addr`
+of a constrained place and a generic type argument, with an `extern (c)`
+signature kept by [1580]'s own report. R7.20 was to decide how the check
+composes.
+
+**Chosen:** it does not compose. A range subtype constrains a binding, a
+parameter, a named return and a conversion, which are exactly the positions
+where D188's check runs on the way in. The five refused positions keep their
+L0304 permanently: its primary message now says the position cannot be a
+range subtype, and its second note says "ROADMAP.md R7.20 records this
+source-form boundary". The external signature keeps [1580]'s report. [0660]
+now states the boundary and names `distinct` as the carrier for a checked
+value in storage, which is [1730]'s habit.
+
+The reason is D188's own premise. Because `percent` and `u8` are one type,
+`[]percent` and `[]u8` would be one slice type, and `addr` of a constrained
+place would be an ordinary `ptr mut u8`: any write through the base type
+would reach constrained storage with no check. A composition that keeps the
+guarantee therefore needs the constraint to become identity in exactly the
+composite positions — `[]percent` apart from `[]u8`, a generic instance keyed
+by its bounds — which is a second nominal identity beside [0650]'s, with its
+own relaxation question, while [0440] calls its relaxation the one the
+language has. Measured against the checker, the composite descriptors carry
+no constraint (`Landin.Checking.Field_Shape` and `Reference_Descriptor` hold
+kind, element, nominal and reference facts only) and the check is a
+checker-owned fact emitted at two lowering choke points. A composite
+constraint would have to reach field shapes, reference descriptors, instance
+keys, zero-image eligibility (a subtype excluding zero has no zero image, so
+every containing aggregate would leave [0550]'s family), module static
+images, variant payload construction, match-arm `inout` aliases and erased
+evidence, and each of those store paths would need its own check for the
+guarantee to stay true. No program asked for it: prototype 1's `baud_rate`
+is a scalar parameter, and the complete derived driver replaced even that
+with plain `u32` and declared recoverable checks.
+
+**The alternatives:** a composite identity with a check on every store path
+was declined for the reasons above. Admitting fields and elements while
+keeping references and generics refused was declined because `inout` of a
+constrained field, slicing a constrained array, whole-aggregate zero images
+and payload aliases reopen the same identity question. Transferring the
+question to a successor was declined because its answer does not wait on a
+program: the conflict is with D188 and [0440], not with cost.
+
+**Pinned by** `negative/range-subtype-struct-field`,
+`negative/r720-range-subtype-array-element`,
+`negative/range-subtype-in-a-slice`, `negative/range-subtype-address`,
+`negative/range-subtype-generic-argument`,
+`negative/range-subtype-external-signature`,
+`negative/r491-refused-operand-cascades`, whose recorded reports carry the
+boundary note, and the `subtype.range` guarantee row.
+
+### D237 — u128, i128 and f16 leave this slice for Language evolution
+
+**The tour said** that the integers include u128 and i128 [0150] and the
+floats include f16 [0170]. D190 kept all three refused by name against R7.20,
+recorded the x86-64 cost R7.20 would inherit, and declined deleting them
+because they are language the tour teaches and no evidence said the language
+should lose them.
+
+**Chosen:** the language does not lose them; this slice does. [0150] and
+[0170] now say that u128, i128 and f16 are not in this version and that the
+Language evolution successor roadmap owns them, with a program that needs
+128-bit arithmetic or binary16 values as the trigger. The checker keeps its
+named L0304 for the three spellings; its message says the type is not in this
+version of the language and its second note says "ROADMAP.md R7.20 transfers
+this to Language evolution". [1790]'s thirteen scalar names, `Landin.Types`,
+the parser's scalar table and the highlighters are unchanged.
+
+New evidence answers D190's reason, and it is of three kinds.
+
+- Consumers. D190 counted documents; R7.20 counts programs. The four complete
+  derived prototypes, the repository `core` library, `examples.md` and the
+  1849 fixture directories write none of the three types outside the refusal
+  fixtures below.
+- Targets, measured with the pinned tools on 2026-09-19. The Cortex-M0 lane's
+  `arm-none-eabi-gcc` 14.2.1 refuses both `__int128` and `_Float16` as not
+  supported on this target, and its pinned `thumb/v6-m/nofp/libgcc.a`
+  (SHA-256 `137aa204587d2cefcc3eea90685a29d1e2f058a0a9cbdc29329e6f27c6249903`)
+  has binary16 conversions (`__gnu_h2f_ieee`, `__gnu_f2h_ieee`,
+  `__gnu_d2h_ieee`) but no 128-bit multiply, divide or shift helper. A u128
+  there is four words whose multiplication and division this compiler would
+  emit itself. At the Linux x86-64 baseline ISA, GCC 16.1 compiles a binary16
+  addition to two `__extendhfsf2` calls and one `__truncsfhf2`, and a 128-bit
+  division to `__udivti3`; neither is an instruction. arm64 alone converts
+  binary16 in hardware.
+- Compiler. The checker's folding domain is the two Ada range types
+  `Magnitude` and `Folded`, with 848 occurrences in 21 source files, and a
+  signed 128-bit fold needs 129 bits. Every backend's `Held_Size` is
+  `Byte_1 .. Byte_8`, so u128 would be the first scalar no backend holds in
+  its accumulator model, with an ABI position of its own on each of three
+  targets. f16 reruns the D162--D176 float programme at binary16 and turns
+  D170's statically safe integer-to-float conversion into a trapping one.
+
+Against no consumer, that cost is what [1710] asks a feature to earn, and
+nothing has earned it. A transfer rather than a deletion keeps D190's point:
+the types remain a designed direction with a stated trigger.
+
+**The alternatives:** implementing all three on every target was declined on
+the evidence above; the plan it would follow is software 128-bit fold
+carriers, register pairs on the hosts and four words at eight-byte alignment
+on Cortex-M0, compiler-emitted multiplication and division on all three,
+f16 promoted through f32 with one rounding as D190 recorded, and a trapping
+`conversion.integer-to-float` row. u128 and i128 on the two hosts only was
+declined, because narrowing an integer to hosted targets is a language
+decision the 32 KiB target argues against, and 128-bit arithmetic matters
+least where it costs most. f16 as a storage-only type with conversions was
+declined, because a float without arithmetic contradicts [0170]'s reading and
+still reopens D170. Deleting the names was declined, because nothing shows
+the language should lose them, only that nothing yet needs them.
+
+**Pinned by** `negative/wide-integer-not-enabled`,
+`negative/float-type-not-enabled`, `negative/refused-widths-name-their-owner`,
+whose recorded report carries the transfer note, and the `types.values`
+guarantee row.
+
+### D238 — A device access is an operation over an ordinary pointer
+
+**The tour said** that a register is reached through a `volatile ptr`
+[0070] [0460] [0850], that a register is a parameterised type
+`register(t, read:, write:, reset:)` whose field reads as a `t` [0740], and
+that `set(X)` generates a packed struct of bool from an encoded union [0540]
+[0730]. D227 enabled scalar volatile accesses as `compiler.volatile_load` and
+`compiler.volatile_store`. D228 enabled the register image with its two
+explicit operations `compiler.register_read` and `compiler.register_write`,
+refused every synthesized device field update, and left the wrapper and
+`set(X)` unenabled. The `volatile ptr` shape was refused by name against
+R6.80, which translated prototype 1 to D227 and D228 forms instead.
+
+**Chosen:** all three are withdrawn. A device access is an operation — D227's
+two scalar operations or D228's two register operations — over an ordinary
+pointer, and a generated module writes one small typed function per register
+over them, with the image's decode and encode beside it and its reset value
+as a constant. The encoded union still places each named bool field of a
+set, and the generator writes those fields out; inside a larger image they
+are offset by where the set begins, as D228 already says. The `volatile ptr`
+shape keeps its named L0010, now a withdrawal naming R7.20 with the four
+operations as its migration guidance. `register(...)` and `set(X)` never had
+a named refusal and remain an ordinary parse error and an unresolved type
+application. [0070], [0460], [0470], [0540], [0730], [0740], [0760] and
+[0850] are rewritten to the operation form, and prototype 1's preamble
+records the withdrawal while its sketch keeps the historical spelling as the
+design record, as R6.80 already did for `register` and `set`.
+
+The evidence is the executed derivation. The complete prototype-1 driver
+(R6.90) runs on Cortex-M under QEMU and Renode through the generated RP2040
+modules' accessors and explicit bool image fields; it needed no volatile
+pointer type, no wrapper and no set former, and its derivation maps every
+sketch use to that form. D228 had already made the wrapper's central promise
+unrealizable as sugar: a field of `register(t, ...)` type would read and write
+through the device, D228 refuses every synthesized field update, and so the
+wrapper could only ever be the explicit read, local update and write that the
+generated functions spell. A `volatile` qualifier would be a second
+permission on every reference beside `mut`, which [0440]'s relaxation, `addr`,
+field projection and generic identity would all have to carry, while D227
+already says what each access orders. `set(X)` is a type-level generator,
+which D3 and [1540] place in generator programs, and general SVD generation
+is the companion tool's (R551-33).
+
+**The alternatives:** a pointer qualifier with volatile `.val` accesses and
+field projection was declined as a second permission axis for a surface no
+executed program needed. A builtin `register(t, ...)` type whose field
+accesses call D228's operations was declined because the explicit
+read/update/write it would hide is what D228 requires to stay visible. A
+builtin `set(X)` former was declined for D3's reason. Keeping the three
+pending for a successor was declined because an executed driver is the
+evidence a successor would have waited for.
+
+**Pinned by** `negative/r491-volatile-pointer`, whose recorded report carries
+the withdrawal note, `runtime/r640-register-images`,
+`negative/r640-register-no-read`, `negative/r640-register-no-write`, the
+complete driver of `compiler/tests/driver/DERIVATION.md`, and the
+`packed.register` guarantee row.
+
+### D239 — Byte order is converted where bytes cross, and the machine attribute words are withdrawn
+
+**The tour said** that byte order is per field, with `big u16` in a
+`layout(c)` packet [0750], and listed `big` and `little` among the attribute
+words and `weak`, `inline` and `noinline` as outside the enabled machine slice
+[0760]. None had a named refusal; each met an ordinary parse error.
+
+**Chosen:** all five are withdrawn. A field holds the target's own byte order,
+which `compiler.byte_order` names [1560]; a program converts another order
+where the bytes cross, with shifts [0320] or an ordinary function. Inlining is
+the optimizer's decision under D211, and no source attribute requests or
+forbids it. A whole program links one definition per name [1610], and the
+compiler-owned vector image of D229 fills each unimplemented slot, which is
+what weak default handlers do in C firmware. The five words stay ordinary
+identifiers: `big u16` remains an L0103 field error and `link(weak)` an
+unknown link label, and no named refusal is owed because the tour no longer
+describes them [1830]. [0750] and [0760] are rewritten.
+
+No prototype, derived program, `core` module or example writes any of the
+five. A per-field order would make every load and store of that field a byte
+swap, leave `addr` of the field an ordinary `ptr u16` that reads the wrong
+value, so that addressability would need the refusals packed fields have,
+put static images through a second byte order, and need DWARF's
+`DW_AT_endianity` for a debugger to show the value, a presentation this
+compiler has produced for neither native debugger. The compiler has no
+inliner: no IR pass inlines a call, so `inline` could only be a promise D211
+would then have to keep. Weak linkage matters where separately compiled
+objects compete for a name, and this compiler sees the whole program.
+
+**The alternatives:** a per-field storage order with addressability limits
+and endianity debug information was declined as a new storage attribute with
+packed-field restrictions for a need no program had, while an explicit
+conversion is ordinary code. `inline` and `noinline` as hints were declined:
+a hint nothing honours is text, and an obligation belongs to D211's optimizer
+contract rather than to source. `weak` for C interoperation was declined
+because the C boundary's link names are exact and no binding needed a weak
+one. Keeping the words described but refused by name was declined because
+they are not pending anything.
+
+**Pinned by** `negative/r720-field-byte-order-withdrawn` and
+`negative/r720-machine-attribute-words-withdrawn`.
+
+### D240 — Fixed arrays are the vector type, and the atomic wrapper is a library's
+
+**The tour said** that the `compiler` module reaches the atomic and vector
+intrinsics [1560] and that the standard library wraps the atomics into a
+pleasant type [1620]. The note on a `compiler.vector_*` reference said R4.50
+enables it; R4.50 implemented D209's element-wise operators over fixed arrays
+instead and never enabled an intrinsic.
+
+**Chosen:** the vector intrinsics are withdrawn. [0590] already makes fixed
+arrays the vector type, and a second spelling of the same operation is the
+second vector shape [0590] was written to refuse. A `compiler.vector_*`
+reference keeps its L0203, and its note now says R7.20 withdrew it and points
+at element-wise operators. The wrapper type is transferred to the Broader
+standard library successor (R551-34), which [1620] now names. Cortex-M0
+refuses every read-modify-write atomic (D227), so a wrapper portable across
+the three targets would offer only loads, stores and fences there, and which
+operations a wrapper exposes is a design question for the program that needs
+one. No derived program or `core` module needed one: the driver uses
+`core/cpu`'s interrupt masking and D227's barriers.
+
+**The alternatives:** `compiler.vector_*` as aliases of the operators was
+declined as two spellings of one operation. A `core/atomic` wrapper now was
+declined: it has no consumer, and on the smallest target it would be a type
+whose operations change with the target. Leaving [1620]'s sentence as a
+promise with no owner was declined because [1830] and R7.10's inventory
+refuse an unowned promise.
+
+**Pinned by** `negative/r720-vector-intrinsic-withdrawn`,
+`runtime/r450-array-arithmetic-composition`, `negative/r630-m0-rmw` and
+`runtime/r630-memory-scalars`.

@@ -95,7 +95,7 @@ POINTERS section shows — and nothing else answers either.
 ```landin
 mut cursor: ptr u32 = addr first                 -- re-pointable, reads
 knob:  ptr mut u32 = addr setting                -- fixed, writes
-gpioa: volatile ptr mut port = ptr(0x4002_0000)  -- fixed, writes
+gpioa: ptr mut u32 = ptr(0x4002_0000)            -- fixed, writes
 
 ```
 
@@ -126,6 +126,18 @@ form field lists already use.
 public red, green, blue: u8
 north, south, east, west: atom
 
+```
+
+It means the declarations written one per name, in order: each name gets its
+own storage and everything written around the list — `mut`, `public`, a
+parameter convention, `at` or `from`. A shared initializer runs once, for the
+first name, and the others start as copies of it. A shared declaration needs a
+written type, because `low, high := bounds()` would read as a destructuring
+[1810] (D233).
+
+```landin
+mut low, high: u32 = next_seed()     -- one call; high starts equal to low
+clamp: (inout low, high: i32, value: i32) -> (result: i32) = ... end
 ```
 
 ### [0110] Left of ':' is always the name being introduced
@@ -168,9 +180,14 @@ An inner scope may shadow an outer name.
 
 ## NUMBERS AND LITERALS
 
-### [0150] Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+### [0150] Integers: u8 u16 u32 u64, i8 i16 i32 i64
 
-Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128.
+Integers: u8 u16 u32 u64, i8 i16 i32 i64.
+u128 and i128 are not in this version. No derived program needed them, and
+no target here carries them natively: Cortex-M0 would hold one in four words
+with no multiply or divide to lean on, and its C toolchain refuses the type
+outright. The Language evolution successor roadmap owns them, and a program
+that needs 128-bit arithmetic is what brings them back (D237).
 Any other width exists as well — u4, u12, u23 — for the
 packed fields of [0730], where the datasheet decides how
 many bits a thing gets. D228 admits u1 through u64 only in packed field
@@ -182,9 +199,13 @@ values 0 or 1; it does not acquire implicit boolean conversions.
 
 Pointer-width integers: usize, isize.
 
-### [0170] Floating point: f16, f32, f64
+### [0170] Floating point: f32, f64
 
-Floating point: f16, f32, f64. No f80.
+Floating point: f32, f64. No f80.
+f16 is not in this version either. Neither baseline x86-64 nor Cortex-M0 has
+a binary16 instruction, and adding the width would turn converting an integer
+to a float from a conversion that cannot overflow into one that traps [0700].
+Language evolution owns it with the same kind of trigger (D237).
 
 ### [0180] bool, with true and false
 
@@ -527,10 +548,11 @@ the caller relaxes what it gets by [0440].
 Address literal. The pointee type comes from context, and a
 register is written through, so it is a mut pointee sitting
 in an immutable binding — which is exactly the pair [0070]
-separates.
+separates. What makes an access to it a device transaction is the
+operation that performs it [0850], not the pointer's type.
 
 ```landin
-gpio: volatile ptr mut u32 = ptr(0x4001_0000)
+gpio: ptr mut u32 = ptr(0x4001_0000)
 
 ```
 
@@ -552,18 +574,18 @@ knows, and about which the compiler will say nothing ever
 again. It is the one place inside the language where the
 lifetime system is deliberately left behind, on the same
 footing as the C boundary. Taking the address of a
-volatile field is unremarkable by comparison: volatility
-is a property of the access path, not of the number.
+register is unremarkable by comparison: volatility is a
+property of the access operation, not of the number [0850].
 
 ### [0480] There is no null
 
 There is no null. "maybe a pointer" is an ordinary union of
 an atom and a pointer type. With one atom, the compiler represents
 it as a plain pointer with 0 for the empty case. The spelling does
-not decide how a union of several atoms and a pointer is laid out.
-The kernel enables the one-atom form only; [1870] names R7.20 as the work
-that enables several atoms beside a pointer, with a tag beside the
-pointer.
+not decide how a union of several atoms and a pointer is laid out:
+with several atoms, the atom's own code is stored beside the pointer and
+code zero, which no atom has, marks the present case, so a smaller union or
+an atom set widens into it without changing a bit (D235).
 
 ```landin
 none_found: atom
@@ -749,7 +771,7 @@ Reading that field then traps; copying the image preserves its bits.
 ```landin
 mut buffer: [256]u8 = zeroed
 buffer = zeroed                 -- clear the existing array as a whole
-irqs:   set(irq) = zeroed       -- fine: a set is bools, see [0730]
+irqs:   irq_set  = zeroed       -- fine: a set is bools, see [0730]
 -- mode: clock_mode = zeroed    -- error, write 'internal'
 -- p:    ptr u32     = zeroed   -- error, no zero image
 ```
@@ -825,8 +847,9 @@ row = [header(), of padding()]     -- prefix first, then one padding call
 A zero contextual length and a zero count in the inferred form remain refused:
 `[0]t` is a valid fixed-array type, but repetition still needs a nonzero
 contextual destination or a count that supplies an inferred element shape. A
-count-less inferred initializer and other general array value positions remain
-later compiler slices. Every
+count-less inferred initializer, such as `row := [of 0]`, has no length to
+give and is refused; the other array value positions follow [0520] (D241).
+Every
 inferred extent must fit the target's `usize`. A module
 repetition uses [1940]'s target-aware fold and range rules; its compact repeated
 image survives direct-name chains, while a folded zero pattern has the same
@@ -1048,6 +1071,16 @@ percent: type = u8 range 0..100
 
 ```
 
+A range subtype constrains the places a value is checked on its way in: a
+binding, a parameter, a named return and a conversion. It is not a struct
+field, an array element, a pointer or slice target, a generic argument or
+something `addr` can point at. In each of those a write through the base type
+would reach constrained storage unchecked, and giving the constraint an
+identity of its own there would make a second nominal type with a second
+relaxation [0440]. To keep a checked value in storage, wrap it: a `distinct`
+type that only a checking function constructs is the proof carried [1730]
+(D236).
+
 ### [0670] Struct, block form and inline form
 
 Struct, block form and inline form. Same thing. The inline
@@ -1097,6 +1130,11 @@ node_kind: type = struct
 end node_kind
 
 ```
+
+A case is written where its variant part is the context: constructing into
+that part, and naming an arm of a match on it. It is not a value of its own
+apart from the part, and neither is the part apart from its struct: copy the
+struct, or match it (D241).
 
 ### [0700] Construction and conversion use the same form
 
@@ -1219,32 +1257,41 @@ divider_sel: type = u4 (by_1 = 0 | by_2 = 1)   -- four bits, as given
 
 ```
 
-The enabled D228 kernel accepts the explicit named-boolean expansion below
-that generator form. R6.80's checked-in vendor fixtures use explicit fields and
-encoded unions through existing constructs; automatic `set(X)` remains outside
-the enabled kernel. General SVD generation retains the companion-tool owner.
-The expansion does not change the raw-image or validation contract.
-
-A set is not a kind of its own. set(X) generates a packed
-struct of bool, one field per member of X, each sitting at
-the bit its encoding names — so membership is a field read,
+A set is not a kind of its own. It is a packed struct of
+bool, one field per member, each sitting at the bit its
+member's encoding names — so membership is a field read,
 adding and removing a member is a field write, and building
 one is the ordinary struct literal with 'of' from [0720].
 There is no set literal, no set operator and no membership
 operator, because none of them is needed once it is a
 struct.
-A union used as a set must carry its encodings, since the
-encoding is the bit number. Leaving them out would put the
-bit assignment back at the mercy of declaration order,
-which is the hole this section closed.
+The union's encodings are what place the bits, so the
+bit assignment never falls to declaration order, which is
+the hole this section closed. Inside a larger image the
+same fields sit at the image's bits, offset by where the
+set begins. A generator reading a vendor's SVD writes those
+fields out as it writes every other register declaration
+[1540]; R6.80's checked-in vendor fixtures are that output.
+General SVD generation retains the companion-tool owner.
+The language adds no `set(X)` type former that would write
+them for it (D238), and the expansion does not change the
+raw-image or validation contract.
 
 ```landin
 irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
 
+irq_set: type = layout(packed, u32) struct
+    irq_rx:  bool at 0
+    irq_tx:  bool at 1
+    irq_err: bool at 2
+end irq_set
+
 control: type = layout(packed) struct
     enable:  bool        at 0
     mode:    clock_mode  at 4..6
-    irqs:    set(irq)    at 8..10
+    irq_rx:  bool        at 8      -- irq's encodings, from bit 8
+    irq_tx:  bool        at 9
+    irq_err: bool        at 10
     divider: u12         at 16..27
 end control
 ```
@@ -1276,8 +1323,8 @@ Indexing such a field by a value known only at run time is
 ordinary code: it is a shift by a computed amount inside a
 register image, with a bounds check. D228 retains this bit-selection check
 in `unchecked`, because an invalid bit index has no computed byte address.
-On an image, that is — never straight through the volatile
-pointer, for the reason [0740] gives.
+On an image, that is — never straight through the device,
+for the reason [0740] gives.
 
 ```landin
 set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
@@ -1295,57 +1342,78 @@ starts with zero omitted bits. Packed fields have no independent byte address;
 pass the image for updates. `layout(packed, u32)` explicitly retains a 32-bit
 carrier when the highest named position would otherwise select a smaller one.
 The enabled representation widths are u1 through u64 within packed fields;
-they do not add arbitrary-width arithmetic or calling conventions. Generated
-`set` expansion and the full register wrapper surface below retain their
-roadmap owners.
+they do not add arbitrary-width arithmetic or calling conventions.
 
 ### [0740] Access behaviour is data, not keywords
 
-Access behaviour is data, not keywords. A register is a
-parameterised type carrying how it reads, how it writes and
-what it holds after reset, so an SVD generator can express
-write-one-to-clear, clear-on-read, write-once and whatever
-the next vendor invents without the language growing a word
-for each. Writing a single field through a volatile pointer
-stays forbidden: build the whole value, write it once.
+Access behaviour is data, not keywords. How a register
+reads, how it writes and what reserved bits it wants are
+atoms handed to the one operation that touches it, so an SVD
+generator can express write-one-to-clear, clear-on-read,
+write-once and whatever the next vendor invents without the
+language growing a word for each. There are two operations:
+`compiler.register_read(pointer, read_mode)` and
+`compiler.register_write(pointer, image, write_mode,
+reserved_policy, named_mask)`. The pointer is an ordinary
+one to u8, u16, u32 or u64, and its width is the one
+transaction the device sees. Writing a single field of a
+device register stays forbidden: build the whole value,
+write it once.
 
 ```landin
-status: register(control, read: normal, write: none,
-                 reset: 0x0000_0400)
-clear:  register(set(irq), read: normal, write: one_clears,
-                 reset: 0x0000_0000)
+status_raw: (base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(base + 0x04)
+    raw = compiler.register_read(port, compiler.normal_read)
+end status_raw
+
+clear_events: (base: usize, events: u32) -> none =
+    port: ptr mut u32 = ptr(base + 0x08)
+    compiler.register_write(port, events, compiler.one_clears,
+                            compiler.write_zero, 0x0000_0007)
+end clear_events
 
 ```
 
-A field of `register(t, ...)` type reads as a `t` and is
-assigned a `t`, and the access behaviour is checked exactly
-there: reading one whose read is 'none' is an error, and so
-is writing one whose write is 'none'. Together with the
-rule above that gives the shape of every driver — read the
-whole image, change it locally, write it back whole.
+The access behaviour is checked exactly there: a register
+whose read is 'none' has no read to perform, so
+`compiler.no_read` is an error rather than a mode, and so is
+`compiler.no_write`. Together with the rule above that gives
+the shape of every driver — read the whole image, change it
+locally, write it back whole.
 A fresh local constructor has no access to the previous hardware image.
 Preserving reserved hardware bits therefore requires an explicit image read
 before the local update; a whole-image write cannot hide that read. This
 read/modify/write sequence is not atomic, and its normal-read/normal-write
 premise does not extend to clear-on-read or one-clears behavior. Packed
-image source forms are governed by D228. The complete generated register
-wrapper and `volatile ptr` surface remain outside the enabled kernel; [1830]
-distinguishes those examples from implemented constructs.
+image source forms and every mode and policy are governed by D228.
+A generator writes one small typed function per register over these two
+operations, with the image's decode and encode beside it. D238 withdrew
+the `register(t, read:, write:, reset:)` wrapper type and the `volatile
+ptr` type the tour once used here: the operation, not the type, says that
+an access is a device transaction, and the complete prototype-1 driver
+needed nothing more.
 'reset' initialises nothing. It is what the datasheet says
-the register holds after a reset, recorded so that tools
-and readers know what they are starting from. The hardware
-puts it there, not the program.
+the register holds after a reset, generated as a constant so
+that tools and readers know what they are starting from. The
+hardware puts it there, not the program.
 
 ```landin
-reset_flags: (c: volatile ptr mut control) -> none =
-    c.val = (enable: true, mode: external,
-             irqs: (irq_rx: true, of false), of zeroed)
+reset_flags: (base: usize) -> none =
+    port: ptr mut u32 = ptr(base)
+    image: control = (enable: true, mode: external, irq_rx: true, of zeroed)
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.write_zero,
+                            control_named_mask)
 end reset_flags
 
-read_modify_write: (c: volatile ptr mut control, n: u32) -> none =
-    mut image := c.val
+read_modify_write: (base: usize, n: u32) -> none =
+    port: ptr mut u32 = ptr(base)
+    mut image := control_decode(compiler.register_read(port,
+                                compiler.normal_read))
     image.divider = n
-    c.val = image
+    compiler.register_write(port, control_encode(image),
+                            compiler.normal_write, compiler.preserve,
+                            control_named_mask)
 end read_modify_write
 
 ```
@@ -1365,16 +1433,26 @@ never reorder an unannotated struct.
 `layout(c)` applies the selected C rules [1975]; it does not choose a function's
 calling convention. The enabled C subset uses native-endian scalar fields,
 fixed arrays, nested nonempty C structs and explicitly C-convention callback
-fields. Optimal layout does not qualify a record for C transport. Per-field
-byte-order attributes below remain broader design, not enabled C record forms.
-Byte order is per field.
+fields. Optimal layout does not qualify a record for C transport.
+Byte order is not a property of a field. A field holds the target's own order,
+which `compiler.byte_order` names [1560]; a program reading or writing another
+order converts where the bytes cross, with shifts [0320] or an ordinary
+function, so the conversion is visible where it costs. D239 withdrew the
+per-field `big` and `little` prefixes the tour once showed: they would make
+every load and store of that field a conversion, leave `addr` of it pointing at
+bytes an ordinary pointer reads wrongly, and need a debugger presentation the
+two native debuggers do not share.
 
 ```landin
 packet: type = layout(c) struct
     kind:   u8
-    length: big u16
-    id:     big u32
+    length: u16          -- big-endian as the wire sent it
+    id:     u32
 end packet
+
+from_big_u16: (wire: u16) -> (value: u16) =
+    value = (wire << 8) | (wire >> 8)    -- on a little-endian target
+end from_big_u16
 
 ```
 
@@ -1385,7 +1463,7 @@ are always parenthesised. Closed value sets are atoms;
 arbitrary linker names stay strings.
 
 ```text
-mut public volatile align(n) layout(c|optimal|packed)
+mut public align(n) layout(c|optimal|packed)
 ```
 
 and 'at' for a bit position, which is why a field or an
@@ -1393,15 +1471,20 @@ entry cannot be called that — the same goes for 'from',
 'of', 'with' and 'align' itself.
 
 ```text
-big little escaping caller fixed option
+escaping caller fixed option
 link(section: "...", symbol: "...", align: 16, vector: 16, keep)
--- weak, inline and noinline remain outside the enabled machine slice
 extern(c|interrupt|naked|...)
 ```
 
 packed folded into layout, naked into extern, option implies
 fixed, and the five toolchain words became one attribute with
 named arguments. Register access is data now, not keywords.
+D238 withdrew `volatile` with the pointer type it qualified [0850],
+and D239 withdrew `big`, `little`, `weak`, `inline` and `noinline`:
+byte order is converted where bytes cross [0750], inlining is the
+optimizer's decision rather than the source's [1310], and a whole
+program links one definition per name, with the compiler-owned
+vector image doing what weak default handlers do in C [1640].
 
 ## LIFETIME AND ESCAPE
 
@@ -1675,9 +1758,20 @@ pointer with a tracked reference does not hide the tracked origin.
 ### [0850] Volatile is exempt from the borrow rule and from every
 
 Volatile is exempt from the borrow rule and from every
-aliasing assumption. Hardware routinely needs several typed
-windows on one address — a byte view and a word view of the
-same register — and that is legal, deliberately.
+aliasing assumption. A volatile access is an operation:
+`compiler.volatile_load` and `compiler.volatile_store` for a
+scalar, and D228's `compiler.register_read` and
+`compiler.register_write` for a register image [0740]. Each
+performs exactly one access of its width through an ordinary
+pointer, usually one built from an address [0460] and so
+outside the lifetime checks already [0470]. Hardware routinely
+needs several typed windows on one address — a byte view and a
+word view of the same register — and that is legal,
+deliberately. D227 says what each access orders and what it
+does not. D238 records why there is no `volatile ptr` type: a
+qualifier would be a second permission on every reference,
+relaxed and checked beside `mut` [0440], and the complete
+prototype-1 driver needed none.
 
 The complete prototype-1 [driver derivation](compiler/tests/driver/DERIVATION.md)
 uses these ordinary slices with an explicit synthetic device completion
@@ -2222,8 +2316,9 @@ after an `if` condition or `match` subject and only in the selected arm.
 
 ### [1090] Bare block, for scoping
 
-Bare block, for scoping. The enabled form is `begin ... end`. Labels name
-loops [1180]; labelled bare blocks are outside the enabled [1810] grammar.
+Bare block, for scoping: `begin ... end`. A label turns it into something a
+`break` can leave early — `name: begin ... end name` — with its cleanups
+run as a loop's are [1180].
 
 ```landin
     begin
@@ -2421,6 +2516,21 @@ blocks only. break and continue take one.
 
 ```
 
+A `break` naming a bare block leaves it and whatever loops it crosses, running
+their cleanups on the way out. A bare block has no next iteration and yields no
+value, so `continue` and `break with` still name loops, and an unlabelled
+`break` or `continue` still means the innermost loop (D234).
+
+```landin
+    search: begin
+        for item in items do
+            break search when item == 0
+        end for
+        all_nonzero = true
+    end search
+
+```
+
 ### [1190] break carries a value with 'with'
 
 break carries a value with 'with', which is what makes a
@@ -2493,6 +2603,10 @@ allocator.
 Pattern matching: constant patterns, case patterns with
 binding, and the wildcard. No fallthrough; list several
 labels instead. A missing case is a compile error.
+The constants a pattern names are atoms [0630]: a subject is an atom set, a
+variant part or a pointer union [0480], and an arm names an identity. A number
+has no identity to name, so it is compared with `if` and `elsif` rather than
+matched (D241).
 
 ```landin
 area: (f: figure) -> (a: f32) =
@@ -3465,7 +3579,7 @@ else.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, and the atomic and vector intrinsics |
+| `compiler` | target, word size, byte order, build mode, and the atomic, volatile and register intrinsics |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
@@ -3486,9 +3600,11 @@ core module per target, written with assembler.block behind
 a fixed if and inlined, not a fourth builtin module whose
 contents would change with the target.
 If one of them later turns out to exist on every target
-and mean the same thing everywhere, the way the atomics and
-the vector operations do, it can be promoted into compiler
-then. The rule decides it, not a list.
+and mean the same thing everywhere, the way the atomics do,
+it can be promoted into compiler then. The rule decides it,
+not a list. Vector operations are not on it: fixed arrays are
+the vector type and take element-wise operators [0590], so
+D240 withdrew the vector intrinsics this table once listed.
 
 ### [1570] Calling conventions are a growing set of atoms behind one
 
@@ -3647,8 +3763,12 @@ module-data symbols, machine conventions and the placement in [1640].
 
 Atomics are builtins, not assembly, so the compiler knows
 which memory they touch and can still allocate registers
-around them. The ordering is a compile-time atom. The
-standard library wraps these into a pleasant type.
+around them. The ordering is a compile-time atom. A pleasant
+type wrapping them belongs to the Broader standard library
+successor roadmap rather than to `core`: Cortex-M0 has no
+read-modify-write atomics at all, so what a portable wrapper
+offers is a library design question, answered when a program
+needs one (D240).
 
 ```landin
 bump: (p: ptr mut u32) -> none =
@@ -4122,3 +4242,18 @@ what it refused.
   already pays for them: the frame pointer is always present, the
   callee-saved discipline is explicit, and nothing rides in a
   reserved register.
+- a volatile pointer type, a generated register wrapper carrying read,
+  write and reset modes, and a `set(X)` type former, all sketched before
+  any driver ran. The complete driver needed none of them: an operation
+  says a device access happens, the modes are its arguments, and the
+  generator writes the per-register functions and the named bool fields.
+  A qualifier would have been a second permission on every reference
+  [0740] [0850].
+- per-field byte order and the weak, inline and noinline attributes,
+  listed and never used. A big-endian field makes every access a
+  conversion and its address unreadable through an ordinary pointer;
+  inlining is the optimizer's business; one definition per name leaves
+  weak nothing to do [0750] [0760].
+- vector intrinsics beside element-wise array operators. The table
+  listed both and only one was ever needed: fixed arrays are the
+  vector type [0590] [1560].

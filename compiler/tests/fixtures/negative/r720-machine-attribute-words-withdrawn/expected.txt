@@ -1,0 +1,10 @@
+error[L0103]: a link label requires `:`
+  --> ../tests/fixtures/negative/r720-machine-attribute-words-withdrawn/main.ldn:4:10
+  |
+4 | link(weak) handler: () -> none =
+  |          ^
+  --> ../tests/fixtures/negative/r720-machine-attribute-words-withdrawn/main.ldn:4:1
+  |
+4 | link(weak) handler: () -> none =
+  | ^^^^ this annotation
+  = note: [1640]: labelled link attributes
