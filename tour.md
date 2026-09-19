@@ -983,7 +983,9 @@ inherit this codepoint-index operation; it has the ordinary slice operations.
 DEFERRED to a later version, kept here as a design record.
 It touches aliasing, generics, slicing, addr, layout, debug
 information and the optimiser all at once, and no program
-has yet proved it necessary.
+has yet proved it necessary. The Language evolution successor
+roadmap holds it, and a simulation that needs one field of a
+collection contiguous is what would bring it in.
 A collection may be stored transposed: one array per field
 instead of one array of structs. That is a property of the
 collection, not of the struct, so it is not a layout
@@ -4137,16 +4139,20 @@ authority for language semantics and this file explains them; ROADMAP.md
 is the sole durable
 authority for open work, implementation dependencies, phase gates,
 dispositions and completion evidence. Every inherited item is traced to
-the construct, prototype finding or archived review section it came from.
+the construct, prototype finding or archived review section it came from,
+and each has a terminal disposition there: implemented, rejected with
+evidence, or transferred to one named successor roadmap with what would
+bring it back. What this file keeps parked or deferred, structure-of-arrays
+[0620], affine values [0910], restricting where roots are minted [1680] and
+a third generated-source case [1540], is held by the Language evolution
+successor.
 
-The bootstrap compiler now exists. R0's Ada chassis, R1's executable
-kernel, R2's semantic and representation core and R3's first major
-milestone are complete: `refine` checks and lowers a program, emits Linux
-x86-64 assembly, assembles and links a hosted executable, and runs the
-complete derived parser program with evidence-table dispatch and `any` but
-without specialization. R4 is completing the hosted Linux x86-64 path.
-Target work continues through native macOS arm64 and emulator-first
-Cortex-M.
+The bootstrap compiler now exists. R0 through R6 are complete: `refine`
+checks and lowers a program, emits Linux x86-64, Darwin arm64 and Cortex-M0
+assembly, links hosted executables and compiler-owned firmware, and runs
+all four complete derived programs, the parser, containers and hosted
+application on the hosts and the driver on Cortex-M. R7 closes the
+remaining coverage and dispositions.
 
 The endpoint is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and

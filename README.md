@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.30 — Disposition every inherited item (planned).**
+**Next roadmap item: R7.40 — Close all evidence registers (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -377,3 +377,15 @@ successor and the atomic wrapper type to the Broader standard library. Spec
 decisions D233-D241 record each choice with its alternative, and the
 exact-revision dual-native routine binding with debugger coverage in
 ROADMAP.md owns closure.
+
+R7.30 gives every inherited item and every later discovery a terminal
+disposition. Nineteen of the 32 inherited appendix rows are implemented and
+thirteen are transferred to named successors. No parked item's trigger fired
+and no watch concluded in the four complete derived programs, so C1-C5, the
+E1-E3 watches and the stackful-fibre exploration join D237's scalars with the
+Language evolution successor, each with its trigger and completion evidence.
+A new ledger does the same for the limits R6.10-R7.20
+recorded, giving physical-board evidence to Release readiness and the
+structural editor grammar's drift to R7.40, and `check.py` now refuses a row
+without a terminal disposition. Its exact-revision dual-native routine
+binding in ROADMAP.md owns closure.
