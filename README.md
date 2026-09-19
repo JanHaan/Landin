@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.20 — Close deferred normative behavior (planned).**
+**Next roadmap item: R7.30 — Disposition every inherited item (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -365,3 +365,15 @@ owner, and `check.py` refuses a missing, stale, unowned or unexplained row.
 The described forms it found unfinished are routed to R7.20, target gaps and
 stale refusal notes to R7.40. Its exact-revision dual-native routine binding
 in ROADMAP.md owns closure.
+
+R7.20 decides every one of those rows from measured evidence. Shared names,
+labelled bare blocks, the several-atom pointer union and the remaining general
+aggregate values are implemented on Linux x86-64, Darwin arm64 and Cortex-M0,
+with GDB and LLDB presentation of the new union. Range-subtype composition is
+a recorded boundary; `volatile ptr`, `register(...)`, `set(X)`, per-field byte
+order, the machine attribute words and the vector intrinsics are withdrawn in
+favour of existing mechanisms; u128, i128 and f16 go to the Language evolution
+successor and the atomic wrapper type to the Broader standard library. Spec
+decisions D233-D241 record each choice with its alternative, and the
+exact-revision dual-native routine binding with debugger coverage in
+ROADMAP.md owns closure.

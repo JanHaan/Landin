@@ -255,7 +255,12 @@ dual-native binding owns closure. R6.100 closes Cortex line/function debugging
 and complete measured firmware/stack evidence within its explicit bounds; its exact-revision dual-native milestone
 binding owns closure. R7.10 audits every construct into the generated
 inventory in `compiler/tests/constructs.matrix`; its exact-revision dual-native
-routine binding owns closure. R7.20 is next dependency-ready. R6.80
+routine binding owns closure. R7.20 decides every deferred row it routed:
+shared names, labelled bare blocks, the several-atom pointer union and general
+aggregate values are implemented on all three targets, and the remaining forms
+are bounded, withdrawn or transferred to named successors by D233-D241; its
+exact-revision dual-native routine binding with debugger coverage owns closure.
+R7.30 is next dependency-ready. R6.80
 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

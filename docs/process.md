@@ -52,6 +52,13 @@ boot/stack assertions and independent panic-site evidence checks. It adds
 fixture provenance/regeneration and embedded consumers without changing the
 compiler or claiming a freestanding milestone.
 
+R7.20 selects routine scope with debugger coverage. Its several-atom pointer
+union is a new debugger-visible type with GDB and LLDB presentation checks, and
+the debugger scripts changed. It is not a phase closure and adds no target, ABI
+convention or instruction selection: the one backend change generalizes an
+existing reserved-zero load predicate, and complete release Darwin parity runs
+every new runtime fixture, so milestone scope is not warranted.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.

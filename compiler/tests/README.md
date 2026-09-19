@@ -32,7 +32,8 @@ the corpus says about it. R7.10 completed it as the construct inventory: each
 row also gives the strongest claim per product target, read from fixture
 metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
 `driver/fixture.json`; every named refusal with its item and whether its note
-says the construct is pending, a recorded boundary or withdrawn; and ROADMAP.md
+says the construct is pending, a recorded boundary, withdrawn or (since R7.20)
+transferred to a named successor; and ROADMAP.md
 R7.10's state, applicable targets, gaps and open owner, whose disposition there
 explains the row. A full `check.py` refuses a missing, stale, unowned or
 unexplained row, and `scripts/tests/test_construct_inventory.py` proves each
