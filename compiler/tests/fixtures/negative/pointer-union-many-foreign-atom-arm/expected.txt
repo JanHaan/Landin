@@ -1,0 +1,10 @@
+error[L0301]: this case does not belong to the pointer union matched here
+  --> ../tests/fixtures/negative/pointer-union-many-foreign-atom-arm/program.ldn:10:9
+   |
+10 |         closed: value = 2
+   |         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-foreign-atom-arm/program.ldn:7:11
+  |
+7 |     match m
+  |           ^ this matched pointer union
+  = note: [0480]: matching a pointer union names each of its atoms and `ptr`

@@ -1,0 +1,8 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+closed: atom
+
+bad: () -> (m: maybe_ptr) =
+    m = closed
+end bad

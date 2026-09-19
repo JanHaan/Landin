@@ -1,0 +1,10 @@
+error[L0311]: this match has two `ptr` arms
+  --> ../tests/fixtures/negative/pointer-union-many-pointer-arm-named-twice/program.ldn:10:9
+   |
+10 |         ptr (p): value = p.val
+   |         ^^^
+  --> ../tests/fixtures/negative/pointer-union-many-pointer-arm-named-twice/program.ldn:8:9
+  |
+8 |         ptr: value = 1
+  |         ^^^ first matched here
+  = note: [0480]: a pointer union has one pointer case

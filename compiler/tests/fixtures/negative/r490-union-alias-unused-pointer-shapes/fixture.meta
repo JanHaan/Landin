@@ -1,8 +1,8 @@
 class: negative
-summary: Proven pointer and atom lower bounds reject unconditional unused union violations through nested aliases
+summary: Proven pointer lower bounds reject unconditional unused two-pointer unions through nested aliases, while a union of several atoms and a pointer is no longer a violation
 program: main.ldn
-codes: L0301, L0304, L0301, L0304, L0304
-constructs: 0480, 0630, 0640, 1350, 1795, 1830
+codes: L0301, L0301
+constructs: 0480, 0630, 0640, 1350, 1795
 targets: linux-x86-64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn

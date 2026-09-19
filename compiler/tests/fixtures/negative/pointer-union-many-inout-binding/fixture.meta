@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] a `ptr` arm binding is read-only, because writing it would write a cell of the union
+constructs: 0480, 1210, 1220
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-inout-binding/program.ldn
+status: 1

@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/pointer-union-many-frame-escape/program.ldn:15:25
+   |
+15 |         ptr (p): retain(p)
+   |                         ^
+  --> ../tests/fixtures/negative/pointer-union-many-frame-escape/program.ldn:10:5
+   |
+10 |     value: u32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

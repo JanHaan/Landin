@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] erasing a union of several atoms and a pointer behind `any` would hand an atom case to a dispatch that reads it as the data pointer
+constructs: 0480, 1230, 1240, 1370, 1380
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-any-construction/program.ldn
+status: 1

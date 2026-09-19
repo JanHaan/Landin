@@ -1,0 +1,13 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+
+take: (p: ptr mut u32) -> (value: u32) =
+    value = p.val
+end take
+
+bad: () -> (value: u32) =
+    mut cell: u32 = 1
+    m: maybe_ptr = addr cell
+    value = take(m)
+end bad

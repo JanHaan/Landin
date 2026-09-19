@@ -4437,6 +4437,1146 @@ item 1 ROUTINE same result bool signature 1 params 3 slots 11 blocks 7 values 38
     36 STORE slot 4 <- 35
     37 LOAD bool slot 4
     38 LEAVE <- 37
+file positive/pointer-union-many-declarations/program.ldn
+unit signatures 8 items 8
+atom set 1 atoms {none_found, denied}
+atom set 2 atoms {none_found, denied, closed}
+atom set 3 atoms {none_found, denied}
+signature 1 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 2 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 3 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 4 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 5 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 6 (in struct (denied | none_found | ptr mut u32)) -> struct (closed | denied | none_found | ptr mut u32) from 1
+signature 7 (in usize) -> struct (closed | denied | none_found | ptr mut u32) from 1
+signature 8 () -> usize
+item 1 ROUTINE reversed_of result struct signature 1 params 2 slots 8 blocks 1 values 11
+  slot 1 reversed_of usize param 1
+  slot 2 w aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 5 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 2 ROUTINE repeated_of result struct signature 2 params 2 slots 8 blocks 1 values 11
+  slot 1 repeated_of usize param 1
+  slot 2 r aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 x aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 7 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 3 ROUTINE through_set_of result struct signature 3 params 2 slots 8 blocks 1 values 11
+  slot 1 through_set_of usize param 1
+  slot 2 x aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 s aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 9 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 4 ROUTINE through_union_of result struct signature 4 params 2 slots 8 blocks 1 values 11
+  slot 1 through_union_of usize param 1
+  slot 2 s aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 u aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 11 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 5 ROUTINE alias_of result struct signature 5 params 2 slots 8 blocks 1 values 11
+  slot 1 alias_of usize param 1
+  slot 2 u aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 a aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 13 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 6 ROUTINE grown_of result struct signature 6 params 2 slots 12 blocks 4 values 27
+  slot 1 grown_of usize param 1
+  slot 2 a aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 g aggregate fields u32 atoms {none_found, denied, closed} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  block 1 scope 15 BLOCK length 8
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 6 <- 1
+    3 STORAGE_ADDRESS usize storage slot 5
+    4 STORE slot 7 <- 3
+    5 COPY_ARRAY from address slot 6 to address slot 7
+    6 LOAD_FIELD u32 slot 5 field 1
+    7 FAILURE_TEST bool <- 6
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 15 BLOCK length 4
+    9 LOAD_FIELD u32 slot 5 field 1
+    10 CLEAR_ARRAY destination slot 8
+    11 STORE_FIELD slot 8 field 1 <- 9
+    12 JUMP target 4
+  block 3 scope 15 BLOCK length 4
+    13 LOAD_FIELD usize slot 5 field 2
+    14 CLEAR_ARRAY destination slot 8
+    15 STORE_FIELD slot 8 field 2 <- 13
+    16 JUMP target 4
+  block 4 scope 15 BLOCK length 11
+    17 STORAGE_ADDRESS usize storage slot 8
+    18 STORE slot 9 <- 17
+    19 STORAGE_ADDRESS usize storage slot 4
+    20 STORE slot 10 <- 19
+    21 COPY_ARRAY from address slot 9 to address slot 10
+    22 STORAGE_ADDRESS usize storage slot 4
+    23 STORE slot 11 <- 22
+    24 STORAGE_ADDRESS usize storage slot 3
+    25 STORE slot 12 <- 24
+    26 COPY_ARRAY from address slot 11 to address slot 12
+    27 LEAVE
+item 7 ROUTINE roundtrip result struct signature 7 params 2 slots 18 blocks 1 values 37
+  slot 1 roundtrip usize param 1
+  slot 2 cell usize param 2
+  slot 3 g aggregate fields u32 atoms {none_found, denied, closed} usize return
+  slot 4 w aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 9 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 10 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 11 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 12 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 13 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 14 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 15 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 16 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 17 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 18 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  block 1 scope 17 BLOCK length 37
+    1 LOAD usize slot 2
+    2 CLEAR_ARRAY destination slot 5
+    3 STORE_FIELD slot 5 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 5
+    5 STORE slot 6 <- 4
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 COPY_ARRAY from address slot 6 to address slot 7
+    9 STORAGE_ADDRESS usize storage slot 4
+    10 STORAGE_ADDRESS usize storage slot 14
+    11 CALL none callee 1 reversed_of signature 1 <- 10 9
+    12 STORAGE_ADDRESS usize storage slot 14
+    13 STORAGE_ADDRESS usize storage slot 13
+    14 CALL none callee 2 repeated_of signature 2 <- 13 12
+    15 STORAGE_ADDRESS usize storage slot 13
+    16 STORAGE_ADDRESS usize storage slot 12
+    17 CALL none callee 3 through_set_of signature 3 <- 16 15
+    18 STORAGE_ADDRESS usize storage slot 12
+    19 STORAGE_ADDRESS usize storage slot 11
+    20 CALL none callee 4 through_union_of signature 4 <- 19 18
+    21 STORAGE_ADDRESS usize storage slot 11
+    22 STORAGE_ADDRESS usize storage slot 10
+    23 CALL none callee 5 alias_of signature 5 <- 22 21
+    24 STORAGE_ADDRESS usize storage slot 10
+    25 STORAGE_ADDRESS usize storage slot 9
+    26 CALL none callee 6 grown_of signature 6 <- 25 24
+    27 STORAGE_ADDRESS usize storage slot 9
+    28 STORE slot 15 <- 27
+    29 STORAGE_ADDRESS usize storage slot 8
+    30 STORE slot 16 <- 29
+    31 COPY_ARRAY from address slot 15 to address slot 16
+    32 STORAGE_ADDRESS usize storage slot 8
+    33 STORE slot 17 <- 32
+    34 STORAGE_ADDRESS usize storage slot 3
+    35 STORE slot 18 <- 34
+    36 COPY_ARRAY from address slot 17 to address slot 18
+    37 LEAVE
+item 8 ROUTINE size_of result usize signature 8 params 0 slots 7 blocks 1 values 34
+  slot 1 n usize return
+  slot 2 - usize
+  slot 3 - usize
+  slot 4 - usize
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 - usize
+  block 1 scope 19 BLOCK length 34
+    1 MEASURE_SIZE usize fields u32 atoms {none_found, denied} usize
+    2 STORE slot 2 <- 1
+    3 MEASURE_SIZE usize fields u32 atoms {none_found, denied} usize
+    4 LOAD usize slot 2
+    5 ADD usize <- 4 3
+    6 STORE slot 3 <- 5
+    7 MEASURE_SIZE usize fields u32 atoms {none_found, denied, closed} usize
+    8 LOAD usize slot 3
+    9 ADD usize <- 8 7
+    10 STORE slot 4 <- 9
+    11 MEASURE_SIZE usize fields u32 atoms {none_found, denied} usize
+    12 LOAD usize slot 4
+    13 ADD usize <- 12 11
+    14 STORE slot 1 <- 13
+    15 LOAD usize slot 1
+    16 STORE slot 5 <- 15
+    17 MEASURE_SIZE usize fields u32 atoms {none_found, denied} usize
+    18 NUMBER usize 2
+    19 MULTIPLY usize <- 18 17
+    20 LOAD usize slot 5
+    21 ADD usize <- 20 19
+    22 STORE slot 6 <- 21
+    23 MEASURE_SIZE usize fields u32 atoms {none_found, denied} usize
+    24 NUMBER usize 2
+    25 MULTIPLY usize <- 24 23
+    26 LOAD usize slot 6
+    27 ADD usize <- 26 25
+    28 STORE slot 7 <- 27
+    29 MEASURE_ALIGN usize fields u32 atoms {none_found, denied} usize
+    30 LOAD usize slot 7
+    31 ADD usize <- 30 29
+    32 STORE slot 1 <- 31
+    33 LOAD usize slot 1
+    34 LEAVE <- 33
+file positive/pointer-union-many-widening/program.ldn
+unit signatures 23 items 26
+atom set 1 atoms {none_found, denied}
+atom set 2 atoms {none_found, denied}
+atom set 3 atoms {none_found, denied, closed}
+atom set 4 atoms {none_found, denied}
+atom set 5 atoms {unavailable}
+atom set 6 atoms {denied}
+atom set 7 atoms {none_found}
+atom set 8 atoms {unavailable}
+signature 1 () -> struct (denied | none_found | ptr mut u32)
+signature 2 (in u32 atoms {none_found, denied}) -> struct (denied | none_found | ptr mut u32)
+signature 3 (in usize) -> struct (denied | none_found | ptr mut u32) from 1
+signature 4 (in usize) -> struct (denied | none_found | ptr u32) from 1
+signature 5 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr u32) from 1
+signature 6 (in usize) -> struct (denied | none_found | ptr mut u32) from 1
+signature 7 (in struct (denied | none_found | ptr mut u32)) -> struct (closed | denied | none_found | ptr mut u32) from 1
+signature 8 (in u32, in usize) -> struct (denied | none_found | ptr mut u32) from 2
+signature 9 (in u32 atoms {none_found, denied}, in usize) -> struct (denied | none_found | ptr mut u32) from 2
+signature 10 (in usize) -> struct (denied | none_found | ptr mut u32) from 1
+signature 11 (in usize, in bool) -> struct (denied | none_found | ptr mut u32) from 1 errors atoms {unavailable}
+signature 12 (in usize, in bool) -> struct (denied | none_found | ptr mut u32) from 1
+signature 13 (in usize) -> struct holder from 1
+signature 14 (in usize) -> [3]struct (denied | none_found | ptr mut u32) from 1
+signature 15 (in usize) -> struct shape from 1
+signature 16 (in usize) -> u32
+signature 17 (in usize) -> bool
+signature 18 (in usize) -> u32
+signature 19 (in struct (denied | none_found | ptr mut u32)) -> u32
+signature 20 (inout usize, escaping in usize) -> none
+signature 21 (in struct (denied | none_found | ptr mut u32)) -> struct (denied | none_found | ptr mut u32) from 1
+signature 22 (sink struct (denied | none_found | ptr mut u32)) -> u32
+signature 23 () -> none
+item 1 DATUM module_result result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32 atoms {none_found, denied}
+  field 2 usize
+  image 2 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM module_bigger result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32 atoms {none_found, denied, closed}
+  field 2 usize
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM module_state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32 atoms {none_found, denied}
+  field 2 usize
+  image 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 ROUTINE from_singleton result struct signature 1 params 1 slots 8 blocks 1 values 14
+  slot 1 from_singleton usize param 1
+  slot 2 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 3 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 6 BLOCK length 14
+    1 ATOM u32 identity denied atoms {denied}
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 1 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 STORAGE_ADDRESS usize storage slot 3
+    10 STORE slot 7 <- 9
+    11 STORAGE_ADDRESS usize storage slot 2
+    12 STORE slot 8 <- 11
+    13 COPY_ARRAY from address slot 7 to address slot 8
+    14 LEAVE
+item 5 ROUTINE from_subset result struct signature 2 params 2 slots 9 blocks 1 values 14
+  slot 1 from_subset usize param 1
+  slot 2 a u32 atoms {none_found, denied} param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 8 BLOCK length 14
+    1 LOAD u32 slot 2
+    2 CLEAR_ARRAY destination slot 5
+    3 STORE_FIELD slot 5 field 1 <- 1
+    4 STORAGE_ADDRESS usize storage slot 5
+    5 STORE slot 6 <- 4
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 COPY_ARRAY from address slot 6 to address slot 7
+    9 STORAGE_ADDRESS usize storage slot 4
+    10 STORE slot 8 <- 9
+    11 STORAGE_ADDRESS usize storage slot 3
+    12 STORE slot 9 <- 11
+    13 COPY_ARRAY from address slot 8 to address slot 9
+    14 LEAVE
+item 6 ROUTINE from_pointer result struct signature 3 params 2 slots 9 blocks 1 values 14
+  slot 1 from_pointer usize param 1
+  slot 2 cell usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 10 BLOCK length 14
+    1 LOAD usize slot 2
+    2 CLEAR_ARRAY destination slot 5
+    3 STORE_FIELD slot 5 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 5
+    5 STORE slot 6 <- 4
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 COPY_ARRAY from address slot 6 to address slot 7
+    9 STORAGE_ADDRESS usize storage slot 4
+    10 STORE slot 8 <- 9
+    11 STORAGE_ADDRESS usize storage slot 3
+    12 STORE slot 9 <- 11
+    13 COPY_ARRAY from address slot 8 to address slot 9
+    14 LEAVE
+item 7 ROUTINE relaxed result struct signature 4 params 2 slots 9 blocks 1 values 14
+  slot 1 relaxed usize param 1
+  slot 2 cell usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 12 BLOCK length 14
+    1 LOAD usize slot 2
+    2 CLEAR_ARRAY destination slot 5
+    3 STORE_FIELD slot 5 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 5
+    5 STORE slot 6 <- 4
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 COPY_ARRAY from address slot 6 to address slot 7
+    9 STORAGE_ADDRESS usize storage slot 4
+    10 STORE slot 8 <- 9
+    11 STORAGE_ADDRESS usize storage slot 3
+    12 STORE slot 9 <- 11
+    13 COPY_ARRAY from address slot 8 to address slot 9
+    14 LEAVE
+item 8 ROUTINE relaxed_union result struct signature 5 params 2 slots 12 blocks 4 values 27
+  slot 1 relaxed_union usize param 1
+  slot 2 m aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 14 BLOCK length 8
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 6 <- 1
+    3 STORAGE_ADDRESS usize storage slot 5
+    4 STORE slot 7 <- 3
+    5 COPY_ARRAY from address slot 6 to address slot 7
+    6 LOAD_FIELD u32 slot 5 field 1
+    7 FAILURE_TEST bool <- 6
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 14 BLOCK length 4
+    9 LOAD_FIELD u32 slot 5 field 1
+    10 CLEAR_ARRAY destination slot 8
+    11 STORE_FIELD slot 8 field 1 <- 9
+    12 JUMP target 4
+  block 3 scope 14 BLOCK length 4
+    13 LOAD_FIELD usize slot 5 field 2
+    14 CLEAR_ARRAY destination slot 8
+    15 STORE_FIELD slot 8 field 2 <- 13
+    16 JUMP target 4
+  block 4 scope 14 BLOCK length 11
+    17 STORAGE_ADDRESS usize storage slot 8
+    18 STORE slot 9 <- 17
+    19 STORAGE_ADDRESS usize storage slot 4
+    20 STORE slot 10 <- 19
+    21 COPY_ARRAY from address slot 9 to address slot 10
+    22 STORAGE_ADDRESS usize storage slot 4
+    23 STORE slot 11 <- 22
+    24 STORAGE_ADDRESS usize storage slot 3
+    25 STORE slot 12 <- 24
+    26 COPY_ARRAY from address slot 11 to address slot 12
+    27 LEAVE
+item 9 ROUTINE from_one_atom result struct signature 6 params 2 slots 10 blocks 4 values 25
+  slot 1 from_one_atom usize param 1
+  slot 2 m usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - usize
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 16 BLOCK length 6
+    1 LOAD usize slot 2
+    2 STORE slot 5 <- 1
+    3 LOAD usize slot 5
+    4 NUMBER usize 0
+    5 EQUAL_TO bool <- 3 4
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 16 BLOCK length 4
+    7 ATOM u32 identity none_found atoms {none_found}
+    8 CLEAR_ARRAY destination slot 6
+    9 STORE_FIELD slot 6 field 1 <- 7
+    10 JUMP target 4
+  block 3 scope 16 BLOCK length 4
+    11 LOAD usize slot 5
+    12 CLEAR_ARRAY destination slot 6
+    13 STORE_FIELD slot 6 field 2 <- 11
+    14 JUMP target 4
+  block 4 scope 16 BLOCK length 11
+    15 STORAGE_ADDRESS usize storage slot 6
+    16 STORE slot 7 <- 15
+    17 STORAGE_ADDRESS usize storage slot 4
+    18 STORE slot 8 <- 17
+    19 COPY_ARRAY from address slot 7 to address slot 8
+    20 STORAGE_ADDRESS usize storage slot 4
+    21 STORE slot 9 <- 20
+    22 STORAGE_ADDRESS usize storage slot 3
+    23 STORE slot 10 <- 22
+    24 COPY_ARRAY from address slot 9 to address slot 10
+    25 LEAVE
+item 10 ROUTINE grown result struct signature 7 params 2 slots 12 blocks 4 values 27
+  slot 1 grown usize param 1
+  slot 2 m aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied, closed} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - aggregate fields u32 atoms {none_found, denied, closed} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied, closed},usize)
+  block 1 scope 18 BLOCK length 8
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 6 <- 1
+    3 STORAGE_ADDRESS usize storage slot 5
+    4 STORE slot 7 <- 3
+    5 COPY_ARRAY from address slot 6 to address slot 7
+    6 LOAD_FIELD u32 slot 5 field 1
+    7 FAILURE_TEST bool <- 6
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 18 BLOCK length 4
+    9 LOAD_FIELD u32 slot 5 field 1
+    10 CLEAR_ARRAY destination slot 8
+    11 STORE_FIELD slot 8 field 1 <- 9
+    12 JUMP target 4
+  block 3 scope 18 BLOCK length 4
+    13 LOAD_FIELD usize slot 5 field 2
+    14 CLEAR_ARRAY destination slot 8
+    15 STORE_FIELD slot 8 field 2 <- 13
+    16 JUMP target 4
+  block 4 scope 18 BLOCK length 11
+    17 STORAGE_ADDRESS usize storage slot 8
+    18 STORE slot 9 <- 17
+    19 STORAGE_ADDRESS usize storage slot 4
+    20 STORE slot 10 <- 19
+    21 COPY_ARRAY from address slot 9 to address slot 10
+    22 STORAGE_ADDRESS usize storage slot 4
+    23 STORE slot 11 <- 22
+    24 STORAGE_ADDRESS usize storage slot 3
+    25 STORE slot 12 <- 24
+    26 COPY_ARRAY from address slot 11 to address slot 12
+    27 LEAVE
+item 11 ROUTINE chosen result struct signature 8 params 3 slots 21 blocks 7 values 51
+  slot 1 chosen usize param 1
+  slot 2 which u32 param 2
+  slot 3 cell usize param 3
+  slot 4 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - u32
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - u32
+  slot 12 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 13 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 14 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 15 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 16 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 17 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 18 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 19 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 20 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 21 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 20 BLOCK length 6
+    1 LOAD u32 slot 2
+    2 STORE slot 7 <- 1
+    3 NUMBER u32 0
+    4 LOAD u32 slot 7
+    5 EQUAL_TO bool <- 4 3
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 21 BLOCK length 9
+    7 ATOM u32 identity none_found atoms {none_found}
+    8 CLEAR_ARRAY destination slot 8
+    9 STORE_FIELD slot 8 field 1 <- 7
+    10 STORAGE_ADDRESS usize storage slot 8
+    11 STORE slot 9 <- 10
+    12 STORAGE_ADDRESS usize storage slot 6
+    13 STORE slot 10 <- 12
+    14 COPY_ARRAY from address slot 9 to address slot 10
+    15 JUMP target 4
+  block 3 scope 20 BLOCK length 6
+    16 LOAD u32 slot 2
+    17 STORE slot 11 <- 16
+    18 NUMBER u32 1
+    19 LOAD u32 slot 11
+    20 EQUAL_TO bool <- 19 18
+    21 BRANCH target 5 alternative 6 <- 20
+  block 4 scope 20 BLOCK length 11
+    41 STORAGE_ADDRESS usize storage slot 6
+    42 STORE slot 18 <- 41
+    43 STORAGE_ADDRESS usize storage slot 5
+    44 STORE slot 19 <- 43
+    45 COPY_ARRAY from address slot 18 to address slot 19
+    46 STORAGE_ADDRESS usize storage slot 5
+    47 STORE slot 20 <- 46
+    48 STORAGE_ADDRESS usize storage slot 4
+    49 STORE slot 21 <- 48
+    50 COPY_ARRAY from address slot 20 to address slot 21
+    51 LEAVE
+  block 5 scope 22 BLOCK length 9
+    22 LOAD usize slot 3
+    23 CLEAR_ARRAY destination slot 12
+    24 STORE_FIELD slot 12 field 2 <- 22
+    25 STORAGE_ADDRESS usize storage slot 12
+    26 STORE slot 13 <- 25
+    27 STORAGE_ADDRESS usize storage slot 6
+    28 STORE slot 14 <- 27
+    29 COPY_ARRAY from address slot 13 to address slot 14
+    30 JUMP target 4
+  block 6 scope 20 BLOCK length 1
+    31 JUMP target 7
+  block 7 scope 23 BLOCK length 9
+    32 ATOM u32 identity denied atoms {denied}
+    33 CLEAR_ARRAY destination slot 15
+    34 STORE_FIELD slot 15 field 1 <- 32
+    35 STORAGE_ADDRESS usize storage slot 15
+    36 STORE slot 16 <- 35
+    37 STORAGE_ADDRESS usize storage slot 6
+    38 STORE slot 17 <- 37
+    39 COPY_ARRAY from address slot 16 to address slot 17
+    40 JUMP target 4
+item 12 ROUTINE matched result struct signature 9 params 3 slots 17 blocks 5 values 36
+  slot 1 matched usize param 1
+  slot 2 a u32 atoms {none_found, denied} param 2
+  slot 3 cell usize param 3
+  slot 4 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - u32 atoms {none_found, denied}
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 13 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 14 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 15 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 16 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 17 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 25 BLOCK length 6
+    1 LOAD u32 slot 2
+    2 STORE slot 7 <- 1
+    3 LOAD u32 slot 7
+    4 ATOM u32 identity none_found atoms {none_found}
+    5 EQUAL_TO bool <- 3 4
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 26 BLOCK length 9
+    7 LOAD usize slot 3
+    8 CLEAR_ARRAY destination slot 8
+    9 STORE_FIELD slot 8 field 2 <- 7
+    10 STORAGE_ADDRESS usize storage slot 8
+    11 STORE slot 9 <- 10
+    12 STORAGE_ADDRESS usize storage slot 6
+    13 STORE slot 10 <- 12
+    14 COPY_ARRAY from address slot 9 to address slot 10
+    15 JUMP target 4
+  block 3 scope 25 BLOCK length 1
+    16 JUMP target 5
+  block 4 scope 25 BLOCK length 11
+    26 STORAGE_ADDRESS usize storage slot 6
+    27 STORE slot 14 <- 26
+    28 STORAGE_ADDRESS usize storage slot 5
+    29 STORE slot 15 <- 28
+    30 COPY_ARRAY from address slot 14 to address slot 15
+    31 STORAGE_ADDRESS usize storage slot 5
+    32 STORE slot 16 <- 31
+    33 STORAGE_ADDRESS usize storage slot 4
+    34 STORE slot 17 <- 33
+    35 COPY_ARRAY from address slot 16 to address slot 17
+    36 LEAVE
+  block 5 scope 27 BLOCK length 9
+    17 ATOM u32 identity denied atoms {denied}
+    18 CLEAR_ARRAY destination slot 11
+    19 STORE_FIELD slot 11 field 1 <- 17
+    20 STORAGE_ADDRESS usize storage slot 11
+    21 STORE slot 12 <- 20
+    22 STORAGE_ADDRESS usize storage slot 6
+    23 STORE slot 13 <- 22
+    24 COPY_ARRAY from address slot 12 to address slot 13
+    25 JUMP target 4
+item 13 ROUTINE looked result struct signature 10 params 2 slots 12 blocks 4 values 22
+  slot 1 looked usize param 1
+  slot 2 cell usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 29 BLOCK length 1
+    1 JUMP target 2
+  block 2 scope 29 BLOCK length 1
+    2 JUMP target 3
+  block 3 scope 30 BLOCK length 9
+    3 LOAD usize slot 2
+    4 CLEAR_ARRAY destination slot 6
+    5 STORE_FIELD slot 6 field 2 <- 3
+    6 STORAGE_ADDRESS usize storage slot 6
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 5
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 JUMP target 4
+  block 4 scope 29 BLOCK length 11
+    12 STORAGE_ADDRESS usize storage slot 5
+    13 STORE slot 9 <- 12
+    14 STORAGE_ADDRESS usize storage slot 4
+    15 STORE slot 10 <- 14
+    16 COPY_ARRAY from address slot 9 to address slot 10
+    17 STORAGE_ADDRESS usize storage slot 4
+    18 STORE slot 11 <- 17
+    19 STORAGE_ADDRESS usize storage slot 3
+    20 STORE slot 12 <- 19
+    21 COPY_ARRAY from address slot 11 to address slot 12
+    22 LEAVE
+item 14 ROUTINE fallible result struct signature 11 params 3 slots 11 blocks 3 values 20
+  slot 1 fallible usize param 1
+  slot 2 cell usize param 2
+  slot 3 reject bool param 3
+  slot 4 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 5 - u32 atoms {unavailable}
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 32 BLOCK length 2
+    1 LOAD bool slot 3
+    2 BRANCH target 2 alternative 3 <- 1
+  block 2 scope 32 BLOCK length 4
+    3 ATOM u32 identity unavailable atoms {unavailable}
+    4 STORE slot 5 <- 3
+    5 LOAD u32 slot 5
+    6 FAIL <- 5
+  block 3 scope 32 BLOCK length 14
+    7 LOAD usize slot 2
+    8 CLEAR_ARRAY destination slot 7
+    9 STORE_FIELD slot 7 field 2 <- 7
+    10 STORAGE_ADDRESS usize storage slot 7
+    11 STORE slot 8 <- 10
+    12 STORAGE_ADDRESS usize storage slot 6
+    13 STORE slot 9 <- 12
+    14 COPY_ARRAY from address slot 8 to address slot 9
+    15 STORAGE_ADDRESS usize storage slot 6
+    16 STORE slot 10 <- 15
+    17 STORAGE_ADDRESS usize storage slot 4
+    18 STORE slot 11 <- 17
+    19 COPY_ARRAY from address slot 10 to address slot 11
+    20 LEAVE
+item 15 ROUTINE recovered result struct signature 12 params 3 slots 15 blocks 4 values 30
+  slot 1 recovered usize param 1
+  slot 2 cell usize param 2
+  slot 3 reject bool param 3
+  slot 4 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 5 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 6 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 7 - u32 atoms {unavailable}
+  slot 8 - usize
+  slot 9 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 13 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 14 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 15 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 34 BLOCK length 9
+    1 LOAD usize slot 2
+    2 STORE slot 8 <- 1
+    3 LOAD bool slot 3
+    4 LOAD usize slot 8
+    5 STORAGE_ADDRESS usize storage slot 6
+    6 CALL none callee 14 fallible signature 11 failure slot 7 <- 5 4 3
+    7 LOAD u32 slot 7
+    8 FAILURE_TEST bool <- 7
+    9 BRANCH target 2 alternative 3 <- 8
+  block 2 scope 34 BLOCK length 9
+    10 ATOM u32 identity denied atoms {denied}
+    11 CLEAR_ARRAY destination slot 9
+    12 STORE_FIELD slot 9 field 1 <- 10
+    13 STORAGE_ADDRESS usize storage slot 9
+    14 STORE slot 10 <- 13
+    15 STORAGE_ADDRESS usize storage slot 6
+    16 STORE slot 11 <- 15
+    17 COPY_ARRAY from address slot 10 to address slot 11
+    18 JUMP target 4
+  block 3 scope 34 BLOCK length 1
+    19 JUMP target 4
+  block 4 scope 34 BLOCK length 11
+    20 STORAGE_ADDRESS usize storage slot 6
+    21 STORE slot 12 <- 20
+    22 STORAGE_ADDRESS usize storage slot 5
+    23 STORE slot 13 <- 22
+    24 COPY_ARRAY from address slot 12 to address slot 13
+    25 STORAGE_ADDRESS usize storage slot 5
+    26 STORE slot 14 <- 25
+    27 STORAGE_ADDRESS usize storage slot 4
+    28 STORE slot 15 <- 27
+    29 COPY_ARRAY from address slot 14 to address slot 15
+    30 LEAVE
+item 16 ROUTINE stored result struct signature 13 params 2 slots 6 blocks 1 values 11
+  slot 1 stored usize param 1
+  slot 2 cell usize param 2
+  slot 3 h aggregate fields u32 struct (u32 atoms {none_found, denied},usize) return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 37 BLOCK length 11
+    1 NUMBER u32 1
+    2 STORE_FIELD slot 3 field 1 <- 1
+    3 LOAD usize slot 2
+    4 CLEAR_ARRAY destination slot 4
+    5 STORE_FIELD slot 4 field 2 <- 3
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 5 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3 field 2
+    9 STORE slot 6 <- 8
+    10 COPY_ARRAY from address slot 5 to address slot 6
+    11 LEAVE
+item 17 ROUTINE in_row result array signature 14 params 2 slots 12 blocks 1 values 25
+  elements 3 of struct (u32 atoms {none_found, denied},usize)
+  slot 1 in_row usize param 1
+  slot 2 cell usize param 2
+  slot 3 row elements 3 of struct (u32 atoms {none_found, denied},usize) return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 39 BLOCK length 25
+    1 ATOM u32 identity none_found atoms {none_found}
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 1 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3 nested 1
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 LOAD usize slot 2
+    10 CLEAR_ARRAY destination slot 7
+    11 STORE_FIELD slot 7 field 2 <- 9
+    12 STORAGE_ADDRESS usize storage slot 7
+    13 STORE slot 8 <- 12
+    14 STORAGE_ADDRESS usize storage slot 3 nested 2
+    15 STORE slot 9 <- 14
+    16 COPY_ARRAY from address slot 8 to address slot 9
+    17 ATOM u32 identity denied atoms {denied}
+    18 CLEAR_ARRAY destination slot 10
+    19 STORE_FIELD slot 10 field 1 <- 17
+    20 STORAGE_ADDRESS usize storage slot 10
+    21 STORE slot 11 <- 20
+    22 STORAGE_ADDRESS usize storage slot 3 nested 3
+    23 STORE slot 12 <- 22
+    24 COPY_ARRAY from address slot 11 to address slot 12
+    25 LEAVE
+item 18 ROUTINE in_payload result struct signature 15 params 2 slots 6 blocks 1 values 12
+  slot 1 in_payload usize param 1
+  slot 2 cell usize param 2
+  slot 3 s aggregate fields variant u8 cases2 () (struct (u32 atoms {none_found, denied},usize),u32) return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 41 BLOCK length 12
+    1 SELECT_VARIANT destination slot 3 field 1 case 2
+    2 LOAD usize slot 2
+    3 CLEAR_ARRAY destination slot 4
+    4 STORE_FIELD slot 4 field 2 <- 2
+    5 STORAGE_ADDRESS usize storage slot 4
+    6 STORE slot 5 <- 5
+    7 STORAGE_ADDRESS usize storage slot 3 field 1 case 2 nested 1
+    8 STORE slot 6 <- 7
+    9 COPY_ARRAY from address slot 5 to address slot 6
+    10 NUMBER u32 2
+    11 STORE_FIELD slot 3 field 1 case 2 nested 2 <- 10
+    12 LEAVE
+item 19 ROUTINE boxed result u32 signature 16 params 1 slots 6 blocks 1 values 13
+  slot 1 cell usize param 1
+  slot 2 k u32 return
+  slot 3 b aggregate fields struct (u32 atoms {none_found, denied},usize)
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 43 BLOCK length 13
+    1 LOAD usize slot 1
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3 field 1
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 STORAGE_ADDRESS usize storage slot 3 field 1
+    10 CALL u32 callee 22 weigh signature 19 <- 9
+    11 STORE slot 2 <- 10
+    12 LOAD u32 slot 2
+    13 LEAVE <- 12
+item 20 ROUTINE boxed_reading result bool signature 17 params 1 slots 10 blocks 5 values 27
+  slot 1 cell usize param 1
+  slot 2 read bool return
+  slot 3 b aggregate fields struct (u32 atoms {none_found, denied},usize)
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - bool
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 45 BLOCK length 16
+    1 LOAD usize slot 1
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3 field 1
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 STORAGE_ADDRESS usize storage slot 3 field 1
+    10 STORE slot 9 <- 9
+    11 STORAGE_ADDRESS usize storage slot 8
+    12 STORE slot 10 <- 11
+    13 COPY_ARRAY from address slot 9 to address slot 10
+    14 LOAD_FIELD u32 slot 8 field 1
+    15 FAILURE_TEST bool <- 14
+    16 BRANCH target 3 alternative 2 <- 15
+  block 2 scope 46 BLOCK length 3
+    17 TRUTH bool true
+    18 STORE slot 7 <- 17
+    19 JUMP target 4
+  block 3 scope 45 BLOCK length 1
+    20 JUMP target 5
+  block 4 scope 45 BLOCK length 4
+    24 LOAD bool slot 7
+    25 STORE slot 2 <- 24
+    26 LOAD bool slot 2
+    27 LEAVE <- 26
+  block 5 scope 47 BLOCK length 3
+    21 TRUTH bool false
+    22 STORE slot 7 <- 21
+    23 JUMP target 4
+item 21 ROUTINE argument result u32 signature 18 params 1 slots 16 blocks 1 values 39
+  slot 1 cell usize param 1
+  slot 2 k u32 return
+  slot 3 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - u32
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - u32
+  slot 13 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 14 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 15 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 16 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 49 BLOCK length 39
+    1 ATOM u32 identity denied atoms {denied}
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 1 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 STORAGE_ADDRESS usize storage slot 3
+    10 CALL u32 callee 22 weigh signature 19 <- 9
+    11 STORE slot 7 <- 10
+    12 LOAD usize slot 1
+    13 CLEAR_ARRAY destination slot 9
+    14 STORE_FIELD slot 9 field 2 <- 12
+    15 STORAGE_ADDRESS usize storage slot 9
+    16 STORE slot 10 <- 15
+    17 STORAGE_ADDRESS usize storage slot 8
+    18 STORE slot 11 <- 17
+    19 COPY_ARRAY from address slot 10 to address slot 11
+    20 STORAGE_ADDRESS usize storage slot 8
+    21 CALL u32 callee 22 weigh signature 19 <- 20
+    22 LOAD u32 slot 7
+    23 ADD u32 <- 22 21
+    24 STORE slot 12 <- 23
+    25 ATOM u32 identity none_found atoms {none_found}
+    26 CLEAR_ARRAY destination slot 14
+    27 STORE_FIELD slot 14 field 1 <- 25
+    28 STORAGE_ADDRESS usize storage slot 14
+    29 STORE slot 15 <- 28
+    30 STORAGE_ADDRESS usize storage slot 13
+    31 STORE slot 16 <- 30
+    32 COPY_ARRAY from address slot 15 to address slot 16
+    33 STORAGE_ADDRESS usize storage slot 13
+    34 CALL u32 callee 22 weigh signature 19 <- 33
+    35 LOAD u32 slot 12
+    36 ADD u32 <- 35 34
+    37 STORE slot 2 <- 36
+    38 LOAD u32 slot 2
+    39 LEAVE <- 38
+item 22 ROUTINE weigh result u32 signature 19 params 1 slots 7 blocks 7 values 31
+  slot 1 m aggregate fields u32 atoms {none_found, denied} usize param 1
+  slot 2 k u32 return
+  slot 3 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 4 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 p usize
+  slot 7 - address of u32
+  block 1 scope 51 BLOCK length 9
+    1 STORAGE_ADDRESS usize storage slot 1
+    2 STORE slot 4 <- 1
+    3 STORAGE_ADDRESS usize storage slot 3
+    4 STORE slot 5 <- 3
+    5 COPY_ARRAY from address slot 4 to address slot 5
+    6 LOAD_FIELD u32 slot 3 field 1
+    7 ATOM u32 identity none_found atoms {none_found}
+    8 EQUAL_TO bool <- 6 7
+    9 BRANCH target 2 alternative 3 <- 8
+  block 2 scope 52 BLOCK length 3
+    10 NUMBER u32 1
+    11 STORE slot 2 <- 10
+    12 JUMP target 4
+  block 3 scope 51 BLOCK length 4
+    13 LOAD_FIELD u32 slot 3 field 1
+    14 ATOM u32 identity denied atoms {denied}
+    15 EQUAL_TO bool <- 13 14
+    16 BRANCH target 5 alternative 6 <- 15
+  block 4 scope 51 BLOCK length 2
+    30 LOAD u32 slot 2
+    31 LEAVE <- 30
+  block 5 scope 53 BLOCK length 3
+    17 NUMBER u32 2
+    18 STORE slot 2 <- 17
+    19 JUMP target 4
+  block 6 scope 51 BLOCK length 1
+    20 JUMP target 7
+  block 7 scope 54 BLOCK length 9
+    21 LOAD_FIELD usize slot 3 field 2
+    22 STORE slot 6 <- 21
+    23 LOAD usize slot 6
+    24 POINTER_ADDRESS usize <- 23
+    25 STORE slot 7 <- 24
+    26 LOAD usize slot 7
+    27 LOAD_INDIRECT u32 address slot 7 <- 26
+    28 STORE slot 2 <- 27
+    29 JUMP target 4
+item 23 ROUTINE replace result none signature 20 params 2 slots 12 blocks 1 values 23
+  slot 1 m address of struct (u32 atoms {none_found, denied},usize) param 1
+  slot 2 cell usize param 2
+  slot 3 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 9 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 10 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 11 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 12 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 56 BLOCK length 23
+    1 LOAD usize slot 2
+    2 CLEAR_ARRAY destination slot 4
+    3 STORE_FIELD slot 4 field 2 <- 1
+    4 STORAGE_ADDRESS usize storage slot 4
+    5 STORE slot 5 <- 4
+    6 STORAGE_ADDRESS usize storage slot 3
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 5 to address slot 6
+    9 STORAGE_ADDRESS usize storage slot 3
+    10 STORE slot 7 <- 9
+    11 COPY_ARRAY from address slot 7 to address slot 1
+    12 STORAGE_ADDRESS usize storage address slot 1
+    13 STORAGE_ADDRESS usize storage slot 9
+    14 CALL none callee 24 closed_free signature 21 <- 13 12
+    15 STORAGE_ADDRESS usize storage slot 9
+    16 STORE slot 10 <- 15
+    17 STORAGE_ADDRESS usize storage slot 8
+    18 STORE slot 11 <- 17
+    19 COPY_ARRAY from address slot 10 to address slot 11
+    20 STORAGE_ADDRESS usize storage slot 8
+    21 STORE slot 12 <- 20
+    22 COPY_ARRAY from address slot 12 to address slot 1
+    23 LEAVE
+item 24 ROUTINE closed_free result struct signature 21 params 2 slots 8 blocks 1 values 11
+  slot 1 closed_free usize param 1
+  slot 2 m aggregate fields u32 atoms {none_found, denied} usize param 2
+  slot 3 r aggregate fields u32 atoms {none_found, denied} usize return
+  slot 4 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 7 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 8 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 58 BLOCK length 11
+    1 STORAGE_ADDRESS usize storage slot 2
+    2 STORE slot 5 <- 1
+    3 STORAGE_ADDRESS usize storage slot 4
+    4 STORE slot 6 <- 3
+    5 COPY_ARRAY from address slot 5 to address slot 6
+    6 STORAGE_ADDRESS usize storage slot 4
+    7 STORE slot 7 <- 6
+    8 STORAGE_ADDRESS usize storage slot 3
+    9 STORE slot 8 <- 8
+    10 COPY_ARRAY from address slot 7 to address slot 8
+    11 LEAVE
+item 25 ROUTINE consume result u32 signature 22 params 1 slots 2 blocks 1 values 5
+  slot 1 m aggregate fields u32 atoms {none_found, denied} usize param 1
+  slot 2 k u32 return
+  block 1 scope 60 BLOCK length 5
+    1 STORAGE_ADDRESS usize storage slot 1
+    2 CALL u32 callee 22 weigh signature 19 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD u32 slot 2
+    5 LEAVE <- 4
+item 26 ROUTINE update result none signature 23 params 0 slots 6 blocks 1 values 14
+  slot 1 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 2 - aggregate fields u32 atoms {none_found, denied} usize
+  slot 3 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 4 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 5 - address of struct (u32 atoms {none_found, denied},usize)
+  slot 6 - address of struct (u32 atoms {none_found, denied},usize)
+  block 1 scope 62 BLOCK length 14
+    1 ATOM u32 identity denied atoms {denied}
+    2 CLEAR_ARRAY destination slot 2
+    3 STORE_FIELD slot 2 field 1 <- 1
+    4 STORAGE_ADDRESS usize storage slot 2
+    5 STORE slot 3 <- 4
+    6 STORAGE_ADDRESS usize storage slot 1
+    7 STORE slot 4 <- 6
+    8 COPY_ARRAY from address slot 3 to address slot 4
+    9 STORAGE_ADDRESS usize storage slot 1
+    10 STORE slot 5 <- 9
+    11 STORAGE_ADDRESS usize storage datum 3 module_state
+    12 STORE slot 6 <- 11
+    13 COPY_ARRAY from address slot 5 to address slot 6
+    14 LEAVE
+file positive/pointer-union-several-atoms/program.ldn
+unit signatures 0 items 0
+atom set 1 atoms {none_found, denied}
 file positive/pointer-unions/program.ldn
 unit signatures 6 items 6
 signature 1 (in usize) -> usize from 1
@@ -7007,6 +8147,15 @@ item 3 ROUTINE main result i32 signature 3 params 0 slots 1 blocks 1 values 4
     2 STORE slot 1 <- 1
     3 LOAD i32 slot 1
     4 LEAVE <- 3
+file positive/r490-union-alias-optional-widening/main.ldn
+unit signatures 0 items 0
+atom set 1 atoms {first, second}
+file positive/r490-union-alias-tagged-pointer/main.ldn
+unit signatures 0 items 0
+atom set 1 atoms {first, second}
+file positive/r490-union-concrete-optional-widening/main.ldn
+unit signatures 0 items 0
+atom set 1 atoms {first, second}
 file positive/r491-alias-backing/main.ldn
 unit signatures 7 items 8
 signature 1 (inout usize, in usize) -> usize from 1

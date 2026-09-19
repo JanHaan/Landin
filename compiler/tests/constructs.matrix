@@ -69,7 +69,7 @@
 0450 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Permission is shallow
 0460 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Address literal
 0470 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Both directions between a pointer and an integer are the
-0480 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | There is no null
+0480 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | There is no null
 0490 | tour | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
 0500 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
 0510 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in

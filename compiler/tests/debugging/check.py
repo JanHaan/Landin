@@ -367,6 +367,19 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
         ("element", "loop_element"),
         ("sum", "loop_sum"),
     ))
+    #  [0480]/[1870]: a live union in an atom case and in the pointer case.
+    lines.extend([f"tbreak {source_name}:{source_lines['unions-ready']}",
+                  "continue"])
+    emit_section(lines, "unions-ready-line", ["frame", "info line"])
+    emit_section(lines, "unions-locals", ["info args", "info locals"])
+    emit_section(lines, "unions-type", ["ptype union_atom"])
+    emit_section(lines, "unions-values", ["output union_atom", "printf \"\\n\"",
+                                          "output union_pointer", "printf \"\\n\""])
+    emit_values(lines, "unions", (
+        ("atom_code", "union_atom.atom"),
+        ("pointer_code", "union_pointer.atom"),
+        ("pointee", "*union_pointer.ptr"),
+    ))
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
@@ -701,6 +714,8 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                 "debug_aliases")
     expect_line(transcript, "loop-element-line", source_lines["loop-element"],
                 "debug_aliases")
+    expect_line(transcript, "unions-ready-line", source_lines["unions-ready"],
+                "debug_unions")
     for section_name, source_text in (
             ("outer-source", "inner_result: i32 = debug_inner("),
             ("inner-source", "step_local: i32 = scalar_local"),
@@ -773,6 +788,7 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
         "multiple.base": 5, "multiple.first": 15, "multiple.second": 25,
         "aliases.renamed_left": 15, "aliases.renamed_right": 25,
         "loop.element": 3, "loop.sum": 0,
+        "unions.pointer_code": 0, "unions.pointee": 41,
     }
     variant_members = {
         "choice.tag": 1,
@@ -804,7 +820,9 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                                 "generic_local", "generic_result")),
             ("multiple-locals", ("first", "second")),
             ("aliases-locals", ("renamed_left", "renamed_right")),
-            ("loop-element-locals", ("loop_element", "loop_sum"))):
+            ("loop-element-locals", ("loop_element", "loop_sum")),
+            ("unions-locals", ("union_param", "union_atom",
+                               "union_pointer"))):
         section = marker_section(transcript, section_name)
         for name in names:
             require(re.search(r"\b" + re.escape(name) + r"\b", section),
@@ -829,6 +847,21 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                 f"variant debug view omits {name}")
     require(re.search(r"\btag = 1\b", variant_values) is not None,
             "variant debug view omits the active payload tag")
+    #  [0480]/[1870]: the union is a structure named by its canonical
+    #  spelling; an atom case has a nonzero code, the pointer case code 0.
+    union_type = marker_section(transcript, "unions-type")
+    require("debug_denied | debug_none | ptr mut i32" in union_type
+            and re.search(r"\batom;", union_type) is not None
+            and re.search(r"\*\s*ptr;", union_type) is not None,
+            f"pointer union type is not presented: {union_type!r}")
+    union_values = marker_section(transcript, "unions-values")
+    require(re.search(r"atom = [1-9]\d*, ptr = 0x0\b", union_values)
+            is not None and re.search(r"atom = 0, ptr = 0x[0-9a-f]*[1-9a-f]",
+                                      union_values) is not None,
+            f"pointer union cases are not presented: {union_values!r}")
+    require(re.search(r"^LANDIN-VALUE unions\.atom_code=[1-9]\d*$",
+                      transcript, re.M) is not None,
+            "GDB did not report a nonzero atom code for the atom case")
     for value in ("7000000000", "111", "222", "333"):
         require(value in variant_values,
                 f"variant payload debug view omits {value}")
@@ -1122,6 +1155,7 @@ SOURCE_LINES = {
     "multiple-ready": source_line(MAIN_SOURCE, "multiple_ready: i32 ="),
     "aliases-ready": source_line(MAIN_SOURCE, "aliases_ready: i32 ="),
     "loop-element": source_line(MAIN_SOURCE, "loop_sum += loop_element"),
+    "unions-ready": source_line(MAIN_SOURCE, "union_ready: i32 = 1"),
 }
 GENERIC_NEXT_LINES = tuple(
     source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4)

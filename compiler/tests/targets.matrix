@@ -567,9 +567,30 @@ negative/pointer-union-from-an-integer | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-inout-binding | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-integer-conversion | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-is-not-a-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-address-of-referent | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-any-construction | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-assignment-target | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-atom-outside-the-set | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-case-named-twice | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-comparison | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-dereference | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-does-not-narrow | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-foreign-atom-arm | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-from-an-integer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-inout-binding | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-inout-is-exact | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-integer-conversion | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-is-not-a-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-match-not-exhaustive | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-permission-does-not-widen | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-pointer-arm-named-twice | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-result-is-not-a-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-return-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-two-pointers | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-many-zeroed | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-match-not-exhaustive | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-present-arm-named-twice | linux-x86-64, macos-arm64, synthetic-32
-negative/pointer-union-several-atoms | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-zeroed | linux-x86-64, macos-arm64, synthetic-32
 negative/public-on-statement | linux-x86-64, macos-arm64
@@ -767,12 +788,9 @@ negative/r490-union-alias-application-reports | linux-x86-64, macos-arm64, synth
 negative/r490-union-alias-deduction-conflict | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-direct-array | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-nonatom | linux-x86-64, macos-arm64, synthetic-32
-negative/r490-union-alias-optional-widening | linux-x86-64, macos-arm64, synthetic-32
-negative/r490-union-alias-tagged-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-nonatom | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-pointer-shapes | linux-x86-64, macos-arm64, synthetic-32
-negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-alias-backing | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-anonymous-type-scope | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-callee-undeclared | linux-x86-64, synthetic-32
@@ -1235,6 +1253,9 @@ positive/parameterized-type-alias-fixed-array | linux-x86-64, macos-arm64
 positive/parameterized-type-alias-scalar | linux-x86-64, macos-arm64
 positive/parentheses-override | linux-x86-64, macos-arm64
 positive/pointer-comparison-same-referent | linux-x86-64, macos-arm64
+positive/pointer-union-many-declarations | linux-x86-64, macos-arm64
+positive/pointer-union-many-widening | linux-x86-64, macos-arm64
+positive/pointer-union-several-atoms | linux-x86-64, macos-arm64
 positive/pointer-unions | linux-x86-64, macos-arm64
 positive/precedence-alternation-over-comparison | linux-x86-64, macos-arm64
 positive/precedence-and-over-or | linux-x86-64, macos-arm64
@@ -1266,6 +1287,9 @@ positive/r440-parameterized-struct-unused-numeric-array-shape | linux-x86-64, ma
 positive/r450-array-arithmetic-source | linux-x86-64, macos-arm64
 positive/r450-optimal-layout-source | linux-x86-64, macos-arm64
 positive/r490-conformance-input-keys | linux-x86-64, macos-arm64, synthetic-32
+positive/r490-union-alias-optional-widening | linux-x86-64, macos-arm64
+positive/r490-union-alias-tagged-pointer | linux-x86-64, macos-arm64
+positive/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64
 positive/r491-alias-backing | linux-x86-64
 positive/r491-bare-block-examples | linux-x86-64, macos-arm64
 positive/r491-construction-static-arguments | linux-x86-64, macos-arm64, synthetic-32
@@ -1581,6 +1605,7 @@ runtime/parameterized-struct-lazy-value-layout | linux-x86-64, macos-arm64
 runtime/parameterized-struct-values | linux-x86-64, macos-arm64
 runtime/parameterized-type-alias-fixed-array | linux-x86-64, macos-arm64
 runtime/pointer-to-small-integer-traps | linux-x86-64, macos-arm64
+runtime/pointer-union-many | linux-x86-64, macos-arm64
 runtime/pointer-unions | linux-x86-64, macos-arm64
 runtime/r230-composition | linux-x86-64, macos-arm64
 runtime/r230-composition-trap | linux-x86-64, macos-arm64

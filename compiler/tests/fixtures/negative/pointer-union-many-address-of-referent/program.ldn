@@ -1,0 +1,8 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+
+bad: (m: maybe_ptr) -> (value: u32) =
+    p: ptr mut u32 = addr m.val
+    value = p.val
+end bad

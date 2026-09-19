@@ -1,0 +1,9 @@
+class: negative
+summary: R7.20 [0480]/[1870] a union of several atoms and a pointer has no address to convert
+constructs: 0470, 0480
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-integer-conversion/program.ldn
+status: 1

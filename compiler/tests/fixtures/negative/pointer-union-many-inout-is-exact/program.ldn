@@ -1,0 +1,14 @@
+none_found: atom
+denied: atom
+maybe_ptr: type = none_found | denied | ptr mut u32
+closed: atom
+bigger: type = none_found | denied | closed | ptr mut u32
+
+change: (inout m: bigger) -> none =
+    m = closed
+end change
+
+bad: () -> none =
+    mut f: maybe_ptr = denied
+    change(f)
+end bad

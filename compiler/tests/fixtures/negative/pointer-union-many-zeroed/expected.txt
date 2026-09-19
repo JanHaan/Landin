@@ -1,0 +1,10 @@
+error[L0301]: this type does not permit a zeroed initializer
+  --> ../tests/fixtures/negative/pointer-union-many-zeroed/program.ldn:6:9
+  |
+6 |     m = zeroed
+  |         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-zeroed/program.ldn:6:5
+  |
+6 |     m = zeroed
+  |     ^ the place written here
+  = note: [0540]/[0630]/D213: zeroed is available only when the complete type permits a zero image
