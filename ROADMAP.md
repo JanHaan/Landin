@@ -2786,218 +2786,12 @@ model used before the Cortex-M backend exists.
 
 #### Construct applicability coverage
 
-This register assigns every normative construct to the first target slice that
-must account for it. `hosted-now` is the R4.10 closure set: each such row must
-have corpus evidence or a named refusal, and R4.10 cannot close while one of
-its own named refusals remains. R4.90 tightens closure to a Linux runtime or ABI
-program oracle for every hosted row, except the explicitly audited compile-time
-rules in its register. Refusal alone cannot demonstrate an implemented operation. The other classes are scheduled later in R4,
-belong to the freestanding path, are explicitly deferred, or state a principle
-that has no implementation owner.
-
-| Construct | Applicability | Owner | Disposition |
-| --- | --- | --- | --- |
-| `[0010]` | hosted-now | R1.20 | matrix evidence |
-| `[0020]` | hosted-now | R1.20 | matrix evidence |
-| `[0030]` | hosted-now | R1.20 | matrix evidence |
-| `[0040]` | hosted-now | R1.50 | matrix evidence |
-| `[0050]` | hosted-now | R1.50 | matrix evidence |
-| `[0060]` | hosted-now | R1.50 | matrix evidence |
-| `[0070]` | hosted-now | R2.50 | matrix evidence |
-| `[0080]` | hosted-now | R1.50 | matrix evidence |
-| `[0090]` | hosted-now | R3.10 | matrix evidence |
-| `[0100]` | hosted-now | R1.50 | matrix evidence for atom name lists; shared ordinary declaration names remain named refusals owned by R7.20 |
-| `[0110]` | hosted-now | R1.50 | matrix evidence |
-| `[0120]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0130]` | hosted-now | R1.50 | matrix evidence |
-| `[0140]` | hosted-now | R1.50 | matrix evidence |
-| `[0150]` | hosted-now | R4.10 | matrix evidence for the enabled widths; u128 and i128 are named refusals owned by R7.20; the arbitrary field widths this construct hands to [0730] are no spelling [1790] admits and are that freestanding row's work |
-| `[0160]` | hosted-now | R2.10 | matrix evidence |
-| `[0170]` | hosted-now | R4.10 | matrix evidence for f32 and f64; f16 is a named refusal owned by R7.20 |
-| `[0180]` | hosted-now | R1.60 | matrix evidence |
-| `[0190]` | hosted-now | R1.60 | matrix evidence |
-| `[0200]` | hosted-now | R1.60 | matrix evidence |
-| `[0210]` | hosted-now | R4.10 | matrix evidence |
-| `[0220]` | hosted-now | R4.10 | matrix evidence |
-| `[0230]` | hosted-now | R4.10 | matrix evidence |
-| `[0240]` | hosted-now | R4.10 | matrix evidence |
-| `[0250]` | hosted-now | R4.10 | matrix evidence |
-| `[0260]` | hosted-now | R4.10 | matrix evidence |
-| `[0270]` | hosted-now | R4.10 | matrix evidence |
-| `[0280]` | hosted-now | R4.10 | matrix evidence |
-| `[0290]` | hosted-now | R1.60 | matrix evidence |
-| `[0300]` | hosted-now | R1.60 | matrix evidence |
-| `[0310]` | hosted-now | R1.60 | matrix evidence |
-| `[0320]` | hosted-now | R1.60 | matrix evidence |
-| `[0330]` | hosted-now | R1.60 | matrix evidence |
-| `[0340]` | hosted-now | R1.60 | matrix evidence |
-| `[0350]` | hosted-now | R1.60 | matrix evidence |
-| `[0360]` | hosted-now | R1.60 | matrix evidence |
-| `[0370]` | hosted-now | R2.10 | matrix evidence |
-| `[0380]` | hosted-now | R2.50 | implemented; fixture attribution in this increment |
-| `[0390]` | hosted-now | R1.60 | matrix evidence |
-| `[0400]` | hosted-now | R1.60 | matrix evidence |
-| `[0410]` | hosted-now | R1.60 | matrix evidence |
-| `[0420]` | hosted-now | R1.60 | matrix evidence |
-| `[0430]` | hosted-now | R2.50 | matrix evidence |
-| `[0440]` | hosted-now | R2.50 | matrix evidence |
-| `[0450]` | hosted-now | R2.50 | matrix evidence |
-| `[0460]` | hosted-now | R2.50 | matrix evidence |
-| `[0470]` | hosted-now | R2.50 | matrix evidence |
-| `[0480]` | hosted-now | R4.10 | matrix evidence and named refusal |
-| `[0490]` | principle | none | system-tool policy; no implementation claim |
-| `[0500]` | hosted-now | R4.20 | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
-| `[0510]` | hosted-now | R3.30 | matrix evidence |
-| `[0520]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0530]` | hosted-now | R2.20 | matrix evidence |
-| `[0540]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0550]` | hosted-now | R2.60 | matrix evidence |
-| `[0560]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0570]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0580]` | hosted-now | R2.20 | matrix evidence |
-| `[0590]` | hosted-now | R4.50 | D209 and matrix evidence |
-| `[0600]` | hosted-now | R4.10 | matrix evidence |
-| `[0610]` | hosted-now | R4.10 | matrix evidence |
-| `[0620]` | deferred | R7.20 | explicitly deferred structure-of-arrays design |
-| `[0630]` | hosted-now | R2.20 | matrix evidence |
-| `[0640]` | hosted-now | R2.20 | matrix evidence |
-| `[0650]` | hosted-now | R2.20 | named refusal |
-| `[0660]` | hosted-now | R4.10 | matrix evidence and named refusal |
-| `[0670]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0680]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0690]` | hosted-now | R2.20 | matrix evidence |
-| `[0700]` | hosted-now | R2.20 | matrix evidence |
-| `[0710]` | hosted-now | R2.20 | matrix evidence |
-| `[0720]` | hosted-now | R2.20 | matrix evidence and named refusal |
-| `[0730]` | freestanding | R6.80 | scheduled device-register work |
-| `[0740]` | freestanding | R6.80 | scheduled device-register work |
-| `[0750]` | hosted-now | R2.20 | matrix evidence |
-| `[0760]` | freestanding | R6.80 | scheduled generated-device attribute work |
-| `[0770]` | hosted-now | R2.50 | matrix evidence |
-| `[0780]` | hosted-now | R2.50 | matrix evidence |
-| `[0790]` | hosted-now | R2.50 | matrix evidence |
-| `[0800]` | hosted-now | R2.50 | matrix evidence |
-| `[0810]` | hosted-now | R4.20 | D196 states [0470]'s actual derivation cut; the `pointer.integer-origin` evidence pins its non-guarantee |
-| `[0820]` | hosted-now | R4.80 | D212 withdraws the lexical block and builtin parameter type; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
-| `[0830]` | hosted-now | R2.50 | matrix evidence |
-| `[0840]` | hosted-now | R2.50 | matrix evidence |
-| `[0850]` | freestanding | R6.80 | scheduled volatile-access work |
-| `[0860]` | hosted-now | R2.50 | matrix evidence |
-| `[0870]` | hosted-now | R2.30 | matrix evidence |
-| `[0880]` | hosted-now | R2.30 | matrix evidence |
-| `[0890]` | hosted-now | R2.30 | `none` has matrix evidence; `noreturn` has a named refusal owned by R6.70 |
-| `[0900]` | hosted-now | R2.50 | matrix evidence |
-| `[0910]` | hosted-now | R2.50 | matrix evidence |
-| `[0920]` | hosted-now | R2.30 | matrix evidence |
-| `[0930]` | hosted-now | R2.30 | matrix evidence |
-| `[0940]` | hosted-now | R2.30 | matrix evidence |
-| `[0950]` | hosted-now | R2.30 | matrix evidence |
-| `[0960]` | hosted-now | R2.30 | matrix evidence |
-| `[0970]` | hosted-now | R2.30 | matrix evidence |
-| `[0980]` | hosted-now | R2.30 | matrix evidence |
-| `[0990]` | hosted-now | R2.30 | matrix evidence |
-| `[1000]` | hosted-now | R2.30 | matrix evidence |
-| `[1010]` | hosted-now | R2.30 | matrix evidence |
-| `[1020]` | hosted-now | R2.30 | matrix evidence |
-| `[1030]` | hosted-now | R2.30 | matrix evidence |
-| `[1040]` | hosted-now | R4.10 | D192 and matrix evidence |
-| `[1050]` | hosted-now | R2.30 | matrix evidence |
-| `[1060]` | hosted-now | R2.30 | matrix evidence |
-| `[1070]` | hosted-now | R4.10 | D185 and matrix evidence |
-| `[1080]` | hosted-now | R2.30 | matrix evidence |
-| `[1090]` | hosted-now | R2.30 | unlabelled begin/end blocks; labelled blocks are outside [1810] |
-| `[1100]` | hosted-now | R2.30 | matrix evidence |
-| `[1110]` | hosted-now | R2.30 | matrix evidence |
-| `[1120]` | hosted-now | R4.10 | D187 and matrix evidence; the division, shift, bool, float and text edges it never removes are named there rather than refused |
-| `[1130]` | hosted-now | R4.10 | matrix evidence |
-| `[1140]` | hosted-now | R4.10 | matrix evidence |
-| `[1150]` | hosted-now | R4.10 | matrix evidence |
-| `[1160]` | hosted-now | R4.10 | matrix evidence |
-| `[1170]` | hosted-now | R4.10 | matrix evidence |
-| `[1180]` | hosted-now | R4.10 | matrix evidence |
-| `[1190]` | hosted-now | R4.10 | matrix evidence |
-| `[1200]` | hosted-now | R2.30 | implemented; fixture attribution in this increment |
-| `[1210]` | hosted-now | R2.20 | matrix evidence |
-| `[1220]` | hosted-now | R2.30 | matrix evidence |
-| `[1230]` | hosted-now | R2.60 | matrix evidence |
-| `[1240]` | hosted-now | R2.60 | matrix evidence |
-| `[1250]` | hosted-now | R2.60 | matrix evidence |
-| `[1260]` | hosted-now | R2.60 | matrix evidence |
-| `[1270]` | hosted-now | R2.60 | matrix evidence |
-| `[1280]` | hosted-now | R2.60 | matrix evidence |
-| `[1290]` | hosted-now | R2.40 | matrix evidence and named refusal |
-| `[1300]` | hosted-now | R2.40 | matrix evidence |
-| `[1310]` | hosted-now | R2.70 | matrix evidence |
-| `[1320]` | hosted-now | R2.60 | matrix evidence |
-| `[1330]` | hosted-now | R4.10 | implemented; fixture attribution in this increment |
-| `[1340]` | hosted-now | R2.60 | matrix evidence |
-| `[1350]` | hosted-now | R2.40 | matrix evidence and named refusal |
-| `[1360]` | hosted-now | R3.20 | matrix evidence |
-| `[1370]` | hosted-now | R2.80 | matrix evidence |
-| `[1380]` | hosted-now | R2.80 | matrix evidence |
-| `[1390]` | hosted-now | R2.80 | matrix evidence |
-| `[1400]` | hosted-now | R2.80 | enforced absence; fixture attribution in this increment |
-| `[1410]` | hosted-now | R3.10 | matrix evidence |
-| `[1420]` | hosted-now | R3.10 | matrix evidence |
-| `[1430]` | hosted-now | R4.30 | D201 aliases retain file-local namespace lookup |
-| `[1440]` | hosted-now | R4.30 | D201 selected imports retain original public declaration identities |
-| `[1450]` | hosted-now | R3.10 | implemented; fixture attribution in this increment |
-| `[1460]` | hosted-now | R1.60 | matrix evidence |
-| `[1470]` | deferred | R7.20 | companion-tool package policy remains deferred |
-| `[1480]` | hosted-now | R4.30 | explicit ordered roots; arranging project/user/system defaults belongs to the companion tool |
-| `[1490]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
-| `[1500]` | hosted-now | R2.40 | matrix evidence |
-| `[1510]` | hosted-now | R4.30 | D202 and fixed assertion fixtures |
-| `[1520]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
-| `[1530]` | hosted-now | R4.30 | D202 and deterministic typed option cases |
-| `[1540]` | hosted-now | R2.40 | matrix evidence |
-| `[1550]` | principle | none | native-backend policy; implementations have target owners |
-| `[1560]` | hosted-now | R4.30 | D202 hosted tool facts/directives; machine operations have named owners |
-| `[1570]` | hosted-now | R3.50 | matrix evidence |
-| `[1580]` | hosted-now | R4.40 | D203--D205 and `extern.c-boundary` cover the selected boundary; native gate 1884079 passed |
-| `[1590]` | hosted-now | R4.30 | D202 and runtime/r430-static-library archive execution |
-| `[1600]` | hosted-now | R4.40 | C definitions are implemented and classified by `extern.c-boundary`; native gate 1884079 passed |
-| `[1610]` | hosted-now | R4.40 | independent native/C symbol overrides are implemented and classified by `functions.linkage`; native gate 1884079 passed |
-| `[1620]` | freestanding | R6.30 | D227 scalar atomics/barriers implemented on hosted targets; M0 load/store contract, emission R6.50 |
-| `[1630]` | freestanding | R6.60 | scheduled inline-assembly work |
-| `[1640]` | freestanding | R6.60 | scheduled keep and placement work |
-| `[1650]` | hosted-now | R1.80 | matrix evidence |
-| `[1660]` | hosted-now | R3.50 | matrix evidence |
-| `[1670]` | hosted-now | R1.80 | matrix evidence |
-| `[1680]` | hosted-now | R3.60 | matrix evidence |
-| `[1690]` | hosted-now | R2.50 | matrix evidence |
-| `[1700]` | hosted-now | R2.30 | matrix evidence |
-| `[1710]` | principle | none | admission criterion; no implementation claim |
-| `[1720]` | hosted-now | R2.90 | matrix and guarantee evidence |
-| `[1730]` | principle | none | proof-carrying principle; no implementation claim |
-| `[1740]` | hosted-now | R3.10 | matrix evidence |
-| `[1750]` | hosted-now | R1.20 | matrix evidence |
-| `[1760]` | hosted-now | R1.20 | matrix evidence |
-| `[1770]` | hosted-now | R4.10 | matrix evidence |
-| `[1780]` | hosted-now | R1.20 | matrix evidence |
-| `[1790]` | hosted-now | R1.60 | matrix evidence |
-| `[1795]` | hosted-now | R2.20 | matrix evidence |
-| `[1800]` | hosted-now | R2.30 | matrix evidence |
-| `[1810]` | hosted-now | R2.30 | matrix evidence |
-| `[1820]` | hosted-now | R1.40 | matrix evidence |
-| `[1830]` | hosted-now | R1.30 | matrix evidence |
-| `[1840]` | hosted-now | R1.50 | matrix evidence |
-| `[1850]` | hosted-now | R1.50 | matrix evidence |
-| `[1860]` | hosted-now | R1.50 | matrix evidence |
-| `[1870]` | hosted-now | R1.60 | matrix evidence |
-| `[1880]` | hosted-now | R1.60 | matrix evidence |
-| `[1890]` | hosted-now | R1.60 | matrix evidence |
-| `[1900]` | hosted-now | R1.60 | matrix evidence |
-| `[1910]` | hosted-now | R1.60 | matrix evidence |
-| `[1920]` | hosted-now | R2.30 | matrix evidence |
-| `[1930]` | hosted-now | R2.30 | matrix evidence |
-| `[1940]` | hosted-now | R1.60 | matrix evidence |
-| `[1950]` | hosted-now | R1.60 | matrix evidence |
-| `[1960]` | hosted-now | R1.80 | matrix evidence |
-| `[1970]` | hosted-now | R1.80 | matrix evidence |
-| `[1975]` | hosted-now | R3.50 | matrix evidence |
-| `[1980]` | hosted-now | R2.30 | matrix evidence |
-| `[1990]` | freestanding | R6.60 | compiler-owned firmware, typed machine conventions and placement |
+R7.10 replaced this register with its construct inventory. Each row's first
+implementing slice became the inventory's Phase column, and its former
+`hosted-now`, `freestanding`, `deferred` and `principle` classes became an
+explicit state and set of applicable targets. `check.py` now holds every row
+to the corpus, the named-refusal tables and its roadmap owners; the R4.90 parity
+rule reads the inventory through the same four classes.
 
 ### R2 gate
 
@@ -5552,6 +5346,7 @@ them. This table does not withdraw any construct.
 | --- | --- | --- | --- |
 | `[1270]` | `positive/r490-conformance-input-keys` | `negative/conformance-collision`, `negative/r490-conformance-input-alias-collision` | Whole-program conformance keys include normalized input tuples; unequal keys coexist and equal keys collide before runtime. |
 | `[1400]` | none | `negative/local-array-literal-inferred-element-mismatch` | Heterogeneous implicit boxing is deliberately absent; mismatched element types are rejected. Ordinary explicit `any` dispatch has separate executed rows. |
+| `[1730]` | `positive/range-subtypes` | none | A range-subtype value carries its proof between constrained positions; the recorded IR has no second check. A run cannot observe an elided check, so R7.10 moved this row here from its former principle class. |
 | `[1860]` | none | `negative/name-declared-nowhere`, `negative/condition-declaration-out-of-scope` | Every name must resolve in its scope; the observable failure is a compiler diagnostic. |
 
 Closure records the complete applicable implementation and independent review
@@ -11795,7 +11590,7 @@ readiness or begin self-hosting.
 
 ### R7.10 — Audit every normative construct
 
-Status: planned
+Status: complete
 Depends on: R5.50, R6.100
 
 Complete the construct-matrix inventory for every current `[NNNN]`. For every
@@ -11804,6 +11599,444 @@ applicable targets and the work item owning any open row. A rejection or
 transfer first amends the tour so the roadmap never overrides the specification.
 
 Exit evidence: no construct row is missing, unowned or unexplained.
+
+Completion is bound to the exact-revision routine acceptance and delivery
+below. Development runs and failed or interrupted candidates cannot supply that
+binding. This is an audit and inventory item: no compiler source, grammar,
+diagnostic, backend, runtime oracle or language rule changes here.
+
+Repository and inherited evidence audit:
+
+The starting checkout was clean on `r6100-freestanding-evidence` at accepted
+R6.100 `713a49c2850a124456cd591a0ea56ba981d46b1c`, tree
+`c00b25f432b485f13bb6568aff9b4d7c5fed0118`. Its annotated approval object
+`cf5a41688494cca53d360c8ab02e6b6a02aab88b` binds Linux milestone run
+`20260918T185811Z-0cb2c47b2457` (all eight jobs passed) and Darwin run
+`20260918T192946Z-afb494b2469c` to archive SHA-256
+`e7481170071dd22fd398ee97c96ff8f7329cd523032527a7f5ebb200ae5c3f4b`; the
+approval reconstructed from both verified exports equals the tag's annotation
+exactly. Canonical and GitHub namespaces matched at 48 rows (24 logical refs
+excluding HEAD plus 23 peeled tags) with no publication lock. Guarded Pages
+1891437, mirror 1891438 and tag jobs 1891439/1891440 succeeded, and the roadmap,
+driver, devices, targets, index, spec and tour pages on both domains matched
+verified rendering byte for byte. The previous scratch delivery record was
+corroboration, not an authority.
+
+Inventory decisions:
+
+- Representation. R4.10's construct applicability register moved here as the
+  construct inventory below, and `compiler/tests/constructs.matrix` grew to
+  carry it. Each generated row joins what three sources say: the corpus's
+  claims, per product target, read from fixture metadata plus the three
+  records that decide where a fixture actually runs (Darwin's
+  `compiler/tests/darwin/parity.json`, the Cortex-M
+  `compiler/tests/cortex-m/corpus.json` and the firmware driver's
+  `compiler/tests/driver/fixture.json`); every named refusal with its item and
+  the wording of its [1830] note; and this register's state, applicable
+  targets, recorded gaps, implementing phase and open owner. A separate
+  generated companion file was the alternative. It was rejected because the
+  cross-cutting definition above makes the construct matrix the place for
+  applicable targets and final disposition, and one reading copy cannot
+  disagree with another. `targets.matrix` stays keyed by fixture because the
+  Ada harness reads it.
+- States. `executed`: fixtures claim acceptance, emission and execution, and
+  every applicable target outside the recorded gaps executes a claiming
+  program. `compiled`: the observable behaviour is a compile-time verdict
+  (acceptance with recorded IR, or refusal) that no run can observe more of;
+  such a hosted row must also be in R4.90's audited compile-time register.
+  `deferred`: the tour itself says DEFERRED and a live item owns the
+  decision. `transferred`: the tour already assigns the construct to a named
+  successor roadmap. `advisory`: design, usage or process prose that adds no
+  source behaviour a fixture could discriminate. A named refusal is not a
+  state; it is part of a row, and an open part of an `executed` row is its
+  owner.
+- Targets are `all` (Linux x86-64, macOS arm64 and Cortex-M), `hosted`,
+  `cortex-m` or `none`; `synthetic-32` is a pre-Cortex model and applies to
+  no construct. Gaps are applicable targets without the state's evidence;
+  every gap needs an owning item.
+- Owners are live roadmap items or successor names. A finished owner, an
+  unknown owner or an owner the disposition does not mention is refused.
+- `check.py` holds all of it mechanically on every full run: exactly one row
+  per construct either document defines, closed vocabularies, a finished
+  implementing phase for `executed` and `compiled`, recorded gaps equal to
+  the derived gaps both ways, a stale `compiled` row that now executes, no
+  evidence, refusal or owner on an `advisory` row, a tour DEFERRED marker and
+  live owner for `deferred`, a successor whose ownership the construct's
+  paragraph or a paragraph its disposition cites states, and every refusal:
+  one pending on a live item must be owned by it, one still promising a
+  finished item must have a live owner that explains it, and a recorded
+  boundary or withdrawal must be named in the disposition. The same full
+  check runs `scripts/tests/test_construct_inventory.py`'s sixteen controls:
+  the unaltered inventory is clean, each malformed variant is refused, and the
+  refusal wording and target records are read as described. R4.90's parity
+  rule and its tests are unchanged; they read the inventory through its
+  former four classes.
+
+Inventory result:
+
+201 constructs: 173 defined by `tour.md` and 28 by `spec.md`, none in both.
+The accepted matrix read 197 with fixture evidence and four with neither:
+[0490], [0620], [1470] and [1710]. After the claim corrections below it reads
+196 and five, [1550] joining them. States: 192 executed, 4 compiled ([1270],
+[1400], [1730], [1860]), 1 deferred ([0620]), 1 transferred ([1470]) and 3
+advisory ([0490], [1550], [1710]). Twenty-nine rows name an open owner:
+twenty R7.20, seven R7.40 and three Companion tool and ecosystem, [0730]
+naming two. Five rows have a recorded gap, each on Cortex-M and each owned by
+R7.40. No row is missing, unowned or unexplained.
+
+The five rows without fixture evidence have different dispositions:
+
+- [0490] is usage guidance: pointers for hardware, the C boundary and library
+  internals, slices, handles and indices elsewhere. It enforces nothing.
+- [0620] is the tour's own DEFERRED design record. R7.20 already owns whether
+  its trigger forced an amendment; otherwise inherited C5 transfers to
+  Language evolution at R7.30 under R551-35. `soa` meets an ordinary parse
+  error, and no [1830] refusal is owed to a construct the tour places outside
+  the language.
+- [1470] is transferred rather than deferred. Its version, origin, owner
+  naming and conflict error are the companion tool's by [1480]'s own text and
+  inherited D6 (R551-33); the former owner R7.20 never owned it. The
+  compiler's share is [1420]'s first-root rule, delivered by R3.10 and covered
+  by the driver and resolution suites, which no fixture can express. No tour
+  amendment was needed: [1480] already states the transfer.
+- [1550] is toolchain policy. R1.90 recorded that no fixture can discriminate
+  it; R4.50, R6.60 and R6.70 later added four claims that were D211, D229 and
+  D230 evidence, and this item removed them rather than let a column fill with
+  claims that mean nothing.
+- [1710] is the admission test for new features, a process rule.
+
+Fixture claim corrections, each a metadata change; programs, verdicts and
+oracles are unchanged:
+
+- `[1550]` removed from `positive/r660-machine-directives` and
+  `positive/r670-scalar-assembly` (target-fixed hosted parsing of D229/D230
+  machine forms, still claimed as [1570], [1630] and [1990]) and from
+  `runtime/r450-opt-discarded-trap` and `runtime/r450-opt-effects`
+  (optimizer preservation of an unchecked zero-divisor trap and of effects
+  and cleanup order, still claimed as [1120], [0410] and [1100]).
+- `[1730]` removed from `runtime/range-subtype-checks` (an in-range value
+  passes each constrained store; a run cannot observe whether a check was
+  elided) and `positive/range-subtype-exit-before-the-check` (no check is
+  owed where no value arrives, which is [0660]'s placement). It stays on
+  `positive/range-subtypes`, whose recorded IR shows the proof carried with
+  no second check, so [1730] moves from its former principle class to a
+  compiled row in R4.90's register.
+- `[1570]` added to the firmware driver record: its DMA and timer
+  `extern(interrupt)` handlers execute under QEMU and Renode, and the run would
+  fail if that convention were wrong. This is the under-claim that left
+  [1570] without Cortex-M execution evidence.
+
+Other claims were read for every row whose state depended on them and kept
+where passing would change: [1720]'s three runtime fixtures execute its stated
+non-guarantees, and [1830]'s runtime and positive claims show formerly refused
+forms now accepted.
+
+Refusal audit:
+
+The two refusal tables hold 21 entries. Five pend on R7.20 and are owned by it:
+[0100]'s shared names, [0150]'s u128 and i128, [0170]'s f16, [0480]'s
+multi-atom pointer union and [0660]'s constrained composition. Six record
+R2.20 or R2.40 source-form boundaries and two record R4.80's arena
+withdrawals. Eight still say `is where it is enabled` of a finished item:
+[0850]'s `volatile ptr` names R6.80, the checker's aggregate refusals for
+[0520], [0540], [0670] and [0680] name R2.20, [1350]'s malformed application
+names R2.40 and [1580]'s explicit C categories name R4.40. [1830] forbids a
+note that claims a completed construct remains unimplemented. The four
+transcription tables are unchanged: `Landin.Tokens`' keywords, the precedence
+table, the parser's refusal words and the checker's refused-type names still
+spell tour words, cite existing paragraphs and name existing items.
+
+Work routed rather than done here:
+
+- R7.20 now also owns, implement or amend with a tour change and register
+  decision: the aggregate-value positions behind the four R2.20 notes; [0560]'s
+  count-less inferred initializer and other general array value positions,
+  which the paragraph calls later compiler slices with no owner; automatic
+  `set(X)` [0730], which meets L0304 as a parameterized alias; the generated
+  `register(t, ...)` wrapper [0740]; per-field byte order [0750]; the `big`,
+  `little`, `weak`, `inline` and `noinline` attribute words [0760]; the
+  `volatile ptr` surface [0850]; labelled bare blocks [1090] [1180]; the
+  `compiler` vector intrinsics [1560], whose note says R4.50 enables them;
+  and [1620]'s library wrapper type, which `core` does not provide. Most meet
+  a parse error or an unrelated diagnostic, not a named refusal, so the
+  [1830] naming gap closes with R7.20's decision. D188, D189, D190 and the
+  shared-name forms stay R7.20's under R551-29; [1310] has no delayed part.
+- R7.30 dispositions the inherited rows these rows link: C5 for [0620], D6 for
+  [1470], C3 for [1680], E1 for [1180] and the watch items [1710] governs.
+  The 32-row appendix and R5.51's consolidated intake stay R7.30's.
+- R7.40 owns the Cortex-M gaps of the compile-time rows [1270], [1400],
+  [1730] and [1860], where no Cortex-M source verdict exists for a
+  target-neutral frontend or IR rule; [1610]'s Cortex-M link names, which
+  execute only in R6.60's firmware probe outside the fixture corpus; and the
+  wording of [1350]'s and [1580]'s notes for boundaries that are already
+  decided. R7.40 still closes every register, and R4.30's repeated
+  unresolved-name recovery remains its (R551-30).
+- Companion tool and ecosystem keeps [1470], [1480]'s root defaults, fetching,
+  solving, locks and naming authority, and [0730]'s general SVD generation
+  under R551-33.
+
+Reconciliation with the accepted R6.100 artifacts:
+
+The corpus still has 1849 fixture directories: 503 runtime, 33 ABI, 255
+positive, 1047 negative, 3 end-to-end and 8 unit. The 536 shared runtime/ABI
+fixtures and the Cortex-M corpus inventory are unchanged (436 executed, 17
+selected-image limits, 50 source refusals, 33 general-C restrictions), as are
+the 2173 accepted Cortex-M verdict rows, Darwin's parity manifest, every
+fixture program, verdict, code list and expected output. `targets.matrix`,
+`guarantees.matrix`, `conformances.matrix`, `diagnostics.catalogue` and
+`diagnostics.matrix` regenerate byte-identical. `prototypes.matrix` changes
+only in the driver's added [1570], and `constructs.matrix` gains the
+per-target, refusal and inventory columns. No lane, verdict or oracle is
+removed.
+
+Limits:
+
+A claim remains a fixture author's claim; not every one of the corpus's
+claims was re-read, only those a row's state depended on. Per-target evidence
+is derived from committed records, not a replay: Darwin counts its four native
+replacements, a selected-image limit does not count as Cortex-M execution,
+and evidence outside fixture metadata (firmware probes, driver and resolution
+suites, debugger lanes) is recorded in dispositions rather than claimed. The
+inventory's scopes are judgments recorded here and held to the evidence; R7.40
+closes the target-applicability register itself. Nothing in the language, the
+compiler or the prototypes changed, so no tour, spec or prototype-derived
+amendment was needed; the amendments R7.20 may make are its own.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies without debugger risk were selected
+with `scripts/ci/policy.py routine` and committed as `169218ab` before the
+closure candidate.
+The changes are documents, generated matrices, `check.py`, one test file and
+construct claims in fixture metadata and the driver record; no compiler
+source, emission, debug information, debugger script or acceptance
+selection/verification changes. Routine keeps the Linux debug host suite,
+complete release hosted suite, release quality, bindings and documents jobs,
+with every embedded Cortex-M lane inside documents, and Darwin's two
+compiler-host modes, complete release hosted parity and bindings. Debugger
+risk would have been forced by any change to emission, DWARF, CFI, debugger
+scripts or their verification; milestone scope by phase closure or new parity
+or backend scope. R7.10 is neither.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision.
+Atomic canonical promotion, the identical remote commit and approval object,
+a complete matching GitHub namespace and successful guarded Pages publication
+with byte-matched pages on both domains are required; transient publication
+locks use the existing mirror workflow. A later bookkeeping revision cannot
+supply the binding. With it R7.20 and R7.30 are both dependency-ready, and
+R7.20 is next in roadmap order.
+
+#### Construct inventory
+
+Generated into `compiler/tests/constructs.matrix` and checked by
+`python3 check.py`. States, targets and owners are defined above; Phase is
+the item that first implemented the row. A disposition of "matrix evidence"
+means the generated row's evidence is the whole explanation.
+
+| Construct | State | Targets | Gaps | Phase | Owner | Disposition |
+| --- | --- | --- | --- | --- | --- | --- |
+| `[0010]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[0020]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[0030]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[0040]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0050]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0060]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0070]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0080]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0090]` | executed | all | none | R3.10 | none | matrix evidence |
+| `[0100]` | executed | all | none | R1.50 | R7.20 | Atom name lists are matrix evidence. Shared binding, field, parameter and return names are refused by name pending R7.20 under R551-29, which owns their semantics. |
+| `[0110]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0120]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named `type` source-form boundary |
+| `[0130]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0140]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[0150]` | executed | all | none | R4.10 | R7.20 | The enabled widths are matrix evidence; u128 and i128 are refused by name pending R7.20 under D190 and R551-29. Arbitrary packed widths are D228's, admitted only in packed fields [0730]. |
+| `[0160]` | executed | all | none | R2.10 | none | matrix evidence |
+| `[0170]` | executed | all | none | R4.10 | R7.20 | f32 and f64 are matrix evidence; f16 is refused by name pending R7.20 under D190 and R551-29. |
+| `[0180]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0190]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0200]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0210]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0220]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0230]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0240]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0250]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0260]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0270]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0280]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0290]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0300]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0310]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0320]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0330]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0340]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0350]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0360]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0370]` | executed | all | none | R2.10 | none | matrix evidence |
+| `[0380]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0390]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0400]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0410]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0420]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[0430]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0440]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0450]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0460]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0470]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0480]` | executed | all | none | R4.10 | R7.20 | The one-atom optional pointer is matrix evidence under D189; several atoms beside a pointer are refused by name pending R7.20's tagged carrier under R551-29. |
+| `[0490]` | advisory | none | none | none | none | Usage guidance: pointers serve hardware, the C boundary and library internals, while everyday code uses slices, handles and indices. It states no rule the compiler enforces or a fixture could discriminate; the operations it points to are [0430]-[0480]'s rows. |
+| `[0500]` | executed | all | none | R4.20 | none | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
+| `[0510]` | executed | all | none | R3.30 | none | matrix evidence |
+| `[0520]` | executed | all | none | R2.20 | R7.20 | Array values, bounds and copies are matrix evidence. Checker refusals of the remaining general array-value and array-field positions still say R2.20 enables them, though R2.20 is complete. R7.20 decides which positions [0520] and [0560] describe as language and implements them, or amends the tour and records the boundary; the note follows. |
+| `[0530]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0540]` | executed | all | none | R2.20 | R7.20 | Zero images are matrix evidence. The checker's local-array `zeroed` refusal still says R2.20 enables it; R7.20 implements the shape or amends the tour and records the boundary, and the note follows. |
+| `[0550]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[0560]` | executed | all | none | R2.20 | R7.20 | Typed, counted and mixed repetition are matrix evidence; R2.20 records the named repetition source-form boundary. The paragraph still calls a count-less inferred initializer and other general array value positions later compiler slices with no owner: R7.20 implements or amends them. |
+| `[0570]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named indexing source-form boundary, which requires a named place |
+| `[0580]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0590]` | executed | all | none | R4.50 | none | D209 and matrix evidence |
+| `[0600]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0610]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[0620]` | deferred | none | none | none | R7.20 | The tour declares structure-of-arrays DEFERRED and keeps it as a design record; no program has proved it necessary and nothing enables `soa`, which meets an ordinary parse error. R7.20 owns whether its trigger forced a tour amendment; otherwise inherited C5 transfers to Language evolution at R7.30 under R551-35. |
+| `[0630]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0640]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0650]` | executed | all | none | R2.20 | none | named refusal |
+| `[0660]` | executed | all | none | R4.10 | R7.20 | Scalar range subtypes are matrix evidence under D188; composite, reference, `addr` and generic-argument positions are refused by name pending R7.20 under R551-29. |
+| `[0670]` | executed | all | none | R2.20 | R7.20 | Both struct forms are matrix evidence; R2.20 records the named inline-struct source-form boundary. Checker refusals of the remaining general struct-value positions still say R2.20 enables them; R7.20 implements or amends each and the note follows. |
+| `[0680]` | executed | all | none | R2.20 | R7.20 | Variant declaration, storage, construction and matching are matrix evidence. Checker refusals of the remaining general variant-value positions still say R2.20 enables them; R7.20 implements or amends them and the note follows. |
+| `[0690]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0700]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0710]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[0720]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named all-`of` literal source-form boundary |
+| `[0730]` | executed | all | none | R6.80 | R7.20, Companion tool and ecosystem | D228 packed images, encoded unions and the explicit named-boolean expansion are matrix evidence on all three targets, the derived driver on Cortex-M. Automatic `set(X)` is neither enabled nor refused by name, and meets L0304 as a parameterized alias: R7.20 implements or amends it. General SVD generation stays with Companion tool and ecosystem under R551-33, as the paragraph says. |
+| `[0740]` | executed | all | none | R6.80 | R7.20 | D228 access modes and explicit register-image policies are matrix evidence, including the generated RP2040 consumers and the derived driver. The generated `register(t, read:, write:, reset:)` wrapper the paragraph shows is outside the enabled kernel and meets a parse error rather than a named refusal: R7.20 implements or amends it. |
+| `[0750]` | executed | all | none | R2.20 | R7.20 | Source order, optimal and C layout are matrix evidence. Per-field byte order such as `big u16` is shown as language, called broader design and meets a parse error: R7.20 implements or amends it. |
+| `[0760]` | executed | all | none | R6.80 | R7.20 | The enabled attributes are matrix evidence, including Cortex-M placement. The `big` and `little` field words and `weak`, `inline` and `noinline` are listed but outside the enabled slice and not refused by name: R7.20 implements or amends them. |
+| `[0770]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0780]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0790]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0800]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0810]` | executed | all | none | R4.20 | none | D196 states [0470]'s actual derivation cut; the `pointer.integer-origin` evidence pins its non-guarantee |
+| `[0820]` | executed | all | none | R4.80 | none | D212 withdraws the lexical block and builtin parameter type, and R4.80 keeps their named withdrawal diagnostics; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
+| `[0830]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0840]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0850]` | executed | all | none | R6.80 | R7.20 | D227 volatile scalar access is matrix evidence on all three targets. The `volatile ptr` reference surface used by [0070], [0460], [0740] and [0850] is refused by name with a note saying R6.80 enables it, though R6.80 is complete and translated that surface to D227 and D228 forms: R7.20 implements or amends it and the note follows. |
+| `[0860]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0870]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0880]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0890]` | executed | all | none | R2.30 | none | `none` has matrix evidence; `noreturn` has a named refusal owned by R6.70 |
+| `[0900]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0910]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[0920]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0930]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0940]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0950]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0960]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0970]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0980]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[0990]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1000]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1010]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1020]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1030]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1040]` | executed | all | none | R4.10 | none | D192 and matrix evidence |
+| `[1050]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1060]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1070]` | executed | all | none | R4.10 | none | D185 and matrix evidence |
+| `[1080]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1090]` | executed | all | none | R2.30 | R7.20 | Unlabelled `begin`/`end` blocks are matrix evidence. Labelled bare blocks, which [1180] describes, are outside [1810] and meet unrelated diagnostics rather than a named refusal: R7.20 implements or amends them. |
+| `[1100]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1110]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1120]` | executed | all | none | R4.10 | none | D187 and matrix evidence; the division, shift, bool, float and text edges it never removes are named there rather than refused |
+| `[1130]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1140]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1150]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1160]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1170]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1180]` | executed | all | none | R4.10 | R7.20 | Loop labels are matrix evidence. Labels on bare blocks are not enabled [1090]; R7.20 implements or amends them. The inherited E1 watch on labels is R7.30's. |
+| `[1190]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1200]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1210]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[1220]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1230]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1240]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1250]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1260]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1270]` | compiled | all | cortex-m | R2.60 | R7.40 | Hosted compile-time rule audited by R4.90: conformance keys include their input tuples. No Cortex-M source verdict exists; the frontend rule is target-neutral, and R7.40 decides whether that closes the target row or adds a verdict. |
+| `[1280]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1290]` | executed | all | none | R2.40 | none | matrix evidence; R2.40 records the named type-parameter source-form boundary |
+| `[1300]` | executed | all | none | R2.40 | none | matrix evidence |
+| `[1310]` | executed | all | none | R2.70 | none | Evidence tables from R2.70 and D211's proved specialization and build report from R4.50 are matrix evidence; no delayed part remains, so R7.20's exit clause for [1310] can cite this evidence. |
+| `[1320]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1330]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1340]` | executed | all | none | R2.60 | none | matrix evidence |
+| `[1350]` | executed | all | none | R2.40 | R7.40 | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, but the checker's note says R2.40 enables them though R2.40 is complete: R7.40 corrects the note. `set(X)` meets this refusal and [0730] owns it. |
+| `[1360]` | executed | all | none | R3.20 | none | matrix evidence |
+| `[1370]` | executed | all | none | R2.80 | none | matrix evidence |
+| `[1380]` | executed | all | none | R2.80 | none | matrix evidence |
+| `[1390]` | executed | all | none | R2.80 | none | matrix evidence |
+| `[1400]` | compiled | all | cortex-m | R2.80 | R7.40 | Hosted compile-time rule audited by R4.90: heterogeneous implicit boxing is refused. No Cortex-M source verdict exists; R7.40 decides whether the target-neutral frontend rule closes that target. |
+| `[1410]` | executed | all | none | R3.10 | none | matrix evidence |
+| `[1420]` | executed | all | none | R3.10 | none | matrix evidence |
+| `[1430]` | executed | all | none | R4.30 | none | D201 aliases retain file-local namespace lookup |
+| `[1440]` | executed | all | none | R4.30 | none | D201 selected imports retain original public declaration identities |
+| `[1450]` | executed | all | none | R3.10 | none | matrix evidence |
+| `[1460]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1470]` | transferred | none | none | R3.10 | Companion tool and ecosystem | Versions, origins, owner/package naming and the version-conflict error belong to Companion tool and ecosystem, which [1480] says arranges the roots so only one version is reachable; inherited D6 and R551-33 carry the transfer and R7.30 dispositions D6. The compiler's share is [1420]'s first-root rule from R3.10, covered by the driver and resolution suites rather than a fixture claim. |
+| `[1480]` | executed | all | none | R4.30 | Companion tool and ecosystem | Explicit ordered roots are matrix evidence from R4.30. Root defaults for the project, user home and system, fetching, version solving, locks and naming authority are Companion tool and ecosystem's under R551-33, as the paragraph says. |
+| `[1490]` | executed | all | none | R2.40 | none | matrix evidence |
+| `[1500]` | executed | all | none | R2.40 | none | matrix evidence |
+| `[1510]` | executed | all | none | R4.30 | none | D202 and fixed assertion fixtures |
+| `[1520]` | executed | all | none | R2.40 | none | matrix evidence |
+| `[1530]` | executed | all | none | R4.30 | none | D202 and deterministic typed option cases |
+| `[1540]` | executed | all | none | R2.40 | none | matrix evidence |
+| `[1550]` | advisory | none | none | none | none | Toolchain policy: Landin keeps its own native backends, not LLVM or C. R1.90 left the row bare because no fixture can discriminate it; four later claims were D211, D229 and D230 evidence and R7.10 removed them. Its concrete obligations are other rows' and lanes': the [1570] and [1650] conventions, [1990] firmware, the quality determinism rebuild and the native debugger frame checks. |
+| `[1560]` | executed | all | none | R4.30 | R7.20 | Compiler facts and assertions, `linker.library`, atomics and Cortex-M assembly and placement are matrix evidence; other tool operations meet named refusals. The `compiler` vector intrinsics the table lists are refused with a note saying R4.50 enables them though R4.50 is complete: R7.20 implements them or amends [1560] to [0590]'s element-wise operators. |
+| `[1570]` | executed | all | none | R3.50 | none | `extern(c)`, `extern(interrupt)` and `extern(naked)` are matrix evidence; the derived driver's interrupt handlers execute on Cortex-M. `aapcs`, `sysv`, `win64`, Fortran and Swift are named as room for later conventions, not described constructs. |
+| `[1580]` | executed | hosted | none | R4.40 | R7.40 | The hosted C boundary is matrix evidence under D203--D205. The categories the paragraph lists are refused explicitly, a recorded boundary, but the checker note says R4.40 enables them though R4.40 is complete: R7.40 corrects the note. Cortex-M C signatures are not enabled, an R6.20 restriction. |
+| `[1590]` | executed | hosted | none | R4.30 | none | Hosted archive linkage: Linux runtime evidence and Darwin's native archive-selection replacement under R4.30 and R5.50; Cortex-M refuses the general C surface. |
+| `[1600]` | executed | hosted | none | R4.40 | none | Hosted C definitions from R4.40 are matrix evidence; Cortex-M C signatures are restricted. |
+| `[1610]` | executed | all | cortex-m | R4.40 | R7.40 | Native and C link names are matrix evidence on both hosts. Cortex-M module-data and function symbols execute in R6.60's firmware probe outside the fixture corpus, so no fixture claims them there: R7.40 attributes that evidence or adds a claim. |
+| `[1620]` | executed | all | none | R6.30 | R7.20 | D227 scalar atomics, orderings and barriers are matrix evidence on all three targets. The paragraph's library type wrapping them does not exist in `core`: R7.20 implements or amends the sentence; a broader-library facility would be R551-34's. |
+| `[1630]` | executed | cortex-m | none | R6.60 | none | Cortex-M0 `assembler.block` under D229 and D230 executes in the derived driver and firmware lanes; hosted targets refuse machine assembly by design. |
+| `[1640]` | executed | cortex-m | none | R6.60 | none | Cortex-M placement, vectors and keep under D229 execute in the derived driver; hosted targets refuse placement by design. |
+| `[1650]` | executed | all | none | R1.80 | none | matrix evidence |
+| `[1660]` | executed | hosted | none | R3.50 | none | matrix evidence; the freestanding root is [0460]'s address literal |
+| `[1670]` | executed | all | none | R1.80 | none | matrix evidence |
+| `[1680]` | executed | hosted | none | R3.60 | none | Capabilities minted at the hosted entry and passed below it are matrix evidence. The freestanding root is [0460]'s address literal, which the paragraph states is a habit rather than an enforced rule; the parked C3 tightening is R7.30's. |
+| `[1690]` | executed | all | none | R2.50 | none | matrix evidence |
+| `[1700]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1710]` | advisory | none | none | none | none | The admission test for a new language feature, a design-process rule. It adds no source behavior; the parked and watch items it governs are R7.30's to disposition. |
+| `[1720]` | executed | all | none | R2.90 | none | matrix and guarantee evidence; its stated non-guarantees execute |
+| `[1730]` | compiled | all | cortex-m | R4.10 | R7.40 | `positive/range-subtypes`' recorded IR shows a range-subtype value carrying its proof with no check under D188, a hosted compile-time rule now in R4.90's audited register; R7.10 dropped two claims that could not observe elision. No Cortex-M verdict exists; R7.40 decides whether the target-neutral IR closes that target. |
+| `[1740]` | executed | all | none | R3.10 | none | matrix evidence |
+| `[1750]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[1760]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[1770]` | executed | all | none | R4.10 | none | matrix evidence |
+| `[1780]` | executed | all | none | R1.20 | none | matrix evidence |
+| `[1790]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1795]` | executed | all | none | R2.20 | none | matrix evidence |
+| `[1800]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1810]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1820]` | executed | all | none | R1.40 | none | matrix evidence |
+| `[1830]` | executed | all | none | R1.30 | none | matrix evidence |
+| `[1840]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[1850]` | executed | all | none | R1.50 | none | matrix evidence |
+| `[1860]` | compiled | all | cortex-m | R1.50 | R7.40 | Hosted compile-time rule audited by R4.90. No Cortex-M source verdict exists; R7.40 decides whether the target-neutral frontend rule closes that target. |
+| `[1870]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1880]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1890]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1900]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1910]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1920]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1930]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1940]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1950]` | executed | all | none | R1.60 | none | matrix evidence |
+| `[1960]` | executed | all | none | R1.80 | none | matrix evidence |
+| `[1970]` | executed | hosted | none | R1.80 | none | matrix evidence; the hosted entry shape |
+| `[1975]` | executed | hosted | none | R3.50 | none | matrix evidence; Cortex-M C boundaries are restricted |
+| `[1980]` | executed | all | none | R2.30 | none | matrix evidence |
+| `[1990]` | executed | cortex-m | none | R6.60 | none | D229 and D230 firmware and machine directives execute through compiler-owned firmware and the derived driver; hosted targets select them away. |
 
 ### R7.20 — Close deferred normative behavior
 
@@ -11844,6 +12077,21 @@ overflow either float width: binary16 tops out at 65504, so
 records f32 promotion with a single rounding as the arithmetic model to
 inherit.
 
+R7.10's construct inventory routes further described forms here. Each is
+implemented, or the tour is amended and the decision registered, and its note
+or named refusal follows that decision: the aggregate-value positions whose
+checker notes still say R2.20 enables them ([0520], [0540], [0670], [0680]);
+[0560]'s count-less inferred initializer and other general array value
+positions; automatic `set(X)` [0730]; the generated `register(t, ...)` wrapper
+[0740]; per-field byte order [0750]; the `big`, `little`, `weak`, `inline` and
+`noinline` attribute words [0760]; the `volatile ptr` surface [0850], whose
+note names R6.80; labelled bare blocks [1090] [1180]; the `compiler` vector
+intrinsics [1560], whose note names R4.50; and [1620]'s library wrapper type.
+Most meet a parse error or an unrelated diagnostic rather than a named refusal.
+[1310] has no delayed part left; its exit clause can cite R2.70 and R4.50's
+evidence. The inventory refuses this item's completion while a row still names
+it.
+
 Sources: `[0480]`'s multi-atom pointer union; [0660]'s composite and reference
 positions, refused by name in R4.10; `[0150]`'s u128 and i128 and `[0170]`'s
 f16, refused by name and re-owned here by D190.
@@ -11867,6 +12115,11 @@ Include R5.51's consolidated intake and all subsequent discoveries. Keep named
 successor transfers, activation triggers and completion evidence visible at
 R7.70; a category heading alone does not replace a retained work record.
 
+R7.10's inventory links C5 to [0620], D6 to [1470], C3 to [1680], E1 to
+[1180] and the parked and watch items [1710] governs. [1470]'s row already
+names Companion tool and ecosystem because [1480] and D6 transfer it; the
+others name no successor until this item dispositions their inherited rows.
+
 ### R7.40 — Close all evidence registers
 
 Status: planned
@@ -11881,6 +12134,14 @@ can repeat unresolved-name errors because the refused binding has no
 continuation identity. Suppress those follow-on reports while retaining the
 original visibility verdict and exact source report; this changes diagnostic
 recovery, not which programs are accepted.
+
+R7.10's construct inventory routes three kinds of row here: Cortex-M source
+verdicts for the compile-time rows [1270], [1400], [1730] and [1860], or a
+recorded argument that their target-neutral frontend or IR evidence covers
+Cortex-M; attributable Cortex-M evidence for [1610]'s link names, which run
+only in R6.60's firmware probe; and boundary wording for the [1350] and [1580]
+notes, which still say finished R2.40 and R4.40 enable decided refusals. The
+inventory refuses this item's completion while a row still names it.
 
 Exit evidence: `spec.md` contains lexical, precedence, statement and expression
 grammar for every construct the tour still describes; no matrix contains a gap, stale

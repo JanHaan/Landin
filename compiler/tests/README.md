@@ -10,7 +10,7 @@ is eventually rewritten, these must still be the tests it has to pass.
 compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
   harness-cases/malformed/               trees that must be rejected
-  constructs.matrix                      generated: every [NNNN] and its evidence
+  constructs.matrix                      generated: every [NNNN], its evidence and inventory
   diagnostics.catalogue                  generated: every code and its rule
   diagnostics.matrix                     generated: code contracts, emitters and owners
   guarantees.matrix                      generated: classified semantic boundaries
@@ -27,10 +27,16 @@ generated files and refuses each when it is stale; the last two are written
 by `./scripts/test.sh --record`, because producing them means running compiler
 stages and asking the target model, which `check.py` cannot do. It will not
 tell you those two are stale — the harness and the gate will. `constructs.matrix`
-is R1.90's: it lists every construct either document defines against what
-the corpus says about it, and a construct with neither evidence nor a
-by-name refusal is a row that item has to answer for. Regenerate it with
-`python3 check.py --matrix`.
+began as R1.90's list of every construct either document defines against what
+the corpus says about it. R7.10 completed it as the construct inventory: each
+row also gives the strongest claim per product target, read from fixture
+metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
+`driver/fixture.json`; every named refusal with its item and whether its note
+says the construct is pending, a recorded boundary or withdrawn; and ROADMAP.md
+R7.10's state, applicable targets, gaps and open owner, whose disposition there
+explains the row. A full `check.py` refuses a missing, stale, unowned or
+unexplained row, and `scripts/tests/test_construct_inventory.py` proves each
+refusal fires. Regenerate it with `python3 check.py --matrix`.
 
 Fixture classes, and the directory each uses:
 
@@ -545,7 +551,11 @@ asserted values come from literals earns it. The failure this rule prevents
 is the one a matrix is most prone to: a full column that means nothing. When
 a claim turns out not to be earned, the honest repairs are to drop it or to
 make it true — `runtime/statements-run-as-they-read` claimed [1840] before
-it declared anything inside an arm, and grew a function that does.
+it declared anything inside an arm, and grew a function that does. R7.10
+dropped [1550] from four fixtures whose passing another backend would not
+change, and [1730] from two that could not observe an elided check, and added
+[1570] to the firmware driver, whose interrupt handlers execute on Cortex-M.
+A claim that would fit every fixture discriminates none.
 
 A fixture with a `program` must name at least one, because a `.ldn` program
 is written in the language and is therefore evidence about some construct of
