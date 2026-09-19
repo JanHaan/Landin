@@ -2876,6 +2876,32 @@ package body Landin.IR.Verifier is
             then
                return (Kind => Nominal_Metadata_Malformed, others => <>);
             end if;
+            --  [0480]/[1870]: a pointer union is exactly its atom code cell
+            --  and one pointer cell, in natural placement, because the
+            --  backends read the code through the one zero-admitting form.
+            if Is_Pointer_Union (Of_Unit, Nominal)
+              and then
+                (not Has_Nominal_Shape (Of_Unit, Nominal)
+                 or else Landin.Layouts."/="
+                   (Layout_Of (Of_Unit, Nominal), Landin.Layouts.Natural)
+                 or else Aggregate_Field_Count (Of_Unit, Shape) /= 2
+                 or else Nth_Aggregate_Field (Of_Unit, Shape, 1)
+                   /= (Kind => Scalar_Field_Shape, Element => Landin.Types.U32,
+                       Atoms => Nth_Aggregate_Field (Of_Unit, Shape, 1).Atoms,
+                       others => <>)
+                 or else not Holds
+                   (Of_Unit, Nth_Aggregate_Field (Of_Unit, Shape, 1).Atoms)
+                 or else Nth_Aggregate_Field (Of_Unit, Shape, 2)
+                   /= (Kind => Scalar_Field_Shape,
+                       Element => Landin.Types.Usize,
+                       Pointee => Nth_Aggregate_Field
+                         (Of_Unit, Shape, 2).Pointee,
+                       others => <>)
+                 or else not Holds
+                   (Of_Unit, Nth_Aggregate_Field (Of_Unit, Shape, 2).Pointee))
+            then
+               return (Kind => Nominal_Metadata_Malformed, others => <>);
+            end if;
             if Has_Nominal_Shape (Of_Unit, Nominal) then
                declare
                   use type Landin.Packed.Image;

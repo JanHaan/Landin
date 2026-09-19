@@ -18,6 +18,7 @@ with Landin.IR.Verifier;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
@@ -480,6 +481,111 @@ package body Landin.Tests.Verifier_Suite is
             "a nonaggregate slot cannot carry nominal metadata");
       end;
    end Nominal_Root_Metadata_Is_Checked;
+
+   --  [0480]/[1870]: a union of several atoms and one pointer is exactly its
+   --  atom code cell and one pointer cell; only that code cell's direct
+   --  slot-field load may observe the reserved zero.
+   procedure Pointer_Union_Nominals_Are_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Pointer_Union_Nominals_Are_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      type Case_Kind is
+        (Well_Formed, Code_Without_Atoms, Pointer_Is_An_Integer,
+         Extra_Cell, No_Shape);
+   begin
+      Ready (Work, Site);
+      for Which in Case_Kind loop
+         declare
+            Meanings : constant not null access Landin.Resolution.Table :=
+              Landin.Stages.Meanings (Work);
+            Unit : IR.Unit;
+            Atoms : IR.Atom_Set_Id;
+            Target : IR.Pointee_Id;
+            Union : IR.Nominal_Type_Id;
+            Routine : IR.Item_Id;
+            Held : IR.Slot_Id;
+            Code, Pointer : IR.Value_Id;
+            Block : IR.Block_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Atoms := IR.Add_Atom_Set (Unit, [5, 6]);
+            Target := IR.Add_Pointee
+              (Unit, (Element => Landin.Types.U32, others => <>));
+            Union := IR.Add_Pointer_Union_Type
+              (Unit, Landin.Source.Names.No_Name);
+            declare
+               Code_Cell : constant IR.Field_Shape :=
+                 (Element => Landin.Types.U32,
+                  Atoms => (if Which = Code_Without_Atoms
+                            then IR.No_Atom_Set else Atoms),
+                  others => <>);
+               Pointer_Cell : constant IR.Field_Shape :=
+                 (Element => (if Which = Pointer_Is_An_Integer
+                              then Landin.Types.U64
+                              else Landin.Types.Usize),
+                  Pointee => (if Which = Pointer_Is_An_Integer
+                              then IR.No_Pointee else Target),
+                  others => <>);
+            begin
+               case Which is
+                  when No_Shape =>
+                     null;
+                  when Extra_Cell =>
+                     IR.Set_Nominal_Shape
+                       (Unit, Union, [Code_Cell, Pointer_Cell, Code_Cell]);
+                  when others =>
+                     IR.Set_Nominal_Shape
+                       (Unit, Union, [Code_Cell, Pointer_Cell]);
+               end case;
+            end;
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+            Held := IR.Add_Aggregate_Slot
+              (Unit, Routine, IR.No_Declaration, Site, Union);
+            if Which /= No_Shape then
+               for Field in 1 .. IR.Nominal_Field_Count (Unit, Union) loop
+                  IR.Add_Slot_Field
+                    (Unit, Routine, Held,
+                     IR.Nth_Nominal_Field (Unit, Union, Field));
+               end loop;
+            end if;
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            IR.Emit_Array_Clear
+              (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Held), Site);
+            Code := IR.Emit_Load_Slot_Field
+              (Unit, Routine, Held, 1, Landin.Types.U32, Site);
+            Pointer := IR.Emit_Load_Slot_Field
+              (Unit, Routine, Held, 2,
+               (if Which = Pointer_Is_An_Integer then Landin.Types.U64
+                else Landin.Types.Usize), Site);
+            if Which = Well_Formed then
+               Landin.Testing.Check
+                 (Item,
+                  IR.Admits_Reserved_Zero (Unit, Routine, Code)
+                  and then not IR.Admits_Reserved_Zero
+                    (Unit, Routine, Pointer)
+                  and then not IR.Is_Failure_Status_Load
+                    (Unit, Routine, Code),
+                  "only the union's code cell load admits the reserved zero");
+            end if;
+            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Expect
+              (Item, V.Check (Unit),
+               (if Which = Well_Formed then V.Nothing_Wrong
+                else V.Nominal_Metadata_Malformed),
+               "a pointer union nominal is its code and pointer cells: "
+               & Case_Kind'Image (Which));
+         end;
+      end loop;
+   end Pointer_Union_Nominals_Are_Checked;
 
    procedure Nominal_Shapes_Are_Canonical
      (Item : in out Landin.Testing.Context);
@@ -8145,6 +8251,9 @@ package body Landin.Tests.Verifier_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "pointer union nominals are checked",
+         Pointer_Union_Nominals_Are_Checked'Access);
       Landin.Testing.Register
         (Into, "verifier", "representation check is bounded",
          Representation_Check_Is_Bounded'Access);
