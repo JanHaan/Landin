@@ -1,0 +1,7 @@
+error[L0304]: a struct literal needs a named type from its destination
+  --> ../tests/fixtures/negative/r720-discard-untyped-struct-literal/main.ldn:9:9
+  |
+9 |     _ = (x: 1, y: 2)
+  |         ^^^^^^^^^^^^
+  = note: the tour describes it at [0670]
+  = note: ROADMAP.md R7.20 records this source-form boundary

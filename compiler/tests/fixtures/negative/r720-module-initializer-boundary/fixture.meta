@@ -1,0 +1,9 @@
+class: negative
+summary: [1940] a module array or struct initializer copies a static image from a name, never an element
+program: main.ldn
+codes: L0304, L0304
+constructs: 0520, 0670, 1740, 1830, 1940
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-module-initializer-boundary/main.ldn
+status: 1

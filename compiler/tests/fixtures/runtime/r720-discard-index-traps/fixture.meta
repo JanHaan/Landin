@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: [1930] a discarded whole array element still traps on a computed index outside its array
+constructs: 0520, 1930, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64, macos-arm64

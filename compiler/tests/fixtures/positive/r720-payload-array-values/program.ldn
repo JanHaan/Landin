@@ -1,0 +1,53 @@
+--  D84/R7.20: a fixed-array payload takes every value an ordinary array
+--  field takes, in a case construction and in a case assignment: an
+--  element, a call, `try`, array arithmetic, a control expression, a field
+--  at any depth, a parameter, a dereference and a slice element.
+
+packet: type = struct
+    kind: variant
+        empty |
+        values: (row: [2]u16)
+    end kind
+end packet
+
+inner: type = struct
+    row: [2]u16
+end inner
+
+outer: type = struct
+    child: inner
+end outer
+
+missing: atom
+problems: type = missing
+
+make: () -> (row: [2]u16) =
+    row = [1, 2]
+end make
+
+maybe: () -> (row: [2]u16) ! problems =
+    row = [3, 4]
+end maybe
+
+take: (item: packet) -> none =
+    _ = item
+end take
+
+f: (source: [2]u16, nested: outer, through: ptr [2]u16, rows: [][2]u16,
+    flag: bool, i: usize) -> none ! problems =
+    grid: [2][2]u16 = [[1, 2], [3, 4]]
+    mut item: packet = packet(kind: values(row: grid[i]))
+    item.kind = values(row: grid[0])
+    item.kind = values(row: make())
+    item.kind = values(row: try maybe())
+    item.kind = values(row: source + source)
+    item.kind = values(row: -source)
+    item.kind = values(row: if flag then source else make() end if)
+    item.kind = values(row: nested.child.row)
+    item.kind = values(row: source)
+    item.kind = values(row: through.val)
+    item.kind = values(row: rows[i])
+    built := packet(kind: values(row: make()))
+    take(packet(kind: values(row: source * source)))
+    _ = built
+end f

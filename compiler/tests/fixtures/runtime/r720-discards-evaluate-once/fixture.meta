@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: [1930] discarding whole array and struct places, literals, repetitions, constructions and calls runs each effect once in source order
+constructs: 0520, 0530, 0560, 0670, 0700, 1930
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

@@ -12,8 +12,9 @@
 #
 #  linux-x86-64, macos-arm64 and cortex-m are the strongest
 #  claim a target's own records make: executed, compiled or
-#  refused.  Refusals are item:pending, item:boundary or
-#  item:withdrawn, as their [1830] note says.  State, targets,
+#  refused.  Refusals are item:pending, item:boundary,
+#  item:withdrawn or item:transferred, as their [1830] note
+#  says.  State, targets,
 #  gaps and owner come from ROADMAP.md R7.10, whose
 #  disposition column explains every row; see ROADMAP.md R1.90
 #  and R7.10.
@@ -36,9 +37,9 @@
 0120 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | Types are declared like any other value, with 'type'
 0130 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Order inside a module does not matter
 0140 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An inner scope may shadow an outer name
-0150 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+0150 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:transferred | executed | all | none | R7.20 | Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pointer-width integers: usize, isize
-0170 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Floating point: f16, f32, f64
+0170 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:transferred | executed | all | none | R7.20 | Floating point: f16, f32, f64
 0180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | bool, with true and false
 0190 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Integer literals are untyped
 0200 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | With no context, an integer literal defaults to i32
@@ -73,9 +74,9 @@
 0490 | tour | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
 0500 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
 0510 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in
-0520 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | Array: a value
+0520 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Array: a value
 0530 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The length may be inferred from the literal
-0540 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | zeroed is the all-bits-zero image of a type
+0540 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | zeroed is the all-bits-zero image of a type
 0550 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The first of those two properties is also a concept
 0560 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | R7.20 | Repetition, for static patterns that live in flash
 0570 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | Slice: a view
@@ -87,9 +88,9 @@
 0630 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
 0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
 0650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Distinct type
-0660 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Range subtype: checked at assignment and conversion
-0670 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary R2.20:pending | executed | all | none | R7.20 | Struct, block form and inline form
-0680 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | Struct with a variant part
+0660 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Range subtype: checked at assignment and conversion
+0670 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary R7.20:boundary | executed | all | none | R7.20 | Struct, block form and inline form
+0680 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | R7.20 | Struct with a variant part
 0690 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A case with no payload is written bare
 0700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Construction and conversion use the same form
 0710 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A struct literal is untyped
@@ -106,7 +107,7 @@
 0820 | tour | accepted emitted executed refused | executed | executed | executed | R4.80:withdrawn | executed | all | none | none | Arenas are ordinary allocators with explicit backing
 0830 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A view derived from a local borrows it
 0840 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Origins join to the shortest-lived part
-0850 | tour | accepted emitted executed refused | executed | executed | executed | R6.80:pending | executed | all | none | R7.20 | Volatile is exempt from the borrow rule and from every
+0850 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:withdrawn | executed | all | none | R7.20 | Volatile is exempt from the borrow rule and from every
 0860 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What this does not catch
 0870 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function is a value of a function type
 0880 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A single-expression body still takes an end

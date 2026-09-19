@@ -1,0 +1,9 @@
+class: negative
+summary: D74 reports a struct body that cannot be laid out once, at its field, and a later containing struct adds no follow-on refusal
+program: main.ldn
+codes: L0304, L0201
+constructs: 0170, 0670, 0750, 1830, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-refused-field-adds-no-cascade/main.ldn
+status: 1

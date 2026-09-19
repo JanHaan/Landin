@@ -1,0 +1,7 @@
+error[L0304]: a variant case is written where its variant part is the destination
+  --> ../tests/fixtures/negative/r720-variant-case-needs-its-part/main.ldn:12:14
+   |
+12 |     alone := dot
+   |              ^^^
+  = note: the tour describes it at [0680]
+  = note: ROADMAP.md R7.20 records this source-form boundary

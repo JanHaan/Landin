@@ -1,0 +1,9 @@
+class: negative
+summary: D76/D77 match and write a variant part in place; the part is a struct member with no value of its own
+program: main.ldn
+codes: L0304
+constructs: 0680, 1830, 1930
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-variant-part-has-no-value/main.ldn
+status: 1

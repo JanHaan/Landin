@@ -1,4 +1,4 @@
-error[L0301]: utf8 indexing takes u32 or core/text.position, not something unknown
+error[L0301]: utf8 indexing takes u32 or core/text.position, not a struct
   --> ../tests/fixtures/negative/utf8-index-position-identity-is-exact/program.ldn:6:21
   |
 6 |     result = source[cursor]

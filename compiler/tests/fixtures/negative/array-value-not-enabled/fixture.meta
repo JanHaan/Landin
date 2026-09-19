@@ -1,6 +1,6 @@
 class: negative
-summary: [0520] leaves a whole local array value for a later R2.20 slice
-constructs: 0520, 1810, 1830
+summary: [1930] discarding a whole local array still reads it, so an unassigned one is refused by [1910]
+constructs: 0520, 1810, 1910, 1930
 program: program.ldn
-codes: L0304
+codes: L0302
 targets: linux-x86-64, macos-arm64

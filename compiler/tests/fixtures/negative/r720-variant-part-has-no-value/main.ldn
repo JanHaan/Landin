@@ -1,0 +1,14 @@
+holder: type = struct
+    tag: u8
+    kind: variant
+        dot |
+        box: (w: u8)
+    end kind
+end holder
+
+--  R7.20: a variant part is a member of its struct.  It is matched and
+--  written with a case, and copied only with the struct that holds it.
+f: (h: holder) -> none =
+    _ = h
+    part := h.kind
+end f

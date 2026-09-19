@@ -1,0 +1,9 @@
+class: negative
+summary: [0690] a case written where a whole struct belongs is a type error, as an initializer, an assignment and an argument
+program: main.ldn
+codes: L0301, L0301, L0301
+constructs: 0680, 0690, 0700, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r720-case-is-not-a-whole-struct/main.ldn
+status: 1

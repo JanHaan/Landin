@@ -1,6 +1,6 @@
 class: negative
-summary: D57 keeps zeroed nested in a general local struct initializer refused
+summary: D57 gives `zeroed` its destination's type; as an arithmetic operand it has none, which is a type error
 constructs: 0410, 0540, 0670, 0710, 0750, 1810
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

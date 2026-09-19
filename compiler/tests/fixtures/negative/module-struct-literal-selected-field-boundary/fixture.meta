@@ -2,5 +2,5 @@ class: negative
 summary: D71 keeps scalar, element and type-root selections outside a module struct image
 constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1820, 1940
 program: program.ldn
-codes: L0304, L0304, L0304
+codes: L0304, L0304, L0301
 targets: linux-x86-64, macos-arm64

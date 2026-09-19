@@ -1,0 +1,17 @@
+point: type = struct
+    x: u8
+    y: u8
+end point
+
+holder: type = struct
+    corner: point
+    row: [2]u8
+end holder
+
+--  D200: a comparison takes one register-sized value.  A struct, a nested
+--  struct field and an array have no equality of their own.
+f: (a: point, b: point, h: holder) -> none =
+    _ = a == b
+    _ = h.corner <> a
+    _ = h.row == h.row
+end f
