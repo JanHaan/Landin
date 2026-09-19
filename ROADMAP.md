@@ -11947,7 +11947,7 @@ means the generated row's evidence is the whole explanation.
 | `[1060]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1070]` | executed | all | none | R4.10 | none | D185 and matrix evidence |
 | `[1080]` | executed | all | none | R2.30 | none | matrix evidence |
-| `[1090]` | executed | all | none | R2.30 | R7.20 | Unlabelled `begin`/`end` blocks are matrix evidence. Labelled bare blocks, which [1180] describes, are outside [1810] and meet unrelated diagnostics rather than a named refusal: R7.20 implements or amends them. |
+| `[1090]` | executed | all | none | R2.30 | none | Unlabelled `begin`/`end` blocks and D234's labelled bare blocks, left by a `break` naming them with their cleanups run, are matrix evidence on all three targets. |
 | `[1100]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1110]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1120]` | executed | all | none | R4.10 | none | D187 and matrix evidence; the division, shift, bool, float and text edges it never removes are named there rather than refused |
@@ -11956,7 +11956,7 @@ means the generated row's evidence is the whole explanation.
 | `[1150]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1160]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1170]` | executed | all | none | R4.10 | none | matrix evidence |
-| `[1180]` | executed | all | none | R4.10 | R7.20 | Loop labels are matrix evidence. Labels on bare blocks are not enabled [1090]; R7.20 implements or amends them. The inherited E1 watch on labels is R7.30's. |
+| `[1180]` | executed | all | none | R4.10 | none | Loop labels and D234's bare-block labels are matrix evidence on all three targets; `continue` naming a block and `break with` targeting one are refused. The inherited E1 watch on labels is R7.30's. |
 | `[1190]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1200]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1210]` | executed | all | none | R2.20 | none | matrix evidence |

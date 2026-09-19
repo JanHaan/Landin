@@ -132,7 +132,7 @@ does not use that construct. Type names are not among them: u32 and bool
 are ordinary declared names [0120] that the kernel happens to predeclare.
 
 Control words cannot name bindings, types, functions, parameters, results,
-fields, atoms, import bindings or loop labels. In particular, `begin = 10`
+fields, atoms, import bindings or loop and block labels. In particular, `begin = 10`
 and `begin: i32 = 10` are invalid; `(begin)` is not an identifier escape.
 A longer spelling such as `begin_value` remains an ordinary identifier.
 D225 records the reservation and its compatibility consequence.
@@ -537,8 +537,10 @@ R4.10 admits the statement forms of [1130], [1140], [1170], [1180], and
 is evaluated before every iteration and must be `bool`. `break` transfers to
 the point after its target loop and `continue` transfers to that loop's next
 condition test (or next unconditional iteration). Without a label they target
-the nearest loop; with one they target the nearest enclosing loop carrying
-that ordinary name. A labelled loop closes with its label. Their optional `when`
+the nearest loop; with one they target the nearest enclosing loop, or labelled
+bare block, carrying that ordinary name. A labelled loop or block closes with
+its label. A block is left only by a plain `break`: `continue` naming one and
+`break with` targeting one are refused (D234). Their optional `when`
 condition is evaluated once and must be `bool`; its false edge continues with
 the following statement. Both transfers leave every lexical block between the
 statement and the loop edge, so [1100]'s `defer` runs and [1110]'s `undo` does
@@ -9400,7 +9402,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1070, 1080, 1090 | L0200 or L0201 at a condition-binding scope boundary; L0301 or L0302 at every condition, reachable join and exit | `negative/condition-declaration-body-shadowing`, `negative/condition-declaration-not-bool`, `negative/condition-declaration-out-of-scope`, `negative/if-expression-missing-else`, `runtime/condition-declarations`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view` |
+| `control.loops` | static | 1090, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, incomplete/inconsistent value exit, or a value given to a labelled bare block's break; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named loop or labelled block edge, or the nearest loop, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view`, `runtime/r720-labelled-block-transfers`, `negative/r720-labelled-block-break-value` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction`, `runtime/r490-generic-inferred-recovery`, `runtime/r490-generic-recovery-frontier`, `runtime/r490-generic-union-alias`, `runtime/r490-generic-erased-recovery-views`, `negative/r490-generic-recovery-conflict`, `negative/r490-recovery-expanding-generic` |
@@ -14593,6 +14595,63 @@ type was declined for the destructuring reading.
 `runtime/shared-declarations-evaluate-once`, `negative/r491-shared-declaration`,
 `negative/shared-type-names-nothing`, `negative/shared-packed-fields-overlap`
 and `negative/shared-link-symbol-duplicates`.
+
+### D234 — A labelled bare block is left by a break that names it
+
+**The tour said** that labels use the ordinary name form on loops and bare
+blocks only, and that `break` and `continue` take one [1180]; [1090] showed
+only the unlabelled block. D157 retained loop labels on loop syntax and on each
+targeted transfer. A labelled block was outside the grammar: `scope: begin`
+parsed as a binding and its `end` closed the enclosing function (R4.91's J40),
+and `break scope` met L0110.
+
+**Chosen:** `labeled_block ::= identifier ":" "begin" block "end" identifier`
+is a statement. Its closer repeats the label with the same diagnostics a
+labelled loop's closer has. `break name`, with or without `when`, targets the
+nearest enclosing loop or labelled block carrying that name — equal nested
+labels resolve to the nearest, as D157 already does for loops — and control
+continues after the block's `end name`. Every scope the transfer leaves runs
+its applicable cleanup exactly as a loop `break` runs it: [1100]'s `defer`
+entries run innermost first and [1110]'s `undo` does not, and a loop crossed
+on the way out is left without its `complete`. An unlabelled `break` or
+`continue` still targets the innermost loop; a labelled block never captures
+one. The label is retained on the block node and on the transfer, like D157's,
+and lowering reuses the loop exit edge and cleanup boundary: no IR
+instruction, backend or debug-information change.
+
+Three refusals keep the construct a statement. `continue name` naming a block
+is L0110, because a block has no next iteration. `break name with v`
+targeting a block is L0301, the report a value given to a statement loop gets.
+A labelled block in expression position is L0102. The reason is that a label
+exists only to be left early by `break name`, [1190] makes `break with` the
+value of a search loop rather than of a block, and a block expression (D125)
+gets its value from its final expression, which an early exit would skip.
+
+Definite assignment after a labelled block is the meet of its fallthrough and
+every edge leaving it by `break`; unlike a loop, an assignment in the body is
+not held back, because the body runs once. The reference-origin and borrow
+checks merge the same edges; the check that a borrowed view is not read after
+a mutating call now assumes any break may resume after the block's `end`,
+which can only report more.
+
+**The alternatives:** a labelled block that yields `break name with v`, as in
+languages whose blocks are search expressions, was declined because [1190]
+already gives that job to loops and a second value exit would duplicate D158's
+join for no program that needed it. Removing labels from bare blocks was
+declined under inherited E1's own rule that a program not needing a construct
+is evidence, not automatic removal; the construct costs no new IR. Letting an
+unlabelled `break` leave the innermost labelled block was declined because it
+would change what every existing `break` inside a labelled block means.
+
+**Pinned by** `positive/r720-labelled-bare-blocks`,
+`runtime/r720-labelled-block-transfers`,
+`negative/r720-labelled-block-break-value`,
+`negative/r720-labelled-block-partial-assignment`,
+`negative/r720-labelled-block-break-origin`,
+`negative/r720-labelled-block-borrow-after-break`,
+`negative/r720-labelled-block-not-an-expression`, the driver case
+`R7.20 labelled block refusals` for the closer and `continue` reports, and the
+`control.loops` guarantee row.
 
 ### D236 — A range subtype constrains scalar positions only
 
