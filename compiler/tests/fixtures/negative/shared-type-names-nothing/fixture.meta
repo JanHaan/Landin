@@ -1,0 +1,9 @@
+class: negative
+summary: a shared type that names nothing is refused once per written type, not once per name, in bindings, fields, parameters and returns
+program: program.ldn
+constructs: 0100, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32
+codes: L0201, L0201, L0201, L0201
+args: ../tests/fixtures/negative/shared-type-names-nothing/program.ldn
+expect: expected.txt
+status: 1

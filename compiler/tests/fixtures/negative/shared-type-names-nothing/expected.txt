@@ -1,0 +1,24 @@
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/shared-type-names-nothing/program.ldn:1:20
+  |
+1 | mut first, second: missing = 1
+  |                    ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `absent` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/shared-type-names-nothing/program.ldn:4:18
+  |
+4 |     left, right: absent
+  |                  ^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `unknown` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/shared-type-names-nothing/program.ldn:7:14
+  |
+7 | take: (a, b: unknown) -> (c, d: nowhere) =
+  |              ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `nowhere` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/shared-type-names-nothing/program.ldn:7:33
+  |
+7 | take: (a, b: unknown) -> (c, d: nowhere) =
+  |                                 ^^^^^^^
+  = note: [1860]: a name that names nothing is refused

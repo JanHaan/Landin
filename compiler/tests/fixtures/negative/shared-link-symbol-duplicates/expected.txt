@@ -1,0 +1,10 @@
+error[L0301]: invalid, reserved or duplicate datum symbol
+  --> ../tests/fixtures/negative/shared-link-symbol-duplicates/program.ldn:1:14
+  |
+1 | link(symbol: "hue") public tint, shade: u32
+  |              ^^^^^
+  --> ../tests/fixtures/negative/shared-link-symbol-duplicates/program.ldn:1:1
+  |
+1 | link(symbol: "hue") public tint, shade: u32
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this data linkage
+  = note: [1640]: Cortex data linkage requires one ASCII identifier, distinct from all explicit symbols
