@@ -209,6 +209,10 @@ which would read the carrier as an address are guarded by name in
 `Landin.Stages.Checking` rather than by an exhaustive case. Reference
 checking gives the bound pointer the subject's own origin and gives the empty
 case none; lowering emits the reserved zero and one comparison against it.
+D235's several-atom union is instead `Landin.Checking.Intern_Pointer_Union`'s
+two-cell aggregate nominal, keyed by its atom set and pointer type, with no
+source body; `Landin.IR.Admits_Reserved_Zero` lets the backends load its zero
+code cell, and the DWARF writer names it by its canonical spelling.
 D206 separately refuses known null integer constructions and checks dynamic
 zero after target-width conversion, even in `unchecked`; origin erasure does
 not erase non-nullness. The library's absent backing uses named pointer unions,

@@ -434,9 +434,16 @@ traps. Whole aggregate copies preserve the carrier without extracting fields.
 Ordinary atom loads also validate their software codes. The private call-status
 slot has a different domain: zero means success, otherwise the code identifies
 a declared error. `Is_Failure_Status_Load` recognizes only a slot designated by
-a direct or indirect call's failure edge. All three backends permit zero for that
-transport load before `Failure_Test`; ordinary source atom storage does not
-gain a zero value. Recovery still observes a named error on the failing branch.
+a direct or indirect call's failure edge. D235's pointer union has a second
+reserved-zero cell: its first field holds the atom's own code, and zero marks
+the pointer case. `Is_Union_Code_Load` recognizes a load of that field from a
+union held in a frame slot, and `Admits_Reserved_Zero` is the union of the two
+predicates. All three backends ask it, and permit zero only for such a load
+before `Failure_Test`; ordinary source atom storage does not gain a zero value.
+Recovery still observes a named error on the failing branch. The union itself
+is an ordinary two-cell aggregate nominal with no source body — code, then one
+pointer — and the verifier holds its shape to exactly those cells, so no IR
+instruction, ABI position or selection was added for it.
 
 The x86 baseline body-sharing check compares slot and value atom domains as
 well as scalar carriers: two u32 carriers can require different validation

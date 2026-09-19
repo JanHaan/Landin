@@ -11886,7 +11886,7 @@ means the generated row's evidence is the whole explanation.
 | `[0450]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0460]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0470]` | executed | all | none | R2.50 | none | matrix evidence |
-| `[0480]` | executed | all | none | R4.10 | R7.20 | The one-atom optional pointer is matrix evidence under D189; several atoms beside a pointer are refused by name pending R7.20's tagged carrier under R551-29. |
+| `[0480]` | executed | all | none | R4.10 | none | The one-atom optional pointer (D189) and D235's several-atom union, the atom's code beside the pointer, are matrix evidence on all three targets, with GDB and LLDB presentation of both cases. |
 | `[0490]` | advisory | none | none | none | none | Usage guidance: pointers serve hardware, the C boundary and library internals, while everyday code uses slices, handles and indices. It states no rule the compiler enforces or a fixture could discriminate; the operations it points to are [0430]-[0480]'s rows. |
 | `[0500]` | executed | all | none | R4.20 | none | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
 | `[0510]` | executed | all | none | R3.30 | none | matrix evidence |
