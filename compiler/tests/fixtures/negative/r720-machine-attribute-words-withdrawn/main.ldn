@@ -1,0 +1,5 @@
+-- D239: inlining is the optimizer's decision under D211 and a whole
+-- program links one definition per name, so `inline`, `noinline` and
+-- `weak` are not attributes; `link(...)` keeps its closed label set.
+link(weak) handler: () -> none =
+end handler

@@ -36,9 +36,13 @@ RP2040 surface into explicit D228 images, encoded unions and D227/D228 scalar
 accesses. The conceptual map below is not an RP2040 description: pin count,
 DMA stream/count geometry and addresses differ. Separate modules preserve
 GPIO control/SIO commands, timer alarms, UART FIFO/flags and DMA channel images;
-explicit synthetic bases adapt only the execution lane. Automatic `set(X)` and
-`register` sketch forms are not newly admitted syntax. The historical findings
-below remain historical. R6.90 owns the complete driver and its full derivation
+explicit synthetic bases adapt only the execution lane. D238 withdraws the
+`volatile ptr` type, the `register(t, ...)` wrapper and automatic `set(X)`:
+a device access is D227's or D228's explicit operation over an ordinary
+pointer, and a generator writes the per-register functions and named bool
+fields. The sketch below keeps those spellings as its design record, and the
+derivation maps each one to that form. The historical findings below remain
+historical. R6.90 owns the complete driver and its full derivation
 mapping, consumption and overrun protocol. Prototype 3's caller-backed storage,
 explicit allocator capabilities and local origin obligations remain unchanged;
 these fixtures acquire no allocator. The ordinary-slice DMA and D227 barrier

@@ -1,0 +1,6 @@
+-- D239: byte order is converted where bytes are read or written, not
+-- declared per field; `big` is an ordinary name and not a type prefix.
+packet: type = layout(c) struct
+    kind:   u8
+    length: big u16
+end packet

@@ -1,0 +1,10 @@
+error[L0103]: a field names its type after `:`
+  --> ../tests/fixtures/negative/r720-field-byte-order-withdrawn/main.ldn:5:20
+  |
+5 |     length: big u16
+  |                    ^
+  --> ../tests/fixtures/negative/r720-field-byte-order-withdrawn/main.ldn:5:17
+  |
+5 |     length: big u16
+  |                 ^^^ the field named here
+  = note: [0750]: a field is a name and a type, in the order the layout keeps them

@@ -1,0 +1,8 @@
+class: negative
+summary: D239 withdraws the weak, inline and noinline attribute words; `link(weak)` is refused as an unknown link label
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/r720-machine-attribute-words-withdrawn/main.ldn
+codes: L0103
+status: 1
+constructs: 0760, 1640

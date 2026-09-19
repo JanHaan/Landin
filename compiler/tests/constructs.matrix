@@ -12,14 +12,15 @@
 #
 #  linux-x86-64, macos-arm64 and cortex-m are the strongest
 #  claim a target's own records make: executed, compiled or
-#  refused.  Refusals are item:pending, item:boundary or
-#  item:withdrawn, as their [1830] note says.  State, targets,
+#  refused.  Refusals are item:pending, item:boundary,
+#  item:withdrawn or item:transferred, as their [1830] note
+#  says.  State, targets,
 #  gaps and owner come from ROADMAP.md R7.10, whose
 #  disposition column explains every row; see ROADMAP.md R1.90
 #  and R7.10.
 #  201 constructs, 196 with fixture evidence, 5 with none.
 #  States: 192 executed, 4 compiled, 1 deferred, 1 transferred, 3 advisory.
-#  29 rows name an open owner; 5 have target gaps.
+#  23 rows name an open owner; 5 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
@@ -36,9 +37,9 @@
 0120 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | Types are declared like any other value, with 'type'
 0130 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Order inside a module does not matter
 0140 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An inner scope may shadow an outer name
-0150 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+0150 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:transferred | executed | all | none | Language evolution | Integers: u8 u16 u32 u64, i8 i16 i32 i64
 0160 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pointer-width integers: usize, isize
-0170 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Floating point: f16, f32, f64
+0170 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:transferred | executed | all | none | Language evolution | Floating point: f32, f64
 0180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | bool, with true and false
 0190 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Integer literals are untyped
 0200 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | With no context, an integer literal defaults to i32
@@ -83,21 +84,21 @@
 0590 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fixed arrays are the vector type
 0600 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Text types are distinct views
 0610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the bytes of one
-0620 | tour | - | - | - | - | - | deferred | none | none | R7.20 | DEFERRED to a later version, kept here as a design record
+0620 | tour | - | - | - | - | - | deferred | none | none | R7.30 | DEFERRED to a later version, kept here as a design record
 0630 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
 0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
 0650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Distinct type
-0660 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:pending | executed | all | none | R7.20 | Range subtype: checked at assignment and conversion
+0660 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:boundary | executed | all | none | none | Range subtype: checked at assignment and conversion
 0670 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary R2.20:pending | executed | all | none | R7.20 | Struct, block form and inline form
 0680 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:pending | executed | all | none | R7.20 | Struct with a variant part
 0690 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A case with no payload is written bare
 0700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Construction and conversion use the same form
 0710 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A struct literal is untyped
 0720 | tour | accepted emitted executed refused | executed | executed | executed | R2.20:boundary | executed | all | none | none | 'of' fills every field the literal did not name
-0730 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20, Companion tool and ecosystem | A register has three kinds of field
-0740 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Access behaviour is data, not keywords
-0750 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Fields keep the order you wrote them
-0760 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Attributes are prefix words, from a closed set
+0730 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Companion tool and ecosystem | A register has three kinds of field
+0740 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Access behaviour is data, not keywords
+0750 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fields keep the order you wrote them
+0760 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Attributes are prefix words, from a closed set
 0770 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There is no borrow checker and there are no lifetime
 0780 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Parameters are non-escaping by default
 0790 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The other direction
@@ -106,7 +107,7 @@
 0820 | tour | accepted emitted executed refused | executed | executed | executed | R4.80:withdrawn | executed | all | none | none | Arenas are ordinary allocators with explicit backing
 0830 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A view derived from a local borrows it
 0840 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Origins join to the shortest-lived part
-0850 | tour | accepted emitted executed refused | executed | executed | executed | R6.80:pending | executed | all | none | R7.20 | Volatile is exempt from the borrow rule and from every
+0850 | tour | accepted emitted executed refused | executed | executed | executed | R7.20:withdrawn | executed | all | none | none | Volatile is exempt from the borrow rule and from every
 0860 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What this does not catch
 0870 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function is a value of a function type
 0880 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A single-expression body still takes an end
@@ -177,13 +178,13 @@
 1530 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Your own build switches
 1540 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There are no compile-time loops and no compile-time
 1550 | tour | - | - | - | - | - | advisory | none | none | none | Landin has its own native backends
-1560 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Three builtin modules are the way to the tools
+1560 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Three builtin modules are the way to the tools
 1570 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calling conventions are a growing set of atoms behind one
 1580 | tour | accepted emitted executed refused | executed | executed | executed | R4.40:pending | executed | hosted | none | R7.40 | Importing from C
 1590 | tour | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
 1600 | tour | accepted emitted executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
 1610 | tour | accepted emitted executed refused | executed | executed | - | - | executed | all | cortex-m | R7.40 | A symbol name the language's identifiers cannot spell
-1620 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | R7.20 | Atomics are builtins
+1620 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics are builtins
 1630 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Inline assembly, for what has no builtin
 1640 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Kept against section garbage collection, and placed
 1650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Entry point
