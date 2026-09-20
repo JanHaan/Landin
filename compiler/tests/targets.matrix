@@ -847,8 +847,8 @@ negative/r630-fence-relaxed | linux-x86-64, macos-arm64
 negative/r630-frame-dma | linux-x86-64, macos-arm64
 negative/r630-immutable | linux-x86-64, macos-arm64
 negative/r630-load-release | linux-x86-64, macos-arm64
-negative/r630-m0-rmw | linux-x86-64, macos-arm64
-negative/r630-m0-wide | linux-x86-64, macos-arm64
+negative/r630-m0-rmw | cortex-m
+negative/r630-m0-wide | cortex-m
 negative/r630-optional | linux-x86-64, macos-arm64
 negative/r630-runtime-order | linux-x86-64, macos-arm64
 negative/r630-signed | linux-x86-64, macos-arm64
@@ -871,7 +871,7 @@ negative/r640-enum-field | linux-x86-64, macos-arm64
 negative/r640-enum-integer-conversion | linux-x86-64, macos-arm64
 negative/r640-image-equality | linux-x86-64, macos-arm64
 negative/r640-inout | linux-x86-64, macos-arm64
-negative/r640-m0-register64 | linux-x86-64, macos-arm64
+negative/r640-m0-register64 | cortex-m
 negative/r640-missing-position | linux-x86-64, macos-arm64
 negative/r640-ordinary-position | linux-x86-64, macos-arm64
 negative/r640-overlap | linux-x86-64, macos-arm64
@@ -893,7 +893,7 @@ negative/r640-width | linux-x86-64, macos-arm64
 negative/r640-zero-array | linux-x86-64, macos-arm64
 negative/r640-zero-field | linux-x86-64, macos-arm64
 negative/r660-hosted-assembly | linux-x86-64, macos-arm64, synthetic-32
-negative/r660-materialization | linux-x86-64, macos-arm64
+negative/r660-materialization | cortex-m
 negative/r670-noreturn-fallthrough | linux-x86-64, macos-arm64, synthetic-32
 negative/r670-panic-handler | linux-x86-64, macos-arm64, synthetic-32
 negative/r720-aggregate-comparison-refused | linux-x86-64, macos-arm64, synthetic-32
@@ -917,6 +917,13 @@ negative/r720-refused-field-adds-no-cascade | linux-x86-64, macos-arm64, synthet
 negative/r720-variant-case-needs-its-part | linux-x86-64, macos-arm64, synthetic-32
 negative/r720-variant-part-has-no-value | linux-x86-64, macos-arm64, synthetic-32
 negative/r720-vector-intrinsic-withdrawn | linux-x86-64, macos-arm64
+negative/r740-c-category-boundary | linux-x86-64, macos-arm64
+negative/r740-cortex-conformance-input-keys | cortex-m
+negative/r740-cortex-inferred-element-mismatch | cortex-m
+negative/r740-cortex-name-declared-nowhere | cortex-m
+negative/r740-missing-import-adds-no-cascade | linux-x86-64, macos-arm64
+negative/r740-parameterized-application-boundary | linux-x86-64, macos-arm64
+negative/r740-refused-private-import-adds-no-cascade | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -963,7 +970,7 @@ negative/selection-from-a-call | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar-element | linux-x86-64, macos-arm64
 negative/several-independent-errors | linux-x86-64, macos-arm64
-negative/shared-link-symbol-duplicates | linux-x86-64, macos-arm64
+negative/shared-link-symbol-duplicates | cortex-m
 negative/shared-packed-fields-overlap | linux-x86-64, macos-arm64
 negative/shared-type-names-nothing | linux-x86-64, macos-arm64, synthetic-32
 negative/shift-amount-is-negative | linux-x86-64, macos-arm64
@@ -1343,7 +1350,7 @@ positive/r720-inferred-reference-literals | linux-x86-64, macos-arm64, synthetic
 positive/r720-labelled-bare-blocks | linux-x86-64, macos-arm64
 positive/r720-payload-array-values | linux-x86-64, macos-arm64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
-positive/range-subtypes | linux-x86-64, macos-arm64
+positive/range-subtypes | linux-x86-64, macos-arm64, cortex-m
 positive/recursive-module-images | linux-x86-64, synthetic-32
 positive/reference-origins-and-consume | linux-x86-64, macos-arm64, synthetic-32
 positive/return-bare | linux-x86-64, macos-arm64

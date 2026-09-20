@@ -124,6 +124,12 @@ suite with that environment's `python3` first on `PATH`.
 `--integration` adds every positive, runtime and ABI Landin source plus
 `core/*` to the tree-sitter pass. The `*.ldn` filter is deliberate: C and
 header companions in an ABI fixture are never presented to the Landin grammar.
-It remains useful as language-wide evidence, but is not needed to test or
-package the highlighters themselves. Each editor directory contains the
+It is language-wide evidence, and it is not needed to test or package the
+highlighters themselves, so it stays a separate request. Unlike every other
+optional tool here, the pinned tree-sitter CLI is mandatory once it is asked
+for: `--integration` without it exits non-zero rather than reporting a corpus
+pass that did not run. R7.40 made it so after R730-18 found that the grammar
+had drifted from the enabled kernel unnoticed, 48 of 846 sources failing,
+because the pass could be requested and skipped in the same run. No gate runs
+it; ROADMAP.md's R730-22 owns that. Each editor directory contains the
 shortest installation path for that editor.

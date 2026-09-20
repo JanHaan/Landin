@@ -1,0 +1,553 @@
+==================
+Distinct type declaration and bare reference
+==================
+
+meter: type = distinct f32
+distance: meter = 3.0
+distinct: type = u32
+alias_of_distinct: type = distinct
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (distinct_body
+        type: (scalar_type))))
+  (public_declaration
+    (binding
+      name: (identifier_list
+        (identifier))
+      type: (declaration_reference
+        (identifier))
+      value: (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (float_literal))))))))))))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (scalar_type)))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (declaration_reference
+        (identifier)))))
+
+==================
+Parameterized type declaration and application
+==================
+
+identity: type (t: type) = t
+byte: type = identity(u8)
+row: type = identity([3]u16)
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_formals
+        (type_formal
+          name: (identifier)))
+      (declaration_reference
+        (identifier))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_application
+        function: (declaration_reference
+          (identifier))
+        argument: (type_argument
+          (scalar_type)))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_application
+        function: (declaration_reference
+          (identifier))
+        argument: (type_argument
+          (array_type
+            length: (logical_or_expression
+              (logical_and_expression
+                (comparison_expression
+                  (alternation_expression
+                    (exclusion_expression
+                      (conjunction_expression
+                        (shift_expression
+                          (sum_expression
+                            (product_expression
+                              (unary_expression
+                                (literal
+                                  (integer_literal))))))))))))
+            element: (scalar_type)))))))
+
+==================
+Parameterized atom union and union alias
+==================
+
+first, second: atom
+joined: type (left: type, right: type) = left | right
+optional: type (t: type) = first | ptr t
+combo: type = joined(first, second)
+
+---
+
+(source_file
+  (public_declaration
+    (atom_declaration
+      name: (identifier_list
+        (identifier)
+        (identifier))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_formals
+        (type_formal
+          name: (identifier))
+        (type_formal
+          name: (identifier)))
+      (atom_union
+        (declaration_reference
+          (identifier))
+        (declaration_reference
+          (identifier)))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_formals
+        (type_formal
+          name: (identifier)))
+      (atom_union
+        (declaration_reference
+          (identifier))
+        (pointer_type
+          target: (declaration_reference
+            (identifier))))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (type_application
+        function: (declaration_reference
+          (identifier))
+        argument: (type_argument
+          (declaration_reference
+            (identifier)))
+        argument: (type_argument
+          (declaration_reference
+            (identifier)))))))
+
+==================
+Inline struct declaration, with and without layout
+==================
+
+point: type = (x: i32, y: i32)
+compact: type = layout(optimal) (small: u8, wide: u64)
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (struct_body
+        (field
+          name: (identifier_list
+            (identifier))
+          type: (scalar_type))
+        (field
+          name: (identifier_list
+            (identifier))
+          type: (scalar_type)))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (struct_body
+        (c_layout
+          attribute: (identifier)
+          convention: (identifier))
+        (field
+          name: (identifier_list
+            (identifier))
+          type: (scalar_type))
+        (field
+          name: (identifier_list
+            (identifier))
+          type: (scalar_type))))))
+
+==================
+Noreturn return form
+==================
+
+halt: () -> noreturn =
+    loop do
+    end loop
+end halt
+
+callback: type = () -> noreturn
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      name: (identifier)
+      (declared_signature
+        (arrow)
+        (returns))
+      body: (block
+        value: (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (loop_statement))))))))))))
+      end_name: (identifier)))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (function_type
+        (signature
+          (arrow)
+          (returns))))))
+
+==================
+Shared declaration names in binding, field, parameter and named return
+==================
+
+mut first, second: i32 = 1
+site: type = struct
+    file_id, line, column: u32
+end site
+total: (in a, b: i32, c: u8) -> (sum: i32) =
+    sum = a + b + i32(c)
+end total
+split: (source: []u8) -> (head, tail: []u8 from source) =
+    head = source[0..<1]
+    tail = source[1..<2]
+end split
+
+---
+
+(source_file
+  (public_declaration
+    (binding
+      name: (identifier_list
+        (identifier)
+        (identifier))
+      type: (scalar_type)
+      value: (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (struct_body
+        (field
+          name: (identifier_list
+            (identifier)
+            (identifier)
+            (identifier))
+          type: (scalar_type))
+        (identifier))))
+  (public_declaration
+    (function_declaration
+      name: (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (parameter_convention)
+            name: (identifier_list
+              (identifier)
+              (identifier))
+            type: (scalar_type))
+          (parameter
+            name: (identifier_list
+              (identifier))
+            type: (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            name: (identifier_list
+              (identifier))
+            type: (scalar_type))))
+      body: (block
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))
+                          (product_expression
+                            (unary_expression
+                              (call_expression
+                                function: (indexed_expression
+                                  (scalar_type))
+                                (arguments
+                                  (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (indexed_expression
+                                                        (identifier))))))))))))))))))))))))))
+      end_name: (identifier)))
+  (public_declaration
+    (function_declaration
+      name: (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            name: (identifier_list
+              (identifier))
+            type: (slice_type
+              element: (scalar_type))))
+        (arrow)
+        (returns
+          (named_return
+            name: (identifier_list
+              (identifier)
+              (identifier))
+            type: (slice_type
+              element: (scalar_type))
+            (identifier))))
+      body: (block
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (indexed_expression
+                                  (identifier))
+                                (index_selection
+                                  index: (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))
+                                  upper: (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal)))))))))))))))))))))))))
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (indexed_expression
+                                  (identifier))
+                                (index_selection
+                                  index: (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))
+                                  upper: (logical_or_expression
+                                    (logical_and_expression
+                                      (comparison_expression
+                                        (alternation_expression
+                                          (exclusion_expression
+                                            (conjunction_expression
+                                              (shift_expression
+                                                (sum_expression
+                                                  (product_expression
+                                                    (unary_expression
+                                                      (literal
+                                                        (integer_literal))))))))))))))))))))))))))
+      end_name: (identifier))))
+
+==================
+Labelled bare block left by a break that names it
+==================
+
+demo: (x: i32) -> (out: i32) =
+    out = 0
+    scope: begin
+        tmp := x * 2
+        out = out + tmp
+    end scope
+    out = out + 1
+end demo
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      name: (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            name: (identifier_list
+              (identifier))
+            type: (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            name: (identifier_list
+              (identifier))
+            type: (scalar_type))))
+      body: (block
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal)))))))))))))
+        (labeled_block
+          label: (identifier)
+          (block
+            (binding
+              name: (identifier)
+              value: (logical_or_expression
+                (logical_and_expression
+                  (comparison_expression
+                    (alternation_expression
+                      (exclusion_expression
+                        (conjunction_expression
+                          (shift_expression
+                            (sum_expression
+                              (product_expression
+                                (unary_expression
+                                  (indexed_expression
+                                    (identifier)))
+                                (unary_expression
+                                  (literal
+                                    (integer_literal)))))))))))))
+            (assignment_statement
+              left: (place
+                (indexed_expression
+                  (identifier)))
+              right: (logical_or_expression
+                (logical_and_expression
+                  (comparison_expression
+                    (alternation_expression
+                      (exclusion_expression
+                        (conjunction_expression
+                          (shift_expression
+                            (sum_expression
+                              (product_expression
+                                (unary_expression
+                                  (indexed_expression
+                                    (identifier))))
+                              (product_expression
+                                (unary_expression
+                                  (indexed_expression
+                                    (identifier))))))))))))))
+          end_label: (identifier))
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))
+                          (product_expression
+                            (unary_expression
+                              (literal
+                                (integer_literal))))))))))))))
+      end_name: (identifier))))

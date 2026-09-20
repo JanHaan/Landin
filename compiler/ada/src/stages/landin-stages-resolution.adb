@@ -1108,6 +1108,14 @@ package body Landin.Stages.Resolution is
                      --  Scalar type names and R2.60's closed compiler
                      --  concept have no source declaration to bind.
                      null;
+                  --  R7.40 (R551-30): an import of this name was refused in
+                  --  this file, so the name is not a misspelling and its
+                  --  visibility was already decided and reported once.  The
+                  --  refusal stands; only the repetition goes.
+                  elsif Res.Import_Refused
+                    (Meanings.all, Syn.Source_Of (Of_Tree), Named)
+                  then
+                     null;
                   elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report
                        (Item    => Names.Unresolved_Name,
@@ -1757,6 +1765,13 @@ package body Landin.Stages.Resolution is
                            Note => "[1440]: selected imports name public"
                                    & " declarations in the selected module",
                            Into => Found);
+                        --  R7.40 (R551-30): this name is answered.  The
+                        --  program is refused either way, and every later
+                        --  use of it would otherwise be reported again as
+                        --  a misspelling it is not.
+                        Res.Refuse_Import
+                          (Meanings.all, Source_Id, Named,
+                           Syn.Origin (Of_Tree.all, Node));
                      elsif not Res.Is_Public (Meanings.all, Member) then
                         Names.Report
                           (Item => Names.Inaccessible_Name,
@@ -1770,6 +1785,9 @@ package body Landin.Stages.Resolution is
                              (Written.all, Member),
                            Because => "declared without `public` here",
                            Into => Found);
+                        Res.Refuse_Import
+                          (Meanings.all, Source_Id, Named,
+                           Syn.Origin (Of_Tree.all, Node));
                      else
                         Res.Bind_Imported_Declaration
                           (Meanings.all, Source_Id, Named, Member,

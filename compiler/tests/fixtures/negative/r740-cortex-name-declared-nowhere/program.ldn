@@ -1,0 +1,3 @@
+f: () -> (r: u32) =
+    r = mistpelled
+end f

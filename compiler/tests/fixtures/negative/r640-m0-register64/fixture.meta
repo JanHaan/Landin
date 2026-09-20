@@ -2,7 +2,7 @@ class: negative
 summary: packed contract refuses m0-register64
 program: program.ldn
 constructs: 0630, 0730, 0740
-targets: linux-x86-64, macos-arm64
+targets: cortex-m
 codes: L0301
 args: --target=cortex-m0 ../tests/fixtures/negative/r640-m0-register64/program.ldn
 expect: expected.txt

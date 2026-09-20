@@ -3540,6 +3540,101 @@ def refusal_entries():
     return out
 
 
+#  The driver spells the Cortex target `cortex-m0` and the applicability
+#  register spells it `cortex-m`: one names a described target, the other
+#  a product family, and neither is free to be the other's spelling.
+CORTEX_TARGET_FLAG = "--target=cortex-m0"
+
+
+def selects_cortex_target(fields):
+    """Whether a fixture's own arguments compile it for Cortex-M0."""
+    return CORTEX_TARGET_FLAG in (fields.get("args", "") or "").split()
+
+
+def cortex_target_problems():
+    """A compile-time Cortex-M claim has to be the run that was made.
+
+    R7.40 lets a positive or negative fixture carry Cortex-M evidence,
+    because a verdict reached before emission is reached on every host.
+    The claim is worth having only while it cannot drift from the run:
+    a fixture that names `cortex-m` among its targets must select
+    `--target=cortex-m0`, and one that selects it must say so.  R551-17's
+    rule, that inventory equality is not semantic coverage, is what this
+    keeps: without it the target column could be filled by editing a
+    metadata line.
+    """
+    problems = []
+    for name, (path, fields) in sorted(fixture_records().items()):
+        if name.split("/")[0] not in ("positive", "negative", "end-to-end"):
+            continue
+        named = "cortex-m" in [
+            one.strip() for one in fields.get("targets", "").split(",")]
+        selected = selects_cortex_target(fields)
+        if named and not selected:
+            problems.append((path, 0, (
+                "%s names cortex-m and no argument selects %s"
+                % (name, CORTEX_TARGET_FLAG))))
+        elif selected and not named:
+            problems.append((path, 0, (
+                "%s selects %s and does not name cortex-m among its targets"
+                % (name, CORTEX_TARGET_FLAG))))
+    return problems
+
+
+CORTEX_PROBES = "compiler/tests/cortex-m/probes.json"
+
+
+def cortex_probe_records():
+    """R6.60's firmware probes, which run on Cortex-M outside the corpus."""
+    path = os.path.join(ROOT, CORTEX_PROBES)
+    if not os.path.exists(path):
+        return []
+    return json.load(io.open(path, encoding="utf-8")).get("probes", [])
+
+
+def cortex_probe_problems(titles):
+    """A probe may only attribute evidence a runner actually produces.
+
+    R7.10 kept evidence outside fixture metadata in dispositions rather
+    than in the target columns, which left [1610]'s Cortex-M link names
+    with no way to be counted at all.  R7.40 counts them, and pays for it
+    with the rule that makes the record answerable: the probe source and
+    its runner exist, the runner names the source it is said to run, and
+    every construct attributed is one a document defines.  A row nothing
+    runs is then not a row that can be written.
+    """
+    problems = []
+    defined = set(one for one, _, _ in titles)
+    for probe in cortex_probe_records():
+        name = probe.get("name", "?")
+        source = probe.get("source", "")
+        runner = probe.get("runner", "")
+        for role, relative in (("source", source), ("runner", runner)):
+            if not relative or not os.path.exists(os.path.join(ROOT, relative)):
+                problems.append((CORTEX_PROBES, 0, (
+                    "probe %s names a %s that is not here: %s"
+                    % (name, role, relative or "nothing"))))
+        if source and runner and os.path.exists(os.path.join(ROOT, runner)):
+            body = io.open(os.path.join(ROOT, runner), encoding="utf-8").read()
+            if os.path.basename(source) not in body:
+                problems.append((CORTEX_PROBES, 0, (
+                    "probe %s says %s runs %s and it does not name it"
+                    % (name, runner, source))))
+        if probe.get("targets") != "cortex-m":
+            problems.append((CORTEX_PROBES, 0, (
+                "probe %s is Cortex-M evidence and says otherwise" % name)))
+        if not (probe.get("evidence") or "").strip():
+            problems.append((CORTEX_PROBES, 0, (
+                "probe %s attributes evidence and says none" % name)))
+        for one in [x.strip()
+                    for x in probe.get("constructs", "").split(",") if x.strip()]:
+            if one not in defined:
+                problems.append((CORTEX_PROBES, 0, (
+                    "probe %s attributes [%s], which no document defines"
+                    % (name, one))))
+    return problems
+
+
 def construct_target_evidence():
     """The strongest claim each product target makes about each construct.
 
@@ -3552,6 +3647,14 @@ def construct_target_evidence():
     Reading metadata alone would overstate one target and understate
     another, so this reads all four.  A claim is still a fixture's claim:
     `executed` beats `compiled` beats `refused`, and none is a measurement.
+
+    R7.40 adds the fourth way a construct reaches Cortex-M: a compile-time
+    fixture whose own `args:` select `--target=cortex-m0`, which the
+    ordinary recorded runner compiles for that target on every host because
+    a verdict reached before emission needs no Cortex toolchain.  That
+    claim is held to being run rather than asserted: `cortex_target_problems`
+    refuses a compile-time fixture that names the target it does not select,
+    or selects the target it does not name.
     """
     parity_path = os.path.join(ROOT, "compiler/tests/darwin/parity.json")
     corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
@@ -3562,6 +3665,7 @@ def construct_target_evidence():
     parity = json.load(io.open(parity_path, encoding="utf-8"))
     corpus = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
     driver = json.load(io.open(driver_path, encoding="utf-8"))
+    probes = cortex_probe_records()
     best = {}
 
     def claim(construct, target, what):
@@ -3600,8 +3704,15 @@ def construct_target_evidence():
                     status = parity["diagnostics"].get(name, {}).get("status")
                     claim(one, "macos-arm64", verdict if status is None else
                           "compiled" if status == "0" else "refused")
+                if "cortex-m" in targets and selects_cortex_target(fields):
+                    claim(one, "cortex-m", verdict)
     for one in listed(driver.get("constructs", "")):
         claim(one, "cortex-m", "executed")
+    #  R7.40: the firmware lane's own probes, which are built and run on
+    #  Cortex-M outside the corpus exactly as the driver is.
+    for probe in probes:
+        for one in listed(probe.get("constructs", "")):
+            claim(one, "cortex-m", "executed")
     return best
 
 
@@ -3982,6 +4093,8 @@ def check_matrix(full_run):
     inputs = inventory_inputs()
     out = inventory_problems(inputs) if inputs is not None else [
         (ROADMAP, 1, "the construct inventory's inputs cannot be read")]
+    out += cortex_target_problems()
+    out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
     fresh = construct_matrix()
     if fresh is None:

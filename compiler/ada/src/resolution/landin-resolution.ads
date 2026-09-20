@@ -54,6 +54,16 @@
 --  something and an unresolved name is one that did not; the codes belong
 --  to Landin.Diagnostics.Resolution, and this package's contracts say
 --  which of the two happened without spelling either.
+--
+--  A refused import is the third answer, and R7.40 gives it a name here for
+--  the same reason: an import that named a private or absent member binds
+--  nothing, so every later use of that name is a lookup that did not find
+--  something, and the stage above would report each one as a misspelling.
+--  Refuse_Import records that the file's import scope already answered for
+--  the name, and Import_Refused is what a caller asks before it reports.
+--  Visible is deliberately unchanged -- the name still resolves to nothing,
+--  which is what it does -- so this decides what is said and never what is
+--  accepted.
 
 private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
@@ -334,6 +344,28 @@ package Landin.Resolution is
       Name     : Landin.Source.Names.Name_Id) return Landin.Provenance.Origin
      with Pre => Is_Prepared (Of_Table)
                  and then Has_Import (Of_Table, Source, Name);
+
+   --  R7.40 (R551-30): the import itself was refused, so the name has no
+   --  continuation identity and no later use of it can be answered.  The
+   --  origin is the import that failed, which is where the one report the
+   --  program gets already points.  Repeating it is harmless: one refused
+   --  import name is one refusal however many times it is written.
+   procedure Refuse_Import
+     (Into   : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Origin : Landin.Provenance.Origin)
+     with Pre  => Is_Prepared (Into)
+                  and then Source /= Landin.Source.No_Source
+                  and then Name /= Landin.Source.Names.No_Name,
+          Post => Import_Refused (Into, Source, Name);
+
+   function Import_Refused
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Source /= Landin.Source.No_Source;
 
    procedure Bind_Imported_Module
      (Into  : in out Table;
@@ -736,6 +768,10 @@ private
       Module_Scopes : Scope_Id_Vectors.Vector;
       File_Scopes   : Scope_Id_Vectors.Vector;
       Imports       : Import_Maps.Map;
+      --  Import names this file wrote and the binder refused.  Kept apart
+      --  from Imports so that Has_Import keeps meaning exactly what it
+      --  meant: a name an import successfully gave to something.
+      Refused_Imports : Import_Maps.Map;
       Runs         : Run_Vectors.Vector;
       Tree_Addresses : Tree_Address_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;

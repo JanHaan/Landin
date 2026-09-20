@@ -1,0 +1,11 @@
+import lib (private_value, offered)
+
+--  R7.40: the import already said why `private_value` is not available
+--  here.  Each later use of it adds no second report, while `offered`,
+--  imported in the same list, keeps resolving.
+public main: () -> (code: i32) =
+    first: i32 = private_value
+    second: i32 = private_value + offered
+    third: i32 = private_value
+    code = first + second + third
+end main

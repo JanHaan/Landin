@@ -1,0 +1,9 @@
+class: negative
+summary: R7.40 pins [1350]'s malformed-application note, which records R2.40's source-form boundary instead of promising a finished item
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/r740-parameterized-application-boundary/program.ldn
+codes: L0304
+status: 1
+constructs: 0520, 1350, 1790, 1795
+targets: linux-x86-64, macos-arm64

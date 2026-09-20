@@ -7,4 +7,5 @@
 (fixed_conditional) @fold
 (match_expression) @fold
 (bare_block) @fold
+(labeled_block) @fold
 (comment) @fold

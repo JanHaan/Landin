@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "comment": "R7.40: Cortex-M evidence that executes outside the fixture corpus. The firmware lane builds and runs these probes under QEMU, so a construct they exercise has an executed Cortex-M verdict that no fixture claims. Each row names the source, the runner that builds it and what the run observes; check.py holds the runner to naming the source and every construct to existing.",
+  "probes": [
+    {
+      "name": "firmware-machine",
+      "source": "environments/cortex-m/probes/firmware-machine.ldn",
+      "runner": "environments/cortex-m/firmware.py",
+      "targets": "cortex-m",
+      "constructs": "1610",
+      "evidence": "R6.60's machine probe gives a module datum the link name `assembly_data` and a native function the link name `worker`, and the QEMU session resolves both spellings in the linked image: it breaks at `*worker`, reads `*(unsigned*)&assembly_data` as 18 before the body and 99 after it. The names the session uses are the written link symbols and not the Landin names, so a wrong or dropped symbol fails the run. This is [1610]'s standalone native form, which D229 enables on Cortex-M; the `extern(c)` form stays disabled there by R6.20 and is R730-07's."
+    }
+  ]
+}

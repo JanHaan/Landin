@@ -1,0 +1,6 @@
+--  R7.40: [1580] says the categories it lists are "refused explicitly
+--  rather than guessed", and this is where that refusal is made: an array
+--  is not a by-value C argument, so the signature is a type error at the
+--  position that wrote it.  R4.40 recorded that boundary; no named
+--  refusal promises it as work still to come.
+extern(c) take: (values: [4]i32) -> none

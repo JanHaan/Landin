@@ -43,7 +43,8 @@ end add
         (identifier))))
   (public_declaration
     (binding
-      name: (identifier)
+      name: (identifier_list
+        (identifier))
       type: (scalar_type)
       value: (logical_or_expression
         (logical_and_expression
@@ -62,10 +63,12 @@ end add
       name: (identifier)
       (struct_body
         (field
-          name: (identifier)
+          name: (identifier_list
+            (identifier))
           type: (scalar_type))
         (field
-          name: (identifier)
+          name: (identifier_list
+            (identifier))
           type: (scalar_type))
         (identifier))))
   (public_declaration
@@ -74,15 +77,18 @@ end add
       (declared_signature
         (routine_formals
           (parameter
-            name: (identifier)
+            name: (identifier_list
+              (identifier))
             type: (scalar_type))
           (parameter
-            name: (identifier)
+            name: (identifier_list
+              (identifier))
             type: (scalar_type)))
         (arrow)
         (returns
           (named_return
-            name: (identifier)
+            name: (identifier_list
+              (identifier))
             type: (scalar_type))))
       body: (block
         (assignment_statement
@@ -191,7 +197,8 @@ option: u32 = 2
                               (text_literal)))))))))))))))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -207,7 +214,8 @@ option: u32 = 2
                             (integer_literal))))))))))))))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -238,7 +246,8 @@ as: u32 = 0
       (identifier)))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -285,7 +294,8 @@ symbol : i32 = 0
           (identifier)
           (identifier))
         (field
-          (identifier)
+          (identifier_list
+            (identifier))
           (scalar_type))
         (identifier))))
   (public_declaration
@@ -297,12 +307,14 @@ symbol : i32 = 0
         (c_signature
           (parameters
             (parameter
-              (identifier)
+              (identifier_list
+                (identifier))
               (scalar_type)))
           (arrow)
           (returns
             (named_return
-              (identifier)
+              (identifier_list
+                (identifier))
               (scalar_type)))))))
   (public_declaration
     (type_declaration
@@ -326,12 +338,14 @@ symbol : i32 = 0
           (c_signature
             (parameters
               (parameter
-                (identifier)
+                (identifier_list
+                  (identifier))
                 (scalar_type)))
             (arrow)
             (returns
               (named_return
-                (identifier)
+                (identifier_list
+                  (identifier))
                 (scalar_type))))))))
   (public_declaration
     (extern_declaration
@@ -345,14 +359,16 @@ symbol : i32 = 0
       (c_declared_signature
         (routine_formals
           (parameter
-            (identifier)
+            (identifier_list
+              (identifier))
             (declaration_reference
               (identifier))))
         (variadic_marker)
         (arrow)
         (returns
           (named_return
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type))))))
   (public_declaration
     (extern_declaration
@@ -362,12 +378,14 @@ symbol : i32 = 0
       (c_declared_signature
         (routine_formals
           (parameter
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type)))
         (arrow)
         (returns
           (named_return
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type))))
       (block
         (assignment_statement
@@ -397,12 +415,14 @@ symbol : i32 = 0
       (declared_signature
         (routine_formals
           (parameter
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type)))
         (arrow)
         (returns
           (named_return
-            (identifier)
+            (identifier_list
+              (identifier))
             (scalar_type))))
       (block
         (assignment_statement
@@ -424,7 +444,8 @@ symbol : i32 = 0
       (identifier)))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -440,7 +461,8 @@ symbol : i32 = 0
                             (integer_literal))))))))))))))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -456,7 +478,8 @@ symbol : i32 = 0
                             (integer_literal))))))))))))))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression
@@ -472,7 +495,8 @@ symbol : i32 = 0
                             (integer_literal))))))))))))))
   (public_declaration
     (binding
-      (identifier)
+      (identifier_list
+        (identifier))
       (scalar_type)
       (logical_or_expression
         (logical_and_expression

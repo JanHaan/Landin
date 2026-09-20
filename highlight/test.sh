@@ -32,6 +32,21 @@ else
 fi
 
 tree_cli="$root/highlight/tree-sitter/node_modules/.bin/tree-sitter"
+
+#  R7.40: the structural block is optional, and --integration is the one
+#  caller that cannot treat it so.  R730-18's drift went unseen because the
+#  corpus pass was asked for and skipped in the same breath: a run that
+#  reports success without parsing a single fixture is worse than no run,
+#  since it is the evidence R3.80's exit clause cites.  Ask for the corpus
+#  and the pinned CLI is mandatory.
+if test "$integration" = true && ! test -x "$tree_cli"; then
+    echo "$0: --integration needs the pinned tree-sitter CLI at" >&2
+    echo "  highlight/tree-sitter/node_modules/.bin/tree-sitter" >&2
+    echo "  (npm install in highlight/tree-sitter); refusing to report a" >&2
+    echo "  corpus pass that did not run" >&2
+    exit 1
+fi
+
 if test -x "$tree_cli"; then
     tree_work="$test_tmp/tree-sitter"
     mkdir -p "$tree_work/config" "$tree_work/cache"

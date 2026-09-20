@@ -96,6 +96,10 @@
         "named": true
       },
       {
+        "type": "labeled_block",
+        "named": true
+      },
+      {
         "type": "loop_statement",
         "named": true
       },
@@ -478,6 +482,10 @@
         {
           "type": "pointer_type",
           "named": true
+        },
+        {
+          "type": "type_application",
+          "named": true
         }
       ]
     }
@@ -507,6 +515,10 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "identifier_list",
             "named": true
           }
         ]
@@ -1190,6 +1202,22 @@
     }
   },
   {
+    "type": "distinct_body",
+    "named": true,
+    "fields": {
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "empty_slice",
     "named": true,
     "fields": {}
@@ -1355,7 +1383,7 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "identifier_list",
             "named": true
           }
         ]
@@ -1873,6 +1901,42 @@
     }
   },
   {
+    "type": "labeled_block",
+    "named": true,
+    "fields": {
+      "end_label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "block",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "link_symbol",
     "named": true,
     "fields": {
@@ -2202,7 +2266,7 @@
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "identifier_list",
             "named": true
           }
         ]
@@ -2290,6 +2354,10 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "identifier_list",
             "named": true
           }
         ]
@@ -2906,6 +2974,10 @@
           "named": true
         },
         {
+          "type": "distinct_body",
+          "named": true
+        },
+        {
           "type": "encoded_union",
           "named": true
         },
@@ -3486,6 +3558,10 @@
     "named": false
   },
   {
+    "type": "distinct",
+    "named": false
+  },
+  {
     "type": "do",
     "named": false
   },
@@ -3627,6 +3703,10 @@
   },
   {
     "type": "none",
+    "named": false
+  },
+  {
+    "type": "noreturn",
     "named": false
   },
   {

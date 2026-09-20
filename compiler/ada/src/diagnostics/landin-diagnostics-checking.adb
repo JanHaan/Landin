@@ -41,6 +41,7 @@ package body Landin.Diagnostics.Checking is
                elsif Refused in Constrained_Composition | Struct_Value
                                 | Variant_Value | Array_Value
                                 | Array_Element | Zeroed_Value
+                                | Parameterized_Type_Alias
                then " records this source-form boundary"
                else " is where it is enabled"));
       elsif Note /= "" then

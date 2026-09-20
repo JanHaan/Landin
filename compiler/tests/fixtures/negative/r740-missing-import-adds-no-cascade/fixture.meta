@@ -1,0 +1,8 @@
+class: negative
+summary: R7.40 reports a selected import of an absent member once, at its import, and its two later uses add no follow-on refusal
+expect: expected.txt
+args: --root=../tests/fixtures/negative/r740-missing-import-adds-no-cascade/root ../tests/fixtures/negative/r740-missing-import-adds-no-cascade/entry
+codes: L0201
+status: 1
+constructs: 1440, 1450, 1860
+targets: linux-x86-64, macos-arm64

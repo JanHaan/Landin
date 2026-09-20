@@ -1,0 +1,10 @@
+error[L0202]: `private_value` is module-internal
+  --> ../tests/fixtures/negative/r740-refused-private-import-adds-no-cascade/entry/main.ldn:1:13
+  |
+1 | import lib (private_value, offered)
+  |             ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r740-refused-private-import-adds-no-cascade/root/lib/library.ldn:2:1
+  |
+2 | private_value: i32 = 7
+  | ^^^^^^^^^^^^^ declared without `public` here
+  = note: [1410]: only a public declaration is visible across a module boundary

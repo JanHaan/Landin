@@ -1,0 +1,2 @@
+public offered: i32 = 3
+private_value: i32 = 7

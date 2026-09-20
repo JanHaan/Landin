@@ -1,0 +1,6 @@
+error[L0201]: the imported module has no member `absent_value`
+  --> ../tests/fixtures/negative/r740-missing-import-adds-no-cascade/entry/main.ldn:1:13
+  |
+1 | import lib (absent_value, offered)
+  |             ^^^^^^^^^^^^
+  = note: [1440]: selected imports name public declarations in the selected module

@@ -10,6 +10,7 @@ import copy
 import importlib.util
 from pathlib import Path
 import unittest
+import unittest.mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,30 +61,55 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems({row: row.replace("| all |", "| hosts |")}),
                      "unknown targets")
 
-    def test_an_owner_must_be_live_and_named(self):
+    def gapped(self):
+        """[1860] as it stood before R7.40 supplied its Cortex-M verdict.
+
+        No row has a gap or a live roadmap owner after R7.40, so the rules
+        about both are kept exercised by rebuilding the row that had them:
+        clean as written against `without_cortex`, and refused once the
+        owner finishes, goes missing or stops being named.
+        """
         row = self.row("1860")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| R2.20 |")}),
-                     "still owned by finished R2.20")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| R9.90 |")}),
-                     "names missing owner R9.90")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| Somebody |")}),
-                     "unknown owner")
+        return {row: "| `[1860]` | compiled | all | cortex-m | R1.50 | R7.50 |"
+                     " Hosted compile-time rule audited by R4.90; R7.50 stands"
+                     " here for the owner a recorded gap needs. |"}
+
+    @staticmethod
+    def without_cortex(targets):
+        targets["1860"].pop("cortex-m")
+
+    def test_an_owner_must_be_live_and_named(self):
+        (row, synthetic), = self.gapped().items()
+        self.assertEqual(self.problems(self.gapped(),
+                                       targets=self.without_cortex), [])
+        for owner, fragment in (("R2.20", "still owned by finished R2.20"),
+                                ("R9.90", "names missing owner R9.90"),
+                                ("Somebody", "unknown owner")):
+            self.refused(self.problems(
+                {row: synthetic.replace("| R7.50 |", "| %s |" % owner)},
+                targets=self.without_cortex), fragment)
+        self.refused(self.problems(
+            {row: synthetic.replace("R7.50 stands", "nobody stands")},
+            targets=self.without_cortex),
+            "[1860] does not say what R7.50 owns")
 
         def pending(refusals):
-            refusals.append(("1860", "R7.40", "pending", "table", "Probe"))
-        row = self.row("1860")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| none |")},
-                                   refusals=pending),
-                     "refused pending R7.40 and the row does not name it")
+            refusals.append(("1860", "R7.50", "pending", "table", "Probe"))
+        self.refused(self.problems(refusals=pending),
+                     "refused pending R7.50 and the row does not name it")
 
     def test_a_finished_owner_makes_the_row_stale(self):
-        heading = "### R7.40 — Close all evidence registers\n\nStatus: planned"
-        self.refused(self.problems({heading: heading.replace("planned", "complete")}),
-                     "still owned by finished R7.40")
+        (row, synthetic), = self.gapped().items()
+        heading = ("### R7.50 — Prove deterministic baseline toolchain"
+                   " behavior\n\nStatus: planned")
+        self.refused(self.problems(
+            {row: synthetic, heading: heading.replace("planned", "complete")},
+            targets=self.without_cortex),
+            "still owned by finished R7.50")
 
     def test_phase_must_be_finished_implementation(self):
         row = self.row("0010")
-        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.40 |")}),
+        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.50 |")}),
                      "no finished implementing phase")
 
     def test_gaps_follow_the_corpus_both_ways(self):
@@ -92,15 +118,18 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems(targets=lose),
                      "[0010] records gaps none; the corpus leaves cortex-m")
 
-        def gain(targets):
-            targets["1860"]["cortex-m"] = "refused"
-        self.refused(self.problems(targets=gain),
+        self.refused(self.problems(self.gapped()),
                      "[1860] records gaps cortex-m; the corpus leaves none")
 
     def test_a_gap_needs_an_owning_item(self):
-        row = self.row("1860")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| none |")}),
-                     "target gaps and no owning item")
+        (row, synthetic), = self.gapped().items()
+        self.refused(self.problems(
+            {row: synthetic.replace(
+                "| R7.50 | Hosted compile-time rule audited by R4.90; R7.50"
+                " stands here for the owner a recorded gap needs.",
+                "| none | Hosted compile-time rule audited by R4.90.")},
+            targets=self.without_cortex),
+            "target gaps and no owning item")
 
     def test_a_compiled_row_that_executes_is_stale(self):
         def run(targets):
@@ -111,8 +140,8 @@ class Inventory(unittest.TestCase):
         """[0620] as it stood before R7.30 transferred it: the last deferred
         construct, now a synthetic control for the deferral rules."""
         row = self.row("0620")
-        return {row: "| `[0620]` | deferred | none | none | none | R7.40 |"
-                     " The tour keeps it DEFERRED and R7.40 owns the decision. |"}
+        return {row: "| `[0620]` | deferred | none | none | none | R7.50 |"
+                     " The tour keeps it DEFERRED and R7.50 owns the decision. |"}
 
     def test_advisory_deferred_and_transferred_rows_carry_no_evidence(self):
         def claim(evidence):
@@ -139,11 +168,11 @@ class Inventory(unittest.TestCase):
                      "deferred but the tour does not say so")
         (row, synthetic), = self.deferred().items()
         self.refused(self.problems({row: synthetic.replace(
-            "| R7.40 | The tour keeps it DEFERRED and R7.40 owns the decision.",
+            "| R7.50 | The tour keeps it DEFERRED and R7.50 owns the decision.",
             "| none | The tour keeps it DEFERRED.")}),
             "[0620] is deferred with no owning item")
-        self.refused(self.problems({row: synthetic.replace("| R7.40 |", "| R7.20 |")
-                                    .replace("and R7.40 owns", "and R7.20 owns")}),
+        self.refused(self.problems({row: synthetic.replace("| R7.50 |", "| R7.20 |")
+                                    .replace("and R7.50 owns", "and R7.20 owns")}),
                      "still owned by finished R7.20")
 
         #  R7.30's transfer is the tour's first: [0620] names its successor.
@@ -170,14 +199,18 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems({row: row.replace("R4.80", "the withdrawal")}),
                      "does not explain its refusal recorded by R4.80")
 
-        row = self.row("1350")
-        self.refused(self.problems({row: row.replace("| R7.40 |", "| none |")}),
+        #  R7.40 turned [1350]'s note from a promise into a boundary and
+        #  removed [1580]'s entry outright, so no refusal promises a finished
+        #  item any more; the control supplies one.
+        def promised(refusals):
+            refusals.append(("1350", "R2.40", "pending", "table", "Probe"))
+        self.refused(self.problems(refusals=promised),
                      "still promises finished R2.40")
 
         def boundary(refusals):
-            refusals.append(("0010", "R7.40", "boundary", "table", "Probe"))
+            refusals.append(("0010", "R7.50", "boundary", "table", "Probe"))
         self.refused(self.problems(refusals=boundary),
-                     "boundary refusal names unfinished R7.40")
+                     "boundary refusal names unfinished R7.50")
 
     def test_a_transfer_names_its_successor(self):
         #  R7.20's transfers: the tour names each successor, and a refusal
@@ -221,20 +254,57 @@ class Inventory(unittest.TestCase):
                          ("0150", "R7.20", "transferred"),
                          ("0170", "R7.20", "transferred"),
                          ("0660", "R7.20", "boundary"),
-                         ("1350", "R2.40", "pending")):
+                         ("1350", "R2.40", "boundary")):
             self.assertIn(expected, wording)
-        self.assertEqual(len(self.inputs["refusals"]), 20)
+        #  R7.40 turned [1350]'s note into a boundary and removed [1580]'s
+        #  entry, which nothing raised, so no refusal is `pending` now.
+        self.assertNotIn("pending", {how for _, _, how in wording})
+        self.assertEqual(len(self.inputs["refusals"]), 19)
 
     def test_target_records_decide_where_a_fixture_runs(self):
         held = self.inputs["targets"]
-        #  Darwin runs a native replacement for a Linux-only archive fixture,
-        #  the firmware driver runs outside the hosted harness, and a
-        #  hosted-only compile-time rule has no Cortex-M verdict at all.
+        #  Darwin runs a native replacement for a Linux-only archive
+        #  fixture, and the firmware driver runs outside the hosted harness.
         self.assertEqual(held["1590"]["macos-arm64"], "executed")
         self.assertEqual(held["1590"]["cortex-m"], "refused")
         self.assertEqual(held["1570"]["cortex-m"], "executed")
         self.assertEqual(held["1630"]["linux-x86-64"], "compiled")
-        self.assertNotIn("cortex-m", held["1860"])
+        #  R7.40's two new Cortex-M records.  A compile-time fixture that
+        #  selects --target=cortex-m0 carries its verdict there, and R6.60's
+        #  machine probe carries [1610]'s link names, which no fixture claims.
+        self.assertEqual(held["1860"]["cortex-m"], "refused")
+        self.assertEqual(held["1730"]["cortex-m"], "compiled")
+        self.assertEqual(held["1610"]["cortex-m"], "executed")
+
+    def test_a_cortex_claim_must_be_the_run_that_was_made(self):
+        """R7.40's own rule, without which the column is editable prose."""
+        self.assertEqual(CHECK.cortex_target_problems(), [])
+        records = CHECK.fixture_records()
+        #  The two halves of [1860]'s evidence: the hosted fixture selects no
+        #  target, and R7.40's sibling selects the one it names.
+        self.assertTrue(CHECK.selects_cortex_target(
+            records["negative/r740-cortex-name-declared-nowhere"][1]))
+        self.assertFalse(CHECK.selects_cortex_target(
+            records["negative/name-declared-nowhere"][1]))
+
+    def test_a_probe_may_only_attribute_what_a_runner_runs(self):
+        titles = CHECK.construct_titles() or ()
+        self.assertEqual(CHECK.cortex_probe_problems(titles), [])
+        probe, = CHECK.cortex_probe_records()
+        for change, fragment in (
+                ({"source": "environments/cortex-m/probes/nothing.ldn"},
+                 "names a source that is not here"),
+                ({"runner": "environments/cortex-m/devices.py"},
+                 "and it does not name it"),
+                ({"targets": "linux-x86-64"},
+                 "is Cortex-M evidence and says otherwise"),
+                ({"evidence": "   "}, "attributes evidence and says none"),
+                ({"constructs": "9999"}, "which no document defines")):
+            broken = dict(probe, **change)
+            with unittest.mock.patch.object(
+                    CHECK, "cortex_probe_records", lambda: [broken]):
+                self.refused([message for _, _, message
+                              in CHECK.cortex_probe_problems(titles)], fragment)
 
 
 if __name__ == "__main__":

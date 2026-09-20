@@ -70,7 +70,12 @@ module.exports = grammar({
     [$.import_declaration],
     [$.declaration_reference, $.indexed_expression],
     [$._type, $.type_application],
-    [$.routine_formals, $.parameters],
+    [$.encoded_union, $.declaration_reference],
+    [$._type, $.encoded_union],
+    [$.distinct_body, $.declaration_reference],
+    [$.type_application, $._union_member],
+    [$.field, $.parameter],
+    [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement],
     [$.routine_formals],
     [$.parameters],
     [$.labeled_arguments, $.arguments],
@@ -79,7 +84,6 @@ module.exports = grammar({
     [$.struct_body],
     [$.concept_body],
     [$.destructured_field, $.indexed_expression],
-    [$.destructured_field, $.indexed_expression, $.declaration_reference],
     [$.indexed_expression, $.declaration_reference, $.measurement_expression],
     [$.indexed_expression, $.measurement_expression, $.of_keyword],
     [$.measurement_expression, $.of_keyword],
@@ -88,21 +92,21 @@ module.exports = grammar({
     [$.indexed_expression, $.measurement_expression],
     [$.call_expression],
     [$.labeled_application],
-    [$.signature, $.declared_signature],
     [$.named_return],
     [$.variant_part],
     [$.block, $._statement],
-    [$._statement, $._primary_expression],
     [$._value_statement, $._primary_expression],
     [$._type, $.indexed_expression],
-    [$.binding, $.condition_declaration],
-    [$.condition_declaration, $.indexed_expression],
-    [$.condition_declaration, $.indexed_expression, $.declaration_reference],
-    [$.condition_declaration, $.indexed_expression, $.declaration_reference, $.measurement_expression],
-    [$.condition_declaration, $.indexed_expression, $.measurement_expression, $.of_keyword],
-    [$.binding, $.loop_statement, $.while_statement, $.for_statement],
-    [$.identifier_list, $.binding, $.type_declaration, $.concept_declaration, $.function_declaration, $.loop_statement, $.while_statement, $.for_statement],
-    [$.identifier_list, $.binding, $.type_declaration, $.concept_declaration, $.function_declaration],
+    [$.identifier_list, $.type_declaration, $.concept_declaration, $.function_declaration],
+    [$.identifier_list, $.function_declaration],
+    [$.identifier_list, $.field_value],
+    [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.field_value],
+    [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.labeled_block],
+    [$.identifier_list, $.type_formal],
+    [$.identifier_list, $.destructured_field, $.field_value],
+    [$.identifier_list, $.destructured_field],
+    [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.destructured_field, $.field_value],
+    [$.identifier_list, $.variant_part],
   ],
 
   rules: {
@@ -193,12 +197,14 @@ module.exports = grammar({
       alias('option', $.identifier),
       alias('as', $.identifier),
       alias('link', $.identifier),
+      alias('distinct', $.identifier),
     ),
 
+    // D233: several names may share one binding, with one written type.
     binding: $ => seq(optional($.link_symbol), choice(
       seq(
         optional('mut'),
-        field('name', $._declaration_name),
+        field('name', $.identifier_list),
         ':',
         field('type', $._type),
         optional(seq('=', field('value', $._expression))),
@@ -247,10 +253,13 @@ module.exports = grammar({
       field('name', $._declaration_name), ':', 'type',
       choice(
         seq('=', choice($.atom_union, $.encoded_union, $.range_subtype,
-                         $._type, $.struct_body)),
-        seq($.type_formals, '=', choice($._type, $.struct_body)),
+                         $.distinct_body, $._type, $.struct_body)),
+        seq($.type_formals, '=', choice($.atom_union, $.encoded_union,
+                         $.distinct_body, $._type, $.struct_body)),
       ),
     ),
+    // [0650]/[1795]: `distinct` makes a type that is not the type it names.
+    distinct_body: $ => seq('distinct', field('type', $._type)),
     // [0660]: a scalar with a range it must stay in.
     range_subtype: $ => seq(
       field('base', $._type), 'range',
@@ -304,16 +313,21 @@ module.exports = grammar({
       $._union_member,
       repeat(seq('|', $._union_member)),
     ),
-    _union_member: $ => choice($.declaration_reference, $.pointer_type),
-    encoded_union: $ => prec(1, seq(
+    _union_member: $ => choice($.declaration_reference, $.type_application, $.pointer_type),
+    encoded_union: $ => prec.dynamic(1, seq(
       optional(choice($.scalar_type, $.identifier)), '(', $.encoded_member,
       repeat(seq('|', $.encoded_member)), ')',
     )),
     encoded_member: $ => seq($.declaration_reference, '=', $.exclusion_expression),
 
+    // [1795]: the parenthesized inline field list and the `struct ... end`
+    // block are the same declaration body.
     struct_body: $ => seq(
       optional($.c_layout),
-      'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
+      choice(
+        seq('struct', repeat1(choice($.field, $.variant_part)), 'end', optional($._declaration_name)),
+        seq('(', commaSep1($.field), ')'),
+      ),
     ),
     // Keep the existing node name for editor-query compatibility; the
     // contextual policy also admits explicit packed carrier storage.
@@ -325,7 +339,8 @@ module.exports = grammar({
       optional(seq(',', $.scalar_type)),
       ')',
     ),
-    field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type),
+    // D233: several field names may share one type, `at` position included.
+    field: $ => seq(field('name', $.identifier_list), ':', field('type', $._type),
       optional(seq('at', $._expression,
                    optional(seq('..', $._expression))))),
     variant_part: $ => seq(
@@ -371,22 +386,27 @@ module.exports = grammar({
     parameters: $ => commaSep1($.parameter),
     // `caller` marks D192's site parameter and is not reserved, so a
     // parameter may also be named caller.
+    // D233: several parameter names may share one convention and type.
     parameter: $ => choice(
-      seq('caller', field('name', $._declaration_name), ':', field('type', $._type)),
+      seq('caller', field('name', $.identifier_list), ':', field('type', $._type)),
       seq(field('name', alias('caller', $.identifier)), ':', field('type', $._type)),
       seq(
         optional('escaping'),
         optional($.parameter_convention),
-        field('name', $._declaration_name), ':', field('type', $._type),
+        field('name', $.identifier_list), ':', field('type', $._type),
       ),
     ),
     parameter_convention: _ => choice('in', 'inout', 'sink'),
     returns: $ => choice(
       seq('(', optional(commaSep1($.named_return)), ')'),
       'none',
+      // D231's distinct `noreturn` return form (R6.70).
+      'noreturn',
     ),
+    // D233: several return names may share one type; a comma reaching ':'
+    // instead starts the next named return rather than extending `from`.
     named_return: $ => seq(
-      field('name', $._declaration_name), ':', field('type', $._type),
+      field('name', $.identifier_list), ':', field('type', $._type),
       optional(seq('from', commaSep1($.identifier))),
     ),
     errors: $ => prec.right(seq(
@@ -425,6 +445,7 @@ module.exports = grammar({
       $.if_expression,
       $.match_expression,
       $.bare_block,
+      $.labeled_block,
     )),
 
     // R4.10's loops, [1130]-[1190]. D225 reserves their control words
@@ -515,6 +536,11 @@ module.exports = grammar({
     ),
     match_binding: $ => seq(optional('inout'), field('name', $._declaration_name)),
     bare_block: $ => prec.dynamic(4, seq('begin', optional($.block), 'end')),
+    // D234: a labelled bare block is left by a `break` naming it.
+    labeled_block: $ => prec.dynamic(4, seq(
+      field('label', $.identifier), ':', 'begin', optional($.block),
+      'end', field('end_label', $.identifier),
+    )),
 
     place: $ => $.indexed_expression,
 
@@ -641,8 +667,10 @@ module.exports = grammar({
       optional(seq(field('operator', choice('..', '..<')), field('upper', $._expression))),
       ']',
     ),
+    // 'distinct' remains an identifier everywhere `distinct_body` does not
+    // meet it, including a bare reference to a type named `distinct`.
     declaration_reference: $ => seq(
-      $.identifier, repeat($.member_selection),
+      choice($.identifier, alias('distinct', $.identifier)), repeat($.member_selection),
     ),
 
     call_expression: $ => choice(

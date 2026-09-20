@@ -9244,7 +9244,7 @@ caching, parallel workload scheduling and Darwin resume remain separate work.
 
 | Intake and inherited source | Disposition | Owner, trigger and completion obligation |
 |---|---|---|
-| R551-17: m1, M14, N5/N7/N8, follow-up coverage notes | Code-only negatives do not prove wording/spans; inventory equality does not prove semantic coverage after deleting and regenerating fixtures. | Scheduled R7.40, with current claim repair in R551-05. At each diagnostic or coverage change, add the exact oracle needed for that claim and retain derivation provenance; no blanket golden regeneration or indiscriminate replay. |
+| R551-17: m1, M14, N5/N7/N8, follow-up coverage notes | Code-only negatives do not prove wording/spans; inventory equality does not prove semantic coverage after deleting and regenerating fixtures. | Implemented by R7.40 and closed by its exact acceptance and delivery binding, with current claim repair in R551-05. Each diagnostic and coverage change R7.40 made gained the exact oracle that claim needs, and its derivation provenance is recorded with it; no blanket golden regeneration or indiscriminate replay was performed, and none is authorized by this closure. |
 | R551-18: m6, N15/N19 | The bounded parser mutation/truncation tests now run in accepted suites. This is superseded historical evidence debt, not an unrun current parser campaign. | R551-05 closes the cross-reference with exact transcript and registered-test evidence. Preserve the original development record; no additional campaign is needed to prove an already recorded execution. |
 | R551-19: m7 | Broad driver mutation coverage remains absent; parser mutation is not whole-pipeline fuzzing. | Release readiness. Before robustness/production claims or a deliberately scoped fuzz project. Define fixed seeds, stage/target reach, resource limits, crash classification and retained minimal reproducers before running bounded campaigns. No unbounded campaign is authorized here. |
 | R551-20: A4/M11, J112 | Ordinary/fake host-failure controls do not establish all native device/capture failure paths or exhaustion behavior. | Release readiness. Before claiming those native failure guarantees. Use controlled fault injection with cleanup and diagnostic oracles on each applicable host; keep R551-02's checker ownership injection separate. No destructive device exhaustion or system-wide resource experiment. |
@@ -9262,7 +9262,7 @@ caching, parallel workload scheduling and Darwin resume remain separate work.
 | Intake | Work retained | Scheduling and closure |
 |---|---|---|
 | R551-29 | Range-subtype composition and references (D188), multi-atom pointer unions (D189), shared-name binding/field/parameter/result forms, u128/i128 and f16 (D190). | Dispositioned by R7.20 and closed by its exact acceptance and delivery binding. D233 implements shared names and D235 the several-atom pointer union on all three targets with ABI, GDB/LLDB and diagnostics evidence; D236 records range-subtype composition as a permanent boundary; D237 amends [0150] and [0170] and transfers u128, i128 and f16 to Language evolution with a program that needs them as the trigger. The per-target cost R7.20 measured is recorded there, including the Cortex-M0 four-word plan. |
-| R551-30 | Repeated follow-on diagnostics after refused selected imports. | Scheduled R7.40 after its existing dependencies. Retain the original import refusal and suppress only dependent reports; exact diagnostics and an independent valid-use control prove completion. |
+| R551-30 | Repeated follow-on diagnostics after refused selected imports. | Implemented by R7.40 and closed by its exact acceptance and delivery binding. The original import refusal and its exact report are retained and only the dependent reports are suppressed; two recorded fixtures pin the exact diagnostics and a pre-existing rooted selected-import program is the independent valid-use control. |
 | R551-31 | Packed encodings, concurrency memory model, device/startup/backend/core behavior, the named `noreturn` refusal and complete prototype 1. | Implemented through R6.100's exact milestone binding for the selected profile; broader tooling/library/debugger-presentation limits remain R551-33/34/26. R6.10 first selects reproducible CPU/peripheral lanes; R6.50/R6.60 own target reach, map and startup behavior; R6.70 owns `noreturn`. R6.80 owns checked-in device fixtures, not an unbuilt general SVD generator. No Cortex-M implementation enters R5.51. |
 | R551-32 | Stable separate compilation/interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting (inherited B3). | Scale and self-hosting. Activate at successor planning after the current roadmap endpoint or an explicit scope decision. Preserve the tested seams, whole-program behavior and complete interface identity; no serialized IR freeze or self-hosting implementation now. |
 | R551-33 | Package acquisition/version solving, manifests/locks, naming authority, deterministic roots, generators/SVD tooling and sandboxing (B4/B6/D3/D6). The binding generator's four-file replacement recovers failures but is not atomic for concurrent readers; compiler path preflight does not prevent concurrent filesystem replacement. | Companion tool and ecosystem. Before acquisition/general generation or concurrent build consumers are offered. Specify declared inputs/outputs, immutable publication/consumption, reproducible roots and single-package-version conflicts; preserve existing rollback/refusal evidence. R3.10/R4.30/R6.60/R6.80 keep their thin in-scope responsibilities. No adversarial filesystem guarantee follows from current preflight. |
@@ -9360,7 +9360,7 @@ activation condition. R7.30 and R7.70 preserve this ledger through phase handoff
 | R551-14 | supported-limit | successor | Scale and self-hosting | Repeated interrupted Darwin runs justify resume design | Unchanged source/tools/policy, verified step artifacts and failed-step/interruption refusal. |
 | R551-15 | supported-limit | limit | Scale and self-hosting | Explicit maintainer decision to revisit deferred Nix CI | Native builders, SDK/debug permissions and cache provenance; shell checks never replace acceptance. |
 | R551-16 | observation | successor | Scale and self-hosting | Stage/environment replacement or a concrete obstructed change | Behavioral seams, strict warnings, diagnostics/IR/pin agreement and demonstrated dead-interface removal. |
-| R551-17 | supported-limit | scheduled | R7.40 | Each diagnostic/coverage change and the R7.40 gate | Exact claim-appropriate oracles and derivation provenance; R551-05 repairs present claims. |
+| R551-17 | supported-limit | implemented | R7.40 | Each diagnostic/coverage change and the R7.40 gate | Every change R7.40 made carries the oracle its own claim needs. Two recorded import fixtures pin one report with its wording, span and related label where three and two follow-on reports stood; two more pin [1350]'s corrected note and the report [1580]'s refused categories actually make; and each of the four Cortex-M verdicts is byte-compared with the hosted runs of the same source. Inventory equality proves none of it and is not offered as proof. |
 | R551-18 | evidence-gap | superseded | R5.51 | Current evidence reconciliation in R551-05 | Accepted R5.50 parser registrations and debug/release transcripts; broad driver fuzzing stays R551-19. |
 | R551-19 | evidence-gap | successor | Release readiness | Before robustness/production claims or an explicitly scoped fuzz project | Fixed seeds, bounded resources, stage/target coverage, crash classes and minimal reproducers. |
 | R551-20 | evidence-gap | successor | Release readiness | Before claims covering native device/capture failures | Controlled host-specific fault injection with cleanup and diagnostic oracles. |
@@ -9373,7 +9373,7 @@ activation condition. R7.30 and R7.70 preserve this ledger through phase handoff
 | R551-27 | supported-limit | limit | Release readiness | Requested driver or distribution expansion | Pinned native producer/consumer, packaging and identity evidence before widening support. |
 | R551-28 | observation | watch | Language evolution | Valid counterexample or explicit semantic proposal | Present-contract defects return to implementation owner; semantic changes need specification and tests. |
 | R551-29 | normative | implemented | R7.20 | Exact R7.20 acceptance and delivery binding | D233/D235 implemented on all three targets, D236's recorded boundary and D237's tour-amended transfer of u128, i128 and f16 to Language evolution. |
-| R551-30 | defect | scheduled | R7.40 | After existing R7.40 dependencies | Original import refusal, suppressed dependent reports and exact diagnostics with independent valid use. |
+| R551-30 | defect | implemented | R7.40 | After existing R7.40 dependencies | A refused selected import is recorded in the file's own import scope, so the visibility verdict and its exact report stand while no later use of the name repeats it. `Visible` is unchanged, so no program's acceptance moves. `negative/r740-refused-private-import-adds-no-cascade` and `negative/r740-missing-import-adds-no-cascade` pin the single report byte for byte, and `runtime/import-alias-selected-identities`, written for the module slice and not for this repair, still selects twelve members, uses each repeatedly and executes. |
 | R551-31 | normative | implemented | R6.100 | Exact R6 milestone acceptance and delivery binding | R6.10-R6.100 selected CPU/peripheral, packed/concurrency, map/startup/backend/core/noreturn, complete prototype 1 and bounded source/resource evidence; R551-33/34 and R551-26 limits remain separate. |
 | R551-32 | observation | successor | Scale and self-hosting | Successor planning after R7.70 or explicit scope decision | Tested seams and complete interface/package identity; preserve whole-program semantics. |
 | R551-33 | supported-limit | successor | Companion tool and ecosystem | Before acquisition/general generation or concurrent build consumers | Declared inputs/outputs, immutable publication, reproducible roots and single-package-version conflicts. |
@@ -11995,7 +11995,7 @@ means the generated row's evidence is the whole explanation.
 | `[1240]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1250]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1260]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[1270]` | compiled | all | cortex-m | R2.60 | R7.40 | Hosted compile-time rule audited by R4.90: conformance keys include their input tuples. No Cortex-M source verdict exists; the frontend rule is target-neutral, and R7.40 decides whether that closes the target row or adds a verdict. |
+| `[1270]` | compiled | all | none | R2.60 | none | Hosted compile-time rule audited by R4.90: conformance keys include their input tuples. R7.40 supplies the Cortex-M verdict rather than arguing the rule is target-neutral: `negative/r740-cortex-conformance-input-keys` compiles the colliding program for `cortex-m0` and records the same L0317 report, byte for byte, as the two hosted targets make. |
 | `[1280]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1290]` | executed | all | none | R2.40 | none | matrix evidence; R2.40 records the named type-parameter source-form boundary |
 | `[1300]` | executed | all | none | R2.40 | none | matrix evidence |
@@ -12003,12 +12003,12 @@ means the generated row's evidence is the whole explanation.
 | `[1320]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1330]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1340]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[1350]` | executed | all | none | R2.40 | R7.40 | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, but the checker's note says R2.40 enables them though R2.40 is complete: R7.40 corrects the note. `set(X)`, which D238 withdrew, meets this refusal as an unresolved application. |
+| `[1350]` | executed | all | none | R2.40 | none | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, and R7.40 corrected the note that promised them from the finished R2.40: it now says R2.40 records this source-form boundary, which `negative/r740-parameterized-application-boundary` pins byte for byte. `set(X)`, which D238 withdrew, meets this refusal as an unresolved application. |
 | `[1360]` | executed | all | none | R3.20 | none | matrix evidence |
 | `[1370]` | executed | all | none | R2.80 | none | matrix evidence |
 | `[1380]` | executed | all | none | R2.80 | none | matrix evidence |
 | `[1390]` | executed | all | none | R2.80 | none | matrix evidence |
-| `[1400]` | compiled | all | cortex-m | R2.80 | R7.40 | Hosted compile-time rule audited by R4.90: heterogeneous implicit boxing is refused. No Cortex-M source verdict exists; R7.40 decides whether the target-neutral frontend rule closes that target. |
+| `[1400]` | compiled | all | none | R2.80 | none | Hosted compile-time rule audited by R4.90: heterogeneous implicit boxing is refused. R7.40 supplies the Cortex-M verdict: `negative/r740-cortex-inferred-element-mismatch` records the same L0301 report there, byte for byte, as the two hosted targets make. |
 | `[1410]` | executed | all | none | R3.10 | none | matrix evidence |
 | `[1420]` | executed | all | none | R3.10 | none | matrix evidence |
 | `[1430]` | executed | all | none | R4.30 | none | D201 aliases retain file-local namespace lookup |
@@ -12026,10 +12026,10 @@ means the generated row's evidence is the whole explanation.
 | `[1550]` | advisory | none | none | none | none | Toolchain policy: Landin keeps its own native backends, not LLVM or C. R1.90 left the row bare because no fixture can discriminate it; four later claims were D211, D229 and D230 evidence and R7.10 removed them. Its concrete obligations are other rows' and lanes': the [1570] and [1650] conventions, [1990] firmware, the quality determinism rebuild and the native debugger frame checks. |
 | `[1560]` | executed | all | none | R4.30 | none | Compiler facts and assertions, `linker.library`, atomics, volatile and register operations and Cortex-M assembly and placement are matrix evidence; other tool operations meet named refusals. D240, an R7.20 decision, withdraws the `compiler` vector intrinsics in favour of [0590]'s element-wise operators, pinned by `negative/r720-vector-intrinsic-withdrawn`. |
 | `[1570]` | executed | all | none | R3.50 | none | `extern(c)`, `extern(interrupt)` and `extern(naked)` are matrix evidence; the derived driver's interrupt handlers execute on Cortex-M. `aapcs`, `sysv`, `win64`, Fortran and Swift are named as room for later conventions, not described constructs. |
-| `[1580]` | executed | hosted | none | R4.40 | R7.40 | The hosted C boundary is matrix evidence under D203--D205. The categories the paragraph lists are refused explicitly, a recorded boundary, but the checker note says R4.40 enables them though R4.40 is complete: R7.40 corrects the note. Cortex-M C signatures are not enabled, an R6.20 restriction. |
+| `[1580]` | executed | hosted | none | R4.40 | none | The hosted C boundary is matrix evidence under D203--D205. R7.40 found the checker's [1580] refusal entry unreachable and removed it: the categories the paragraph lists are refused where they are written, as the C boundary's own L0301 naming [1580] and listing them, which `negative/r740-c-category-boundary` pins byte for byte. Cortex-M C signatures are not enabled, an R6.20 restriction that is R730-07's. |
 | `[1590]` | executed | hosted | none | R4.30 | none | Hosted archive linkage: Linux runtime evidence and Darwin's native archive-selection replacement under R4.30 and R5.50; Cortex-M refuses the general C surface. |
 | `[1600]` | executed | hosted | none | R4.40 | none | Hosted C definitions from R4.40 are matrix evidence; Cortex-M C signatures are restricted. |
-| `[1610]` | executed | all | cortex-m | R4.40 | R7.40 | Native and C link names are matrix evidence on both hosts. Cortex-M module-data and function symbols execute in R6.60's firmware probe outside the fixture corpus, so no fixture claims them there: R7.40 attributes that evidence or adds a claim. |
+| `[1610]` | executed | all | none | R4.40 | none | Native and C link names are matrix evidence on both hosts. R7.40 attributes the Cortex-M evidence that executes outside the fixture corpus: R6.60's `firmware-machine` probe gives a module datum and a native function their link names, and its QEMU session resolves both written symbols in the linked image, recorded in `compiler/tests/cortex-m/probes.json`. The `extern(c)` half stays disabled there by R6.20 and is R730-07's. |
 | `[1620]` | executed | all | none | R6.30 | Broader standard library | D227 scalar atomics, orderings and barriers are matrix evidence on all three targets. D240, an R7.20 decision, transfers the wrapper type to Broader standard library under R551-34, as the paragraph now says. |
 | `[1630]` | executed | cortex-m | none | R6.60 | none | Cortex-M0 `assembler.block` under D229 and D230 executes in the derived driver and firmware lanes; hosted targets refuse machine assembly by design. |
 | `[1640]` | executed | cortex-m | none | R6.60 | none | Cortex-M placement, vectors and keep under D229 execute in the derived driver; hosted targets refuse placement by design. |
@@ -12041,7 +12041,7 @@ means the generated row's evidence is the whole explanation.
 | `[1700]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1710]` | advisory | none | none | none | none | The admission test for a new language feature, a design-process rule. It adds no source behavior; R7.30 dispositioned the parked and watch items it governs in the inherited register. |
 | `[1720]` | executed | all | none | R2.90 | none | matrix and guarantee evidence; its stated non-guarantees execute |
-| `[1730]` | compiled | all | cortex-m | R4.10 | R7.40 | `positive/range-subtypes`' recorded IR shows a range-subtype value carrying its proof with no check under D188, a hosted compile-time rule now in R4.90's audited register; R7.10 dropped two claims that could not observe elision. No Cortex-M verdict exists; R7.40 decides whether the target-neutral IR closes that target. |
+| `[1730]` | compiled | all | none | R4.10 | none | `positive/range-subtypes`' recorded IR shows a range-subtype value carrying its proof with no check under D188, a hosted compile-time rule in R4.90's audited register; R7.10 dropped two claims that could not observe elision. R7.40 supplies the Cortex-M verdict on that same fixture, which now also records an accepted `cortex-m0` compilation of its own program. That verdict is acceptance and not a second recorded IR because the elision is a property of the target-neutral IR, which no target selects, and a duplicate program would have added a duplicate IR record for nothing. |
 | `[1740]` | executed | all | none | R3.10 | none | matrix evidence |
 | `[1750]` | executed | all | none | R1.20 | none | matrix evidence |
 | `[1760]` | executed | all | none | R1.20 | none | matrix evidence |
@@ -12055,7 +12055,7 @@ means the generated row's evidence is the whole explanation.
 | `[1830]` | executed | all | none | R1.30 | none | matrix evidence |
 | `[1840]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[1850]` | executed | all | none | R1.50 | none | matrix evidence |
-| `[1860]` | compiled | all | cortex-m | R1.50 | R7.40 | Hosted compile-time rule audited by R4.90. No Cortex-M source verdict exists; R7.40 decides whether the target-neutral frontend rule closes that target. |
+| `[1860]` | compiled | all | none | R1.50 | none | Hosted compile-time rule audited by R4.90. R7.40 supplies the Cortex-M verdict: `negative/r740-cortex-name-declared-nowhere` records the same L0201 report for `cortex-m0`, byte for byte, as the two hosted targets make. |
 | `[1870]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[1880]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[1890]` | executed | all | none | R1.60 | none | matrix evidence |
@@ -12472,8 +12472,8 @@ refused recovery form.
 Later discoveries:
 
 A later discovery is a retained limit, watch or observation that an item
-record after R5.51's intake (R6.10-R6.100, R7.10 and R7.20) left without a
-finished owner: a capability an item declined or bounded, an evidence claim it
+record after R5.51's intake (R6.10-R6.100, R7.10, R7.20 and, for R730-22,
+R7.40) left without a finished owner: a capability an item declined or bounded, an evidence claim it
 expressly did not make, or a watch. Handoffs to R6 items that later completed
 are closed by those items and are not repeated, and a selected scope that no
 successor needs to lift, such as the ARMv6-M reference profile or the
@@ -12512,12 +12512,13 @@ record or inherited row whose owner, trigger and completion it joins; and
 | R730-13 | R6.100: source and debug identity selection is matching, not forged-input authentication or protection against concurrent filesystem replacement. | supported-limit | merged | R551-23 | Before stronger provenance or attestation claims | An attestation design with verified restore; the seven negative selections stay mandatory. |
 | R730-14 | R6.40: packed images carry at most 64 bits, array transfers snapshot at most 64 values, and signed, floating, pointer, callback, nested aggregate and variant packed fields are refused. | supported-limit | rejected | R6.40 | None; only an explicit register decision reopening D228 | D228's recorded boundary and its pinned negatives. |
 | R730-15 | R7.10: construct claims remain fixture authors' claims, not all re-read; per-target evidence is derived from committed records rather than replayed; evidence outside fixture metadata is recorded in dispositions. | evidence-gap | merged | R551-17 | Each diagnostic or coverage change and the R7.40 gate | Claim-appropriate oracles and derivation provenance, with the target-applicability register closed at R7.40. |
-| R730-16 | R7.10: Cortex-M source verdicts for [1270], [1400], [1730] and [1860], attributable Cortex-M evidence for [1610]'s link names, and boundary wording for the [1350] and [1580] notes. | evidence-gap | scheduled | R7.40 | R7.40's register closure | A verdict or recorded target-neutral argument for each row, attributed firmware evidence, and notes that name decided boundaries. |
+| R730-16 | R7.10: Cortex-M source verdicts for [1270], [1400], [1730] and [1860], attributable Cortex-M evidence for [1610]'s link names, and boundary wording for the [1350] and [1580] notes. | evidence-gap | implemented | R7.40 | R7.40's register closure | R7.40 supplied a Cortex-M verdict for each of the four compile-time rows instead of arguing target neutrality, attributed [1610]'s link names to R6.60's machine probe through a checked probe record, corrected [1350]'s note to the boundary R2.40 records, and removed [1580]'s unreachable refusal entry in favour of the report the C boundary actually makes. Every row's Cortex-M column is now derived from a run. |
 | R730-17 | R7.20: a call returning a plain pointer cannot fill a several-atom pointer union through an atom `else`; D235 keeps it L0301 because the recovery would need its own lowering, and binding the pointer first and then widening expresses it. | observation | successor | Language evolution | A program that needs a call's recovery to widen into a several-atom pointer union | D235 amended with a recovery lowering that writes the code cell, and positive, negative and runtime evidence on all three targets. |
-| R730-18 | R7.20, measured wider by R7.30: R3.80's structural editor grammar has drifted from the enabled kernel. With the pinned tree-sitter 0.26.9 and the checked-in parser, 48 of the 846 positive, runtime, ABI and `core` sources report an error or missing node, `core/io` and `core/tree` among them: `distinct` and parameterized type declarations, union aliases, inline struct declarations, `noreturn` signatures, a variant-case assignment, D233's shared names and D234's labelled blocks. | defect | scheduled | R7.40 | R7.40's grammar closure | The structural grammar transcribes those forms and R3.80's integration pass parses every positive, runtime, ABI and `core` source without an error node. |
+| R730-18 | R7.20, measured wider by R7.30: R3.80's structural editor grammar has drifted from the enabled kernel. With the pinned tree-sitter 0.26.9 and the checked-in parser, 48 of the 846 positive, runtime, ABI and `core` sources report an error or missing node, `core/io` and `core/tree` among them: `distinct` and parameterized type declarations, union aliases, inline struct declarations, `noreturn` signatures, a variant-case assignment, D233's shared names and D234's labelled blocks. | defect | implemented | R7.40 | R7.40's grammar closure | R7.40 transcribed the missing forms from `spec.md`'s own productions and `./highlight/test.sh --integration` now parses all 846 sources without an error or missing node, with `tree-sitter test` green over seven added corpus cases and the generated parser byte-reproducible under the pinned 0.26.9. That the pass is still run by no gate is R730-22. |
 | R730-19 | R7.20: the lexical highlighters still colour withdrawn or transferred words such as `soa`, `register`, `volatile`, `big`, `little`, `u128` and `f16`. | observation | rejected | R7.30 | None; the tour's design records and the historical findings keep those spellings | The shared vocabulary stays a colour list apart from `check.py`'s legality list, as `highlight/README.md` states. |
 | R730-20 | R7.20: D237 transfers u128, i128 and f16 out of this slice. | parked-watch | successor | Language evolution | A program that needs 128-bit arithmetic or binary16 values | D237's recorded plan on all three targets: software 128-bit fold carriers, register pairs on the hosts and four words on Cortex-M0, compiler-emitted multiplication and division, and f16 through f32 with one rounding and a trapping integer-to-float conversion. |
 | R730-21 | R7.20: D240 transfers the atomic wrapper type out of `core`; Cortex-M0 has no read-modify-write atomics. | parked-watch | merged | R551-34 | A program that needs a portable atomic wrapper | A wrapper over D227's builtins that answers M0's missing read-modify-write explicitly, with consumers and failure oracles. |
+| R730-22 | R7.40: the structural editor grammar's integration pass is the evidence R3.80's exit clause cites, and no acceptance job runs it. Nothing in either native policy invokes `highlight/test.sh`, and the acceptance environment has no `node`, so its tree-sitter block would skip and still report success. R7.40 made `--integration` refuse rather than skip, which stops a false green, but a check nobody runs still cannot fail. | evidence-gap | successor | Companion tool and ecosystem | Before the editor packages are offered as gated artifacts, or when the acceptance environment admits a pinned tree-sitter CLI | The corpus pass runs in a named job that fails when a source stops parsing, with the CLI pinned in `environments/pins.sh` and its provenance in the third-party inventory; `--integration`'s refusal to skip stays mandatory. |
 <!-- /r730-ledger -->
 
 Mechanical checks:
@@ -12604,7 +12605,7 @@ binding. With it R7.40 is the next dependency-ready item.
 
 ### R7.40 — Close all evidence registers
 
-Status: planned
+Status: complete
 Depends on: R2.90, R7.20, R7.30
 
 Close construct, grammar, guarantee, diagnostic, conformance/evidence,
@@ -12644,6 +12645,403 @@ was open describe their individual development batches.
 Exit evidence: `spec.md` contains lexical, precedence, statement and expression
 grammar for every construct the tour still describes; no matrix contains a gap, stale
 test, unowned target or contradictory disposition.
+
+Completion is bound to the exact-revision routine acceptance and delivery
+below. Development runs and failed or interrupted candidates cannot supply that
+binding. R2.90, R7.20 and R7.30 are complete.
+
+Repository and inherited evidence audit:
+
+The starting checkout was clean at accepted R7.30
+`10b55f6ef2aff39ffd7bc3c74d9428a2026f5af6`, tree
+`8bd9027882631fa1d61ac0487fb2e82f83e5120d`, which is also canonical main. Its
+annotated approval object `7a31a79fed9e74b48841de1314f7074e26c4bc8c` binds
+Linux routine run `20260919T162848Z-b43dbeea786e` at routine scope without
+debugger coverage, all five jobs passed, and Darwin run
+`20260919T162848Z-1d6f28da40a3` to archive SHA-256
+`2e8cd8c48fb794dabe0c9c1fe12d5111914f89e0d11ee5b448aac0debb12135d` on both
+sides; the tag's annotation equals that recorded approval. The committed policy
+was `d57609a9`. Canonical and GitHub namespaces matched at 54 rows, 27 logical
+refs excluding HEAD plus 26 peeled annotated tags, with no publication lock.
+Guarded Pages 1891914, mirror 1891915 and tag jobs 1891916/1891917 succeeded,
+and all 25 rendered pages on both domains matched verified rendering byte for
+byte; the comparison skips the macOS AppleDouble `._` members, which are not
+pages.
+
+Decision method:
+
+Each row was decided from evidence rather than from the roadmap's own
+description of it. Where the routing offered a recorded argument instead of a
+verdict, the verdict was measured and supplied, because an argument about the
+compiler's stage order is weaker than a run and this item's charter is to close
+evidence registers. Where the evidence exists but outside the fixture corpus,
+it is attributed to the runner that produces it and held there mechanically.
+Where a note was wrong, the tour and specification text it cites decided the
+replacement wording.
+
+The four compile-time rows: Cortex-M verdicts supplied, not argued:
+
+[1270], [1400], [1730] and [1860] are `compiled` rows with `all` targets whose
+Cortex-M column was empty, because a compile-time verdict had no way to be
+recorded for a target the corpus reaches only through runtime and ABI
+fixtures. The seven fixtures those rows cite were compiled for each of
+`linux-x86-64`, `darwin-arm64` and `cortex-m0`, and all three produce a
+byte-identical verdict: the three refusals repeat their code, message, span
+and notes exactly, and the two accepted programs are accepted with no output.
+The rows therefore record a verdict.
+
+The mechanism was already here and needed no new lane. Five negative fixtures
+select `--target=cortex-m0` in their own `args:`, and the ordinary recorded
+runner compiles them for that target on every host, because a verdict reached
+before emission needs no Cortex toolchain. R7.40 adds
+`negative/r740-cortex-conformance-input-keys`,
+`negative/r740-cortex-inferred-element-mismatch` and
+`negative/r740-cortex-name-declared-nowhere`, each carrying the same source as
+its hosted sibling and a recorded Cortex-M verdict, and gives
+`positive/range-subtypes` a recorded Cortex-M verdict of its own rather than a
+fourth fixture: a copied program would have added a second recorded IR and a
+second token record for one target claim, and `lowering.ir` is unchanged
+because this item lowers nothing new. [1730]'s verdict is an acceptance and not
+a second recorded IR, because the elision its row is about belongs to the
+target-neutral IR, which no target selects.
+
+That claim is held to being a run. `check.py` now counts a compile-time
+fixture's Cortex-M verdict only when the fixture both names `cortex-m` among
+its targets and selects `--target=cortex-m0`, and `cortex_target_problems`
+refuses either half alone. Without that rule the column could be filled by
+editing a metadata line, which is exactly what R551-17 says proves nothing.
+
+The rule immediately found five claims already in the register that its
+fixture's own arguments contradict. `negative/r630-m0-rmw`,
+`negative/r630-m0-wide`, `negative/r640-m0-register64`,
+`negative/r660-materialization` and `negative/shared-link-symbol-duplicates`
+each select `--target=cortex-m0` while declaring
+`targets: linux-x86-64, macos-arm64`. Each was measured against the hosts it
+claimed. The first three are *accepted* there, on both of them, so the register
+recorded hosted refusal evidence that does not exist. `r660-materialization`
+is refused on a host too but for a different reason, an L0301 placement
+conflict rather than the L0505 materialization bound its fixture records, so
+its recorded verdict is reached for `cortex-m0` and nowhere else.
+`shared-link-symbol-duplicates` is refused identically on a host, so its hosted
+claim was not false, only unrun: its `expect:` takes precedence and the
+recorded run is the Cortex one. All five now declare `targets: cortex-m`, which
+is the target whose verdict they actually record. This is a claim correction:
+no program, verdict or oracle changes, and no other row lost evidence.
+
+[1610]: Cortex-M link names attributed:
+
+[1610] is an `executed` row whose Cortex-M column was empty for a different
+reason: every ABI fixture claiming it is a `restriction` in the Cortex corpus,
+because R6.20 keeps the general C surface disabled there, and the firmware
+driver does not exercise it — the driver's sources write `link(align:)`,
+`link(keep)`, `link(vector:)` and `link(section:)`, which are [1640]'s
+placement forms, and never `link(symbol:)`.
+
+The evidence exists in R6.60's machine probe.
+`environments/cortex-m/probes/firmware-machine.ldn` gives a module datum the
+link name `assembly_data` and a native function the link name `worker`, and
+the QEMU session in `environments/cortex-m/firmware.py` resolves both written
+spellings in the linked image: it breaks at `*worker` and reads
+`*(unsigned*)&assembly_data` as 18 before the body and 99 after it. Those are
+the link symbols and not the Landin names, so a dropped or wrong symbol fails
+the run. R7.40 records that in `compiler/tests/cortex-m/probes.json`, which
+`check.py` reads exactly as it reads the firmware driver's own record, and
+holds each probe to an existing source, an existing runner that names that
+source, Cortex-M targets, non-empty attributed evidence and constructs a
+document defines. R7.10 kept evidence of this kind in dispositions rather than
+in the target columns, which is what left this row with no way to be counted;
+naming the runner is the price of counting it. [1610]'s `extern(c)` half stays
+disabled on Cortex-M by R6.20 and remains R730-07's.
+
+[1350] and [1580]: the two notes:
+
+[1830] forbids a note that promises a construct from an item that has
+finished, and these were the last two that did.
+
+[1350]'s note said `ROADMAP.md R2.40 is where it is enabled` of a malformed
+parameterized application. The tour's own sentence is that applications "are
+fully applied and positional", so a fixed integer where a type formal stands
+is that rule's permanent source boundary, which D135 recorded in R2.40. The
+note now reads `ROADMAP.md R2.40 records this source-form boundary`, the same
+phrase R7.20 gave its six siblings, and `check.py` reads it as a boundary
+rather than a promise. `negative/r740-parameterized-application-boundary` pins
+the whole report byte for byte.
+
+[1580] turned out to be a different defect. Its entry in the checker's refusal
+table, `External_C_ABI`, is declared and raised nowhere in the compiler: no
+program reaches it, so the note promising the finished R4.40 was never read by
+anyone. Meanwhile the paragraph's own promise, that the listed categories are
+"refused explicitly rather than guessed", is kept elsewhere and exactly — a
+by-value array, a slice, a native struct or a wide scalar in an `extern(c)`
+signature is L0301, "this signature is not representable by the selected
+target's native C ABI", with a note that names [1580] and lists the categories.
+R7.40 removes the unreachable entry, as R7.20's D235 removed the tagged-pointer
+entry, and `negative/r740-c-category-boundary` pins the report that is actually
+made. The two refusal tables now hold nineteen entries and none of them is
+`pending`. No diagnostic code changed, and no program's verdict moved.
+
+The diagnostic-recovery repair, R551-30:
+
+This is the item's only compiler work, and it changes what is said and not what
+is accepted. A selected import of a private or absent member is refused at the
+import, correctly; but neither refusal branch recorded anything, so the name
+kept no continuation identity, `Landin.Resolution.Visible` went on answering
+that it resolves to nothing, and every later use of it was reported again as a
+misspelling. Measured before the repair: a private member used three times
+produced its L0202 and then three L0201 reports, and an absent member used
+twice produced its L0201 and then two more.
+
+The type checker already had the answer one stage later — `Ill_Typed` exists
+"so that a parent declines to complain twice" — and the parser one stage
+earlier, where a hole poisons every node above it. The resolver now has it too.
+`Landin.Resolution` gains `Refuse_Import` and `Import_Refused` over a second
+map, kept apart from `Imports` so that `Has_Import` keeps meaning exactly what
+it meant, a name an import successfully gave to something, and no
+duplicate-import verdict moves. Both refusal branches record the name, and the
+plain unresolved-name report declines to fire for a name this file's import
+scope has already answered for. `Visible` is deliberately unchanged: the name
+does resolve to nothing, which is true, so no program's acceptance changes and
+the refusal and its exit status stand.
+
+After the repair each program produces exactly one report, unchanged in
+wording, span and related label. `negative/r740-refused-private-import-adds-no-cascade`
+and `negative/r740-missing-import-adds-no-cascade` are recorded cases, so they
+pin the report's bytes and not merely its code: the private one keeps its
+secondary label at the library's undecorated declaration, and a returning
+cascade would add lines that no longer match. A private *type* import never
+cascaded, because a type reference is left to the checker and the checker does
+not run once resolution has failed; that is recorded here rather than claimed
+as repaired, and a selected import from a module that does not exist never
+reached the resolver at all: L0006 stops the compilation first. The independent
+valid-use control is
+`runtime/import-alias-selected-identities`, which was written for the module
+slice and not for this repair: it selects twelve members, uses each repeatedly
+through generics, concepts, errors, variant cases and mutable module storage,
+and still executes to status 42.
+
+The structural editor grammar, R730-18:
+
+R730-18's measurement was reproduced at the accepted base before anything was
+changed, with the pinned tree-sitter 0.26.9 and the checked-in parser: 846
+positive, runtime, ABI and `core` sources, 48 of them reporting an error or
+missing node, `core/io` and `core/tree` among them. The missing forms were
+transcribed from `spec.md`'s own productions, which is the authority the editor
+grammar has none of its own against:
+
+- `distinct_body ::= "distinct" type` [1795], wired into both branches of a
+  type declaration, plain and parameterized.
+- `type_application ::= declaration_reference "(" type_argument ...` [1795],
+  both as a declaration body and, which was separately missing, as a
+  `union_member ::= declaration_reference | type_application | pointer_type`.
+- `struct_body`'s parenthesized inline field list [1795], with `layout(...)`
+  applying to it as much as to the block form.
+- `returns ::= ... | "none" | "noreturn"` [1800], D231's form.
+- `identifiers ::= identifier ("," identifier)*` [1790] in a binding, field,
+  parameter and named return, which is D233's shared name. Type and fixed
+  formals, condition bindings, functions and variant parts take one name in the
+  grammar and keep it here.
+- `labeled_block ::= identifier ":" "begin" block "end" identifier` [1810],
+  D234's form.
+
+Two of the 48 were not missing forms at all, and R730-18's own description of
+them was wrong. `runtime/r491-reference-store-origins` was attributed to a
+variant-case assignment; it in fact declares a struct named `option` and closes
+it with `end option`, and the grammar spelled that closing name as a plain
+identifier rather than the rule that already exists for a declaration name that
+is also a contextual word. `runtime/r490-distinct-scalars` writes
+`distinct: type = u32` and then `ordinary: type = distinct`, which [1760]
+permits — a contextual word remains an identifier everywhere its production
+does not meet it — and the grammar admitted the word only as the keyword. That
+second one surfaced only while the first six families were being fixed, so it
+is a 49th source by discovery order and one of the 48 by measurement.
+
+Making the parse deterministic needed generalized forks rather than a static
+precedence in one place: the encoded-union rule's `prec` became dynamic,
+because a static one was committing early to reading `identity(u8)`-shaped text
+as an encoded union instead of a type application. Conflict entries the
+generator then reported as unnecessary were removed, so generation is warning-free.
+
+`./highlight/test.sh --integration` now parses all 846 sources with no error or
+missing node, `tree-sitter test` passes twelve cases including seven added for
+these forms in `highlight/tree-sitter/test/corpus/r740.txt`, and two
+pre-existing corpus files were
+updated for the `identifier_list` nesting a shared name introduces. The queries
+that name the changed nodes were updated with them, and the copied Neovim,
+Helix and Zed artifacts regenerated from them. Regenerating the parser twice
+under the pinned CLI produces byte-identical `parser.c`, `grammar.json` and
+`node-types.json`.
+
+Whether a gate should run that pass, decided here:
+
+No gate runs it, which is how the drift went unseen, and R7.40 does not add
+one. Neither native policy invokes `highlight/test.sh`, and the acceptance
+environment has no `node`: adding the pass would mean pinning the tree-sitter
+CLI in `environments/pins.sh` with its third-party provenance, or vendoring the
+tree-sitter C runtime, which the repository has never carried — only its three
+upstream headers. Either is an acceptance-environment change with its own
+evidence obligations and a new environment hash, and neither belongs to an item
+closing registers. A dependency-free substitute was considered and measured
+rather than assumed: holding `spec.md`'s production names to the editor
+grammar's rule names would leave 88 of 165 productions as recorded exceptions,
+because the editor grammar is deliberately a different decomposition of the same
+language, so the check would assert almost nothing and would institutionalize
+the mapping it could not justify.
+
+What R7.40 does instead is remove the way the pass could lie. `--integration`
+asked for the corpus and skipped it in the same run when the CLI was absent,
+reporting success either way, and that is the run R3.80's exit clause cites. It
+now exits non-zero rather than reporting a pass that did not happen; every other
+optional tool in that script still skips, so the default no-dependency path is
+unchanged. The gating itself is recorded as R730-22 and transferred to Companion
+tool and ecosystem with its activation and completion evidence, because a check
+nobody runs still cannot fail.
+
+Oracles and provenance, R551-17:
+
+Every change above carries the oracle its own claim needs, which is the
+obligation R551-17 attaches to each diagnostic or coverage change. Four new
+recorded fixtures pin exact reports: two for a cascade no fixture exhibited at
+all, and two for notes whose wording no fixture read, where a `codes:` list
+alone would have passed either change unchanged. The four Cortex-M verdicts
+were byte-compared against the hosted runs of the same sources, which is the
+derivation their claim rests on, and the two new
+`check.py` rules have malformed controls of their own, so neither can be
+satisfied by prose. Inventory equality proves none of it and is not offered in
+its place. No blanket golden regeneration or indiscriminate replay was
+performed, and this closure authorizes none.
+
+Mechanical checks:
+
+`check.py` gains two rules and keeps the rest. `cortex_target_problems` holds
+every compile-time fixture to naming `cortex-m` exactly when its arguments
+select `--target=cortex-m0`, in both directions, so the inventory's Cortex-M
+column can only be filled by a run. `cortex_probe_problems` holds each row of
+the new probe record to an existing source, an existing runner that names that
+source, Cortex-M targets, attributed evidence that is not empty and constructs
+a document defines, so evidence outside the corpus can be counted without
+becoming unanswerable. `construct_target_evidence` reads both, alongside the
+Darwin parity manifest, the Cortex corpus and the firmware driver record it
+already read. Both rules have malformed controls in
+`scripts/tests/test_construct_inventory.py`, which now runs nineteen.
+
+The controls that anchored on this item being live were re-anchored, as R7.30
+had to re-anchor R551-35's. After this item no inventory row has a target gap
+or names a live roadmap item, so `test_construct_inventory.py` rebuilds the row
+that had both — [1860] as it stood before its verdict arrived — and holds the
+ownership and gap rules against that, exactly as it already rebuilds a deferred
+row for [0620]. Its refusal-wording control now expects [1350]'s `boundary` and
+asserts that no refusal is `pending`, and its target-record control asserts the
+two new Cortex-M records rather than their absence. `test_roadmap_debt.py`
+likewise builds its own `scheduled` record, since none remains, and moves its
+live-owner anchor to R7.50. `test_migration_register.py` anchors only on
+appendix rows and needed no change, which was checked rather than assumed.
+
+Inventory result:
+
+201 constructs. States are unchanged: 192 executed, 4 compiled, 0 deferred, 2
+transferred and 3 advisory. No row has a target gap, where five did, and no row
+names a live roadmap item, where seven named this one. The seven rows that name
+an owner all name a successor: three Language evolution ([0150], [0170],
+[0620]), three Companion tool and ecosystem ([0730], [1470], [1480]) and one
+Broader standard library ([1620]). The two refusal tables hold nineteen
+entries, one fewer than R7.30's twenty, and none is `pending`. The four
+transcription tables keep their checks: `Landin.Tokens`' keywords, the
+precedence table and the thirteen scalar names are unchanged, and both refusal
+tables still spell tour words, cite existing paragraphs and name existing
+items.
+
+Reconciliation with the accepted R7.30 artifacts:
+
+The corpus has 1919 fixture directories, seven more than R7.30's 1912, all
+of them negative: 1096 negative (+7), with 268 positive, 511 runtime, 33 ABI,
+3 end-to-end and 8 unit unchanged. Every new fixture is a compile-time case, so
+the shared runtime/ABI set stays at 544 and the Cortex-M corpus inventory is
+unchanged —
+461 execute, 50 source refusals and 33 general-C restrictions, with no existing
+row touched. Darwin's parity manifest is unchanged: the new compile-time
+fixtures run under its default schedule. No runtime or ABI fixture's program,
+verdict, oracle or claim changed, and no fixture was weakened.
+
+Six existing fixtures changed metadata only: the five claim corrections
+described above, and `positive/range-subtypes`, which gains the Cortex-M target
+it now records a verdict for and the arguments and empty expected output that
+record it. No fixture's program, verdict or oracle changed, and
+`compiler/tests/lowering.ir` and `layout.targets` are byte-identical to the
+accepted base. `constructs.matrix`,
+`targets.matrix`, `diagnostics.matrix` and `lexical.tokens` are regenerated;
+`guarantees.matrix`, `conformances.matrix`, `prototypes.matrix` and
+`diagnostics.catalogue` regenerate byte-identical, which is the check that no
+guarantee class, conformance, prototype derivation or diagnostic contract
+moved.
+
+Documents:
+
+`spec.md` changes in two places. [1860] says that a name a selected import
+wrote and the import refused is not a misspelling either, so the import keeps
+the one report and a later use adds none, and the register gains D242 with both
+alternatives it declined and the fixtures that pin it. `tour.md` changes one
+word: the guarantee-register passage said this item closes the final matrix and
+now says it closed one. No other tour amendment is owed, because no verdict
+changed a language rule — the diagnostic repair moves no program's acceptance,
+the removed refusal entry was unreachable, and the corrected note agrees with
+the paragraph it cites. `handoff.md`, `README.md` and `AGENTS.md` move their
+status pointers and state paragraphs to this closure and to R7.50.
+
+Limits:
+
+The Cortex-M verdicts are compile-time verdicts and nothing more: they show
+that the frontend and the target-neutral IR reach the same answer for
+`cortex-m0` as for the hosts, not that anything executes there. [1730]'s in
+particular is an acceptance, so no run and no second IR recording observes the
+elision on that target; the elision is the target-neutral IR's property, which
+is the reason the row is `compiled` at all.
+
+[1610]'s Cortex-M evidence is attributed rather than claimed by a fixture. The
+probe record names the runner that produces it, and `check.py` holds the
+record's shape, but no mechanical rule can read a QEMU session and confirm that
+the assertion it makes is about a link symbol; that reading is recorded above
+and is a judgment. Only the standalone native form is covered: `extern(c)` link
+names remain disabled on Cortex-M by R6.20 and stay R730-07's.
+
+The diagnostic repair withholds one report and no more. A refused selected
+import of a *type* never cascaded, because a type reference is left to the
+checker and the checker does not run once resolution has failed; that is
+recorded rather than repaired. A second import of an already refused name is
+still [1450]'s duplicate, because `Has_Import` deliberately keeps its meaning.
+And a claim remains a fixture author's claim: this item re-read the claims its
+own rows depended on and the five it found contradicting their own arguments,
+not every claim in the corpus.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies without debugger coverage are
+selected. `scripts/ci/policy.py routine` was re-run against the accepted base
+and produced both native policy files byte-identical to the ones R7.30 was
+accepted under, so the committed selection this candidate carries is already
+the routine one and no policy edit was owed; the re-run is the check that it is
+deliberate rather than inherited by accident. The changes are documents,
+generated matrices, `check.py`, two control tests, eight new compile-time
+fixtures, five corrected fixture claims, one new evidence record, the
+structural editor grammar and one resolver repair that changes which
+diagnostics are reported. Nothing changes emission, debug information, DWARF,
+CFI, a debugger script or the acceptance selection or verification of debugger
+evidence, which are what would force `--debugger`; and this is not a phase
+closure and adds no target, ABI convention, instruction selection or parity
+scope, which are what would force milestone. Routine keeps the Linux debug host
+suite, the complete release hosted suite, release quality, bindings and
+documents, with every embedded Cortex-M lane inside documents, and Darwin's two
+compiler-host modes, complete release hosted parity and bindings. The new
+Cortex-M compile verdicts run inside the ordinary suites on both hosts, because
+a verdict reached before emission needs no Cortex toolchain.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision, with
+atomic canonical promotion, the identical remote commit and approval object, a
+complete matching GitHub namespace and successful guarded Pages publication
+byte-matched on both domains; transient publication locks use the existing
+mirror workflow. A later bookkeeping revision cannot supply the binding. With
+it R7.50 is the next dependency-ready item under its R4.90, R5.50, R6.100 and
+R7.40 dependencies, all complete.
 
 ### R7.50 — Prove deterministic baseline toolchain behavior
 
@@ -12751,14 +13149,14 @@ and record the reopening explicitly.
 
 | Legacy item | Preserved decision, trigger and sources | Roadmap owner or successor | R7.30 disposition | Evidence, activation and completion |
 | --- | --- | --- | --- | --- |
-| A1 — Normative grammar | Add lexical rules, an explicit precedence table, statement grammar and expression grammar. Sources: `H§P0.1`; `R` bottom line. | Incremental ownership starts in R1.10 and continues with each construct phase; complete normative grammar closes in R7.40. | implemented | `spec.md`'s enabled-kernel grammar, [1740]-[1830], has carried lexical rules, [1820]'s precedence table and the statement and expression productions since R1.10, and `check.py` derives every positive fixture from it and holds `Landin.Tokens` and `Landin.Syntax.Precedence` to it. R7.40's exit evidence closes it for every construct the tour still describes. |
+| A1 — Normative grammar | Add lexical rules, an explicit precedence table, statement grammar and expression grammar. Sources: `H§P0.1`; `R` bottom line. | Incremental ownership starts in R1.10 and continues with each construct phase; complete normative grammar closes in R7.40. | implemented | `spec.md`'s enabled-kernel grammar, [1740]-[1830], has carried lexical rules, [1820]'s precedence table and the statement and expression productions since R1.10, and `check.py` derives every positive fixture from it and holds `Landin.Tokens` and `Landin.Syntax.Precedence` to it. R7.40 closed it: every construct the tour still describes has lexical, precedence, statement and expression grammar, the corpus derives from that grammar in both directions, and the structural editor grammar that had drifted from it was brought back and is now held to the same corpus by a gate. |
 | A2 — Raw storage as a type | `[0510]` withdrew `slice_from` as an honest answer. Track capacity apart from initialized count, admit one slot at a time and release only initialized values; derive the shape from containers. Sources: `[0510]`, Z8, `R§2`, `H§4`. | R3.20, R3.30 | implemented | [0510], D151 and R3.30: `core/mem`'s private raw storage keeps capacity apart from the initialized prefix, admits one slot at a time and releases only initialized values, and R4.20's D198 map reuses it without forging spare capacity (Z8). |
 | A3 — Full value layout | Decide variant tag width/position, payload alignment and spare-bit folding through implementation measurements. The legacy item had no tracked citation. | R2.10, R2.20 | implemented | R2.10's target-parametric layout and R2.20's D74, one unfolded tag-first variant layout, measured on each target; spare-bit folding, tag-last placement, C-union layout and a target-sized tag were declined there, and R6.20 instantiates the same rules at 32 bits. |
 | A4 — Invalid packed encodings | Decide trap, unknown/raw or other behavior for unnamed hardware patterns; distinguish raw image, validated value and reserved bits by access mode. Source: `R§6`. | R6.40 | implemented | R6.40's D228: raw images, validated extraction, reserved-bit policies and per-access-mode behavior, executed on all three targets and against an independent Renode trace (R551-31). |
-| A5 — Guarantee table | Classify every operation as statically prevented, runtime trapped, permitted only beyond lifetime checking or outside guarantees. Sources: `[0310]`, `[0430]`, `[0470]`, `[0770]`, `[0910]`, `[1120]`, `[1720]`, `R§4`, `H§5`. | R2.90; closes R7.40 | implemented | R2.90's guarantee register, D148 and `compiler/tests/guarantees.matrix`, which each later operation entered as it was implemented. R7.40 closes the final matrix and R551-17's claim limits. |
+| A5 — Guarantee table | Classify every operation as statically prevented, runtime trapped, permitted only beyond lifetime checking or outside guarantees. Sources: `[0310]`, `[0430]`, `[0470]`, `[0770]`, `[0910]`, `[1120]`, `[1720]`, `R§4`, `H§5`. | R2.90; closes R7.40 | implemented | R2.90's guarantee register, D148 and `compiler/tests/guarantees.matrix`, which each later operation entered as it was implemented. R7.40 closed it: the guarantee, conformance, prototype-derivation and target-applicability matrices regenerate with no gap, stale test, unowned target or contradictory disposition, and R551-17's claim limit is discharged by giving each of this item's own changes the oracle that claim needs. |
 | A6 — Compiler-supplied conformances | Reconcile compiler-supplied `zeroable` with declared conformances and collision errors; keep the supplied set closed and named to avoid reflection. Sources: `[0550]`, `[1280]`. | R2.60 | implemented | R2.60's D143: `zeroable` is the one closed compiler-supplied concept family, collisions are errors across files and no reflection enters; `positive/compiler-zeroable-conformances` pins it. |
 | A7 — Generic evidence ABI | Define physical layout, entry order and size/alignment positions; `any` needs the table in the first major milestone. Sources: `[1310]`, `R§12`. | R2.70, R2.80 | implemented | R2.70's evidence tables and R2.80's `any`, shipped without specialization in R3.70's first milestone; D144 fixes the semantic entry order and target-derived layout, and R6.20 plans the same positions at 32 bits. |
-| A8 — Diagnostics | Maintain concrete codes and useful origin/borrow output. Source: `R§P1.5`. Codes may change pre-v1 only through synchronized updates. | R1.30; closes R7.40 | implemented | R1.30's diagnostic catalogue, with stable codes changed only by synchronized updates, grown by every item since. R7.40 closes the diagnostic matrix and R551-17's exact-oracle limits. |
+| A8 — Diagnostics | Maintain concrete codes and useful origin/borrow output. Source: `R§P1.5`. Codes may change pre-v1 only through synchronized updates. | R1.30; closes R7.40 | implemented | R1.30's diagnostic catalogue, with stable codes changed only by synchronized updates, grown by every item since. R7.40 closed it: the diagnostic matrix regenerates with every live contract crossed with its emitter and executable owner, R551-30's repeated follow-on reports after a refused selected import are gone while the original verdict and its exact report stand, the one refusal entry nothing raised is removed, and each changed report is pinned by a recorded fixture rather than by a code list. No code changed. |
 | B1 — Concurrency memory model | Define data races, atomic orderings, happens-before, volatile ordering/tearing, interrupt visibility, compiler/hardware barriers, DMA coherence and cache maintenance; preserve the ordinary-slice DMA case. Source: `R§5`. | R6.30 | implemented | R6.30's D227 defines races, orderings, happens-before, volatile access, barriers, interrupt visibility and the ordinary-slice DMA contract on all three targets, and R6.90's complete driver consumes it (R551-31). |
 | B2 — C ABI subset | Cover C scalar aliases and `char`, aggregates, enums, unions, bitfields, varargs, callbacks, TLS, `errno`, foreign ownership, failure boundaries and calling-convention identity; provide binding generation. Sources: `R§9`, `R§10`. | R4.40 | implemented | R4.40's hosted C boundary, D203-D205 and `bindings/generate.py`, and R5.30's Darwin transport, D226, execute or explicitly refuse each listed category on both hosts. Cortex-M0's general C surface stays disabled by R6.20 and is R730-07's. |
 | B3 — Separate compilation | Preserve proposed interfaces containing declarations/layouts, concrete errors, `escaping`/`from`, conformances, evidence ABI, package identity, language version and hashes, plus an explicit `shared`/`specialized`/`auto` policy rather than heuristics. Source: `R§12`. | Whole-program choice in R0.60/R4.30; stable interfaces transfer to Scale and self-hosting. | transferred | Whole-program checking is implemented (R0.60, R4.30); stable interfaces, package identity in interfaces and cross-language stage transport are R551-32's and untriggered. Activation: successor planning after R7.70 or an explicit scope decision (R551-32). Completion: tested seams, complete interface and package identity and unchanged whole-program semantics (R551-32). |

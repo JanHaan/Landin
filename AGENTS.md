@@ -263,7 +263,13 @@ exact-revision dual-native routine binding with debugger coverage owns closure.
 R7.30 gives every inherited row and later discovery a terminal disposition:
 untriggered parked and watch items transfer to Language evolution with their
 triggers, and `check.py` refuses a row without one; its exact-revision
-dual-native routine binding owns closure. R7.40 is next dependency-ready.
+dual-native routine binding owns closure. R7.40 closes every evidence register:
+no matrix has a gap, stale test, unowned target or contradictory disposition,
+the four compile-time rows and [1610]'s link names carry measured Cortex-M
+evidence, D242 makes a refused selected import answer for its name so later
+uses stop repeating it, and the structural editor grammar is back on the
+enabled kernel; its exact-revision dual-native routine binding owns closure.
+R7.50 is next dependency-ready.
 R6.80 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

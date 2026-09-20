@@ -19,12 +19,15 @@ end record
           (identifier)
           (identifier))
         (field
-          (identifier)
+          (identifier_list
+            (identifier))
           (scalar_type))
         (field
-          (identifier)
+          (identifier_list
+            (identifier))
           (scalar_type))
         (field
-          (identifier)
+          (identifier_list
+            (identifier))
           (scalar_type))
         (identifier)))))

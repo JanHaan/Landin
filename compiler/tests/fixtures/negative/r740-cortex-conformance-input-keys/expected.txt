@@ -1,0 +1,10 @@
+error[L0317]: this conformance has the same whole-program key as another
+  --> ../tests/fixtures/negative/r740-cortex-conformance-input-keys/program.ldn:5:1
+  |
+5 | i32 is ordered ()
+  | ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r740-cortex-conformance-input-keys/program.ldn:4:1
+  |
+4 | i32 is ordered ()
+  | ^^^^^^^^^^^^^^^^^ the conformance that keeps the key
+  = note: [1280]: conformances have no precedence or override

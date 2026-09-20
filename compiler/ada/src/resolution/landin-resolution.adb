@@ -267,6 +267,30 @@ package body Landin.Resolution is
            (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name))
              .Origin);
 
+   --  Include and not Insert: the same name may be refused once for its
+   --  import and again by a second import of it, and one refused name is
+   --  one answer either way.
+   procedure Refuse_Import
+     (Into   : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Origin : Landin.Provenance.Origin) is
+   begin
+      Into.Refused_Imports.Include
+        (Key'(Scope => File_Scope_Of (Into, Source), Name => Name),
+         Import_Binding'
+           (Source => Source, Name => Name,
+            Target => Landin.Modules.No_Module,
+            Member => No_Declaration, Origin => Origin));
+   end Refuse_Import;
+
+   function Import_Refused
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Boolean
+     is (Of_Table.Refused_Imports.Contains
+           (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name)));
+
    procedure Bind_Imported_Module
      (Into  : in out Table;
       Source : Landin.Source.Source_Id;

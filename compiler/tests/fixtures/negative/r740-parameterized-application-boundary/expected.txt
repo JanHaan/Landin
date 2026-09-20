@@ -1,0 +1,7 @@
+error[L0304]: this positional argument must be a type
+  --> ../tests/fixtures/negative/r740-parameterized-application-boundary/program.ldn:6:19
+  |
+6 | bad: type = bytes(4, 4)
+  |                   ^
+  = note: the tour describes it at [1350]
+  = note: ROADMAP.md R2.40 records this source-form boundary

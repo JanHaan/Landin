@@ -1,0 +1,9 @@
+import lib (absent_value, offered)
+
+--  R7.40: the module has no such member, which the import reports once.
+--  A name refused there is not a misspelling at its uses.
+public main: () -> (code: i32) =
+    first: i32 = absent_value
+    second: i32 = absent_value + offered
+    code = first + second
+end main

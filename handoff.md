@@ -287,7 +287,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.40 — Close all evidence registers (planned).**
+**Next roadmap item: R7.50 — Prove deterministic baseline toolchain behavior (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -404,3 +404,19 @@ recorded, giving physical-board evidence to Release readiness and the
 structural editor grammar's drift to R7.40, and `check.py` now refuses a row
 without a terminal disposition. Its exact-revision dual-native routine
 binding in ROADMAP.md owns closure.
+
+R7.40 closes every evidence register. The four compile-time rows whose
+Cortex-M column was empty now carry a measured verdict rather than an argument
+that the frontend is target-neutral: the same sources compile to a
+byte-identical verdict on all three targets, and `check.py` counts such a
+claim only from a fixture that selects the target it names. That rule found
+five fixtures claiming hosted refusals their programs do not make. [1610]'s
+Cortex-M link names are attributed to the firmware probe that resolves them,
+recorded where the runner can be checked. The two notes that still promised a
+finished item are gone: [1350]'s says which boundary R2.40 records, and
+[1580]'s refusal entry, which nothing raised, is removed in favour of the C
+signature error the boundary actually reports. D242 gives a refused selected
+import a continuation identity, so its verdict and exact report stand while
+later uses of the name stop repeating a misspelling they are not, and the
+structural editor grammar is transcribed back onto the enabled kernel. Its
+exact-revision dual-native routine binding in ROADMAP.md owns closure.

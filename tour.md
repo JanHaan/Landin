@@ -4096,7 +4096,7 @@ That is a smaller claim than 'safe' and a larger one than
 C's. D148's guarantee register now puts every implemented
 observable failure boundary in one of four columns and links it
 to executable evidence. New operations have to enter that
-register as they are implemented, and R7.40 closes the final
+register as they are implemented, and R7.40 closed the final
 feature-complete matrix. Read the claim as: deliberately unsafe,
 with static help that is worth having.
 Checks stay on by default. unchecked [1120] removes the

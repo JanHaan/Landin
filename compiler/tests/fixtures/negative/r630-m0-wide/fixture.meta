@@ -2,7 +2,7 @@ class: negative
 summary: explicit memory boundary refusal m0-wide
 program: program.ldn
 constructs: 0430, 0850, 1620
-targets: linux-x86-64, macos-arm64
+targets: cortex-m
 codes: L0301
 args: --target=cortex-m0 ../tests/fixtures/negative/r630-m0-wide/program.ldn
 expect: expected.txt

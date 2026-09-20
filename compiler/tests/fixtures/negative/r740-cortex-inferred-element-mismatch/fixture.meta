@@ -1,0 +1,9 @@
+class: negative
+summary: R7.40 [1400]'s refusal of heterogeneous implicit boxing is a type identity, so the Cortex-M0 verdict is the hosted one
+program: program.ldn
+codes: L0301
+constructs: 0520, 0530, 1400
+targets: cortex-m
+args: --target=cortex-m0 ../tests/fixtures/negative/r740-cortex-inferred-element-mismatch/program.ldn
+expect: expected.txt
+status: 1

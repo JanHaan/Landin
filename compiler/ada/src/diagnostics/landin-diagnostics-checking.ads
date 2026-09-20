@@ -171,8 +171,15 @@ package Landin.Diagnostics.Checking is
       Parameterized_Type_Alias,
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Value,
-      --  [1580]'s aggregate, variadic and wider foreign ABI matrix.
-      External_C_ABI,
+      --  [1580]'s entry stood here and R7.40 removed it.  Nothing raised it:
+      --  the categories that paragraph lists are refused where they are
+      --  written, as the C boundary's own type errors, which is what
+      --  "refused explicitly rather than guessed" already promises.  An
+      --  entry no report reaches cannot say which work records the boundary,
+      --  and its note still named the finished R4.40 as the item that would
+      --  enable them.  `negative/r740-c-category-boundary` pins the report
+      --  that is actually made.
+      --
       --  D188: [0660]'s range subtype is its base type constrained, so
       --  `[]percent` and `[]u8` would be one type and a `[]u8` write of an
       --  excluded value would enter constrained storage unchecked.  A
@@ -198,7 +205,6 @@ package Landin.Diagnostics.Checking is
             when Array_Element      => "[0520]",
             when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]",
-            when External_C_ABI     => "[1580]",
             when Constrained_Composition => "[0660]",
             when Arena_Region       => "[0820]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
@@ -262,8 +268,12 @@ private
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R7.20",
+            --  R2.40 enabled [1350]'s declaration form and D135 fixed what
+            --  an application may be: fully applied and positional.  An
+            --  unapplied constructor or a malformed application is that
+            --  rule's permanent source boundary, not work R2.40 left; R7.40
+            --  stops the note promising a finished item.
             when Parameterized_Type_Alias => "R2.40",
-            when External_C_ABI     => "R4.40",
             --  D236 records the composite, reference and generic
             --  positions as [0660]'s permanent source-form boundary: a
             --  constraint belongs to a scalar binding, parameter, return

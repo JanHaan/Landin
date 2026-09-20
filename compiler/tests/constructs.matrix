@@ -20,7 +20,7 @@
 #  and R7.10.
 #  201 constructs, 196 with fixture evidence, 5 with none.
 #  States: 192 executed, 4 compiled, 2 transferred, 3 advisory.
-#  14 rows name an open owner; 5 have target gaps.
+#  7 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
@@ -149,7 +149,7 @@
 1240 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A conformance registers one type against one concept
 1250 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A conformance for a parameterised type binds its variables
 1260 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A concept entry's error set has to be concrete
-1270 | tour | accepted emitted refused | compiled | compiled | - | - | compiled | all | cortex-m | R7.40 | The register is keyed by (type
+1270 | tour | accepted emitted refused | compiled | compiled | refused | - | compiled | all | none | none | The register is keyed by (type
 1280 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Conformances may be declared anywhere
 1290 | tour | accepted emitted executed refused | executed | executed | executed | R2.40:boundary | executed | all | none | none | A generic function takes the type as an ordinary parameter
 1300 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | At the call site the type is inferred from the arguments
@@ -157,12 +157,12 @@
 1320 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Traversal is a concept
 1330 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A range is not a concept
 1340 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Concepts compose
-1350 | tour | accepted emitted executed refused | executed | executed | executed | R2.40:pending | executed | all | none | R7.40 | Types take parameters through a declaration form of their
+1350 | tour | accepted emitted executed refused | executed | executed | executed | R2.40:boundary | executed | all | none | none | Types take parameters through a declaration form of their
 1360 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Allocation is an ordinary concept
 1370 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | 'any C' is a value of some type satisfying concept C
 1380 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Building one is explicit
 1390 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calls go through the table
-1400 | tour | refused | refused | refused | - | - | compiled | all | cortex-m | R7.40 | This is what generics cannot do
+1400 | tour | refused | refused | refused | refused | - | compiled | all | none | none | This is what generics cannot do
 1410 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A module is a directory
 1420 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An import path is a directory path, and nothing cleverer
 1430 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Alias, for collisions
@@ -180,10 +180,10 @@
 1550 | tour | - | - | - | - | - | advisory | none | none | none | Landin has its own native backends
 1560 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Three builtin modules are the way to the tools
 1570 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calling conventions are a growing set of atoms behind one
-1580 | tour | accepted emitted executed refused | executed | executed | executed | R4.40:pending | executed | hosted | none | R7.40 | Importing from C
+1580 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | hosted | none | none | Importing from C
 1590 | tour | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
 1600 | tour | accepted emitted executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
-1610 | tour | accepted emitted executed refused | executed | executed | - | - | executed | all | cortex-m | R7.40 | A symbol name the language's identifiers cannot spell
+1610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A symbol name the language's identifiers cannot spell
 1620 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics are builtins
 1630 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Inline assembly, for what has no builtin
 1640 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Kept against section garbage collection, and placed
@@ -195,7 +195,7 @@
 1700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms are the same idea wherever they appear
 1710 | tour | - | - | - | - | - | advisory | none | none | none | How a new feature earns its place
 1720 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | What the language claims, at this version, plainly
-1730 | tour | accepted emitted | compiled | compiled | - | - | compiled | all | cortex-m | R7.40 | Check once, then carry the proof
+1730 | tour | accepted emitted | compiled | compiled | compiled | - | compiled | all | none | none | Check once, then carry the proof
 1740 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A source file is an import prelude and declarations in any order
 1750 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A source file is bytes
 1760 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Identifiers are lower case, and no identifier is a keyword
@@ -209,7 +209,7 @@
 1830 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What is not enabled is refused, and named
 1840 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's scopes, outermost first
 1850 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | One scope gives one name to one thing
-1860 | spec | refused | refused | compiled | - | - | compiled | all | cortex-m | R7.40 | A name that names nothing is refused
+1860 | spec | refused | refused | compiled | refused | - | compiled | all | none | none | A name that names nothing is refused
 1870 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's types, and what each of them holds
 1880 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Where a literal's type comes from, and what a context is
 1890 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What each operator takes and what it gives

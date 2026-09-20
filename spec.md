@@ -878,7 +878,10 @@ is and the declaration that was meant is not there to point at.
 An imported namespace whose selected member exists but is not public is a
 different error: the use is refused as inaccessible and the private declaration
 is related evidence. A namespace used without selecting a member names no
-runtime or type value and is likewise refused.
+runtime or type value and is likewise refused. A name a selected import [1440]
+wrote and the import refused is not a misspelling either: the import is where
+the mistake is and where the one report goes, and a later use of that name adds
+none (D242). The program is refused by the import.
 
 ### [1870] The kernel's types, and what each of them holds
 
@@ -15109,3 +15112,41 @@ promises nobody's work.
 `negative/r720-refused-field-adds-no-cascade`,
 `negative/r491-inferred-repetition-refusals` and
 `negative/array-repetition-countless-inferred-initializer-not-enabled`.
+
+### D242 — A refused import answers for its name
+
+**The tour said** that a file may import selected public members of a module
+[1440] and that a file's import scope gives one name to one thing [1450], and
+[1860] says a name that names nothing is refused because it is a misspelling.
+Nothing says what the name of a refused selected import is afterwards. It is
+not a misspelling — the program wrote a name its module does say, or one the
+module keeps to itself — and the import already reported exactly that.
+
+**Chosen:** the refused import answers for the name. The file's import scope
+records that the name was refused there, and a later use of it is resolved to
+nothing without a report. The import's verdict and its exact report stand, the
+program is refused, and the exit status does not change. A name a refused
+import wrote is neither bound nor available: visibility is unchanged, so this
+decides what the compiler says and not what it accepts.
+
+**A competent reader could have** reported every use, which is what the
+compiler did: the report is individually true, and a reader who saw only the
+third one would still learn something. That was declined because the first
+report is the only one that names the mistake, the rest say "misspelling" of a
+name that is spelled correctly, and a program importing one private helper used
+ten times received eleven errors of which ten were misleading. Binding the name
+to an error declaration instead, so that the checker reported type errors at
+each use, was declined for the same reason and a worse one: it would move a
+visibility question into the type stage, where [1410]'s answer is not
+available. Leaving the refusal to suppress *all* later reports about the name,
+including a genuine second import of it, was declined because [1450]'s
+duplicate-import rule is about the scope and not about this name's fate;
+`Has_Import` therefore keeps its meaning and only the misspelling report is
+withheld.
+
+**Pinned by** `negative/r740-refused-private-import-adds-no-cascade`,
+`negative/r740-missing-import-adds-no-cascade`,
+`negative/import-selected-private`, `negative/import-selected-missing`,
+`negative/imported-private-name`,
+`negative/import-selected-namespace-unbound` and
+`runtime/import-alias-selected-identities`.

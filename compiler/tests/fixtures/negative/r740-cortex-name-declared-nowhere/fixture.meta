@@ -1,0 +1,9 @@
+class: negative
+summary: R7.40 [1860]'s refusal of a name that names nothing is name resolution, so the Cortex-M0 verdict is the hosted one
+program: program.ldn
+codes: L0201
+constructs: 1860
+targets: cortex-m
+args: --target=cortex-m0 ../tests/fixtures/negative/r740-cortex-name-declared-nowhere/program.ldn
+expect: expected.txt
+status: 1

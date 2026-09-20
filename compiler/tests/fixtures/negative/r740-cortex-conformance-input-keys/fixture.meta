@@ -1,0 +1,9 @@
+class: negative
+summary: R7.40 [1270]'s whole-program conformance key is decided before a target is chosen, so the Cortex-M0 verdict is the hosted one
+program: program.ldn
+codes: L0317
+constructs: 1240, 1270, 1280
+targets: cortex-m
+args: --target=cortex-m0 ../tests/fixtures/negative/r740-cortex-conformance-input-keys/program.ldn
+expect: expected.txt
+status: 1
