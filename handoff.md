@@ -150,6 +150,13 @@ interface files, header parsing.
    reread the prototypes against the revision and against each other.
 5. Run `check.py`. Every new cheap invariant, and every defect it once
    missed, belongs there.
+6. State the relation before measuring the property. A determinism,
+   parity or reproducibility claim with no stated equivalence — what may
+   differ between two runs and still count as the same build — is not a
+   claim, and it will be read later as stronger than it was. Say what
+   varies, say what is not claimed, and give the claim a gate that can
+   refuse it; a check nobody can fail reports success while the property
+   rots.
 
 Two habits that produced most of the good outcomes, and that are worth
 keeping deliberately. **Disagreement gets argued out rather than
@@ -287,7 +294,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.50 — Prove deterministic baseline toolchain behavior (planned).**
+**Next roadmap item: R7.60 — Run complete derived prototype coverage (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.

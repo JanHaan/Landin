@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.50 — Prove deterministic baseline toolchain behavior (planned).**
+**Next roadmap item: R7.60 — Run complete derived prototype coverage (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -405,3 +405,23 @@ import a continuation identity, so its verdict and exact report stand while
 later uses of the name stop repeating a misspelling they are not, and the
 structural editor grammar is transcribed back onto the enabled kernel. Its
 exact-revision dual-native routine binding in ROADMAP.md owns closure.
+
+R7.50 proves deterministic baseline toolchain behavior. [1550] already said
+the compiler emits deterministic assembly text and relies on the platform's
+assembler and linker; until now nothing could refuse a violation of it. The
+item states the relation first — two compilations are equivalent closures when
+they agree on source, closure, target and build options, and may differ in
+build directory, working directory, output path, environment, repetition and
+order — and then gates it. Target code and the build report are identical
+under that whole relation on Linux x86-64, Darwin arm64 and Cortex-M0; debug
+metadata is identical too once the compilation directory is fixed, and when
+that directory moves it may differ in the recorded directory and the identity
+hashed over it and in nothing else, so an instruction that followed the build
+directory fails. The hosted linked image is deliberately not claimed: two
+Linux links of one unchanged assembly differ in six bytes because the GNU
+driver writes its own random temporary object name into the symbol table, in
+the same directory from the same command. Baseline code generation was
+measured and left alone; Darwin's frames are about twice Linux's for the same
+programs, which is recorded against the optimization row whose trigger it
+fires and acted on by nobody here. Its exact-revision dual-native routine
+binding with debugger coverage in ROADMAP.md owns closure.

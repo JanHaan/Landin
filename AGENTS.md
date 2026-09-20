@@ -269,7 +269,13 @@ the four compile-time rows and [1610]'s link names carry measured Cortex-M
 evidence, D242 makes a refused selected import answer for its name so later
 uses stop repeating it, and the structural editor grammar is back on the
 enabled kernel; its exact-revision dual-native routine binding owns closure.
-R7.50 is next dependency-ready.
+R7.50 proves deterministic baseline toolchain behavior: it declares the
+equivalence relation two compilations must satisfy to be equivalent closures,
+gates target-code and build-report identity under it on all three targets,
+pins how debug metadata may vary with the compilation directory and no
+further, and records the hosted linked image as the platform driver's artifact
+rather than a Landin claim; its exact-revision dual-native routine binding
+with debugger coverage owns closure. R7.60 is next dependency-ready.
 R6.80 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

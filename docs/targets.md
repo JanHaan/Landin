@@ -245,6 +245,47 @@ is claimed. R5.51 R551-07 retains R5.20's large-image placement/preflight transf
 scale and self-hosting successor, with an explicit activation condition. No giant materialized object sweep or
 new exhaustion guarantee is introduced.
 
+## Deterministic artifacts
+
+[1550] says the compiler emits deterministic assembly text and relies on the
+platform's assembler and linker. R7.50 states the relation that sentence needs
+and gates it with
+[`compiler/tests/test_determinism.py`](../compiler/tests/test_determinism.py),
+which runs in every suite job of both native policies.
+
+Two compilations are *equivalent closures* when they agree on the source
+bytes, the module closure, the target, `--optimize`, `--specialize`,
+`--build-mode` and the pinned compiler. They may differ in the absolute build
+directory, the working directory, the output path and name, the whole
+environment and in how often and in what order they run.
+
+| artifact | deterministic under | records |
+|---|---|---|
+| assembly without `--debug` | equivalent closures | nothing about where it was built |
+| build report | equivalent closures, apart from `sources[].path_hex` | the caller-spelled source paths, and a content hash beside each |
+| panic map (`*.sources.json`) | equivalent closures, apart from `path_hex` | the caller-spelled paths, and the SHA-256 of the assembly it maps |
+| `--debug=full`, `--debug=lines` assembly | equivalent closures with the compilation directory and source spelling fixed | DWARF `comp_dir` and `.file`, and the build identity hashed over them |
+| Cortex-M firmware ELF, object, assembly, linker script and linker map | equivalent closures, checked in [`devices.py`](../environments/cortex-m/devices.py) | — |
+| hosted linked executable | **not claimed** | the platform driver's own temporary object name |
+
+The last row is measured, not assumed. On the pinned Linux toolchain two links
+of one unchanged assembly differ in six bytes, in the same directory and from
+the same command, because `x86_64-pc-linux-gnu-gcc` writes its random
+temporary object name (`ccXXXXXX.o`) into the symbol table. Darwin's came out
+identical, which is one toolchain's tidiness rather than a contract. The gate
+therefore checks that the assembly the link consumed was byte-identical and
+reports the image residue; R730-23 owns a reproducible hosted image with its
+activation.
+
+The debug row is a declared record and not a defect: `comp_dir` and `.file`
+are how a debugger finds source, and the panic map resolves an off-target
+check site back to the file the caller named. Canonicalizing them away would
+buy byte-identity across directories at the price of a debugger that cannot
+find source. What the gate does instead is pin how they may vary — when only
+the compilation directory moves, the debug assembly may differ in the recorded
+directory and the identity derived from it and in nothing else, so an
+instruction that followed the build directory fails.
+
 ## Cortex-M environment boundary
 
 R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's

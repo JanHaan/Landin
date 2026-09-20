@@ -12472,8 +12472,8 @@ refused recovery form.
 Later discoveries:
 
 A later discovery is a retained limit, watch or observation that an item
-record after R5.51's intake (R6.10-R6.100, R7.10, R7.20 and, for R730-22,
-R7.40) left without a finished owner: a capability an item declined or bounded, an evidence claim it
+record after R5.51's intake (R6.10-R6.100, R7.10, R7.20, for R730-22, R7.40,
+and for R730-23 and R730-24, R7.50) left without a finished owner: a capability an item declined or bounded, an evidence claim it
 expressly did not make, or a watch. Handoffs to R6 items that later completed
 are closed by those items and are not repeated, and a selected scope that no
 successor needs to lift, such as the ARMv6-M reference profile or the
@@ -12519,6 +12519,8 @@ record or inherited row whose owner, trigger and completion it joins; and
 | R730-20 | R7.20: D237 transfers u128, i128 and f16 out of this slice. | parked-watch | successor | Language evolution | A program that needs 128-bit arithmetic or binary16 values | D237's recorded plan on all three targets: software 128-bit fold carriers, register pairs on the hosts and four words on Cortex-M0, compiler-emitted multiplication and division, and f16 through f32 with one rounding and a trapping integer-to-float conversion. |
 | R730-21 | R7.20: D240 transfers the atomic wrapper type out of `core`; Cortex-M0 has no read-modify-write atomics. | parked-watch | merged | R551-34 | A program that needs a portable atomic wrapper | A wrapper over D227's builtins that answers M0's missing read-modify-write explicitly, with consumers and failure oracles. |
 | R730-22 | R7.40: the structural editor grammar's integration pass is the evidence R3.80's exit clause cites, and no acceptance job runs it. Nothing in either native policy invokes `highlight/test.sh`, and the acceptance environment has no `node`, so its tree-sitter block would skip and still report success. R7.40 made `--integration` refuse rather than skip, which stops a false green, but a check nobody runs still cannot fail. | evidence-gap | successor | Companion tool and ecosystem | Before the editor packages are offered as gated artifacts, or when the acceptance environment admits a pinned tree-sitter CLI | The corpus pass runs in a named job that fails when a source stops parsing, with the CLI pinned in `environments/pins.sh` and its provenance in the third-party inventory; `--integration`'s refusal to skip stays mandatory. |
+| R730-23 | R7.50: a linked hosted image is not bit-reproducible. Two links of one unchanged assembly differ in six bytes on the pinned Linux toolchain — measured in the same directory, from the same command, with the same output path — because the GNU driver writes its own random temporary object name into the symbol table. Darwin's came out identical, which is one toolchain's tidiness and not a contract. Landin's own side, the assembly the link consumes, is deterministic and gated. | supported-limit | successor | Release readiness | Before a reproducible-distribution or bit-identical hosted-image claim, or when both pinned hosted drivers link reproducibly | The image compared byte for byte across equivalent closures on both hosted targets with the driver's naming pinned, the assembly-identity check retained, and Cortex-M's existing firmware ELF, object, assembly, linker-script and linker-map identity unchanged. |
+| R730-24 | R7.50: the build report's per-routine counters are populated only by the lane that needed them. Linux fills all of them, Cortex-M0 fills frame, spill and instruction counts, and Darwin fills frame bytes alone, reading zero instructions and zero registers for a program that has both. The Linux object-quality lane measures with `size` and `objdump` and never depended on them, so nothing is wrong today; a cross-target comparison drawn from the report would be. | evidence-gap | merged | R551-12 | Before any measured code-quality comparison across targets is drawn from the build report | Every counter the report declares populated on every backend that emits it, or the report stating per target which counters it does not measure, with the determinism contract's report identity unchanged. |
 <!-- /r730-ledger -->
 
 Mechanical checks:
@@ -13045,15 +13047,185 @@ R7.40 dependencies, all complete.
 
 ### R7.50 — Prove deterministic baseline toolchain behavior
 
-Status: planned
+Status: complete
 Depends on: R4.90, R5.50, R6.100, R7.40
 
 Run correct baseline code generation, assembly determinism, ABI and selected
 debug evidence across Linux x86-64, macOS arm64 and the Cortex-M reference
 profile. Do not add competitive benchmark targets.
 
-Exit evidence: equivalent closures produce declared deterministic artifacts and
-all target-specific debugger/map requirements pass.
+This item inherits no routed work. The construct inventory has no target gap
+and its seven owned rows all name a successor family rather than a live item;
+neither the R5.51 nor the R7.30 ledger holds a `scheduled` record. Both were
+re-counted here rather than taken from R7.40's word. The charter is therefore
+its own programme, and the discipline that matters is not widening it.
+
+The determinism contract, and why it needed stating:
+
+R4.90's exit clause — equivalent builds produce identical assembly and
+behavior under the pinned toolchain — is Linux-only, and the machinery behind
+it holds under the weakest equivalence there is. `compiler/tests/quality/
+check.py` runs one command twice, in one directory, with one output path. A
+property that only survives when nothing differs is not a determinism
+property, and a claim with no stated equivalence relation is not a claim. So
+this item states the relation first and measures afterwards.
+
+Two compilations are *equivalent closures* when they agree on the source
+bytes, the module closure, the target, `--optimize`, `--specialize`,
+`--build-mode` and the pinned compiler. They may differ in the absolute build
+directory, the working directory, the output path and file name, the whole
+environment — locale, timezone, `SOURCE_DATE_EPOCH`, every variable — and in
+how often and in what order they run.
+
+Tier 1, target code, is deterministic under that whole relation on all three
+targets: the assembly emitted without `--debug`, and the build report apart
+from its `sources[].path_hex` entries. The panic map is Tier 1 under the same
+rule, and must name the assembly it claims to map.
+
+Tier 2, source-identifying artifacts, is deterministic under Tier 1's relation
+narrowed by a fixed absolute compilation directory and a fixed source-path
+spelling: `--debug=full` and `--debug=lines` assembly, and the caller-spelled
+paths in the report and map. This is a declared record, not a defect. DWARF's
+`comp_dir` and `.file` are how a debugger finds source, and the panic map
+resolves an off-target check site back to the file the caller named. The
+alternative was to strip or canonicalize those paths for byte-identity across
+directories, which buys a stronger-sounding claim by making a debugger unable
+to find source and the panic map unable to name a file; it was rejected. What
+the contract does instead is pin exactly how Tier 2 varies: when only the
+compilation directory moves, the debug assembly must differ in the `comp_dir`
+string and the build identity hashed over it and in nothing else. An
+instruction that followed the build directory fails, which is the difference
+between checking a boundary and excusing one.
+
+Measured, and what refuses a regression:
+
+`compiler/tests/test_determinism.py` is the new rule. It runs the shared
+six-fixture corpus and one module closure over three profiles on
+linux-x86-64, darwin-arm64 and cortex-m0 — 63 equivalent closures — comparing
+two differently named build directories, two output names and two deliberately
+hostile environments, then repetition in one directory, then the panic map,
+then Tier 2's residue. It is host-neutral on purpose: it emits assembly and
+needs no target assembler, linker or emulator, so the Cortex-M column runs in
+both native acceptance environments rather than only where the ARM toolchain
+lives. It is committed into every suite job of both native policies, beside
+the `test_native_report_identity.py` check it extends. All 63 closures pass on
+both hosts.
+
+A check that cannot fail reports success forever, which is how R730-18's
+editor grammar drifted and what R730-22 still records. So
+`compiler/tests/test_determinism_controls.py` exercises every refusal in the
+contract against a synthetic artifact that violates it — a moved instruction,
+a changed content hash, an out-of-order closure, an unbound panic map, a
+build identity that moved with no directory behind it, and a string literal
+shaped like an absolute path, which must *not* buy a Tier 2 exemption. It runs
+in the same jobs. Twenty-three controls pass.
+
+The report's canonical source order is the mechanism that makes closure order
+irrelevant — entry module first, then sorted — so the check asserts the
+mechanism rather than trying to perturb a host's `readdir`, which on APFS
+already returns sorted names and would have proved nothing.
+
+Two measured results that are boundaries, not gaps:
+
+The hosted linked image is not bit-reproducible, and R4.90's wording was right
+to say assembly and behavior rather than image. On the pinned Linux
+toolchain, two links of one unchanged assembly differ in exactly six bytes —
+`ccGUIyla.o` against `ccSLqAmD.o` — because the GNU driver writes its own
+random temporary object name into the symbol table. Measured in the same
+directory, from the same command, with the same output path: it is
+per-invocation driver randomness and not a build-directory effect at all. On
+Darwin the same comparison came out identical, and one toolchain being tidier
+is not a contract. The check therefore claims and verifies what Landin owns —
+that the assembly the link consumed was byte-identical — and reports the image
+residue rather than excusing it. R730-23 transfers the reproducible hosted
+image with its activation. Cortex-M is the target where the claim does hold:
+`environments/cortex-m/devices.py` already compares firmware ELF, object,
+assembly, linker script and linker map byte for byte between two build
+directories, and that stays the Cortex map requirement.
+
+Baseline code generation was measured, not optimized. Over the shared corpus
+at `size`/`auto`, summed frame bytes are 2144 on Linux, 3904 on Darwin and
+2288 on Cortex-M0; over the `core/mem` closure they are 2304, 4480 and 1952.
+Darwin's frame is roughly twice Linux's for the same programs, which is
+exactly R551-12's recorded observation about Darwin stack homes lacking
+register allocation and body folding, and exactly its activation — measured
+code-quality pressure. It is recorded against that row and left there. This
+item does not act on it, adds no benchmark target and sets no size budget;
+`speed`/`all` and `size`/`auto` produce identical aggregates on all three
+targets for this corpus, which is an observation and not a defect.
+
+Measuring that also exposed why the comparison needs care. The build report's
+per-routine counters are populated only by the lane that needed them: Linux
+fills all of them, Cortex-M0 fills frame, spill and instruction counts, and
+Darwin fills frame bytes alone, reading zero instructions and zero registers
+for a program that plainly has both. The Linux object-quality lane never
+depended on them — it measures with `size` and `objdump` — so nothing was
+wrong, but a later reader comparing 0 against 1555 would conclude something
+false. R730-24 records that as an evidence gap merged into R551-12, because it
+is that row's completion evidence that would need it.
+
+What the tour already said, and what is owed to it:
+
+[1550] states that the compiler "emits deterministic assembly text and relies
+on the assembler and linker of the platform". That sentence is exactly this
+item's contract, including the part that is not claimed: the platform's
+assembler and linker are not Landin's, which is why the hosted image residue
+belongs to the driver and not to a Landin defect. Until now no gate could
+refuse a violation of it. The new check is what makes [1550] falsifiable, so
+the tour needs no amendment and none is made; the wording was load-bearing
+already and R7.50's job was to hold it to something.
+
+No language or representation decision was taken here, so `spec.md`'s register
+gains no entry. The tier boundary is a decision about artifacts and evidence,
+not about what a program means, and recording it in the register would put a
+toolchain contract where a semantic one belongs. It is recorded above instead,
+with its alternative and the measurement that pins it.
+
+Selected debug evidence, and the contracts it did not widen:
+
+Debug evidence selects native GDB on Linux x86-64 and native LLDB on Darwin
+arm64 in full release profile, through this item's `--debugger` policy
+selection, plus the Cortex-M remote GDB lines-and-functions session the
+embedded lane already runs inside the documents job — and, newly, debug
+*metadata* identity under the declared equivalence on all three targets, which
+is the part no gate previously covered. R730-12's Cortex-M contract is
+untouched: lines and functions only, no locals, arguments, types or
+expressions, no unwinding across an exception, and none of that is widened
+here. R551-26 keeps the hosted presentation limit. R730-03, R730-05 and
+R730-06 keep their boundaries: no formal proof of D227, no worst-case stack
+bound, no production firmware budget, and the seventeen shared programs that
+exceed the selected 32 KiB profile stay exceeded. Repeating a measurement does
+not lift a boundary that was recorded as one.
+
+ABI evidence is the existing evidence, run rather than reinvented: the `abi`
+fixture class on both hosted targets, `compiler/tests/darwin/check.py
+--parity` for Darwin, and `environments/cortex-m/abi.py`'s independent
+C and assembly controls in the embedded lane. This item adds no ABI rule.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies **with** debugger coverage are
+selected, and committed before the closure candidate. `docs/process.md`
+defines debugger risk as changed debug metadata, source or variable locations,
+unwind or frame conventions, debugger transport, debugger checks, *or the
+acceptance selection or verification of debugger evidence*. This item adds a
+check that reads and verifies debug metadata on three targets and commits it
+into both policies' jobs, which is that last clause exactly; the selection is
+forced rather than optional, and `--debugger` adds full release Linux GDB and
+Darwin LLDB. Milestone scope is judged on its own terms and is not warranted:
+this is not a phase closure, adds no target, ABI convention, instruction
+selection or parity scope, and changes no emission — the compiler is
+untouched. The run being large is not the test. The changes are one new check,
+one new control test, both native policy files, documents and the generated
+matrices.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision, with
+atomic canonical promotion, the identical remote commit and approval object, a
+complete matching GitHub namespace and successful guarded Pages publication
+byte-matched on both domains. A later bookkeeping revision cannot supply the
+binding. With it R7.60 is the next dependency-ready item under its R3.70,
+R4.70, R4.80, R5.50, R6.90 and R7.50 dependencies, all complete.
 
 ### R7.60 — Run complete derived prototype coverage
 

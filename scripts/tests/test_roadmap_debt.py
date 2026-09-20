@@ -34,10 +34,10 @@ class DebtTests(unittest.TestCase):
         line = next(l for l in self.text.splitlines()
                     if l.startswith('| R551-29 | normative |'))
         self.assertIn('| implemented | R7.20 |', line)
-        scheduled = line.replace('| implemented | R7.20 |', '| scheduled | R7.50 |')
+        scheduled = line.replace('| implemented | R7.20 |', '| scheduled | R7.60 |')
         self.assertEqual(len(validate(self.text.replace(line, scheduled))), 36)
         with self.assertRaisesRegex(ValueError, 'complete owner'):
-            validate(self.text.replace(line, line.replace('| R7.20 |', '| R7.50 |')))
+            validate(self.text.replace(line, line.replace('| R7.20 |', '| R7.60 |')))
 
     def test_scheduled_work_needs_a_live_owner(self):
         #  R551-35 was scheduled on R7.30 until R7.30 transferred it, and
@@ -47,13 +47,13 @@ class DebtTests(unittest.TestCase):
         self.assertNotIn('| scheduled |', self.ledger())
         line = next(l for l in self.text.splitlines() if l.startswith('| R551-17 |'))
         self.assertIn('| implemented | R7.40 |', line)
-        live = line.replace('| implemented | R7.40 |', '| scheduled | R7.50 |')
+        live = line.replace('| implemented | R7.40 |', '| scheduled | R7.60 |')
         self.assertEqual(len(validate(self.text.replace(line, live))), 36)
         finished = line.replace('| implemented | R7.40 |', '| scheduled | R7.40 |')
         with self.assertRaisesRegex(ValueError, 'live owner: R551-17'):
             validate(self.text.replace(line, finished))
-        heading = ('### R7.50 — Prove deterministic baseline toolchain'
-                   ' behavior\n\nStatus: planned')
+        heading = ('### R7.60 — Run complete derived prototype'
+                   ' coverage\n\nStatus: planned')
         self.assertIn(heading, self.text)
         with self.assertRaisesRegex(ValueError, 'live owner'):
             validate(self.text.replace(line, live)
@@ -77,7 +77,7 @@ class DiscoveryTests(unittest.TestCase):
             validate_discoveries(self.text.replace(old, new, 1))
 
     def test_complete_ledger(self):
-        self.assertEqual(len(validate_discoveries(self.text)), 22)
+        self.assertEqual(len(validate_discoveries(self.text)), 24)
 
     def test_identities_are_unique_and_contiguous(self):
         line = self.line('R730-02')
@@ -103,11 +103,11 @@ class DiscoveryTests(unittest.TestCase):
         #  R730-16 was scheduled on R7.40 until R7.40 implemented it, so the
         #  scheduled control now makes one out of it and moves its owner.
         scheduled = self.line('R730-16').replace(
-            '| implemented | R7.40 |', '| scheduled | R7.50 |')
+            '| implemented | R7.40 |', '| scheduled | R7.60 |')
         self.refused(self.line('R730-16'), scheduled.replace(
-            '| R7.50 |', '| R7.20 |'), 'scheduled work needs a live owner')
+            '| R7.60 |', '| R7.20 |'), 'scheduled work needs a live owner')
         self.refused(self.line('R730-14'), self.line('R730-14').replace(
-            '| R6.40 |', '| R7.50 |'), 'closed disposition needs a finished owner')
+            '| R6.40 |', '| R7.60 |'), 'closed disposition needs a finished owner')
         self.refused(self.line('R730-02'), self.line('R730-02').replace(
             '| R551-34 |', '| R551-99 |'), 'merged into a missing record')
         self.refused(self.line('R730-10'), self.line('R730-10').replace(

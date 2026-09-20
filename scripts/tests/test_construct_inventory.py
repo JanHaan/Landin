@@ -70,8 +70,8 @@ class Inventory(unittest.TestCase):
         owner finishes, goes missing or stops being named.
         """
         row = self.row("1860")
-        return {row: "| `[1860]` | compiled | all | cortex-m | R1.50 | R7.50 |"
-                     " Hosted compile-time rule audited by R4.90; R7.50 stands"
+        return {row: "| `[1860]` | compiled | all | cortex-m | R1.50 | R7.60 |"
+                     " Hosted compile-time rule audited by R4.90; R7.60 stands"
                      " here for the owner a recorded gap needs. |"}
 
     @staticmethod
@@ -86,30 +86,30 @@ class Inventory(unittest.TestCase):
                                 ("R9.90", "names missing owner R9.90"),
                                 ("Somebody", "unknown owner")):
             self.refused(self.problems(
-                {row: synthetic.replace("| R7.50 |", "| %s |" % owner)},
+                {row: synthetic.replace("| R7.60 |", "| %s |" % owner)},
                 targets=self.without_cortex), fragment)
         self.refused(self.problems(
-            {row: synthetic.replace("R7.50 stands", "nobody stands")},
+            {row: synthetic.replace("R7.60 stands", "nobody stands")},
             targets=self.without_cortex),
-            "[1860] does not say what R7.50 owns")
+            "[1860] does not say what R7.60 owns")
 
         def pending(refusals):
-            refusals.append(("1860", "R7.50", "pending", "table", "Probe"))
+            refusals.append(("1860", "R7.60", "pending", "table", "Probe"))
         self.refused(self.problems(refusals=pending),
-                     "refused pending R7.50 and the row does not name it")
+                     "refused pending R7.60 and the row does not name it")
 
     def test_a_finished_owner_makes_the_row_stale(self):
         (row, synthetic), = self.gapped().items()
-        heading = ("### R7.50 — Prove deterministic baseline toolchain"
-                   " behavior\n\nStatus: planned")
+        heading = ("### R7.60 — Run complete derived prototype"
+                   " coverage\n\nStatus: planned")
         self.refused(self.problems(
             {row: synthetic, heading: heading.replace("planned", "complete")},
             targets=self.without_cortex),
-            "still owned by finished R7.50")
+            "still owned by finished R7.60")
 
     def test_phase_must_be_finished_implementation(self):
         row = self.row("0010")
-        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.50 |")}),
+        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.60 |")}),
                      "no finished implementing phase")
 
     def test_gaps_follow_the_corpus_both_ways(self):
@@ -125,7 +125,7 @@ class Inventory(unittest.TestCase):
         (row, synthetic), = self.gapped().items()
         self.refused(self.problems(
             {row: synthetic.replace(
-                "| R7.50 | Hosted compile-time rule audited by R4.90; R7.50"
+                "| R7.60 | Hosted compile-time rule audited by R4.90; R7.60"
                 " stands here for the owner a recorded gap needs.",
                 "| none | Hosted compile-time rule audited by R4.90.")},
             targets=self.without_cortex),
@@ -140,8 +140,8 @@ class Inventory(unittest.TestCase):
         """[0620] as it stood before R7.30 transferred it: the last deferred
         construct, now a synthetic control for the deferral rules."""
         row = self.row("0620")
-        return {row: "| `[0620]` | deferred | none | none | none | R7.50 |"
-                     " The tour keeps it DEFERRED and R7.50 owns the decision. |"}
+        return {row: "| `[0620]` | deferred | none | none | none | R7.60 |"
+                     " The tour keeps it DEFERRED and R7.60 owns the decision. |"}
 
     def test_advisory_deferred_and_transferred_rows_carry_no_evidence(self):
         def claim(evidence):
@@ -168,11 +168,11 @@ class Inventory(unittest.TestCase):
                      "deferred but the tour does not say so")
         (row, synthetic), = self.deferred().items()
         self.refused(self.problems({row: synthetic.replace(
-            "| R7.50 | The tour keeps it DEFERRED and R7.50 owns the decision.",
+            "| R7.60 | The tour keeps it DEFERRED and R7.60 owns the decision.",
             "| none | The tour keeps it DEFERRED.")}),
             "[0620] is deferred with no owning item")
-        self.refused(self.problems({row: synthetic.replace("| R7.50 |", "| R7.20 |")
-                                    .replace("and R7.50 owns", "and R7.20 owns")}),
+        self.refused(self.problems({row: synthetic.replace("| R7.60 |", "| R7.20 |")
+                                    .replace("and R7.60 owns", "and R7.20 owns")}),
                      "still owned by finished R7.20")
 
         #  R7.30's transfer is the tour's first: [0620] names its successor.
@@ -208,9 +208,9 @@ class Inventory(unittest.TestCase):
                      "still promises finished R2.40")
 
         def boundary(refusals):
-            refusals.append(("0010", "R7.50", "boundary", "table", "Probe"))
+            refusals.append(("0010", "R7.60", "boundary", "table", "Probe"))
         self.refused(self.problems(refusals=boundary),
-                     "boundary refusal names unfinished R7.50")
+                     "boundary refusal names unfinished R7.60")
 
     def test_a_transfer_names_its_successor(self):
         #  R7.20's transfers: the tour names each successor, and a refusal

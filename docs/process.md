@@ -59,6 +59,15 @@ convention or instruction selection: the one backend change generalizes an
 existing reserved-zero load predicate, and complete release Darwin parity runs
 every new runtime fixture, so milestone scope is not warranted.
 
+R7.50 selects routine scope with debugger coverage, and the selection is
+forced rather than chosen. Debugger risk above includes the acceptance
+selection or verification of debugger evidence, and this item commits a check
+that reads and verifies debug metadata on all three targets into every suite
+job of both native policies. It changes no emission and no debugger script;
+the compiler is untouched. Milestone scope is judged on phase closure, new
+parity or backend scope, none of which applies, so the size of the run does
+not make it one.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.
