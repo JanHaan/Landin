@@ -87,6 +87,25 @@ matrix, and that matrix records that they deliberately do not all reach all
 targets. There is no phase closure here, no new target, ABI convention,
 instruction selection or parity scope, and the compiler is untouched.
 
+R7.70 selects `milestone` scope, and it is the only R7 item that does. The
+category above is "major phase/parity milestone", and the disjunction is
+satisfied by phase closure: this item closes R7 and the roadmap, which R7.60's
+record already located here when it declined milestone scope for itself. It is
+also the last chance to select one. A routine approval cannot later be cited
+as a milestone result and no subsequent item can correct the choice, so an
+endpoint that deserves a milestone has to have one selected now. The claim
+being bound is the widest the roadmap makes, and the two earlier items that
+made claims of comparable width, R5.50 and R6.100, were both milestones. That
+the item changes no compiler code is why milestone scope was not warranted for
+R7.40, R7.50 or R7.60, none of which closed a phase; it does not answer a
+phase closure, and the run here is the evidence under the declaration rather
+than regression detection. Debugger coverage is judged separately and is not
+forced: this item changes no debug metadata, source or variable location,
+unwind or frame convention, debugger transport or debugger check, and neither
+selects nor verifies debugger evidence, exactly as R7.60 records. Milestone
+scope runs GDB and LLDB in both compiler modes as part of the full matrix, so
+that coverage arrives with the scope rather than with a risk.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.
