@@ -7504,6 +7504,27 @@ still intercepted as a control expression. J104/D225 subsequently repaired
 that primary-expression facet without reserving words or introducing newline
 semantics. Exact-revision acceptance remains the phase closure requirement.
 
+D225 follows the user's explicit J104 decision to reserve control words.
+The thirteen additional keywords join the scanner's reserved vocabulary;
+statement/expression dispatch and loop closers use token kinds, and transfer
+labels no longer need an exception for a variable named complete. Existing
+scope and assignment controls use legal longer names, while new negative
+controls cover the retired names. Historical evidence for the contextual
+spelling remains evidence for its original revision, not this changed rule.
+Development validation: sixteen exact selectors pass 1,482 checks on each of
+macOS debug and Linux release. The new reservation seam contributes 119 checks;
+existing control, cleanup, recovery, anonymous-loop and completion-scope cases
+retain their verdicts, and the two migrated positives emit only assembly text.
+The additional driver check found four stale L0304 expectations from before
+J138, each exercised for both output modes; they now require J138's L0201
+without changing their one-diagnostic, no-write and no-tool contracts.
+Both single-worker builds pass. The full document/grammar check passes, and
+the pinned tree-sitter 0.26.9 generator updates the editor's 49-word reserved
+set and generated parser. Its C parser was not compiled or executed. No
+assembler, linker, generated Landin executable, debugger or mutation campaign
+ran. Logs are retained in `.scratch/r491-control-keywords/` and
+`.scratch/r491-final-values/`; exact-revision acceptance remains open.
+
 M15/N17/J20 development evidence: five exact metadata/discovery selectors
 pass 124 checks in each of macOS debug and Linux release. Fake fixtures
 prove that ordinary and renamed cases retain six profiles, names formerly
@@ -12611,6 +12632,15 @@ item transcribes the missing forms into the grammar and records that pass
 clean. R730-16 restates R7.10's routing above, and R551-17 and R551-30 stay
 here; R5.51's ledger refuses a `scheduled` record whose owner has completed.
 
+Documentation repairs owned here: R4.91's D225 paragraph, which records the
+reserved control words and their development validation, had been appended
+after the inherited register's table instead of inside R4.91's record. It now
+sits beside J104's statement repair, moved verbatim. Its `.scratch/r491-*`
+references and its closing sentence about acceptance are the form that record
+uses in some two hundred sibling paragraphs, and they stay: R4.91's own
+closure section already governs them, since earlier statements that acceptance
+was open describe their individual development batches.
+
 Exit evidence: `spec.md` contains lexical, precedence, statement and expression
 grammar for every construct the tour still describes; no matrix contains a gap, stale
 test, unowned target or contradictory disposition.
@@ -12753,24 +12783,3 @@ and record the reopening explicitly.
 | F1 — Executable prototype conformance | Preserve positive and negative cases, especially formerly contradictory pre-0.0.17 examples; prose-only prototypes cost two patch releases. Sources: `R§P0.8`; `H` definition of success. | R0.30 and complete derived programs at R3.70/R4.70/R4.80/R6.90/R7.60. | implemented | R0.30's corpus and the complete derived programs of R3.70, R4.70, R4.80 and R6.90 execute with positive and negative derivatives; R7.60 runs complete coverage by the applicability matrix. |
 | F2 — Grow `check.py` | Every cheap new rule and every defect once missed becomes a check; it found most 0.0.15-through-0.1.0 defects. The legacy item had no citation. | Roadmap-wide process and mechanical gate. | implemented | A continuing gate rather than a deliverable: R5.51's ledger checks, R7.10's inventory checks and R7.30's disposition checks each turned a textual rule into a mechanical one with malformed controls. |
 | F3 — First implementation amendment | Evidence tables and `any` belong in the first major subset; specialization does not. The table is the foundation and specialization the optimization; parser and hosted I/O need dispatch. Source: `[1310]`. | R2.70/R2.80 and R3.70; specialization starts only at R4.50. | implemented | Evidence tables and `any` shipped in R2.70, R2.80 and R3.70's first milestone without specialization, which R4.50's D211 adds as an optimization. |
-
-D225 follows the user's explicit J104 decision to reserve control words.
-The thirteen additional keywords join the scanner's reserved vocabulary;
-statement/expression dispatch and loop closers use token kinds, and transfer
-labels no longer need an exception for a variable named complete. Existing
-scope and assignment controls use legal longer names, while new negative
-controls cover the retired names. Historical evidence for the contextual
-spelling remains evidence for its original revision, not this changed rule.
-Development validation: sixteen exact selectors pass 1,482 checks on each of
-macOS debug and Linux release. The new reservation seam contributes 119 checks;
-existing control, cleanup, recovery, anonymous-loop and completion-scope cases
-retain their verdicts, and the two migrated positives emit only assembly text.
-The additional driver check found four stale L0304 expectations from before
-J138, each exercised for both output modes; they now require J138's L0201
-without changing their one-diagnostic, no-write and no-tool contracts.
-Both single-worker builds pass. The full document/grammar check passes, and
-the pinned tree-sitter 0.26.9 generator updates the editor's 49-word reserved
-set and generated parser. Its C parser was not compiled or executed. No
-assembler, linker, generated Landin executable, debugger or mutation campaign
-ran. Logs are retained in `.scratch/r491-control-keywords/` and
-`.scratch/r491-final-values/`; exact-revision acceptance remains open.
