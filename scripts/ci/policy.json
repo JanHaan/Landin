@@ -34,6 +34,16 @@
           "{refine}"
         ],
         [
+          "python3",
+          "compiler/tests/test_determinism_controls.py"
+        ],
+        [
+          "python3",
+          "compiler/tests/test_determinism.py",
+          "--refine",
+          "{refine}"
+        ],
+        [
           "{refine}",
           "--identify"
         ]
@@ -61,6 +71,16 @@
           "{refine}"
         ],
         [
+          "python3",
+          "compiler/tests/test_determinism_controls.py"
+        ],
+        [
+          "python3",
+          "compiler/tests/test_determinism.py",
+          "--refine",
+          "{refine}"
+        ],
+        [
           "{refine}",
           "--identify"
         ]
@@ -80,6 +100,23 @@
         ],
         [
           "./scripts/quality.sh"
+        ]
+      ]
+    },
+    {
+      "id": "debugger-release",
+      "mode": "release",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh",
+          "-j8"
+        ],
+        [
+          "./scripts/debug.sh"
         ]
       ]
     },
@@ -157,5 +194,5 @@
   ],
   "cortex_m": true,
   "scope": "routine",
-  "debugger": false
+  "debugger": true
 }

@@ -326,6 +326,14 @@ def required_jobs(scope=None, debugger=False, cortex_m=False):
         if not debugger:
             result = [job for job in result if job["id"] != "debugger-release"]
     if scope is not None:
+        #  R7.50's determinism contract, beside the report-identity check it
+        #  extends.  Schema 1 keeps its historical eight-job command list.
+        for job in result:
+            if job["id"].startswith("suite-"):
+                job["commands"].insert(-1, ["python3",
+                    "compiler/tests/test_determinism_controls.py"])
+                job["commands"].insert(-1, ["python3",
+                    "compiler/tests/test_determinism.py", "--refine", "{refine}"])
         result[-1]["commands"].insert(-2, ["python3", "scripts/tests/test_check_caching.py"])
     if cortex_m:
         result[-1]["commands"].insert(-2, ["python3", "environments/cortex-m/test.py"])

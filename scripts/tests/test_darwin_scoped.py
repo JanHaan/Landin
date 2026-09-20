@@ -25,7 +25,10 @@ class ScopedTests(unittest.TestCase):
             darwin_scoped.compatible(policy, common.required_policy(scope, debugger))
             self.assertEqual(policy['hosted_modes'], hosted)
             self.assertEqual(policy['debugger_modes'], debugging)
-            self.assertEqual(len(policy['commands']), 4 + 3 * len(hosted) + len(debugging))
+            #  Two per mode are R7.50's determinism contract and its controls.
+            self.assertEqual(len(policy['commands']),
+                             4 + 2 * len(policy['modes'])
+                             + 3 * len(hosted) + len(debugging))
             for mode in ('debug', 'release'):
                 self.assertIn(['env', 'LANDIN_BUILD_MODE=' + mode, './scripts/test.sh', '--host'], policy['commands'])
 

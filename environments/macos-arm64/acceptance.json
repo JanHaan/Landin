@@ -1,7 +1,7 @@
 {
   "schema": 4,
   "scope": "routine",
-  "debugger": false,
+  "debugger": true,
   "modes": [
     "debug",
     "release"
@@ -9,7 +9,9 @@
   "hosted_modes": [
     "release"
   ],
-  "debugger_modes": [],
+  "debugger_modes": [
+    "release"
+  ],
   "commands": [
     [
       "env",
@@ -25,6 +27,20 @@
     ],
     [
       "env",
+      "LANDIN_BUILD_MODE=debug",
+      "python3",
+      "compiler/tests/test_determinism_controls.py"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=debug",
+      "python3",
+      "compiler/tests/test_determinism.py",
+      "--refine",
+      "{refine-debug}"
+    ],
+    [
+      "env",
       "LANDIN_BUILD_MODE=release",
       "./scripts/build.sh",
       "-j8"
@@ -34,6 +50,20 @@
       "LANDIN_BUILD_MODE=release",
       "./scripts/test.sh",
       "--host"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "python3",
+      "compiler/tests/test_determinism_controls.py"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "python3",
+      "compiler/tests/test_determinism.py",
+      "--refine",
+      "{refine-release}"
     ],
     [
       "env",
@@ -66,6 +96,15 @@
       "{refine-release}",
       "--output",
       "{bindings-release}"
+    ],
+    [
+      "env",
+      "LANDIN_BUILD_MODE=release",
+      "./scripts/debug.sh",
+      "--target=darwin-arm64",
+      "--parity",
+      "--output",
+      "{debugging-release}"
     ]
   ]
 }

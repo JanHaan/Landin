@@ -55,6 +55,13 @@ def scoped_policy(scope, debugger=False):
     historical = required_policy(parity=True)["commands"]
     for index, mode in enumerate(("debug", "release")):
         commands.extend(historical[index * 6:index * 6 + 2])
+        #  R7.50's determinism contract, in both compiler modes.  Schema 3
+        #  keeps its historical six-command-per-mode list untouched.
+        prefix = ["env", "LANDIN_BUILD_MODE=" + mode]
+        commands.append(prefix + ["python3",
+            "compiler/tests/test_determinism_controls.py"])
+        commands.append(prefix + ["python3", "compiler/tests/test_determinism.py",
+                                  "--refine", "{refine-" + mode + "}"])
         if mode in hosted:
             commands.extend(historical[index * 6 + 2:index * 6 + 5])
         if mode in debugging:
