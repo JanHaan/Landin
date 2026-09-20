@@ -250,7 +250,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.60 — Run complete derived prototype coverage (planned).**
+**Next roadmap item: R7.70 — Declare the roadmap endpoint (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -425,3 +425,22 @@ measured and left alone; Darwin's frames are about twice Linux's for the same
 programs, which is recorded against the optimization row whose trigger it
 fires and acted on by nobody here. Its exact-revision dual-native routine
 binding with debugger coverage in ROADMAP.md owns closure.
+
+R7.60 runs complete derived prototype coverage. Prototype 1's driver executes
+on Cortex-M0 in the embedded lane, prototypes 2, 3 and 4 execute on Linux
+x86-64 and macOS arm64, and their positive and negative conformance
+derivatives run beside them. What the item added is the part its exit clause
+asked for and the register did not have: every derivation row now carries
+generated inputs and a generated oracle — program, arguments, expected status,
+ordered diagnostic codes, and the length and digest of every golden it cites —
+together with the verdict each product target's own record reached for it.
+Both are derived rather than written beside the row, so editing a golden or a
+target record moves the column and a stale matrix fails the gate; a result
+column written by hand, which no run could contradict, was the alternative and
+was rejected. The applicability matrix is respected rather than widened:
+hosted I/O programs are not demanded on Cortex-M, where the three complete
+hosted derivatives are recorded as refused with the corpus's own reasons, the
+32 KiB profile's recorded capacity boundary is not re-judged, and
+`synthetic-32` is never reported as a target result because it is the model
+that preceded the Cortex-M backend. Its exact-revision dual-native routine
+binding in ROADMAP.md owns closure.

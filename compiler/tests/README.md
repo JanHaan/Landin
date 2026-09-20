@@ -15,7 +15,7 @@ compiler/tests/
   diagnostics.matrix                     generated: code contracts, emitters and owners
   guarantees.matrix                      generated: classified semantic boundaries
   conformances.matrix                    generated: conformance/evidence mechanisms
-  prototypes.matrix                      generated: completed prototype derivations
+  prototypes.matrix                      generated: derivations, their oracles and target results
   targets.matrix                         generated: applicability of every fixture
   lexical.tokens                         generated: the scanned corpus
   layout.targets                         recorded: what each target measures
@@ -743,6 +743,26 @@ is accepted or emitted, validates every fixture, diagnostic, decision and
 prototype finding they cite, requires every fixture to name applicable targets,
 and recovers prototype finding line numbers from the prototype sources. The
 copies are generated for reading; editing one cannot change its source.
+
+R7.60 added three columns to `prototypes.matrix`: `inputs`, `outputs` and
+`results`. All three are derived, never asserted beside the row. `inputs` and
+`outputs` come from the fixture's own record — its program, root, arguments,
+C peer, status, ordered codes and a digest of every golden it cites — so an
+edited expected output or a changed code list moves the column and a stale
+matrix fails the gate. `results` is the verdict each product target's retained
+record reaches for that one derivation, read through the same per-fixture
+reader the construct inventory folds over constructs: `executed`, `compiled`
+or `refused`, strongest first. `targets` stays the applicability claim it
+always was, and the two are deliberately separate — the Cortex corpus records
+verdicts for fixtures whose metadata names only the hosted targets, and a
+recorded Cortex refusal of a hosted derivative is a result rather than a
+silence. `synthetic-32` never appears under `results`: it is the model that
+preceded the Cortex-M backend and applies to no construct, so a verdict under
+it would be a verdict about nothing. `compiler/tests/driver/fixture.json`
+carries the firmware driver's `oracle`, the assertion groups its runner
+defines; `scripts/tests/test_prototype_coverage.py` proves each of those
+refusals fires, including a renamed oracle, an absent golden and a target a
+row claims that no record places.
 
 Every full `check.py` run fails if any generated copy is stale, and it refuses
 a code literal written anywhere else under `compiler/ada/src`.

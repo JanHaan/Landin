@@ -6,5 +6,6 @@
   "driver": "compiler/tests/driver/drivers/uart/uart.ldn",
   "mapping": "compiler/tests/driver/DERIVATION.md",
   "runner": "environments/cortex-m/driver.py",
-  "layout": "compiler/tests/driver/layout/main.ldn"
+  "layout": "compiler/tests/driver/layout/main.ldn",
+  "oracle": "cpu, layout_cpu, application, protocol, configurations, capacity_boundaries"
 }

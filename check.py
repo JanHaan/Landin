@@ -3635,8 +3635,13 @@ def cortex_probe_problems(titles):
     return problems
 
 
-def construct_target_evidence():
-    """The strongest claim each product target makes about each construct.
+#  Cached because R7.60 reads it once per derivation row as well as once per
+#  construct, and each call rescans every fixture record.  Callers only read
+#  the result; `prototype_evidence_records` is what adds the driver row, and
+#  it works from its own copy of `fixture_records`.
+@lru_cache(maxsize=1)
+def fixture_target_claims():
+    """The strongest claim each product target makes about each fixture.
 
     `constructs:` says what a fixture is about and `targets:` where it
     applies, but where it runs is decided by three records beside it:
@@ -3648,13 +3653,22 @@ def construct_target_evidence():
     another, so this reads all four.  A claim is still a fixture's claim:
     `executed` beats `compiled` beats `refused`, and none is a measurement.
 
-    R7.40 adds the fourth way a construct reaches Cortex-M: a compile-time
+    R7.40 adds the fourth way a fixture reaches Cortex-M: a compile-time
     fixture whose own `args:` select `--target=cortex-m0`, which the
     ordinary recorded runner compiles for that target on every host because
     a verdict reached before emission needs no Cortex toolchain.  That
     claim is held to being run rather than asserted: `cortex_target_problems`
     refuses a compile-time fixture that names the target it does not select,
     or selects the target it does not name.
+
+    R7.60 reads the per-fixture answer this already computed.  The prototype
+    derivation register needs the verdict each product target reached for one
+    named derivation, not the union over a construct, and deriving both from
+    one reader is what stops the two registers from disagreeing.  `cortex-m`
+    is claimed here even where the fixture does not name it, because the
+    corpus records a verdict the embedded lane actually reaches; a target a
+    fixture names and no record places is `cortex_target_problems`' concern
+    and, for a derivation row, `prototype_result_problems`'.
     """
     parity_path = os.path.join(ROOT, "compiler/tests/darwin/parity.json")
     corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
@@ -3665,7 +3679,62 @@ def construct_target_evidence():
     parity = json.load(io.open(parity_path, encoding="utf-8"))
     corpus = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
     driver = json.load(io.open(driver_path, encoding="utf-8"))
-    probes = cortex_probe_records()
+    best = {}
+
+    def claim(fixture, target, what):
+        held = best.setdefault(fixture, {})
+        if CLAIM_RANK[what] > CLAIM_RANK.get(held.get(target), 0):
+            held[target] = what
+
+    def listed(value):
+        return [one.strip() for one in value.split(",") if one.strip()]
+
+    for name, (_, fields) in fixture_records().items():
+        kind = name.split("/")[0]
+        targets = listed(fields.get("targets", ""))
+        if kind in ("runtime", "abi"):
+            if "linux-x86-64" in targets:
+                claim(name, "linux-x86-64", "executed")
+            change = parity["differences"].get(name, {})
+            if "replacement" in change or (
+                    "macos-arm64" in targets and "limit" not in change):
+                claim(name, "macos-arm64", "executed")
+            row = corpus.get(name, {})
+            if row.get("mode") == "execute" and "profile_limit" not in row:
+                claim(name, "cortex-m", "executed")
+            elif row.get("mode") == "refuse":
+                claim(name, "cortex-m", "refused")
+        elif kind in ("positive", "negative", "end-to-end"):
+            verdict = "compiled" if kind == "positive" else "refused"
+            if "linux-x86-64" in targets:
+                claim(name, "linux-x86-64", verdict)
+            #  Darwin's source verdicts are its positive and negative
+            #  fixtures with a program or arguments; the manifest may
+            #  make a fixed conditional select differently on arm64.
+            if (kind != "end-to-end" and "macos-arm64" in targets
+                    and (fields.get("program") or fields.get("args"))):
+                status = parity["diagnostics"].get(name, {}).get("status")
+                claim(name, "macos-arm64", verdict if status is None else
+                      "compiled" if status == "0" else "refused")
+            if "cortex-m" in targets and selects_cortex_target(fields):
+                claim(name, "cortex-m", verdict)
+    if driver.get("constructs"):
+        claim("firmware/derived-driver", "cortex-m", "executed")
+    return best
+
+
+def construct_target_evidence():
+    """The strongest claim each product target makes about each construct.
+
+    This is `fixture_target_claims` folded over what each fixture says it is
+    about, plus the firmware lane's own probes, which are built and run on
+    Cortex-M outside the corpus exactly as the driver is and attribute
+    constructs without being fixtures.
+    """
+    claims = fixture_target_claims()
+    if claims is None:
+        return None
+    records = prototype_evidence_records()
     best = {}
 
     def claim(construct, target, what):
@@ -3676,41 +3745,12 @@ def construct_target_evidence():
     def listed(value):
         return [one.strip() for one in value.split(",") if one.strip()]
 
-    for name, (_, fields) in fixture_records().items():
-        kind = name.split("/")[0]
-        targets = listed(fields.get("targets", ""))
+    for name, reached in claims.items():
+        fields = records.get(name, (None, {}))[1]
         for one in listed(fields.get("constructs", "")):
-            if kind in ("runtime", "abi"):
-                if "linux-x86-64" in targets:
-                    claim(one, "linux-x86-64", "executed")
-                change = parity["differences"].get(name, {})
-                if "replacement" in change or (
-                        "macos-arm64" in targets and "limit" not in change):
-                    claim(one, "macos-arm64", "executed")
-                row = corpus.get(name, {})
-                if row.get("mode") == "execute" and "profile_limit" not in row:
-                    claim(one, "cortex-m", "executed")
-                elif row.get("mode") == "refuse":
-                    claim(one, "cortex-m", "refused")
-            elif kind in ("positive", "negative", "end-to-end"):
-                verdict = "compiled" if kind == "positive" else "refused"
-                if "linux-x86-64" in targets:
-                    claim(one, "linux-x86-64", verdict)
-                #  Darwin's source verdicts are its positive and negative
-                #  fixtures with a program or arguments; the manifest may
-                #  make a fixed conditional select differently on arm64.
-                if (kind != "end-to-end" and "macos-arm64" in targets
-                        and (fields.get("program") or fields.get("args"))):
-                    status = parity["diagnostics"].get(name, {}).get("status")
-                    claim(one, "macos-arm64", verdict if status is None else
-                          "compiled" if status == "0" else "refused")
-                if "cortex-m" in targets and selects_cortex_target(fields):
-                    claim(one, "cortex-m", verdict)
-    for one in listed(driver.get("constructs", "")):
-        claim(one, "cortex-m", "executed")
-    #  R7.40: the firmware lane's own probes, which are built and run on
-    #  Cortex-M outside the corpus exactly as the driver is.
-    for probe in probes:
+            for target, what in reached.items():
+                claim(one, target, what)
+    for probe in cortex_probe_records():
         for one in listed(probe.get("constructs", "")):
             claim(one, "cortex-m", "executed")
     return best
@@ -4156,6 +4196,192 @@ def fixture_names(text):
         r"/[A-Za-z0-9][A-Za-z0-9._-]*)`", text)
 
 
+def golden_digest(relative):
+    """A committed oracle file as bytes and a short content digest.
+
+    The digest is what gives the generated `outputs` column teeth.  A status
+    and a file name can both stay the same while the expected bytes change,
+    and a coverage column that survives an edited golden records nothing.
+    """
+    path = os.path.join(ROOT, relative)
+    if not os.path.isfile(path):
+        return None
+    with io.open(path, "rb") as stream:
+        data = stream.read()
+    return "%s %dB sha %s" % (os.path.basename(relative), len(data),
+                              hashlib.sha256(data).hexdigest()[:12])
+
+
+def prototype_row_evidence(name, fields):
+    """R7.60's inputs, outputs and target results for one derivation row.
+
+    The exit clause asks each row for inputs, outputs, target results and a
+    trace.  The register already carried the trace (`Findings`, rendered as
+    source line numbers) and the inputs implicitly, in a fixture name.  The
+    other two were missing, and the choice that decides whether they are
+    worth having is where they come from.  Asserting a result by hand would
+    add a column no run can contradict, so all three are derived: inputs and
+    outputs from the fixture's own committed record, results from
+    `fixture_target_claims`, which is the same reader the construct inventory
+    uses.  Editing a golden, an argument, a status, a code list or a target
+    record moves this column, and a stale matrix is a gate failure.
+
+    `targets:` stays an applicability claim and is rendered separately.  The
+    results column names only product targets: `synthetic-32` is the model
+    that preceded the Cortex-M backend and applies to no construct, so a
+    verdict under it would be a verdict about nothing.
+    """
+    kind = name.split("/")[0]
+    inputs, outputs = [], []
+    if kind == "firmware":
+        for field in ("source", "driver", "protocol", "layout"):
+            if fields.get(field):
+                inputs.append(fields[field])
+        oracles = [one.strip() for one in
+                   (fields.get("oracle", "") or "").split(",") if one.strip()]
+        if oracles:
+            outputs.append("runner oracles " + ", ".join(sorted(oracles)))
+    else:
+        if fields.get("program"):
+            inputs.append(fields["program"])
+        if fields.get("root"):
+            inputs.append("rooted")
+        for label, field in (("args", "args"), ("run_args", "run_args"),
+                             ("peer", "c-sources")):
+            if fields.get(field):
+                inputs.append("%s %s" % (label, fields[field]))
+        status = fields.get("status")
+        if kind == "negative":
+            outputs.append("refused" if status is None
+                           else "refused status " + status)
+        elif status is not None:
+            outputs.append("status " + status)
+        if fields.get("codes"):
+            outputs.append("codes " + fields["codes"])
+        for field, label in (("run_expect",
+                              fields.get("stream", "stdout") + " stream"),
+                             ("expect", "report")):
+            if fields.get(field):
+                digest = golden_digest(os.path.join(
+                    "compiler/tests/fixtures", name, fields[field]))
+                outputs.append("%s %s" % (label, digest or "MISSING"))
+        #  `no output` is part of an oracle, never the whole of one: a
+        #  runtime or ABI row with no status has nothing to be checked
+        #  against, so the column collapses and the row is refused.
+        if kind in ("runtime", "abi") and status and not fields.get("run_expect"):
+            outputs.append("no output")
+    reached = (fixture_target_claims() or {}).get(name, {})
+    results = ["%s=%s" % (target, reached[target])
+               for target in PRODUCT_TARGETS if target in reached]
+    return ("; ".join(inputs) or "-", "; ".join(outputs) or "-",
+            ", ".join(results) or "-")
+
+
+def prototype_scope_problems(prototypes, scopes, records):
+    """An applicability claim must be reached by one of its own derivations.
+
+    R2.90's scope register and the per-row `targets:` metadata deliberately
+    say different things: a scope row is where the prototype's subject matter
+    belongs, the finer assignment is the fixture's, and neither is the other's
+    union.  Measured at R7.60, the rows reach further than three of the four
+    scope rows claim -- prototype 1's two hosted lifetime and ABI derivatives,
+    and prototype 2's and prototype 4's recorded Cortex verdicts -- and that
+    is the documented relationship rather than a defect, so neither register
+    is edited to match the other.
+
+    What was never checked is the other direction, and that one is a real
+    obligation: a scope row naming a product target no derivation of that
+    prototype reaches is an applicability claim with nothing behind it.
+    `synthetic-32` is exempt because it is the model that preceded the
+    Cortex-M backend and reaches no product verdict at all.
+    """
+    if scopes is None:
+        return []
+    numbers = {"prototype-%s" % n: str(n) for n in (1, 2, 3, 4)}
+    reached = {scope: set() for scope in numbers}
+    for _, row in prototypes:
+        name = row["Fixture"].strip("`")
+        if name not in records:
+            continue
+        number = row["Prototype"].strip("`Pp ")
+        _, _, results = prototype_row_evidence(name, records[name][1])
+        for scope, wanted in numbers.items():
+            if wanted == number:
+                reached[scope] |= {one.split("=")[0]
+                                   for one in results.split(", ") if "=" in one}
+    out = []
+    for line, row in scopes:
+        scope = row["Scope"].strip("`")
+        if scope not in reached:
+            continue
+        named = {one.strip("` ") for one in row["Targets"].split(",")}
+        for target in sorted((named & set(PRODUCT_TARGETS)) - reached[scope]):
+            out.append((ROADMAP, line,
+                        "%s claims %s and no derivation of it reaches that"
+                        " target" % (scope, target)))
+    return out
+
+
+def prototype_result_problems(prototypes, records):
+    """A derivation row's three new columns must each be answerable.
+
+    R730-18's editor grammar drifted because no gate ran; a coverage column
+    nothing can refuse rots the same way.  So each row is held to having
+    inputs, an oracle and at least one product-target verdict drawn from a
+    retained record, to not claiming a product target no record places, and
+    to naming an oracle file that is here.  The firmware driver's oracle is
+    its runner's own assertion groups, so each named group must be a routine
+    that runner defines: a renamed oracle fails rather than going unnoticed.
+    """
+    out = []
+    claims = fixture_target_claims()
+    if claims is None:
+        return [(ROADMAP, 1, "the per-fixture target records cannot be read")]
+    for line, row in prototypes:
+        name = row["Fixture"].strip("`")
+        if name not in records:
+            continue
+        meta, fields = records[name]
+        inputs, outputs, results = prototype_row_evidence(name, fields)
+        for label, value in (("inputs", inputs), ("outputs", outputs),
+                             ("target results", results)):
+            if value == "-":
+                out.append((ROADMAP, line,
+                            "derivation %s records no %s" % (name, label)))
+        if "MISSING" in outputs:
+            out.append((ROADMAP, line,
+                        "derivation %s names an absent oracle file" % name))
+        #  Every derivation but the firmware driver is one Landin program,
+        #  and the driver's own sources are checked field by field below.
+        if name.split("/")[0] != "firmware" and not fields.get("program"):
+            out.append((ROADMAP, line,
+                        "derivation %s names no program" % name))
+        if "synthetic-32" in results:
+            out.append((ROADMAP, line,
+                        "synthetic-32 is not a product target result: " + name))
+        named = {one.strip() for one in (fields.get("targets", "") or "").split(",")}
+        for target in sorted((named & set(PRODUCT_TARGETS))
+                             - set(claims.get(name, {}))):
+            out.append((ROADMAP, line,
+                        "derivation %s claims %s and no record places it"
+                        % (name, target)))
+        if name.split("/")[0] == "firmware":
+            runner = fields.get("runner", "")
+            source = ""
+            if runner and os.path.isfile(os.path.join(ROOT, runner)):
+                with io.open(os.path.join(ROOT, runner),
+                             encoding="utf-8") as stream:
+                    source = stream.read()
+            for oracle in (one.strip() for one in
+                           (fields.get("oracle", "") or "").split(",")):
+                if oracle and not re.search(r"^def %s\b" % re.escape(oracle),
+                                            source, re.M):
+                    out.append((os.path.relpath(meta, ROOT), 1,
+                                "oracle %s is not a routine in %s"
+                                % (oracle, runner or "nothing")))
+    return out
+
+
 def implemented_constructs():
     """Constructs the current corpus says reach acceptance or emission."""
     return {one for one, has in construct_evidence().items()
@@ -4309,9 +4535,21 @@ def coverage_dumps():
                        "3": ("prototype-3-containers.md", "Z"),
                        "4": ("prototype-4-app.md", "W")}
     records = prototype_evidence_records()
-    p_lines = ["# Generated by check.py from ROADMAP.md's R2.90 register.",
-               "# Do not edit; regenerate with python3 check.py --coverage.",
-               "# fixture | prototype | finding source lines | constructs | targets | pressure"]
+    p_lines = ["# Generated by check.py from ROADMAP.md's R2.90 register,",
+               "# each fixture's own record and its targets' retained",
+               "# results.  Do not edit; regenerate with",
+               "# python3 check.py --coverage.",
+               "#",
+               "#  inputs, outputs and results are derived, never asserted:",
+               "#  inputs and outputs come from the fixture's committed",
+               "#  record, including a digest of every golden it cites, and",
+               "#  results from the same per-fixture target records the",
+               "#  construct inventory reads.  targets stays an",
+               "#  applicability claim; results names product targets only,",
+               "#  so synthetic-32 never appears there.  See ROADMAP.md",
+               "#  R2.90 and R7.60.",
+               "# fixture | prototype | finding source lines | constructs "
+               "| inputs | outputs | targets | results | pressure"]
     for _, row in prototypes:
         number = row["Prototype"].strip("`Pp ")
         source, _ = finding_sources.get(number, ("?", "?"))
@@ -4324,9 +4562,11 @@ def coverage_dumps():
             locations.append("%s:%d" % (finding, line))
         fixture = row["Fixture"].strip("`")
         fields = records.get(fixture, (None, {}))[1]
+        inputs, outputs, results = prototype_row_evidence(fixture, fields)
         p_lines.append(" | ".join((fixture, source, ", ".join(locations),
                                    fields.get("constructs", "-"),
-                                   fields.get("targets", "-"),
+                                   inputs, outputs,
+                                   fields.get("targets", "-"), results,
                                    row["Pressure"])))
 
     t_lines = ["# Generated by check.py from every fixture's metadata and",
@@ -4630,6 +4870,10 @@ def check_coverage_registers(full_run):
                     out.append((ROADMAP, line,
                                 "%s is not a finding in %s" %
                                 (finding, source)))
+        #  R7.60's exit clause: the same rows also carry inputs, outputs and
+        #  a per-target result, all three derived rather than asserted.
+        out += prototype_result_problems(prototypes, fixtures)
+        out += prototype_scope_problems(prototypes, scopes, fixtures)
 
     firmware = fixtures["firmware/derived-driver"][1]
     for field in ("source", "protocol", "layout", "driver", "mapping", "runner"):
@@ -6041,6 +6285,7 @@ def check_phase_handoff(full_run):
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_migration_register.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_construct_inventory.py")],
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_prototype_coverage.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
                 [sys.executable, os.path.join(ROOT, "devices/test.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")],

@@ -294,7 +294,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.60 — Run complete derived prototype coverage (planned).**
+**Next roadmap item: R7.70 — Declare the roadmap endpoint (planned).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.

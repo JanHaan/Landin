@@ -275,7 +275,13 @@ gates target-code and build-report identity under it on all three targets,
 pins how debug metadata may vary with the compilation directory and no
 further, and records the hosted linked image as the platform driver's artifact
 rather than a Landin claim; its exact-revision dual-native routine binding
-with debugger coverage owns closure. R7.60 is next dependency-ready.
+with debugger coverage owns closure. R7.60 closes complete derived prototype
+coverage: all thirty derivation rows now carry generated inputs, oracles and
+per-target results beside their existing finding trace, every product target
+the four applicability scopes name is reached by one of that prototype's own
+rows, and the two registers stay separate because the Cortex corpus reaches
+further than metadata claims. Its exact-revision dual-native routine binding
+owns closure. R7.70 is next dependency-ready.
 R6.80 retains its separate generated-device fixture gate.
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.

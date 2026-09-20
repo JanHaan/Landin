@@ -12473,7 +12473,7 @@ Later discoveries:
 
 A later discovery is a retained limit, watch or observation that an item
 record after R5.51's intake (R6.10-R6.100, R7.10, R7.20, for R730-22, R7.40,
-and for R730-23 and R730-24, R7.50) left without a finished owner: a capability an item declined or bounded, an evidence claim it
+for R730-23 and R730-24, R7.50, and for R730-25, R7.60) left without a finished owner: a capability an item declined or bounded, an evidence claim it
 expressly did not make, or a watch. Handoffs to R6 items that later completed
 are closed by those items and are not repeated, and a selected scope that no
 successor needs to lift, such as the ARMv6-M reference profile or the
@@ -12521,6 +12521,7 @@ record or inherited row whose owner, trigger and completion it joins; and
 | R730-22 | R7.40: the structural editor grammar's integration pass is the evidence R3.80's exit clause cites, and no acceptance job runs it. Nothing in either native policy invokes `highlight/test.sh`, and the acceptance environment has no `node`, so its tree-sitter block would skip and still report success. R7.40 made `--integration` refuse rather than skip, which stops a false green, but a check nobody runs still cannot fail. | evidence-gap | successor | Companion tool and ecosystem | Before the editor packages are offered as gated artifacts, or when the acceptance environment admits a pinned tree-sitter CLI | The corpus pass runs in a named job that fails when a source stops parsing, with the CLI pinned in `environments/pins.sh` and its provenance in the third-party inventory; `--integration`'s refusal to skip stays mandatory. |
 | R730-23 | R7.50: a linked hosted image is not bit-reproducible. Two links of one unchanged assembly differ in six bytes on the pinned Linux toolchain — measured in the same directory, from the same command, with the same output path — because the GNU driver writes its own random temporary object name into the symbol table. Darwin's came out identical, which is one toolchain's tidiness and not a contract. Landin's own side, the assembly the link consumes, is deterministic and gated. | supported-limit | successor | Release readiness | Before a reproducible-distribution or bit-identical hosted-image claim, or when both pinned hosted drivers link reproducibly | The image compared byte for byte across equivalent closures on both hosted targets with the driver's naming pinned, the assembly-identity check retained, and Cortex-M's existing firmware ELF, object, assembly, linker-script and linker-map identity unchanged. |
 | R730-24 | R7.50: the build report's per-routine counters are populated only by the lane that needed them. Linux fills all of them, Cortex-M0 fills frame, spill and instruction counts, and Darwin fills frame bytes alone, reading zero instructions and zero registers for a program that has both. The Linux object-quality lane measures with `size` and `objdump` and never depended on them, so nothing is wrong today; a cross-target comparison drawn from the report would be. | evidence-gap | merged | R551-12 | Before any measured code-quality comparison across targets is drawn from the build report | Every counter the report declares populated on every backend that emits it, or the report stating per target which counters it does not measure, with the determinism contract's report identity unchanged. |
+| R730-25 | R7.60: `end-to-end/refine-identity` is the one fixture in the corpus that names a product target no machine-readable record places. It runs on macOS arm64 in both Darwin host suite modes, but `compiler/tests/darwin/parity.json` records source verdicts for positive and negative fixtures and the coverage reader deliberately excludes the end-to-end class, so its arm64 evidence exists as a run and not as a citable record. R7.60's derivation rule found this and does not cover it: no derivation row is an end-to-end fixture. | evidence-gap | successor | Release readiness | Before an end-to-end fixture's per-target claim is cited as evidence, or when the Darwin parity manifest gains end-to-end verdicts | Every end-to-end fixture's product-target claim corroborated by a record the coverage readers read, with the existing positive and negative source verdicts unchanged. |
 <!-- /r730-ledger -->
 
 Mechanical checks:
@@ -13229,15 +13230,222 @@ R4.70, R4.80, R5.50, R6.90 and R7.50 dependencies, all complete.
 
 ### R7.60 — Run complete derived prototype coverage
 
-Status: planned
+Status: complete
 Depends on: R3.70, R4.70, R4.80, R5.50, R6.90, R7.50
 
 Run all four complete derived prototypes according to the applicability matrix,
 plus their positive and negative conformance derivatives. Do not demand hosted
 I/O programs on Cortex-M or the full 64 KiB container pool on a 32 KiB target.
 
-Exit evidence: every derivation row has inputs, outputs, target results and a
-trace back to the original design record.
+This item inherits no routed work. The construct inventory's 201 rows have no
+target gap, and its seven owned rows all name a successor family — Language
+evolution, Companion tool and ecosystem, Broader standard library — rather than
+a live item; neither the R5.51 nor the R7.30 ledger holds a `scheduled` record.
+All three were recounted here rather than taken from R7.50's word, and the
+charter is not widened because the count came out the same.
+
+What the exit clause was missing, and where the missing part comes from:
+
+Every derivation row already had two of the four things the exit clause asks
+for. R2.90's register names the fixture, which is its inputs, and the findings
+it derives, which `check.py --coverage` renders as `Xn`/`Yn`/`Zn`/`Wn` with the
+line each occupies in its prototype — a trace recovered from the label rather
+than hand-copied, so moving prose cannot stale it. Outputs and target results
+were not there at all. `targets` looked like the second one and is not: it is
+an applicability claim, the assignment R2.90 made about where a prototype's
+subject matter belongs, and it says nothing about what any run produced.
+
+The decision that mattered was where the two new columns come from, because a
+result column that no run can contradict is worth less than no column. Both
+are derived. `inputs` and `outputs` are read out of the fixture's own committed
+record — its program, whether it compiles rooted, its compiler and run
+arguments, its C peer, its expected status, its ordered diagnostic codes, and a
+length and content digest of every golden it cites. `results` is read out of
+the same four per-target records the construct inventory already folds over
+constructs: fixture metadata, `compiler/tests/darwin/parity.json`,
+`compiler/tests/cortex-m/corpus.json` and `compiler/tests/driver/fixture.json`.
+The reader that computed the inventory's per-construct answer was split so that
+the per-fixture answer it had already computed is the one the derivation
+register reads; the inventory regenerates byte-identical across that split,
+which is what says the two registers cannot now disagree about a target.
+
+The alternative was to write a results column beside each row by hand. It was
+rejected for the reason R730-18 records: the editor grammar drifted because no
+gate ran, and an asserted coverage claim is a sentence, not a check. What the
+derived column buys instead is teeth. Edit a golden and the digest moves. Change
+a status, a code list, an argument or a target record and the column moves. A
+stale `prototypes.matrix` is a gate failure, so the coverage claim and the
+corpus cannot part company silently.
+
+The four prototypes, and what each produced:
+
+Prototype 1 runs on Cortex-M0 as `firmware/derived-driver`, outside the hosted
+harness, through `environments/cortex-m/driver.py` in the mandatory embedded
+lane. Its inputs are the four sources `compiler/tests/driver/fixture.json`
+names — the application, the UART driver, the protocol client and the
+target-layout control — and its oracle is that runner's own six assertion
+groups: `cpu`, `layout_cpu`, `application`, `protocol`, `configurations` and
+`capacity_boundaries`. The record now names them, and `check.py` refuses an
+oracle that is not a routine the named runner defines, so a renamed assertion
+group fails rather than quietly leaving the register describing a run nobody
+makes. Its result is `cortex-m=executed`. Its other two derivation rows are
+hosted: `negative/r630-frame-dma` refuses a frame buffer escaping through a DMA
+descriptor on both hosted targets, and `abi/r630-dma-slice` executes there.
+
+Prototype 2 runs on Linux x86-64 and macOS arm64 as `runtime/derived-parser`,
+with `runtime/diagnostic-loggers-dispatch` beside it. Its inputs are its rooted
+`main.ldn` and the `input.txt` its own `run_args` names; its outputs are status
+42 and 63 bytes of merged output whose digest is now in the register.
+
+Prototype 3 runs on both hosted targets as `runtime/derived-containers` —
+rooted `main.ldn`, status 42 and an empty expected output, which is the whole
+oracle that program has and is now recorded as such. Fifteen further P3 rows
+carry it, nine of them runtime programs the Cortex corpus also executes.
+
+Prototype 4 runs on both hosted targets as `runtime/derived-hosted-memory`,
+rooted, status 42, no output, with eight further rows including the two arena
+programs and four negative derivatives; four of its rows also execute on
+Cortex-M0 and two are refused there.
+
+All thirty rows now carry all four elements. None could not: there is no row
+whose result rests on a run the acceptance environment cannot make, so nothing
+is transferred for want of one.
+
+The two registers say different things, and only one direction is an obligation:
+
+Measured across the whole corpus, 497 of 544 fixtures reach a product target
+their own `targets:` does not name, 493 of them Cortex-M, because the Cortex
+corpus independently assigns a verdict to every runtime and ABI fixture while
+metadata records applicability. That is the documented relationship rather than
+a defect, and it is why the two columns stay separate instead of one being
+edited into agreement with the other. Seventeen of the thirty derivation rows
+are in that majority. Three of the four scope rows are reached more widely than
+they claim: prototype 1's two hosted derivatives, and prototype 2's and
+prototype 4's recorded Cortex verdicts.
+
+The other direction had never been checked and is a real obligation. A scope
+row naming a product target that no derivation of that prototype reaches is an
+applicability claim with nothing behind it. `prototype_scope_problems` refuses
+one. It holds today: every product target all four scope rows name is reached
+by at least one of that prototype's own rows, prototype 3's Cortex-M included —
+nine of its runtime derivations execute there, which is the evidence that claim
+always rested on and never cited. `synthetic-32` is exempt, because it reaches
+no product verdict at all.
+
+`scripts/tests/test_prototype_coverage.py` is what keeps all of this from
+becoming a check that cannot fail, on R7.50's pattern. Seventeen controls alter
+one input each — a record that stops naming its program, an absent golden, an
+edited golden, a changed status or code list, a target record that no longer
+places a row, a scope claim whose corpus backing is removed, a driver oracle
+the runner does not define — and require the named refusal. It runs inside
+`check.py`, so it is in the documents job of both native policies. It runs no
+compiler, emulator or debugger: it establishes that the register cannot lie,
+never that a program works, which stays with the runtime, quality, debugger and
+embedded lanes.
+
+The conformance derivatives, and what refuses a regression in each:
+
+The ten negative derivations refuse on both hosted targets, and their codes are
+in the register in order: L0314 for the three frame and callback escapes and the
+DMA descriptor, L0315 for the live map entry and the borrowed source, L0316 for
+the wrong map origin, L0318 for the missing ordering conformance, L0301 for the
+two substituted-signature and permission refusals. Three of them also pin an
+exact report, whose digest the register now carries. The Linux `suite-debug`
+and `suite-release` jobs refuse a regression in every one of them through
+`scripts/test.sh`; Darwin refuses it through its native
+diagnostics command, which checks source verdicts on arm64. The positive side is
+the runtime and ABI derivations themselves: `suite-release` runs the complete
+matrix over each fixture's profiles on Linux, Darwin's parity execution
+command runs every runtime and ABI fixture on arm64, `scripts/quality.sh`
+repeats the three complete hosted workloads over all six profiles and executes
+each measured object against its original oracle, and the embedded lane runs
+the driver. `conformances.matrix` separately holds D148's fifteen conformance
+mechanisms to their cited evidence, three of which cite the derived parser.
+
+No coverage is left ungated by this item. The one thing the new rule found and
+could not corroborate is a provenance gap rather than a coverage gap:
+`end-to-end/refine-identity` is the single fixture in the corpus that names a
+product target — macOS arm64 — which no machine-readable record places, because
+the Darwin parity manifest records source verdicts for positive and negative
+fixtures and the reader deliberately excludes the end-to-end class. The fixture
+does run there, in both Darwin host suite modes. R730-25 records that its
+Darwin evidence exists as a run and not as a citable record, and transfers it.
+
+The applicability decisions this item respected rather than widened:
+
+Hosted I/O programs are not demanded on Cortex-M. The three complete hosted
+derivatives are recorded `cortex-m=refused`, with the corpus's own reasons:
+`derived-containers` imports `core/heap`, whose allocator and releaser need
+`extern(c)`, and the general C source surface stays refused. Reporting that
+refusal is the point — it is a recorded scope decision, and a row left silent
+would be indistinguishable from a row nobody looked at.
+
+The full container pool is not demanded on a 32 KiB target. R730-05's boundary
+stands exactly as recorded: seventeen shared programs exceed the selected
+32 KiB flash, 16 KiB RAM and 4 KiB stack profile in every scheduled mode, 72
+capacity verdicts, and no verdict is re-judged here. Running a program again
+does not lift a boundary that was recorded as one.
+
+Two more, found rather than given. `synthetic-32` is never reported as a target
+result: it is the model that preceded the Cortex-M backend and applies to no
+construct, so a verdict under it would be a verdict about nothing. The seven
+derivation rows that legitimately name it keep it in `targets`, where it says
+what it has always said. And prototype 1's scope stays Cortex-M although two of
+its derivations are hosted-only, while prototype 2's and prototype 4's scope
+rows stay hosted although their rows carry Cortex verdicts. Neither register is
+edited to match the other, because a scope row is a decision about where a
+prototype's subject matter belongs and a result is a record of what ran.
+
+No language or representation decision was taken, so `spec.md`'s register gains
+no entry and `tour.md` needs no amendment. Nothing here changes what a program
+means: the item added a register column, its derivation and its refusals. The
+decisions above are recorded here with their alternatives and the measurements
+that pin them, which is where an evidence decision belongs.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `routine` policies **without** debugger coverage are
+selected, and committed before the closure candidate. Both judgments were made
+on `docs/process.md`'s own terms rather than on the size of the run.
+
+Debugger coverage is not forced and not chosen. Debugger risk there is changed
+debug metadata, source or variable locations, unwind or frame conventions,
+debugger transport, debugger checks, or the acceptance selection or
+verification of debugger evidence. This item changes none of them: it does not
+touch `scripts/debug.sh`, `compiler/tests/debugging/check.py` or the schedule
+check that holds the complete P2/P3/P4 workloads to their three profiles, and
+it adds no debugger claim to any column — `results` is `executed`, `compiled`
+or `refused` and nothing else. R7.50's selection was forced because it
+committed a check that reads and verifies debug metadata into every suite job;
+this item commits a check that reads records. Measured rather than argued:
+every result the new register records is established by a job the routine
+policy runs anyway — the Linux `suite-release` job for each hosted execution,
+Darwin's step-10 parity execution command for every runtime and ABI fixture on
+arm64, `scripts/quality.sh` for the six-profile repeats, and
+`environments/cortex-m/run.py` in the documents job for the driver. Adding
+`--debugger` would run GDB and LLDB over three programs whose behaviour this
+item did not change, which is what `docs/process.md` warns against.
+
+Milestone scope is judged on phase closure or new parity or backend scope, and
+it is not warranted. This is the item that most looks like a parity claim and
+is not one, for a reason its own charter states: it runs the prototypes
+*according to the applicability matrix*, and that matrix records that they
+deliberately do not all reach all targets. Parity means the same programs on
+every target; R5.50 established hosted parity on a second backend and R6.100
+closed the freestanding profile, and both were new scope. R7.60 establishes no
+new parity, no target, no ABI convention and no instruction selection, and
+leaves the compiler untouched. The phase closes at R7.70, not here. The changes
+are the coverage reader and its two new columns, one new control test, the
+firmware driver's `oracle` field, both native policy files, documents and the
+generated matrices.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision, with
+atomic canonical promotion, the identical remote commit and approval object, a
+complete matching GitHub namespace and successful guarded Pages publication
+byte-matched on both domains. A later bookkeeping revision cannot supply the
+binding. With it R7.70 is the next dependency-ready item, and R7.60 is its
+sole dependency.
 
 ### R7.70 — Declare the roadmap endpoint
 
@@ -13350,6 +13558,6 @@ and record the reopening explicitly.
 | E1 — Control flow nobody used | Labels, `break with` and `complete` appeared in one of four prototypes. A fifth program not needing them is evidence, not automatic removal. Sources: Y4, Z15. | Watch through R7; transfer to Language evolution if inconclusive. | transferred | Inconclusive under its own rule: none of the four complete derived programs (R3.70, R4.70, R4.80, R6.90) nor `core` writes a label, `break with` or `complete`, which E1 counts as evidence, not removal, while D157, D158 and D234 implement all three on every target and D234's blocks need no IR of their own. Activation: an explicit proposal to remove or reshape them, which must bring evidence beyond non-use. Completion: a tour amendment and register decision weighing that proposal against the four programs' record. |
 | E2 — Concept width | Resist widening concepts to the hungriest implementation; watch real libraries. Sources: `[1260]`, W4. | Watch R3/R4; transfer to Language evolution if inconclusive. | transferred | Inconclusive, one case each way. R4.80's application kept W4's destination concept narrow with fixed counts, and `filter`, `drawable` and the other `core` concepts needed nothing wider. In `core`, the one real library here, D154's `diag.log` instead carries both providers' needs, the streaming provider's `io_failed` and the bounded provider's `escaping` retention, because prototype 2 requires interchangeable sinks, which rules out [1260]'s two-concept answer. Activation: a real library whose concept must widen for its hungriest implementation or split in two ([1260]). Completion: [1260] confirmed or amended with that library's evidence, weighing D154's interchangeability case. |
 | E3 — Source-generation count | Two cases stand: generated tables and SVD bindings. A third triggers D3 review. The legacy item had no independent citation. | Watch R3-R6; transfer to Language evolution if no third case appears. | transferred | No third case: the repository's two Landin source generators are R6.80's SVD device generator, the SVD case, and R4.40's C binding generator, which B2 required and which reads the headers `refine` deliberately does not parse, so compile-time execution would not replace it; no program generated a table or an SoA layout. Activation: a third kind of generated source, which starts the D3 review. Completion: that review recorded against D3's preserved rationale. |
-| F1 — Executable prototype conformance | Preserve positive and negative cases, especially formerly contradictory pre-0.0.17 examples; prose-only prototypes cost two patch releases. Sources: `R§P0.8`; `H` definition of success. | R0.30 and complete derived programs at R3.70/R4.70/R4.80/R6.90/R7.60. | implemented | R0.30's corpus and the complete derived programs of R3.70, R4.70, R4.80 and R6.90 execute with positive and negative derivatives; R7.60 runs complete coverage by the applicability matrix. |
+| F1 — Executable prototype conformance | Preserve positive and negative cases, especially formerly contradictory pre-0.0.17 examples; prose-only prototypes cost two patch releases. Sources: `R§P0.8`; `H` definition of success. | R0.30 and complete derived programs at R3.70/R4.70/R4.80/R6.90/R7.60. | implemented | R0.30's corpus and the complete derived programs of R3.70, R4.70, R4.80 and R6.90 execute with positive and negative derivatives. R7.60 closed coverage by the applicability matrix: all thirty derivation rows carry generated inputs, outputs, per-target results and a finding trace, every product target the four scope rows name is reached by one of that prototype's own rows, and `scripts/tests/test_prototype_coverage.py` proves each refusal fires. |
 | F2 — Grow `check.py` | Every cheap new rule and every defect once missed becomes a check; it found most 0.0.15-through-0.1.0 defects. The legacy item had no citation. | Roadmap-wide process and mechanical gate. | implemented | A continuing gate rather than a deliverable: R5.51's ledger checks, R7.10's inventory checks and R7.30's disposition checks each turned a textual rule into a mechanical one with malformed controls. |
 | F3 — First implementation amendment | Evidence tables and `any` belong in the first major subset; specialization does not. The table is the foundation and specialization the optimization; parser and hosted I/O need dispatch. Source: `[1310]`. | R2.70/R2.80 and R3.70; specialization starts only at R4.50. | implemented | Evidence tables and `any` shipped in R2.70, R2.80 and R3.70's first milestone without specialization, which R4.50's D211 adds as an optimization. |
