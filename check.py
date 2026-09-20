@@ -142,6 +142,11 @@ CURRENT_ROADMAP_WORK = re.compile(
     r"^\*\*Current roadmap work: (R[0-7]\.\d+ — \S.*?)\.\*\*$")
 NEXT_ROADMAP_ITEM = re.compile(
     r"^\*\*Next roadmap item: (R[0-7]\.\d+ — \S.*?) \(planned\)\.\*\*$")
+#  R7.70's third answer.  A roadmap that has run out of work is not the same
+#  state as one whose remaining work cannot start, and the pages must be able
+#  to say which without either being able to pass as the other.
+ENDPOINT_ROADMAP_ITEM = re.compile(
+    r"^\*\*Roadmap endpoint: (R[0-7]\.\d+ — \S.*?) \(complete\)\.\*\*$")
 ROADMAP_PROSE_STATUS = re.compile(
     r"(?=(\b(R[0-7]\.\d+)'s\b.{0,240}?\b(?:is|are) "
     r"(active|complete)\b))")
@@ -1551,6 +1556,12 @@ def check_project_status(full_run):
     Keep all three answers mechanically one answer. Between active items, show
     the first dependency-ready planned item in roadmap order rather than claiming its
     implementation is active.
+
+    R7.70 adds the third state a finished roadmap needs. "Nothing is ready
+    because everything is done" and "nothing is ready because something is
+    stuck" are different facts, and a rule that cannot tell them apart is
+    worse than one that refuses both: the endpoint is recognised only when no
+    item is planned, active or blocked, so a blocked item still refuses.
     """
     if not full_run:
         return []
@@ -1593,6 +1604,8 @@ def check_project_status(full_run):
              and all(dependency == "none"
                      or items.get(dependency, {}).get("status") == "complete"
                      for dependency in item["depends"])]
+    live = [work_id for work_id, item in items.items()
+            if item["status"] in ("planned", "active", "blocked")]
     out = []
     if len(active) == 1:
         work_id, item = active[0]
@@ -1601,6 +1614,13 @@ def check_project_status(full_run):
     elif not active and ready:
         work_id, item = ready[0]
         marker_kind = "next"
+        expected = "%s — %s" % (work_id, item["title"])
+    elif items and not live:
+        #  The endpoint: the pages name the last item in roadmap order, which
+        #  is the one that declared it.  ROADMAP.md's own endpoint rule holds
+        #  the declaration to the same item.
+        work_id, item = list(items.items())[-1]
+        marker_kind = "endpoint"
         expected = "%s — %s" % (work_id, item["title"])
     else:
         out.append((ROADMAP, 1,
@@ -1616,13 +1636,15 @@ def check_project_status(full_run):
         markers = []
         for n, line in enumerate(text.splitlines(), 1):
             for kind, pattern in (("current", CURRENT_ROADMAP_WORK),
-                                  ("next", NEXT_ROADMAP_ITEM)):
+                                  ("next", NEXT_ROADMAP_ITEM),
+                                  ("endpoint", ENDPOINT_ROADMAP_ITEM)):
                 match = pattern.match(line)
                 if match:
                     markers.append((n, kind, match.group(1)))
         if len(markers) != 1:
             out.append((relative, 1,
-                        "expected one current- or next-roadmap-work line, found %d"
+                        "expected one current-, next- or endpoint-roadmap-work"
+                        " line, found %d"
                         % len(markers)))
         elif (expected is not None
               and (markers[0][1] != marker_kind
@@ -6271,18 +6293,21 @@ def check_hosted_derivation(full_run):
 
 
 def check_phase_handoff(full_run):
-    """Check roadmap-owned transfers and native policy refusal controls."""
+    """Check roadmap-owned transfers, the endpoint and native refusal controls."""
     if not full_run:
         return []
-    from scripts.roadmap_debt import validate, validate_discoveries
+    from scripts.roadmap_debt import (validate, validate_discoveries,
+                                      validate_endpoint)
     import subprocess
     try:
         with io.open(os.path.join(ROOT, "ROADMAP.md"), encoding="utf-8") as source:
             text = source.read()
         validate(text)
         validate_discoveries(text)
+        validate_endpoint(text)
         for command in (
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_endpoint.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_migration_register.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_construct_inventory.py")],
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_prototype_coverage.py")],

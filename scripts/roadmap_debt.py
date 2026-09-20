@@ -127,3 +127,87 @@ def validate_discoveries(text):
             'discovery labels are not contiguous from R730-01')
     require(set(re.findall(r'R730-\d+', text)) <= set(seen), 'dangling discovery reference')
     return set(seen)
+
+
+TRANSFERRING = {'successor', 'limit', 'watch', 'transferred'}
+ENDPOINT_OPEN, ENDPOINT_CLOSE = '<!-- roadmap-endpoint -->', '<!-- /roadmap-endpoint -->'
+
+
+def durable_records(text):
+    """(label, disposition, owner cell) for every durable record there is.
+
+    The R5.51 ledger, the R7.30 ledger and the inherited review register each
+    own their own rules elsewhere; the endpoint is the one claim that spans
+    all three, so they are read together here. A ledger owner is a cell and an
+    appendix owner is a sentence, which is why the caller matches by name.
+    """
+    out = []
+    for start, end, disposition_at, owner_at in (
+            ('<!-- r551-ledger -->', '<!-- /r551-ledger -->', 2, 3),
+            ('<!-- r730-ledger -->', '<!-- /r730-ledger -->', 3, 4)):
+        if text.count(start) != 1 or text.count(end) != 1:
+            continue
+        for line in text.split(start)[1].split(end)[0].splitlines():
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            if len(cells) > owner_at and re.fullmatch(r'R\d{3}-\d{2}', cells[0]):
+                out.append((cells[0], cells[disposition_at], cells[owner_at]))
+    appendix = text.split('\n## Inherited review register and migration parity\n', 1)
+    if len(appendix) == 2:
+        for line in appendix[1].split('\n## ', 1)[0].splitlines():
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            found = re.match(r'([A-F]\d) — ', cells[0]) if cells else None
+            if found and len(cells) == 5:
+                out.append((found.group(1), cells[3], cells[2]))
+    return out
+
+
+def validate_endpoint(text):
+    """R7.70: the roadmap declares an endpoint exactly when it has reached one.
+
+    Both directions, because only one of them is the interesting failure. A
+    declaration beside a live item is a false claim; a roadmap whose last item
+    is complete and whose prose still points forward is the drift that arrives
+    the first time somebody adds a successor item here instead of to the
+    roadmap that owns it. Neither state can be reached without this failing.
+
+    The transfers are held the same way. At the endpoint no durable record may
+    still be owed by a roadmap item, because every item is finished; and a
+    successor family that owns no record at all is documentation of a
+    direction rather than an owner, which is a different thing and should not
+    be able to pass as one.
+    """
+    def require(ok, message):
+        if not ok:
+            raise ValueError('roadmap endpoint: ' + message)
+    require(text.count(ENDPOINT_OPEN) == text.count(ENDPOINT_CLOSE) <= 1,
+            'missing or repeated endpoint declaration')
+    status = statuses(text)
+    require(bool(status), 'no work items to reach an endpoint with')
+    live = sorted(one for one, state in status.items() if state in LIVE)
+    if text.count(ENDPOINT_OPEN) != 1:
+        require(live, 'every work item is complete and nothing declares the endpoint')
+        return None
+    require(not live, 'the endpoint is declared and these items are live: '
+            + ', '.join(live))
+    block = text.split(ENDPOINT_OPEN)[1].split(ENDPOINT_CLOSE)[0]
+    require(block.strip(), 'the endpoint declaration says nothing')
+    last = re.findall(r'^### (R\d+\.\d+) — ', text, re.M)[-1]
+    require(re.search(r'\b%s\b' % re.escape(last), block),
+            'the endpoint declaration does not name the last work item ' + last)
+    named = successor_names(text)
+    require(named, 'the endpoint names no successor roadmap')
+    owed, owning = [], set()
+    for label, disposition, owner in durable_records(text):
+        if disposition not in TRANSFERRING:
+            #  A closed record cites a finished item, and its own rule already
+            #  says so. Only a transfer makes a successor an owner, so only a
+            #  transfer counts towards one below.
+            continue
+        found = [name for name in named if name in owner]
+        if not found:
+            owed.append(label)
+        owning.update(found)
+    require(not owed, 'transferred with no named successor: ' + ', '.join(owed))
+    idle = [name for name in named if name not in owning]
+    require(not idle, 'named successor owns no durable record: ' + ', '.join(idle))
+    return last

@@ -8,9 +8,24 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from roadmap_debt import validate, validate_discoveries
 
 
+#  R7.70 completed the roadmap, so no item is planned, active or blocked and
+#  the rules about a live owner have nothing real to point at.  Keeping an
+#  item artificially open would make the roadmap lie to make its tests pass,
+#  and deleting the controls would retire the rules themselves, so a control
+#  that needs a live owner appends one to the copy it validates.  R7.99 is not
+#  a real identity and cannot become one: work IDs are never reused and this
+#  roadmap adds none.
+LIVE = 'R7.99'
+LIVE_HEADING = ('\n### R7.99 — A live item, so a rule that needs one can be'
+                ' tested\n\nStatus: planned\nDepends on: none\n')
+
+
 class DebtTests(unittest.TestCase):
     def setUp(self):
         self.text = (ROOT / 'ROADMAP.md').read_text()
+
+    def live(self):
+        return self.text + LIVE_HEADING
 
     def test_complete_intake(self):
         self.assertEqual(len(validate(self.text)), 36)
@@ -34,10 +49,12 @@ class DebtTests(unittest.TestCase):
         line = next(l for l in self.text.splitlines()
                     if l.startswith('| R551-29 | normative |'))
         self.assertIn('| implemented | R7.20 |', line)
-        scheduled = line.replace('| implemented | R7.20 |', '| scheduled | R7.70 |')
-        self.assertEqual(len(validate(self.text.replace(line, scheduled))), 36)
+        scheduled = line.replace('| implemented | R7.20 |',
+                                 '| scheduled | %s |' % LIVE)
+        self.assertEqual(len(validate(self.live().replace(line, scheduled))), 36)
         with self.assertRaisesRegex(ValueError, 'complete owner'):
-            validate(self.text.replace(line, line.replace('| R7.20 |', '| R7.70 |')))
+            validate(self.live().replace(
+                line, line.replace('| R7.20 |', '| %s |' % LIVE)))
 
     def test_scheduled_work_needs_a_live_owner(self):
         #  R551-35 was scheduled on R7.30 until R7.30 transferred it, and
@@ -47,17 +64,16 @@ class DebtTests(unittest.TestCase):
         self.assertNotIn('| scheduled |', self.ledger())
         line = next(l for l in self.text.splitlines() if l.startswith('| R551-17 |'))
         self.assertIn('| implemented | R7.40 |', line)
-        live = line.replace('| implemented | R7.40 |', '| scheduled | R7.70 |')
-        self.assertEqual(len(validate(self.text.replace(line, live))), 36)
+        live = line.replace('| implemented | R7.40 |',
+                            '| scheduled | %s |' % LIVE)
+        self.assertEqual(len(validate(self.live().replace(line, live))), 36)
         finished = line.replace('| implemented | R7.40 |', '| scheduled | R7.40 |')
         with self.assertRaisesRegex(ValueError, 'live owner: R551-17'):
             validate(self.text.replace(line, finished))
-        heading = ('### R7.70 — Declare the roadmap'
-                   ' endpoint\n\nStatus: planned')
-        self.assertIn(heading, self.text)
         with self.assertRaisesRegex(ValueError, 'live owner'):
-            validate(self.text.replace(line, live)
-                     .replace(heading, heading.replace('planned', 'complete')))
+            validate(self.live().replace(line, live)
+                     .replace(LIVE_HEADING,
+                              LIVE_HEADING.replace('planned', 'complete')))
         self.assertIn('| R551-35 | parked-watch | successor | Language evolution |', self.text)
 
     def ledger(self):
@@ -68,16 +84,20 @@ class DiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.text = (ROOT / 'ROADMAP.md').read_text()
 
+    def live(self):
+        return self.text + LIVE_HEADING
+
     def line(self, label):
         return next(l for l in self.text.splitlines() if l.startswith('| %s |' % label))
 
-    def refused(self, old, new, fragment):
+    def refused(self, old, new, fragment, live=False):
         self.assertIn(old, self.text)
+        source = self.live() if live else self.text
         with self.assertRaisesRegex(ValueError, fragment):
-            validate_discoveries(self.text.replace(old, new, 1))
+            validate_discoveries(source.replace(old, new, 1))
 
     def test_complete_ledger(self):
-        self.assertEqual(len(validate_discoveries(self.text)), 25)
+        self.assertEqual(len(validate_discoveries(self.text)), 26)
 
     def test_identities_are_unique_and_contiguous(self):
         line = self.line('R730-02')
@@ -103,11 +123,16 @@ class DiscoveryTests(unittest.TestCase):
         #  R730-16 was scheduled on R7.40 until R7.40 implemented it, so the
         #  scheduled control now makes one out of it and moves its owner.
         scheduled = self.line('R730-16').replace(
-            '| implemented | R7.40 |', '| scheduled | R7.70 |')
+            '| implemented | R7.40 |', '| scheduled | %s |' % LIVE)
+        self.assertEqual(len(validate_discoveries(
+            self.live().replace(self.line('R730-16'), scheduled))), 26)
         self.refused(self.line('R730-16'), scheduled.replace(
-            '| R7.70 |', '| R7.20 |'), 'scheduled work needs a live owner')
+            '| %s |' % LIVE, '| R7.20 |'), 'scheduled work needs a live owner')
+        #  A live owner cannot close a record, which needs a live owner to
+        #  say with; a missing one would exercise a different rule.
         self.refused(self.line('R730-14'), self.line('R730-14').replace(
-            '| R6.40 |', '| R7.70 |'), 'closed disposition needs a finished owner')
+            '| R6.40 |', '| %s |' % LIVE),
+            'closed disposition needs a finished owner', live=True)
         self.refused(self.line('R730-02'), self.line('R730-02').replace(
             '| R551-34 |', '| R551-99 |'), 'merged into a missing record')
         self.refused(self.line('R730-10'), self.line('R730-10').replace(

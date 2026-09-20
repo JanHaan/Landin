@@ -14,14 +14,17 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.1.0. The compiler can build and run Landin programs
-for Linux x86-64 and native macOS arm64. It handles functions, user-defined data types, generic
+for Linux x86-64 and native macOS arm64, and builds firmware for Cortex-M0. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
 `any`. Hosted containers, allocators, text and I/O in `core`, a complete
 recovering configuration parser and a hosted log filter now run alongside the
 automatically tested FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
-FASTA workloads. Microcontroller support and the broader standard library
-are still to come.**
+FASTA workloads. A complete derived driver and application run on the pinned
+Cortex-M0 emulators with compiler-owned startup, within the recorded 32 KiB
+capacity and source-debugging limits. The roadmap that built this has reached
+its endpoint: the slice is feature-complete pre-v1, and the broader standard
+library, packaging and every release decision belong to successor roadmaps.**
 
 ## What is here
 
@@ -250,7 +253,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.70 — Declare the roadmap endpoint (planned).**
+**Roadmap endpoint: R7.70 — Declare the roadmap endpoint (complete).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -322,10 +325,12 @@ specialization is explicitly not part of that gate. Target work then proceeds
 through the complete hosted Linux x86-64 path, native macOS arm64, and
 emulator-first Cortex-M.
 
-The endpoint is feature-complete pre-v1, not production or self-hosting.
-Package acquisition, competitive optimization, release versioning, and
-self-hosting belong to successor roadmaps or later decisions. No version or
-release designation changes automatically.
+That endpoint has been reached and declared: R7.70 is the roadmap's last
+work item, and ROADMAP.md's own endpoint rule refuses a roadmap that stops
+matching the declaration. Feature-complete pre-v1 is a claim about coverage
+and nothing else. Package acquisition, competitive optimization, release
+versioning, and self-hosting belong to successor roadmaps or later decisions.
+No version or release designation changes automatically.
 
 ## License
 
@@ -444,3 +449,25 @@ hosted derivatives are recorded as refused with the corpus's own reasons, the
 `synthetic-32` is never reported as a target result because it is the model
 that preceded the Cortex-M backend. Its exact-revision dual-native routine
 binding in ROADMAP.md owns closure.
+
+R7.70 declares the roadmap endpoint. Every work item is complete, which is a
+state two gates refused: the status-pointer rule and the front page both
+wanted one active item or one dependency-ready planned item, and a roadmap
+that has finished has neither. Both learned a third state rather than being
+weakened, because "nothing is ready because everything is done" and "nothing
+is ready because something is stuck" are different facts — the endpoint is
+recognised only when no item is planned, active or blocked, so a single
+blocked item is still refused with the count it always reported. The
+declaration itself is mechanical: `validate_endpoint` refuses a roadmap that
+declares an endpoint beside a live item, and equally one whose items are all
+complete and which declares none, so an item added here instead of to the
+successor that owns it fails on the commit that adds it. It reads the two debt
+ledgers and the inherited review register as one statement, 94 records, and
+requires every transferred one to name a successor roadmap and every named
+successor to own at least one record. Feature-complete pre-v1 is a claim about
+coverage and nothing else: no version, release, production claim, license or
+self-hosting work changed, and the recorded boundaries — the 32 KiB capacity
+verdicts, the lines-and-functions Cortex-M debugging contract, the end-to-end
+evidence-provenance gap and the Darwin shared-region placement limit — stand
+exactly as measured. Its exact-revision dual-native milestone binding in
+ROADMAP.md owns closure.

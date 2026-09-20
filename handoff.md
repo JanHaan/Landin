@@ -294,7 +294,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R7.70 — Declare the roadmap endpoint (planned).**
+**Roadmap endpoint: R7.70 — Declare the roadmap endpoint (complete).**
 
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
@@ -352,10 +352,16 @@ and `any`, explicitly without specialization. Work then proceeds through
 the complete hosted Linux x86-64 path, native macOS arm64, and
 emulator-first Cortex-M.
 
-The endpoint is feature-complete pre-v1. Production claims, release
-versioning, package acquisition, competitive optimization, and
-self-hosting are outside this roadmap. A future self-hosting roadmap may
-replace tested Ada stages incrementally, but none is scheduled now.
+The endpoint is feature-complete pre-v1, and R7.70 reached and declared
+it. Production claims, release versioning, package acquisition,
+competitive optimization, and self-hosting are outside this roadmap and
+belong to the six successor roadmaps it names, each of which owns at
+least one recorded item with its own activation and completion evidence.
+A future self-hosting roadmap may replace tested Ada stages
+incrementally, but none is scheduled now. ROADMAP.md's endpoint rule
+refuses a roadmap that declares an endpoint beside live work, and equally
+one that has run out of work and declares none, so adding an item here
+rather than to the successor that owns it fails mechanically.
 
 ---
 
@@ -427,3 +433,13 @@ import a continuation identity, so its verdict and exact report stand while
 later uses of the name stop repeating a misspelling they are not, and the
 structural editor grammar is transcribed back onto the enabled kernel. Its
 exact-revision dual-native routine binding in ROADMAP.md owns closure.
+
+R7.70 declares the roadmap endpoint: every work item is complete, every
+durable item across the two debt ledgers and the inherited review register has
+a terminal disposition, and every transferred one names a successor roadmap
+that owns at least one record. Completing it made the roadmap reach a state
+two gates refused, so the status-pointer rule and the front page learned a
+third state instead of being weakened; a blocked item is still a stall and is
+still refused. Feature-complete pre-v1 is a claim about coverage and nothing
+else, and the recorded boundaries stand exactly as measured. Its
+exact-revision dual-native milestone binding in ROADMAP.md owns closure.

@@ -1643,17 +1643,28 @@ def status_parts(text):
 
 
 def roadmap_progress(text, recent_count=3):
-    """The completed, active or next-planned items around roadmap work."""
+    """The completed, active, next-planned or endpoint items around the work.
+
+    R7.70 adds the last of those. A roadmap with nothing left to do still has
+    a front page, and it says so; a roadmap with work it cannot start does not
+    get to use the same lane, so the endpoint is recognised only when no item
+    is planned, active or blocked.
+    """
     items = [dict(key=m.group(1), title=m.group(2), status=m.group(3),
                   depends=m.group(4).split(", ") if m.group(4) else [])
              for m in ROADMAP_ITEM.finditer(text)]
+
+    def track(recent_at, **lanes):
+        completed = [item for item in items[:recent_at]
+                     if item["status"] == "complete"][-recent_count:]
+        return dict({"recent": completed, "current": None,
+                     "following": None, "endpoint": None}, **lanes)
+
     active = [i for i, item in enumerate(items) if item["status"] == "active"]
     if len(active) == 1:
         at = active[0]
-        completed = [item for item in items[:at]
-                     if item["status"] == "complete"][-recent_count:]
-        following = items[at + 1] if at + 1 < len(items) else None
-        return dict(recent=completed, current=items[at], following=following)
+        return track(at, current=items[at],
+                     following=items[at + 1] if at + 1 < len(items) else None)
 
     ready = [i for i, item in enumerate(items)
              if item["status"] == "planned"
@@ -1662,15 +1673,16 @@ def roadmap_progress(text, recent_count=3):
                             and other["status"] == "complete"
                             for other in items)
                      for dependency in item["depends"])]
+    live = [item for item in items
+            if item["status"] in ("planned", "active", "blocked")]
+    if items and not live:
+        return track(len(items) - 1, endpoint=items[-1])
     if active or not ready:
         raise SystemExit("render_html: ROADMAP.md must have exactly one active "
                          "item or at least one dependency-ready planned item for the "
                          "front page")
     # Roadmap order selects the next item when a phase opens parallel work.
-    at = ready[0]
-    completed = [item for item in items[:at]
-                 if item["status"] == "complete"][-recent_count:]
-    return dict(recent=completed, current=None, following=items[at])
+    return track(ready[0], following=items[ready[0]])
 
 
 def landing_samples(text, ids=LANDING_IDS):
@@ -1883,17 +1895,23 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
                        if progress["current"] else "")
             following = (progress_item(progress["following"])
                          if progress["following"] else "")
+            endpoint = (progress_item(progress["endpoint"])
+                        if progress.get("endpoint") else "")
             current_lane = ('<div class="roadmap-now">'
                             '<span class="roadmap-label">in progress</span>'
                             f'{current}</div>') if current else ""
-            following_label = ("up next" if current else "next planned item")
+            if endpoint:
+                last_label, last_item = "roadmap endpoint", endpoint
+            else:
+                last_label = "up next" if current else "next planned item"
+                last_item = following
             hero += ('<div class="roadmap-track">'
                      '<div><span class="roadmap-label">recently completed</span>'
                      f'{recent}</div>'
                      f'{current_lane}'
                      '<div><span class="roadmap-label">'
-                     f'{following_label}</span>'
-                     f'{following}</div></div>')
+                     f'{last_label}</span>'
+                     f'{last_item}</div></div>')
         hero += '</aside>'
 
     nav = nav_html(docs, "index.html", [
@@ -2293,10 +2311,10 @@ def main(argv):
         front = ([("the pitch", " ".join(intro)), ("the status", status)]
                  + [(f'roadmap {item["key"]}', item["title"])
                     for item in (progress["recent"]
-                                 + ([progress["current"]]
-                                    if progress["current"] else [])
-                                 + ([progress["following"]]
-                                    if progress["following"] else []))]
+                                 + [one for one in (progress["current"],
+                                                    progress["following"],
+                                                    progress.get("endpoint"))
+                                    if one])]
                  + [(f"sample [{cid}]", "\n".join(code))
                     for cid, _, code in samples])
 

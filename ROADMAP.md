@@ -12,7 +12,9 @@ issues may hold execution detail, but every durable discovery, dependency or
 disposition must be promoted here before the issue closes.
 
 This roadmap begins a production-quality bootstrap compiler in Ada 2022. It
-ends at a feature-complete pre-v1 compiler and toolchain slice. It does not
+ends at a feature-complete pre-v1 compiler and toolchain slice, and that
+endpoint is reached: R7.70 is its last work item, and "The endpoint" below
+records what the declaration does and does not claim. It does not
 claim production readiness, assign a release, change a version, or schedule
 self-hosting. Any version or release designation requires a separate explicit
 decision; Landin does not assume SemVer.
@@ -156,8 +158,8 @@ each later discovery in R7.30's ledger has a terminal disposition, and each
 transfer is a record with its own activation and completion evidence rather
 than a heading here. Intake labels identify dispositions, not additional
 phases or a second work list. A named successor is a destination, not a claim
-that its implementation is scheduled in R0-R7. R7.70 must preserve every
-transfer.
+that its implementation is scheduled in R0-R7. R7.70 preserved every transfer
+and added none, and the endpoint below is held to that mechanically.
 
 - **Scale and self-hosting:** stable separate compilation and interface files
   (inherited B3), scale-driven caching, explicit cross-language stage transport
@@ -182,6 +184,41 @@ transfer.
 - **Release readiness:** licensing, distribution, production claims and every
   release or version decision, including the physical-board evidence and
   worst-case firmware resource claims R7.30 transfers.
+
+## The endpoint
+
+<!-- roadmap-endpoint -->
+R7.70 is the last work item here. Every item in R0 through R7 is complete and
+none is planned, active or blocked, so the compiler and toolchain slice this
+roadmap set out to build is feature-complete pre-v1 and the roadmap is closed.
+
+Feature-complete pre-v1 is a claim about coverage and nothing else. It does
+not assign a release, change a version, claim production readiness, alter the
+license or begin self-hosting. Each of those is a separate explicit decision,
+and the first three belong to Release readiness above; the license was settled
+early, for the reason recorded under selected implementation constraints, and
+is not among them.
+
+Nothing was dropped to get here. Every durable item in the R5.51 ledger, the
+R7.30 ledger and the inherited review register has a terminal disposition, and
+every one that was transferred rather than closed names one of the six
+successor roadmaps above. Each of those six owns at least one record: a family
+nobody transferred anything to would be a recorded direction rather than an
+owner, and the two are worth telling apart.
+
+A recorded boundary stays a boundary. An endpoint is the strongest place in a
+roadmap to round a measured limit up to a finished one, so none is rounded
+here: R730-05's 32 KiB capacity verdicts, R730-12's lines-and-functions
+Cortex-M debugging contract, R730-25's end-to-end evidence provenance and the
+Darwin shared-region placement limit under R551-07 each stand exactly as
+measured, owned where they were transferred.
+
+This section and the item list are held to each other in both directions by
+`validate_endpoint` in `scripts/roadmap_debt.py`. A declaration standing beside
+a live item is refused, and so is a roadmap whose items are all complete and
+which declares no endpoint. The next item after this one belongs to a
+successor roadmap rather than to this one.
+<!-- /roadmap-endpoint -->
 
 ## Cross-cutting evidence
 
@@ -12473,7 +12510,8 @@ Later discoveries:
 
 A later discovery is a retained limit, watch or observation that an item
 record after R5.51's intake (R6.10-R6.100, R7.10, R7.20, for R730-22, R7.40,
-for R730-23 and R730-24, R7.50, and for R730-25, R7.60) left without a finished owner: a capability an item declined or bounded, an evidence claim it
+for R730-23 and R730-24, R7.50, for R730-25, R7.60, and for R730-26, R7.70)
+left without a finished owner: a capability an item declined or bounded, an evidence claim it
 expressly did not make, or a watch. Handoffs to R6 items that later completed
 are closed by those items and are not repeated, and a selected scope that no
 successor needs to lift, such as the ARMv6-M reference profile or the
@@ -12522,6 +12560,7 @@ record or inherited row whose owner, trigger and completion it joins; and
 | R730-23 | R7.50: a linked hosted image is not bit-reproducible. Two links of one unchanged assembly differ in six bytes on the pinned Linux toolchain — measured in the same directory, from the same command, with the same output path — because the GNU driver writes its own random temporary object name into the symbol table. Darwin's came out identical, which is one toolchain's tidiness and not a contract. Landin's own side, the assembly the link consumes, is deterministic and gated. | supported-limit | successor | Release readiness | Before a reproducible-distribution or bit-identical hosted-image claim, or when both pinned hosted drivers link reproducibly | The image compared byte for byte across equivalent closures on both hosted targets with the driver's naming pinned, the assembly-identity check retained, and Cortex-M's existing firmware ELF, object, assembly, linker-script and linker-map identity unchanged. |
 | R730-24 | R7.50: the build report's per-routine counters are populated only by the lane that needed them. Linux fills all of them, Cortex-M0 fills frame, spill and instruction counts, and Darwin fills frame bytes alone, reading zero instructions and zero registers for a program that has both. The Linux object-quality lane measures with `size` and `objdump` and never depended on them, so nothing is wrong today; a cross-target comparison drawn from the report would be. | evidence-gap | merged | R551-12 | Before any measured code-quality comparison across targets is drawn from the build report | Every counter the report declares populated on every backend that emits it, or the report stating per target which counters it does not measure, with the determinism contract's report identity unchanged. |
 | R730-25 | R7.60: `end-to-end/refine-identity` is the one fixture in the corpus that names a product target no machine-readable record places. It runs on macOS arm64 in both Darwin host suite modes, but `compiler/tests/darwin/parity.json` records source verdicts for positive and negative fixtures and the coverage reader deliberately excludes the end-to-end class, so its arm64 evidence exists as a run and not as a citable record. R7.60's derivation rule found this and does not cover it: no derivation row is an end-to-end fixture. | evidence-gap | successor | Release readiness | Before an end-to-end fixture's per-target claim is cited as evidence, or when the Darwin parity manifest gains end-to-end verdicts | Every end-to-end fixture's product-target claim corroborated by a record the coverage readers read, with the existing positive and negative source verdicts unchanged. |
+| R730-26 | R7.70: `validate` required a `successor` disposition to name a listed successor roadmap but left `limit` and `watch` free to name anything else in scope, including a finished roadmap item, so one of the three places the exit clause "all transferred scope has a named successor" was checked had a hole in it. It was harmless while items were live and is not at an endpoint, where no item can own anything. The R7.30 ledger's reader already held all three dispositions; only R5.51's did not. | defect | implemented | R7.70 | R7.70's endpoint closure | `validate_endpoint` reads the R5.51 ledger, the R7.30 ledger and the inherited review register as one statement and refuses any record disposed `successor`, `limit`, `watch` or `transferred` whose owner names no family from "Successor roadmaps", with malformed controls for each register in `scripts/tests/test_roadmap_endpoint.py`. |
 <!-- /r730-ledger -->
 
 Mechanical checks:
@@ -13449,7 +13488,7 @@ sole dependency.
 
 ### R7.70 — Declare the roadmap endpoint
 
-Status: planned
+Status: complete
 Depends on: R7.60
 
 Record that the compiler/toolchain slice is feature-complete pre-v1 and name all
@@ -13459,7 +13498,236 @@ readiness, change the license or start self-hosting.
 Exit evidence: every work item is complete, all transferred scope has a named
 successor, and repository authority documents agree on the endpoint.
 
+R7.60, this item's sole dependency, is complete, and its closure is bound to
+the exact revision its record names. R7.70 inherits no routed work, which was
+recounted here rather than taken from R7.60's word: the construct inventory's
+201 rows have no target gap, and its seven owned rows all name a successor
+family; neither ledger holds a `scheduled` record; and all thirty derivation
+rows carry their inputs, oracles, per-target results and finding trace.
+
+What made this item different from the six before it:
+
+Completing it makes every work item complete, which is a state two gates
+refused. `check_project_status` in `check.py` wanted one `active` item or at
+least one dependency-ready `planned` item and otherwise reported that the page
+needed exactly one status pointer; `roadmap_progress` in
+`docs/site/render_html.py` raised on the same condition, so `scripts/site.sh`
+failed with it and the documents job failed in both native policies. Three
+documents answer that question and the rule holds all three answers to being
+one answer.
+
+So the rule learned a third state rather than being weakened, because the two
+states it could not tell apart are different facts. A roadmap with nothing left
+to do and a roadmap whose remaining work cannot start both have no ready item,
+and only one of them is finished. The endpoint is recognised only when no item
+is `planned`, `active` or `blocked`; a single blocked item is still a stall and
+is still refused with the count it always reported.
+`test_unavailable_status_is_refused` keeps a mid-roadmap fixture with a blocked
+item and keeps failing, beside the new endpoint fixture that differs from it in
+exactly that one status.
+
+The marker is one wording, decided once and shared:
+`**Roadmap endpoint: R7.70 — Declare the roadmap endpoint (complete).**` It is
+the same shape as the two it joins, carrying its item and that item's status in
+the same places, and it names the last work item in roadmap order, which is the
+one that declared the endpoint. `README.md` and `handoff.md` carry it, the
+checker computes it from the item list, and the front page renders it in a
+`roadmap endpoint` lane instead of `next planned item`. An endpoint marker
+before the endpoint is refused, and a next-item marker after it is refused, in
+both directions, by the same rule.
+
+The endpoint declaration, and what refuses a roadmap that stops matching it:
+
+"The endpoint" above is the declaration, between its own anchors, and
+`validate_endpoint` in `scripts/roadmap_debt.py` holds it to the roadmap in
+both directions. A declaration standing beside a live item is refused. A
+roadmap whose items are all complete and which declares no endpoint is refused
+too, and that is the direction worth having: the first failure mode of a
+finished roadmap is that somebody adds an item to it instead of to the
+successor that owns the work, and this refuses that on the commit that does it
+rather than on the review that might not happen. The declaration must also name
+the last work item, so inserting one after R7.70 cannot leave the prose
+pointing at R7.70.
+
+The same rule carries the exit clause's second half. "All transferred scope has
+a named successor" was checked in three separate places and not as one
+statement, and one of the three had a hole: `validate` required a `successor`
+disposition to name a listed family but left `limit` and `watch` free to name
+anything in scope, including a roadmap item. That mattered nowhere while items
+were live and matters exactly at the endpoint, where an item cannot own
+anything because every item is finished. R730-26 records it.
+`validate_endpoint` now reads the R5.51 ledger, the R7.30 ledger and the
+inherited review register together — 94 durable records — and refuses any
+record disposed `successor`, `limit`, `watch` or `transferred` whose owner
+names no family from "Successor roadmaps".
+
+It also refuses the converse, which is what settled the question about
+`Competitive optimization`. A family listed as a destination that nothing was
+ever transferred to is a recorded direction, not an owner, and the two should
+not be able to pass as each other. Measured rather than argued: 48 of the 94
+records are transfers, and every family owns some of them — Scale and
+self-hosting nine, Companion tool and ecosystem five, Broader standard library
+three, Competitive optimization four, Language evolution fourteen and Release
+readiness thirteen. Twelve further R7.30 discoveries are merged rather than
+transferred, and eleven of those reach a family through the record they joined;
+the twelfth, R730-15, joined a record R7.40 implemented and is closed with it.
+`Competitive optimization` owns four —
+R551-09's cleanup growth, R551-10's identity scans and simplification
+scratch work, R551-11's repeated frame and allocation planning and R551-12's
+indexed bounds check and Darwin stack homes — each an `observation` whose
+activation is a measurement, and two R7.30 discoveries, R730-04 and R730-24,
+are merged into R551-12 and inherit its owner. It is an owner. Nothing was
+moved into it or out of it here, and no appendix row transfers to it, which is
+consistent: the inherited register predates the measurements those four record.
+
+Every work item's final status, established rather than asserted:
+
+Sixty-seven work items, sixty-seven complete. `check_roadmap` already refused a
+complete item with an incomplete dependency and a dependency cycle, so the
+inventory is not a list that happens to read `complete` sixty-seven times: each
+item's completion was bound to its own exact revision's acceptance and delivery
+at the time it was made, and the endpoint rule holds the declaration to the
+statuses rather than to a sentence about them. The R7 gate's four bullets are
+established the same way. Every construct the amended tour describes is
+implemented on every applicable target, by R7.10's inventory over 201 rows with
+no target gap and R7.40's per-target evidence. All complete derived prototypes
+and evidence matrices pass, by R7.60's thirty derivation rows and the four
+generated matrices. Every durable item has an explicit terminal disposition, by
+R7.30's two ledgers and the appendix, now read as one statement here. The result
+remains pre-v1, unreleased and not self-hosted, which this item was careful to
+leave exactly as it found it.
+
+The controls that had to be re-expressed, and why that shape:
+
+`scripts/tests/test_construct_inventory.py` and
+`scripts/tests/test_roadmap_debt.py` anchored their ownership, gap, deferral,
+phase, refusal, scheduled-work and finished-owner controls on R7.70 being live,
+because a rule about a live owner needs one to point at. R7.60 moved them there
+from R7.50's R7.60 anchor. There is no successor item to move them to this
+time, and the two ways out were both worse: keeping an item artificially open
+would make the roadmap lie to make its tests pass, and deleting the controls
+would silently retire rules R7.10 through R7.60 built.
+
+Both tests already patch the roadmap text they validate, so they now inject a
+synthetic live heading into that copy and anchor on it. That heading carries an
+identity in the R7 range which this roadmap does not use and cannot acquire,
+because work IDs are never reused and this roadmap adds none; each test names
+it in its own comment, and neither can spell it here without this file
+referring to an item it does not define. Every control still fails when it should —
+that is what the tests assert, one altered input at a time — and each now
+proves its rule against a live owner the repository does not have rather than
+against one it was borrowing.
+
+The retained boundaries this declaration does not round up:
+
+R730-05 stands as measured. Seventeen shared programs exceed the selected
+32 KiB flash, 16 KiB RAM and 4 KiB stack profile in every scheduled mode, 72
+capacity verdicts, and R6.70's exploratory pool composition exceeded flash by
+10,152 bytes. Feature-complete does not mean every program fits every profile;
+it means the language and toolchain reach the profile, and the verdicts say
+which programs do.
+
+R730-12 stands as measured. Cortex-M0 source debugging is lines and functions,
+with no locals, arguments, types or expressions, no automatic source unwinding
+across an exception and no lines inside naked bodies or veneers. The hosted
+targets carry the fuller contract and the freestanding one does not, which is
+recorded rather than averaged.
+
+R730-25 stands as measured. `end-to-end/refine-identity` runs on macOS arm64 in
+both Darwin host suite modes, and that evidence exists as a run rather than as
+a record the coverage readers read. An endpoint does not convert a provenance
+gap into coverage.
+
+The Darwin shared-region limit stands as measured.
+`runtime/large-array-offset-is-addressed` reserves two gibibytes, emits,
+assembles and links on arm64, and aborts before `main` because the pinned
+default executable layout overlaps dyld's shared-cache region; a native Clang
+control reproduces the same abort. It is recorded `platform-limited` in all
+four profiles, with both programs and their actual failed executions retained,
+and general large-image placement stays R551-07's transfer to Scale and
+self-hosting.
+
+What is next, in the terms the endpoint defines:
+
+Nothing is next here. There is no dependency-ready item, because there is no
+item; the next work belongs to whichever successor roadmap owns it, and each of
+the six names what it owns, with the activation that starts it and the
+completion evidence it inherits, in its own records rather than in a heading.
+Scale and self-hosting holds stable separate compilation and interfaces, caching
+at scale, cross-language stage transport and the incremental replacement of the
+tested Ada stages. Companion tool and ecosystem holds package acquisition,
+version solving, manifests, locks, publishing, naming authority and the
+still-unnamed build and package tool. Broader standard library holds the layers
+above the core the four prototypes needed. Competitive optimization holds
+optimization beyond correct deterministic baseline code generation and beyond
+the specialization the specification requires. Language evolution holds the
+parked and watch items whose triggers did not fire here, with those triggers.
+Release readiness holds licensing, distribution, production claims and every
+release or version decision, and the physical-board and worst-case firmware
+resource evidence R7.30 transferred to it.
+
+No version or release designation changed, no release was assigned, no
+production claim was made, the license is unchanged and no self-hosting work
+was started. The changes are the endpoint declaration and its rule, the third
+state in the status-pointer rule and the renderer, the two status pointers, one
+new control test, two re-anchored ones, one ledger record and the documents.
+No language or representation decision was taken, so `spec.md`'s register gains
+no entry and `tour.md` needs no amendment: nothing here changes what a program
+means.
+
+Acceptance scope and closure binding:
+
+Compatible dual-native `milestone` policies are selected, and committed before
+the closure candidate. Both judgments are made on `docs/process.md`'s own terms.
+
+Milestone scope is the open judgment and is selected. `docs/process.md` names
+the category "major phase/parity milestone" and says to select and commit it
+before a major milestone such as R5.50 or R6.100. The disjunction is satisfied
+by phase closure, and this item is one: it closes R7 and the roadmap, which
+R7.60's record already said it would when it declined milestone scope for
+itself. It is also the last chance to make the choice. A routine approval
+cannot later be cited as a milestone result, and there is no subsequent item to
+correct the selection, so an endpoint that deserves a milestone has to have one
+selected now. The claim being bound is the widest the roadmap makes —
+feature-complete pre-v1 across the whole range from a 32 KiB microcontroller to
+a hosted application — and the two items that made claims of comparable width,
+R5.50 for hosted parity on a second backend and R6.100 for the freestanding
+profile, were both milestones. Closing over both with less evidence than either
+carried is the one place this roadmap would have traded evidence for
+convenience.
+
+The argument against it is real and was weighed. This item changes no compiler
+code, adds no target, ABI convention, instruction selection or parity scope,
+and a milestone measures emission it did not touch. That is exactly why
+milestone scope was not warranted for R7.40, R7.50 or R7.60, none of which was
+a phase closure; it does not answer one. The run is not for regression
+detection here. It is the evidence under the declaration, and milestone is the
+only scope that runs the complete matrix in both compiler modes on both native
+targets at one revision.
+
+Debugger coverage is the settled judgment and is not forced. Debugger risk is
+changed debug metadata, source or variable locations, unwind or frame
+conventions, debugger transport, debugger checks, or the acceptance selection
+or verification of debugger evidence, and this item changes none of them;
+R7.60's record sets that reasoning out in full and the work has not changed.
+Milestone scope runs GDB and LLDB in both compiler modes as part of the full
+matrix, so the coverage arrives with the scope rather than being selected for a
+risk that is not there.
+
+Only matching verified native exports and the annotated dual-native
+`ci/accepted/FULL_COMMIT` approval close this exact containing revision, with
+atomic canonical promotion, the identical remote commit and approval object, a
+complete matching GitHub namespace and successful guarded Pages publication
+byte-matched on both domains. A later bookkeeping revision cannot supply the
+binding. With it the roadmap has no dependency-ready item, because it has no
+item left.
+
 ### R7 gate
+
+Closed through R7.70's exact-revision milestone binding, within the boundaries
+R730-05, R730-12, R730-25 and the Darwin shared-region limit record. Each
+bullet is established by a generated register or a mechanical rule rather than
+by this list; R7.70's record names which.
 
 - Every construct the amended tour still describes is implemented on every
   applicable target.

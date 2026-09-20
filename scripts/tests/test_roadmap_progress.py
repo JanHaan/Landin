@@ -35,6 +35,11 @@ Depends on: R4.50
 """
 
 ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
+#  R7.70's endpoint: the same two items, with nothing left to do.  It differs
+#  from the blocked fixture below in exactly one status, which is the whole
+#  point -- "everything is done" and "something is stuck" must not be the same
+#  answer.
+ENDPOINT = BETWEEN_ITEMS.replace("Status: planned", "Status: complete", 1)
 
 
 class RoadmapProgress(unittest.TestCase):
@@ -97,6 +102,36 @@ Depends on: none
         self.assertTrue(any("roadmap status pointer" in problem[2]
                             for problem in problems))
 
+    def test_the_endpoint_uses_its_own_pointer(self):
+        marker = ("**Roadmap endpoint: R4.60 — Start source debugging"
+                  " (complete).**")
+        self.assertEqual(self.project_status(ENDPOINT, marker), [])
+        progress = RENDER.roadmap_progress(ENDPOINT)
+        self.assertIsNone(progress["current"])
+        self.assertIsNone(progress["following"])
+        self.assertEqual(progress["endpoint"]["key"], "R4.60")
+        self.assertEqual([item["key"] for item in progress["recent"]], ["R4.50"])
+
+    def test_the_endpoint_pointer_is_refused_before_the_endpoint(self):
+        marker = ("**Roadmap endpoint: R4.60 — Start source debugging"
+                  " (complete).**")
+        problems = self.project_status(BETWEEN_ITEMS, marker)
+        self.assertTrue(any("roadmap status pointer is endpoint" in problem[2]
+                            for problem in problems))
+
+    def test_a_next_item_pointer_is_refused_after_the_endpoint(self):
+        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+                  "(planned).**")
+        problems = self.project_status(ENDPOINT, marker)
+        self.assertTrue(any("roadmap status pointer is next" in problem[2]
+                            for problem in problems))
+
+    def test_the_endpoint_names_the_last_item_in_roadmap_order(self):
+        marker = "**Roadmap endpoint: R4.50 — Finish the baseline (complete).**"
+        problems = self.project_status(ENDPOINT, marker)
+        self.assertTrue(any("roadmap status pointer" in problem[2]
+                            for problem in problems))
+
     def test_unavailable_status_is_refused(self):
         roadmap = BETWEEN_ITEMS.replace("Status: planned", "Status: blocked", 1)
         marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
@@ -105,6 +140,10 @@ Depends on: none
                             for problem in problems))
         with self.assertRaisesRegex(SystemExit, "exactly one active"):
             RENDER.roadmap_progress(roadmap)
+        #  A stall and an endpoint differ by one status, and the rule that
+        #  admits the second must keep refusing the first.
+        self.assertEqual(roadmap.replace("Status: blocked", "Status: complete"),
+                         ENDPOINT)
 
     def test_wrong_marker_is_refused(self):
         marker = ("**Next roadmap item: R4.60 — Start source debugging "
@@ -127,6 +166,24 @@ Depends on: none
                 RENDER.SITE = old_site
         self.assertIn("next planned item", index)
         self.assertIn("R4.60", index)
+        self.assertNotIn('<div class="roadmap-now">', index)
+        self.assertNotIn("roadmap endpoint", index)
+
+    def test_renderer_smoke_shows_the_endpoint(self):
+        with tempfile.TemporaryDirectory(prefix="landin-site-") as directory:
+            old_site = RENDER.SITE
+            RENDER.SITE = Path(directory) / "site"
+            try:
+                progress = RENDER.roadmap_progress(ENDPOINT)
+                with patch.object(RENDER, "roadmap_progress", return_value=progress):
+                    self.assertEqual(
+                        RENDER.main(["--from", str(ROOT), "--verify"]), 0)
+                index = (RENDER.SITE / "index.html").read_text()
+            finally:
+                RENDER.SITE = old_site
+        self.assertIn("roadmap endpoint", index)
+        self.assertIn("R4.60", index)
+        self.assertNotIn("next planned item", index)
         self.assertNotIn('<div class="roadmap-now">', index)
 
 

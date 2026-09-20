@@ -281,12 +281,20 @@ per-target results beside their existing finding trace, every product target
 the four applicability scopes name is reached by one of that prototype's own
 rows, and the two registers stay separate because the Cortex corpus reaches
 further than metadata claims. Its exact-revision dual-native routine binding
-owns closure. R7.70 is next dependency-ready.
+owns closure. R7.70 declares the roadmap endpoint: every work item is
+complete, every durable item across both ledgers and the inherited review
+register has a terminal disposition, every transferred one names a successor
+roadmap and every named successor owns at least one record. The status-pointer
+rule, `roadmap_progress` and both status pointers learned an endpoint state
+that a blocked item still cannot reach, and `validate_endpoint` in
+`scripts/roadmap_debt.py` refuses a declaration beside live work and a
+finished roadmap that declares none. Its exact-revision dual-native milestone
+binding owns closure. No roadmap item remains.
 R6.80 retains its separate generated-device fixture gate.
-`ROADMAP.md` names the next dependency-ready item and owns the exact revision's
-acceptance and delivery evidence.
+`ROADMAP.md` owns the endpoint declaration and each revision's acceptance and
+delivery evidence.
 
-The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it. Do not change any version or release designation without explicit user approval, and do not assume SemVer.
+The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice and has reached that endpoint. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it, with the six successor roadmaps in `ROADMAP.md` naming who owns each. Do not change any version or release designation without explicit user approval, and do not assume SemVer. Do not add a work item to `ROADMAP.md`: it is closed, and the endpoint rule refuses one.
 
 ## Design constraints
 
