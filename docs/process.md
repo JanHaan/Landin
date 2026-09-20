@@ -68,6 +68,25 @@ the compiler is untouched. Milestone scope is judged on phase closure, new
 parity or backend scope, none of which applies, so the size of the run does
 not make it one.
 
+R7.60 selects routine scope **without** debugger coverage, and both judgments
+are made on the definitions above. It changes no debug metadata, source or
+variable location, unwind or frame convention, debugger transport or debugger
+check, and it neither selects nor verifies debugger evidence: it does not touch
+`scripts/debug.sh`, `compiler/tests/debugging/check.py` or the schedule check
+that holds the complete P2/P3/P4 workloads to three profiles, and its new
+coverage column reports `executed`, `compiled` or `refused` and no debugger
+claim. Re-running unchanged workloads is not a reason to run a debugger matrix.
+Every result its register records is established by a job routine scope runs
+anyway: the Linux release suite for each hosted execution, Darwin's release
+parity execution command for every runtime and ABI fixture, the release object
+quality job for the six-profile repeats of the three complete hosted workloads,
+and the embedded lane in the documents job for the firmware driver. Milestone
+scope is not warranted either. It is the item that most resembles a parity
+claim and is not one: it runs the prototypes according to the applicability
+matrix, and that matrix records that they deliberately do not all reach all
+targets. There is no phase closure here, no new target, ABI convention,
+instruction selection or parity scope, and the compiler is untouched.
+
 Before a major milestone such as R5.50 or R6.100, select and commit milestone
 scope with the closure candidate. A routine approval cannot be cited as a full
 milestone result. Subsequent development returns to routine scope.
