@@ -17,6 +17,12 @@
 #  debugger, no bindings, no release mode, no evidence retained. It builds
 #  the compiler on Linux and runs the two things that fail loudly when the
 #  language moves. MOVING.md records what a real gate still owes.
+#
+#  Two jobs, because the first measurement was lopsided: check.py and the
+#  build together take two and a half minutes, and the 741-case corpus
+#  takes fifty-nine. Waiting an hour for a verdict on a typo is how a gate
+#  stops being read. `fast` is the signal to watch; `corpus` runs beside it
+#  on the same push and nothing is skipped.
 
 name: gate
 
@@ -30,38 +36,36 @@ permissions:
   contents: read
 
 jobs:
-  linux:
+  #  Documents, grammar, transcription tables, and that the compiler still
+  #  builds. Two and a half minutes, so it is the one worth waiting for.
+  fast:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
       - name: Install the pinned toolchain
-        run: |
-          set -eu
-          . ./environments/pins.sh
-          landin_install_toolchain "$HOME/landin-toolchain" x86_64-linux
-          {
-            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
-            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
-          } >> "$GITHUB_ENV"
+        uses: ./.github/actions/pinned-toolchain
 
-      - name: Identify the toolchain
-        run: |
-          "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
-          "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
-          #  The target driver comes from the pin, not from the runner:
-          #  the FSF build installs itself as x86_64-pc-linux-gnu-gcc.
-          "$LANDIN_GNAT_HOME/bin/x86_64-pc-linux-gnu-gcc" --version | head -1
-
-      #  Documents, grammar and the transcription tables. The licensed face
-      #  is not fetched here: check_fonts reports its coverage as not
-      #  checked rather than failing, and pages.yml refuses to publish
-      #  without it, so the coverage is still enforced where it matters.
+      #  The licensed face is not fetched here: check_fonts reports its
+      #  coverage as not checked rather than failing, and pages.yml refuses
+      #  to publish without it, so the coverage stays enforced where it
+      #  matters and this job stays independent of the object storage.
       - name: check.py
         run: python3 check.py
 
       - name: Build refine
         run: ./scripts/build.sh -j4
+
+  #  All 741 cases. Slow, and running beside `fast` rather than in front of
+  #  it, so a green corpus is still required on every push.
+  corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
 
       - name: The fixture corpus
         run: ./scripts/test.sh

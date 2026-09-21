@@ -38,19 +38,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install the pinned toolchain
-        run: |
-          set -eu
-          . ./environments/pins.sh
-          landin_install_toolchain "$HOME/landin-toolchain" '${{ matrix.platform }}'
-          {
-            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
-            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
-          } >> "$GITHUB_ENV"
-
-      - name: Identify the toolchain
-        run: |
-          "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
-          "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: ${{ matrix.platform }}
 
       - name: Build refine
         run: ./scripts/build.sh -j4

@@ -1,0 +1,34 @@
+#  Installing the pinned toolchain, in one place.
+#
+#  environments/pins.sh is the one place a version or a checksum is written,
+#  and this is the one place a workflow reads it, so a job cannot quietly
+#  acquire a different compiler.  It also identifies what it installed:
+#  the target driver comes from the pin rather than from the runner, since
+#  the FSF build installs itself as x86_64-pc-linux-gnu-gcc and Ubuntu's own
+#  gcc answers to a different triplet.
+
+name: Pinned toolchain
+description: Install the pinned GNAT and GPRbuild, and say which ones.
+
+inputs:
+  platform:
+    description: A platform environments/pins.sh carries a checksum for.
+    required: false
+    default: x86_64-linux
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -eu
+        . ./environments/pins.sh
+        landin_install_toolchain "$HOME/landin-toolchain" '${{ inputs.platform }}'
+        {
+          echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+          echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+        } >> "$GITHUB_ENV"
+    - shell: bash
+      run: |
+        "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
+        "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
