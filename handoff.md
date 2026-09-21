@@ -1,8 +1,8 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.1.0** while the bootstrap compiler
-advances through the roadmap.
+anything. Kept current at specification **0.2.0**, which seals the first
+implementation roadmap.
 
 ---
 

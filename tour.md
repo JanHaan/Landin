@@ -7,15 +7,18 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.1.0 — the first version of the specification proper. It was
+Version 0.2.0 — the specification as the first implementation roadmap
+left it. 0.1.0 was the first version of the specification proper,
 arrived at over seventeen pre-release revisions, four prototype
-programs and two outside reviews. That history is kept in a separate
-archive; the part of it with lasting value is at the end of this file,
-under WHAT WAS TRIED AND DROPPED.
+programs and two outside reviews; 0.2.0 seals the roadmap that
+followed, R0 through R7.70, over which a working compiler was built and
+the specification was held to what that compiler could be made to do.
+That history is kept in a separate archive; the part of it with lasting
+value is at the end of this file, under WHAT WAS TRIED AND DROPPED.
 
 Numbering: [NNNN] is stable, which is the point of it — an insert never
 renumbers anything, so the order things are read in and the order of
-the numbers need not agree. They agree today, at 0.1.0, and they will
+the numbers need not agree. They agree today, at 0.2.0, and they will
 drift, and that is the numbering working rather than failing. Gaps of
 ten leave room. Sections carry titles and no numbers, because nothing
 cites a section. Refer to decisions by number.

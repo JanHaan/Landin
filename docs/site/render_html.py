@@ -48,7 +48,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
-VERSION_LINE = "specification 0.1.0"
+VERSION_LINE = "specification 0.2.0"
 LANDING_LINE = "built from scratch"
 REPO = "https://git.sr.ht/~sinnfrei/landin"
 #  The canonical host.  pages.sr.ht serves 701.dev as well and

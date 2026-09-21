@@ -1,6 +1,6 @@
 # Landin prototype 3 — a generic container library
 
-Current with specification 0.1.0. Its own findings Z1-Z19 are all
+Current with specification 0.2.0. Its own findings Z1-Z19 are all
 resolved below.
 
 This one was chosen because it presses on five things at once:
