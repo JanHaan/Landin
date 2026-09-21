@@ -1,0 +1,67 @@
+#  The minimal gate: does the compiler still build, and does the corpus
+#  still pass?
+#
+#  Until this existed nothing verified anything about the compiler on a
+#  push. `determinism.yml` emits assembly and hashes it but never
+#  assembles, links or runs; `pages.yml` publishes; `links.yml` checks
+#  URLs. check.py -- the grammar, the transcription tables, the citations,
+#  the document graph -- ran only when somebody typed it.
+#
+#  That gap mattered most for the work queued behind it. Rewriting spec.md
+#  and tour.md means showing the rewritten documents describe the same
+#  language, and the things that show it are check.py's grammar corpus and
+#  the fixture suite. A safety net nobody runs is not one.
+#
+#  This is deliberately small. It is not the replacement for the retired
+#  exact-revision acceptance: no Darwin, no Cortex-M execution, no
+#  debugger, no bindings, no release mode, no evidence retained. It builds
+#  the compiler on Linux and runs the two things that fail loudly when the
+#  language moves. MOVING.md records what a real gate still owes.
+
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          landin_install_toolchain "$HOME/landin-toolchain" x86_64-linux
+          {
+            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Identify the toolchain
+        run: |
+          "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
+          "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
+          #  The target driver comes from the pin, not from the runner:
+          #  the FSF build installs itself as x86_64-pc-linux-gnu-gcc.
+          "$LANDIN_GNAT_HOME/bin/x86_64-pc-linux-gnu-gcc" --version | head -1
+
+      #  Documents, grammar and the transcription tables. The licensed face
+      #  is not fetched here: check_fonts reports its coverage as not
+      #  checked rather than failing, and pages.yml refuses to publish
+      #  without it, so the coverage is still enforced where it matters.
+      - name: check.py
+        run: python3 check.py
+
+      - name: Build refine
+        run: ./scripts/build.sh -j4
+
+      - name: The fixture corpus
+        run: ./scripts/test.sh
