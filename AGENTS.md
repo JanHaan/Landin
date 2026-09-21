@@ -57,8 +57,8 @@ python3 check.py prototype-2-parser.md
 python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --suite=checking
 
 # Render every document as HTML, verify nothing was dropped, and package
-# it for pages.sr.ht.  --publish uploads it, which the CI gate also does on
-# approved promotion to main; see docs/site/README.md.
+# it for pages.sr.ht.  --publish uploads it; no job does this any more, so
+# publication is manual until the page moves; see docs/site/README.md.
 ./scripts/site.sh
 
 # On a nix machine, a shell holding the pinned toolchain, python3 and hut.
@@ -76,11 +76,12 @@ status, resume, export, administrative approval tags and atomic promotion.
 Revisions carrying the Darwin policy marker additionally require `scripts/ci/darwin.py accept COMMIT` and matching
 Darwin evidence at approval; see `environments/macos-arm64/README.md`.
 
-A push submits only `.build.yml` (Pages) and `.builds/github-mirror.yml`.
-Pages publishes from canonical main only after validating its exact annotated
-`ci/accepted/FULL_COMMIT` approval; `scripts/site.sh --publish` has the same
-fail-closed guard. GitHub mirrors canonical branches and tags. Neither job
-runs compiler acceptance. Nix shell checks are explicit supplemental native
+The repository submits no build manifests. GitHub is canonical and takes
+pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
+the same remote rather than by a job. Neither host runs a gate: the GitHub
+Actions replacement is not in place yet. `scripts/site.sh --publish` keeps its
+fail-closed `ci/accepted/FULL_COMMIT` guard and still targets pages.sr.ht, so
+701.dev holds its last published state until the page moves. Nix shell checks are explicit supplemental native
 Nix validation when shell inputs change; the former automatic Nix manifest is retired.
 Historical SourceHut gate links remain evidence for their original revisions.
 

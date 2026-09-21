@@ -6325,7 +6325,7 @@ def check_phase_handoff(full_run):
 
 
 def check_native_ci(full_run):
-    """Preserve the complete native gate while SourceHut only publishes/mirrors."""
+    """Preserve the native gate, and keep every build manifest out of the tree."""
     if not full_run:
         return []
     import importlib.util
@@ -6356,25 +6356,17 @@ def check_native_ci(full_run):
             out.append((override, 1, "Docker runner limits must match native acceptance policy"))
     except (OSError, ValueError, TypeError, KeyError) as exc:
         out.append((path, 1, "native acceptance policy: " + str(exc)))
-    manifests = {".build.yml"}
+    #  No build manifest may sit in the tree.  GitHub is canonical and
+    #  git.sr.ht is a mirror kept in step by a second push URL, not by a job;
+    #  a manifest reaching the mirror would build on every mirrored push, and
+    #  the guard it used to run cannot pass a revision no gate accepted.
+    stray = [".build.yml"] if os.path.exists(os.path.join(ROOT, ".build.yml")) else []
     builds = os.path.join(ROOT, ".builds")
     if os.path.isdir(builds):
-        manifests.update(".builds/" + name for name in os.listdir(builds)
-                         if name.endswith((".yml", ".yaml")))
-    if manifests != {".build.yml", ".builds/github-mirror.yml"}:
-        out.append((".build.yml", 1, "only Pages and mirror manifests may remain"))
-    with io.open(os.path.join(ROOT, ".build.yml"), encoding="utf-8") as stream:
-        pages = stream.read()
-    tasks = re.findall(r"^  - ([a-z][a-z-]*): [|]$", pages, re.M)
-    if tasks != ["pages"]:
-        out.append((".build.yml", 1, "SourceHut must have exactly the Pages task"))
-    guard = "python3 scripts/ci/approval.py"
-    if guard not in pages or pages.index(guard) > pages.find("git clone"):
-        out.append((".build.yml", 1, "Pages must guard approval before font access"))
-    if '${GIT_REF:-}' not in pages or '!= "refs/heads/main"' not in pages:
-        out.append((".build.yml", 1, "Pages must skip non-main refs"))
-    if re.search(r"^  - (clang-19|gdb|binutils)$", pages, re.M):
-        out.append((".build.yml", 1, "SourceHut must not install acceptance tools"))
+        stray += [".builds/" + name for name in sorted(os.listdir(builds))
+                  if name.endswith((".yml", ".yaml"))]
+    for name in stray:
+        out.append((name, 1, "no build manifest may remain: git.sr.ht is a mirror"))
     with io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8") as stream:
         site = stream.read()
     guard = 'python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"'

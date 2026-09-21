@@ -1049,7 +1049,6 @@ class PublicationWiringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for name in ("scripts/ci/common.py", "scripts/ci/policy.json", "scripts/site.sh",
-                         ".build.yml", ".builds/github-mirror.yml",
                          "environments/native-ci/compose.resources.yaml",
                          "environments/macos-arm64/acceptance.json"):
                 target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
@@ -1072,16 +1071,19 @@ class PublicationWiringTests(unittest.TestCase):
                 override.write_text(limits.replace("107374182400", "137438953472"))
                 self.assertTrue(checker.check_native_ci(True))
                 override.write_text(limits)
-                pages = root / ".build.yml"
-                original = pages.read_text()
-                pages.write_text(original.replace("python3 scripts/ci/approval.py", "true"))
-                self.assertTrue(checker.check_native_ci(True))
-                pages.write_text(original)
                 site = root / "scripts/site.sh"
                 script = site.read_text()
                 site.write_text(script.replace("exec python3", "python3"))
                 self.assertTrue(checker.check_native_ci(True))
                 site.write_text(script)
+                #  git.sr.ht is a mirror: any manifest reaching it would
+                #  build on every mirrored push, so none may sit in the tree.
+                pages = root / ".build.yml"
+                pages.write_text("tasks: []\n")
+                self.assertTrue(checker.check_native_ci(True))
+                pages.unlink()
+                self.assertEqual(checker.check_native_ci(True), [])
+                (root / ".builds").mkdir(parents=True, exist_ok=True)
                 (root / ".builds/nix.yml").write_text("tasks: []\n")
                 self.assertTrue(checker.check_native_ci(True))
 

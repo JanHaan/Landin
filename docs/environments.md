@@ -24,7 +24,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 | native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | working |
-| builds.sr.ht | approved-main Pages publication and GitHub mirror | working |
+| builds.sr.ht | retired: the repository submits no build manifest | retired |
 
 The acceptance controller runs the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion runs debug compiler-host
@@ -37,12 +37,13 @@ promotion remain required. See
 [`environments/native-ci/README.md`](../environments/native-ci/README.md) for
 operations and [`docs/process.md`](process.md) for the workflow.
 
-SourceHut's `.build.yml` publishes only current canonical main with its exact
-validated approval tag, before accessing the licensed font checkout. Manual
-`scripts/site.sh --publish` uses the same guard. `.builds/github-mirror.yml`
-mirrors every canonical branch and tag. Neither manifest runs compiler tests;
-the former automatic Nix manifest has been retired in favor of explicit supplemental native
-Nix checks when the shell's inputs change.
+No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
+kept in step by a second push URL on the same remote; the Pages and
+GitHub-mirror manifests are retired with the SourceHut gate. Manual
+`scripts/site.sh --publish` keeps its validated-approval guard before it
+reaches the licensed font checkout. The former automatic Nix manifest was
+retired earlier, in favor of explicit supplemental native Nix checks when the
+shell's inputs change.
 
 Native macOS arm64 is a *development* loop at R0. It becomes a validated
 target of its own at R5, with its own compiler build, platform tools and

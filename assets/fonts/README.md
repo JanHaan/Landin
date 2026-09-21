@@ -81,10 +81,10 @@ host. What refuses is `scripts/site.sh --publish`: a page published in a
 fallback face is the site quietly not being itself, so the publish asks
 `fonts.py --require` first and stops if a family is absent.
 
-The CI gate's pages task clones `landin-fonts` beside the repository with
-a deploy key held as a builds.sr.ht secret, which only a build submitted
-by the account holding it receives. A mailed patch has no key, and never
-reaches that task anyway.
+No job clones `landin-fonts` any more. The pages task that did, with a
+deploy key held as a builds.sr.ht secret, is retired with the SourceHut
+gate; publication is manual until the page moves, so the checkout beside
+the repository is the one the publishing host already has.
 
 ## What is not inlined
 

@@ -61,11 +61,12 @@ absorb silently, losing structure that no word count could miss.
 ./scripts/site.sh --publish    # and upload to pages.sr.ht
 ```
 
-SourceHut's Pages-only `.build.yml` runs the second command from approved
-canonical `main`. It validates the exact administrative approval tag before
-accessing private fonts. `scripts/site.sh --publish` applies the same guard to
-manual publication, refusing dirty, unapproved or known-stale checkouts.
-The Pages job receives a `pages.sr.ht/PAGES:RW` token for that job. Native
+Publication is manual. The Pages-only `.build.yml` that ran the second command
+from approved canonical `main` is retired with the rest of the SourceHut gate,
+so nothing publishes on a push and 701.dev holds its last published state until
+the page moves to GitHub. `scripts/site.sh --publish` still applies the
+fail-closed guard, refusing dirty, unapproved or known-stale checkouts, and
+still needs a `pages.sr.ht/PAGES:RW` token. Native
 acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.
