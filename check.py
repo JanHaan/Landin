@@ -1839,10 +1839,14 @@ def check_pinned_toolchain(full_run):
     record = os.path.join(ROOT, "compiler/ada/TOOLCHAIN.md")
     pins = os.path.join(ROOT, "environments/pins.sh")
 
-    if not os.path.exists(recipe) or not os.path.exists(record):
-        return []
+    #  These used to be skipped when absent, which made the whole check
+    #  vacuous the moment either was renamed: the pins would stop being
+    #  compared and the run would still say all clean.  That is the fault
+    #  absent() was written for, and this check had it.
+    out = absent([recipe, record])
+    if out:
+        return out
 
-    out = []
     recipe_text = io.open(recipe, encoding="utf-8").read()
     record_text = io.open(record, encoding="utf-8").read()
     pins_text = (io.open(pins, encoding="utf-8").read()
@@ -5806,7 +5810,8 @@ def check_document_reachability(full_run):
     edges = {}
     for document in docs:
         base = os.path.dirname(document)
-        text = io.open(os.path.join(ROOT, document), encoding="utf-8").read()
+        with io.open(os.path.join(ROOT, document), encoding="utf-8") as stream:
+            text = stream.read()
         found = set()
         for pattern in (link, quoted, bare):
             for match in pattern.finditer(text):
