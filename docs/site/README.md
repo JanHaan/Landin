@@ -61,12 +61,12 @@ absorb silently, losing structure that no word count could miss.
 ./scripts/site.sh --publish    # and upload to pages.sr.ht
 ```
 
-Publication is manual. The Pages-only `.build.yml` that ran the second command
-from approved canonical `main` is retired with the rest of the SourceHut gate,
-so nothing publishes on a push and 701.dev holds its last published state until
-the page moves to GitHub. `scripts/site.sh --publish` still applies the
-fail-closed guard, refusing dirty, unapproved or known-stale checkouts, and
-still needs a `pages.sr.ht/PAGES:RW` token. Native
+`.github/workflows/pages.yml` publishes on every push to main. It renders with
+the same `--verify` pass, fetches the licensed code face from object storage
+because that face is not in this repository, writes the `www.701.dev` CNAME and
+deploys to GitHub Pages. It is not a gate and runs no compiler test.
+`scripts/site.sh --publish` is the retired SourceHut path: it still applies the
+fail-closed approval guard and still needs a `pages.sr.ht/PAGES:RW` token. Native
 acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.

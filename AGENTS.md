@@ -79,9 +79,11 @@ Darwin evidence at approval; see `environments/macos-arm64/README.md`.
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
 the same remote rather than by a job. Neither host runs a gate: the GitHub
-Actions replacement is not in place yet. `scripts/site.sh --publish` keeps its
-fail-closed `ci/accepted/FULL_COMMIT` guard and still targets pages.sr.ht, so
-701.dev holds its last published state until the page moves. Nix shell checks are explicit supplemental native
+Actions replacement is not in place yet. `.github/workflows/pages.yml` publishes
+www.701.dev from GitHub Pages on every push to main, fetching the licensed code
+face from object storage because it is not in this repository; it renders and
+verifies, and runs no compiler test. The retired `scripts/site.sh --publish`
+path still targets pages.sr.ht behind its old approval guard. Nix shell checks are explicit supplemental native
 Nix validation when shell inputs change; the former automatic Nix manifest is retired.
 Historical SourceHut gate links remain evidence for their original revisions.
 

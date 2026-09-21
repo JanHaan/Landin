@@ -25,6 +25,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | working |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
+| GitHub Actions | publishes www.701.dev from GitHub Pages; not a gate | working |
 
 The acceptance controller runs the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion runs debug compiler-host

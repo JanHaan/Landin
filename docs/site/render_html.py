@@ -51,9 +51,10 @@ SITE = HERE / "site"
 VERSION_LINE = "specification 0.2.0"
 LANDING_LINE = "built from scratch"
 REPO = "https://git.sr.ht/~sinnfrei/landin"
-#  The canonical host.  pages.sr.ht serves 701.dev as well and
-#  cannot redirect between the two, so every page says which of
-#  them it wants to be found at.
+#  The canonical host.  The pages are served from GitHub Pages under
+#  the CNAME the publishing workflow writes; every page still says
+#  which of 701.dev and www.701.dev it wants to be found at, because a
+#  reader who arrives at the other one should be told, not guessed at.
 SITE_URL = "https://www.701.dev"
 OG_IMAGE = "og.png"
 

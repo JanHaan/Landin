@@ -1,0 +1,78 @@
+#  Publish the reading copies at https://www.701.dev.
+#
+#  This is not a gate.  It renders the documents, verifies that the render
+#  dropped nothing, and deploys; it runs no compiler test.  The mechanical
+#  gate that replaces native acceptance is a separate workflow and is not
+#  in place yet.
+#
+#  The licensed code face is not in this repository and never will be:
+#  MonoLisa's EULA licenses it to one licensee and forbids supplying the
+#  font data on.  It is fetched at build time from the maintainer's own
+#  object storage, which is also where a developer's checkout comes from.
+#  A build that cannot reach it renders in the fallback stack, so the
+#  fetch is fatal rather than best-effort.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+#  One publication at a time, and never cancel one in flight: a cancelled
+#  deploy can leave the site half-replaced.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  FONTS_BASE: https://fsn1.your-objectstorage.com/landin/fonts
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the licensed face
+        run: |
+          set -eu
+          dest="${RUNNER_TEMP}/landin-fonts"
+          mkdir -p "$dest/monolisa"
+          curl -fsS -o "$dest/README.md"            "$FONTS_BASE/README.md"
+          curl -fsS -o "$dest/monolisa/LICENSE.md"  "$FONTS_BASE/monolisa/LICENSE.md"
+          curl -fsS -o "$dest/monolisa/monolisa.css" "$FONTS_BASE/monolisa/monolisa.css"
+          #  The stylesheet is the list of faces, so a subset added upstream
+          #  arrives without editing this workflow.
+          grep -oE 'url\([^)]*\)' "$dest/monolisa/monolisa.css" \
+            | sed 's|url(||; s|)||; s|^/||' | sort -u \
+            | while read -r face; do
+                curl -fsS --create-dirs -o "$dest/monolisa/$face" \
+                     "$FONTS_BASE/monolisa/$face"
+              done
+          echo "LANDIN_FONTS=$dest" >> "$GITHUB_ENV"
+
+      - name: Render and verify
+        run: python3 docs/site/render_html.py --from . --verify
+
+      - name: Claim the domain
+        run: echo 'www.701.dev' > docs/site/site/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

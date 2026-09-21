@@ -83,8 +83,10 @@ fallback face is the site quietly not being itself, so the publish asks
 
 No job clones `landin-fonts` any more. The pages task that did, with a
 deploy key held as a builds.sr.ht secret, is retired with the SourceHut
-gate; publication is manual until the page moves, so the checkout beside
-the repository is the one the publishing host already has.
+gate. `.github/workflows/pages.yml` fetches the family from the
+maintainer's object storage instead, reading the faces to fetch out of
+the family's own stylesheet; a developer still works from the checkout
+beside this repository.
 
 ## What is not inlined
 
