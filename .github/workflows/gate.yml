@@ -67,5 +67,13 @@ jobs:
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
+      #  Two cases in this suite spawn refine, the assembler, the linker
+      #  and the produced program once per fixture and profile, and were
+      #  eighty-one per cent of the run. They now run across workers,
+      #  which on this runner's four cores takes the corpus from about an
+      #  hour to about twenty-five minutes. The default stays at one job:
+      #  this is the path CI exercises on every push, and flipping the
+      #  default wants mileage rather than one good measurement.
+      #  scripts/parallel-equivalence.sh is the guard.
       - name: The fixture corpus
-        run: ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=4 ./scripts/test.sh

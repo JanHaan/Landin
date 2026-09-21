@@ -26,6 +26,15 @@ package Landin.Testing is
 
    procedure Fail (Item : in out Context; Description : String);
 
+   --  Take one context's results into another, for work that was split
+   --  across workers and has to read afterwards as though it were not.
+   --  A case that runs its fixtures in parallel gives each worker its own
+   --  context and absorbs them in fixture order, so the checks, the
+   --  failures and the failure text are what a single-file run produced.
+   --  Merging out of order would change the transcript, which is the one
+   --  thing the harness promises is the same on every host.
+   procedure Absorb (Into : in out Context; From : Context);
+
    function Checks (Item : Context) return Natural;
    function Failures (Item : Context) return Natural;
    function Failure_Text (Item : Context) return String;

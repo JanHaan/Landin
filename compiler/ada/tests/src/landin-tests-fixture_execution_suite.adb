@@ -6,6 +6,7 @@ with Ada.Strings;
 --  is executed here through the real tool adapter, and its bytes and exit
 --  status are compared with what it claims.
 
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
@@ -42,6 +43,118 @@ package body Landin.Tests.Fixture_Execution_Suite is
    begin
       Selected := Unbounded.To_Unbounded_String (Path);
    end Select_Fixture;
+
+   --  How many fixtures may be in flight at once.  One unless a run asks
+   --  for more, so the harness behaves exactly as it always has by default
+   --  and a parallel run is something a caller opted into.  An unreadable
+   --  or absurd value is one job rather than an error: this decides how
+   --  fast the suite runs, never what it concludes.
+   function Job_Count return Positive;
+
+   function Job_Count return Positive is
+      Name : constant String := "LANDIN_TEST_JOBS";
+   begin
+      if not Environment.Exists (Name) then
+         return 1;
+      end if;
+
+      return Positive'Value (Environment.Value (Name));
+   exception
+      when others =>
+         return 1;
+   end Job_Count;
+
+   --  Run a corpus-wide loop across workers, and read afterwards as though
+   --  it had not been.
+   --
+   --  Two cases in this suite are eighty-one per cent of the whole test
+   --  program's time and two per cent of its checks, because the work is
+   --  spawning refine, the assembler, the linker and the produced program
+   --  rather than anything computed here.  That work parallelises with
+   --  cores instead of contending for them.
+   --
+   --  Each worker is given its own context, and the results are absorbed
+   --  in WORK ORDER once every worker has finished.  So the transcript
+   --  does not depend on which worker finished first, and one job runs the
+   --  work in the order it was collected, which is the order it always
+   --  ran in.  That is the property the equivalence check holds: the same
+   --  transcript, whatever LANDIN_TEST_JOBS says.
+   generic
+      type Element is private;
+      type Element_Array is array (Positive range <>) of Element;
+      with procedure Perform
+        (Piece : Element; Item : in out Landin.Testing.Context);
+   procedure Across_Workers
+     (Work : Element_Array; Item : in out Landin.Testing.Context);
+
+   procedure Across_Workers
+     (Work : Element_Array; Item : in out Landin.Testing.Context)
+   is
+      type Context_Array is
+        array (Positive range <>) of Landin.Testing.Context;
+      Results : Context_Array (Work'Range);
+   begin
+      if Work'Length = 0 then
+         return;
+      end if;
+
+      declare
+         Jobs : constant Positive := Positive'Min (Job_Count, Work'Length);
+
+         protected Dispenser is
+            procedure Next (Slot : out Natural);
+         private
+            Cursor : Natural := Work'First;
+         end Dispenser;
+
+         protected body Dispenser is
+            procedure Next (Slot : out Natural) is
+            begin
+               if Cursor > Work'Last then
+                  Slot := 0;
+               else
+                  Slot := Cursor;
+                  Cursor := Cursor + 1;
+               end if;
+            end Next;
+         end Dispenser;
+
+         task type Worker;
+
+         task body Worker is
+            Slot : Natural;
+         begin
+            loop
+               Dispenser.Next (Slot);
+               exit when Slot = 0;
+
+               --  A worker that dies takes its fixture's verdict with it
+               --  and leaves a shorter transcript that still says pass.
+               --  So the raise is recorded where the case would have
+               --  recorded it, and the run stays red rather than smaller.
+               begin
+                  Perform (Work (Slot), Results (Slot));
+               exception
+                  when Error : others =>
+                     Landin.Testing.Fail
+                       (Results (Slot),
+                        "raised "
+                        & Ada.Exceptions.Exception_Name (Error));
+               end;
+            end loop;
+         end Worker;
+
+         Workers : array (1 .. Jobs) of Worker;
+         pragma Unreferenced (Workers);
+      begin
+         --  Every worker is awaited at the end of this block.
+         null;
+      end;
+
+      for Slot in Work'Range loop
+         Landin.Testing.Absorb (Item, Results (Slot));
+      end loop;
+   end Across_Workers;
 
    --  Mirrors compiler/ada/landin_common.gpr, so a harness run from
    --  compiler/ada finds the executable the same build produced.
@@ -562,18 +675,44 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      for Index in 1 .. Count (Found) loop
-         declare
-            Case_Item : constant Fixture := Nth (Found, Index);
+      declare
+         type Index_Array is array (Positive range <>) of Positive;
+
+         Work : Index_Array (1 .. Count (Found));
+         Last : Natural := 0;
+
+         procedure Emit_One
+           (Piece : Positive; Slot : in out Landin.Testing.Context);
+
+         procedure Emit_One
+           (Piece : Positive; Slot : in out Landin.Testing.Context) is
          begin
-            if Class (Case_Item) = Positive_Program
-              and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
-            then
-               Emit_Positive (Case_Item, Host, Program, Item);
-               Ran := Ran + 1;
-            end if;
-         end;
-      end loop;
+            Emit_Positive (Nth (Found, Piece), Host, Program, Slot);
+         end Emit_One;
+
+         procedure Emit_Each is new Across_Workers
+           (Element => Positive,
+            Element_Array => Index_Array,
+            Perform => Emit_One);
+      begin
+         --  Collected first, run second: the work order is the corpus
+         --  order whatever the workers do with it.
+         for Index in 1 .. Count (Found) loop
+            declare
+               Case_Item : constant Fixture := Nth (Found, Index);
+            begin
+               if Class (Case_Item) = Positive_Program
+                 and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
+               then
+                  Last := Last + 1;
+                  Work (Last) := Index;
+               end if;
+            end;
+         end loop;
+
+         Ran := Last;
+         Emit_Each (Work (1 .. Last), Item);
+      end;
 
       Landin.Testing.Check_Equal
         (Item, Ran, Program_Count (Found, Positive_Program),
@@ -887,25 +1026,71 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      for Index in 1 .. Count (Found) loop
-         declare
-            Case_Item : constant Fixture := Nth (Found, Index);
+      declare
+         type Piece_Kind is (Runtime_Piece, ABI_Piece);
+
+         type Piece_Record is record
+            Index   : Positive;
+            Profile : Positive;
+            Kind    : Piece_Kind;
+         end record;
+
+         type Piece_Array is array (Positive range <>) of Piece_Record;
+
+         Work : Piece_Array
+           (1 .. Profile_Run_Count (Found, Runtime)
+                 + Profile_Run_Count (Found, Abi));
+         Last : Natural := 0;
+
+         procedure Run_One
+           (Piece : Piece_Record; Slot : in out Landin.Testing.Context);
+
+         procedure Run_One
+           (Piece : Piece_Record; Slot : in out Landin.Testing.Context)
+         is
+            Case_Item : constant Fixture := Nth (Found, Piece.Index);
          begin
-            if Class (Case_Item) = Runtime then
-               Runtime_Ran := Runtime_Ran + 1;
-               for Profile in 1 .. Profile_Count (Case_Item) loop
-                  Run_Runtime (Case_Item, Host, Program, Profile, Item);
-                  Runtime_Profiles := Runtime_Profiles + 1;
-               end loop;
-            elsif Class (Case_Item) = Abi then
-               ABI_Ran := ABI_Ran + 1;
-               for Profile in 1 .. Profile_Count (Case_Item) loop
-                  Run_ABI (Case_Item, Host, Program, Profile, Item);
-                  ABI_Profiles := ABI_Profiles + 1;
-               end loop;
-            end if;
-         end;
-      end loop;
+            case Piece.Kind is
+               when Runtime_Piece =>
+                  Run_Runtime
+                    (Case_Item, Host, Program, Piece.Profile, Slot);
+               when ABI_Piece =>
+                  Run_ABI (Case_Item, Host, Program, Piece.Profile, Slot);
+            end case;
+         end Run_One;
+
+         procedure Run_Each is new Across_Workers
+           (Element => Piece_Record,
+            Element_Array => Piece_Array,
+            Perform => Run_One);
+      begin
+         --  One piece of work per fixture and profile, in corpus order.
+         --  The counters come from the collection rather than from the
+         --  workers, so they say the same thing at any job count.
+         for Index in 1 .. Count (Found) loop
+            declare
+               Case_Item : constant Fixture := Nth (Found, Index);
+            begin
+               if Class (Case_Item) = Runtime then
+                  Runtime_Ran := Runtime_Ran + 1;
+                  for Profile in 1 .. Profile_Count (Case_Item) loop
+                     Last := Last + 1;
+                     Work (Last) := (Index, Profile, Runtime_Piece);
+                     Runtime_Profiles := Runtime_Profiles + 1;
+                  end loop;
+               elsif Class (Case_Item) = Abi then
+                  ABI_Ran := ABI_Ran + 1;
+                  for Profile in 1 .. Profile_Count (Case_Item) loop
+                     Last := Last + 1;
+                     Work (Last) := (Index, Profile, ABI_Piece);
+                     ABI_Profiles := ABI_Profiles + 1;
+                  end loop;
+               end if;
+            end;
+         end loop;
+
+         Run_Each (Work (1 .. Last), Item);
+      end;
 
       Landin.Testing.Check_Equal
         (Item, Runtime_Ran, Count_Of (Found, Runtime),

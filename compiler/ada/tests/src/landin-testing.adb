@@ -59,6 +59,13 @@ package body Landin.Testing is
       Note (Item, "failed: " & Description);
    end Fail;
 
+   procedure Absorb (Into : in out Context; From : Context) is
+   begin
+      Into.Checks := Into.Checks + From.Checks;
+      Into.Failures := Into.Failures + From.Failures;
+      Unbounded.Append (Into.Text, From.Text);
+   end Absorb;
+
    function Checks (Item : Context) return Natural is (Item.Checks);
 
    function Failures (Item : Context) return Natural is (Item.Failures);
