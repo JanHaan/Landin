@@ -91,16 +91,11 @@ Historical SourceHut gate links remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
-During R5/R6, use `scripts/dev-test.sh --host` on the Mac and native Linux
-development slots for Linux execution. Do not run Linux containers, Linux
-workload emission or repeated complete suites on the Mac as routine feedback.
-Run changed-component tests while editing, one routine acceptance for the
-final promotion candidate, and full matrices only at major milestones. Native GDB/LLDB
-coverage is required for debugger risk (including selection/verification
-changes) or milestones. `policy.py` selects compatible policies on both targets.
-Routine retains debug host and full release hosted coverage; risk adds full
-release debugging, and milestones retain both modes. Only Linux can resume
-verified successful jobs; Darwin interruptions require a new run.
+Use `scripts/dev-test.sh --host` on the Mac for compiler-host feedback. Do
+not run Linux containers, Linux workload emission or repeated complete suites
+on the Mac as routine feedback. Run changed-component tests while editing and
+the complete suite before pushing; `LANDIN_TEST_JOBS` splits the corpus
+fixtures across workers, which is most of what the suite costs.
 Nix CI is deferred. `docs/process.md` explains the workflow; ROADMAP.md owns
 its decisions and remaining work.
 

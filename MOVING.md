@@ -15,8 +15,9 @@ said `all clean`.
 | what | since | trigger to fix |
 |---|---|---|
 | No mechanical gate. Nothing builds the compiler or runs the fixture corpus on a push. `determinism.yml` checks host-independence and `pages.yml` publishes; neither runs a compiler test. | the SourceHut gate was retired | a replacement gate is designed; it is not the old eight-job matrix ported over |
-| `scripts/ci/` (~2,600 lines) is dead. No manifest submits it and no revision is accepted. `approval.py` and `publish.py` are now unreachable from `site.sh`, but `controller.py` and `test_ci.py` still import them. | the mirror inversion | the CI retirement, which removes the tree and its tests together |
-| `check.py` still carries the roadmap- and CI-coupled checks (~940 lines) whose subjects are going away. | — | the check.py audit |
+| ~~`scripts/ci/` is dead.~~ Removed, with its four test suites and `check_native_ci`. `ROADMAP.md` still names the controller in records of which policy accepted which revision; those names are allowlisted in `check.py` rather than the rule weakened, and that list is where the last references are found when the roadmap is replaced. | — | done |
+| `check.py` still carries the roadmap-structure checks (~555 lines) whose subject is going away. | — | the new roadmap, which is what they would be checked against |
+| 34 of 37 checks in `check.py` have no control proving they can fail. | — | the check.py audit, whose first step this is: a property cannot be shown to have moved home if neither holder can be made to fail |
 | `ROADMAP.md` names 169 `.scratch` paths; 155 do not exist on any machine. | R4.91 onward | the roadmap replacement, which converts them to prose |
 
 ## Deferred, with the reason

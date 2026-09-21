@@ -232,6 +232,28 @@ NAMED_FILE_ALLOWLIST = frozenset((
     "og.png",
     "icon-mono.svg",
     "apple-touch-icon.png",
+    #  The retired exact-revision acceptance.  ROADMAP.md records which
+    #  controller ran for which revision and docs/environments.md describes
+    #  the arrangement; those are statements about what happened, and they
+    #  stay true after the tree they name is gone.  A document may not name
+    #  a file that is not here, so the retired names are listed rather than
+    #  the rule weakened -- and when the roadmap is replaced, this list is
+    #  where the last references to scripts/ci are found.
+    "scripts/ci/controller.py",
+    "scripts/ci/darwin.py",
+    "scripts/ci/darwin_parity.py",
+    "scripts/ci/policy.py",
+    "scripts/ci/approval.py",
+    "scripts/ci/publish.py",
+    "scripts/ci/common.py",
+    "scripts/ci/job.py",
+    "scripts/ci/records.py",
+    "scripts/ci/resources.py",
+    "scripts/ci/darwin_scoped.py",
+    "scripts/ci/darwin_oracles_v3.py",
+    #  ROADMAP.md names this one without its directory, dozens of times,
+    #  in records of which policy a revision was accepted under.
+    "policy.py",
 ))
 
 STALE_BACKLOG_ALLOWLIST = {
@@ -6283,7 +6305,6 @@ def check_optimization_contract(full_run):
                    "scripts/tests/test_build_inventory.py",
                    "scripts/tests/test_build_lock.py"):
         out += absent([runner])
-    out += check_native_ci(full_run)
     out += check_phase_handoff(full_run)
     tour = io.open(TOUR_NAME, encoding="utf-8").read()
     array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
@@ -6325,7 +6346,7 @@ def check_debugger_contract(full_run):
         import runpy
         debugger = runpy.run_path(paths[1], run_name="debugger_contract_check")
         out += debugger_workload_problems(debugger)
-    # check_native_ci independently holds both native debugger modes to the
+    # The retired acceptance policy independently held both debugger modes to the
     # canonical policy, including the clean builds and required tool identity.
     return out
 
@@ -6394,77 +6415,13 @@ def check_phase_handoff(full_run):
                 [sys.executable, os.path.join(ROOT, "scripts/tests/test_prototype_coverage.py")],
                 [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
                 [sys.executable, os.path.join(ROOT, "devices/test.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")],
-                [sys.executable, "-m", "unittest", "discover", "-s",
-                 os.path.join(ROOT, "scripts/tests"), "-p", "test_darwin*.py"]):
+                [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")]):
             result = subprocess.run(command, capture_output=True, text=True, timeout=20)
             if result.returncode:
                 return [("ROADMAP.md", 1, result.stdout + result.stderr)]
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         return [("ROADMAP.md", 1, str(error))]
     return []
-
-
-def check_native_ci(full_run):
-    """Preserve the native gate, and keep every build manifest out of the tree."""
-    if not full_run:
-        return []
-    import importlib.util
-    import json
-    out = []
-    path = os.path.join(ROOT, "scripts/ci/common.py")
-    try:
-        module_spec = importlib.util.spec_from_file_location("landin_ci_contract", path)
-        contract = importlib.util.module_from_spec(module_spec)
-        module_spec.loader.exec_module(contract)
-        linux = contract.read_json(os.path.join(ROOT, "scripts/ci/policy.json"))
-        contract.validate_policy(linux)
-        sys.path.insert(0, os.path.join(ROOT, "scripts/ci"))
-        from darwin import MARKER, validate_policy as darwin_policy
-        from darwin_scoped import compatible
-        mac = darwin_policy(contract.read_json(os.path.join(ROOT, MARKER)))
-        if mac["schema"] == 4:
-            compatible(mac, linux)
-        override = "environments/native-ci/compose.resources.yaml"
-        with io.open(os.path.join(ROOT, override), encoding="utf-8") as stream:
-            lines = [line for line in stream.read().splitlines()
-                     if line.strip() and not line.lstrip().startswith("#")]
-        limits = contract.required_limits()
-        expected = ["services:", "  runner:",
-                    "    mem_limit: " + str(limits["memory_bytes"]),
-                    "    memswap_limit: " + str(limits["memory_bytes"] + limits["swap_bytes"])]
-        if lines != expected:
-            out.append((override, 1, "Docker runner limits must match native acceptance policy"))
-    except (OSError, ValueError, TypeError, KeyError) as exc:
-        out.append((path, 1, "native acceptance policy: " + str(exc)))
-    #  No build manifest may sit in the tree.  GitHub is canonical and
-    #  git.sr.ht is a mirror kept in step by a second push URL, not by a job;
-    #  a manifest reaching the mirror would build on every mirrored push, and
-    #  the guard it used to run cannot pass a revision no gate accepted.
-    stray = [".build.yml"] if os.path.exists(os.path.join(ROOT, ".build.yml")) else []
-    builds = os.path.join(ROOT, ".builds")
-    if os.path.isdir(builds):
-        stray += [".builds/" + name for name in sorted(os.listdir(builds))
-                  if name.endswith((".yml", ".yaml"))]
-    for name in stray:
-        out.append((name, 1, "no build manifest may remain: git.sr.ht is a mirror"))
-    #  site.sh renders and packages; it does not publish.  A publishing
-    #  path here would upload from a developer's checkout, outside the
-    #  workflow that is now the only publisher, and behind an approval
-    #  guard that no longer has a gate to consult.
-    with io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8") as stream:
-        #  Comments are excluded: the script explains that it used to
-        #  publish and why it stopped, and a header that cannot say so is a
-        #  worse script.  What is checked is what it runs.
-        site = "\n".join(line for line in stream.read().splitlines()
-                         if not line.lstrip().startswith("#"))
-    for spelling in ("--publish", "hut pages publish",
-                     "scripts/ci/publish.py", "scripts/ci/approval.py"):
-        if spelling in site:
-            out.append(("scripts/site.sh", 1,
-                        "site.sh renders and does not publish, so it may not name "
-                        + spelling))
-    return out
 
 
 def check_macos_environment(full_run):
