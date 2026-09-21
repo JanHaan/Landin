@@ -1,0 +1,50 @@
+#  An experiment, not a gate: does a compiler built on a different host
+#  emit the same bytes?
+#
+#  The determinism contract in compiler/tests/test_determinism.py fixes the
+#  build directory, the environment and the ordering, but says nothing about
+#  the host.  If emission really is host-neutral -- and it must be, since
+#  nothing outside Landin.Targets may ask the host how wide a pointer is --
+#  then the CI matrix is hosts + targets rather than hosts x targets.  This
+#  produces one side of that comparison.
+#
+#  Delete this workflow once the question is answered one way or the other.
+
+name: host-determinism
+
+on:
+  workflow_dispatch:
+
+jobs:
+  manifest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          landin_install_toolchain "$HOME/landin-toolchain" x86_64-linux
+          {
+            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Identify the toolchain
+        run: |
+          "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
+          "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
+
+      - name: Build refine
+        run: ./scripts/build.sh -j4
+
+      - name: Emit the manifest
+        run: |
+          python3 scripts/emit_manifest.py \
+            compiler/ada/build/linux-amd64/debug/bin/refine . manifest-linux.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest-linux
+          path: manifest-linux.json
