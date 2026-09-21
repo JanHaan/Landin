@@ -13,8 +13,8 @@ Two compilations are EQUIVALENT CLOSURES when they agree on the source bytes,
 the module closure, the target, `--optimize`, `--specialize`, `--build-mode`
 and the pinned compiler.  They are free to differ in the absolute build
 directory, the working directory, the output path and file name, the whole
-environment (locale, timezone, SOURCE_DATE_EPOCH, everything) and in how often
-and in what order they are run.
+environment (locale, timezone, SOURCE_DATE_EPOCH, everything), in how often
+and in what order they are run, and in THE HOST THEY RUN ON.
 
 Tier 1, TARGET CODE, is deterministic under that whole relation:
 
@@ -50,6 +50,24 @@ same comparison happened to come out identical; one toolchain being tidier is
 not a contract.  Nothing here claims determinism across compiler versions,
 across differing pins, across differing build options -- an option is an
 input, not an equivalence -- or any timing reproducibility.
+
+The host is the one freedom this file cannot exercise, because one machine
+cannot disagree with itself.  It is checked from two instead:
+`scripts/emit_manifest.py` emits every positive fixture on every target in
+both build modes and hashes each one, and `.github/workflows/determinism.yml`
+builds that manifest on each host and requires the manifests to agree.
+Measured across macOS arm64 and Linux x86-64: 1446 entries, identical, with
+the 22 refusals agreeing too -- so accept and reject are host-neutral as well
+as the bytes.  The claim is worth stating because nothing outside
+`Landin.Targets` may ask the host how wide a pointer is; when that slips, a
+32-bit target quietly follows the machine it was built on.
+
+The first run of that check disagreed on six entries and the check was wrong,
+not the compiler.  Tier 2's fixed source-path spelling is an INPUT, `caller`
+locations put a digest of the caller files into the assembly, and two
+absolute paths disagree that way on one host as readily as on two.  A
+cross-host check that does not pin the spelling is measuring its own working
+directory.
 
 Cortex-M firmware ELF, object, assembly, linker script and linker map identity
 across build directories is claimed too, and is checked where the ARM

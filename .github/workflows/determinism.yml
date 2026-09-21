@@ -1,0 +1,81 @@
+#  Emission is host-neutral, or the compiler is reading something off the
+#  machine it runs on.
+#
+#  compiler/tests/test_determinism.py states the equivalence relation two
+#  compilations must agree on and checks it within one host.  A single
+#  machine cannot check the host itself, so that half lives here: each host
+#  emits a manifest of assembly digests for every positive fixture on every
+#  target in both build modes, and the manifests have to agree.
+#
+#  The cheap axis is the one that multiplies.  Emission needs no target
+#  assembler, linker or emulator, so a host job installs the pinned
+#  toolchain, builds the compiler and emits for all three targets in about
+#  two minutes -- which is what makes the matrix hosts + targets rather
+#  than hosts x targets.
+
+name: determinism
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  manifest:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: ubuntu-24.04
+            platform: x86_64-linux
+            build: linux-amd64
+          - host: macos-15
+            platform: aarch64-darwin
+            build: darwin-arm64
+    runs-on: ${{ matrix.host }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          landin_install_toolchain "$HOME/landin-toolchain" '${{ matrix.platform }}'
+          {
+            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Identify the toolchain
+        run: |
+          "$LANDIN_GNAT_HOME/bin/gnat" --version | head -1
+          "$LANDIN_GPRBUILD_HOME/bin/gprbuild" --version | head -1
+
+      - name: Build refine
+        run: ./scripts/build.sh -j4
+
+      - name: Emit this host's manifest
+        run: |
+          python3 scripts/emit_manifest.py emit \
+            compiler/ada/build/${{ matrix.build }}/debug/bin/refine \
+            . manifest-${{ matrix.platform }}.json
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: manifest-${{ matrix.platform }}
+          path: manifest-${{ matrix.platform }}.json
+
+  agree:
+    needs: manifest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v6
+        with:
+          path: manifests
+          merge-multiple: true
+      - name: Every host emitted the same bytes
+        run: |
+          ls -l manifests
+          python3 scripts/emit_manifest.py compare manifests/*.json
