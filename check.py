@@ -5735,6 +5735,87 @@ def check_named_files(full_run):
     return out
 
 
+def check_document_reachability(full_run):
+    """Every tracked document is reachable from README.md.
+
+    A document nothing links to is one nobody reads and nobody updates, and
+    it decays without anything noticing.  Six were in that state when this
+    was written: two derivation manifests, the malformed harness cases, the
+    isolated highlighting fixtures, a 267-line exploratory design note and
+    MOVING.md itself.  Each was current; none was findable.
+
+    `check_named_files` is the other direction -- a name a document uses
+    must resolve.  This one is reachability: a document must be named.
+    Neither implies the other, which is how all six passed a clean run.
+
+    Naming a directory counts as reaching its README.md, because that is
+    how a reader follows `highlight/emacs` or `examples/config_parser/`.
+    Reachability is indirect on purpose: README.md does not have to name
+    everything, it only has to be the root of a connected graph.
+    """
+    if not full_run:
+        return []
+
+    docs = []
+    for here, dirs, files in os.walk(ROOT):
+        #  The same exclusions basenames() uses: generated trees and other
+        #  people's checkouts are not this repository's documents.
+        dirs[:] = [d for d in dirs
+                   if d not in (".git", "build", ".scratch", ".claude",
+                                "node_modules", "site", "__pycache__")]
+        for name in files:
+            if name.endswith(".md"):
+                docs.append(os.path.relpath(os.path.join(here, name), ROOT))
+    docs = sorted(docs)
+    if "README.md" not in docs:
+        return [("README.md", 1, "this file is needed by a check and is not here")]
+    known = set(docs)
+    #  A directory is reached through the README it contains.
+    readmes = {os.path.dirname(d): d for d in docs
+               if os.path.basename(d) == "README.md"}
+
+    #  A link, a name in backticks, or a bare path ending in .md.  The
+    #  backtick form matters: most of this repository's cross-references
+    #  are `docs/ir.md` rather than Markdown links.
+    link = re.compile(r"\[[^\]]*\]\(([^)#]+?)(?:#[^)]*)?\)")
+    quoted = re.compile(r"`([A-Za-z0-9_./+-]+(?:\.md)?/?)`")
+    bare = re.compile(r"(?<![\w/`(])((?:[A-Za-z0-9_.+-]+/)*[A-Za-z0-9_+-]+\.md)\b")
+
+    edges = {}
+    for document in docs:
+        base = os.path.dirname(document)
+        text = io.open(os.path.join(ROOT, document), encoding="utf-8").read()
+        found = set()
+        for pattern in (link, quoted, bare):
+            for match in pattern.finditer(text):
+                found.add(match.group(1))
+        reached = set()
+        for target in found:
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            target = target.rstrip("/")
+            for candidate in (os.path.normpath(os.path.join(base, target)),
+                              target.lstrip("./")):
+                if candidate in known:
+                    reached.add(candidate)
+                    break
+                if candidate in readmes:
+                    reached.add(readmes[candidate])
+                    break
+        edges[document] = reached
+
+    seen, pending = {"README.md"}, ["README.md"]
+    while pending:
+        for nxt in edges.get(pending.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                pending.append(nxt)
+
+    return [(document, 1, "no document links here, so nothing leads to it "
+                          "from README.md")
+            for document in sorted(known - seen)]
+
+
 def check_stale_backlog(paths, full_run):
     """No live document points at the retired work authority."""
     out = []
@@ -6501,6 +6582,7 @@ def main(argv):
     extra = check_citations(citation_paths)
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
+    extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)

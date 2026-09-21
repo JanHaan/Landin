@@ -1,0 +1,28 @@
+#  External link checking.  check.py holds the other two properties: that a
+#  repository-relative name a document uses resolves, and that every document
+#  is reachable from README.md.  Neither can say whether a URL still answers,
+#  which is what rots without anyone noticing.
+
+#  Link rot is slow and networks are not, so a transient failure must not be
+#  reported as a dead link.
+max_retries = 3
+retry_wait_time = 2
+timeout = 30
+
+#  429 is a host rate-limiting the checker, not a broken link.  403 is a host
+#  refusing an unattended client; several vendor documentation sites do this
+#  to anything without a browser's headers, and a link a human can open is
+#  not broken.
+accept = ["200..=299", "403", "429"]
+
+#  Generated output, vendored packages and other people's checkouts.
+exclude_path = [
+    "docs/site/site",
+    "highlight/tree-sitter/node_modules",
+    "highlight/textmate/node_modules",
+    ".scratch",
+]
+
+#  A mail address is not a link to follow.
+exclude_mail = true
+no_progress = true

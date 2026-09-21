@@ -1,0 +1,37 @@
+#  Do the links still answer?
+#
+#  check.py holds the two properties it can hold without a network: a
+#  repository-relative name a document uses resolves, and every document is
+#  reachable from README.md.  Neither says whether a URL is still there.
+#
+#  This runs when a document changes and once a week otherwise, because link
+#  rot happens on the far side of the link and no commit here announces it.
+#  It is not a gate on the compiler.
+
+name: links
+
+on:
+  push:
+    paths:
+      - '**.md'
+      - 'lychee.toml'
+      - '.github/workflows/links.yml'
+  schedule:
+    #  Mondays, early UTC.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lychee:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check every link in every document
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: --config lychee.toml --no-progress './**/*.md'
+          fail: true
