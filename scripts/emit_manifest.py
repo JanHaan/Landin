@@ -3,8 +3,17 @@
 
 The point is a manifest that must be byte-identical on any host.  Emission
 needs no target assembler, linker or emulator, so this runs anywhere the
-compiler builds.  Every input to the declared equivalence relation is fixed
-on the command line; only the host is free to vary.
+compiler builds.
+
+Every input to the declared equivalence relation is fixed, which includes
+one that is easy to miss: Tier 2 of the determinism contract is only
+deterministic under a fixed SOURCE-PATH SPELLING, and `caller` locations
+put a digest of the caller files into the assembly.  A first run passed
+absolute paths and six of 1446 entries differed for that reason alone --
+on one host, two absolute paths disagree the same way.  So each fixture is
+compiled from its own directory under the bare spelling `program.ldn`,
+which is the same string on every host.  Only the host is then free to
+vary.
 """
 import hashlib, json, subprocess, sys, tempfile, os
 from pathlib import Path
@@ -32,8 +41,8 @@ with tempfile.TemporaryDirectory() as tmp:
                 r = subprocess.run(
                     [str(refine), "--target=" + target, "--build-mode=" + mode,
                      "--optimize=size", "--specialize=auto", "--emit=asm",
-                     "-o", str(asm), str(src)],
-                    capture_output=True, cwd=tmp)
+                     "-o", str(asm), src.name],
+                    capture_output=True, cwd=fx)
                 if r.returncode != 0 or not asm.exists():
                     manifest[key] = "refused:%d" % r.returncode
                     refused += 1
