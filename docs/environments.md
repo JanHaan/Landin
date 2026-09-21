@@ -40,9 +40,9 @@ operations and [`docs/process.md`](process.md) for the workflow.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
 kept in step by a second push URL on the same remote; the Pages and
-GitHub-mirror manifests are retired with the SourceHut gate. Manual
-`scripts/site.sh --publish` keeps its validated-approval guard before it
-reaches the licensed font checkout. The former automatic Nix manifest was
+GitHub-mirror manifests are retired with the SourceHut gate, and
+`scripts/site.sh` renders and packages without publishing.
+`.github/workflows/pages.yml` is the only publisher. The former automatic Nix manifest was
 retired earlier, in favor of explicit supplemental native Nix checks when the
 shell's inputs change.
 

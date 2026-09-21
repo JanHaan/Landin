@@ -77,9 +77,9 @@ the pages without the other — `--mono` still names it, and the stack
 behind it is what a reader sees — and `render_html.py` says so once on
 stderr. `check.py` reports the family's coverage as not checked rather
 than failed, because a host without a private checkout is an ordinary
-host. What refuses is `scripts/site.sh --publish`: a page published in a
-fallback face is the site quietly not being itself, so the publish asks
-`fonts.py --require` first and stops if a family is absent.
+host. What refuses is `.github/workflows/pages.yml`, whose fetch of the
+family is fatal rather than best-effort: a page published in a fallback
+face is the site quietly not being itself, which no word count can see.
 
 No job clones `landin-fonts` any more. The pages task that did, with a
 deploy key held as a builds.sr.ht secret, is retired with the SourceHut

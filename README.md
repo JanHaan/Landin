@@ -87,11 +87,10 @@ the mirror copies its branches and tags.
 Explicit native acceptance approves an exact committed revision. SourceHut
 publishes the reading copies after approved promotion to canonical `main`;
 manual publication uses the same guard. See
-`environments/native-ci/README.md` for acceptance operations. To render or publish:
+`environments/native-ci/README.md` for acceptance operations. To render:
 
 ```sh
 ./scripts/site.sh              # render, verify, package
-./scripts/site.sh --publish    # and upload
 ```
 
 ## Checking

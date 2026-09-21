@@ -14,7 +14,7 @@ one licensee and forbids supplying the font data to anyone else, so its
 package lives in a private repository -- `landin-fonts`, found through
 `LANDIN_FONTS` or beside this one -- and a checkout without it renders
 the pages in the stack behind the family.  `missing()` says when that
-happened, and `scripts/site.sh --publish` refuses to publish that way.
+happened, and the publishing workflow refuses to publish that way.
 
 The `@font-face` rules are not written here either.  Each family keeps
 its source's own stylesheet, which is what states the weight axis and

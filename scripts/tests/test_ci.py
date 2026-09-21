@@ -1023,24 +1023,16 @@ class PublicationLockTests(unittest.TestCase):
 
 
 class PublicationWiringTests(unittest.TestCase):
-    def test_guard_failure_precedes_render_fonts_and_upload(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "scripts").mkdir(); (root / "bin").mkdir()
-            for name in ("env.sh", "site.sh"):
-                shutil.copy2(ROOT / "scripts" / name, root / "scripts" / name)
-            python = root / "bin/python3"
-            python.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$PROBE_LOG\"\nexit 91\n")
-            python.chmod(0o755)
-            probe = root / "probe.log"
-            result = subprocess.run(["sh", str(root / "scripts/site.sh"), "--publish"],
-                                    env={**os.environ, "PATH": str(root / "bin") + ":" + os.environ["PATH"],
-                                         "PROBE_LOG": str(probe)}, capture_output=True)
-            self.assertEqual(result.returncode, 91)
-            lines = probe.read_text().splitlines()
-            self.assertEqual(len(lines), 1)
-            self.assertIn("scripts/ci/approval.py", lines[0])
-            self.assertFalse((root / "docs/site/site").exists())
+    def test_site_sh_names_no_publishing_path(self):
+        #  Publication is .github/workflows/pages.yml and nothing else.  A
+        #  --publish here would upload from a developer's checkout, outside
+        #  the one publisher, behind a guard with no gate left to consult.
+        script = "\n".join(
+            line for line in (ROOT / "scripts" / "site.sh").read_text().splitlines()
+            if not line.lstrip().startswith("#"))
+        for spelling in ("--publish", "hut pages publish",
+                         "scripts/ci/publish.py", "scripts/ci/approval.py"):
+            self.assertNotIn(spelling, script)
 
     def test_manifest_and_guard_invariants_reject_regression(self):
         import importlib.util
@@ -1073,7 +1065,7 @@ class PublicationWiringTests(unittest.TestCase):
                 override.write_text(limits)
                 site = root / "scripts/site.sh"
                 script = site.read_text()
-                site.write_text(script.replace("exec python3", "python3"))
+                site.write_text(script + '\nhut pages publish "$Tarball"\n')
                 self.assertTrue(checker.check_native_ci(True))
                 site.write_text(script)
                 #  git.sr.ht is a mirror: any manifest reaching it would

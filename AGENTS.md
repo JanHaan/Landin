@@ -57,8 +57,8 @@ python3 check.py prototype-2-parser.md
 python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --suite=checking
 
 # Render every document as HTML, verify nothing was dropped, and package
-# it for pages.sr.ht.  --publish uploads it; no job does this any more, so
-# publication is manual until the page moves; see docs/site/README.md.
+# it.  It does not publish: .github/workflows/pages.yml is the only
+# publisher; see docs/site/README.md.
 ./scripts/site.sh
 
 # On a nix machine, a shell holding the pinned toolchain, python3 and hut.
@@ -82,8 +82,8 @@ the same remote rather than by a job. Neither host runs a gate: the GitHub
 Actions replacement is not in place yet. `.github/workflows/pages.yml` publishes
 www.701.dev from GitHub Pages on every push to main, fetching the licensed code
 face from object storage because it is not in this repository; it renders and
-verifies, and runs no compiler test. The retired `scripts/site.sh --publish`
-path still targets pages.sr.ht behind its old approval guard. Nix shell checks are explicit supplemental native
+verifies, and runs no compiler test. `scripts/site.sh` renders and packages
+and does not publish. Nix shell checks are explicit supplemental native
 Nix validation when shell inputs change; the former automatic Nix manifest is retired.
 Historical SourceHut gate links remain evidence for their original revisions.
 
@@ -176,7 +176,7 @@ list of files copied beside the pages. `Nunito Sans` is under the OFL and
 vendored in `assets/fonts/`; `MonoLisaCode` is under a foundry EULA that
 forbids passing the files on, so it lives in the private `landin-fonts`
 repository, found through `LANDIN_FONTS` or beside this one, and a host
-without it renders in the fallback stack while `scripts/site.sh --publish`
+without it renders in the fallback stack while the publishing workflow
 refuses. The module reads each family's own stylesheet rather than
 transcribing thirty `unicode-range` lists, and `check.py` holds every
 character of every rendered document to falling inside a subset of both

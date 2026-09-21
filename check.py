@@ -5259,7 +5259,7 @@ def check_fonts(full_run):
     finds through `LANDIN_FONTS` or beside this repository.  A host
     without that checkout is an ordinary host, not a broken one: the
     family's coverage is reported skipped rather than failed, and
-    `scripts/site.sh --publish` is what refuses to go without it.
+    The publishing workflow is what refuses to go without it.
     """
     if not full_run:
         return []
@@ -6367,16 +6367,22 @@ def check_native_ci(full_run):
                   if name.endswith((".yml", ".yaml"))]
     for name in stray:
         out.append((name, 1, "no build manifest may remain: git.sr.ht is a mirror"))
+    #  site.sh renders and packages; it does not publish.  A publishing
+    #  path here would upload from a developer's checkout, outside the
+    #  workflow that is now the only publisher, and behind an approval
+    #  guard that no longer has a gate to consult.
     with io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8") as stream:
-        site = stream.read()
-    guard = 'python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"'
-    if guard not in site or site.index(guard) > site.find('render_html.py'):
-        out.append(("scripts/site.sh", 1, "manual publication must guard before rendering"))
-    publisher = 'exec python3 "$LANDIN_ROOT/scripts/ci/publish.py" --root "$LANDIN_ROOT"'
-    if publisher not in site or site.index(publisher) > site.find('render_html.py'):
-        out.append(("scripts/site.sh", 1, "publication must enter the shared publisher before rendering"))
-    if "hut pages publish" in site:
-        out.append(("scripts/site.sh", 1, "publication may not bypass the shared publisher"))
+        #  Comments are excluded: the script explains that it used to
+        #  publish and why it stopped, and a header that cannot say so is a
+        #  worse script.  What is checked is what it runs.
+        site = "\n".join(line for line in stream.read().splitlines()
+                         if not line.lstrip().startswith("#"))
+    for spelling in ("--publish", "hut pages publish",
+                     "scripts/ci/publish.py", "scripts/ci/approval.py"):
+        if spelling in site:
+            out.append(("scripts/site.sh", 1,
+                        "site.sh renders and does not publish, so it may not name "
+                        + spelling))
     return out
 
 

@@ -249,13 +249,13 @@ and non-fast-forward races refuse the operation without partial promotion.
 Direct unapproved main pushes are not prevented by server-side protection;
 the publication guard refuses them.
 
-`scripts/site.sh --publish` calls
-`scripts/ci/approval.py`. It requires a clean checkout at current canonical
+`scripts/ci/approval.py` requires a clean checkout at current canonical
 main, fetches the exact canonical annotated approval without replacement,
 reconstructs source/tree/policy identities, and verifies all required outcomes.
-The `.build.yml` that called it on a push is retired, so publication is manual
-only. Manual
-publication enters `scripts/ci/publish.py`, which holds an owned canonical Git
+Nothing calls it any more: the `.build.yml` that ran it on a push is retired,
+and `scripts/site.sh` no longer publishes. It is described here as the
+retired arrangement. That
+publication entered `scripts/ci/publish.py`, which holds an owned canonical Git
 lease across rendering, the final approval check and both domain uploads.
 Waiting jobs recheck the exact approved revision after acquiring the lease.
 This serializes participating publishers; it does not lock canonical main

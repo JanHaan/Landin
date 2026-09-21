@@ -1,21 +1,20 @@
 #!/bin/sh
-#  Render the documentation and package it for pages.sr.ht.
+#  Render the documentation and package it.
 #
 #  Render the specification, tour, prototypes and the Markdown guides
 #  selected by the renderer's DOCS and GUIDES lists. The
 #  render is verified word-for-word against its sources, so a page that
 #  quietly lost a paragraph fails here rather than going up.
 #
-#  Usage: scripts/site.sh [--publish]
+#  This renders and packages; it does not publish.  Publication is
+#  .github/workflows/pages.yml, which deploys www.701.dev from GitHub
+#  Pages on every push to main.  The --publish option that uploaded to
+#  pages.sr.ht went with the SourceHut gate: its approval guard cannot
+#  pass a revision no gate accepted, so from 0.2.0 it could only refuse.
+#
+#  Usage: scripts/site.sh
 
 . "$(dirname -- "$0")/env.sh"
-
-# Both SourceHut and direct publication validate canonical approval before
-# rendering, private-font access, or publisher invocation.
-if [ "${1:-}" = "--publish" ]; then
-    python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"
-    exec python3 "$LANDIN_ROOT/scripts/ci/publish.py" --root "$LANDIN_ROOT"
-fi
 
 Site="$LANDIN_ROOT/docs/site/site"
 Tarball="$LANDIN_ROOT/docs/site/landin-site.tar.gz"
