@@ -23,6 +23,6 @@ exclude_path = [
     ".scratch",
 ]
 
-#  A mail address is not a link to follow.
-exclude_mail = true
+#  A mail address is not a link to follow.  lychee leaves those alone unless
+#  include_mail is set, so there is nothing to turn off here.
 no_progress = true
