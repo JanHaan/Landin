@@ -9,7 +9,8 @@ is eventually rewritten, these must still be the tests it has to pass.
 ```text
 compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
-  harness-cases/malformed/               trees that must be rejected
+  harness-cases/malformed/               trees that must be rejected; see
+                                         harness-cases/README.md
   constructs.matrix                      generated: every [NNNN], its evidence and inventory
   diagnostics.catalogue                  generated: every code and its rule
   diagnostics.matrix                     generated: code contracts, emitters and owners
@@ -86,9 +87,10 @@ acceptance owns closure.
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
 identifies the scope; compiler units, diagnostics and the complete IR golden
 remain included.
-The routine native acceptance policy uses this scope for the debug compiler
-and runs the complete runtime/ABI matrix with the release compiler. Milestone
-acceptance runs the complete suite in both modes. See
+The retired routine acceptance policy used this scope for the debug compiler
+and ran the complete runtime/ABI matrix with the release compiler; milestone
+acceptance ran the complete suite in both modes. Nothing runs either now; see
+[`MOVING.md`](../../MOVING.md). See
 [`docs/process.md`](../../docs/process.md).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
@@ -392,8 +394,8 @@ test $? -eq 42
 ```
 
 Each program returns 42 when its result is the expected one. They are runtime
-fixtures as well as examples, so the authoritative Linux gate compiles, runs
-and checks all ten during explicit complete native acceptance.
+fixtures as well as examples. The authoritative Linux gate that compiled, ran
+and checked all ten is retired; see [`MOVING.md`](../../MOVING.md).
 
 The test program validates its complete suite-name inventory before any
 selected or complete run. It rejects missing and unlisted suites separately
@@ -819,11 +821,13 @@ sketches, including their omissions and historical findings. Complete derived
 can compile them.
 
 `runtime/derived-parser` hosts the complete prototype-2-derived lexer and
-recovering configuration parser in `examples/config_parser`. Its derivation
-manifest maps the executable behavior and negative controls to the prototype.
+recovering configuration parser in `examples/config_parser`. Its
+[`DERIVATION.md`](fixtures/runtime/derived-parser/DERIVATION.md)
+maps the executable behavior and negative controls to the prototype.
 
 `runtime/derived-containers` hosts `examples/derived_containers/workload` as the
-complete prototype-3-derived workload. Its `DERIVATION.md` maps every prototype
+complete prototype-3-derived workload. Its
+[`DERIVATION.md`](fixtures/runtime/derived-containers/DERIVATION.md) maps every prototype
 section and Z finding to the ordinary `core` modules, executable paths and
 negative corpus. The runtime entry requires every path to succeed before
 returning 42, with no stdout or stderr: list growth and sorting, direct fixed
@@ -892,7 +896,7 @@ every applicable Darwin source verdict. Explicit native differences and
 replacements are recorded in `darwin/parity.json`, with strict executable
 evidence. Linux golden records remain unchanged. The complete derived parser
 now also uses all six runtime profiles. The [parity guide](darwin/README.md)
-describes full coverage, debugger oracles and retained platform limitations. Native acceptance
+describes full coverage, debugger oracles and retained platform limitations. The retired native acceptance
 and matching-revision approval are documented in
 [the Mac guide](../../environments/macos-arm64/README.md).
 

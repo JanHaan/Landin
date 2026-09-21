@@ -1,9 +1,10 @@
 # Development and validation environments
 
-`ROADMAP.md` R0.70 owns this document. Canonical hosting remains git.sr.ht;
-GitHub is an automated mirror. Explicit committed-revision native acceptance
-is the current Linux authority. Historical SourceHut gate results below keep
-their original meaning.
+`ROADMAP.md` R0.70 owns this document. Canonical hosting is GitHub; git.sr.ht
+is a mirror. The exact-revision native acceptance described below approved
+every revision through 0.2.0 and no longer runs; see [`MOVING.md`](../MOVING.md)
+for what replaces it, which is so far nothing. Historical SourceHut gate
+results below keep their original meaning.
 
 
 Native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
@@ -23,7 +24,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 |---|---|---|
 | native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
-| native Linux x86-64 runner | explicit exact-revision acceptance | working |
+| native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
 | GitHub Actions | publishes www.701.dev from GitHub Pages; not a gate | working |
 
@@ -311,9 +312,10 @@ and it is why the gate now exists: from R1.80 onwards, `refine` emits
 instructions. The original SourceHut gate ran them on their target hardware;
 explicit native acceptance now preserves that requirement.
 
-Hosting remains canonical git.sr.ht. SourceHut handles Pages and mirroring;
-`scripts/ci/` owns explicit native acceptance and canonical approval validation.
-The underlying compiler and test commands remain ordinary repository scripts.
+Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions publishes
+the pages and checks host-independent emission; `scripts/ci/` is retained but
+dead, since nothing submits it and no revision is accepted. The underlying
+compiler and test commands remain ordinary repository scripts.
 
 R5.40 adds native LLDB acceptance through `scripts/debug.sh --target=darwin-arm64`
 and the committed Mac policy. It validates emitted Landin programs with the

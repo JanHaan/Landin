@@ -440,9 +440,10 @@ python3 environments/cortex-m/backend_controls.py --refine PATH_TO_REFINE --outp
 python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
 ```
 
-Filtered commands are development feedback. Exact-revision native acceptance
-runs the complete mandatory path and exports `artifacts/cortex-m/backend` with
-all prior evidence. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
+Filtered commands are development feedback. The retired exact-revision native
+acceptance ran the complete mandatory path and exported
+`artifacts/cortex-m/backend` with all prior evidence; nothing runs it now, and
+[`MOVING.md`](../../MOVING.md) records that. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
 records instruction, allocation, ABI, runtime-helper and memory decisions.
 R6.60 owns language startup/linking/sections/interrupt/naked/inline-assembly
 surfaces; R6.70 freestanding core/noreturn; R6.80 checked-in device fixtures;

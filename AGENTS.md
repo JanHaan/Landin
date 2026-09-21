@@ -4,30 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1, R2, R3 and R4 are complete through the exact-revision approval and
-delivery binding in ROADMAP.md; R5.10 has established the native macOS compiler
-environment, R5.20 isolates target contracts, and R5.30 implements Darwin arm64 lowering. `refine`
-scans and parses every
-`.ldn` file it is given, resolves the files as one module, checks every type
-and definite assignment, lowers accepted functions into verified
-target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0 assembly, and can invoke a
-target-selected native toolchain to assemble and link a hosted executable. Runtime
-fixtures execute those binaries on the native Linux x86-64 gate. A small
-repository-owned `core` library and complete derived prototypes 2, 3 and 4
-execute through that path with native source-debugging coverage. Darwin arm64 has native lowering, ABI and LLDB source-debugging acceptance;
-R5.50 adds complete shared hosted and derived-program parity on both targets,
-with the explicit physical-image limits recorded in ROADMAP.md. R6.50 adds a
-Cortex-M0 assembly backend, validated through an external emulator harness;
-R6.60 adds compiler-owned firmware startup/linking and machine directives;
-source debugging and the broader standard library retain their later owners. Under
-`compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
-source and diagnostic foundations, host adapters, target facts, stage seams,
-the scanner, parser, syntax table, name resolver, type checker, verified IR,
-Linux x86-64 and Darwin arm64 backends, toolchain adapter and repository-owned test harness;
-shared fixtures live under `compiler/tests/`. The four prototype files remain
-specification stress tests written as code sketches; they contain omissions
-such as `...` and are not standalone programs.
+Landin is a language specification with a working Ada bootstrap compiler.
+`refine` scans and parses every `.ldn` file it is given, resolves the files as
+one module, checks every type and definite assignment, lowers accepted
+functions into verified target-neutral IR, emits Linux x86-64, Darwin arm64 or
+Cortex-M0 assembly, and can invoke a target-selected native toolchain to
+assemble and link.
+
+All three targets are implemented. The two hosted ones build and run complete
+programs with native source-debugging coverage — GDB on Linux, LLDB on
+Darwin — and Cortex-M0 builds firmware with compiler-owned reset, vectors,
+linker script and initialized-data copying, with line and function debugging.
+A small repository-owned `core` library and the complete derived prototypes 2,
+3 and 4 execute through that path. Runtime fixtures execute those binaries,
+but see the gate note below: nothing runs them on a push at present.
+
+Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
+executable, source and diagnostic foundations, host adapters, target facts,
+stage seams, the scanner, parser, syntax table, name resolver, type checker,
+verified IR, the three backends, the toolchain adapter and the
+repository-owned test harness; shared fixtures live under `compiler/tests/`.
+The four prototype files remain specification stress tests written as code
+sketches; they contain omissions such as `...` and are not standalone
+programs.
 
 ## Commands
 
@@ -67,14 +66,17 @@ python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh -
 nix develop
 ```
 
-Explicit exact-revision native acceptance is authoritative for Linux x86-64.
-`python3 scripts/ci/controller.py accept COMMIT` runs the committed routine or milestone
-policy against one committed archive, retains host evidence and exports a
-verified local copy. Development runs are incremental/filtered feedback and
-cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
-status, resume, export, administrative approval tags and atomic promotion.
-Revisions carrying the Darwin policy marker additionally require `scripts/ci/darwin.py accept COMMIT` and matching
-Darwin evidence at approval; see `environments/macos-arm64/README.md`.
+**There is no mechanical gate at present.** The exact-revision native
+acceptance in `scripts/ci/` approved every revision through 0.2.0 and no longer
+runs: nothing submits it and no revision is accepted. Do not cite it as
+current, and do not claim a change is accepted. `MOVING.md` records this and
+the rest of what the move left open; `environments/native-ci/README.md` and
+`environments/macos-arm64/README.md` describe the retired arrangement.
+
+What does run on a push is `.github/workflows/determinism.yml`, which requires
+every host to emit the same bytes, and `.github/workflows/pages.yml`, which
+publishes <https://www.701.dev>. Neither runs a compiler test, so a green run
+says nothing about the compiler.
 
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
@@ -109,8 +111,7 @@ evidence, never a current success rule. Linux runtime/GDB evidence comes from
 the native Linux runner; Darwin runtime/LLDB evidence runs natively on the Mac.
 
 `scripts/test.sh` builds and runs the complete Linux test program on native
-Linux. Its `--host` selector retains compiler checks on the Mac. Exact-revision
-native acceptance owns closure. `scripts/dev-build.sh` and
+Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
 `scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
 latter accepts one exact `--suite`, `--case`, or `--fixture` selector. A
 filtered run says `FILTERED` in its transcript and is not gate evidence. There
@@ -217,85 +218,18 @@ Compiler stages are Ada packages behind tested seams so a future self-hosting ro
 
 Implementation proceeds without waiting for every unresolved foundation.
 `ROADMAP.md` assigns each question to the first vertical slice that needs it.
-R0 established the bootstrap chassis, R1 built the executable language kernel
-and first Linux x86-64 path, R2 settled the semantic and representation core
-from executable cases, and R3 delivered the first major compiler milestone: a
-complete derived parser program with useful diagnostics, evidence-table
-dispatch, and `any` but without specialization. R4 delivered the hosted
-Linux x86-64 path and its applicable parity audit; R4.91 closes the reviewed
-compiler, tooling and documentation repairs with explicit retained limits
-and R5 handoffs. R5.10 has established the native macOS compiler environment; R5.20 isolates
-target contracts and records retained resource dispositions. R5.30 implements
-native Darwin lowering; R5.40 adds native LLDB and Mach-O debug identity.
-R5.50 closes hosted parity through its dual-native milestone binding;
-R5.51 closes bounded loop-transfer ownership and compatible native routine
-acceptance, with a mechanically checked retained-debt handoff. Its exact-revision
-dual-native binding owns closure. R6.10 establishes QEMU Cortex-M0 CPU/startup
-and synthetic Renode peripheral probes on native Debian 13 x86-64; see
-`environments/cortex-m/README.md`. Its Linux acceptance evidence is retained
-with the accepted revision. R6.20 instantiates the 32-bit layouts and external
-AAPCS/internal Landin ABI planner with independent executable C/assembly
-controls. Its exact-revision dual-native binding owns closure. R6.30 defines
-D227's concurrency memory model and implements hosted scalar atomics, volatile
-accesses and barriers, with independent interrupt/DMA/cache controls. Its
-exact-revision dual-native binding owns closure. R6.40 implements D228's packed
-images, validated extraction and explicit register-image policies on both native
-backends, with compiler-generated and independent peripheral controls. Its
-exact-revision dual-native binding owns closure. R6.50 implements Cortex-M0
-instruction selection and internal ABI transport, with generated QEMU and
-synthetic peripheral execution bound by native acceptance. R6.60 adds
-compiler-owned reset, initialized-data/RAM-code copying, BSS,
-vectors, interrupt/naked conventions, sections/keep and opaque assembly.
-Its QEMU/Renode firmware lane remains distinct from R6.50's external harness.
-R6.70 adds ordinary CPU/panic modules and nonreturning signatures over the
-existing caller-backed memory/collections. Its exact-revision dual-native
-binding owns closure. R6.80 adds pinned RP2040 device fixtures, deterministic
-regeneration and generated-firmware consumers; its exact-revision dual-native
-binding owns closure. R6.90 implements the complete derived driver/application,
-with explicit synthetic device adaptation, DMA consumption/overrun/recovery,
-compiler-owned boot and independent peripheral evidence. Its exact-revision
-dual-native binding owns closure. R6.100 closes Cortex line/function debugging
-and complete measured firmware/stack evidence within its explicit bounds; its exact-revision dual-native milestone
-binding owns closure. R7.10 audits every construct into the generated
-inventory in `compiler/tests/constructs.matrix`; its exact-revision dual-native
-routine binding owns closure. R7.20 decides every deferred row it routed:
-shared names, labelled bare blocks, the several-atom pointer union and general
-aggregate values are implemented on all three targets, and the remaining forms
-are bounded, withdrawn or transferred to named successors by D233-D241; its
-exact-revision dual-native routine binding with debugger coverage owns closure.
-R7.30 gives every inherited row and later discovery a terminal disposition:
-untriggered parked and watch items transfer to Language evolution with their
-triggers, and `check.py` refuses a row without one; its exact-revision
-dual-native routine binding owns closure. R7.40 closes every evidence register:
-no matrix has a gap, stale test, unowned target or contradictory disposition,
-the four compile-time rows and [1610]'s link names carry measured Cortex-M
-evidence, D242 makes a refused selected import answer for its name so later
-uses stop repeating it, and the structural editor grammar is back on the
-enabled kernel; its exact-revision dual-native routine binding owns closure.
-R7.50 proves deterministic baseline toolchain behavior: it declares the
-equivalence relation two compilations must satisfy to be equivalent closures,
-gates target-code and build-report identity under it on all three targets,
-pins how debug metadata may vary with the compilation directory and no
-further, and records the hosted linked image as the platform driver's artifact
-rather than a Landin claim; its exact-revision dual-native routine binding
-with debugger coverage owns closure. R7.60 closes complete derived prototype
-coverage: all thirty derivation rows now carry generated inputs, oracles and
-per-target results beside their existing finding trace, every product target
-the four applicability scopes name is reached by one of that prototype's own
-rows, and the two registers stay separate because the Cortex corpus reaches
-further than metadata claims. Its exact-revision dual-native routine binding
-owns closure. R7.70 declares the roadmap endpoint: every work item is
-complete, every durable item across both ledgers and the inherited review
-register has a terminal disposition, every transferred one names a successor
-roadmap and every named successor owns at least one record. The status-pointer
-rule, `roadmap_progress` and both status pointers learned an endpoint state
-that a blocked item still cannot reach, and `validate_endpoint` in
-`scripts/roadmap_debt.py` refuses a declaration beside live work and a
-finished roadmap that declares none. Its exact-revision dual-native milestone
-binding owns closure. No roadmap item remains.
-R6.80 retains its separate generated-device fixture gate.
-`ROADMAP.md` owns the endpoint declaration and each revision's acceptance and
-delivery evidence.
+The first roadmap is complete and declared so at R7.70: no work item remains.
+R0 established the bootstrap chassis, R1 the executable language kernel and the
+first Linux x86-64 path, R2 the semantic and representation core, R3 the first
+complete derived program, R4 the hosted Linux path, R5 the native macOS target
+and its debugging, R6 Cortex-M0 and compiler-owned firmware, and R7 audited
+every construct and gave every inherited row a terminal disposition.
+
+What each item contributed is not re-narrated here. That is the roadmap's job,
+it grew to thirteen thousand lines doing it, and a changelog is not what an
+agent needs: what the compiler does today is under **Repository state** above.
+`ROADMAP.md` holds the record and is being replaced; `MOVING.md` says what the
+replacement has not decided yet.
 
 The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice and has reached that endpoint. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it, with the six successor roadmaps in `ROADMAP.md` naming who owns each. Do not change any version or release designation without explicit user approval, and do not assume SemVer. Do not add a work item to `ROADMAP.md`: it is closed, and the endpoint rule refuses one.
 

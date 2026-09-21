@@ -39,6 +39,7 @@ library, packaging and every release decision belong to successor roadmaps.**
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 and Darwin arm64 backends and native toolchain paths, and its own test harness. |
 | `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
+| `docs/notes/` | exploratory design notes, explicitly non-normative and not roadmap commitments; [the formatting API note](docs/notes/printf-alternative.md) is the one so far. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
 | `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |
@@ -77,17 +78,21 @@ The canonical repository the pages are generated from is at
 **<https://git.sr.ht/~sinnfrei/landin>**:
 
 ```sh
-git clone https://git.sr.ht/~sinnfrei/landin
+git clone https://github.com/JanHaan/Landin
 ```
 
-An automatically maintained GitHub mirror is at
-**<https://github.com/JanHaan/Landin>**. Changes still originate on SourceHut;
-the mirror copies its branches and tags.
+Canonical hosting is **<https://github.com/JanHaan/Landin>**. git.sr.ht is a
+mirror, kept in step by a second push URL on the same remote rather than by a
+job.
 
-Explicit native acceptance approves an exact committed revision. SourceHut
-publishes the reading copies after approved promotion to canonical `main`;
-manual publication uses the same guard. See
-`environments/native-ci/README.md` for acceptance operations. To render:
+There is no mechanical gate at present. The exact-revision native acceptance
+that approved every revision through 0.2.0 was retired with SourceHut, and its
+replacement is not designed yet; [`MOVING.md`](MOVING.md) records that and what
+else the move left open. `.github/workflows/determinism.yml` checks that every
+host emits the same bytes and `.github/workflows/pages.yml` publishes
+<https://www.701.dev>; neither runs a compiler test.
+`environments/native-ci/README.md` describes the retired arrangement. To
+render:
 
 ```sh
 ./scripts/site.sh              # render, verify, package

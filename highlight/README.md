@@ -103,7 +103,8 @@ renderings. Regenerate or verify them with:
 ```sh
 python3 highlight/generate.py
 python3 highlight/generate.py --check
-./highlight/test.sh                 # isolated: only highlight/ fixtures
+./highlight/test.sh                 # isolated: only highlight/ fixtures, see
+                                    # highlight/tests/README.md
 ./highlight/test.sh --integration   # also parse compiler and core fixtures
 ```
 

@@ -1,5 +1,11 @@
 # Native macOS compiler environment
 
+> **The acceptance half is retired.** `scripts/ci/darwin.py accept` no longer
+> runs; the Darwin evidence it produced stands for the revisions it named. The
+> environment itself -- the pinned tool homes, the Mac `--host` workflow and
+> LLDB -- is current and still how this machine is used. See
+> [`MOVING.md`](../../MOVING.md).
+
 `ROADMAP.md` R5.10 records the bootstrap environment; R5.51 owns the current
 acceptance handoff. The reproduction sections below preserve R5.10
 environment validation, while the exact-revision section describes current

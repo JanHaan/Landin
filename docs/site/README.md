@@ -2,7 +2,7 @@
 
 `render_html.py` renders the language documents and the guides selected in
 its `DOCS` and `GUIDES` lists as self-contained HTML pages. `scripts/site.sh`
-packages them for pages.sr.ht. The Markdown files are the rendering sources;
+renders and packages them. The Markdown files are the rendering sources;
 publication does not change their authority. The specification remains
 normative, and derived guides such as [the IR explanation](../ir.md) remain
 non-authoritative.
@@ -69,28 +69,23 @@ that uploaded to pages.sr.ht went with the SourceHut gate. Native
 acceptance and evidence export happen before promotion; see
 [`environments/native-ci/README.md`](../../environments/native-ci/README.md).
 Non-publishing renders remain available for previews.
-Publication stays on SourceHut. `scripts/ci/publish.py` acquires the canonical
-`refs/tags/ci/publication-lock` tag with an atomic create-only Git lease.
-Every automatic and manual publisher uses that same lock, retaining it through
-the final approval check and both domain uploads. A waiting older job rechecks
-canonical main before rendering or uploading and refuses a stale revision.
-The two domain operations remain separate: serialization prevents an older
-participating job from overwriting a newer completed publication, but does not
-make both domains change atomically or prevent main advancing during an upload.
+Publication is [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)
+and nothing else. It runs on every push to `main`, renders with the same
+`--verify` pass, writes the `www.701.dev` CNAME and deploys to GitHub Pages.
+Its `concurrency` group serializes publications and never cancels one in
+flight, because a cancelled deploy can leave the site half-replaced.
 
-Each publication renders and packages into its own temporary directory. The
-renderer accepts `--to DIR` for isolated output; ordinary previews keep their
-usual directory. The final guard must still return the exact revision approved
-before lock acquisition, so changing HEAD while rendering cannot approve an
-archive made from a different revision.
-Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
-with a token that has the `PAGES:RW` scope. The site goes to
-`www.701.dev` and then to `701.dev`: pages.sr.ht serves one site per domain
-and cannot redirect between them, so both are published rather than one of
-them going stale. `LANDIN_PAGES_DOMAIN` and `LANDIN_PAGES_ALIAS` override
-each, and an empty `LANDIN_PAGES_ALIAS` publishes only the first.
-`hut pages publish -s //some/path` moves the site into a subdirectory if
-the root is wanted for something else.
+The site is served at `www.701.dev`, and GitHub redirects `701.dev` to it.
+That is the one thing the move simplified: pages.sr.ht served one site per
+domain and could not redirect between them, so both had to be published
+separately and either could go stale. Every page still declares which of the
+two it wants to be found at, because a reader who arrives at the other one
+should be told rather than guessed at.
+
+The licensed code face is not in this repository and the workflow fetches it
+from object storage before rendering. That fetch is fatal rather than
+best-effort: a silent fallback publishes a site set in the wrong face, which
+no word count can see.
 
 The Pages job's existing SSH identity must be allowed to write the lock tag in
 canonical `git.sr.ht`; read access to private fonts and write access to the
