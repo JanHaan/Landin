@@ -5,7 +5,9 @@
 --  to be elaborated is a suite that can silently disappear.
 
 with Ada.Command_Line;
+with Ada.Containers.Generic_Array_Sort;
 with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
@@ -343,6 +345,119 @@ begin
       Text_IO.New_Line;
    end if;
    Text_IO.Put (Unbounded.To_String (Transcript));
+
+   --  Where the run went, on standard error, when asked.  Not in the
+   --  transcript: that is parsed, and is the one thing promised to be the
+   --  same on every host, which a duration can never be.  A suite that
+   --  costs forty minutes should be able to say so rather than be guessed
+   --  at from the outside, which is how the last three measurements were
+   --  taken.
+   if Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS") then
+      declare
+         use type Unbounded.Unbounded_String;
+         Measured : constant Landin.Testing.Timing_Vectors.Vector :=
+           Landin.Testing.Last_Timings;
+
+         type Row is record
+            Suite   : Unbounded.Unbounded_String;
+            Seconds : Duration := 0.0;
+            Cases   : Natural := 0;
+         end record;
+
+         type Row_Array is array (Positive range <>) of Row;
+
+         function Slower (Left, Right : Row) return Boolean is
+           (Left.Seconds > Right.Seconds);
+
+         procedure Sort_Rows is new Ada.Containers.Generic_Array_Sort
+           (Index_Type => Positive, Element_Type => Row,
+            Array_Type => Row_Array, "<" => Slower);
+
+         Suites : Row_Array (1 .. Natural (Measured.Length));
+         Last   : Natural := 0;
+         Total  : Duration := 0.0;
+      begin
+         for Measurement of Measured loop
+            Total := Total + Measurement.Seconds;
+
+            declare
+               Known : Natural := 0;
+            begin
+               for Index in 1 .. Last loop
+                  if Suites (Index).Suite = Measurement.Suite then
+                     Known := Index;
+                  end if;
+               end loop;
+
+               if Known = 0 then
+                  Last := Last + 1;
+                  Suites (Last) := (Measurement.Suite,
+                                    Measurement.Seconds, 1);
+               else
+                  Suites (Known).Seconds :=
+                    Suites (Known).Seconds + Measurement.Seconds;
+                  Suites (Known).Cases := Suites (Known).Cases + 1;
+               end if;
+            end;
+         end loop;
+
+         Sort_Rows (Suites (1 .. Last));
+
+         Text_IO.New_Line (Text_IO.Standard_Error);
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error,
+            "timings: " & Duration'Image (Total) & "s over"
+            & Natural'Image (Natural (Measured.Length)) & " cases");
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error, "  seconds  share  cases  suite");
+
+         for Index in 1 .. Last loop
+            declare
+               Share : constant Natural :=
+                 (if Total > 0.0
+                  then Natural (Float'Floor
+                        (Float (Suites (Index).Seconds) * 100.0
+                         / Float (Total)))
+                  else 0);
+            begin
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error,
+                  Duration'Image (Suites (Index).Seconds)
+                  & "  " & Natural'Image (Share) & "%"
+                  & Natural'Image (Suites (Index).Cases) & "  "
+                  & Unbounded.To_String (Suites (Index).Suite));
+            end;
+         end loop;
+
+         --  The slowest cases by name, because one case inside a suite is
+         --  usually the whole of it.
+         Text_IO.New_Line (Text_IO.Standard_Error);
+         Text_IO.Put_Line (Text_IO.Standard_Error, "  slowest cases:");
+
+         declare
+            Cases : Row_Array (1 .. Natural (Measured.Length));
+            Count : Natural := 0;
+         begin
+            for Measurement of Measured loop
+               Count := Count + 1;
+               Cases (Count) :=
+                 (Measurement.Suite
+                    & Unbounded.To_Unbounded_String (" / ")
+                    & Measurement.Name,
+                  Measurement.Seconds, 1);
+            end loop;
+
+            Sort_Rows (Cases (1 .. Count));
+
+            for Index in 1 .. Natural'Min (12, Count) loop
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error,
+                  Duration'Image (Cases (Index).Seconds) & "  "
+                  & Unbounded.To_String (Cases (Index).Suite));
+            end loop;
+         end;
+      end;
+   end if;
 
    if Result.Failed > 0 or else Result.Cases = 0 then
       if Result.Cases = 0 then

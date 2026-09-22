@@ -1,0 +1,48 @@
+#  Where does the corpus spend its time, and how many workers suit it?
+#
+#  An experiment, not a gate. Delete it once the answer is in.
+#
+#  The first parallel run on CI gave 1.9x on four workers where this Mac
+#  gave 5.3x on eight, and guessing why from the outside is what the last
+#  three measurements already cost. So: every job count in one wall-clock
+#  window, each reporting where its time went.
+#
+#  LANDIN_TEST_TIMINGS writes a per-suite and slowest-case breakdown to
+#  standard error. It is not in the transcript, which is parsed and must
+#  stay identical.
+
+name: corpus-profile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    strategy:
+      fail-fast: false
+      matrix:
+        jobs: [1, 2, 4, 8, 16]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: What this runner is
+        run: |
+          nproc
+          free -g | head -2
+          df -h / /dev/shm | head -3
+
+      - name: The corpus at ${{ matrix.jobs }} workers
+        run: |
+          set -eu
+          start=$(date +%s)
+          LANDIN_TEST_JOBS=${{ matrix.jobs }} LANDIN_TEST_TIMINGS=1 \
+            ./scripts/test.sh
+          echo "WORKERS=${{ matrix.jobs }} ELAPSED=$(( $(date +%s) - start ))s"

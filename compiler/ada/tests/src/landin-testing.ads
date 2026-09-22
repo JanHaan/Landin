@@ -73,6 +73,23 @@ package Landin.Testing is
       Checks : Natural := 0;
    end record;
 
+   --  What each case cost, from the last Run, in registration-sorted
+   --  order.  This is not in the transcript and must not be: the
+   --  transcript is parsed, and is the one thing promised to be identical
+   --  on every host, which a duration can never be.  The test program
+   --  writes these to standard error when LANDIN_TEST_TIMINGS is set, so
+   --  a slow run can say where it went instead of being guessed at.
+   type Timing is record
+      Suite   : Ada.Strings.Unbounded.Unbounded_String;
+      Name    : Ada.Strings.Unbounded.Unbounded_String;
+      Seconds : Duration := 0.0;
+   end record;
+
+   package Timing_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Timing);
+
+   function Last_Timings return Timing_Vectors.Vector;
+
    procedure Run
      (In_Registry : Registry;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;

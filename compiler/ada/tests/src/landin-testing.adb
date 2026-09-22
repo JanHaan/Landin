@@ -1,3 +1,4 @@
+with Ada.Calendar;
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Exceptions;
 
@@ -6,6 +7,10 @@ package body Landin.Testing is
    use type Unbounded.Unbounded_String;
 
    LF : constant Character := Character'Val (10);
+
+   Recorded : Timing_Vectors.Vector;
+
+   function Last_Timings return Timing_Vectors.Vector is (Recorded);
 
    procedure Note (Item : in out Context; Description : String);
 
@@ -175,6 +180,7 @@ package body Landin.Testing is
    begin
       Transcript := Unbounded.Null_Unbounded_String;
       Result := (others => 0);
+      Recorded.Clear;
       Sorting.Sort (Ordered);
 
       if Suite_Filter /= "" then
@@ -197,6 +203,7 @@ package body Landin.Testing is
             declare
                State : Context;
                Label : constant String := Unbounded.To_String (Item.Name);
+               Began : constant Ada.Calendar.Time := Ada.Calendar.Clock;
             begin
                --  A case that raises is a case that failed, not a run that
                --  stopped.  Letting it propagate loses every case after it,
@@ -210,6 +217,12 @@ package body Landin.Testing is
                         "raised " & Ada.Exceptions.Exception_Name (Error)
                         & ": " & Ada.Exceptions.Exception_Message (Error));
                end;
+
+               Recorded.Append
+                 (Timing'(Suite   => Item.Suite,
+                          Name    => Item.Name,
+                          Seconds => Ada.Calendar."-"
+                                       (Ada.Calendar.Clock, Began)));
 
                Result.Cases  := Result.Cases + 1;
                Result.Checks := Result.Checks + Checks (State);
