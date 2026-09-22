@@ -1924,9 +1924,12 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
             else:
                 last_label = "up next" if current else "next planned item"
                 last_item = following
+            #  A roadmap that has not finished an item yet has nothing to
+            #  show here, and an empty lane under a label reads as a fault.
+            recent_lane = ('<div><span class="roadmap-label">recently completed'
+                           f'</span>{recent}</div>') if recent else ""
             hero += ('<div class="roadmap-track">'
-                     '<div><span class="roadmap-label">recently completed</span>'
-                     f'{recent}</div>'
+                     f'{recent_lane}'
                      f'{current_lane}'
                      '<div><span class="roadmap-label">'
                      f'{last_label}</span>'
