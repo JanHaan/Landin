@@ -153,10 +153,11 @@ package body Landin.Testing is
    procedure Run
      (In_Registry : Registry;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
-      Result      : out Summary)
+      Result      : out Summary;
+      Record_Timings : Boolean := False)
    is
    begin
-      Run (In_Registry, "", "", Transcript, Result);
+      Run (In_Registry, "", "", Transcript, Result, Record_Timings);
    end Run;
 
    procedure Run
@@ -164,7 +165,8 @@ package body Landin.Testing is
       Suite_Filter : String;
       Case_Filter  : String;
       Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
-      Result       : out Summary)
+      Result       : out Summary;
+      Record_Timings : Boolean := False)
    is
       Ordered : Entry_Vectors.Vector := In_Registry.Items;
       Current : Unbounded.Unbounded_String;
@@ -180,7 +182,9 @@ package body Landin.Testing is
    begin
       Transcript := Unbounded.Null_Unbounded_String;
       Result := (others => 0);
-      Recorded.Clear;
+      if Record_Timings then
+         Recorded.Clear;
+      end if;
       Sorting.Sort (Ordered);
 
       if Suite_Filter /= "" then
@@ -218,11 +222,13 @@ package body Landin.Testing is
                         & ": " & Ada.Exceptions.Exception_Message (Error));
                end;
 
-               Recorded.Append
-                 (Timing'(Suite   => Item.Suite,
-                          Name    => Item.Name,
-                          Seconds => Ada.Calendar."-"
-                                       (Ada.Calendar.Clock, Began)));
+               if Record_Timings then
+                  Recorded.Append
+                    (Timing'(Suite   => Item.Suite,
+                             Name    => Item.Name,
+                             Seconds => Ada.Calendar."-"
+                                          (Ada.Calendar.Clock, Began)));
+               end if;
 
                Result.Cases  := Result.Cases + 1;
                Result.Checks := Result.Checks + Checks (State);

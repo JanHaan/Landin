@@ -90,10 +90,16 @@ package Landin.Testing is
 
    function Last_Timings return Timing_Vectors.Vector;
 
+   --  Record_Timings is False by default and the test program is the only
+   --  caller that passes True.  The harness suite exercises Run itself, so
+   --  a nested run would otherwise clear the timings of the run containing
+   --  it: the first measurement lost every suite before `harness` that way
+   --  and reported 372 of 741 cases.
    procedure Run
      (In_Registry : Registry;
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
-      Result      : out Summary);
+      Result      : out Summary;
+      Record_Timings : Boolean := False);
 
    --  A focused run is developer feedback, not the repository gate.  Empty
    --  filters mean every value at that level; a case filter therefore needs
@@ -104,7 +110,8 @@ package Landin.Testing is
       Suite_Filter : String;
       Case_Filter  : String;
       Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
-      Result       : out Summary)
+      Result       : out Summary;
+      Record_Timings : Boolean := False)
      with Pre => Case_Filter = "" or else Suite_Filter /= "";
 
 private

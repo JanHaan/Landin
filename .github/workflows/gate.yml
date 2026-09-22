@@ -71,9 +71,11 @@ jobs:
       #  The corpus is 2,494 compile-assemble-link-execute cycles over 544
       #  runtime and ABI fixtures at four or six profiles each, plus 268
       #  emissions. Two cases hold all of it, and they now run across
-      #  workers: 3592s to 2235s at four. That is 1.6x, not the 2.4x
-      #  predicted from this Mac's 5.3x at eight, so the width is being
-      #  measured rather than assumed -- see corpus-profile.yml.
+      #  workers. Measured on this runner, one job at a time: 4523s at
+      #  one, 1801s at two, 2221s at four, and a timeout at eight. Two is
+      #  the width, not four: each work item is itself a chain of
+      #  processes, so four workers oversubscribe four vCPUs and the
+      #  heaviest fixture then passes the 600s tool limit.
       #
       #  The default stays at one job. This is the path CI exercises on
       #  every push, and flipping the default wants mileage rather than one
@@ -83,4 +85,4 @@ jobs:
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
       - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=4 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=2 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh

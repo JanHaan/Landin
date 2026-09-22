@@ -319,17 +319,24 @@ begin
 
    case Mode is
       when Run_All | Run_Host =>
-         Landin.Testing.Run (Cases, Transcript, Result);
+         Landin.Testing.Run
+           (Cases, Transcript, Result,
+            Record_Timings =>
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
       when Run_Suite =>
          Landin.Testing.Run
            (Cases, Unbounded.To_String (Suite_Filter), "",
-            Transcript, Result);
+            Transcript, Result,
+            Record_Timings =>
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
       when Run_Case =>
          Landin.Testing.Run
            (Cases,
             Unbounded.To_String (Suite_Filter),
             Unbounded.To_String (Case_Filter),
-            Transcript, Result);
+            Transcript, Result,
+            Record_Timings =>
+              Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"));
       when Run_Fixture =>
          Landin.Testing.Run
            (Cases, "fixture execution", "selected fixture executes",
