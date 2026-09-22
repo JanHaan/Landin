@@ -365,5 +365,55 @@ class GrammarCorpus(unittest.TestCase):
         self.assertTrue(said)
 
 
+TOKENS = ["spec.md", "tour.md",
+          "compiler/ada/src/syntax/landin-tokens.ads",
+          "compiler/ada/src/syntax/landin-tokens.adb"]
+
+
+class TokenVocabulary(unittest.TestCase):
+    """The scanner's reserved words are the grammar's own.
+
+    This is a transcription held to its source, not a duplicate waiting to
+    be generated away.  ROADMAP.md's D3 keeps generated tables out of the
+    repository and E3 counts the cases: a third kind of generated source
+    triggers a D3 review, which a successor roadmap owns.  So the rule is
+    "write it twice and compare", deliberately, and this control is what
+    makes the comparison trustworthy.
+    """
+
+    def test_the_real_vocabulary_agrees(self):
+        self.assertEqual(
+            faults(checker.check_token_vocabulary, copied=TOKENS), [])
+
+    def test_a_missing_scanner_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_token_vocabulary, copied=TOKENS[:1])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_word_the_scanner_reserves_and_the_grammar_does_not(self):
+        from check_controls import tree
+        with tree(copied=TOKENS) as root:
+            spec = root / TOKENS[2]
+            spec.write_text(spec.read_text().replace(
+                "Kw_Match", "Kw_Invented", 1))
+            said = [why for _, _, why
+                    in checker.check_token_vocabulary(True)]
+        self.assertTrue(any("differ from the grammar" in why
+                            for why in said))
+
+    def test_a_word_the_grammar_reserves_and_the_scanner_does_not(self):
+        #  The other direction, which is the one a language change causes:
+        #  a keyword added to the grammar and not to the scanner.
+        from check_controls import tree
+        with tree(copied=TOKENS) as root:
+            spec = root / "spec.md"
+            text = spec.read_text()
+            spec.write_text(text.replace('"match"', '"match" | "invented"', 1))
+            said = [why for _, _, why
+                    in checker.check_token_vocabulary(True)]
+        self.assertTrue(any("differ from the grammar" in why
+                            for why in said))
+
+
 if __name__ == "__main__":
     unittest.main()
