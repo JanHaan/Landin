@@ -193,5 +193,82 @@ class Citations(unittest.TestCase):
 #  audit work; MOVING.md records it.
 
 
+DEBUGGER = ["scripts/debug.sh", "compiler/tests/debugging"]
+
+HOSTED = ["compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md",
+          "core/region/region.ldn", "examples/derived_hosted",
+          #  The manifest names fixtures, and the check holds those to
+          #  existing too: the mapping may not cite evidence that is gone.
+          "compiler/tests/fixtures/runtime",
+          "compiler/tests/fixtures/negative",
+          #  And the roadmap, because the mapping is held to accounting
+          #  for prototype 4's W1-W7 findings.
+          "ROADMAP.md"]
+
+
+class DebuggerContract(unittest.TestCase):
+    """Every derived workload runs on both compiler modes, without GDB."""
+
+    def test_the_real_schedule_passes(self):
+        self.assertEqual(
+            faults(checker.check_debugger_contract, copied=DEBUGGER), [])
+
+    def test_a_missing_input_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_debugger_contract, copied=DEBUGGER[:1])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_dropped_profile_is_reported(self):
+        #  Nine workloads: parser, containers and hosted, each at none/off,
+        #  size/auto and size/all. Losing one is coverage lost quietly,
+        #  which is why this is checked without invoking GDB at all.
+        from check_controls import tree
+        with tree(copied=DEBUGGER) as root:
+            target = root / "compiler/tests/debugging/check.py"
+            target.write_text(target.read_text().replace(
+                '"size-all", "size", "all"', '"size-all", "size", "auto"', 1))
+            said = [why for _, _, why in checker.check_debugger_contract(True)]
+        self.assertTrue(said)
+
+    def test_a_schedule_that_cannot_be_driven_is_reported(self):
+        from check_controls import tree
+        with tree(copied=DEBUGGER) as root:
+            (root / "compiler/tests/debugging/check.py").write_text(
+                "# nothing to measure\n")
+            said = [why for _, _, why in checker.check_debugger_contract(True)]
+        self.assertTrue(said)
+        self.assertIn("workload schedule", said[0])
+
+
+class HostedDerivation(unittest.TestCase):
+    """The complete P4 source inventory stays traceable to its manifest."""
+
+    def test_the_real_manifest_passes(self):
+        self.assertEqual(
+            faults(checker.check_hosted_derivation, copied=HOSTED), [])
+
+    def test_a_missing_manifest_is_reported_rather_than_skipped(self):
+        #  Deleted rather than not copied: the manifest lives inside the
+        #  runtime fixture tree, so leaving it out of the copy list puts
+        #  it back. The first version of this control did exactly that and
+        #  tested nothing.
+        from check_controls import tree
+        with tree(copied=HOSTED) as root:
+            (root / HOSTED[0]).unlink()
+            said = [why for _, _, why in checker.check_hosted_derivation(True)]
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_source_the_manifest_omits_is_reported(self):
+        #  A source added without updating the mapping must not vanish
+        #  from it silently; this checks names, never behaviour.
+        from check_controls import tree
+        with tree(copied=HOSTED) as root:
+            new = root / "examples/derived_hosted/invented.ldn"
+            new.write_text("invented: () -> none =\nend invented\n")
+            said = [why for _, _, why in checker.check_hosted_derivation(True)]
+        self.assertTrue(any("omits source" in why for why in said))
+
+
 if __name__ == "__main__":
     unittest.main()

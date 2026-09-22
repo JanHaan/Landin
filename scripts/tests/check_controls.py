@@ -35,7 +35,12 @@ _spec.loader.exec_module(checker)
 @contextmanager
 def tree(written=None, copied=()):
     """A throwaway repository: `written` from scratch, `copied` from here."""
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as raw:
+        #  Resolved, because on macOS the temporary directory is reached
+        #  through a symlink: /var is /private/var.  ROOT and the working
+        #  directory would then disagree, and absent() would compute a
+        #  relative path out of the tree and call every file missing.
+        tmp = os.path.realpath(raw)
         root = Path(tmp)
         for relative in copied:
             target = root / relative
