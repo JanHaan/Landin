@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents working in this repository. `CLAUDE.md` is a
+symlink to this file, so Claude Code and any harness that reads `AGENTS.md`
+see the same text; edit this one.
 
 ## Repository state
 
@@ -17,7 +19,8 @@ Darwin — and Cortex-M0 builds firmware with compiler-owned reset, vectors,
 linker script and initialized-data copying, with line and function debugging.
 A small repository-owned `core` library and the complete derived prototypes 2,
 3 and 4 execute through that path. Runtime fixtures execute those binaries,
-but see the gate note below: nothing runs them on a push at present.
+and the gate runs all of them on Linux on every push; the other two targets
+have no automated coverage.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
@@ -51,59 +54,85 @@ python3 check.py prototype-2-parser.md
 # Remove this host's build artefacts (--all removes every host's).
 ./scripts/clean.sh
 
-# Mac compiler-host feedback; Linux workloads use the native runner.
+# Mac compiler-host feedback.  The unfiltered suite needs Linux.
 ./scripts/dev-test.sh --host --suite=checking
-python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --suite=checking
 
 # Render every document as HTML, verify nothing was dropped, and package
 # it.  It does not publish: .github/workflows/pages.yml is the only
 # publisher; see docs/site/README.md.
 ./scripts/site.sh
 
-# On a nix machine, a shell holding the pinned toolchain, python3 and hut.
-# It reads environments/pins.sh and tags its objects `nix`, so it does not
+# On a nix machine, a shell holding the pinned toolchain and python3.  It
+# reads environments/pins.sh and tags its objects `nix`, so it does not
 # collide with the other environments; see docs/environments.md.
 nix develop
+
+# Build the compiler through the flake.  .#refine is the default and builds
+# this checkout from source -- about 140s on a fast Linux host, and the same
+# cold, because the 478MB of pinned toolchain fetches alongside the compile.
+# .#refine-bin fetches the published release asset instead, in about 5s, and
+# ignores the working tree: it answers "give me the compiler", not "build
+# what I have".
+nix build .#refine
+nix build .#refine-bin
 ```
 
-**There is no mechanical gate at present.** The exact-revision native
-acceptance in `scripts/ci/` approved every revision through 0.2.0 and no longer
-runs: nothing submits it and no revision is accepted. Do not cite it as
-current, and do not claim a change is accepted. `MOVING.md` records this and
-the rest of what the move left open; `environments/native-ci/README.md` and
-`environments/macos-arm64/README.md` describe the retired arrangement.
+`.github/workflows/gate.yml` is the mechanical gate, and it runs on every
+push and pull request. Two jobs that share nothing: `documents` runs
+`check.py` in about ninety seconds, needing neither the toolchain nor a built
+compiler, and `compiler` builds `refine` with the pinned toolchain and runs
+all 741 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes. Splitting them
+means a typo gets its verdict without waiting for the corpus, and a compile
+error still surfaces about two minutes into `compiler`.
 
-What does run on a push is `.github/workflows/determinism.yml`, which requires
-every host to emit the same bytes, and `.github/workflows/pages.yml`, which
-publishes <https://www.701.dev>. Neither runs a compiler test, so a green run
-says nothing about the compiler.
+The gate is deliberately small and is **not** the retired acceptance. It is
+Linux only and debug only: no Darwin, no Cortex-M execution, no debugger, no
+bindings, no release mode, and no retained evidence. Green means the compiler
+builds and the corpus passes on one host in one mode — nothing about the
+other two targets. `MOVING.md` records what a fuller gate still owes.
+
+Three more workflows run on a push. `determinism.yml` requires every host in
+its matrix to emit the same bytes; it emits and hashes but never assembles,
+links or runs. `pages.yml` publishes <https://www.701.dev>. `links.yml`
+checks every link in every document, weekly and whenever a document changes.
+`release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
+assets that `nix build .#refine-bin` consumes.
+
+The exact-revision native acceptance in `scripts/ci/` approved every revision
+through 0.2.0 and was removed when the project left SourceHut. Do not cite it
+as current and do not claim a change is accepted: nothing accepts revisions
+now, and the gate above is a safety net rather than a verdict on a revision.
+`environments/native-ci/README.md` and `environments/macos-arm64/README.md`
+describe the retired arrangement.
 
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
-the same remote rather than by a job. Neither host runs a gate: the GitHub
-Actions replacement is not in place yet. `.github/workflows/pages.yml` publishes
-www.701.dev from GitHub Pages on every push to main, fetching the licensed code
+the same remote rather than by a job. `pages.yml` fetches the licensed code
 face from object storage because it is not in this repository; it renders and
 verifies, and runs no compiler test. `scripts/site.sh` renders and packages
-and does not publish. Nix shell checks are explicit supplemental native
-Nix validation when shell inputs change; the former automatic Nix manifest is retired.
-Historical SourceHut gate links remain evidence for their original revisions.
+and does not publish. Nix CI is deferred: the flake is built by hand, and the
+former automatic Nix manifest is retired. Historical SourceHut gate links
+remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
-Use `scripts/dev-test.sh --host` on the Mac for compiler-host feedback. Do
-not run Linux containers, Linux workload emission or repeated complete suites
-on the Mac as routine feedback. Run changed-component tests while editing and
-the complete suite before pushing; `LANDIN_TEST_JOBS` splits the corpus
-fixtures across workers, which is most of what the suite costs.
-Nix CI is deferred. `docs/process.md` explains the workflow; ROADMAP.md owns
-its decisions and remaining work.
+Use `scripts/dev-test.sh --host` on the Mac for compiler-host feedback, and
+expect every selected case to pass. The unfiltered harness includes Linux
+execution and fails without its target toolchain, so do not run Linux
+containers, Linux workload emission or repeated complete suites on the Mac as
+routine feedback. Run changed-component tests while editing and the complete
+suite before pushing; `LANDIN_TEST_JOBS` splits the corpus fixtures across
+workers, which is most of what the suite costs. One worker is still the
+default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
+the same verdicts.
 
-On a Mac use `scripts/dev-test.sh --host`; every selected case must pass.
-The unfiltered harness includes Linux execution and fails without its target
-toolchain. R5.10's retained expected-refusal transcript is historical bootstrap
-evidence, never a current success rule. Linux runtime/GDB evidence comes from
-the native Linux runner; Darwin runtime/LLDB evidence runs natively on the Mac.
+Linux runtime and GDB evidence comes from the gate, or from a Linux host you
+run yourself; the dedicated native runner is gone. Darwin runtime and LLDB
+evidence runs natively on the Mac and nothing automates it, so a Darwin claim
+needs a Mac run behind it. R5.10's retained expected-refusal transcript is
+historical bootstrap evidence, never a current success rule.
+`docs/process.md` explains the workflow; `MOVING.md` owns what the move left
+open.
 
 `scripts/test.sh` builds and runs the complete Linux test program on native
 Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
@@ -127,10 +156,10 @@ Use the repository documents in this order:
 
 1. `spec.md` is the normative specification. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and a register naming every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it, in fourteen subject sections. Where `spec.md` and `tour.md` could be read differently, `spec.md` decides.
 2. `tour.md` explains the language, [0010]-[1730]. It teaches by example, which is why it omits what a reader supplies for themselves — every implementation item so far has found more of what it left unsaid, and the answer is to write the rule into `spec.md` rather than to attribute one to a paragraph that does not state it. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions, and no ID is defined in both documents. Both documents are arranged by subject and their numbers therefore do not ascend down the page; that is the numbering working, not drift to be tidied up. `docs/documents.md` says where a new rule goes.
-3. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files.
+3. `ROADMAP.md` is the durable work record. It owns every implementation dependency, phase, disposition and completion gate of the first roadmap, which is closed and holds no open item; `MOVING.md` holds what the move left open until its replacement exists. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files.
 4. `prototype-{1..4}-*.md` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
-6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
+6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
@@ -206,6 +235,9 @@ The compiler checks whole programs and may use private caches. Its verified targ
 the project. Keep it current when the representation, verification boundary
 or optimization pipeline changes. It is derived from implementation and
 tests, never an authority for semantics, implementation decisions or work.
+`docs/targets.md` does the same for the C and link-name package boundaries,
+and `examples.md` holds the complete programs the runtime suite executes.
+All three are derived documents and none of them decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
