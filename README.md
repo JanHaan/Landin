@@ -22,9 +22,9 @@ automatically tested FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
 FASTA workloads. A complete derived driver and application run on the pinned
 Cortex-M0 emulators with compiler-owned startup, within the recorded 32 KiB
-capacity and source-debugging limits. The roadmap that built this has reached
-its endpoint: the slice is feature-complete pre-v1, and the broader standard
-library, packaging and every release decision belong to successor roadmaps.**
+capacity and source-debugging limits. The roadmap that built this closed with
+the slice feature-complete pre-v1; the next one takes it to an editor, more
+targets and the microcontrollers people buy.**
 
 ## What is here
 
@@ -34,7 +34,7 @@ library, packaging and every release decision belong to successor roadmaps.**
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
 | `examples.md` | ten complete programs the compiler emits and the native hosted gates run today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
-| `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
+| `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 and Darwin arm64 backends and native toolchain paths, and its own test harness. |
@@ -259,7 +259,7 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Roadmap endpoint: R7.70 — Declare the roadmap endpoint (complete).**
+**Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
 
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
@@ -331,12 +331,11 @@ specialization is explicitly not part of that gate. Target work then proceeds
 through the complete hosted Linux x86-64 path, native macOS arm64, and
 emulator-first Cortex-M.
 
-That endpoint has been reached and declared: R7.70 is the roadmap's last
-work item, and ROADMAP.md's own endpoint rule refuses a roadmap that stops
-matching the declaration. Feature-complete pre-v1 is a claim about coverage
-and nothing else. Package acquisition, competitive optimization, release
-versioning, and self-hosting belong to successor roadmaps or later decisions.
-No version or release designation changes automatically.
+That endpoint was reached, and the first roadmap closed there.
+Feature-complete pre-v1 is a claim about coverage and nothing else. The
+current roadmap starts where it stopped; a build tool, package acquisition,
+release versioning and self-hosting stay outside it. No version or release
+designation changes automatically.
 
 ## License
 
@@ -464,13 +463,9 @@ weakened, because "nothing is ready because everything is done" and "nothing
 is ready because something is stuck" are different facts — the endpoint is
 recognised only when no item is planned, active or blocked, so a single
 blocked item is still refused with the count it always reported. The
-declaration itself is mechanical: `validate_endpoint` refuses a roadmap that
-declares an endpoint beside a live item, and equally one whose items are all
-complete and which declares none, so an item added here instead of to the
-successor that owns it fails on the commit that adds it. It reads the two debt
-ledgers and the inherited review register as one statement, 94 records, and
-requires every transferred one to name a successor roadmap and every named
-successor to own at least one record. Feature-complete pre-v1 is a claim about
+two debt ledgers and the inherited review register were read as one
+statement, 94 records, and every transferred one named a successor family;
+the current roadmap's register carries them. Feature-complete pre-v1 is a claim about
 coverage and nothing else: no version, release, production claim, license or
 self-hosting work changed, and the recorded boundaries — the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract, the end-to-end

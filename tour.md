@@ -1979,7 +1979,7 @@ the value is copyable, so a copy made before the sink is
 refused nothing, and consuming through both is not caught.
 Making it ownership means values that cannot be copied.
 Affine values remain parked with their resource-prototype
-trigger in ROADMAP.md's inherited review register.
+trigger in ROADMAP.md's register.
 A place sunk out of an inout parameter must be assigned
 again before the function returns, or the caller would get
 its struct back with a dead field and nobody tracking it.

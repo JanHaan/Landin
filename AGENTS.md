@@ -156,7 +156,7 @@ Use the repository documents in this order:
 
 1. `spec.md` is the normative specification. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and a register naming every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it, in fourteen subject sections. Where `spec.md` and `tour.md` could be read differently, `spec.md` decides.
 2. `tour.md` explains the language, [0010]-[1730]. It teaches by example, which is why it omits what a reader supplies for themselves — every implementation item so far has found more of what it left unsaid, and the answer is to write the rule into `spec.md` rather than to attribute one to a paragraph that does not state it. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions, and no ID is defined in both documents. Both documents are arranged by subject and their numbers therefore do not ascend down the page; that is the numbering working, not drift to be tidied up. `docs/documents.md` says where a new rule goes.
-3. `ROADMAP.md` is the durable work record. It owns every implementation dependency, phase, disposition and completion gate of the first roadmap, which is closed and holds no open item; `MOVING.md` holds what the move left open until its replacement exists. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files.
+3. `ROADMAP.md` is the sole authority for open work: phases R8 onward with their items, dependencies and gates, the register of work that waits for a trigger, and the positions an outside review challenged and the project kept. The first roadmap, R0 to R7, is closed; its text is in the history and only an index of its items remains, until the citations it left in the tree are removed. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files. The evidence registers, what the compiler's evidence is rather than what is left to do, are in `compiler/tests/registers.md`.
 4. `prototype-{1..4}-*.md` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
@@ -252,13 +252,21 @@ complete derived program, R4 the hosted Linux path, R5 the native macOS target
 and its debugging, R6 Cortex-M0 and compiler-owned firmware, and R7 audited
 every construct and gave every inherited row a terminal disposition.
 
-What each item contributed is not re-narrated here. That is the roadmap's job,
-it grew to thirteen thousand lines doing it, and a changelog is not what an
-agent needs: what the compiler does today is under **Repository state** above.
-`ROADMAP.md` holds the record and is being replaced; `MOVING.md` says what the
-replacement has not decided yet.
+What each item contributed is not re-narrated here, and the current roadmap
+does not narrate either: the first one grew to thirteen thousand lines doing
+it. A completed item gets a short `Done:` paragraph, and the reasoning goes in
+the commit and in `spec.md`'s register of decisions. What the compiler does
+today is under **Repository state** above.
 
-The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice and has reached that endpoint. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it, with the six successor roadmaps in `ROADMAP.md` naming who owns each. Do not change any version or release designation without explicit user approval, and do not assume SemVer. Do not add a work item to `ROADMAP.md`: it is closed, and the endpoint rule refuses one.
+The current roadmap runs from R8: a frontend that scales, assembly with
+operands, a frontend for an editor, more hosted targets, microcontrollers,
+the library split, concurrency, Windows and optimization. A build tool,
+package acquisition, release versioning and self-hosting stay outside it, with
+the successor families in `ROADMAP.md` owning each. Do not change any version
+or release designation without explicit user approval, and do not assume
+SemVer. Cite a roadmap item or register record in `ROADMAP.md` and nowhere
+else: `check.py` refuses one of the current roadmap's identities anywhere
+else, and the first roadmap's are being removed.
 
 ## Design constraints
 
@@ -270,7 +278,7 @@ Changes must preserve the range from a 32 KB microcontroller to a hosted applica
 - Concepts and evidence tables support both static generics and `any` runtime dispatch; specialization is an optimization rather than the semantic basis.
 - There is no compile-time execution or macro system. Source generators belong in the future build design.
 
-Before reviving a previously rejected idea, read `ROADMAP.md`'s inherited review register and `tour.md`'s `WHAT WAS TRIED AND DROPPED` section.
+Before reviving a previously rejected idea, read `ROADMAP.md`'s retained positions and register, and `tour.md`'s `WHAT WAS TRIED AND DROPPED` section.
 
 ## Editing the specification
 

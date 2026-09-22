@@ -961,8 +961,8 @@ GUIDES = [
                "the part of it that exists."),
     dict(key="roadmap", src="ROADMAP.md", out="roadmap.html",
          nav="the roadmap", group="the project",
-         blurb="The sole durable authority for open work: phases, "
-               "dependencies, gates, and every inherited disposition."),
+         blurb="The sole authority for open work: phases, dependencies, "
+               "gates, and the register of work waiting for a trigger."),
     dict(key="handoff", src="handoff.md", out="handoff.html",
          nav="the design, in one page", group="the project",
          blurb="The design and the principles behind it, and which "

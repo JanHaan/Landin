@@ -319,7 +319,7 @@ What it is not is ownership. A slice descriptor is a copyable
 value: copy it first and the copy is refused nothing, so freeing
 through both is a double free this does not catch. sink is a
 use-after-consume check on one place. Affine values would be the
-other thing, and they are parked with a condition in ROADMAP.md's inherited review register.
+other thing, and they are parked with a condition in ROADMAP.md's register.
 The catch: every caller below passes a struct field rather than a
 binding, and what sink means for a field is not stated. [Z13]
 

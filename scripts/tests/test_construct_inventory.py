@@ -31,13 +31,11 @@ class Inventory(unittest.TestCase):
         return next(line for line in inventory.splitlines()
                     if line.startswith(prefix))
 
-    #  R7.70 completed the roadmap, so no item is live and the rules about a
-    #  live owner have nothing real to point at.  Keeping an item artificially
-    #  open would make the roadmap lie to make its tests pass, and deleting
-    #  the controls would silently retire the rules R7.10 through R7.60 built,
-    #  so the controls that need a live owner inject one into the copy they
-    #  validate.  R7.99 is not a real identity and cannot become one: work IDs
-    #  are never reused and this roadmap adds none.
+    #  No inventory row names a live owner today, so the rules about one have
+    #  nothing real to point at, and the controls that need a live owner
+    #  inject one into the copy they validate.  R7.99 is not a real identity
+    #  and cannot become one: the first roadmap, R0 to R7, is closed and work
+    #  IDs are never reused.
     LIVE = "R7.99"
     LIVE_HEADING = ("\n### R7.99 — A live item, so a rule that needs one can"
                     " be tested\n\nStatus: planned\nDepends on: none\n")
@@ -99,7 +97,7 @@ class Inventory(unittest.TestCase):
         self.assertEqual(self.problems(self.gapped(), live=True,
                                        targets=self.without_cortex), [])
         for owner, fragment in (("R2.20", "still owned by finished R2.20"),
-                                ("R9.90", "names missing owner R9.90"),
+                                ("R7.98", "names missing owner R7.98"),
                                 ("Somebody", "unknown owner")):
             self.refused(self.problems(
                 {row: synthetic.replace("| R7.99 |", "| %s |" % owner)},

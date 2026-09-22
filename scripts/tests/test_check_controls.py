@@ -245,30 +245,6 @@ class SplitSubjects(unittest.TestCase):
         self.assertTrue(said)
         self.assertIn("needed by a check", said[0])
 
-    def test_the_roadmap_validation_passes(self):
-        #  Controllable now that it is only the roadmap validation. It
-        #  used to run eight test scripts as well, which made a control
-        #  over it a second full run of everything.
-        self.assertEqual(
-            faults(checker.check_phase_handoff,
-                   copied=["ROADMAP.md", "scripts"]), [])
-
-    def test_a_roadmap_that_fails_validation_is_reported(self):
-        from check_controls import tree
-        with tree(copied=["ROADMAP.md", "scripts"]) as root:
-            target = root / "ROADMAP.md"
-            #  Every transferred record must name a listed successor;
-            #  validate_endpoint refuses one that names nothing.
-            target.write_text(target.read_text().replace(
-                "## Successor roadmaps", "## Retired headings", 1))
-            said = [why for _, _, why in checker.check_phase_handoff(True)]
-        self.assertTrue(said)
-
-    def test_a_missing_roadmap_is_reported_rather_than_skipped(self):
-        said = reasons(checker.check_phase_handoff, copied=["scripts"])
-        self.assertTrue(said)
-        self.assertIn("needed by a check", said[0])
-
     def test_the_owned_tests_name_the_script_that_failed(self):
         #  They used to be run through two other checks and every failure
         #  was attributed to ROADMAP.md, whatever had actually failed.
@@ -768,20 +744,39 @@ class NativeEnvironment(unittest.TestCase):
                             for why in said))
 
 
-#  check.py is in the list because the roadmap test scripts this check
-#  drives import it, which is the widest reach of any check here.
 ROADMAP_INPUTS = ["ROADMAP.md", "scripts", "check.py", "spec.md",
                   "tour.md", "compiler/tests",
                   "compiler/ada/src"] + list(checker.LIVE_DOCS)
 
 
-class RoadmapStructure(unittest.TestCase):
-    """The checks that hold ROADMAP.md's own shape.
+def roadmap_faults(edit):
+    """What check_roadmap says about the real roadmap after one edit."""
+    from check_controls import tree
+    with tree(copied=ROADMAP_INPUTS) as root:
+        target = root / "ROADMAP.md"
+        target.write_text(edit(target.read_text()))
+        return [why for _, why in checker.check_roadmap(str(target))]
 
-    These retire with the roadmap they describe, and have no successor
-    until the replacement exists. Controlled meanwhile because they are
-    live: a roadmap that stops saying what it decided against, or a
-    document that points at the retired work authority, still fails here.
+
+def once(old, new):
+    def edit(text):
+        assert old in text, old
+        return text.replace(old, new, 1)
+    return edit
+
+
+#  This roadmap's own identities are spelt out of parts here, because the
+#  citation rule refuses them anywhere but ROADMAP.md -- this file included.
+FIRST = "R%d.10" % 8
+SECOND = "R%d.20" % 8
+
+
+class RoadmapStructure(unittest.TestCase):
+    """The checks that hold ROADMAP.md's own shape, and its reach.
+
+    The phases, items and dependencies, the first roadmap's index, the
+    register and its families, the status pointers that mirror the next
+    item, and the rule that keeps the roadmap's identities in the roadmap.
     """
 
     def test_the_real_roadmap_passes(self):
@@ -791,24 +786,103 @@ class RoadmapStructure(unittest.TestCase):
                 list(checker.check_roadmap(str(root / "ROADMAP.md"))), [])
 
     def test_the_structural_checks_pass(self):
-        #  check_phase_handoff is absent deliberately. It drives the
-        #  roadmap test scripts, which run the whole of check.py, so its
-        #  input surface is the repository and a control over it would be
-        #  a second full run rather than a statement about one property.
-        #  It retires with the roadmap; MOVING.md records it.
         for check in (checker.check_project_status,
+                      checker.check_roadmap_citations,
                       checker.check_register_entries):
             with self.subTest(check=check.__name__):
                 self.assertEqual(faults(check, copied=ROADMAP_INPUTS), [])
 
     def test_a_status_line_the_roadmap_does_not_carry_is_reported(self):
+        said = roadmap_faults(once("### %s — Remove the first roadmap's"
+                                   " citations\n\nStatus: planned" % FIRST,
+                                   "### %s — Remove the first roadmap's"
+                                   " citations\n\nStatus: invented" % FIRST))
+        self.assertTrue(any("invalid status" in why for why in said))
+
+    def test_a_phase_out_of_order_is_reported(self):
+        said = roadmap_faults(once("## R9 — ", "## R7 — "))
+        self.assertTrue(any("not R8 onward in order" in why for why in said))
+
+    def test_an_index_row_that_is_not_the_first_roadmaps_is_reported(self):
+        said = roadmap_faults(once("| R7.70 |", "| R%d.70 |" % 9))
+        self.assertTrue(any("is not one of its items" in why for why in said))
+
+    def test_a_reference_to_nothing_is_reported(self):
+        said = roadmap_faults(once("| Guarded cleanups can expand",
+                                   "| R7.99's guarded cleanups can expand"))
+        self.assertTrue(any("R7.99 is referenced and not defined" in why
+                            for why in said))
+
+    def test_a_record_with_an_unknown_family_is_reported(self):
+        said = roadmap_faults(once("| R551-08 | Scale and self-hosting |",
+                                   "| R551-08 | Somebody else |"))
+        self.assertTrue(any("unknown family" in why for why in said))
+
+    def test_a_record_registered_twice_is_reported(self):
+        said = roadmap_faults(once("| R551-09 | Competitive",
+                                   "| R551-08 | Competitive"))
+        self.assertTrue(any("registered twice" in why for why in said))
+
+    def test_a_record_scheduled_on_no_item_is_reported(self):
+        said = roadmap_faults(once("| scheduled " + SECOND + " |",
+                                   "| scheduled R7.10 |"))
+        self.assertTrue(any("not a work item of this roadmap" in why
+                            for why in said))
+
+    def test_a_record_scheduled_on_a_finished_item_is_reported(self):
+        def finish(text):
+            heading = "### %s — " % SECOND
+            at = text.index(heading)
+            return (text[:at] + text[at:].replace(
+                "Status: planned", "Status: complete", 1))
+        said = roadmap_faults(finish)
+        self.assertTrue(any("still scheduled on finished " + SECOND in why
+                            for why in said))
+
+    def test_a_record_without_an_activation_is_reported(self):
+        said = roadmap_faults(once(
+            "| A measured cleanup workload with unacceptable growth. |",
+            "| — |"))
+        self.assertTrue(any("R551-09 has no activation" in why
+                            for why in said))
+
+    def test_a_family_that_owns_nothing_is_reported(self):
+        said = roadmap_faults(once(
+            "- **Release readiness:**",
+            "- **Release readiness:** unchanged.\n- **Nobody's:**"))
+        self.assertTrue(any("family Nobody's owns no open record" in why
+                            for why in said))
+
+    def test_a_roadmap_identity_cited_elsewhere_is_reported(self):
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
-            target = root / "ROADMAP.md"
+            target = root / "docs/ir.md"
+            target.write_text(target.read_text()
+                              + "\nSee %s for the rest.\n" % FIRST)
+            said = [(where, why) for where, _, why
+                    in checker.check_roadmap_citations(True)]
+        self.assertTrue(any(where == "docs/ir.md" and FIRST in why
+                            for where, why in said))
+
+    def test_the_status_pointer_may_name_the_next_item(self):
+        #  The one place outside ROADMAP.md an identity belongs, because
+        #  check_project_status holds it to the roadmap.
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            text = (root / "README.md").read_text()
+            self.assertIn("**Next roadmap item: %s — " % FIRST, text)
+            said = checker.check_roadmap_citations(True)
+        self.assertEqual(said, [])
+
+    def test_a_pointer_that_disagrees_with_the_roadmap_is_reported(self):
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            target = root / "handoff.md"
             target.write_text(target.read_text().replace(
-                "Status: complete", "Status: invented", 1))
-            said = list(checker.check_roadmap(str(target)))
-        self.assertTrue(said)
+                "**Next roadmap item: %s — " % FIRST,
+                "**Next roadmap item: %s — " % SECOND, 1))
+            said = [why for _, _, why in checker.check_project_status(True)]
+        self.assertTrue(any("roadmap status pointer" in why for why in said))
 
     def test_a_live_document_naming_the_retired_authority_is_reported(self):
         #  BACKLOG.md is allowlisted as a name so the documents can refuse
