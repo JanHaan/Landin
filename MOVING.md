@@ -20,6 +20,8 @@ said `all clean`.
 | 34 of 37 checks in `check.py` have no control proving they can fail. | — | the check.py audit, whose first step this is: a property cannot be shown to have moved home if neither holder can be made to fail |
 | `ROADMAP.md` names 169 `.scratch` paths; 155 do not exist on any machine. | R4.91 onward | the roadmap replacement, which converts them to prose |
 
+| The corpus at one worker measured 4523s on CI, against 3592s for the pre-parallelism sequential run. One job is still the default, so this is the path a developer gets. | the parallelism change | single CI samples on shared hardware cannot tell variance from a regression; a Mac run at one job against the recorded 2897s baseline would settle it |
+
 ## Deferred, with the reason
 
 | what | why it is not simply done |
