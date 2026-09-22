@@ -75,9 +75,15 @@ jobs:
           asset="landin-$version-${{ matrix.platform }}.tar.gz"
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
           test -x "$binary"
-          #  Deterministic: no timestamps, no owner, sorted.
-          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-              -czf "$asset" -C "$(dirname "$binary")" refine
+          #  Portable across GNU tar and the bsdtar macOS ships, which
+          #  has no --sort, no --mtime and no --owner. The first attempt
+          #  used all three and built on Linux while failing on Darwin.
+          #  One file needs no sorting; a fixed mtime and gzip -n remove
+          #  the two timestamps that would otherwise differ per run.
+          stage=$(mktemp -d)
+          cp "$binary" "$stage/refine"
+          touch -t 197001010000 "$stage/refine"
+          tar -cf - -C "$stage" refine | gzip -n -9 > "$asset"
           sum=$(shasum -a 256 "$asset" | cut -d' ' -f1)
           echo "$sum  $asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
