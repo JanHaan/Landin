@@ -184,13 +184,104 @@ class Citations(unittest.TestCase):
         self.assertEqual(self.cited("# Tour\n\nprose only\n"), [])
 
 
-#  check_optimization_contract has no control yet, deliberately.  Its
-#  docstring claims the quality wiring and the object reader, and it also
-#  calls check_phase_handoff -- a roadmap-structure check -- and enforces a
-#  tour prose rule about array comparison and reduction.  Three subjects in
-#  one function cannot be controlled as one property, and the roadmap half
-#  is destined for deletion while the other two are not.  Splitting it is
-#  audit work; MOVING.md records it.
+QUALITY = ["compiler/tests/quality", "scripts/quality.sh",
+           "compiler/ada/src/base/landin-optimization.ads",
+           "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb",
+           "compiler/tests/test_native_report_identity.py",
+           "scripts/tests/test_build_inventory.py",
+           "scripts/tests/test_build_lock.py",
+           #  Reached through the quality checker this one runpy's.
+           "scripts/build.sh", "scripts/env.sh", "environments/pins.sh",
+           "compiler/ada/landin_lib.gpr", "compiler/ada/landin_common.gpr",
+           "compiler/ada/refine.gpr", "compiler/tests",
+           #  The quality checker reads the derived programs' own sources
+           #  for routine evidence, so its reach is most of the tree.
+           "examples", "core", "compiler/ada"]
+
+
+class SplitSubjects(unittest.TestCase):
+    """The four checks that were one.
+
+    check_optimization_contract claimed the quality wiring and held three
+    things: that, a roadmap validation, and a tour prose rule -- and the
+    roadmap one in turn ran the repository's whole Python test suite. None
+    could be controlled while they shared a function. Each is controlled
+    here because each is now its own.
+    """
+
+    def test_the_optimization_wiring_passes(self):
+        self.assertEqual(
+            faults(checker.check_optimization_contract, copied=QUALITY), [])
+
+    def test_a_dropped_runtime_profile_is_reported(self):
+        from check_controls import tree
+        with tree(copied=QUALITY) as root:
+            harness = root / QUALITY[3]
+            #  The check strips the Landin.Optimization. prefix before
+            #  looking, so the file itself spells the profiles long.
+            harness.write_text(harness.read_text().replace(
+                "All_Eligible", "Off"))
+            said = [why for _, _, why
+                    in checker.check_optimization_contract(True)]
+        self.assertTrue(any("runtime profile missing" in why
+                            for why in said))
+
+    def test_the_array_prose_passes(self):
+        self.assertEqual(
+            faults(checker.check_array_prose, copied=["tour.md"]), [])
+
+    def test_array_prose_reviving_a_dropped_form_is_reported(self):
+        from check_controls import tree
+        with tree(copied=["tour.md"]) as root:
+            tour = root / "tour.md"
+            text = tour.read_text()
+            tour.write_text(text.replace(
+                "### [0590]", "### [0590]\n\nreduce_add( revived\n", 1))
+            said = [why for _, _, why in checker.check_array_prose(True)]
+        self.assertTrue(said)
+
+    def test_a_missing_tour_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_array_prose, copied=["spec.md"])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_the_roadmap_validation_passes(self):
+        #  Controllable now that it is only the roadmap validation. It
+        #  used to run eight test scripts as well, which made a control
+        #  over it a second full run of everything.
+        self.assertEqual(
+            faults(checker.check_phase_handoff,
+                   copied=["ROADMAP.md", "scripts"]), [])
+
+    def test_a_roadmap_that_fails_validation_is_reported(self):
+        from check_controls import tree
+        with tree(copied=["ROADMAP.md", "scripts"]) as root:
+            target = root / "ROADMAP.md"
+            #  Every transferred record must name a listed successor;
+            #  validate_endpoint refuses one that names nothing.
+            target.write_text(target.read_text().replace(
+                "## Successor roadmaps", "## Retired headings", 1))
+            said = [why for _, _, why in checker.check_phase_handoff(True)]
+        self.assertTrue(said)
+
+    def test_a_missing_roadmap_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_phase_handoff, copied=["scripts"])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_the_owned_tests_name_the_script_that_failed(self):
+        #  They used to be run through two other checks and every failure
+        #  was attributed to ROADMAP.md, whatever had actually failed.
+        from check_controls import tree
+        with tree(copied=["scripts", "devices", "environments", "check.py",
+                          "ROADMAP.md", "spec.md", "tour.md", "compiler",
+                          "core", "examples", "highlight", "assets",
+                          "bindings"] + list(checker.LIVE_DOCS)) as root:
+            broken = root / "devices/test.py"
+            broken.write_text("import sys\nsys.exit(3)\n")
+            said = [(where, why) for where, _, why
+                    in checker.check_owned_tests(True)]
+        self.assertTrue(any(where == "devices/test.py" for where, _ in said))
 
 
 DEBUGGER = ["scripts/debug.sh", "compiler/tests/debugging"]

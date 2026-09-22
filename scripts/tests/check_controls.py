@@ -48,7 +48,14 @@ def tree(written=None, copied=()):
             target.parent.mkdir(parents=True, exist_ok=True)
             source = ROOT / relative
             if source.is_dir():
-                shutil.copytree(source, target, dirs_exist_ok=True)
+                #  Never the generated trees.  A build directory holds a
+                #  fixture's deliberately recursive symlinks -- parent
+                #  pointing at parent, thirty deep -- which is a test of
+                #  the compiler's path handling and a trap for a copy.
+                shutil.copytree(source, target, dirs_exist_ok=True,
+                                symlinks=True, ignore=shutil.ignore_patterns(
+                                    "build", ".git", ".scratch",
+                                    "node_modules", "__pycache__", "site"))
             else:
                 shutil.copy2(source, target)
         for relative, content in (written or {}).items():

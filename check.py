@@ -6312,11 +6312,37 @@ def check_optimization_contract(full_run):
                    "scripts/tests/test_build_inventory.py",
                    "scripts/tests/test_build_lock.py"):
         out += absent([runner])
-    out += check_phase_handoff(full_run)
-    tour = io.open(TOUR_NAME, encoding="utf-8").read()
-    array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
-    if "Arithmetic and comparison" in array_section or "reduce_add(" in array_section:
-        out.append((TOUR_NAME, 1, "array prose revives undefined comparison/reduction"))
+    return out
+
+
+def check_array_prose(full_run):
+    """[0590] does not revive comparison or reduction the kernel dropped.
+
+    One rule about one section, and it lived inside the optimization
+    contract check because that is where it was written, not because it
+    belongs there.  A check named for one subject and holding three is a
+    check nobody can control: this one, the roadmap validation and the
+    repository's own test runner were all reached through a function whose
+    docstring says "quality wiring and object-reader checks".
+    """
+    if not full_run:
+        return []
+
+    out = absent([os.path.join(ROOT, TOUR_NAME)])
+    if out:
+        return out
+
+    with io.open(os.path.join(ROOT, TOUR_NAME), encoding="utf-8") as stream:
+        tour = stream.read()
+    if "### [0590]" not in tour or "### [0600]" not in tour:
+        return [(TOUR_NAME, 1,
+                 "the array section this check reads is not here")]
+
+    section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
+    if ("Arithmetic and comparison" in section
+            or "reduce_add(" in section):
+        out.append((TOUR_NAME, 1,
+                    "array prose revives undefined comparison/reduction"))
     return out
 
 
@@ -6407,28 +6433,73 @@ def check_phase_handoff(full_run):
         return []
     from scripts.roadmap_debt import (validate, validate_discoveries,
                                       validate_endpoint)
-    import subprocess
+    out = absent([os.path.join(ROOT, "ROADMAP.md")])
+    if out:
+        return out
     try:
-        with io.open(os.path.join(ROOT, "ROADMAP.md"), encoding="utf-8") as source:
+        with io.open(os.path.join(ROOT, "ROADMAP.md"),
+                     encoding="utf-8") as source:
             text = source.read()
         validate(text)
         validate_discoveries(text)
         validate_endpoint(text)
-        for command in (
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_debt.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_roadmap_endpoint.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_migration_register.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_construct_inventory.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_prototype_coverage.py")],
-                [sys.executable, os.path.join(ROOT, "environments/cortex-m/test.py")],
-                [sys.executable, os.path.join(ROOT, "devices/test.py")],
-                [sys.executable, os.path.join(ROOT, "scripts/tests/test_panic_locations.py")]):
-            result = subprocess.run(command, capture_output=True, text=True, timeout=20)
-            if result.returncode:
-                return [("ROADMAP.md", 1, result.stdout + result.stderr)]
-    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
-        return [("ROADMAP.md", 1, str(error))]
+    #  A malformed roadmap is a fault to report, not a traceback. The
+    #  validators index into what they find, so a missing heading reached
+    #  this as IndexError and took the whole run down with it rather than
+    #  saying which document was wrong.
+    except (OSError, ValueError, IndexError, KeyError) as error:
+        return [("ROADMAP.md", 1,
+                 type(error).__name__ + ": " + str(error))]
     return []
+
+
+#  The repository's own Python test scripts, and what runs them.
+OWNED_TESTS = (
+    "scripts/tests/test_roadmap_debt.py",
+    "scripts/tests/test_roadmap_endpoint.py",
+    "scripts/tests/test_migration_register.py",
+    "scripts/tests/test_construct_inventory.py",
+    "scripts/tests/test_prototype_coverage.py",
+    "environments/cortex-m/test.py",
+    "devices/test.py",
+    "scripts/tests/test_panic_locations.py",
+)
+
+
+def check_owned_tests(full_run):
+    """Run the repository's own Python tests, and say which one failed.
+
+    These used to run as a side effect of the optimization contract check,
+    through the roadmap handoff check, which is three subjects deep from
+    anything that says "tests".  check.py is the only thing that runs
+    them -- the gate runs check.py and the Ada suite and nothing else -- so
+    hiding them there meant the Python suite's fate rested on a function
+    whose docstring described object readers.
+
+    Named for what it does now, and it says which script failed rather
+    than attributing every one of them to ROADMAP.md.
+    """
+    if not full_run:
+        return []
+    import subprocess
+
+    out = []
+    for relative in OWNED_TESTS:
+        path = os.path.join(ROOT, relative)
+        missing = absent([path])
+        if missing:
+            out += missing
+            continue
+        try:
+            result = subprocess.run([sys.executable, path],
+                                    capture_output=True, text=True,
+                                    timeout=120)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            out.append((relative, 1, str(error)))
+            continue
+        if result.returncode:
+            out.append((relative, 1, result.stdout + result.stderr))
+    return out
 
 
 def check_macos_environment(full_run):
@@ -6553,6 +6624,9 @@ def main(argv):
     extra += check_developer_loops(full_run)
     extra += check_source_locations(full_run)
     extra += check_optimization_contract(full_run)
+    extra += check_array_prose(full_run)
+    extra += check_phase_handoff(full_run)
+    extra += check_owned_tests(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)
