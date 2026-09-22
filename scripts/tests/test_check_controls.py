@@ -415,5 +415,117 @@ class TokenVocabulary(unittest.TestCase):
                             for why in said))
 
 
+#  Every live document, read from check.py so this list cannot drift from
+#  the one the checks actually walk.
+LIVE = list(checker.LIVE_DOCS)
+
+
+class DocumentForm(unittest.TestCase):
+    """The four rules that hold the documents' form.
+
+    Each exists because a conversion destroyed something no word count
+    could see: prose that lost an em dash, Landin that fell out of its
+    fence, a table row that grew a cell and broke an inline span, and the
+    comment markers that ARE the demonstration in [0010] and [0020].
+    """
+
+    def broken(self, check, document, replace, with_):
+        from check_controls import tree
+        with tree(copied=LIVE) as root:
+            target = root / document
+            text = target.read_text()
+            self.assertIn(replace, text, "the control's own anchor is gone")
+            target.write_text(text.replace(replace, with_))
+            return [why for _, _, why in check(True)]
+
+    def test_the_real_documents_pass(self):
+        for check in (checker.check_ascii_dashes, checker.check_unfenced_code,
+                      checker.check_table_shape, checker.check_comment_forms):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=LIVE), [])
+
+    def test_a_spaced_ascii_dash_in_prose_is_reported(self):
+        self.assertTrue(self.broken(
+            checker.check_ascii_dashes, "README.md",
+            "## Checking", "## Checking -- and why\n"))
+
+    def test_landin_outside_a_fence_is_reported(self):
+        self.assertTrue(self.broken(
+            checker.check_unfenced_code, "tour.md",
+            "## WHAT WAS TRIED AND DROPPED",
+            "stray: u32 = 7\n\n## WHAT WAS TRIED AND DROPPED"))
+
+    def test_a_table_row_with_an_extra_cell_is_reported(self):
+        self.assertTrue(self.broken(
+            checker.check_table_shape, "README.md",
+            "## Checking",
+            "| a | b |\n|---|---|\n| one | two | three |\n\n## Checking"))
+
+    def test_a_comment_opener_the_tour_stops_showing_is_reported(self):
+        #  The markers are the demonstration: [0010]'s marker IS a line
+        #  comment. A conversion that read them as markup destroyed the
+        #  section with every word intact.
+        self.assertTrue(self.broken(
+            checker.check_comment_forms, "tour.md", "--(", "-- ("))
+
+
+ICONS = ["assets/icons.py", "assets/icon.svg", "assets/landin_icon.py",
+         "docs/site/render_html.py", "assets/README.md"]
+
+HIGHLIGHT = ["highlight", "assets/fonts.py", "docs/site/render_html.py"]
+
+BINDINGS = ["bindings", "AGENTS.md", "README.md", "docs/targets.md",
+            "compiler/ada/TOOLCHAIN.md", "spec.md", "tour.md"]
+
+
+class Artifacts(unittest.TestCase):
+    """The mark, the borrowed icons, the editor packages, the generator."""
+
+    def test_the_real_artifacts_pass(self):
+        for check, inputs in ((checker.check_borrowed_icons, ICONS),
+                              (checker.check_icon, ICONS),
+                              (checker.check_highlighters, HIGHLIGHT),
+                              (checker.check_binding_generator, BINDINGS)):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=inputs), [])
+
+    def test_a_missing_drawing_is_reported_rather_than_skipped(self):
+        #  This one returned [] when the drawing was renamed, so the mark
+        #  stopped being checked while the run still said all clean. The
+        #  second check found that way, after check_pinned_toolchain.
+        said = reasons(checker.check_icon, copied=ICONS[2:])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_generated_rendering_that_drifted_is_reported(self):
+        #  The copied editor files are deterministic renderings of one
+        #  source; regenerating is the only way to change them.
+        from check_controls import tree
+        import runpy
+        with tree(copied=HIGHLIGHT) as root:
+            #  Asked of the generator rather than guessed: outputs() is
+            #  the list the check compares, so this disturbs exactly one
+            #  thing the check is looking at.
+            #  The generator imports its own vocabulary module, the way
+            #  check.py arranges for it.
+            sys.path.insert(0, str(root / "highlight"))
+            try:
+                namespace = runpy.run_path(
+                    str(root / "highlight/generate.py"),
+                    run_name="outputs_probe")
+            finally:
+                sys.path.pop(0)
+            generated = sorted(namespace["outputs"]())
+            self.assertTrue(generated, "the generator renders nothing")
+            target = root / generated[0]
+            target.write_bytes(target.read_bytes() + b"\n#  drifted\n")
+            said = [why for _, _, why in checker.check_highlighters(True)]
+        self.assertTrue(said)
+
+    def test_a_missing_generator_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_binding_generator, copied=BINDINGS[1:])
+        self.assertTrue(said)
+
+
 if __name__ == "__main__":
     unittest.main()

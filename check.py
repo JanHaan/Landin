@@ -5190,11 +5190,13 @@ def check_icon(full_run):
     drawing = os.path.join(ROOT, "assets/icon.svg")
     module = os.path.join(ROOT, "assets/landin_icon.py")
     site = os.path.join(ROOT, "docs/site/render_html.py")
-    for path in (drawing, module, site):
-        if not os.path.exists(path):
-            return []
+    #  Renaming any of the three used to make this check vacuous while the
+    #  run still said all clean.  The second one found that way, after
+    #  check_pinned_toolchain; absent() exists for exactly this.
+    out = absent((drawing, module, site))
+    if out:
+        return out
 
-    out = []
     svg = io.open(drawing, encoding="utf-8").read()
     code = io.open(module, encoding="utf-8").read()
     css = io.open(site, encoding="utf-8").read()
