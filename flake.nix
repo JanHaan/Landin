@@ -33,9 +33,14 @@
             value = build system;
           }) systems
         );
-    in
-    {
-      devShells = forEachSystem (
+
+      #  The toolchain is assembled once per system and used twice: by the
+      #  development shell, and by the compiler derivation a consuming
+      #  flake takes as an input.  Every workaround below -- the patched
+      #  interpreter, the gprconfig description, the argv[0] exec, the
+      #  triplet driver names -- is needed by both, and was needed by the
+      #  shell first.
+      perSystem = forEachSystem (
         system:
         let
           pkgs = inputs.nixpkgs.legacyPackages.${system};
@@ -57,6 +62,17 @@
           #  x86_64-linux -> X86_64_LINUX, which is how the checksums are
           #  named.  The archive names use the nix system string as it is.
           suffix = lib.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] system);
+
+          #  Stated once, in README.md's status line, the same string
+          #  docs/site/render_html.py holds the page to.  A version written
+          #  twice is a version that drifts.
+          specification =
+            let
+              found = builtins.match
+                "(.|\n)*specification ([0-9]+\\.[0-9]+\\.[0-9]+)(.|\n)*"
+                (builtins.readFile ./README.md);
+            in
+            if found == null then "0" else builtins.elemAt found 1;
 
           releases = pin "LANDIN_RELEASES";
           gnatVersion = pin "LANDIN_GNAT_VERSION";
@@ -193,7 +209,68 @@
             });
         in
         {
-          default = pkgs.mkShell {
+          #  The compiler itself, so a project can take Landin as a flake
+          #  input instead of cloning this repository and running a build
+          #  script.  Release mode: a consumer wants the compiler, not its
+          #  assertions.
+          refine = pkgs.stdenv.mkDerivation {
+            pname = "landin";
+            version = specification;
+
+            src = lib.cleanSourceWith {
+              src = ./.;
+              #  None of the generated trees is an input, and one of them
+              #  holds a fixture's deliberately recursive symlinks.
+              filter =
+                path: type:
+                !(builtins.elem (baseNameOf (toString path)) [
+                  "build"
+                  ".scratch"
+                  "site"
+                  "node_modules"
+                  "__pycache__"
+                ]);
+            };
+
+            nativeBuildInputs = [
+              gnat
+              gprbuild
+              pkgs.makeWrapper
+            ];
+
+            dontConfigure = true;
+
+            #  The project puts its objects under build/$TAG/$MODE, and the
+            #  tag is 'nix' here for the same reason the shell sets it: so
+            #  these objects cannot be confused with another host's.
+            buildPhase = ''
+              runHook preBuild
+              cd compiler/ada
+              LANDIN_BUILD_TAG=nix LANDIN_BUILD_MODE=release \
+                gprbuild -p -P refine.gpr -j''${NIX_BUILD_CORES:-1}
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 build/nix/release/bin/refine "$out/bin/refine"
+              #  refine names its assembler and linker by GNU triplet and
+              #  deliberately will not fall back to a bare gcc, so the
+              #  wrapped compiler has to be on its path: without this the
+              #  package can emit assembly and cannot link it.
+              wrapProgram "$out/bin/refine" \
+                --prefix PATH : "${gnat}/bin"
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "The Landin bootstrap compiler";
+              homepage = "https://www.701.dev";
+              mainProgram = "refine";
+            };
+          };
+
+          shell = pkgs.mkShell {
             packages = [
               gnat
               gprbuild
@@ -239,5 +316,15 @@
           };
         }
       );
+    in
+    {
+      devShells = builtins.mapAttrs (_: built: { default = built.shell; }) perSystem;
+
+      packages = builtins.mapAttrs (
+        _: built: {
+          default = built.refine;
+          inherit (built) refine;
+        }
+      ) perSystem;
     };
 }
