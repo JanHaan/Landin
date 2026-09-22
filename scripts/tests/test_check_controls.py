@@ -157,5 +157,41 @@ class SourceLocations(unittest.TestCase):
         self.assertTrue(said)
 
 
+class Citations(unittest.TestCase):
+    """Every construct citation resolves, and no id is defined twice."""
+
+    def cited(self, tour, spec="# Spec\n"):
+        from check_controls import tree
+        with tree(written={"tour.md": tour, "spec.md": spec}) as root:
+            return [why for _, _, why in checker.check_citations(
+                [str(root / "tour.md"), str(root / "spec.md")])]
+
+    def test_a_citation_with_a_definition_passes(self):
+        self.assertEqual(
+            self.cited("### [0010] A thing\n\nas [0010] says\n"), [])
+
+    def test_a_citation_without_a_definition_is_reported(self):
+        self.assertTrue(self.cited("### [0010] A thing\n\nas [0020] says\n"))
+
+    def test_a_definition_in_both_documents_is_reported(self):
+        #  A construct is defined in exactly one of the two. Merging the
+        #  dictionaries is what makes this catch an id defined in both,
+        #  which is the invariant the spec/tour split newly needed.
+        self.assertTrue(
+            self.cited("### [0010] A thing\n", spec="### [0010] Again\n"))
+
+    def test_citing_nothing_passes(self):
+        self.assertEqual(self.cited("# Tour\n\nprose only\n"), [])
+
+
+#  check_optimization_contract has no control yet, deliberately.  Its
+#  docstring claims the quality wiring and the object reader, and it also
+#  calls check_phase_handoff -- a roadmap-structure check -- and enforces a
+#  tour prose rule about array comparison and reduction.  Three subjects in
+#  one function cannot be controlled as one property, and the roadmap half
+#  is destined for deletion while the other two are not.  Splitting it is
+#  audit work; MOVING.md records it.
+
+
 if __name__ == "__main__":
     unittest.main()
