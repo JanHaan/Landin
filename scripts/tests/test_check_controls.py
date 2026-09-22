@@ -733,5 +733,57 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(said)
 
 
+REGISTERS = ["spec.md", "tour.md", "ROADMAP.md",
+             "prototype-1-driver.md", "prototype-2-parser.md",
+             "prototype-3-containers.md", "prototype-4-app.md",
+             "compiler/tests", "compiler/ada/src", "compiler/ada/tests",
+             "scripts", "check.py", "environments", "devices",
+             "examples", "core", "bindings", "highlight"]
+
+
+class Registers(unittest.TestCase):
+    """The generated inventories and the catalogue they close over.
+
+    check_matrix and check_coverage_registers are the hybrids the audit
+    could not place: the construct inventory and the guarantee closure are
+    language artifacts, while the evidence rows they carry are roadmap
+    bookkeeping. Controlled as they stand, because the untangling is a
+    later decision and the property is live now.
+    """
+
+    def test_the_real_registers_agree(self):
+        for check in (checker.check_catalogue, checker.check_matrix,
+                      checker.check_coverage_registers):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=REGISTERS), [])
+
+    def test_a_missing_catalogue_is_reported_rather_than_skipped(self):
+        from check_controls import tree
+        with tree(copied=REGISTERS) as root:
+            (root / "compiler/tests/diagnostics.catalogue").unlink()
+            said = [why for _, _, why in checker.check_catalogue(True)]
+        self.assertTrue(said)
+
+    def test_a_code_the_catalogue_stops_describing_is_reported(self):
+        from check_controls import tree
+        with tree(copied=REGISTERS) as root:
+            target = root / "compiler/tests/diagnostics.catalogue"
+            kept = [line for line in target.read_text().splitlines()
+                    if not line.startswith("L0100")]
+            target.write_text("\n".join(kept) + "\n")
+            said = [why for _, _, why in checker.check_catalogue(True)]
+        self.assertTrue(said)
+
+    def test_a_stale_construct_inventory_is_reported(self):
+        #  The matrix is generated; a hand edit is the drift this exists
+        #  for, and regenerating is the only way to change it.
+        from check_controls import tree
+        with tree(copied=REGISTERS) as root:
+            target = root / "compiler/tests/constructs.matrix"
+            target.write_text(target.read_text() + "invented row\n")
+            said = [why for _, _, why in checker.check_matrix(True)]
+        self.assertTrue(said)
+
+
 if __name__ == "__main__":
     unittest.main()
