@@ -102,16 +102,21 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      #  NOT `assets`: the repository has a directory by that name, and
+      #  downloading into it made the upload glob sweep up assets/fonts.py,
+      #  assets/icon.svg and the assets/fonts directory -- which gh cannot
+      #  upload, so the job failed after publishing three files that were
+      #  never meant to leave the repository.
       - uses: actions/download-artifact@v6
         with:
-          path: assets
+          path: release-assets
           merge-multiple: true
 
       #  The checksums go in the log as well as beside the assets, because
       #  the flake records them by hand and this is where they are read.
       - name: What was built
         run: |
-          cd assets && ls -l && cat ./*.sha256
+          cd release-assets && ls -l && cat ./*.sha256
 
       - name: Publish
         env:
@@ -126,4 +131,4 @@ jobs:
             gh release create "$tag" --verify-tag \
               --title "Landin $tag" --notes "$notes"
           fi
-          gh release upload "$tag" assets/* --clobber
+          gh release upload "$tag" release-assets/* --clobber
