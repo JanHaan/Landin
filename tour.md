@@ -18,10 +18,12 @@ value is at the end of this file, under WHAT WAS TRIED AND DROPPED.
 
 Numbering: [NNNN] is stable, which is the point of it — an insert never
 renumbers anything, so the order things are read in and the order of
-the numbers need not agree. They agree today, at 0.2.0, and they will
-drift, and that is the numbering working rather than failing. Gaps of
-ten leave room. Sections carry titles and no numbers, because nothing
-cites a section. Refer to decisions by number.
+the numbers need not agree. They no longer do. Both documents are
+arranged by subject rather than by the order things were found, so
+[1000] is read before [0900] here and [1950] sits beside [1890] in
+`spec.md`, and that is the numbering working rather than failing. Gaps
+of ten leave room. Sections carry titles and no numbers, because
+nothing cites a section. Refer to decisions by number.
 
 This file explains the language and does not decide it. `spec.md` is the
 normative document: it holds the grammar of the kernel the compiler
@@ -1845,6 +1847,62 @@ edge runs, stops later cleanup and the original transfer. Ordinary and C
 signatures may use this form within the target's supported surface; interrupt
 and naked signatures retain `()->none`. D231 specifies the detailed contract.
 
+### [1000] A function type is an ordinary type
+
+A function type is an ordinary type, and a function is an
+ordinary value of it, represented as a code address. There
+is no separate function-pointer type and addr is not used
+on functions: the type is written the way the signature is.
+
+```landin
+handler: type = () -> none
+mut current: handler = default_handler
+
+```
+
+The names written inside the signature describe its parameter and return
+positions; in a type they do not declare local names. Two function types agree
+by those positions' types, not by their labels. Function values may themselves
+be parameters and named returns, so that structural comparison is recursive.
+Convention and variadicness are part of that identity too: a C callback type
+writes `extern(c) (parameters) -> returns`, and an ordinary Landin function
+with the same visible arguments does not agree with it. A pointer to such a
+function type points to a cell holding the code address, not to C callback
+code itself.
+A module binding initialized by a named or anonymous function is a static code
+address; mutable local or module storage may later receive any address with the
+same complete signature.
+A callback is therefore a pair of that and a state pointer,
+written out because nothing is captured.
+
+```landin
+on_byte: type = struct
+    call:  (state: ptr u8, b: u8) -> none
+    state: ptr u8
+end on_byte
+
+```
+
+A function-valued field is called through its ordinary selection:
+`callback.call(callback.state, byte)`. It keeps the complete structural
+signature of the field type through construction, assignment, aggregate copy,
+variant payloads, nesting and arrays of such structs. The root binding decides
+whether the field may be replaced; a call evaluates that selected code address
+before its arguments.
+
+### [1010] Anonymous functions
+
+Anonymous functions. No capture: their routine may use module declarations,
+its own parameters, named return and body locals, but no local, parameter or
+return from the expression's enclosing routine. State travels as an explicit
+parameter. Forming one produces a static code address; it does not execute the
+body.
+
+```landin
+less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
+
+```
+
 ### [0900] Three parameter conventions
 
 Three parameter conventions, and they are about the value
@@ -1940,6 +1998,50 @@ end reset
 
 ```
 
+### [1040] A caller parameter is filled in by the compiler with the call site
+
+A caller parameter is filled in by the compiler with the site of the call,
+so assertions and logging work without macros. Its type is an ordinary struct
+with exactly these three u32 fields, in this order:
+
+```landin
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+assert: (cond: bool, caller where: site) -> none =
+    if not cond then
+        report_failure(where)
+    end if
+end assert
+```
+
+Used as: `assert(count > 0)`.
+
+The value is 12 bytes on both 32-bit and 64-bit targets. The file number belongs
+to this compilation; the line and byte column are one-based. Filenames live in
+a separate table that need not ship with the program. Even without it, an
+assertion can report a file number, line and column. Resolving the filename
+requires the table from the matching build. This follows [1670]'s reason for
+keeping filenames out of the required runtime data; its compiler-check handler
+retains its own numbered-site interface.
+
+The parameter is immutable and omitted from an ordinary call. A wrapper
+preserves the original coordinates explicitly, by naming its own caller
+parameter as the complete argument:
+
+```landin
+checked: (cond: bool, caller where: site) -> none =
+    assert(cond, where: where)
+end checked
+```
+
+Omitting `where` in that inner call deliberately reports the wrapper's call.
+A copied or constructed value cannot be passed into a caller position. The
+coordinates may otherwise be read, copied and saved as an ordinary struct.
+
 ### [0920] Multiple named returns
 
 Multiple named returns.
@@ -1960,6 +2062,28 @@ single return keeps its own type rather than being wrapped.
 
 Every named return must be assigned before return. On the
 fail path they need not be, and the caller may not read them.
+
+### [0990] A return list is an anonymous struct
+
+A return list is an anonymous struct, so a result can be
+bound whole and read by field, or destructured. Binding by
+name, never by position.
+
+```landin
+whole       := divide(10, 3)
+sum         := whole.quot + whole.rem
+(quot, rem) := divide(10, 3)
+(quot: q2)  := divide(20, 3)
+(quot, _)   := divide(30, 3)
+
+```
+
+The call is evaluated once. Names may be selected in any order, omitted, or
+renamed after `:`; `_` explicitly ignores what is not bound. A whole result can
+also cross an `if`, `match`, or bare-block value when every fallthrough edge has
+the same names and field types. Function types compare result types in order
+but not these labels, so a call through a stored function uses the labels of
+its static function type.
 
 ### [0940] Errors: a declared set of atoms in one dedicated register
 
@@ -2044,120 +2168,6 @@ end read_config
 
 ```
 
-### [0970] Early exit
-
-Early exit: return and fail, each with an optional
-`when condition`.
-
-### [0980] Calls: positional first, then named
-
-Calls: positional first, then named. No default values. The positional prefix
-fills parameters in order; the named suffix may reorder the rest. Every runtime
-parameter is filled exactly once, and an unknown or repeated label is an error.
-Arguments still run in written order before their checked values are passed in
-formal order. A generic direct call may put its compile-time actuals in this
-same named list: `copy(t: u8, n: 4, source: bytes)`. Once it names one static
-formal, it names every static formal; those entries neither evaluate nor fill a
-runtime position. A call through a stored or selected function uses the parameter
-labels of that value's static function type; changing those labels does not
-change function-type identity [1000].
-Named arguments work in a call statement as well as in a call expression.
-A C variadic call additionally supplies an unnamed tail under [1580]'s default
-promotions; this does not add optional or defaulted fixed parameters.
-
-```landin
-r1 := divide(10, 3)
-r2 := process(source: src, target: dst, owned: buf)
-
-```
-
-### [0990] A return list is an anonymous struct
-
-A return list is an anonymous struct, so a result can be
-bound whole and read by field, or destructured. Binding by
-name, never by position.
-
-```landin
-whole       := divide(10, 3)
-sum         := whole.quot + whole.rem
-(quot, rem) := divide(10, 3)
-(quot: q2)  := divide(20, 3)
-(quot, _)   := divide(30, 3)
-
-```
-
-The call is evaluated once. Names may be selected in any order, omitted, or
-renamed after `:`; `_` explicitly ignores what is not bound. A whole result can
-also cross an `if`, `match`, or bare-block value when every fallthrough edge has
-the same names and field types. Function types compare result types in order
-but not these labels, so a call through a stored function uses the labels of
-its static function type.
-
-### [1000] A function type is an ordinary type
-
-A function type is an ordinary type, and a function is an
-ordinary value of it, represented as a code address. There
-is no separate function-pointer type and addr is not used
-on functions: the type is written the way the signature is.
-
-```landin
-handler: type = () -> none
-mut current: handler = default_handler
-
-```
-
-The names written inside the signature describe its parameter and return
-positions; in a type they do not declare local names. Two function types agree
-by those positions' types, not by their labels. Function values may themselves
-be parameters and named returns, so that structural comparison is recursive.
-Convention and variadicness are part of that identity too: a C callback type
-writes `extern(c) (parameters) -> returns`, and an ordinary Landin function
-with the same visible arguments does not agree with it. A pointer to such a
-function type points to a cell holding the code address, not to C callback
-code itself.
-A module binding initialized by a named or anonymous function is a static code
-address; mutable local or module storage may later receive any address with the
-same complete signature.
-A callback is therefore a pair of that and a state pointer,
-written out because nothing is captured.
-
-```landin
-on_byte: type = struct
-    call:  (state: ptr u8, b: u8) -> none
-    state: ptr u8
-end on_byte
-
-```
-
-A function-valued field is called through its ordinary selection:
-`callback.call(callback.state, byte)`. It keeps the complete structural
-signature of the field type through construction, assignment, aggregate copy,
-variant payloads, nesting and arrays of such structs. The root binding decides
-whether the field may be replaced; a call evaluates that selected code address
-before its arguments.
-
-### [1010] Anonymous functions
-
-Anonymous functions. No capture: their routine may use module declarations,
-its own parameters, named return and body locals, but no local, parameter or
-return from the expression's enclosing routine. State travels as an explicit
-parameter. Forming one produces a static code address; it does not execute the
-body.
-
-```landin
-less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
-
-```
-
-### [1020] Discarding a result must be explicit
-
-Discarding a result must be explicit.
-
-```landin
-_ = double(5)
-
-```
-
 ### [1030] Handling
 
 Handling, not just propagating: an else clause on the call,
@@ -2200,49 +2210,41 @@ A call that can fail and whose result is discarded is an
 error. Write 'try f()' or discard through an else.
 else is for the error channel only, not for unions.
 
-### [1040] A caller parameter is filled in by the compiler with the call site
+### [0970] Early exit
 
-A caller parameter is filled in by the compiler with the site of the call,
-so assertions and logging work without macros. Its type is an ordinary struct
-with exactly these three u32 fields, in this order:
+Early exit: return and fail, each with an optional
+`when condition`.
 
-```landin
-site: type = struct
-    file_id: u32
-    line: u32
-    column: u32
-end site
+### [0980] Calls: positional first, then named
 
-assert: (cond: bool, caller where: site) -> none =
-    if not cond then
-        report_failure(where)
-    end if
-end assert
-```
-
-Used as: `assert(count > 0)`.
-
-The value is 12 bytes on both 32-bit and 64-bit targets. The file number belongs
-to this compilation; the line and byte column are one-based. Filenames live in
-a separate table that need not ship with the program. Even without it, an
-assertion can report a file number, line and column. Resolving the filename
-requires the table from the matching build. This follows [1670]'s reason for
-keeping filenames out of the required runtime data; its compiler-check handler
-retains its own numbered-site interface.
-
-The parameter is immutable and omitted from an ordinary call. A wrapper
-preserves the original coordinates explicitly, by naming its own caller
-parameter as the complete argument:
+Calls: positional first, then named. No default values. The positional prefix
+fills parameters in order; the named suffix may reorder the rest. Every runtime
+parameter is filled exactly once, and an unknown or repeated label is an error.
+Arguments still run in written order before their checked values are passed in
+formal order. A generic direct call may put its compile-time actuals in this
+same named list: `copy(t: u8, n: 4, source: bytes)`. Once it names one static
+formal, it names every static formal; those entries neither evaluate nor fill a
+runtime position. A call through a stored or selected function uses the parameter
+labels of that value's static function type; changing those labels does not
+change function-type identity [1000].
+Named arguments work in a call statement as well as in a call expression.
+A C variadic call additionally supplies an unnamed tail under [1580]'s default
+promotions; this does not add optional or defaulted fixed parameters.
 
 ```landin
-checked: (cond: bool, caller where: site) -> none =
-    assert(cond, where: where)
-end checked
+r1 := divide(10, 3)
+r2 := process(source: src, target: dst, owned: buf)
+
 ```
 
-Omitting `where` in that inner call deliberately reports the wrapper's call.
-A copied or constructed value cannot be passed into a caller position. The
-coordinates may otherwise be read, copied and saved as an ordinary struct.
+### [1020] Discarding a result must be explicit
+
+Discarding a result must be explicit.
+
+```landin
+_ = double(5)
+
+```
 
 ## CONTROL FLOW
 
@@ -2381,6 +2383,49 @@ calls it a contingency, or a compensating action.
     undo release(handle)
 
 ```
+
+### [1200] Because entries are registered where control reaches
+
+Because entries are registered where control reaches
+them, the triangular cleanup of several fallible
+acquisitions falls out of the order instead of being
+written: the first failing frees nothing, the second
+frees one, the third frees two.
+
+```landin
+new_buffers: (provider: type is mem.allocator,
+              inout state: provider, count: usize)
+             -> (first: mem.byte_buffer, second: mem.byte_buffer,
+                 third: mem.byte_buffer) ! mem.out_of_memory =
+    first = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, first)
+
+    second = try mem.new_bytes(state: state, count: count)
+    undo mem.drop_bytes(state, second)
+
+    third = try mem.new_bytes(state: state, count: count)
+    -- All three owners are published by the successful return.
+end new_buffers
+```
+
+And the discipline it asks for, which has to be said out
+loud: undo cleans up what is still yours. Once a resource
+has been handed on, its cleanup is somebody else's, but
+the entry is still registered. So acquire everything
+fallible first, commit afterwards, and let nothing
+fallible stand between the commit and the end of the
+block. Where that order cannot be had, the entry would
+have to be called off, and there is deliberately no way to
+do that — a construct for calling one off turned out to be
+bookkeeping for a question the block's exit already
+answers.
+The pattern this replaces is a flag and a conditional
+defer. That is linear rather than quadratic, so it was
+never about the number of lines. It is that forgetting to
+set a flag frees storage that is still in use, and under
+an arena, where free does nothing, the mistake is silent
+until somebody runs the same container on a real
+allocator.
 
 ### [1120] Checks may be switched off for a region, visibly
 
@@ -2563,49 +2608,6 @@ could otherwise be either a label or a value.
 end demo_flow
 
 ```
-
-### [1200] Because entries are registered where control reaches
-
-Because entries are registered where control reaches
-them, the triangular cleanup of several fallible
-acquisitions falls out of the order instead of being
-written: the first failing frees nothing, the second
-frees one, the third frees two.
-
-```landin
-new_buffers: (provider: type is mem.allocator,
-              inout state: provider, count: usize)
-             -> (first: mem.byte_buffer, second: mem.byte_buffer,
-                 third: mem.byte_buffer) ! mem.out_of_memory =
-    first = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, first)
-
-    second = try mem.new_bytes(state: state, count: count)
-    undo mem.drop_bytes(state, second)
-
-    third = try mem.new_bytes(state: state, count: count)
-    -- All three owners are published by the successful return.
-end new_buffers
-```
-
-And the discipline it asks for, which has to be said out
-loud: undo cleans up what is still yours. Once a resource
-has been handed on, its cleanup is somebody else's, but
-the entry is still registered. So acquire everything
-fallible first, commit afterwards, and let nothing
-fallible stand between the commit and the end of the
-block. Where that order cannot be had, the entry would
-have to be called off, and there is deliberately no way to
-do that — a construct for calling one off turned out to be
-bookkeeping for a question the block's exit already
-answers.
-The pattern this replaces is a flag and a conditional
-defer. That is linear rather than quadratic, so it was
-never about the number of lines. It is that forgetting to
-set a flag frees storage that is still in use, and under
-an arena, where free does nothing, the mistake is silent
-until somebody runs the same container on a real
-allocator.
 
 ### [1210] Pattern matching
 
