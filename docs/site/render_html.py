@@ -937,6 +937,11 @@ def render_sample(lines, hl, links):
 # --------------------------------------------------------------------------
 
 GUIDES = [
+    dict(key="documents", src="docs/documents.md", out="documents.html",
+         nav="how the documents are arranged", group="the language",
+         blurb="Where each kind of rule lives in the specification and the "
+               "tour, where a new one goes, and what the arrangement is "
+               "and is not evidence of."),
     dict(key="examples", src="examples.md", out="examples.html",
          nav="running examples", group="the language",
          blurb="Ten complete programs the compiler emits and the Linux gate "

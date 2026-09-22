@@ -58,6 +58,7 @@ LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
 ROADMAP = "ROADMAP.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
+                     "docs/documents.md",
                      "docs/environments.md",
                      "docs/ir.md",
                      "docs/targets.md",

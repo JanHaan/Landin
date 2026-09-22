@@ -30,10 +30,15 @@ said `all clean`.
 | what | why it is not simply done |
 |---|---|
 | The Cortex-M lane names `arm-none-eabi-gcc` 14.2.1, pinned through `environments/cortex-m/tools.lock.json`. The pinned publisher also ships `arm-eabi-gcc` 16.1.0, verified to build a valid image. | Adopting it is a two-major-version move that changes emitted firmware bytes and rebaselines every recorded Cortex-M hash and disassembly. It is a decision with an evidence cost, not a swap. |
-| `spec.md` and `tour.md` are organised by discovery order rather than by structure. | The rewrite is 0.2.1 work and wants the implementation frozen so equivalence can be shown. |
 
 ## Already resolved, kept until the move ends
 
+- `spec.md` and `tour.md` are organised by subject. The register became
+  fourteen subject sections, [1840] onward became a part of its own instead
+  of trailing the grammar, and two tour sections whose subjects had been
+  split apart were rejoined. Every one of the 443 units moved with its
+  content unchanged, and the grammar still derives the whole corpus; what
+  that does and does not demonstrate is in `docs/documents.md`.
 - The vendored code face was removed from all history; the thirty acceptance
   tags were re-issued with their content hashes intact.
 - `ci/publication-lock` was deleted: it served a publisher that no longer runs.
