@@ -205,28 +205,18 @@ NAMED_FILE_ALLOWLIST = frozenset((
     "llms.txt",
     "llms-primer.txt",
     "llms-full.txt",
-    #  The retired exact-revision acceptance.  ROADMAP.md records which
-    #  controller ran for which revision and docs/environments.md describes
-    #  the arrangement; those are statements about what happened, and they
-    #  stay true after the tree they name is gone.  A document may not name
-    #  a file that is not here, so the retired names are listed rather than
-    #  the rule weakened -- and when the roadmap is replaced, this list is
-    #  where the last references to scripts/ci are found.
+    #  The retired exact-revision acceptance.  docs/environments.md and the
+    #  environment guides describe the arrangement; those are statements
+    #  about what happened, and they stay true after the tree they name is
+    #  gone.  A document may not name a file that is not here, so the
+    #  retired names are listed rather than the rule weakened.  The first
+    #  roadmap named more of them; its text left the tree, and so did they.
     "scripts/ci/controller.py",
     "scripts/ci/darwin.py",
-    "scripts/ci/darwin_parity.py",
     "scripts/ci/policy.py",
     "scripts/ci/approval.py",
     "scripts/ci/publish.py",
     "scripts/ci/common.py",
-    "scripts/ci/job.py",
-    "scripts/ci/records.py",
-    "scripts/ci/resources.py",
-    "scripts/ci/darwin_scoped.py",
-    "scripts/ci/darwin_oracles_v3.py",
-    #  ROADMAP.md names this one without its directory, dozens of times,
-    #  in records of which policy a revision was accepted under.
-    "policy.py",
 ))
 
 STALE_BACKLOG_ALLOWLIST = {
