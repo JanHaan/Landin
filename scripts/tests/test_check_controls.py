@@ -292,9 +292,9 @@ HOSTED = ["compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md",
           #  existing too: the mapping may not cite evidence that is gone.
           "compiler/tests/fixtures/runtime",
           "compiler/tests/fixtures/negative",
-          #  And the roadmap, because the mapping is held to accounting
+          #  And the registers, because the mapping is held to accounting
           #  for prototype 4's W1-W7 findings.
-          "ROADMAP.md"]
+          "compiler/tests/registers.md"]
 
 
 class DebuggerContract(unittest.TestCase):

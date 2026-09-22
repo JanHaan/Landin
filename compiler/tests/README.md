@@ -11,6 +11,7 @@ compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
   harness-cases/malformed/               trees that must be rejected; see
                                          harness-cases/README.md
+  registers.md                           source: the four evidence registers the matrices are generated from
   constructs.matrix                      generated: every [NNNN], its evidence and inventory
   diagnostics.catalogue                  generated: every code and its rule
   diagnostics.matrix                     generated: code contracts, emitters and owners
@@ -34,9 +35,9 @@ row also gives the strongest claim per product target, read from fixture
 metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
 `driver/fixture.json`; every named refusal with its item and whether its note
 says the construct is pending, a recorded boundary, withdrawn or (since R7.20)
-transferred to a named successor; and ROADMAP.md
-R7.10's state, applicable targets, gaps and open owner, whose disposition there
-explains the row. A full `check.py` refuses a missing, stale, unowned or
+transferred to a named successor; and the state, applicable targets, gaps and
+open owner that [the construct inventory](registers.md#construct-inventory)
+records, whose disposition there explains the row. A full `check.py` refuses a missing, stale, unowned or
 unexplained row, and `scripts/tests/test_construct_inventory.py` proves each
 refusal fires. Regenerate it with `python3 check.py --matrix`.
 
@@ -739,7 +740,8 @@ has its implementation-side unit owner instead.
 
 `python3 check.py --coverage` writes `guarantees.matrix`,
 `conformances.matrix`, `prototypes.matrix` and `targets.matrix`. Their source
-registers are D148 in `spec.md` and R2.90 in `ROADMAP.md`. The checker closes
+registers are D148 in `spec.md` and the prototype registers in
+[`registers.md`](registers.md). The checker closes
 the guarantee rows over every construct the independent construct matrix says
 is accepted or emitted, validates every fixture, diagnostic, decision and
 prototype finding they cite, requires every fixture to name applicable targets,

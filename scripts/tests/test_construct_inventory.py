@@ -26,7 +26,7 @@ class Inventory(unittest.TestCase):
 
     def row(self, construct):
         prefix = "| `[%s]` |" % construct
-        text = self.inputs["roadmap"]
+        text = self.inputs["registers"]
         inventory = text[text.index(CHECK.INVENTORY_HEADING):]
         return next(line for line in inventory.splitlines()
                     if line.startswith(prefix))
@@ -47,8 +47,11 @@ class Inventory(unittest.TestCase):
         if live:
             inputs["roadmap"] += self.LIVE_HEADING
         for old, new in (replace or {}).items():
-            self.assertIn(old, inputs["roadmap"])
-            inputs["roadmap"] = inputs["roadmap"].replace(old, new, 1)
+            #  A row is edited where it lives, in the registers; anything
+            #  else the rules read, such as a status, is the roadmap's.
+            where = "registers" if old in inputs["registers"] else "roadmap"
+            self.assertIn(old, inputs[where])
+            inputs[where] = inputs[where].replace(old, new, 1)
         for key, change in changes.items():
             change(inputs[key])
         return [message for _, _, message in CHECK.inventory_problems(inputs)]
@@ -255,7 +258,7 @@ class Inventory(unittest.TestCase):
             "does not say what Companion tool and ecosystem owns")
 
     def test_compiled_hosted_rows_match_the_audited_register(self):
-        line = next(line for line in self.inputs["roadmap"].splitlines()
+        line = next(line for line in self.inputs["registers"].splitlines()
                     if line.startswith("| `[1730]` | `positive/range-subtypes`"))
         self.refused(self.problems({line + "\n": ""}),
                      "compiled hosted row [1730] has no audited compile-time oracle")

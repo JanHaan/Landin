@@ -56,6 +56,9 @@ LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
                   "prototype-3-containers.md",
                   "prototype-4-app.md"]
 ROADMAP = "ROADMAP.md"
+#  The evidence registers: what the compiler's evidence is, as opposed to
+#  what is left to do.  Four tables, read here and generated into matrices.
+REGISTERS = "compiler/tests/registers.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/documents.md",
@@ -68,6 +71,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "compiler/tests/driver/DERIVATION.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
+                     REGISTERS,
                      "compiler/tests/harness-cases/README.md",
                      "docs/site/README.md"]
 
@@ -3511,7 +3515,8 @@ TARGET_SCOPES = {"all": PRODUCT_TARGETS,
                  "hosted": ("linux-x86-64", "macos-arm64"),
                  "cortex-m": ("cortex-m",),
                  "none": ()}
-INVENTORY_HEADING = "#### Construct inventory"
+INVENTORY_HEADING = "## Construct inventory"
+HOSTED_COMPILE_TIME_HEADING = "## Hosted compile-time evidence"
 INVENTORY_COLUMNS = ("Construct", "State", "Targets", "Gaps", "Phase",
                      "Owner", "Disposition")
 INVENTORY_STATES = ("executed", "compiled", "deferred", "transferred",
@@ -3868,20 +3873,23 @@ def markdown_table(lines, heading, columns):
 
 
 def inventory_inputs():
-    """Everything R7.10's inventory is generated from, read once.
+    """Everything the construct inventory is generated from, read once.
 
-    The corpus, the compiler's named-refusal tables and ROADMAP.md, and
-    nothing kept by hand beside them: the tests feed altered copies of these
-    to `inventory_problems` to show each refusal fires.
+    The corpus, the compiler's named-refusal tables, the registers and the
+    roadmap's item statuses, and nothing kept by hand beside them: the tests
+    feed altered copies of these to `inventory_problems` to show each
+    refusal fires.
     """
     roadmap = os.path.join(ROOT, ROADMAP)
+    registers = os.path.join(ROOT, REGISTERS)
     titles = construct_titles()
     refusals = refusal_entries()
     targets = construct_target_evidence()
     if (titles is None or refusals is None or targets is None
-            or not os.path.exists(roadmap)):
+            or not os.path.exists(roadmap) or not os.path.exists(registers)):
         return None
     return {"roadmap": io.open(roadmap, encoding="utf-8").read(),
+            "registers": io.open(registers, encoding="utf-8").read(),
             "titles": titles,
             "paragraphs": construct_paragraphs(),
             "evidence": construct_evidence(),
@@ -3896,17 +3904,17 @@ def inventory_owners(value):
 def inventory_problems(inputs):
     """R7.10: no construct row is missing, unowned or unexplained.
 
-    The register in ROADMAP.md says what each row is and who owns what is
-    left of it; the corpus and the refusal tables say what is true.  Every
-    rule here holds the first to the second, so a row cannot stay put while
-    the evidence under it moves: a new fixture, a lost target, a refusal
-    that changes item, or an owner that completes all make it fail.
+    The inventory in the registers says what each row is and who owns what
+    is left of it; the corpus and the refusal tables say what is true.
+    Every rule here holds the first to the second, so a row cannot stay put
+    while the evidence under it moves: a new fixture, a lost target, a
+    refusal that changes item, or an owner that completes all make it fail.
     """
     text = inputs["roadmap"]
-    lines = text.splitlines()
+    lines = inputs["registers"].splitlines()
     rows = markdown_table(lines, INVENTORY_HEADING, INVENTORY_COLUMNS)
     if rows is None:
-        return [(ROADMAP, 1, "the construct inventory cannot be read")]
+        return [(REGISTERS, 1, "the construct inventory cannot be read")]
     statuses = dict(re.findall(r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
                                text, re.M))
     section = text.split("## Successor roadmaps\n", 1)
@@ -3921,7 +3929,7 @@ def inventory_problems(inputs):
     seen = {}
 
     def problem(line, message):
-        out.append((ROADMAP, line, message))
+        out.append((REGISTERS, line, message))
 
     for line, row in rows:
         found = re.fullmatch(r"`\[(\d{4})\]`", row["Construct"])
@@ -4056,7 +4064,7 @@ def inventory_problems(inputs):
 
     #  R4.90's audited compile-time rules are exactly the hosted rows that
     #  cannot execute; one register is not allowed to disagree with the other.
-    static = markdown_table(lines, "#### Hosted compile-time evidence",
+    static = markdown_table(lines, HOSTED_COMPILE_TIME_HEADING,
                             ("Construct", "Accepted", "Refused", "Rationale"))
     if static is None:
         problem(1, "the hosted compile-time register cannot be read")
@@ -4114,7 +4122,7 @@ def construct_matrix():
     refused = collections.defaultdict(set)
     for construct, item, wording, _, _ in inputs["refusals"]:
         refused[construct].add("%s:%s" % (item, wording))
-    rows = markdown_table(inputs["roadmap"].splitlines(), INVENTORY_HEADING,
+    rows = markdown_table(inputs["registers"].splitlines(), INVENTORY_HEADING,
                           INVENTORY_COLUMNS) or []
     inventory = {}
     for _, row in rows:
@@ -4145,8 +4153,9 @@ def construct_matrix():
             + [title]))
 
     lines = ["#  Generated by check.py from the fixture corpus, its target",
-             "#  records, the compiler's named-refusal tables and ROADMAP.md's",
-             "#  construct inventory.  Do not edit; regenerate with",
+             "#  records, the compiler's named-refusal tables and the",
+             "#  construct inventory in compiler/tests/registers.md.  Do not",
+             "#  edit; regenerate with",
              "#  python3 check.py --matrix.",
              "#",
              "#  Evidence is what the fixtures *say* they are about, out of",
@@ -4161,9 +4170,8 @@ def construct_matrix():
              "#  refused.  Refusals are item:pending, item:boundary,",
              "#  item:withdrawn or item:transferred, as their [1830] note",
              "#  says.  State, targets,",
-             "#  gaps and owner come from ROADMAP.md R7.10, whose",
-             "#  disposition column explains every row; see ROADMAP.md R1.90",
-             "#  and R7.10.",
+             "#  gaps and owner come from the inventory, whose",
+             "#  disposition column explains every row.",
              "#  %d constructs, %d with fixture evidence, %d with none."
              % (len(titles), len(titles) - bare, bare),
              "#  States: %s." % ", ".join(
@@ -4184,7 +4192,7 @@ def check_matrix(full_run):
 
     inputs = inventory_inputs()
     out = inventory_problems(inputs) if inputs is not None else [
-        (ROADMAP, 1, "the construct inventory's inputs cannot be read")]
+        (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
@@ -4368,7 +4376,7 @@ def prototype_scope_problems(prototypes, scopes, records):
             continue
         named = {one.strip("` ") for one in row["Targets"].split(",")}
         for target in sorted((named & set(PRODUCT_TARGETS)) - reached[scope]):
-            out.append((ROADMAP, line,
+            out.append((REGISTERS, line,
                         "%s claims %s and no derivation of it reaches that"
                         " target" % (scope, target)))
     return out
@@ -4388,7 +4396,7 @@ def prototype_result_problems(prototypes, records):
     out = []
     claims = fixture_target_claims()
     if claims is None:
-        return [(ROADMAP, 1, "the per-fixture target records cannot be read")]
+        return [(REGISTERS, 1, "the per-fixture target records cannot be read")]
     for line, row in prototypes:
         name = row["Fixture"].strip("`")
         if name not in records:
@@ -4398,23 +4406,23 @@ def prototype_result_problems(prototypes, records):
         for label, value in (("inputs", inputs), ("outputs", outputs),
                              ("target results", results)):
             if value == "-":
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "derivation %s records no %s" % (name, label)))
         if "MISSING" in outputs:
-            out.append((ROADMAP, line,
+            out.append((REGISTERS, line,
                         "derivation %s names an absent oracle file" % name))
         #  Every derivation but the firmware driver is one Landin program,
         #  and the driver's own sources are checked field by field below.
         if name.split("/")[0] != "firmware" and not fields.get("program"):
-            out.append((ROADMAP, line,
+            out.append((REGISTERS, line,
                         "derivation %s names no program" % name))
         if "synthetic-32" in results:
-            out.append((ROADMAP, line,
+            out.append((REGISTERS, line,
                         "synthetic-32 is not a product target result: " + name))
         named = {one.strip() for one in (fields.get("targets", "") or "").split(",")}
         for target in sorted((named & set(PRODUCT_TARGETS))
                              - set(claims.get(name, {}))):
-            out.append((ROADMAP, line,
+            out.append((REGISTERS, line,
                         "derivation %s claims %s and no record places it"
                         % (name, target)))
         if name.split("/")[0] == "firmware":
@@ -4454,25 +4462,25 @@ def conformance_rows():
 
 def prototype_rows():
     return markdown_register(
-        ROADMAP, "#### Prototype derivation coverage",
+        REGISTERS, "## Prototype derivation coverage",
         ("Fixture", "Prototype", "Findings", "Pressure"))
 
 
 def target_scope_rows():
     return markdown_register(
-        ROADMAP, "#### Target applicability coverage",
+        REGISTERS, "## Target applicability coverage",
         ("Scope", "Targets"))
 
 
 def construct_applicability_rows():
     """R7.10's inventory, adapted for the rules written before it existed."""
-    rows = markdown_register(ROADMAP, INVENTORY_HEADING, INVENTORY_COLUMNS)
+    rows = markdown_register(REGISTERS, INVENTORY_HEADING, INVENTORY_COLUMNS)
     return None if rows is None else inventory_applicability(rows)
 
 
 def hosted_compile_time_rows():
     return markdown_register(
-        ROADMAP, "#### Hosted compile-time evidence",
+        REGISTERS, HOSTED_COMPILE_TIME_HEADING,
         ("Construct", "Accepted", "Refused", "Rationale"))
 
 
@@ -4493,7 +4501,7 @@ def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
                 and status != "complete"):
             out.append((ROADMAP, 1, "R4.90 cannot close before " + key))
     if applicability is None or static_rows is None:
-        return out + [(ROADMAP, 1, "R4.90 parity registers cannot be read")]
+        return out + [(REGISTERS, 1, "R4.90 parity registers cannot be read")]
 
     def names(field):
         return {value.strip() for value in field.split(",") if value.strip()}
@@ -4511,7 +4519,7 @@ def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
     for line, row in static_rows:
         key = row["Construct"]
         if key not in hosted or key in exceptions or not row["Rationale"]:
-            out.append((ROADMAP, line, "invalid hosted compile-time row " + key))
+            out.append((REGISTERS, line, "invalid hosted compile-time row " + key))
         exceptions.add(key)
         construct = key.strip("`[]")
         cited = []
@@ -4522,24 +4530,24 @@ def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
             cited += found
             if value != "none" and (not found or
                     any(not witness(name, construct, kinds) for name in found)):
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             key + " has invalid " + field.lower() + " evidence"))
         if not cited:
-            out.append((ROADMAP, line, key + " has no compile-time oracle"))
+            out.append((REGISTERS, line, key + " has no compile-time oracle"))
 
     for line, row in applicability:
         key = row["Construct"]
         if row["Applicability"] == "later-r4":
-            out.append((ROADMAP, line, "R4.90 leaves later-r4 work: " + key))
+            out.append((REGISTERS, line, "R4.90 leaves later-r4 work: " + key))
         elif key in hosted:
             owner = row["Owner"].strip("`")
             if statuses.get(owner) != "complete":
-                out.append((ROADMAP, line, key + " has unfinished owner " + owner))
+                out.append((REGISTERS, line, key + " has unfinished owner " + owner))
             if key not in exceptions:
                 construct = key.strip("`[]")
                 if not any(witness(name, construct, {"runtime", "abi"})
                            for name in fixtures):
-                    out.append((ROADMAP, line,
+                    out.append((REGISTERS, line,
                                 key + " has no Linux runtime/ABI program oracle"))
     return out
 
@@ -4587,7 +4595,8 @@ def coverage_dumps():
                        "3": ("prototype-3-containers.md", "Z"),
                        "4": ("prototype-4-app.md", "W")}
     records = prototype_evidence_records()
-    p_lines = ["# Generated by check.py from ROADMAP.md's R2.90 register,",
+    p_lines = ["# Generated by check.py from the prototype derivation register",
+               "# in compiler/tests/registers.md,",
                "# each fixture's own record and its targets' retained",
                "# results.  Do not edit; regenerate with",
                "# python3 check.py --coverage.",
@@ -4598,8 +4607,7 @@ def coverage_dumps():
                "#  results from the same per-fixture target records the",
                "#  construct inventory reads.  targets stays an",
                "#  applicability claim; results names product targets only,",
-               "#  so synthetic-32 never appears there.  See ROADMAP.md",
-               "#  R2.90 and R7.60.",
+               "#  so synthetic-32 never appears there.",
                "# fixture | prototype | finding source lines | constructs "
                "| inputs | outputs | targets | results | pressure"]
     for _, row in prototypes:
@@ -4622,7 +4630,8 @@ def coverage_dumps():
                                    row["Pressure"])))
 
     t_lines = ["# Generated by check.py from every fixture's metadata and",
-               "# ROADMAP.md's prototype applicability.  Do not edit;",
+               "# the prototype applicability in compiler/tests/registers.md.",
+               "# Do not edit;",
                "# regenerate with python3 check.py --coverage.",
                "# scope | targets"]
     for _, row in scopes:
@@ -4676,7 +4685,7 @@ def check_coverage_registers(full_run):
     #  completeness, owners and evidence are check_matrix's.  What R4.10
     #  itself promised still holds: no refusal may name it as enabling work.
     if applicability is None:
-        out.append((ROADMAP, 1, "the construct inventory cannot be read"))
+        out.append((REGISTERS, 1, "the construct inventory cannot be read"))
     if r410_status is None:
         out.append((ROADMAP, 1, "R4.10 has no readable status"))
     elif r410_status != "active":
@@ -4877,7 +4886,7 @@ def check_coverage_registers(full_run):
                        "3": ("prototype-3-containers.md", "Z"),
                        "4": ("prototype-4-app.md", "W")}
     if prototypes is None:
-        out.append((ROADMAP, 1, "the prototype derivation register is absent"))
+        out.append((REGISTERS, 1, "the prototype derivation register is absent"))
     else:
         seen = set()
         for line, row in prototypes:
@@ -4885,41 +4894,41 @@ def check_coverage_registers(full_run):
             number = row["Prototype"].strip("`Pp ")
             identity = (fixture, number)
             if identity in seen:
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "prototype fixture %s is listed twice for P%s"
                             % (fixture, number)))
             seen.add(identity)
             if fixture not in fixtures:
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "prototype derivation names missing fixture %s"
                             % fixture))
             elif (fixture != "firmware/derived-driver" and
                   fixture.split("/", 1)[0] not in ("runtime", "abi", "negative")):
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "%s is not a complete or negative derivation"
                             % fixture))
             else:
                 fields = fixtures[fixture][1]
                 if not fields.get("constructs"):
-                    out.append((ROADMAP, line,
+                    out.append((REGISTERS, line,
                                 "%s names no implemented constructs"
                                 % fixture))
                 if not fields.get("targets"):
-                    out.append((ROADMAP, line,
+                    out.append((REGISTERS, line,
                                 "%s names no target applicability" % fixture))
             source, letter = finding_sources.get(number, (None, None))
             if source is None:
-                out.append((ROADMAP, line, "unknown prototype %s" % number))
+                out.append((REGISTERS, line, "unknown prototype %s" % number))
                 continue
             text = io.open(os.path.join(ROOT, source), encoding="utf-8").read()
             findings = re.findall(r"[XYZW]\d+", row["Findings"])
             if not findings:
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "%s names no prototype finding" % fixture))
             for finding in findings:
                 if not finding.startswith(letter) or not re.search(
                         r"^%s\b" % finding, text, re.M):
-                    out.append((ROADMAP, line,
+                    out.append((REGISTERS, line,
                                 "%s is not a finding in %s" %
                                 (finding, source)))
         #  R7.60's exit clause: the same rows also carry inputs, outputs and
@@ -4930,26 +4939,26 @@ def check_coverage_registers(full_run):
     firmware = fixtures["firmware/derived-driver"][1]
     for field in ("source", "protocol", "layout", "driver", "mapping", "runner"):
         if not os.path.isfile(os.path.join(ROOT, firmware.get(field, ""))):
-            out.append((ROADMAP, 1, "driver derivation lacks " + field))
+            out.append((REGISTERS, 1, "driver derivation lacks " + field))
     mandatory = io.open(os.path.join(ROOT, "environments/cortex-m/run.py"),
                         encoding="utf-8").read()
     if "driver_execute(self, refine)" not in mandatory:
-        out.append((ROADMAP, 1, "driver evidence is not in the mandatory lane"))
+        out.append((REGISTERS, 1, "driver evidence is not in the mandatory lane"))
     if "evidence_execute(self, refine)" not in mandatory:
-        out.append((ROADMAP, 1, "freestanding closure evidence is not in the mandatory lane"))
+        out.append((REGISTERS, 1, "freestanding closure evidence is not in the mandatory lane"))
     for evidence in ("environments/cortex-m/evidence.py",
                      "environments/cortex-m/source_debug.py",
                      "environments/cortex-m/resources.py",
                      "environments/cortex-m/stack_control.py",
                      "scripts/cortex_debug.py"):
         if not os.path.isfile(os.path.join(ROOT, evidence)):
-            out.append((ROADMAP, 1, "freestanding closure lacks " + evidence))
+            out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
     known_targets = {"linux-x86-64", "macos-arm64", "cortex-m",
                      "synthetic-32"}
     if scopes is None:
-        out.append((ROADMAP, 1, "the target applicability register is absent"))
+        out.append((REGISTERS, 1, "the target applicability register is absent"))
     else:
         wanted_scopes = {"prototype-1", "prototype-2", "prototype-3",
                          "prototype-4"}
@@ -4957,21 +4966,21 @@ def check_coverage_registers(full_run):
         for line, row in scopes:
             scope = row["Scope"].strip("`")
             if scope in got_scopes:
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "duplicate target applicability scope %s" % scope))
             got_scopes.add(scope)
             named = {one.strip("` ") for one in row["Targets"].split(",")}
             if not named or "" in named:
-                out.append((ROADMAP, line, "%s names no target" % scope))
+                out.append((REGISTERS, line, "%s names no target" % scope))
             for target in sorted(named - known_targets):
-                out.append((ROADMAP, line,
+                out.append((REGISTERS, line,
                             "%s names unknown target %s" % (scope, target)))
             allowed |= named
         for scope in sorted(got_scopes - wanted_scopes):
-            out.append((ROADMAP, 1,
+            out.append((REGISTERS, 1,
                         "unknown target applicability scope %s" % scope))
         for scope in sorted(wanted_scopes - got_scopes):
-            out.append((ROADMAP, 1, "%s has no target applicability row"
+            out.append((REGISTERS, 1, "%s has no target applicability row"
                         % scope))
         for name, (meta, fields) in fixtures.items():
             targets = fields.get("targets", "")
@@ -6427,7 +6436,7 @@ def check_hosted_derivation(full_run):
     if (len(application) != 1 or
             set(re.findall(r"W\d+", application[0]["Findings"])) !=
             {"W" + str(n) for n in range(1, 8)}):
-        out.append((ROADMAP, 1, "complete hosted derivation must account for W1-W7"))
+        out.append((REGISTERS, 1, "complete hosted derivation must account for W1-W7"))
     return out
 
 

@@ -1019,6 +1019,11 @@ GUIDES = [
          nav="the fixtures", group="the implementation",
          blurb="The test format that has to outlive the implementation "
                "currently checking it."),
+    dict(key="registers", src="compiler/tests/registers.md",
+         out="registers.html",
+         nav="the evidence registers", group="the implementation",
+         blurb="Every construct's state, targets and owner, and every "
+               "prototype derivation, held to the corpus by check.py."),
     dict(key="harness", src="compiler/tests/harness-cases/README.md",
          out="harness-cases.html",
          nav="the malformed cases", group="the implementation",
