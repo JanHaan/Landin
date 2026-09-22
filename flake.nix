@@ -66,13 +66,33 @@
           #  Stated once, in README.md's status line, the same string
           #  docs/site/render_html.py holds the page to.  A version written
           #  twice is a version that drifts.
+          #
+          #  Matched one LINE at a time, never the whole file.  The first
+          #  version wrapped `(.|\n)*` around the pattern and ran it over
+          #  thirty thousand characters; builtins.match backtracks, and an
+          #  alternation-based any-character star on that much text does
+          #  not finish.  It pegged one core for twenty minutes producing
+          #  nothing, and it is what made `nix run` on this flake appear
+          #  to hang.
           specification =
             let
-              found = builtins.match
-                "(.|\n)*specification ([0-9]+\\.[0-9]+\\.[0-9]+)(.|\n)*"
-                (builtins.readFile ./README.md);
+              status = lib.findFirst (
+                line: lib.hasPrefix "**Status: specification " line
+              ) null (lib.splitString "\n" (builtins.readFile ./README.md));
+              found =
+                if status == null then
+                  null
+                else
+                  builtins.match "[^0-9]*([0-9]+\\.[0-9]+\\.[0-9]+).*" status;
             in
-            if found == null then "0" else builtins.elemAt found 1;
+            if found == null then "0" else builtins.head found;
+
+          releaseHashes = {
+            x86_64-linux =
+              "5172ecd9320f84f14e886315ed3a56d5e757db609d52ea712b494bb1715804cb";
+            aarch64-darwin =
+              "d78fb5f283d82cdc5c5307d4055d2c6754b2dc9e881fdb9ba34a337e8651ea5d";
+          };
 
           releases = pin "LANDIN_RELEASES";
           gnatVersion = pin "LANDIN_GNAT_VERSION";
@@ -209,6 +229,72 @@
             });
         in
         {
+          #  The published compiler, fetched rather than built.
+          #
+          #  Building from source means building the pinned toolchain
+          #  first: 383 MB of GNAT to unpack and patch before a line of
+          #  Ada compiles, which is where the hour went when this was
+          #  first tried.  This fetches a 17 MB archive instead, verified
+          #  against the sha256 the release workflow published beside it
+          #  -- the same thing environments/pins.sh does with the
+          #  toolchain, and the same refusal on mismatch.
+          #
+          #  The hashes are recorded by hand after a release, from the
+          #  publish job's log.  That is the same dance pins.sh asks for,
+          #  and it is deliberate: a hash nobody wrote down is a download
+          #  nobody checked.
+
+          refineBin = pkgs.stdenvNoCC.mkDerivation {
+            pname = "landin-bin";
+            version = specification;
+
+            src = pkgs.fetchurl {
+              url =
+                "https://github.com/JanHaan/Landin/releases/download/"
+                + "v${specification}/landin-${specification}-${system}.tar.gz";
+              sha256 = releaseHashes.${system};
+            };
+
+            sourceRoot = ".";
+
+            #  The Linux asset is built against the runner's glibc and has
+            #  no idea the nix store exists, so its interpreter and library
+            #  paths are rewritten the same way the toolchain archives are.
+            nativeBuildInputs =
+              [ pkgs.makeWrapper ]
+              ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                pkgs.autoPatchelfHook
+              ];
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              (lib.getLib pkgs.stdenv.cc.cc)
+            ];
+
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 refine "$out/bin/refine"
+            ''
+            + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+              #  refine names its driver by GNU triplet and deliberately
+              #  will not fall back to a bare gcc, so the name it asks for
+              #  has to exist.  On Darwin it asks for /usr/bin/clang, which
+              #  the host already has.
+              mkdir -p "$out/libexec/landin"
+              ln -s "${pkgs.stdenv.cc}/bin/cc" \
+                "$out/libexec/landin/x86_64-pc-linux-gnu-gcc"
+              wrapProgram "$out/bin/refine" \
+                --prefix PATH : "$out/libexec/landin"
+            ''
+            + ''
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "The Landin bootstrap compiler, prebuilt";
+              homepage = "https://www.701.dev";
+              mainProgram = "refine";
+            };
+          };
+
           #  The compiler itself, so a project can take Landin as a flake
           #  input instead of cloning this repository and running a build
           #  script.  Release mode: a consumer wants the compiler, not its
@@ -322,8 +408,13 @@
 
       packages = builtins.mapAttrs (
         _: built: {
+          #  The source build is the default, because `nix build` on a
+          #  repository is expected to build it.  refine-bin is the fast
+          #  path for a consumer who wants the compiler rather than the
+          #  toolchain that made it.
           default = built.refine;
           inherit (built) refine;
+          refine-bin = built.refineBin;
         }
       ) perSystem;
     };
