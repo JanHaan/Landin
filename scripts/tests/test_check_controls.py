@@ -315,5 +315,55 @@ class CodeRules(unittest.TestCase):
         self.assertEqual(self.said("mut cursor: ptr u32 = addr first\n"), [])
 
 
+GRAMMAR = ["spec.md", "compiler/tests/fixtures",
+           "compiler/tests/lexical.tokens",
+           "compiler/ada/src/syntax", "compiler/ada/src/diagnostics"]
+
+
+class GrammarCorpus(unittest.TestCase):
+    """The specification's grammar derives every positive fixture.
+
+    This is a SECOND implementation on purpose, and the reason it cannot
+    be replaced by running refine: the Ada parser meets the same corpus
+    from the other side, and a disagreement between the two locates a
+    defect in one of them.  Deriving with the compiler instead would
+    collapse two witnesses into one and check the parser against itself.
+    """
+
+    def test_the_real_grammar_and_corpus_agree(self):
+        self.assertEqual(
+            faults(checker.check_grammar_corpus, copied=GRAMMAR), [])
+
+    def test_a_missing_specification_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_grammar_corpus, copied=GRAMMAR[1:])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_positive_fixture_the_grammar_cannot_derive_is_reported(self):
+        from check_controls import tree
+        with tree(copied=GRAMMAR) as root:
+            invented = root / "compiler/tests/fixtures/positive/invented-shape"
+            invented.mkdir(parents=True)
+            (invented / "program.ldn").write_text(
+                "%%% this is not Landin %%%\n")
+            (invented / "fixture.meta").write_text(
+                "class: positive\nsummary: invented\nprogram: program.ldn\n")
+            said = [why for _, _, why in checker.check_grammar_corpus(True)]
+        self.assertTrue(said)
+
+    def test_a_grammar_rule_nothing_reaches_is_reported(self):
+        #  Every rule must be defined and reachable: an unreachable
+        #  production is grammar nobody can be held to.
+        from check_controls import tree
+        with tree(copied=GRAMMAR) as root:
+            spec = root / "spec.md"
+            spec.write_text(spec.read_text().replace(
+                "```landin-grammar\nprogram",
+                "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
+                1))
+            said = [why for _, _, why in checker.check_grammar_corpus(True)]
+        self.assertTrue(said)
+
+
 if __name__ == "__main__":
     unittest.main()
