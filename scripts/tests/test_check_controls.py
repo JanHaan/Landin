@@ -677,5 +677,61 @@ class NativeEnvironment(unittest.TestCase):
                             for why in said))
 
 
+#  check.py is in the list because the roadmap test scripts this check
+#  drives import it, which is the widest reach of any check here.
+ROADMAP_INPUTS = ["ROADMAP.md", "scripts", "check.py", "spec.md",
+                  "tour.md", "compiler/tests",
+                  "compiler/ada/src"] + list(checker.LIVE_DOCS)
+
+
+class RoadmapStructure(unittest.TestCase):
+    """The checks that hold ROADMAP.md's own shape.
+
+    These retire with the roadmap they describe, and have no successor
+    until the replacement exists. Controlled meanwhile because they are
+    live: a roadmap that stops saying what it decided against, or a
+    document that points at the retired work authority, still fails here.
+    """
+
+    def test_the_real_roadmap_passes(self):
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            self.assertEqual(
+                list(checker.check_roadmap(str(root / "ROADMAP.md"))), [])
+
+    def test_the_structural_checks_pass(self):
+        #  check_phase_handoff is absent deliberately. It drives the
+        #  roadmap test scripts, which run the whole of check.py, so its
+        #  input surface is the repository and a control over it would be
+        #  a second full run rather than a statement about one property.
+        #  It retires with the roadmap; MOVING.md records it.
+        for check in (checker.check_project_status,
+                      checker.check_register_entries):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=ROADMAP_INPUTS), [])
+
+    def test_a_status_line_the_roadmap_does_not_carry_is_reported(self):
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            target = root / "ROADMAP.md"
+            target.write_text(target.read_text().replace(
+                "Status: complete", "Status: invented", 1))
+            said = list(checker.check_roadmap(str(target)))
+        self.assertTrue(said)
+
+    def test_a_live_document_naming_the_retired_authority_is_reported(self):
+        #  BACKLOG.md is allowlisted as a name so the documents can refuse
+        #  it; pointing at it as an authority is the fault.
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS + list(checker.LIVE_DOCS)) as root:
+            target = root / "README.md"
+            target.write_text(target.read_text()
+                              + "\nSee BACKLOG.md for open work.\n")
+            said = [why for _, _, why
+                    in checker.check_stale_backlog(
+                        list(checker.LIVE_DOCS), True)]
+        self.assertTrue(said)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 from unittest.mock import patch
 
@@ -59,10 +60,18 @@ def tree(written=None, copied=()):
                 target.write_text(content, encoding="utf-8")
         here = os.getcwd()
         os.chdir(tmp)
+        #  On the path too: some checks import the repository's own
+        #  modules by package, and would otherwise reach the real ones
+        #  beside this file rather than the copies under test.
+        sys.path.insert(0, tmp)
         try:
             with patch.object(checker, "ROOT", tmp):
                 yield root
         finally:
+            sys.path.remove(tmp)
+            for name in [n for n in sys.modules
+                         if n == "scripts" or n.startswith("scripts.")]:
+                del sys.modules[name]
             os.chdir(here)
 
 
