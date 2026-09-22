@@ -101,8 +101,11 @@ jobs:
         run: |
           set -eu
           tag='${{ inputs.tag || github.ref_name }}'
-          gh release view "$tag" >/dev/null 2>&1 \
-            || gh release create "$tag" --verify-tag --title "Landin $tag" \
-                 --notes "The \`refine\` compiler, built from $tag by \
-.github/workflows/release.yml. Verify against the .sha256 beside each asset."
+          notes="The refine compiler, built from $tag by the release"
+          notes="$notes workflow. Verify each asset against the .sha256"
+          notes="$notes published beside it."
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --verify-tag \
+              --title "Landin $tag" --notes "$notes"
+          fi
           gh release upload "$tag" assets/* --clobber
