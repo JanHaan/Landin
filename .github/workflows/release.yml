@@ -42,10 +42,22 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      #  Inlined rather than using .github/actions/pinned-toolchain, which
+      #  the other workflows share. This one checks out a TAG, and a tag
+      #  older than the action does not contain it -- v0.2.0 does not, and
+      #  the first attempt failed on exactly that. environments/pins.sh has
+      #  been there far longer, so reading it directly is what lets this
+      #  build a release from a tree that predates the infrastructure.
       - name: Install the pinned toolchain
-        uses: ./.github/actions/pinned-toolchain
-        with:
-          platform: ${{ matrix.platform }}
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          landin_install_toolchain "$HOME/landin-toolchain" '${{ matrix.platform }}'
+          {
+            echo "LANDIN_GNAT_HOME=$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION"
+            echo "LANDIN_GPRBUILD_HOME=$HOME/landin-toolchain/gprbuild-$LANDIN_GPRBUILD_VERSION"
+          } >> "$GITHUB_ENV"
+          "$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION/bin/gnat" --version | head -1
 
       #  Release mode: a consumer wants the compiler, not its assertions.
       - name: Build refine
