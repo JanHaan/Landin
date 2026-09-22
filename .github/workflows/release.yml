@@ -1,0 +1,108 @@
+#  Publish `refine` for the platforms the pins carry a checksum for.
+#
+#  A consuming project should not have to build a compiler to use one, and
+#  should not have to fetch a 383 MB toolchain to get a 20 MB program. The
+#  flake's source build stays what it is; this is the fast path beside it.
+#
+#  Assets are named and hashed the way environments/pins.sh names and
+#  hashes the toolchain it fetches, because that is the pattern this
+#  repository already trusts: fetch a prebuilt archive, verify it against
+#  a recorded sha256, refuse on mismatch.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing tag to publish assets for.
+        required: true
+        default: v0.2.0
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: x86_64-linux
+            build: linux-amd64
+          - runner: macos-15
+            platform: aarch64-darwin
+            build: darwin-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: ${{ matrix.platform }}
+
+      #  Release mode: a consumer wants the compiler, not its assertions.
+      - name: Build refine
+        env:
+          LANDIN_BUILD_MODE: release
+        run: ./scripts/build.sh -j4
+
+      - name: Package it
+        id: package
+        env:
+          LANDIN_BUILD_MODE: release
+        run: |
+          set -eu
+          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          asset="landin-$version-${{ matrix.platform }}.tar.gz"
+          binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
+          test -x "$binary"
+          #  Deterministic: no timestamps, no owner, sorted.
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+              -czf "$asset" -C "$(dirname "$binary")" refine
+          sum=$(shasum -a 256 "$asset" | cut -d' ' -f1)
+          echo "$sum  $asset"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sum"  >> "$GITHUB_OUTPUT"
+          printf '%s  %s\n' "$sum" "$asset" > "$asset.sha256"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.platform }}
+          path: |
+            ${{ steps.package.outputs.asset }}
+            ${{ steps.package.outputs.asset }}.sha256
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v6
+        with:
+          path: assets
+          merge-multiple: true
+
+      #  The checksums go in the log as well as beside the assets, because
+      #  the flake records them by hand and this is where they are read.
+      - name: What was built
+        run: |
+          cd assets && ls -l && cat ./*.sha256
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag='${{ inputs.tag || github.ref_name }}'
+          gh release view "$tag" >/dev/null 2>&1 \
+            || gh release create "$tag" --verify-tag --title "Landin $tag" \
+                 --notes "The \`refine\` compiler, built from $tag by \
+.github/workflows/release.yml. Verify against the .sha256 beside each asset."
+          gh release upload "$tag" assets/* --clobber
