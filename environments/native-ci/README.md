@@ -3,8 +3,9 @@
 > **Retired.** This describes the exact-revision gate that approved every
 > revision through 0.2.0. Nothing submits it now and no revision is accepted;
 > `scripts/ci/` is retained but dead. Kept because it is the operational
-> record of how those approvals were produced, and because the replacement
-> gate is not designed yet. See [`MOVING.md`](../../MOVING.md).
+> record of how those approvals were produced. `.github/workflows/gate.yml`
+> is the smaller gate that replaced it, and [`ROADMAP.md`](../../ROADMAP.md)
+> schedules the rest.
 
 `ROADMAP.md` R0.70 owns this environment. `scripts/ci/policy.json` is the
 canonical acceptance job list; `scripts/ci/common.py` independently requires

@@ -90,8 +90,9 @@ identifies the scope; compiler units, diagnostics and the complete IR golden
 remain included.
 The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
-acceptance ran the complete suite in both modes. Nothing runs either now; see
-[`MOVING.md`](../../MOVING.md). See
+acceptance ran the complete suite in both modes. Nothing runs either now:
+`.github/workflows/gate.yml` runs the complete suite in debug mode on Linux,
+and [`ROADMAP.md`](../../ROADMAP.md) schedules the rest. See
 [`docs/process.md`](../../docs/process.md).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
@@ -395,8 +396,8 @@ test $? -eq 42
 ```
 
 Each program returns 42 when its result is the expected one. They are runtime
-fixtures as well as examples. The authoritative Linux gate that compiled, ran
-and checked all ten is retired; see [`MOVING.md`](../../MOVING.md).
+fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
+checks all ten on every push.
 
 The test program validates its complete suite-name inventory before any
 selected or complete run. It rejects missing and unlisted suites separately

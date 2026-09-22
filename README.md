@@ -87,12 +87,13 @@ Canonical hosting is **<https://github.com/JanHaan/Landin>**. git.sr.ht is a
 mirror, kept in step by a second push URL on the same remote rather than by a
 job.
 
-There is no mechanical gate at present. The exact-revision native acceptance
-that approved every revision through 0.2.0 was retired with SourceHut, and its
-replacement is not designed yet; [`MOVING.md`](MOVING.md) records that and what
-else the move left open. `.github/workflows/determinism.yml` checks that every
-host emits the same bytes and `.github/workflows/pages.yml` publishes
-<https://www.701.dev>; neither runs a compiler test.
+The exact-revision native acceptance that approved every revision through
+0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it with
+a smaller gate, the document checks and the complete corpus on Linux x86-64 in
+debug mode, and [`ROADMAP.md`](ROADMAP.md) schedules the targets it does not
+run yet. `.github/workflows/determinism.yml` checks that every host emits the
+same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>;
+neither runs a compiler test.
 `environments/native-ci/README.md` describes the retired arrangement. To
 render:
 

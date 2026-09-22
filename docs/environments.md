@@ -2,9 +2,10 @@
 
 `ROADMAP.md` R0.70 owns this document. Canonical hosting is GitHub; git.sr.ht
 is a mirror. The exact-revision native acceptance described below approved
-every revision through 0.2.0 and no longer runs; see [`MOVING.md`](../MOVING.md)
-for what replaces it, which is so far nothing. Historical SourceHut gate
-results below keep their original meaning.
+every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
+is what runs now, a smaller gate on Linux, and [`ROADMAP.md`](../ROADMAP.md)
+schedules the targets it does not run yet. Historical SourceHut gate results
+below keep their original meaning.
 
 
 Native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`

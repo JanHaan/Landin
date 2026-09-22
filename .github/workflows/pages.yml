@@ -1,9 +1,8 @@
 #  Publish the reading copies at https://www.701.dev.
 #
 #  This is not a gate.  It renders the documents, verifies that the render
-#  dropped nothing, and deploys; it runs no compiler test.  The mechanical
-#  gate that replaces native acceptance is a separate workflow and is not
-#  in place yet.
+#  dropped nothing, and deploys; it runs no compiler test.  The gate is
+#  gate.yml.
 #
 #  The licensed code face is not in this repository and never will be:
 #  MonoLisa's EULA licenses it to one licensee and forbids supplying the

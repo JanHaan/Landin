@@ -443,7 +443,7 @@ python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --ou
 Filtered commands are development feedback. The retired exact-revision native
 acceptance ran the complete mandatory path and exported
 `artifacts/cortex-m/backend` with all prior evidence; nothing runs it now, and
-[`MOVING.md`](../../MOVING.md) records that. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
+[`ROADMAP.md`](../../ROADMAP.md) schedules these lanes into the gate. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
 records instruction, allocation, ABI, runtime-helper and memory decisions.
 R6.60 owns language startup/linking/sections/interrupt/naked/inline-assembly
 surfaces; R6.70 freestanding core/noreturn; R6.80 checked-in device fixtures;

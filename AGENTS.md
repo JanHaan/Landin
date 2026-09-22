@@ -89,7 +89,7 @@ The gate is deliberately small and is **not** the retired acceptance. It is
 Linux only and debug only: no Darwin, no Cortex-M execution, no debugger, no
 bindings, no release mode, and no retained evidence. Green means the compiler
 builds and the corpus passes on one host in one mode — nothing about the
-other two targets. `MOVING.md` records what a fuller gate still owes.
+other two targets. `ROADMAP.md` schedules the fuller gate.
 
 Three more workflows run on a push. `determinism.yml` requires every host in
 its matrix to emit the same bytes; it emits and hashes but never assembles,
@@ -131,8 +131,7 @@ run yourself; the dedicated native runner is gone. Darwin runtime and LLDB
 evidence runs natively on the Mac and nothing automates it, so a Darwin claim
 needs a Mac run behind it. R5.10's retained expected-refusal transcript is
 historical bootstrap evidence, never a current success rule.
-`docs/process.md` explains the workflow; `MOVING.md` owns what the move left
-open.
+`docs/process.md` explains the workflow.
 
 `scripts/test.sh` builds and runs the complete Linux test program on native
 Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
