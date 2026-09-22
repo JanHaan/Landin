@@ -233,6 +233,9 @@ NAMED_FILE_ALLOWLIST = frozenset((
     "og.png",
     "icon-mono.svg",
     "apple-touch-icon.png",
+    "llms.txt",
+    "llms-primer.txt",
+    "llms-full.txt",
     #  The retired exact-revision acceptance.  ROADMAP.md records which
     #  controller ran for which revision and docs/environments.md describes
     #  the arrangement; those are statements about what happened, and they

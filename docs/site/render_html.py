@@ -108,6 +108,14 @@ import landin_icon  # noqa: E402
 import icons  # noqa: E402
 import fonts  # noqa: E402
 
+#  Nor are the two files an agent asks for.  They are a reading of the
+#  grammar, the compiler's refusal tables and the catalogue rather than
+#  anything about a page, so they live beside this and not inside it.
+
+sys.path.insert(0, str(HERE))
+
+import llms  # noqa: E402
+
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
 #  one: a page that is mailed, or opened from disk, keeps its mark.
@@ -2314,6 +2322,9 @@ def main(argv):
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
+        for name in llms.write(SITE, source, DOCS + GUIDES, SITE_URL):
+            print(f"{SITE.name}/{name}"
+                  f"{(SITE / name).stat().st_size / 1024:>10.0f} KB")
         front = ([("the pitch", " ".join(intro)), ("the status", status)]
                  + [(f'roadmap {item["key"]}', item["title"])
                     for item in (progress["recent"]
