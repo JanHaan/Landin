@@ -18,11 +18,16 @@
 #  the compiler on Linux and runs the two things that fail loudly when the
 #  language moves. MOVING.md records what a real gate still owes.
 #
-#  Two jobs, because the first measurement was lopsided: check.py and the
-#  build together take two and a half minutes, and the 741-case corpus
-#  takes fifty-nine. Waiting an hour for a verdict on a typo is how a gate
-#  stops being read. `fast` is the signal to watch; `corpus` runs beside it
-#  on the same push and nothing is skipped.
+#  Two jobs, because the first measurement was lopsided: check.py takes a
+#  minute and the 741-case corpus takes the rest of the hour. Waiting an
+#  hour for a verdict on a typo is how a gate stops being read.
+#
+#  They share nothing, which is the point. check.py needs neither the
+#  pinned toolchain nor a built compiler -- it reads documents, the grammar
+#  and the transcription tables -- so `documents` installs nothing and
+#  waits for nothing, and the compiler is built exactly once, in the job
+#  that uses it. A compile error still surfaces about two minutes into
+#  `compiler`, because the build is its first real step.
 
 name: gate
 
@@ -36,29 +41,25 @@ permissions:
   contents: read
 
 jobs:
-  #  Documents, grammar, transcription tables, and that the compiler still
-  #  builds. Two and a half minutes, so it is the one worth waiting for.
-  fast:
+  #  Documents, grammar and the transcription tables. Nothing to install
+  #  and nothing to build, so this is the fastest verdict available and it
+  #  cannot be held up by the compiler.
+  #
+  #  The licensed face is not fetched: check_fonts reports its coverage as
+  #  not checked rather than failing, and pages.yml refuses to publish
+  #  without it, so the coverage stays enforced where it matters and this
+  #  job stays independent of the object storage.
+  documents:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install the pinned toolchain
-        uses: ./.github/actions/pinned-toolchain
-
-      #  The licensed face is not fetched here: check_fonts reports its
-      #  coverage as not checked rather than failing, and pages.yml refuses
-      #  to publish without it, so the coverage stays enforced where it
-      #  matters and this job stays independent of the object storage.
       - name: check.py
         run: python3 check.py
 
-      - name: Build refine
-        run: ./scripts/build.sh -j4
-
-  #  All 741 cases. Slow, and running beside `fast` rather than in front of
-  #  it, so a green corpus is still required on every push.
-  corpus:
+  #  The compiler and all 741 cases. scripts/test.sh builds first, so this
+  #  is also where a compile error is reported.
+  compiler:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -67,13 +68,19 @@ jobs:
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      #  Two cases in this suite spawn refine, the assembler, the linker
-      #  and the produced program once per fixture and profile, and were
-      #  eighty-one per cent of the run. They now run across workers,
-      #  which on this runner's four cores takes the corpus from about an
-      #  hour to about twenty-five minutes. The default stays at one job:
-      #  this is the path CI exercises on every push, and flipping the
-      #  default wants mileage rather than one good measurement.
-      #  scripts/parallel-equivalence.sh is the guard.
+      #  The corpus is 2,494 compile-assemble-link-execute cycles over 544
+      #  runtime and ABI fixtures at four or six profiles each, plus 268
+      #  emissions. Two cases hold all of it, and they now run across
+      #  workers: 3592s to 2235s at four. That is 1.6x, not the 2.4x
+      #  predicted from this Mac's 5.3x at eight, so the width is being
+      #  measured rather than assumed -- see corpus-profile.yml.
+      #
+      #  The default stays at one job. This is the path CI exercises on
+      #  every push, and flipping the default wants mileage rather than one
+      #  good measurement; scripts/parallel-equivalence.sh is the guard.
+      #
+      #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
+      #  in the log, on standard error, so the next time this gets slow it
+      #  says where rather than being inferred from timestamps.
       - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=4 ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=4 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
