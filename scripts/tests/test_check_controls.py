@@ -270,5 +270,50 @@ class HostedDerivation(unittest.TestCase):
         self.assertTrue(any("omits source" in why for why in said))
 
 
+class CodeRules(unittest.TestCase):
+    """The six cheap rules over Landin shown in the documents.
+
+    These cannot be replaced by running refine over the blocks, which was
+    the plan until it was measured: of 259 fenced blocks, about two in
+    five cannot compile by design.  They name things the surrounding prose
+    declared, or carry the `...` omission marker, because the documents
+    teach by showing a piece of a program.  A heuristic is the only thing
+    that can say anything about a fragment, so these rules stay and are
+    controlled instead.
+    """
+
+    def said(self, code):
+        return [why for _, why in checker.check_code(code.splitlines(), 0)]
+
+    def test_ordinary_code_passes(self):
+        self.assertEqual(self.said("value: u32 = 7\n"), [])
+
+    def test_a_keyword_where_a_name_belongs_is_reported(self):
+        said = self.said("match: u32 = 7\n")
+        self.assertTrue(any("keyword" in why for why in said))
+
+    def test_when_outside_an_exit_statement_is_reported(self):
+        said = self.said("    total = total + 1 when ready\n")
+        self.assertTrue(said)
+
+    def test_when_on_an_exit_statement_passes(self):
+        self.assertEqual(self.said("    break when ready\n"), [])
+
+    def test_one_name_declared_twice_in_a_module_is_reported(self):
+        said = self.said("value: u32 = 1\nvalue: u32 = 2\n")
+        self.assertTrue(any("twice" in why or "declared" in why
+                            for why in said))
+
+    def test_an_end_with_no_opener_is_reported(self):
+        said = self.said("end invented\n")
+        self.assertTrue(said)
+
+    def test_a_fragment_that_cannot_compile_still_passes_these(self):
+        #  The case for keeping them: refine refuses this with L0201
+        #  because `first` is declared in the prose around it, and the
+        #  cheap rules still have something to say about the line.
+        self.assertEqual(self.said("mut cursor: ptr u32 = addr first\n"), [])
+
+
 if __name__ == "__main__":
     unittest.main()
