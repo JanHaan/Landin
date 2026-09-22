@@ -527,5 +527,155 @@ class Artifacts(unittest.TestCase):
         self.assertTrue(said)
 
 
+LOOPS = ["scripts/build.sh", "scripts/clean.sh", "scripts/debug.sh",
+         "scripts/dev-build.sh", "scripts/dev-test.sh",
+         "scripts/linux-loop.sh", "scripts/quality.sh", "scripts/test.sh",
+         "scripts/env.sh"]
+
+
+class DeveloperLoops(unittest.TestCase):
+    """Fast feedback stays separate from the complete build and suite.
+
+    Not a CI check, which is what the audit first called it: these are
+    the dispositions that keep a developer wrapper from quietly becoming
+    the gate, or the gate from quietly becoming incremental.
+    """
+
+    def test_the_real_wrappers_pass(self):
+        self.assertEqual(faults(checker.check_developer_loops, copied=LOOPS),
+                         [])
+
+    def test_a_missing_wrapper_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_developer_loops, copied=LOOPS[1:])
+        self.assertTrue(said)
+
+    def test_an_incremental_setting_leaking_into_the_gate_is_reported(self):
+        #  The quiet failure this exists for: one duplicated command
+        #  restores minutes of repeated work, or checksum mode reaches
+        #  the canonical build.
+        from check_controls import tree
+        with tree(copied=LOOPS) as root:
+            build = root / "scripts/build.sh"
+            build.write_text(build.read_text().replace(
+                'Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"',
+                'Incremental="yes"', 1))
+            said = [why for _, _, why in checker.check_developer_loops(True)]
+        self.assertTrue(said)
+
+
+class Vocabularies(unittest.TestCase):
+    """The faces, the highlighting vocabulary and the examples page."""
+
+    def test_the_real_inputs_pass(self):
+        for check, inputs in (
+                (checker.check_fonts,
+                 ["assets/fonts.py", "assets/fonts", "docs/site/render_html.py"]
+                 + list(checker.LIVE_DOCS)),
+                (checker.check_highlight_vocabulary,
+                 ["highlight", "spec.md", "tour.md"]),
+                (checker.check_running_examples,
+                 ["examples.md", "compiler/tests/fixtures"])):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=inputs), [])
+
+    def test_a_missing_vocabulary_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_highlight_vocabulary,
+                       copied=["spec.md", "tour.md"])
+        self.assertTrue(said)
+
+    def test_a_missing_examples_page_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_running_examples,
+                       copied=["compiler/tests/fixtures"])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+
+class Transcriptions(unittest.TestCase):
+    """The tables the compiler transcribes from the grammar and the tour.
+
+    Written twice and compared, deliberately: ROADMAP.md's D3 keeps
+    generated tables out of the repository, and E3 makes a third kind of
+    generated source the trigger for reopening that. So the comparison is
+    the design, and these controls are what make it trustworthy.
+    """
+
+    def test_the_real_tables_agree(self):
+        for check, inputs in (
+                (checker.check_precedence_table,
+                 ["spec.md", "tour.md", "compiler/ada/src/syntax"]),
+                (checker.check_refused_constructs,
+                 ["spec.md", "tour.md", "ROADMAP.md", "compiler/ada/src"]),
+                (checker.check_diagnostic_matrix,
+                 ["compiler/tests/diagnostics.matrix", "compiler/ada/src",
+                  "compiler/ada/tests", "compiler/tests/fixtures",
+                  "spec.md", "tour.md"])):
+            with self.subTest(check=check.__name__):
+                self.assertEqual(faults(check, copied=inputs), [])
+
+    def test_a_precedence_level_out_of_order_is_reported(self):
+        #  [1820]'s levels, in [1820]'s order, with the same operators at
+        #  each. Reordering the Ada table is the drift this catches.
+        from check_controls import tree
+        with tree(copied=["spec.md", "tour.md", "compiler/ada/src/syntax"]) as root:
+            table = root / "compiler/ada/src/syntax/landin-syntax-precedence.ads"
+            text = table.read_text()
+            #  Swap two adjacent levels: the order is [1820]'s order,
+            #  and this is the drift a reordering causes.
+            table.write_text(text.replace(
+                "(Level_Expression,", "(Level_Logical_And,", 1).replace(
+                "      Level_Logical_And,", "      Level_Expression,", 1))
+            said = [why for _, _, why in checker.check_precedence_table(True)]
+        self.assertTrue(said)
+
+    def test_a_missing_precedence_table_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_precedence_table,
+                       copied=["spec.md", "tour.md"])
+        self.assertTrue(said)
+
+    def test_a_missing_diagnostic_matrix_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_diagnostic_matrix,
+                       copied=["compiler/ada/src", "compiler/ada/tests",
+                               "spec.md", "tour.md"])
+        self.assertTrue(said)
+
+
+MACOS = ["environments/macos-arm64", "scripts/macos.sh",
+         "scripts/macos_environment.py",
+         "scripts/tests/test_macos_environment.py",
+         "compiler/ada/TOOLCHAIN.md", "environments/pins.sh"]
+
+
+class NativeEnvironment(unittest.TestCase):
+    """The Apple tool identities stay equal to what TOOLCHAIN.md records.
+
+    Not a CI check either, which the audit first assumed: the acceptance
+    half of that environment is retired, but the pinned SDK, clang,
+    assembler, linker and LLDB are what this machine still compiles and
+    debugs with.
+    """
+
+    def test_the_real_identities_agree(self):
+        self.assertEqual(
+            faults(checker.check_macos_environment, copied=MACOS), [])
+
+    def test_a_missing_policy_is_reported_rather_than_skipped(self):
+        said = reasons(checker.check_macos_environment, copied=MACOS[1:])
+        self.assertTrue(said)
+        self.assertIn("needed by a check", said[0])
+
+    def test_a_tool_identity_that_drifted_from_the_record_is_reported(self):
+        from check_controls import tree
+        import json
+        with tree(copied=MACOS) as root:
+            policy = root / "environments/macos-arm64/policy.json"
+            recorded = json.loads(policy.read_text())
+            recorded["clang"] = "clang version 0.0.0 (invented)"
+            policy.write_text(json.dumps(recorded))
+            said = [why for _, _, why
+                    in checker.check_macos_environment(True)]
+        self.assertTrue(any("differs from TOOLCHAIN.md" in why
+                            for why in said))
+
+
 if __name__ == "__main__":
     unittest.main()
