@@ -968,6 +968,7 @@ negative/reference-expression-body-permission | linux-x86-64, macos-arm64, synth
 negative/reference-traversal-value-live-view | linux-x86-64, macos-arm64
 negative/refused-field-type-in-written-struct | linux-x86-64, macos-arm64
 negative/refused-result-beside-error-set | linux-x86-64, macos-arm64
+negative/refused-results-answered-by-control | linux-x86-64, macos-arm64
 negative/refused-struct-inline-argument | linux-x86-64, macos-arm64, synthetic-32
 negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64

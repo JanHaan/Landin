@@ -1,0 +1,10 @@
+--  A body answering several results whose types were refused has no
+--  result shape for its answer to fill; the refusals say why.  Before
+--  this fixture the answer was held to a shape that did not exist and
+--  the compiler stopped as a defect.
+pair: (left: ptr u32) -> (first: missing from left, second: missing from left) =
+end pair
+
+g: (left: ptr u32, c: bool) -> (first: missing from left, second: missing from left) =
+    if c then pair(left) else pair(left) end if
+end g

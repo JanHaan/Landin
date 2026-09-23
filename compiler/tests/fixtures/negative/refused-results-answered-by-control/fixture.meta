@@ -1,0 +1,9 @@
+class: negative
+summary: a control answer for several refused results reports the refusals and nothing more
+constructs: 0930, 1080
+program: program.ldn
+codes: L0201, L0201, L0201, L0201
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/refused-results-answered-by-control/program.ldn
+status: 1

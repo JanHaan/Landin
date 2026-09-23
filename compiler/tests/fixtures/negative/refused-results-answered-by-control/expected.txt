@@ -1,0 +1,24 @@
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-results-answered-by-control/program.ldn:5:34
+  |
+5 | pair: (left: ptr u32) -> (first: missing from left, second: missing from left) =
+  |                                  ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-results-answered-by-control/program.ldn:5:61
+  |
+5 | pair: (left: ptr u32) -> (first: missing from left, second: missing from left) =
+  |                                                             ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-results-answered-by-control/program.ldn:8:40
+  |
+8 | g: (left: ptr u32, c: bool) -> (first: missing from left, second: missing from left) =
+  |                                        ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-results-answered-by-control/program.ldn:8:67
+  |
+8 | g: (left: ptr u32, c: bool) -> (first: missing from left, second: missing from left) =
+  |                                                                   ^^^^^^^
+  = note: [1860]: a name that names nothing is refused

@@ -33012,7 +33012,12 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
-         if Count > 1 then
+         if Count > 1 and then Signature = Landin.Checking.No_Signature then
+            --  A refused result left no shape to fill.  One refused result
+            --  is already Ill_Typed through Declared_As_Node; several are
+            --  the same, and the refusal has said why.
+            Expected.Kind := Ty.Ill_Typed;
+         elsif Count > 1 then
             Expected.Result_Shape := Signature;
          elsif Gives = Ty.Atom_Value then
             Expected.Atoms := Landin.Checking.Atom_Set_Of
