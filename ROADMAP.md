@@ -28,7 +28,7 @@ Landin does not assume SemVer.
 
 Work item and register identities stay in this file. Code, diagnostics,
 fixtures, generated files and the other documents never cite a work item,
-because an item is finished long before the text that cites it is, and a
+save the one status pointer `README.md` and `handoff.md` carry, because an item is finished long before the text that cites it is, and a
 citation that outlives its item is a question nobody can answer. `check.py`
 refuses a citation of this roadmap's items anywhere else. The first roadmap's
 citations are the exception until R8.10 removes them.
@@ -76,18 +76,19 @@ size, and a gate that runs one of the three targets.
 Status: planned
 Depends on: none
 
-About seven hundred citations of R0 to R7 items and of the first roadmap's
-ledgers sit in compiler sources and comments, diagnostic text and the goldens
-that record it, fixtures, `spec.md`, `tour.md`, the prototypes, the evidence
-registers and the guides, and about a hundred and thirty sentences send a
-reader to `ROADMAP.md` for closure evidence and acceptance records that are
+About eighteen hundred citations of R0 to R7 items, in about two hundred
+and eighty files, and some fifty of the first roadmap's ledger records sit in
+compiler sources and comments, diagnostic text and the goldens that record
+it, fixtures, `spec.md`, `tour.md`, the prototypes, the evidence registers
+and the guides, and nearly two hundred lines name `ROADMAP.md`, many of them
+sending a reader there for closure evidence and acceptance records that are
 now only in the history. Each is rewritten to say what it meant, or removed
 where it said nothing. A refusal that names the work enabling its construct
 names the construct's state instead, which amends [1830]'s note and the two
 refusal tables. The construct inventory loses its Phase column.
 
 Exit evidence: no file outside `ROADMAP.md` cites a work item or register
-identity of either roadmap, `check.py` refuses one, the first roadmap's index
+identity of either roadmap beyond the status pointer, `check.py` refuses one, the first roadmap's index
 is deleted from this file, and every changed diagnostic is pinned by its
 recorded report.
 
@@ -106,9 +107,13 @@ register records R551-06 and R551-10 and the corpus timing question SR-02.
 
 Exit evidence: a scaling benchmark in the repository, generated inputs of
 growing size up to at least 16,000 declarations plus the derived programs,
-whose frontend time grows by no more than 2.5 times per doubling across the
-range; the derived log filter checks in under half a second in release mode;
-and the gate runs the benchmark and fails on a regression.
+whose frontend time, the median of five runs, grows by no more than 2.5 times
+per doubling across the range; the derived log filter checks in under half a
+second with the release compiler on the host that measured the numbers above;
+the same inputs, and a struct of 20,000 fields, check without exhausting the
+host, with each stage's storage measured and a named refusal past a stated
+bound; and the gate runs the benchmark and fails when a ratio exceeds 2.5,
+which does not depend on the runner's speed.
 
 ### R8.30 — Run every existing target in the gate
 
@@ -118,16 +123,20 @@ Depends on: none
 The gate builds and tests on Linux x86-64 in debug mode and nothing else.
 Add macOS arm64 on GitHub's arm64 macOS runners, the release build, the
 Cortex-M QEMU and Renode lanes on Linux, the GDB and LLDB sessions, and the
-structural editor grammar's integration pass. This takes on R730-22 and
-R730-25.
+structural editor grammar's integration pass. Add the runners nothing runs
+today: the determinism closures and their controls, the bindings tests, the
+object-quality lane, `scripts/tests`, and `check.py`'s control suite; and run
+the fixture execution suite with many workers, which is how a race in the
+harness's reads went unseen. This takes on R730-22 and R730-25.
 
 Exit evidence: `gate.yml` runs each of those on every push, a failure in any
-fails the gate, and the documents stop describing the gate as Linux and debug
-only.
+fails the gate, every end-to-end target claim is a verdict in a record the
+coverage readers read rather than a run, and the documents stop describing
+the gate as Linux and debug only.
 
 ### R8 gate
 
-- Nothing outside `ROADMAP.md` cites a work item.
+- Nothing outside `ROADMAP.md` cites a work item but the status pointer.
 - The frontend's scaling benchmark holds in the gate.
 - Every target the compiler has runs in the gate on every push.
 
@@ -370,7 +379,7 @@ recorded run on each board.
 ### R12.60 — Boards in the gate
 
 Status: planned
-Depends on: R12.20
+Depends on: R12.20, R12.30, R12.40, R12.50
 
 A self-hosted runner with the boards attached, run for `main` and by hand and
 never for a pull request from a fork. This takes on R730-01.
@@ -407,7 +416,7 @@ Depends on: R13.10, R12.30
 What firmware on the R12 boards needs, each facility driven by a complete
 consumer: peripheral configuration beyond one baud rate, cache maintenance for
 the cached profiles, and C on Cortex-M. This schedules R551-34's freestanding
-part and R730-02, R730-07 and R730-09.
+part, and B5's, and R730-02, R730-07 and R730-09.
 
 Exit evidence: each facility's consumer running on its targets with failure
 oracles and measured cost on the constrained profiles.
@@ -419,7 +428,7 @@ Depends on: R13.10
 
 Files and directories, processes, the environment, time and sockets, each
 driven by a complete consumer, with the operating system reached through the
-same capabilities as now.
+same capabilities as now. This takes R551-34's hosted part, and with it B5's.
 
 Exit evidence: each consumer running on every hosted target with failure
 oracles.
@@ -542,8 +551,8 @@ Status: planned
 Depends on: R16.10
 
 Allocation for the arm64 backend's stack homes and the remaining x86-64 and
-Cortex-M cases, and the bounds check an indexed increment keeps. This takes on
-R551-12.
+Cortex-M cases, the bounds check an indexed increment keeps, and the atomic
+and barrier lowering, which is baseline. This takes on R551-12.
 
 Exit evidence: measured improvement against R16.10's baselines with unchanged
 behaviour, ABI and debugger evidence.
@@ -628,12 +637,12 @@ with the reason it no longer applies.
 | R551-16 | Scale and self-hosting | Large nested stage procedures, duplicate construction helpers and unused interfaces such as `Needs_Source` remain. | Replacing or splitting the affected stage, or a change it obstructs. | Refactoring behind existing seams with strict warnings, removing only demonstrated dead interfaces. | open |
 | R551-19 | Release readiness | No broad driver mutation or fuzz coverage; parser mutation is not whole-pipeline fuzzing. | Before robustness or production claims. | Fixed seeds, bounded resources, stage and target reach, crash classes and minimal reproducers. R10.50 takes the frontend part. | open |
 | R551-20 | Release readiness | Fake-host failure controls do not establish native device, capture or exhaustion failure paths. | Before claiming those native failure guarantees. | Controlled fault injection with cleanup and diagnostic oracles on each host. | open |
-| R551-22 | Release readiness | Font ancestry was kept; redistribution is not settled. | Before distribution, or a font or history policy change. | A distribution decision keeping the private-font boundary. | open |
+| R551-22 | Release readiness | The code face was removed from all history and the acceptance tags re-issued; only the vendored Nunito Sans remains. Its redistribution, which the pages depend on, is not settled. | Before distribution, or a font policy change. | A distribution decision keeping the private-font boundary. | open |
 | R551-25 | Language evolution | Source-debug CFI is not a promise of foreign-exception unwinding. | An explicit proposal for runtime foreign unwinding. | Semantic, ABI and failure decisions, then native evidence. | limit |
 | R551-26 | Language evolution | LLDB shows C scalar spellings and manual tag and payload selection, with no Landin expression evaluator. Merged: R730-12, Cortex-M0 debugging is lines and functions only. | A concrete debugger-usability proposal. | Truthful types and locations with native sessions for each new promise. | limit |
 | R551-27 | Release readiness | Linux driver overrides follow the GNU contract; Darwin emits thin arm64 Mach-O, not universal binaries; no Clang header parsing. | A requested driver or distribution expansion. | Pinned producer and consumer, packaging and identity evidence. | limit |
 | R551-28 | Language evolution | No callback-identity counterexample exists, and static rejection of known slice-range endpoints is not a normative requirement. | A valid counterexample or an explicit semantic proposal. | Present-contract defects go to their implementation owner; semantic changes need specification and tests. | watch |
-| R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
+| R551-32 | Scale and self-hosting | Stable separate compilation and interfaces, package identity in interfaces, cross-language stage transport and incremental self-hosting. | An explicit scope decision; planning R8 considered it and left it outside. | Tested seams and complete interface and package identity with whole-program semantics preserved. | open |
 | R551-33 | Companion tool and ecosystem | Package acquisition, version solving, manifests, locks, naming authority, deterministic roots, generators and sandboxing; the binding generator's replacement of its four files is not atomic. Merged: R730-08, the RP2040 fixture is a bounded selection and no general SVD generator exists; R730-11, the firmware linker script is fixed. | Before acquisition, general generation or concurrent build consumers are offered. | Declared inputs and outputs, immutable publication, reproducible roots and single-version conflicts. R12.10 takes the SVD and linker halves. | open |
 | R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, cache maintenance for cached device profiles; R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 takes the atomic wrapper. | scheduled R13.20 |
 | R551-35 | Language evolution | The stackful-fibre exploration, and the parked and watched rows C1 to C5 and E1 to E3, each below. | For fibres, a program needing two operations in flight; each row's own trigger otherwise. | A tour amendment and register decision; stackless coroutines stay rejected. | scheduled R14.20 |
@@ -679,7 +688,7 @@ These D labels are the review's, not `spec.md`'s decisions.
 | Position | What was kept, and why |
 | --- | --- |
 | D1 | Integer indexing of UTF-8 text by codepoint ordinal, linear, for ergonomics [0610]; reopen only with program or measurement evidence. |
-| D2 | No weak conformances and no orphan rule: a collision is an error, answered with `distinct` or an explicit function [1280]; reopen on ecosystem-scale evidence. |
+| D2 | No weak conformances and no orphan rule: a collision is an error, answered with `distinct` or an explicit function [1280], because a weak conformance lets an application silently change a generic library's behaviour; reopen on ecosystem-scale evidence. |
 | D3 | No compile-time execution and no macros; generated source comes from programs the build runs [1540]. A third kind of generated source starts its review (E3). |
 | D4 | `escaping` and `from` are written, not inferred, to keep checking local and because an allocator is a counterexample to inferred `from` [0790] [0900]. |
 | D5 | Landin's own backends emitting assembly; not LLVM, a dependency larger than the language, and not C, which loses the calling convention, the traps and the debug information [1550]. |
