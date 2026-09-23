@@ -1,0 +1,6 @@
+error[L0201]: `missing` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-result-beside-error-set/program.ldn:7:32
+  |
+7 | f: (cell: ptr u32) -> (result: missing from cell) ! oops =
+  |                                ^^^^^^^
+  = note: [1860]: a name that names nothing is refused

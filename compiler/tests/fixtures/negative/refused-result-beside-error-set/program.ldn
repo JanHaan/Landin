@@ -1,0 +1,9 @@
+--  A refused result type leaves the signature invalid, and the error
+--  set declared after it may not make it valid again.  Before this
+--  fixture it did, and recording the signature stopped the compiler
+--  as a defect.
+oops: atom
+
+f: (cell: ptr u32) -> (result: missing from cell) ! oops =
+    result = cell
+end f

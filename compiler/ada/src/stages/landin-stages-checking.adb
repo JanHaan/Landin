@@ -7681,7 +7681,10 @@ package body Landin.Stages.Checking is
                   Errors := Landin.Checking.Atom_Set_Of
                     (Types.all, Of_Tree, Written);
                   Error_Form := Landin.Checking.Concrete;
-                  Valid := Errors /= Landin.Checking.No_Atom_Set;
+                  --  A refused parameter or result has already cleared
+                  --  Valid; the error set may not restore it.
+                  Valid := Valid
+                    and then Errors /= Landin.Checking.No_Atom_Set;
                else
                   Valid := False;
                end if;

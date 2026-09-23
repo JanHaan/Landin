@@ -1,0 +1,9 @@
+class: negative
+summary: a refused result type keeps its signature invalid whatever error set follows it
+constructs: 0940, 1860
+program: program.ldn
+codes: L0201
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/refused-result-beside-error-set/program.ldn
+status: 1
