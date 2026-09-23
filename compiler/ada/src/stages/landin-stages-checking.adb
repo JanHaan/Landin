@@ -31124,6 +31124,11 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Value);
                end if;
+            else
+               --  Nothing else here can be out of range, but the fold is
+               --  still what meets a chain that comes back to itself:
+               --  unfolded, `x: bool = x` reached the backend unreported.
+               Fold (Of_Tree, Value, 0, Held, Known, Overflowed);
             end if;
             return;
          elsif Wanted not in Ty.Integer_Name then

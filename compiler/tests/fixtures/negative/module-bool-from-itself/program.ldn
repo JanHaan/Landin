@@ -1,0 +1,3 @@
+itself: bool = itself
+first: bool = not second
+second: bool = first and true

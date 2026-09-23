@@ -3268,8 +3268,8 @@ Those choices respectively turn static data into executable control, contradict
 [0410], or let scalar and aggregate images disagree. All were declined.
 
 **Pinned by** the lowering case `module bools become static images`,
-`runtime/module-known-short-circuit-bools`, the generated IR, and the
-`module.images` guarantee row.
+`runtime/module-known-short-circuit-bools`, `negative/module-bool-from-itself`
+for the cycle, the generated IR, and the `module.images` guarantee row.
 
 ### D200 — A comparison takes one register-sized value with one equality
 
