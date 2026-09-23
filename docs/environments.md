@@ -234,7 +234,7 @@ of writing nixpkgs carries GNAT 16.2.0 and GPRbuild 25.0.0, and the pin is
 GNAT 16.1.0 with GPRbuild 26.0.0.
 
 It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
-other environments leave in the same checkout. `python3` and `hut` come with
+other environments leave in the same checkout. `python3` comes with
 it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it
 also selects `llvmPackages."19".clang` and `glibc.dev` from the package set
 fixed by `flake.lock`, matching the Debian environments' Clang major without

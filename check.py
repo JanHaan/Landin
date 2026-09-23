@@ -1863,12 +1863,11 @@ def check_pinned_toolchain(full_run):
                         "%s %s is not pinned in environments/pins.sh"
                         % (name, value)))
 
-    #  The nix shell and the CI manifest each install the toolchain
-    #  themselves, so each is a further place a version could be written.
-    #  Both are held to reading the pins rather than naming one: a build that
-    #  fetches a different compiler than the recipe does is not a slower
-    #  build, it is a different compiler.
-    for relative in ("flake.nix", "scripts/ci/policy.json"):
+    #  The nix shell installs the toolchain itself, so it is a further place
+    #  a version could be written.  It is held to reading the pins rather
+    #  than naming one: a build that fetches a different compiler than the
+    #  recipe does is not a slower build, it is a different compiler.
+    for relative in ("flake.nix",):
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue

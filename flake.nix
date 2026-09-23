@@ -368,7 +368,6 @@
               gnat
               gprbuild
               pkgs.python3 #  check.py and docs/site/render_html.py
-              pkgs.hut #  scripts/site.sh --publish
             ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               #  R4.40's external header frontend.  Selecting the LLVM 19
               #  package set matches Debian stable's versioned clang-19 rather
