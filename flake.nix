@@ -87,6 +87,13 @@
             in
             if found == null then "0" else builtins.head found;
 
+          #  The release the hashes below belong to, and the one refine-bin
+          #  fetches.  Not `specification`: a declaration commit moves the
+          #  README first, and a tagged tree cannot hold the hashes of assets
+          #  built from itself, so the two move in the commit that records
+          #  the new hashes and never before.
+          releaseVersion = "0.2.0";
+
           releaseHashes = {
             x86_64-linux =
               "5172ecd9320f84f14e886315ed3a56d5e757db609d52ea712b494bb1715804cb";
@@ -246,12 +253,12 @@
 
           refineBin = pkgs.stdenvNoCC.mkDerivation {
             pname = "landin-bin";
-            version = specification;
+            version = releaseVersion;
 
             src = pkgs.fetchurl {
               url =
                 "https://github.com/JanHaan/Landin/releases/download/"
-                + "v${specification}/landin-${specification}-${system}.tar.gz";
+                + "v${releaseVersion}/landin-${releaseVersion}-${system}.tar.gz";
               sha256 = releaseHashes.${system};
             };
 
