@@ -178,6 +178,12 @@ results borrow the allocator or claim to detect helper-side-effect escapes.
 
 ## core/mem  —  a bump allocator over borrowed storage
 
+The library names this allocator `mem.arena` and builds it with
+`mem.arena_over(base, size)` from a first byte and a length rather than a
+slice, returning it `from base`; prototypes 2 and 4, the tour and `core/mem`
+all use that name. The sketch keeps `bump` and `bump_over` as its design
+record.
+
 ```landin
 public bump: type = struct
     base: ptr mut u8
@@ -233,7 +239,7 @@ public counted: type (provider: type is allocator) = struct
 end counted
 
 public count_down: (provider: type is allocator, escaping inner: ptr provider, n: u32)
-                   -> (c: counted(provider)) =
+                   -> (c: counted(provider) from inner) =
     c = (inner: inner, left: n)
 end count_down
 
@@ -397,9 +403,9 @@ alone. The price is one more argument at every mutating call,
 which is what the code below reads like: judge it there. [Z10]
 
 ```landin
-public reserve: (t: type, provider: type is allocator,
+public reserve: (t: type, provider: type is mem.allocator,
                  inout l: list(t), inout a: provider, want: usize)
-                -> none ! out_of_memory =
+                -> none ! mem.out_of_memory =
     return when want <= lenof l.items
     fresh := try mem.new_slice(t: t, provider: provider, a: a, n: want)
     for k in 0..<l.len do
@@ -419,9 +425,9 @@ the list keeps what v refers to. One word covers both, because the
 origin travels with the type. [Z6]
 
 ```landin
-public push: (t: type, provider: type is allocator,
+public push: (t: type, provider: type is mem.allocator,
               inout l: list(t), inout a: provider, escaping v: t)
-             -> none ! out_of_memory =
+             -> none ! mem.out_of_memory =
     if l.len == lenof l.items then
         try reserve(l, a, grown(lenof l.items))
     end if
@@ -450,7 +456,7 @@ public used: (t: type, l: list(t)) -> (s: []mut t from l) =
     s = l.items[0..<l.len]
 end used
 
-public release: (t: type, provider: type is allocator, inout l: list(t), inout a: provider)
+public release: (t: type, provider: type is mem.allocator, inout l: list(t), inout a: provider)
                 -> none =
     mem.drop_slice(a, l.items)
     l.items = []
@@ -570,7 +576,7 @@ public used: (t: type is zeroable, fixed capacity: u32,
              inout s: small(t, capacity)) -> (v: []mut t from s) =
     v = match s.store
             inline  (inout buf): buf[0..<s.len]
-            spilled (items): mem.used(items.values)
+            spilled (items): vec.used(items)
         end match
 end used
 ```
@@ -723,9 +729,9 @@ where control reaches them, so the triangle comes out of the order
 rather than out of the text. [Z19]
 
 ```landin
-rehash: (key_type: type is hashable, value_type: type, provider: type is allocator,
+rehash: (key_type: type is hashable, value_type: type, provider: type is mem.allocator,
          inout m: map(key_type, value_type), inout a: provider, want: usize)
-        -> none ! out_of_memory =
+        -> none ! mem.out_of_memory =
     ns := try mem.new_slice(t: slot, provider: provider, a: a, n: want)
     undo mem.drop_slice(a, ns)
 
@@ -767,9 +773,9 @@ so a failure after the handover would free what m now owns.
     mem.drop_slice(a, old_vals)
 end rehash
 
-public insert: (key_type: type is hashable, value_type: type, provider: type is allocator,
+public insert: (key_type: type is hashable, value_type: type, provider: type is mem.allocator,
                 inout m: map(key_type, value_type), inout a: provider,
-                escaping k: key_type, escaping v: value_type) -> none ! out_of_memory =
+                escaping k: key_type, escaping v: value_type) -> none ! mem.out_of_memory =
     if crowded(m) then
         try rehash(m, a, if lenof m.state == 0 then 16
                          else lenof m.state * 2 end if)
@@ -795,7 +801,7 @@ public remove: (key_type: type is hashable, value_type: type, inout m: map(key_t
     end loop
 end remove
 
-public release_map: (key_type: type is hashable, value_type: type, provider: type is allocator,
+public release_map: (key_type: type is hashable, value_type: type, provider: type is mem.allocator,
                      inout m: map(key_type, value_type), inout a: provider) -> none =
     mem.drop_slice(a, m.state)
     mem.drop_slice(a, m.keys)
@@ -873,8 +879,8 @@ public new_tree: () -> (t: tree) =
     t = (nodes: vec.new_list(t: node))
 end new_tree
 
-public add_leaf: (provider: type is allocator, inout t: tree, inout a: provider, escaping name: utf8)
-                 -> (id: node_id) ! out_of_memory =
+public add_leaf: (provider: type is mem.allocator, inout t: tree, inout a: provider, escaping name: utf8)
+                 -> (id: node_id) ! mem.out_of_memory =
     id = node_id(u32(t.nodes.len))
     try vec.push(t.nodes, a, (name: name, kind: leaf))
 end add_leaf
@@ -887,9 +893,9 @@ usual discipline for this representation and better said out loud
 than discovered.
 
 ```landin
-public add_branch: (provider: type is allocator, inout t: tree, inout a: provider,
+public add_branch: (provider: type is mem.allocator, inout t: tree, inout a: provider,
                     escaping name: utf8, first: node_id, count: u32)
-                   -> (id: node_id) ! out_of_memory =
+                   -> (id: node_id) ! mem.out_of_memory =
     id = node_id(u32(t.nodes.len))
     try vec.push(t.nodes, a,
                  (name: name, kind: branch(first: first, count: count)))
@@ -962,7 +968,7 @@ four lines.
 ```landin
 mut pool: [64 * 1024]u8 = zeroed
 
-run: () -> none ! out_of_memory =
+run: () -> none ! mem.out_of_memory =
     mut a := mem.bump_over(pool[0..<lenof pool])
 
 ```

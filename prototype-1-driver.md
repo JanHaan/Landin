@@ -226,7 +226,6 @@ import chip/vendor/gpio
 import chip/vendor/dma
 import chip/vendor/usart
 import core/sets
-import landin/compiler
 
 public busy:          atom
 public bad_baud:      atom
@@ -429,6 +428,7 @@ end take_events
 ## app  —  freestanding, no main
 
 ```landin
+import core/cpu
 import drivers/uart
 import chip/vendor/gpio
 import chip/vendor/dma
@@ -450,7 +450,7 @@ start: () -> noreturn =
             uart.buffer_too_big: halt()
             uart.buffer_empty:   halt()
         end match
-    end open
+    end
 
     mut scratch: [64]u8 = zeroed
 

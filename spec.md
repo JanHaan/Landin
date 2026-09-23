@@ -14257,9 +14257,11 @@ default-trap fixtures. ROADMAP.md owns results and remaining acceptance work.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
-Not language rules. These were taken while writing `core` and the
-derived programs, and they bind those modules rather than any program
-the compiler accepts.
+These were taken while writing `core` and the derived programs, and most
+bind those modules rather than any program the compiler accepts. D199 is
+the exception: its conversion matrix and its checked and trapping edges are
+language rules the compiler enforces in every program, and they sit here
+because writing the text layer is what forced them.
 
 ### D151 — Raw storage is a private library state machine
 

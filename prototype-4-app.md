@@ -220,7 +220,7 @@ public reader: type = struct
     pos:  usize
 end reader
 
-public open: (provider: type is allocator, inout h: any io.world, inout a: provider,
+public open: (provider: type is mem.allocator, inout h: any io.world, inout a: provider,
               path: utf8, size: usize) -> (r: reader) ! ... =
     f := try io.open_read(h, path)
     undo io.close(h, f)
@@ -268,7 +268,7 @@ The alternative was to sink r.f out of an inout parameter and then
 have nothing to assign back, since there is no i32 that means
 closed. [W3]
 ```landin
-public shut: (provider: type is allocator, sink r: reader,
+public shut: (provider: type is mem.allocator, sink r: reader,
               inout h: any io.world, inout a: provider) -> none =
     io.close(h, r.f)
     mut owned := r.buf
@@ -296,6 +296,8 @@ in the type since 0.1.0, so the entry says what it does without
 also claiming it might re-point the pointer — which the older
 inout spelling did claim, and which was never true.
 ```landin
+import core/text
+
 public filter: type = concept (t: type)
     keep: (self: ptr mut t, line: []u8) -> (yes: bool)
 end filter
@@ -371,7 +373,7 @@ public text_dest: type = struct
     used: usize
 end text_dest
 
-public open_text_dest: (provider: type is allocator, inout h: any io.world,
+public open_text_dest: (provider: type is mem.allocator, inout h: any io.world,
                         inout a: provider, path: utf8, size: usize)
                        -> (d: text_dest) ! ... =
     f := try io.open_write(h, path)
@@ -382,7 +384,7 @@ public open_text_dest: (provider: type is allocator, inout h: any io.world,
     d = (f: f, buf: buf, used: 0)
 end open_text_dest
 
-public discard_text_dest: (provider: type is allocator, inout h: any io.world,
+public discard_text_dest: (provider: type is mem.allocator, inout h: any io.world,
                            inout a: provider, sink d: text_dest) -> none =
     io.close(h, d.f)
     mut owned := d.buf
@@ -411,7 +413,7 @@ end count_dest
 
 count_emit: (self: ptr mut count_dest, inout h: any io.world, line: []u8)
             -> none ! io.io_failed =
-    lvl := level_of(line)
+    lvl := usize(level_of(line))
     self.val.by_level[lvl] = self.val.by_level[lvl] + 1
     self.val.total = self.val.total + 1
 end count_emit
@@ -453,7 +455,7 @@ public config: type = struct
     input: utf8
 end config
 
-public build: (provider: type is allocator, inout h: any io.world, inout a: provider,
+public build: (provider: type is mem.allocator, inout h: any io.world, inout a: provider,
                escaping args: []cstring, inout d: any diag.log)
               -> (c: config from args) ! ... =
     mut chain := vec.new_list(t: any filter.filter)
@@ -657,14 +659,14 @@ world. No uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
     mut h := io.host()
-    w := any(addr h)
+    mut w := any(addr h)
 
     begin
         mut backing := heap.host()
         mut program := region.new_region(addr backing)
         defer region.release_region(program)
         mut logger := diag.to(w.err())
-        d := any(addr logger)
+        mut d := any(addr logger)
 
         kept := run(w, program, d, io.args()) else (e)
             report_failure(w, e)
@@ -688,13 +690,13 @@ mut test_backing: [64 * 1024]u8 = zeroed
 
 test_drops_debug_lines: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
-    w := any(addr h)
+    mut w := any(addr h)
     begin
         mut backing := mem.arena_over(addr test_backing[0], lenof test_backing)
         mut scratch := region.new_region(addr backing)
         defer region.release_region(scratch)
         mut logger := diag.new_log(capacity: 32)
-        d := any(addr logger)
+        mut d := any(addr logger)
         kept := run(w, scratch, d, test_args[0..<5]) else 0
         assert(kept == 1)
         assert(text.eq(io.written(h), "ERROR b\n"))
@@ -728,8 +730,9 @@ separate lifetime chosen by its caller. W7's former block-escape argument is
 not a guarantee of either provider.
 
 R2.80 makes this prototype's `any` pressure executable without changing the
-sketch: construction erases an exact pointer/conformance, every exposed entry
-uses the object-safe first `self` pointer already written here, and the pair
+sketch: construction erases an exact pointer/conformance, every `filter` and
+`dest` entry uses the object-safe first `self` pointer already written here —
+`world` and `diag.log` gain theirs in the executable slice above — and the pair
 carries the pointee origin through the config aggregates. Parent conformances
 stay separate identities while an erased table flattens their function words;
 mutable authority is proved when the pair is constructed rather than stored as

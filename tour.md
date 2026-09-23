@@ -1477,9 +1477,10 @@ arbitrary linker names stay strings.
 mut public align(n) layout(c|optimal|packed)
 ```
 
-and 'at' for a bit position, which is why a field or an
-entry cannot be called that — the same goes for 'from',
-'of', 'with' and 'align' itself.
+and 'at' for a bit position. 'at', 'of' and 'align' are
+contextual: a field or an entry may still be called one of
+them, because nothing reads the word as an attribute there.
+'from' and 'with' are reserved and cannot name anything.
 
 ```text
 escaping caller fixed option
@@ -3062,8 +3063,8 @@ allocator: type = concept (provider: type)
     free:  (inout a: provider, p: ptr mut u8, size: usize) -> none
 end allocator
 
-push: (t: type, provider: type is allocator, inout l: list(t), inout a: provider, v: t)
-      -> none ! out_of_memory = ... end
+push: (t: type, provider: type is allocator, inout l: list(t), inout a: provider,
+      escaping v: t) -> none ! out_of_memory = ... end
 ```
 
 The allocator is threaded, not stored in the container, and

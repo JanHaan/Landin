@@ -1,7 +1,7 @@
 # Landin prototype 2 — a parser full of recoverable errors
 
 Current with specification 0.2.0. Its own findings Y1-Y7 are resolved
-below, except Y4, which stays an open watch that R7 closes.
+below, except Y4, which stays an open watch in the roadmap's register.
 
 The point of this one is the word recoverable. A parser must not stop
 at the first mistake: it reports it, skips to somewhere it trusts, and
@@ -191,7 +191,7 @@ public lexer: type = struct
     pos: text.position
 end lexer
 
-public open: (src: utf8) -> (l: lexer) =
+public open: (src: utf8) -> (l: lexer from src) =
     lexer(src: src, pos: text.first(src))
 end open
 
@@ -238,6 +238,7 @@ end next
 ```landin
 import core/text
 import core/mem
+import core/vec
 import config/lex
 import config/diag
 
@@ -245,11 +246,12 @@ import config/diag
 
 These are the failures that end the parse. There are exactly two,
 and neither is a syntax mistake: syntax mistakes are reported and
-recovered from. That distinction is the whole design.
+recovered from. That distinction is the whole design. Running out of
+memory is `core/mem`'s own `mem.out_of_memory`, propagated rather than
+redeclared, so only nesting too deep is declared here.
 
 ```landin
-public out_of_memory: atom
-public too_deep:      atom
+public too_deep: atom
 
 public value_kind: type = struct
     name: utf8
@@ -313,7 +315,7 @@ failing, because a broken entry must not end the file.
 parse_entry: (inout p: parser, inout d: any diag.log,
               inout a: mem.arena)
               -> (v: ptr mut value_kind, got: bool)
-              ! out_of_memory | too_deep =
+              ! mem.out_of_memory | too_deep =
 
     got = false
     initial: value_kind = (name: "", body: group_value(items: []))
@@ -345,7 +347,7 @@ parse_entry: (inout p: parser, inout d: any diag.log,
                             "number out of range")
                 recover_to_boundary(p)
                 return
-            end parse_int
+            end
             v.val.body = int_value(n: n)
             advance(p)
             got = true
@@ -387,7 +389,7 @@ log whether the result is trustworthy.
 ```landin
 public parse_file: (src: utf8, inout d: any diag.log, inout a: mem.arena)
                     -> (items: []mut ptr mut value_kind)
-                    ! out_of_memory | too_deep =
+                    ! mem.out_of_memory | too_deep =
 
     mut p := parser(lx: lex.open(src), look: first_token(src), depth: 0)
     mut list := vec.new_list(t: ptr mut value_kind)
@@ -401,12 +403,12 @@ public parse_file: (src: utf8, inout d: any diag.log, inout a: mem.arena)
         end if
 
         (v, got) := parse_entry(p, d, a) else (e)
-            fail e when e == out_of_memory
+            fail e when e == mem.out_of_memory
             d.note(p.look.begins, diag.error,
                         "nested too deep, skipping")
             recover_to_boundary(p)
             continue
-        end parse_entry
+        end
         if got then
             try vec.push(list, a, v)
         end if
@@ -421,6 +423,7 @@ end parse_file
 
 ```landin
 import core/io
+import core/mem
 import config/parse
 import config/diag
 
@@ -443,19 +446,19 @@ run: (inout w: any io.world, inout scratch: mem.arena, path: utf8)
             io.write_line(w, "cannot read that file")
             code = 2
             return
-        end read_file
+        end
 
         mut notes := diag.new_log(capacity: 64)
-        d := any(addr notes)
+        mut d := any(addr notes)
 
         items := parse.parse_file(src, d, scratch) else (e)
             match e
-                parse.out_of_memory: io.write_line(w, "out of memory")
-                parse.too_deep:      io.write_line(w, "nested too deep")
+                mem.out_of_memory: io.write_line(w, "out of memory")
+                parse.too_deep:    io.write_line(w, "nested too deep")
             end match
             code = 3
             return
-        end parse_file
+        end
 
 ```
 
