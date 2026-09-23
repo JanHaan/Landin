@@ -228,8 +228,8 @@ the whole transcript with it now costs one line of it.
 ## A nix shell, for convenience
 
 `flake.nix` provides `nix develop` with the pinned toolchain, contributed by
-ZAZPRO. It installs the same archives the container recipe and the CI
-manifest install, verified against the same checksums, because it reads
+ZAZPRO. It installs the same archives the container recipe and the GitHub
+workflows install, verified against the same checksums, because it reads
 `environments/pins.sh` rather than naming a nixpkgs attribute — at the time
 of writing nixpkgs carries GNAT 16.2.0 and GPRbuild 25.0.0, and the pin is
 GNAT 16.1.0 with GPRbuild 26.0.0.

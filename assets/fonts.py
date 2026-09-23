@@ -41,8 +41,9 @@ HERE = Path(__file__).resolve().parent
 VENDOR = HERE / "fonts"
 
 #  Where a licensed family is looked for: the variable first, then a
-#  checkout of landin-fonts beside this repository, which is where the CI
-#  gate's pages task clones it and where a developer's own copy sits.
+#  checkout of landin-fonts beside this repository, which is where a
+#  developer's own copy sits.  pages.yml fetches the faces from object
+#  storage and names the directory through the variable.
 LICENSED_VAR = "LANDIN_FONTS"
 LICENSED_DEFAULT = HERE.parent.parent / "landin-fonts"
 

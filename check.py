@@ -1810,7 +1810,7 @@ def check_pinned_toolchain(full_run):
 
     The recipe pins it, compiler/ada/TOOLCHAIN.md records it for a reader,
     and environments/pins.sh is the one place a value is written; the nix
-    shell and the CI manifests read that file rather than repeating it. Every
+    shell and the workflows read that file rather than repeating it. Every
     file naming a compiler version is another chance to be wrong, and the one
     that drifts is the one nobody reads.
     """
@@ -1882,23 +1882,34 @@ def check_pinned_toolchain(full_run):
                             "%s names %s literally instead of reading it "
                             "from environments/pins.sh" % (relative, name)))
 
-    #  A further manifest need not install the toolchain at all --
-    #  .builds/nix.yml leaves that to the flake, which is why it is not held
-    #  to reading the pins -- but it is still a file where a version could be
-    #  written by hand, and that half of the rule holds everywhere.
-    builds = os.path.join(ROOT, ".builds")
-    for name_yml in sorted(os.listdir(builds) if os.path.isdir(builds) else []):
-        if not name_yml.endswith(".yml"):
-            continue
-        path = os.path.join(builds, name_yml)
-        relative = os.path.join(".builds", name_yml)
-        text = io.open(path, encoding="utf-8").read()
-        for name, pattern in wanted.items():
-            found = pattern.search(recipe_text)
-            if found and found.group(1) in text:
-                out.append((path, 1,
-                            "%s names %s literally instead of reading it "
-                            "from environments/pins.sh" % (relative, name)))
+    #  The recipe is Linux-only, so the Darwin archives' checksums reach
+    #  TOOLCHAIN.md from no file the loop above reads.  Every checksum
+    #  pins.sh holds must be the one the record shows a reader.
+    for name, value in re.findall(
+            r"^(LANDIN_\w+_SHA256\w*)=([0-9a-f]{64})$", pins_text, re.M):
+        if value not in record_text:
+            out.append((pins, 1,
+                        "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
+                        % (name, value)))
+
+    #  A workflow need not install the toolchain itself -- the shared
+    #  action and release.yml source pins.sh -- but every one is still a
+    #  file where a version could be written by hand, and that half of the
+    #  rule holds everywhere.
+    github = os.path.join(ROOT, ".github")
+    for directory, _, names in sorted(os.walk(github)):
+        for name_yml in sorted(names):
+            if not name_yml.endswith((".yml", ".yaml")):
+                continue
+            path = os.path.join(directory, name_yml)
+            relative = os.path.relpath(path, ROOT)
+            text = io.open(path, encoding="utf-8").read()
+            for name, pattern in wanted.items():
+                found = pattern.search(recipe_text)
+                if found and found.group(1) in text:
+                    out.append((path, 1,
+                                "%s names %s literally instead of reading it "
+                                "from environments/pins.sh" % (relative, name)))
 
     return out
 
