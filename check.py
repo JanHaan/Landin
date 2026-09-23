@@ -2216,9 +2216,10 @@ def check_grammar_corpus(full_run):
                                 % (corpus,
                                    complaint or "no derivation")))
 
-    #  R1.10 asks for every production traced to its constructs.  The
-    #  fixtures carry the citations, so the trace is checkable: a construct
-    #  in the grammar that no fixture names is a rule nothing pins.
+    #  Every production is traced to its constructs.  The fixtures'
+    #  `constructs:` lines carry the claims, so the trace is checkable: a
+    #  construct in the grammar that no fixture claims is a rule nothing
+    #  pins.
     cited = set()
     for kind in ("positive", "negative"):
         directory = os.path.join(fixtures, kind)
@@ -2227,14 +2228,35 @@ def check_grammar_corpus(full_run):
         for name in sorted(os.listdir(directory)):
             meta = os.path.join(directory, name, "fixture.meta")
             if os.path.exists(meta):
-                cited |= set(re.findall(
-                    r"\[(\d{4})\]",
-                    io.open(meta, encoding="utf-8").read()))
+                claim = re.search(
+                    r"^constructs:(.*)$",
+                    io.open(meta, encoding="utf-8").read(), re.M)
+                if claim:
+                    cited |= set(re.findall(r"\b(\d{4})\b",
+                                            claim.group(1)))
 
-    section_text = "\n".join(grammar_section(
-        io.open(tour, encoding="utf-8").read())[1] or [])
-    for construct in sorted(set(re.findall(r"^-- \[(\d{4})\]",
-                                           section_text, re.M))):
+    #  A production carries no citation of its own: the construct that owns
+    #  it is the `### [NNNN]` heading its fence sits under.  The .txt form
+    #  marked each with a `-- [NNNN]` line, and matching that marker in the
+    #  Markdown found nothing and so could never refuse anything.
+    owning, heading, inside = set(), None, False
+    for line in io.open(tour, encoding="utf-8").read().splitlines():
+        named = re.match(r"^### \[(\d{4})\]", line)
+        if named:
+            heading = named.group(1)
+        fence = re.match(r"^```(\S*)\s*$", line.strip())
+        if fence:
+            if inside:
+                inside = False
+            else:
+                inside = True
+                if fence.group(1) == "landin-grammar" and heading:
+                    owning.add(heading)
+    if not owning:
+        out.append((SPEC_NAME, 1,
+                    "no construct owns a grammar production, so the trace"
+                    " to fixtures checks nothing"))
+    for construct in sorted(owning):
         if construct not in cited:
             out.append((SPEC_NAME, 1,
                         "grammar construct [%s] is named by no fixture"
@@ -3392,20 +3414,21 @@ def fixture_sources():
 
 
 def pinned_fixtures():
-    """Every fixture in a `Pinned by` paragraph still exists.
+    """Every fixture in a `Pinned by` or `Evidence` paragraph still exists.
 
     Decision-register evidence is a live reference, unlike a historical
     sentence that deliberately names a retired fixture.  Several decisions
     kept citing fixtures after the slice that superseded them deleted those
     directories, and the prose still read plausibly.  Restricting this check
-    to `Pinned by` paragraphs preserves that history while refusing evidence
-    a reader cannot inspect.
+    to those paragraphs, with or without the colon, preserves that history
+    while refusing evidence a reader cannot inspect.
     """
     out = []
     fixture = re.compile(
         r"`((?:unit|positive|negative|runtime|abi|debugger|end-to-end)"
         r"/[A-Za-z0-9][A-Za-z0-9._-]*)`")
-    block = re.compile(r"\*\*Pinned by\*\*(.*?)(?=\n\n|\Z)", re.S)
+    block = re.compile(
+        r"\*\*(?:Pinned by|Evidence):?\*\*(.*?)(?=\n\n|\Z)", re.S)
 
     for relative in LIVE_DOCS:
         path = os.path.join(ROOT, relative)
