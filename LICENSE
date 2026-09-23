@@ -29,6 +29,11 @@ notices when copying the corresponding material:
   * Tree-sitter support headers (alloc.h, array.h and parser.h): MIT;
     notice in highlight/tree-sitter/src/tree_sitter/LICENSE.
     highlight/tree-sitter/README.md records their pinned upstream sources.
+  * Raspberry Pi pico-sdk inputs (RP2040.svd and the hardware headers in
+    devices/inputs/) and the modules devices/generate.py derives from them
+    under devices/generated/rp2040/: BSD-3-Clause; notice in
+    devices/inputs/LICENSE.pico-sdk. devices/README.md records their
+    pinned upstream sources.
 
 The optional MonoLisa files are supplied by the separate private
 landin-fonts checkout and are not included in this tree. Their separate
