@@ -26391,7 +26391,14 @@ package body Landin.Stages.Checking is
                     Syn.Value_Of (Of_Tree, Node);
                   Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Error);
                begin
-                  if Got /= Ty.Atom_Value and then Decidable (Got) then
+                  --  A block with no answer, or one handing back nothing,
+                  --  carries no atom either: nothing else asks it for a
+                  --  value, and the lowering would have no identity to
+                  --  raise.
+                  if Got /= Ty.Atom_Value
+                    and then (Decidable (Got)
+                      or else Got in Ty.Not_Typed | Ty.No_Value)
+                  then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),

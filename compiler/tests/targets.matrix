@@ -243,6 +243,7 @@ negative/escaping-argument-in-while-condition | linux-x86-64, macos-arm64
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
 negative/external-aggregate-boundary | linux-x86-64
 negative/external-convention-not-closed | linux-x86-64
+negative/fail-carries-no-value | linux-x86-64, macos-arm64
 negative/fail-needs-one-atom | linux-x86-64, synthetic-32
 negative/fail-outside-declared-set | linux-x86-64, synthetic-32
 negative/failing-function-signature-mismatch | linux-x86-64, synthetic-32

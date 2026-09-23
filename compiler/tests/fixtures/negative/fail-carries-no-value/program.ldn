@@ -1,0 +1,22 @@
+--  [0940]: `fail` carries one atom.  A block with no answer carries
+--  nothing, and neither does a call returning none [1920].  Before
+--  this fixture both were accepted: the block stopped the lowering as
+--  a defect and the call raised an identity that did not exist.
+unavailable: atom
+
+nothing: () -> none =
+end nothing
+
+empty: (choose: bool) -> none ! unavailable =
+    fail begin
+    end when choose
+end empty
+
+handed: (choose: bool) -> none ! unavailable =
+    fail nothing() when choose
+end handed
+
+unguarded: () -> none ! unavailable =
+    fail begin
+    end
+end unguarded

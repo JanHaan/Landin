@@ -1,0 +1,30 @@
+error[L0301]: `fail` carries one atom identity
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:11:10
+   |
+11 |     fail begin
+   |          ^^^^^
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:11:5
+   |
+11 |     fail begin
+   |     ^^^^^^^^^^ this failing exit
+  = note: [0940]: errors are payload-free atoms
+error[L0301]: `fail` carries one atom identity
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:16:10
+   |
+16 |     fail nothing() when choose
+   |          ^^^^^^^^^
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:16:5
+   |
+16 |     fail nothing() when choose
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing exit
+  = note: [0940]: errors are payload-free atoms
+error[L0301]: `fail` carries one atom identity
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:20:10
+   |
+20 |     fail begin
+   |          ^^^^^
+  --> ../tests/fixtures/negative/fail-carries-no-value/program.ldn:20:5
+   |
+20 |     fail begin
+   |     ^^^^^^^^^^ this failing exit
+  = note: [0940]: errors are payload-free atoms
