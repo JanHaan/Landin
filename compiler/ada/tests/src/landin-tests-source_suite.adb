@@ -1,3 +1,5 @@
+with Ada.Unchecked_Deallocation;
+
 with Landin.Provenance;
 with Landin.Source.Sets;
 
@@ -249,6 +251,39 @@ package body Landin.Tests.Source_Suite is
          "one past the end of CR LF is line two");
    end Terminator_Only_Text;
 
+   --  A source is copied once into the snapshot.  The copy used to pass
+   --  through the stack, so a file larger than the host stack -- about
+   --  8 MiB on Linux -- was reported as host resources exhausted.  The
+   --  text here is twice that, and itself lives on the heap.
+   procedure Text_Larger_Than_The_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Text_Larger_Than_The_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      type Big_Text is access String;
+      procedure Free is new Ada.Unchecked_Deallocation (String, Big_Text);
+      Size : constant := 16 * 1024 * 1024;
+      Text : Big_Text := new String (1 .. Size);
+   begin
+      for Index in Text'Range loop
+         Text (Index) := (if Index mod 64 = 0 then LF else 'x');
+      end loop;
+      declare
+         Snap : constant Snapshot := Create (1, "large.ldn", Text.all);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Natural (Length (Snap)), Size, "every byte was kept");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Line_Count (Snap)), Size / 64 + 1,
+            "every line was mapped");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Line_Text (Snap, Line_Count (Snap) - 1)'Length),
+            63, "the last full line reads back");
+      end;
+      Free (Text);
+   end Text_Larger_Than_The_Stack;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -284,6 +319,9 @@ package body Landin.Tests.Source_Suite is
       Landin.Testing.Register
         (Into, "source", "terminator only text",
          Terminator_Only_Text'Access);
+      Landin.Testing.Register
+        (Into, "source", "text larger than the stack",
+         Text_Larger_Than_The_Stack'Access);
    end Register;
 
 end Landin.Tests.Source_Suite;

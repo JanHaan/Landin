@@ -26,10 +26,13 @@ package body Landin.Source is
 
    function Rebased (Text : String) return Text_Access;
 
+   --  Allocated first and filled in place: a rebasing copy on the stack
+   --  made any source larger than the host stack a Storage_Error.
    function Rebased (Text : String) return Text_Access is
-      Copy : constant String (1 .. Text'Length) := Text;
+      Copy : constant Mutable_Text := new String (1 .. Text'Length);
    begin
-      return new String'(Copy);
+      Copy.all := Text;
+      return Text_Access (Copy);
    end Rebased;
 
    function Create

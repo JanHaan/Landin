@@ -110,9 +110,11 @@ private
    type Text_Access     is access constant String;
    type Offsets_Access  is access constant Offset_Array;
 
-   --  Named so the line map can be filled once, before it is handed over
-   --  as the constant view the rest of the compiler sees.
+   --  Named so the line map and the text can each be filled once, before
+   --  they are handed over as the constant views the rest of the compiler
+   --  sees.
    type Mutable_Offsets is access Offset_Array;
+   type Mutable_Text    is access String;
 
    Empty_Text : aliased constant String := "";
    Empty_Map  : aliased constant Offset_Array := [Line_Number'(1) => 0];
