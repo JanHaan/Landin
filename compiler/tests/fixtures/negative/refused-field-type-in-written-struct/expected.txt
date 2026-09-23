@@ -1,0 +1,44 @@
+error[L0201]: `handler` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:7:15
+  |
+7 |     callback: handler
+  |               ^^^^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0301]: this unsigned width is a packed field representation
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:12:13
+   |
+12 |     row: [1]u3
+   |             ^^ this representation width
+  = note: [0730]: ordinary values use u8, u16, u32 or u64
+error[L0201]: `mode` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:16:12
+   |
+16 |     field: mode at 0..2
+   |            ^^^^
+  = note: [1860]: a name that names nothing is refused
+error[L0301]: this unsigned width is a packed field representation
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:21:13
+   |
+21 |     column: u3
+   |             ^^ this representation width
+  = note: [0730]: ordinary values use u8, u16, u32 or u64
+error[L0301]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:40:16
+   |
+40 | write_caller: (caller where: site) -> none =
+   |                ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:40:30
+   |
+40 | write_caller: (caller where: site) -> none =
+   |                              ^^^^ this written type
+  = note: D192: source filenames live in a separate table
+error[L0303]: `where` is an `in` or `sink` parameter, so its value may not be replaced
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:41:5
+   |
+41 |     where.line = 1
+   |     ^^^^^^^^^^
+  --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:40:23
+   |
+40 | write_caller: (caller where: site) -> none =
+   |                       ^^^^^ declared here
+  = note: [1900]: a mutable binding and a named return may be written, and nothing else may

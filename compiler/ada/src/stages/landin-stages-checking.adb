@@ -13688,7 +13688,12 @@ package body Landin.Stages.Checking is
               (if Nominal = Landin.Checking.No_Nominal_Type
                then 0 else Field_At (Nominal, Syn.Name (Of_Tree, Node)));
          begin
+            --  A struct whose field type was refused has no layout, and
+            --  so no packed field; the refusal already said why.
             return Which > 0
+              and then Landin.Checking.Has_Layout (Types.all, Nominal)
+              and then Which
+                <= Landin.Checking.Layout_Field_Count (Types.all, Nominal)
               and then Landin.Checking.Field_Shape_Of
                 (Types.all, Nominal, Which).Packing.Bits /= 0;
          end;

@@ -1,0 +1,42 @@
+--  A struct whose field type was refused has no layout, so writing
+--  any of its fields, or one of a struct whose packed width was
+--  refused, may only report what the declaration already said.
+--  Before this fixture the write asked the missing layout for its
+--  packed field and the compiler stopped as a defect.
+box: type = struct
+    callback: handler
+    other: i32
+end box
+
+holder: type = struct
+    row: [1]u3
+end holder
+
+image: type = layout(packed) struct
+    field: mode at 0..2
+end image
+
+site: type = struct
+    line: u32
+    column: u3
+end site
+
+mut state: holder
+
+write_beside: () -> none =
+    mut local: box
+    local.other = 1
+end write_beside
+
+write_element: () -> none =
+    state.row[0] = zeroed
+end write_element
+
+write_packed: () -> none =
+    mut value: image = zeroed
+    value.field = zeroed
+end write_packed
+
+write_caller: (caller where: site) -> none =
+    where.line = 1
+end write_caller

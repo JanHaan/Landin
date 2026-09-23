@@ -453,6 +453,7 @@ negative/module-array-mixed-repetition-suffix-not-static | linux-x86-64, macos-a
 negative/module-array-repetition-element-not-static | linux-x86-64, macos-arm64
 negative/module-array-repetition-fold-range | linux-x86-64, macos-arm64
 negative/module-array-repetition-index-element | linux-x86-64, macos-arm64
+negative/module-bool-from-itself | linux-x86-64, macos-arm64
 negative/module-directory-invalid | linux-x86-64, macos-arm64
 negative/module-fold-no-type-holds | linux-x86-64, macos-arm64
 negative/module-function-field-without-image | linux-x86-64, macos-arm64, synthetic-32
@@ -523,6 +524,7 @@ negative/nominal-struct-recursive-layout | linux-x86-64, macos-arm64
 negative/nominal-struct-recursive-payload | linux-x86-64, macos-arm64
 negative/nominal-struct-recursive-zero-array | linux-x86-64, macos-arm64
 negative/non-ascii-outside-comment | linux-x86-64, macos-arm64
+negative/none-is-not-a-value | linux-x86-64, macos-arm64
 negative/nonzeroable-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/nonzeroable-zero-length-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/null-pointer-union-call-else-frame-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -963,6 +965,7 @@ negative/recursive-module-image-cycle | linux-x86-64, synthetic-32
 negative/recursive-module-image-nominal-mismatch | linux-x86-64, synthetic-32
 negative/reference-expression-body-permission | linux-x86-64, macos-arm64, synthetic-32
 negative/reference-traversal-value-live-view | linux-x86-64, macos-arm64
+negative/refused-field-type-in-written-struct | linux-x86-64, macos-arm64
 negative/refused-struct-inline-argument | linux-x86-64, macos-arm64, synthetic-32
 negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64

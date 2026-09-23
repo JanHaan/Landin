@@ -1,0 +1,9 @@
+class: negative
+summary: writing a field of a struct whose field type or packed width was refused reports the declaration and nothing more
+constructs: 0710, 0750, 0770
+program: program.ldn
+codes: L0201, L0301, L0201, L0301, L0301, L0303
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn
+status: 1
