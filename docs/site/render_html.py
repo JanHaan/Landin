@@ -48,7 +48,7 @@ from urllib.parse import quote, unquote, urlsplit, urlunsplit
 HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
-VERSION_LINE = "specification 0.2.0"
+VERSION_LINE = "specification 0.2.1"
 LANDING_LINE = "built from scratch"
 REPO = "https://github.com/JanHaan/Landin"
 #  The canonical host.  The pages are served from GitHub Pages under

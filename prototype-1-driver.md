@@ -1,6 +1,6 @@
 # Landin prototype 1 — a driver from a vendor SVD
 
-Current with specification 0.2.0. Its own findings X1-X9 are all
+Current with specification 0.2.1. Its own findings X1-X9 are all
 resolved below. The bootstrap compiler exists, but this Cortex-M program uses
 future constructs and deliberate omissions, so it remains a specification
 test: every line is meant to follow a rule that is written down, and every
