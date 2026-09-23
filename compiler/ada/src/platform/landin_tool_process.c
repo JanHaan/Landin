@@ -1,19 +1,42 @@
 /* Host-only POSIX process operations. Create the group before exec so a
    tool cannot spawn descendants before its timeout ownership is established.
-   Ada owns deadlines, capture files, diagnostics and argument storage. */
+   Capture files are created here, in the host's temporary directory; Ada
+   owns deadlines, their removal, diagnostics and argument storage. */
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 extern char **environ;
 
+int landin_tool_capture(char *path, size_t capacity);
 int landin_tool_start(char *const args[], int capture, int errors, int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
+
+/* Create one capture file under $TMPDIR, or /tmp when that is unset or
+   empty, and return its open descriptor with its name in path. GNAT's own
+   temporary files are relative to the current directory, which put every
+   capture beside the caller's sources and failed in a read-only one. */
+int landin_tool_capture(char *path, size_t capacity)
+{
+    const char *directory = getenv("TMPDIR");
+    int written;
+
+    if (directory == NULL || directory[0] == '\0')
+        directory = "/tmp";
+    written = snprintf(path, capacity, "%s/landin-tool-XXXXXX", directory);
+    if (written < 0 || (size_t)written >= capacity) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return mkstemp(path);
+}
 
 int landin_tool_start(char *const args[], int capture, int errors, int *child)
 {

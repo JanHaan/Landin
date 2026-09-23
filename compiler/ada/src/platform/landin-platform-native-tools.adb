@@ -27,6 +27,37 @@ package body Landin.Platform.Native.Tools is
       Child   : access Interfaces.C.int) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_tool_start";
 
+   --  Creates one capture file in the host's temporary directory and
+   --  returns its descriptor, or -1, with its NUL-terminated name in Path.
+   function Create_Capture
+     (Path     : out Interfaces.C.char_array;
+      Capacity : Interfaces.C.size_t) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_tool_capture";
+
+   --  Not GNAT.OS_Lib's temporary files: those are created relative to the
+   --  current directory whatever TMPDIR says, so every capture landed beside
+   --  the caller's sources and a read-only directory refused every tool.
+   procedure Create_Capture_File
+     (FD   : out OS.File_Descriptor;
+      Name : out OS.String_Access);
+
+   procedure Create_Capture_File
+     (FD   : out OS.File_Descriptor;
+      Name : out OS.String_Access)
+   is
+      Path   : Interfaces.C.char_array (0 .. 4095);
+      Opened : constant Interfaces.C.int :=
+        Create_Capture (Path, Path'Length);
+   begin
+      if Opened < 0 then
+         FD := OS.Invalid_FD;
+         Name := null;
+      else
+         FD := OS.File_Descriptor (Opened);
+         Name := new String'(Interfaces.C.To_Ada (Path));
+      end if;
+   end Create_Capture_File;
+
    function Wait_Tool
      (Child   : Interfaces.C.int;
       Status  : access Interfaces.C.int;
@@ -144,10 +175,10 @@ package body Landin.Platform.Native.Tools is
            C_Strings.New_String (Arguments.Element (Index));
       end loop;
 
-      --  The GNAT runtime chooses a name unique to this process and creates it
-      --  before returning. Pass that open descriptor to the spawn action,
-      --  avoiding a second filename lookup before the child captures output.
-      OS.Create_Temp_Output_File (FD, Name);
+      --  The adapter chooses a unique name and creates the file before
+      --  returning. Pass that open descriptor to the spawn action, avoiding
+      --  a second filename lookup before the child captures output.
+      Create_Capture_File (FD, Name);
 
       if FD = OS.Invalid_FD or else Name = null then
          raise External_Tool_Failed
@@ -155,7 +186,7 @@ package body Landin.Platform.Native.Tools is
       end if;
 
       if Capture = Output_Only then
-         OS.Create_Temp_Output_File (Error_FD, Error_Name);
+         Create_Capture_File (Error_FD, Error_Name);
          if Error_FD = OS.Invalid_FD or else Error_Name = null then
             raise External_Tool_Failed
               with "could not create temporary tool error output";

@@ -150,7 +150,7 @@ different responsibilities.
 | `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
-| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |
 | `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
@@ -1003,7 +1003,9 @@ programming or resource exceptions. A tool capture that cannot be read raises
 constants. `Native.Tools` passes the already-open capture descriptors and
 literal argument vector. Merged capture retains one ordered byte stream;
 `Output_Only` retains stdout in `Output` and stderr in `Error_Output`, so the
-harness can enforce both expected stdout and empty stderr. Both temporary
+harness can enforce both expected stdout and empty stderr. The adapter creates
+both temporary files under `$TMPDIR`, or `/tmp`, never in the current
+directory, and both
 files share the owned cleanup path. The adapter starts each tool in its own
 process group and uses a monotonic deadline. On timeout it kills that group and reaps the direct child
 before reporting `Timed_Out`; adapter exceptions also stop an owned child.

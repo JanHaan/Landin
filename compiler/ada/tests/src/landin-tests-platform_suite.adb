@@ -650,6 +650,73 @@ package body Landin.Tests.Platform_Suite is
         (Item, Missed, "a missing executable is a host failure");
    end Native_Arguments_And_Capture_Are_Preserved;
 
+   --  Deliberate native-host test: only the host says where a file was
+   --  created. The tool lists TMPDIR while its captures are open, and both
+   --  must be there rather than in the current directory, where GNAT's
+   --  temporary files had put every one. No compiler is invoked.
+   procedure Native_Captures_Use_The_Temporary_Directory
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Captures_Use_The_Temporary_Directory
+     (Item : in out Landin.Testing.Context)
+   is
+      package Environment renames Ada.Environment_Variables;
+
+      Runner   : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result   : Landin.Platform.Tool_Result;
+      Args     : Landin.Platform.Path_List := Landin.Platform.Arguments ("-c");
+      Captures : constant String := Scratch & "/captures";
+      Had      : constant Boolean := Environment.Exists ("TMPDIR");
+      Previous : constant String := Environment.Value ("TMPDIR", "");
+
+      procedure Restore;
+
+      procedure Restore is
+      begin
+         if Had then
+            Environment.Set ("TMPDIR", Previous);
+         else
+            Environment.Clear ("TMPDIR");
+         end if;
+      end Restore;
+
+      function Is_Empty (Directory : String) return Boolean;
+
+      function Is_Empty (Directory : String) return Boolean is
+         Search : Ada.Directories.Search_Type;
+         Found  : Boolean;
+      begin
+         Ada.Directories.Start_Search
+           (Search, Directory, "",
+            [Ada.Directories.Ordinary_File => True, others => False]);
+         Found := Ada.Directories.More_Entries (Search);
+         Ada.Directories.End_Search (Search);
+         return not Found;
+      end Is_Empty;
+   begin
+      if Ada.Directories.Exists (Captures) then
+         Ada.Directories.Delete_Tree (Captures);
+      end if;
+      Ada.Directories.Create_Path (Captures);
+      Environment.Set ("TMPDIR", Ada.Directories.Full_Name (Captures));
+      Landin.Platform.Add (Args, "ls ""$TMPDIR""");
+      begin
+         Runner.Run ("sh", Args, Result, Landin.Platform.Output_Only);
+      exception
+         when others =>
+            Restore;
+            raise;
+      end;
+      Restore;
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Count
+           (Unbounded.To_String (Result.Output), "landin-tool-") = 2,
+         "both captures are created in TMPDIR");
+      Landin.Testing.Check
+        (Item, Is_Empty (Captures), "both captures are removed after the run");
+   end Native_Captures_Use_The_Temporary_Directory;
+
    procedure File_Removal_Preserves_Directories
      (Item : in out Landin.Testing.Context);
 
@@ -1137,6 +1204,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native arguments and capture are preserved",
          Native_Arguments_And_Capture_Are_Preserved'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native captures use the temporary directory",
+         Native_Captures_Use_The_Temporary_Directory'Access);
       Landin.Testing.Register
         (Into, "platform", "fake writes are recorded",
          Fake_Writes_Are_Recorded'Access);

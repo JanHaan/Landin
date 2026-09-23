@@ -1,8 +1,9 @@
 --  Running an external assembler, linker or other tool.
 --
 --  This is the compiler's only process-spawning package. Its host C adapter
---  owns POSIX spawn attributes and wait/signal constants; GNAT supplies path
---  lookup and temporary files. Nothing above this seam depends on either.
+--  owns POSIX spawn attributes, wait/signal constants and the capture files
+--  it creates in the host's temporary directory; GNAT supplies path lookup.
+--  Nothing above this seam depends on either.
 
 package Landin.Platform.Native.Tools is
 
