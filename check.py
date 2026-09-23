@@ -1805,6 +1805,52 @@ def check_citations(paths):
     return sorted(set(out))
 
 
+def check_specification_version(full_run):
+    """Every place that states the specification's version states one.
+
+    README.md's status line is the version the machinery reads: the flake,
+    release.yml's asset name and llms.txt all take it from there.  Six more
+    places write it by hand, and a declaration that missed one of them used
+    to pass this check -- a copy with only the README bumped said all
+    clean.  The site renderer compared its own constant with the README,
+    but only when the site built, which is after the push.  This holds
+    every hand-written spelling to the README's, and changes none of them:
+    what the version is stays a maintainer's decision.
+    """
+    if not full_run:
+        return []
+    readme = "README.md"
+    places = [
+        ("docs/site/render_html.py",
+         re.compile(r'^VERSION_LINE = "specification ([0-9][0-9.]*)"$', re.M)),
+        ("handoff.md",
+         re.compile(r"Kept current at specification \*\*([0-9][0-9.]*)\*\*")),
+        ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
+    ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
+         for name in ("prototype-1-driver.md", "prototype-2-parser.md",
+                      "prototype-3-containers.md", "prototype-4-app.md")]
+    out = absent([readme] + [path for path, _ in places])
+    if out:
+        return out
+    stated = re.search(r"^\*\*Status: specification ([0-9][0-9.]*)\.",
+                       io.open(readme, encoding="utf-8").read(), re.M)
+    if not stated:
+        return [(readme, 1, "the status line states no specification version")]
+    version = stated.group(1)
+    for path, pattern in places:
+        text = io.open(path, encoding="utf-8").read()
+        found = pattern.search(text)
+        if not found:
+            out.append((path, 1, "states no specification version where "
+                                 "check_specification_version looks"))
+        elif found.group(1) != version:
+            line = text.count("\n", 0, found.start(1)) + 1
+            out.append((path, line,
+                        "says specification %s; README.md says %s"
+                        % (found.group(1), version)))
+    return out
+
+
 def check_pinned_toolchain(full_run):
     """Every file that installs or records the toolchain must name one.
 
@@ -6601,6 +6647,7 @@ def main(argv):
     extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)
+    extra += check_specification_version(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)
