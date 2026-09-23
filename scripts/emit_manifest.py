@@ -27,7 +27,12 @@ first run of this check passed absolute paths and six of 1446 entries
 differed for that reason alone; the same two paths disagree the same way on
 one host, which is how it was identified as the check's fault rather than
 the compiler's.  So each fixture is compiled from its own directory under
-the bare spelling `program.ldn`, which is the same string on every host.
+the bare spellings its `fixture.meta` names -- `program`, then `with` in the
+order written, or `--root` and the directory itself -- which are the same
+strings on every host.  The fixture record decides what is compiled, as it
+does for the harness; a fixture this check could not read would be a
+fixture it silently stopped checking, which is how 27 of them went
+unexamined while the header said "every positive fixture".
 
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
@@ -41,7 +46,29 @@ from pathlib import Path
 
 TARGETS = ("linux-x86-64", "darwin-arm64", "cortex-m0")
 MODES = ("debug", "release")
-SOURCE = "program.ldn"
+
+
+def operands(fixture):
+    """The operands the harness hands `refine` for FIXTURE, relative to it.
+
+    `compiler/tests/README.md` defines the keys: a `root` makes the
+    directory the entry module and is passed first as `--root`; otherwise
+    `program` is the file the fixture is named for and `with` is the rest
+    of the module after it.  A fixture that names no program is a fault
+    here rather than a skip.
+    """
+    meta = {}
+    for line in (fixture / "fixture.meta").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and ":" in line:
+            key, value = line.split(":", 1)
+            meta[key.strip()] = value.strip()
+    if not meta.get("program"):
+        raise SystemExit("%s: fixture.meta names no program" % fixture.name)
+    if meta.get("root"):
+        return ["--root=" + meta["root"], "."]
+    rest = [one.strip() for one in meta.get("with", "").split(",") if one.strip()]
+    return [meta["program"]] + rest
 
 
 def emit(refine, root, out):
@@ -53,18 +80,17 @@ def emit(refine, root, out):
     with tempfile.TemporaryDirectory() as tmp:
         asm = Path(tmp) / "out.s"
         for fixture in fixtures:
-            if not (fixture / SOURCE).exists():
-                continue
+            sources = operands(fixture)
             for target in TARGETS:
                 for mode in MODES:
                     if asm.exists():
                         asm.unlink()
-                    #  cwd is the fixture, and the operand is the bare name,
+                    #  cwd is the fixture, and the operands are relative,
                     #  so the source-path spelling is identical everywhere.
                     result = subprocess.run(
                         [str(refine), "--target=" + target, "--build-mode=" + mode,
                          "--optimize=size", "--specialize=auto", "--emit=asm",
-                         "-o", str(asm), SOURCE],
+                         "-o", str(asm)] + sources,
                         capture_output=True, cwd=fixture)
                     key = "%s|%s|%s" % (fixture.name, target, mode)
                     if result.returncode != 0 or not asm.exists():

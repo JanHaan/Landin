@@ -5,7 +5,8 @@
 #  compilations must agree on and checks it within one host.  A single
 #  machine cannot check the host itself, so that half lives here: each host
 #  emits a manifest of assembly digests for every positive fixture on every
-#  target in both build modes, and the manifests have to agree.
+#  target in both build modes, and the manifests have to agree.  Each fixture
+#  is compiled from what its own fixture.meta names, as the harness does.
 #
 #  The cheap axis is the one that multiplies.  Emission needs no target
 #  assembler, linker or emulator, so a host job installs the pinned
