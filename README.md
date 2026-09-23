@@ -18,7 +18,7 @@ for Linux x86-64 and native macOS arm64, and builds firmware for Cortex-M0. It h
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
 `any`. Hosted containers, allocators, text and I/O in `core`, a complete
 recovering configuration parser and a hosted log filter now run alongside the
-automatically tested FizzBuzz, number-theory, searching
+automatically tested sensor-polling, FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
 FASTA workloads. A complete derived driver and application run on the pinned
 Cortex-M0 emulators with compiler-owned startup, within the recorded 32 KiB
@@ -33,7 +33,7 @@ targets and the microcontrollers people buy.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | ten complete programs the compiler emits and the Linux gate runs today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
+| `examples.md` | eleven complete programs the compiler emits and the Linux gate runs today: a sensor poll that puts concepts, runtime dispatch, a lent arena and declared failures together, seven small algorithms, and correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |

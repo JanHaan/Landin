@@ -1,0 +1,75 @@
+--  Sensors of different kinds behind one concept, polled through `any`,
+--  their readings kept in a list whose memory the caller lends.
+import core/mem
+import core/vec
+
+offline, jammed: atom
+
+sensor: type = concept (t: type)
+    read: (self: ptr mut t) -> (value: i32) ! offline | jammed
+end sensor
+
+thermometer: type = struct
+    celsius: i32
+end thermometer
+
+door: type = struct
+    openings: i32
+    wired: bool
+end door
+
+read_thermometer: (self: ptr mut thermometer)
+                  -> (value: i32) ! offline | jammed =
+    fail jammed when self.val.celsius < -40
+    value = self.val.celsius
+end read_thermometer
+
+read_door: (self: ptr mut door) -> (value: i32) ! offline | jammed =
+    fail offline when not self.val.wired
+    inc self.val.openings
+    value = self.val.openings
+end read_door
+
+thermometer is sensor (read: read_thermometer)
+door is sensor (read: read_door)
+
+--  Generic over where the memory comes from; the caller decides.
+poll: (provider: type is mem.allocator, inout memory: provider,
+       sensors: []mut any sensor)
+      -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
+    readings = vec.new_list(item: i32)
+    for device in sensors do
+        --  An unplugged sensor is skipped; a jammed one stops the poll.
+        value := device.read() else (why)
+            fail jammed when why == jammed
+            continue
+        end
+        try vec.push(readings, memory, value)
+    end for
+end poll
+
+public main: () -> (code: i32) =
+    mut bytes: [256]u8 = zeroed
+    mut arena := mem.arena_over(addr bytes[0], lenof bytes)
+
+    mut kitchen: thermometer = (celsius: 21)
+    mut hall: thermometer = (celsius: 19)
+    mut front: door = (openings: 1, wired: true)
+    mut cellar: door = (openings: 0, wired: false)
+    mut sensors: [4]any sensor
+    sensors[0] = any(addr kitchen)
+    sensors[1] = any(addr front)
+    sensors[2] = any(addr cellar)
+    sensors[3] = any(addr hall)
+
+    mut readings := poll(arena, sensors[0..<4]) else (problem)
+        code = if problem == jammed then 2 else 1 end if
+        return
+    end
+    defer vec.release(readings, arena)
+
+    code = 0
+    for value in vec.used(readings) do
+        code += value
+    end for
+end main

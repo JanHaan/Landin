@@ -7,10 +7,11 @@ the runtime suite executes, and each returns 42 only after checking its result.
 The implemented hosted language includes aggregate parameters and results,
 fixed arrays [0520], slices [0570], variants [0680], pattern matching [1210],
 `inout` parameters [0900], loops and traversal [1130] [1140] [1150],
-value-producing loop exits [1190], contextual text literals [0260], and
-floating-point arithmetic [0170] [0210]. These examples use iteration where
-the algorithm calls for it; merge sort keeps only its natural
-divide-and-conquer recursion.
+value-producing loop exits [1190], contextual text literals [0260],
+floating-point arithmetic [0170] [0210], concepts with runtime dispatch
+[1230] [1370], and allocators passed as capabilities [1360]. These examples
+use iteration where the algorithm calls for it; merge sort keeps only its
+natural divide-and-conquer recursion.
 
 ## Compile and run
 
@@ -26,11 +27,103 @@ test $? -eq 42
 ```
 
 FizzBuzz writes its conventional one hundred lines, and the three Benchmark
-Game programs write their official correctness output; the other six programs
+Game programs write their official correctness output; the other seven programs
 print nothing. Status 42 means the checks in `main` passed, and any other
 returned status makes the runtime fixture fail. The Linux gate checks
-all four output oracles and all ten programs on every push; Darwin runs by
+all four output oracles and all eleven programs on every push; Darwin runs by
 hand on a Mac. On a Mac, select `--target=darwin-arm64` in the command above.
+
+## Sensors
+
+This one is not a classic exercise; it shows the language's main ideas
+working together in one short program. Two kinds of sensor conform to one
+concept [1230] [1240] and share one slice as `any sensor` values [1370], so
+each read is dispatched at runtime. `poll` is generic over its allocator
+[1290] [1360]: `main` lends it an arena over a 256-byte stack buffer [0820],
+and the list of readings grows there and nowhere else. A read can fail with a
+declared atom [0940]; the poll skips the unplugged door, would stop at a
+jammed sensor, and passes running out of memory on with `try` [0960]. The
+three readings, 21, 2 and 19, sum to 42.
+
+Fixture source: `compiler/tests/fixtures/runtime/sensors/main.ldn`.
+
+```landin
+--  Sensors of different kinds behind one concept, polled through `any`,
+--  their readings kept in a list whose memory the caller lends.
+import core/mem
+import core/vec
+
+offline, jammed: atom
+
+sensor: type = concept (t: type)
+    read: (self: ptr mut t) -> (value: i32) ! offline | jammed
+end sensor
+
+thermometer: type = struct
+    celsius: i32
+end thermometer
+
+door: type = struct
+    openings: i32
+    wired: bool
+end door
+
+read_thermometer: (self: ptr mut thermometer)
+                  -> (value: i32) ! offline | jammed =
+    fail jammed when self.val.celsius < -40
+    value = self.val.celsius
+end read_thermometer
+
+read_door: (self: ptr mut door) -> (value: i32) ! offline | jammed =
+    fail offline when not self.val.wired
+    inc self.val.openings
+    value = self.val.openings
+end read_door
+
+thermometer is sensor (read: read_thermometer)
+door is sensor (read: read_door)
+
+--  Generic over where the memory comes from; the caller decides.
+poll: (provider: type is mem.allocator, inout memory: provider,
+       sensors: []mut any sensor)
+      -> (readings: vec.list(i32)) ! mem.out_of_memory | jammed =
+    readings = vec.new_list(item: i32)
+    for device in sensors do
+        --  An unplugged sensor is skipped; a jammed one stops the poll.
+        value := device.read() else (why)
+            fail jammed when why == jammed
+            continue
+        end
+        try vec.push(readings, memory, value)
+    end for
+end poll
+
+public main: () -> (code: i32) =
+    mut bytes: [256]u8 = zeroed
+    mut arena := mem.arena_over(addr bytes[0], lenof bytes)
+
+    mut kitchen: thermometer = (celsius: 21)
+    mut hall: thermometer = (celsius: 19)
+    mut front: door = (openings: 1, wired: true)
+    mut cellar: door = (openings: 0, wired: false)
+    mut sensors: [4]any sensor
+    sensors[0] = any(addr kitchen)
+    sensors[1] = any(addr front)
+    sensors[2] = any(addr cellar)
+    sensors[3] = any(addr hall)
+
+    mut readings := poll(arena, sensors[0..<4]) else (problem)
+        code = if problem == jammed then 2 else 1 end if
+        return
+    end
+    defer vec.release(readings, arena)
+
+    code = 0
+    for value in vec.used(readings) do
+        code += value
+    end for
+end main
+```
 
 ## FizzBuzz
 

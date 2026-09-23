@@ -1858,6 +1858,7 @@ runtime/scalar-subobject-zeroed-computed-index-traps | linux-x86-64, macos-arm64
 runtime/scalar-traversal-values | linux-x86-64, macos-arm64
 runtime/scalar-zeroed-assignment-clears-values | linux-x86-64, macos-arm64
 runtime/selection-sort | linux-x86-64, macos-arm64
+runtime/sensors | linux-x86-64, macos-arm64
 runtime/shared-declarations-evaluate-once | linux-x86-64, macos-arm64
 runtime/shifts-fill-with-zeros-beyond-the-width | linux-x86-64, macos-arm64
 runtime/sieve-of-eratosthenes | linux-x86-64, macos-arm64

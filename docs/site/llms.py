@@ -347,7 +347,7 @@ def index(pages, site_url, release, sizes):
             ("tour", "the language explained construct by numbered "
                      "construct, teaching by example. Teaches; does not "
                      "decide."),
-            ("examples", "ten complete programs the compiler emits and the "
+            ("examples", "eleven complete programs the compiler emits and the "
                          "gates run. Each is known to compile and run, so "
                          "each is safe to copy from."),
         ]),

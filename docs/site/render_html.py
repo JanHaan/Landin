@@ -952,9 +952,9 @@ GUIDES = [
                "and is not evidence of."),
     dict(key="examples", src="examples.md", out="examples.html",
          nav="running examples", group="the language",
-         blurb="Ten complete programs the compiler emits and the Linux gate "
-               "runs, from FizzBuzz and Euclid to three Benchmark Game "
-               "correctness workloads."),
+         blurb="Eleven complete programs the compiler emits and the Linux "
+               "gate runs, from a sensor poll and Euclid to three Benchmark "
+               "Game correctness workloads."),
     dict(key="readme", src="README.md", out="readme.html",
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
@@ -1865,9 +1865,9 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
         ("examples.html", "run real programs",
-         "FizzBuzz, Euclid, searching, a prime sieve, run-length encoding and "
-         "sorting, plus fannkuch-redux, Mandelbrot and FASTA: complete sources "
-         "the Linux gate builds and executes."),
+         "A sensor poll, FizzBuzz, Euclid, searching, a prime sieve, "
+         "run-length encoding and sorting, plus fannkuch-redux, Mandelbrot "
+         "and FASTA: complete sources the Linux gate builds and executes."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'

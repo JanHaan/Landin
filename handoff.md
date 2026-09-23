@@ -254,7 +254,7 @@ failing allocators threaded as capabilities; `core/vec`, `core/small`,
 `core/map`, `core/tree` and `core/sort` over honest raw storage; `core/text`
 with validated conversions; and the system and memory I/O worlds. Every
 container transition, allocation rollback and unsafe obligation is written
-down. Of the ten running examples, the four that write output — FizzBuzz and
+down. Of the eleven running examples, the four that write output — FizzBuzz and
 the three Benchmark Game programs — import `core` and are held to exact output
 oracles.
 

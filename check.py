@@ -76,6 +76,8 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/site/README.md"]
 
 RUNNING_EXAMPLES = [
+    ("Sensors",
+     "compiler/tests/fixtures/runtime/sensors/main.ldn"),
     ("FizzBuzz",
      "compiler/tests/fixtures/runtime/fizzbuzz/main.ldn"),
     ("Greatest common divisor",

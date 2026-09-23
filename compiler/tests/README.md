@@ -348,9 +348,12 @@ already resides on its Linux filesystem.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Ten of them are collected in `examples.md` and use
-the language and hosted library implemented through R4.20:
+single-construct probes. Eleven of them are collected in `examples.md` and
+use the language and hosted library implemented through R4.20:
 
+- [sensors](fixtures/runtime/sensors/main.ldn) polls two kinds of sensor
+  through `any`, grows a list of readings in an arena its caller lends, and
+  skips or propagates declared failures;
 - [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) traverses one through 100,
   prints the traditional lines and tallies their atom classifications;
 - [greatest common divisor](fixtures/runtime/greatest-common-divisor/main.ldn)
@@ -379,7 +382,8 @@ FizzBuzz and the three Benchmark Game programs additionally have exact output
 oracles. Together they exercise aggregate parameters, fixed arrays, slices,
 `inout`, atoms, variants,
 pattern matching, computed indexing, valued loop exits, text literals,
-floating-point arithmetic, binary output and hosted I/O. The Benchmark Game
+floating-point arithmetic, concepts, `any` dispatch, lent allocators, binary
+output and hosted I/O. The Benchmark Game
 ports use its published algorithms and small correctness inputs, not its
 performance inputs; they are correctness and compiler-pressure workloads, not
 competitive benchmark targets. Their generated oracles were compared byte for
@@ -403,7 +407,7 @@ test $? -eq 42
 
 Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples. `.github/workflows/gate.yml` compiles, runs and
-checks all ten on every push.
+checks all eleven on every push.
 
 The test program validates its complete suite-name inventory before any
 selected or complete run. It rejects missing and unlisted suites separately
