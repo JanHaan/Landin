@@ -19,7 +19,7 @@
 #  language moves. ROADMAP.md schedules the rest.
 #
 #  Two jobs, because the first measurement was lopsided: check.py takes a
-#  minute and the 742-case corpus takes the rest of the hour. Waiting an
+#  minute and the 743-case corpus takes the rest of the hour. Waiting an
 #  hour for a verdict on a typo is how a gate stops being read.
 #
 #  They share nothing, which is the point. check.py needs neither the
@@ -57,7 +57,7 @@ jobs:
       - name: check.py
         run: python3 check.py
 
-  #  The compiler and all 742 cases. scripts/test.sh builds first, so this
+  #  The compiler and all 743 cases. scripts/test.sh builds first, so this
   #  is also where a compile error is reported.
   compiler:
     runs-on: ubuntu-24.04

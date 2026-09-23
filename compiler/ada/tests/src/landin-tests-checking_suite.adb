@@ -8099,7 +8099,7 @@ package body Landin.Tests.Checking_Suite is
          & "end f" & LF,
          Accepted => False);
       Check_Source
-        ("problem: atom leaf: () -> (r: i32) ! problem = "
+        ("problem: atom leaf: () -> none ! problem = "
          & "fail problem end leaf "
          & "f: () -> none = leaf() else (error) _ = error end end f",
          Accepted => True);

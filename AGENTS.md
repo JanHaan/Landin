@@ -81,7 +81,7 @@ nix build .#refine-bin
 push and pull request. Two jobs that share nothing: `documents` runs
 `check.py` in about ninety seconds, needing neither the toolchain nor a built
 compiler, and `compiler` builds `refine` with the pinned toolchain and runs
-all 742 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes. Splitting them
+all 743 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes. Splitting them
 means a typo gets its verdict without waiting for the corpus, and a compile
 error still surfaces about two minutes into `compiler`.
 
