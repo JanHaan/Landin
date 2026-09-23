@@ -26610,8 +26610,10 @@ package body Landin.Stages.Checking is
 
          --  A routine can also finish by calling a none-returning routine
          --  after assigning its named results. Syntax alone cannot select
-         --  that statement interpretation of the final call.
-         if Routine_Body
+         --  that statement interpretation of the final call.  Any other
+         --  block ending that way has no answer, and whether one was owed
+         --  is flow's to say (D124): a discarded recovery owes none.
+         if Expected.Kind /= Ty.Undecided
            and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
          then
             declare
@@ -26620,6 +26622,9 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Value)
                     in Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
                  and then not Is_Struct_Construction (Of_Tree, Value)
+                 and then (Routine_Body
+                   or else Syn.Kind (Of_Tree, Value) = Syn.Try_Expression
+                   or else Syn.Recovery_Of (Of_Tree, Value) = Syn.No_Node)
                then
                   declare
                      Got : constant Ty.Type_Kind :=
