@@ -4,6 +4,7 @@ with Ada.Environment_Variables;
 with Ada.Streams.Stream_IO;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Interfaces.C;
 
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
@@ -1024,6 +1025,62 @@ package body Landin.Tests.Platform_Suite is
          "contents, missing leaves and invalid paths cannot prove identity");
    end Native_Path_Identity;
 
+   --  The name rule the native identity adapter applies to two absent
+   --  leaves in one directory.  No test host mounts ZFS, XFS or NFS, so the
+   --  unknown-filesystem answer is held here at the C boundary: that is the
+   --  answer every fresh --emit=exe output on such a filesystem depends on.
+   procedure Native_Name_Rules_On_Unknown_Filesystems
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Name_Rules_On_Unknown_Filesystems
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Interfaces.C.int;
+
+      function Names_Alias
+        (Left, Right : Interfaces.C.char_array;
+         Rules       : Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_names_alias";
+
+      Unknown          : constant Interfaces.C.int := -1;
+      Case_Insensitive : constant Interfaces.C.int := 0;
+      Byte_Sensitive   : constant Interfaces.C.int := 1;
+      Distinct         : constant Interfaces.C.int := 0;
+      Alias            : constant Interfaces.C.int := 1;
+      Indeterminate    : constant Interfaces.C.int := -1;
+
+      function Answer
+        (Left, Right : String; Rules : Interfaces.C.int)
+         return Interfaces.C.int
+      is (Names_Alias
+            (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right), Rules));
+   begin
+      Landin.Testing.Check
+        (Item, Answer ("prog", "prog.s", Unknown) = Distinct
+         and then Answer ("a.out", "a.out.s", Unknown) = Distinct
+         and then Answer ("prog.o", "prog.s", Unknown) = Distinct,
+         "ASCII names that differ after folding are distinct anywhere");
+      Landin.Testing.Check
+        (Item, Answer ("prog", "prog", Unknown) = Alias,
+         "an identical name is the same leaf anywhere");
+      Landin.Testing.Check
+        (Item, Answer ("Prog", "prog", Unknown) = Indeterminate
+         and then Answer ("prog.", "prog", Unknown) = Indeterminate
+         and then Answer ("prog ", "prog", Unknown) = Indeterminate
+         and then Answer ("PROG~1", "program", Unknown) = Indeterminate
+         and then Answer ("prog:s", "prog", Unknown) = Indeterminate
+         and then Answer
+           ("caf" & Character'Val (16#C3#) & Character'Val (16#A9#),
+            "cafe", Unknown) = Indeterminate,
+         "names an unknown filesystem could equate stay indeterminate");
+      Landin.Testing.Check
+        (Item, Answer ("Prog", "prog", Case_Insensitive) = Alias
+         and then Answer ("Prog", "prog", Byte_Sensitive) = Distinct
+         and then Answer ("prog.", "prog", Byte_Sensitive) = Distinct,
+         "known filesystems keep their own rules");
+   end Native_Name_Rules_On_Unknown_Filesystems;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1038,6 +1095,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native path identity",
          Native_Path_Identity'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native name rules on unknown filesystems",
+         Native_Name_Rules_On_Unknown_Filesystems'Access);
       Landin.Testing.Register
         (Into, "platform", "fake reads report their reason",
          Fake_Reads_Report_Their_Reason'Access);

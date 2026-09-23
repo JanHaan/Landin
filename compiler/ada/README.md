@@ -984,7 +984,10 @@ The stages remain Ada 2022. The host-only C adapter
 identities without transcribing Darwin and Linux structure layouts into Ada.
 `Landin.Platform.Native.Paths_Overlap` combines it with canonical path lookup
 for report/source/artifact preflight, including hard links, symbolic links and
-not-yet-created output leaves. An unresolved identity is refused conservatively;
+not-yet-created output leaves. Two absent ASCII leaves that differ after
+ASCII case folding are distinct on any filesystem, so an `--emit=exe` build
+on XFS, ZFS or NFS is not refused for `prog` beside `prog.s`. An unresolved
+identity is refused conservatively;
 this does not protect against concurrent filesystem replacement. No host
 identity operation determines Landin target layout or emits program code.
 The separate `Same_File` query answers true only for existing host objects

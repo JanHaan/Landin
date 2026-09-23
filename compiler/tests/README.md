@@ -331,9 +331,12 @@ compiler build modes. `python3 scripts/tests/test_build_inventory.py` exercises
 the production developer-build inventory decision, including C/header
 addition, removal and renaming, without invoking a builder; it is also gated.
 
-Absent names on an unknown filesystem remain conservatively indeterminate.
-In particular, a Linux container cannot infer the host volume's case rules
-from its virtiofs mount. For local object-quality measurements, put the
+On an unknown filesystem, two absent ASCII names that still differ after
+ASCII case folding are distinct, because no filesystem equates them; the
+platform suite holds that rule at the C boundary. Other absent names there
+remain conservatively indeterminate: a case-folded match, a non-ASCII byte,
+a `~` or `:`, or a trailing dot or space. In particular, a Linux container
+cannot infer the host volume's case rules from its virtiofs mount. For local object-quality measurements, put the
 runner's `--output` on the container's own filesystem (for example `/tmp`),
 then retain its `measurements.json` in the host build tree. This changes no
 source, profile, execution oracle or acceptance threshold; the native gate's

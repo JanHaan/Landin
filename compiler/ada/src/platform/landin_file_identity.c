@@ -30,6 +30,8 @@
 
 int landin_same_file(const char *left, const char *right);
 int landin_same_existing_file(const char *left, const char *right);
+int landin_names_alias(const char *left_name, const char *right_name,
+                       int rules);
 
 struct destination {
     struct stat object;
@@ -149,20 +151,26 @@ static int name_rules(const char *directory)
 #endif
 }
 
-static int same_name(const struct destination *a, const struct destination *b)
+/* Whether two names absent from one directory would name one object once
+   created there, under name_rules' answer for that directory. Exported so
+   the platform suite can hold the unknown-filesystem answers without
+   mounting one. Even an unknown filesystem cannot make two ASCII names
+   equal that still differ after ASCII case folding: the equivalences that
+   exist (case, Unicode forms, vfat short names, NTFS streams, and vfat and
+   SMB dropping a trailing dot or space) each need a folded match, a
+   non-ASCII byte, a '~' or ':', or such a trailing byte; those stay
+   indeterminate. */
+int landin_names_alias(const char *left_name, const char *right_name,
+                       int rules)
 {
-    const unsigned char *left = (const unsigned char *)a->name;
-    const unsigned char *right = (const unsigned char *)b->name;
-    int rules;
+    const unsigned char *left = (const unsigned char *)left_name;
+    const unsigned char *right = (const unsigned char *)right_name;
     size_t i;
 
-    if (strcmp(a->name, b->name) == 0)
+    if (strcmp(left_name, right_name) == 0)
         return 1;
-    rules = name_rules(a->directory);
     if (rules == 1)
         return 0;
-    if (rules < 0)
-        return -1;
     /* Host Unicode normalization/folding versions are not a compiler
        table. Without a filesystem proof, non-ASCII missing names remain
        indeterminate (existing leaves are compared by inode above). */
@@ -174,6 +182,16 @@ static int same_name(const struct destination *a, const struct destination *b)
             return -1;
     if (rules == 2)
         return 0;
+    if (rules < 0) {
+        size_t l = strlen(left_name);
+        size_t r = strlen(right_name);
+
+        if (l == 0 || r == 0
+            || left[l - 1] == '.' || left[l - 1] == ' '
+            || right[r - 1] == '.' || right[r - 1] == ' '
+            || strpbrk(left_name, "~:") || strpbrk(right_name, "~:"))
+            return -1;
+    }
     for (i = 0; left[i] && right[i]; ++i) {
         unsigned char l = left[i];
         unsigned char r = right[i];
@@ -184,7 +202,16 @@ static int same_name(const struct destination *a, const struct destination *b)
         if (l != r)
             return 0;
     }
-    return left[i] == right[i];
+    if (left[i] != right[i])
+        return 0;
+    return rules < 0 ? -1 : 1;
+}
+
+static int same_name(const struct destination *a, const struct destination *b)
+{
+    if (strcmp(a->name, b->name) == 0)
+        return 1;
+    return landin_names_alias(a->name, b->name, name_rules(a->directory));
 }
 
 int landin_same_file(const char *left, const char *right)

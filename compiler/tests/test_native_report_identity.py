@@ -18,6 +18,25 @@ SOURCE = b"public main: () -> (code: i32) = code = 0 end main\n"
 REFINE = None
 DIRECTORY = None
 
+# The statfs magics landin_file_identity.c's name_rules recognises on Linux:
+# ext2/3/4, f2fs, tmpfs, ramfs, btrfs and overlayfs. Anywhere else a
+# case-folded pair of absent names is indeterminate, and refused.
+LINUX_KNOWN_MAGICS = {0xEF53, 0xF2F52010, 0x01021994, 0x858458F6,
+                      0x9123683E, 0x794C7630}
+
+
+def names_have_known_rules(directory):
+    """Whether refine can establish this volume's case rules itself."""
+    system = os.uname().sysname
+    if system == "Darwin":
+        # apfs and hfs, the only Darwin volumes these runs are given.
+        return True
+    if system != "Linux":
+        return False
+    magic = subprocess.run(["stat", "-f", "-c", "%t", str(directory)],
+                           capture_output=True, text=True, check=True)
+    return int(magic.stdout.strip(), 16) in LINUX_KNOWN_MAGICS
+
 
 class NativeReportIdentity(unittest.TestCase):
     def setUp(self):
@@ -35,6 +54,10 @@ class NativeReportIdentity(unittest.TestCase):
         upper.write_bytes(b"probe")
         self.insensitive = (self.root / "caseprobe").exists()
         upper.unlink()
+        # Case variants are refused where they may alias, and also where the
+        # compiler cannot tell whether they do.
+        self.case_variants_refused = (
+            self.insensitive or not names_have_known_rules(self.root))
 
     def snapshot(self):
         result = {}
@@ -64,21 +87,21 @@ class NativeReportIdentity(unittest.TestCase):
                          "collision must precede every artifact and tool")
 
     def test_missing_case_variants(self):
-        # Every generated destination is reserved even when a particular
-        # source would not otherwise require a caller source map.
-        cases = [("OUT.s", "out.s", False),
-                 ("PROGRAM", "program", True),
-                 ("PROGRAM", "program.s", True),
-                 ("PROGRAM", "program.sources.json", True),
-                 ("OUT.s", "out.s.sources.json", False)]
+        # Only emitted artifacts are reserved: SOURCE has no caller source,
+        # so no source map is written and its name is free on any volume.
+        cases = [("OUT.s", "out.s", False, True),
+                 ("PROGRAM", "program", True, True),
+                 ("PROGRAM", "program.s", True, True),
+                 ("PROGRAM", "program.sources.json", True, False),
+                 ("OUT.s", "out.s.sources.json", False, False)]
         parent = self.root
-        for index, (output, report, executable) in enumerate(cases):
+        for index, (output, report, executable, reserved) in enumerate(cases):
             # Isolate subcases even when an old compiler corrupts a file.
             self.root = parent / str(index)
             self.root.mkdir()
             (self.root / "main.ldn").write_bytes(SOURCE)
             with self.subTest(output=output, report=report):
-                if self.insensitive:
+                if reserved and self.case_variants_refused:
                     self.refuses_without_effects(output, report,
                                                  executable=executable)
                 elif not executable:
@@ -102,7 +125,7 @@ class NativeReportIdentity(unittest.TestCase):
         (self.root / "real").mkdir()
         (self.root / "alias").symlink_to("real", target_is_directory=True)
         self.refuses_without_effects("real/out.s", "alias/./out.s")
-        if self.insensitive:
+        if self.case_variants_refused:
             self.refuses_without_effects("real/OUT.s", "alias/out.s")
         else:
             result = self.compile("real/OUT.s", "alias/out.s")
