@@ -24,8 +24,6 @@ Third-party material carries its own notice next to it. Preserve those
 notices when copying the corresponding material:
 
   * Lucide icon paths: ISC; notice in assets/icons.py.
-  * SourceHut artwork: CC0; attribution and the separate trademark note
-    in assets/icons.py.
   * Nunito Sans font files: SIL Open Font License 1.1;
     notice in assets/fonts/nunito-sans/OFL.txt.
   * Tree-sitter support headers (alloc.h, array.h and parser.h): MIT;

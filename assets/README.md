@@ -14,7 +14,7 @@ they are described.
 | artifact | is | state |
 |---|---|---|
 | `icon.svg` | the drawing: a plate, the mark, and the light palette as presentation attributes | here |
-| `icons.py` | the small icons around the mark: six from Lucide (ISC) and sourcehut's ring (CC0), copied in as shapes with their notices | here |
+| `icons.py` | the small icons around the mark: seven from Lucide (ISC), copied in as shapes with their notice | here |
 | `landin_icon.py` | every rendering of it — the variants, the inline fragment, the `data:` URL, and the raster: a scanline fill and a PNG encoder, standard library only | here |
 | `docs/site/render_html.py` | the reading copies: the favicon, Safari's pinned tab, the top bar, the front page, the social card | imports the module |
 | `og.png`, `apple-touch-icon.png` | rastered by `card()` at render time, never committed | generated |

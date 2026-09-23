@@ -1,14 +1,14 @@
 """The small icons a page uses, vendored rather than fetched.
 
-Six of them come from Lucide and one from sourcehut.  They are copied in
+All seven come from Lucide.  They are copied in
 here as their own shapes rather than pulled from a package or a CDN, for
 the reasons everything else in this directory is: a page that carries its
 drawing needs no request to show it, and a build that reads a file in this
 repository needs no dependency to run.  `landin_icon.py` holds the mark
 itself; this holds the furniture around it.
 
-Both sources permit the copy and both ask to be named, which is what the
-notices below are for.  Their terms are recorded here rather than in a
+Lucide permits the copy and asks to be named, which is what the notice
+below is for.  Their terms are recorded here rather than in a
 NOTICE file nobody opens, because the place to say where a drawing came
 from is next to the drawing.
 
@@ -28,12 +28,6 @@ Standard library only, like the rest of the site build.
 #  is drawn on a 24 grid with a 2-unit round-capped stroke and no fill,
 #  which is why STROKE below is one set of attributes for all of them.
 LUCIDE_VERSION = "1.33.0"
-
-#  sourcehut, https://sourcehut.org/logo/ -- CC0.  Their own page: "A
-#  circle is not copyrightable.  But, if you insist, you may consider
-#  these CC-0."  Trademark rights are reserved there and not waived, so
-#  this is used to point at sourcehut and nothing else.
-SRHT_VERSION = "logo.svg as served, 2026-08"
 
 STROKE = ('fill="none" stroke="currentColor" stroke-width="2" '
           'stroke-linecap="round" stroke-linejoin="round"')
@@ -61,10 +55,10 @@ ICONS = {
              '.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>'),
     "menu": ("0 0 24 24", STROKE,
              '<path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>'),
-    #  The whole of it: a ring, on the 128 grid sourcehut draws it on.
-    "sourcehut": ("0 0 128 128",
-                  'fill="none" stroke="currentColor" stroke-width="10"',
-                  '<circle cx="64" cy="64" r="50"/>'),
+    "git-branch": ("0 0 24 24", STROKE,
+                   '<path d="M15 6a9 9 0 0 0-9 9V3"/>'
+                   '<circle cx="18" cy="6" r="3"/>'
+                   '<circle cx="6" cy="18" r="3"/>'),
 }
 
 WHY = {
@@ -74,7 +68,7 @@ WHY = {
     "sun": "the theme toggle, offering the light one",
     "moon": "the theme toggle, offering the dark one",
     "menu": "the sidebar drawer, below 60rem",
-    "sourcehut": "the link to the repository",
+    "git-branch": "the link to the repository",
 }
 
 
@@ -117,8 +111,7 @@ def _icon(name):
 
 
 def main(argv):
-    print("%d icons, Lucide %s and sourcehut's own"
-          % (len(ICONS), LUCIDE_VERSION))
+    print("%d icons, Lucide %s" % (len(ICONS), LUCIDE_VERSION))
     for name in ICONS:
         print("  %-10s %s" % (name, WHY[name]))
     return 0

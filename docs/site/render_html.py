@@ -50,7 +50,7 @@ SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.2.0"
 LANDING_LINE = "built from scratch"
-REPO = "https://git.sr.ht/~sinnfrei/landin"
+REPO = "https://github.com/JanHaan/Landin"
 #  The canonical host.  The pages are served from GitHub Pages under
 #  the CNAME the publishing workflow writes; every page still says
 #  which of 701.dev and www.701.dev it wants to be found at, because a
@@ -1166,7 +1166,7 @@ class GuideTargets:
             return href
         target = self.pages.get(source)
         if target is None:
-            target = REPO + "/tree/main/item/" + quote(source, safe="/")
+            target = REPO + "/blob/main/" + quote(source, safe="/")
         return urlunsplit(("", "", target, parts.query, parts.fragment))
 
 
@@ -1572,7 +1572,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
   <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
-  <a class="src" href="{REPO}">{icons.use("sourcehut")}<span>source</span></a>
+  <a class="src" href="{REPO}">{icons.use("git-branch")}<span>source</span></a>
   <button id="menu" type="button" aria-label="documents and sections"
           aria-expanded="false" aria-controls="side">{icons.use("menu")}<span>menu</span></button>
   <input class="theme-x" id="theme" type="checkbox">
@@ -1594,10 +1594,10 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 The text file is the specification; this page is a reading of it.
-The repository is at <a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.
+The repository is at <a href="{REPO}">github.com/JanHaan/Landin</a>.
 <br>Copyright &#169; 2026 Jan Haan.
-Licensed under <a href="{REPO}/tree/main/item/LICENSE-MIT">MIT</a> or
-<a href="{REPO}/tree/main/item/LICENSE-APACHE">Apache-2.0</a>, at your option.
+Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
+<a href="{REPO}/blob/main/LICENSE-APACHE">Apache-2.0</a>, at your option.
 </footer>
 </div>
 <div id="pop"></div>

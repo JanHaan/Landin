@@ -3087,7 +3087,7 @@ def third_party_notices():
     out = []
     inventory = io.open(os.path.join(ROOT, "LICENSE"), encoding="utf-8").read()
     notices = {
-        "assets/icons.py": ("Lucide", "ISC", "sourcehut", "CC0"),
+        "assets/icons.py": ("Lucide", "ISC"),
         "assets/fonts/nunito-sans/OFL.txt":
             ("The Nunito Sans Project Authors", "SIL Open Font License"),
         "highlight/tree-sitter/src/tree_sitter/LICENSE":
@@ -5112,8 +5112,8 @@ _BASENAMES = None
 def check_borrowed_icons(full_run):
     """The borrowed icons are named, explained, and only used if defined.
 
-    `assets/icons.py` holds shapes copied from Lucide and sourcehut, and
-    the reason each one is there.  Two things can drift: an icon added to
+    `assets/icons.py` holds shapes copied from Lucide, and the reason each
+    one is there.  Two things can drift: an icon added to
     the set without a word about what it is for, and a consumer asking
     for one that was never defined.  The second would stop a render --
     icons.py refuses an unknown name -- so this catches the first, and
