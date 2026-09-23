@@ -25237,9 +25237,7 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value)
-                             in Syn.If_Statement | Syn.Match_Statement
-                                | Syn.Bare_Block
+                        if Is_Value_Control (Of_Tree, Value)
                           or else Is_Pointer_Union_Node (Of_Tree, Written)
                         then
                            Check_Contextual_Value
@@ -25517,9 +25515,7 @@ package body Landin.Stages.Checking is
                           Landin.Checking.Signature_Of
                             (Types.all, Of_Tree, Written);
                      begin
-                        if Syn.Kind (Of_Tree, Value)
-                             in Syn.If_Statement | Syn.Match_Statement
-                                | Syn.Bare_Block
+                        if Is_Value_Control (Of_Tree, Value)
                         then
                            Check_Contextual_Value
                              (Of_Tree, Value,
@@ -25988,9 +25984,7 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
 
-                     if Syn.Kind (Of_Tree, Value)
-                          in Syn.If_Statement | Syn.Match_Statement
-                             | Syn.Bare_Block
+                     if Is_Value_Control (Of_Tree, Value)
                        or else Is_Pointer_Union_Node (Of_Tree, Place)
                      then
                         --  [0480]: a pointer union accepts its widening
@@ -26229,9 +26223,7 @@ package body Landin.Stages.Checking is
                           Landin.Checking.Signature_Of
                             (Types.all, Of_Tree, Place);
                      begin
-                        if Syn.Kind (Of_Tree, Value)
-                             in Syn.If_Statement | Syn.Match_Statement
-                                | Syn.Bare_Block
+                        if Is_Value_Control (Of_Tree, Value)
                         then
                            Check_Contextual_Value
                              (Of_Tree, Value,

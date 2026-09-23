@@ -417,6 +417,7 @@ negative/local-struct-initializer-source-unassigned | linux-x86-64, macos-arm64
 negative/local-used-above-its-declaration | linux-x86-64, macos-arm64
 negative/logical-words-on-numbers | linux-x86-64, macos-arm64
 negative/loop-condition-not-bool | linux-x86-64, macos-arm64
+negative/loop-value-in-every-value-context | linux-x86-64, macos-arm64
 negative/loop-value-missing-break-value | linux-x86-64, macos-arm64, synthetic-32
 negative/loop-value-missing-completion | linux-x86-64, macos-arm64, synthetic-32
 negative/loop-value-type-mismatch | linux-x86-64, macos-arm64, synthetic-32

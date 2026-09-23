@@ -1,0 +1,33 @@
+--  D124 holds a loop answer to its context as it holds an `if`, a
+--  `match` or a bare block: a finite loop that can finish without
+--  `break with` has no value to bind or assign.  Before this fixture
+--  a function-typed context accepted such a loop and the lowering
+--  stopped as a defect, and a struct context misreported it.
+op: type = () -> (result: i32)
+
+pair: type = struct
+    x: i32
+    y: i32
+end pair
+
+bound: (items: []i32) -> (found: i32) =
+    found = -1
+    g: () -> (result: i32) = for item in items do
+    end for
+end bound
+
+assigned: (items: []i32) -> (found: op) =
+    found = for item in items do
+    end for
+end assigned
+
+held: (c: bool) -> none =
+    h: op = while c do
+    end while
+end held
+
+built: (items: []i32) -> (found: i32) =
+    g: pair = for item in items do
+    end for
+    found = g.x
+end built
