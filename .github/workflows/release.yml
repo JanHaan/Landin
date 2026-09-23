@@ -8,6 +8,13 @@
 #  hashes the toolchain it fetches, because that is the pattern this
 #  repository already trusts: fetch a prebuilt archive, verify it against
 #  a recorded sha256, refuse on mismatch.
+#
+#  Publication is once per tag.  The build is not bit-reproducible -- two
+#  runs from v0.2.0 published different bytes -- and the flake records the
+#  hashes of what was published, so a second upload over the first would
+#  silently break every consumer.  An asset that already exists is a
+#  refusal, and replacing one is a deliberate `gh release delete-asset`
+#  followed by a flake commit, never a re-run.
 
 name: release
 
@@ -19,10 +26,17 @@ on:
       tag:
         description: An existing tag to publish assets for.
         required: true
-        default: v0.2.0
 
+#  Only the publish job writes; the build jobs run a checked-out tree and
+#  hold nothing they could push with.
 permissions:
-  contents: write
+  contents: read
+
+#  One run per tag, and never cancel one in flight: a cancelled publish can
+#  leave a release holding one platform's asset without the other's.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -38,7 +52,7 @@ jobs:
             build: darwin-arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -60,15 +74,48 @@ jobs:
           "$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION/bin/gnat" --version | head -1
 
       #  Release mode: a consumer wants the compiler, not its assertions.
+      #  -R is GPRbuild's "no run path": without it the Linux binary carried
+      #  an RPATH into the runner's build and toolchain trees, and RPATH is
+      #  searched before the system directories, so an installed refine
+      #  would look for libc beside wherever it was unpacked.  It needs
+      #  none: only the C library and the loader are NEEDED.
       - name: Build refine
         env:
           LANDIN_BUILD_MODE: release
-        run: ./scripts/build.sh -j4
+        run: ./scripts/build.sh -j4 -R
+
+      #  The asset is named from the README, so the README and the tag
+      #  have to agree: tagging v0.2.1 on a tree that still says 0.2.0
+      #  would otherwise publish landin-0.2.0-* under release v0.2.1.
+      #  The compilations are the smoke test -- the whole pipeline to
+      #  assembly for both hosted targets, needing no assembler.
+      - name: Check and smoke-test it
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -eu
+          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          if [ "v$version" != "$TAG" ]; then
+            echo "README says $version; the tag is $TAG" >&2
+            exit 1
+          fi
+          binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
+          "$binary" --identify
+          for target in linux-x86-64 darwin-arm64; do
+            "$binary" --target="$target" --emit=asm -o "$RUNNER_TEMP/smoke.s" \
+              compiler/tests/fixtures/runtime/add-exits-with-its-sum/main.ldn
+            grep -q main "$RUNNER_TEMP/smoke.s"
+          done
+          if [ "$RUNNER_OS" = Linux ]; then
+            readelf -d "$binary"
+            if readelf -d "$binary" | grep -qE 'RPATH|RUNPATH'; then
+              echo "refine carries a run path" >&2
+              exit 1
+            fi
+          fi
 
       - name: Package it
         id: package
-        env:
-          LANDIN_BUILD_MODE: release
         run: |
           set -eu
           version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
@@ -78,19 +125,23 @@ jobs:
           #  Portable across GNU tar and the bsdtar macOS ships, which
           #  has no --sort, no --mtime and no --owner. The first attempt
           #  used all three and built on Linux while failing on Darwin.
-          #  One file needs no sorting; a fixed mtime and gzip -n remove
-          #  the two timestamps that would otherwise differ per run.
+          #  The members are named in a fixed order rather than sorted,
+          #  and a fixed mtime and gzip -n remove the two timestamps that
+          #  would otherwise differ per run.  The licence travels with the
+          #  compiler, because the archive is what a consumer receives.
           stage=$(mktemp -d)
           cp "$binary" "$stage/refine"
-          touch -t 197001010000 "$stage/refine"
-          tar -cf - -C "$stage" refine | gzip -n -9 > "$asset"
+          cp LICENSE LICENSE-MIT LICENSE-APACHE "$stage/"
+          touch -t 197001010000 "$stage"/*
+          tar -cf - -C "$stage" refine LICENSE LICENSE-MIT LICENSE-APACHE \
+            | gzip -n -9 > "$asset"
           sum=$(shasum -a 256 "$asset" | cut -d' ' -f1)
           echo "$sum  $asset"
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
           echo "sha256=$sum"  >> "$GITHUB_OUTPUT"
           printf '%s  %s\n' "$sum" "$asset" > "$asset.sha256"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.platform }}
           path: |
@@ -100,14 +151,16 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       #  NOT `assets`: the repository has a directory by that name, and
       #  downloading into it made the upload glob sweep up assets/fonts.py,
       #  assets/icon.svg and the assets/fonts directory -- which gh cannot
       #  upload, so the job failed after publishing three files that were
       #  never meant to leave the repository.
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: release-assets
           merge-multiple: true
@@ -121,14 +174,23 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -eu
-          tag='${{ inputs.tag || github.ref_name }}'
-          notes="The refine compiler, built from $tag by the release"
+          notes="The refine compiler, built from $TAG by the release"
           notes="$notes workflow. Verify each asset against the .sha256"
           notes="$notes published beside it."
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --verify-tag \
-              --title "Landin $tag" --notes "$notes"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            published=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+            for file in release-assets/*; do
+              name=$(basename "$file")
+              if printf '%s\n' "$published" | grep -qxF "$name"; then
+                echo "$TAG already publishes $name; refusing to replace it" >&2
+                exit 1
+              fi
+            done
+          else
+            gh release create "$TAG" --verify-tag \
+              --title "Landin $TAG" --notes "$notes"
           fi
-          gh release upload "$tag" release-assets/* --clobber
+          gh release upload "$TAG" release-assets/*
