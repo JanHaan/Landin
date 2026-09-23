@@ -1439,6 +1439,14 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Type_Kind;
          Site    : Landin.Provenance.Origin;
          Because : String);
+      --  [1920]: a call of a function returning none is not a value, so a
+      --  context that wants one refuses it here rather than lowering a
+      --  store of nothing.
+      procedure Refuse_No_Value
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Site    : Landin.Provenance.Origin;
+         Because : String);
       --  D188: which range subtype, if any, a value at this node is already
       --  known to be inside.  [1730]'s proof, made answerable.
       function Value_Constraint
@@ -11720,6 +11728,11 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         if Got = Ty.No_Value and then Decidable (Wanted) then
+            Refuse_No_Value (Of_Tree, Node, Site, Because);
+            return;
+         end if;
+
          if not Decidable (Wanted) or else not Decidable (Got) then
             return;
          end if;
@@ -11905,6 +11918,25 @@ package body Landin.Stages.Checking is
          end if;
          return Synthesise (Of_Tree, Node);
       end Arithmetic_Operand;
+
+      procedure Refuse_No_Value
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Site    : Landin.Provenance.Origin;
+         Because : String) is
+      begin
+         Bad.Report
+           (Item    => Bad.Type_Mismatch,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => "this hands back nothing, and a value belongs here",
+            Note    => "[1920]: a call of a function returning none is not"
+                       & " a value",
+            Related => Site,
+            Because => Because,
+            Into    => Found);
+         Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+      end Refuse_No_Value;
 
       procedure Refuse_Missing_Context
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
@@ -19363,6 +19395,11 @@ package body Landin.Stages.Checking is
 
                      if Got = Ty.Untyped_Integer then
                         Commit_To (Of_Tree, Where, Ty.Usize);
+                     elsif Got = Ty.No_Value then
+                        Refuse_No_Value
+                          (Of_Tree, Where, Syn.Origin (Of_Tree, From),
+                           "the array indexed here");
+                        return Kept (Ty.Ill_Typed);
                      elsif Decidable (Got) and then Got /= Ty.Usize then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
@@ -21119,6 +21156,11 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Under)
                   then
                      return Ty.Not_Typed;
+                  elsif Under = Ty.No_Value then
+                     Refuse_No_Value
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                        Syn.Origin (Of_Tree, Node), "this operator");
+                     return Kept (Ty.Ill_Typed);
                   elsif not Decidable (Under) then
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -28210,7 +28252,9 @@ package body Landin.Stages.Checking is
             --  Synthesis discovers an answer's class without choosing its
             --  width.  A sibling or enclosing requirement must still reach
             --  all answers; only an inference/discard boundary defaults it.
-            if Got in Ty.Untyped_Integer | Ty.Untyped_Float
+            --  [1920]: an answer that hands back nothing is not one; the
+            --  context that wanted a value is what refuses it.
+            if Got in Ty.Untyped_Integer | Ty.Untyped_Float | Ty.No_Value
               or else Needs_Value_Context (Of_Tree, First, Got)
             then
                Checking_Routine_Body := Previous_Body_Check;

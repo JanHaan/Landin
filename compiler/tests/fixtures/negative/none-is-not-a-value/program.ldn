@@ -1,0 +1,36 @@
+h: () -> none = return end h
+k: (n: i32) -> none = return end k
+
+typed: () -> none =
+    y: i32 = h()
+end typed
+
+assigned: () -> none =
+    mut x: i32 = 0
+    x = h()
+end assigned
+
+argument: () -> none =
+    k(h())
+    k(n: h())
+    defer k(h())
+end argument
+
+operands: (a: [4]i32) -> (r: i32) =
+    r = a[h()]
+    r = -h()
+    r = ~h()
+    r = h() + 1
+end operands
+
+traversal: () -> none =
+    for i in 0..<h() do end for
+end traversal
+
+bodied: () -> (r: i32) = h() end bodied
+
+blocks: (c: bool) -> none =
+    x := begin h() end
+    z := if c then h() else h() end if
+    w: i32 = begin h() end
+end blocks
