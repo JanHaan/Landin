@@ -1476,12 +1476,14 @@ are always parenthesised. Closed value sets are atoms;
 arbitrary linker names stay strings.
 
 ```text
-mut public align(n) layout(c|optimal|packed)
+mut public layout(c|optimal|packed)
 ```
 
 and 'at' for a bit position. 'at', 'of' and 'align' are
 contextual: a field or an entry may still be called one of
 them, because nothing reads the word as an attribute there.
+Placement alignment is `link`'s 'align' label [1640], not a
+word of its own.
 'from' and 'with' are reserved and cannot name anything.
 
 ```text
