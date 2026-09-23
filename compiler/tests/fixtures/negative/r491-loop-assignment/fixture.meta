@@ -2,5 +2,5 @@ class: negative
 summary: loop exits preserve the conservative assignment boundary and real consumption facts
 program: main.ldn
 codes: L0302, L0302, L0302, L0302
-constructs: 0910, 0930, 1130, 1140, 1150, 1170, 1190, 1810, 1910
+constructs: 0930, 1130, 1140, 1150, 1170, 1810, 1910
 targets: linux-x86-64

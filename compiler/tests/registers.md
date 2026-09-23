@@ -227,7 +227,7 @@ with every named refusal and the wording of its [1830] note.
 | `[1800]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1810]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[1820]` | executed | all | none | R1.40 | none | matrix evidence |
-| `[1830]` | executed | all | none | R1.30 | none | matrix evidence |
+| `[1830]` | compiled | all | none | R1.30 | none | Hosted compile-time rule: a refusal by name is a diagnostic and nothing executes it. `negative/cortex-refused-type-named` records the same L0304 report for `cortex-m0`, byte for byte, as the two hosted targets make. |
 | `[1840]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[1850]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[1860]` | compiled | all | none | R1.50 | none | Hosted compile-time rule audited by R4.90. R7.40 supplies the Cortex-M verdict: `negative/r740-cortex-name-declared-nowhere` records the same L0201 report for `cortex-m0`, byte for byte, as the two hosted targets make. |
@@ -260,6 +260,7 @@ construct.
 | `[1270]` | `positive/r490-conformance-input-keys` | `negative/conformance-collision`, `negative/r490-conformance-input-alias-collision` | Whole-program conformance keys include normalized input tuples; unequal keys coexist and equal keys collide before runtime. |
 | `[1400]` | none | `negative/local-array-literal-inferred-element-mismatch` | Heterogeneous implicit boxing is deliberately absent; mismatched element types are rejected. Ordinary explicit `any` dispatch has separate executed rows. |
 | `[1730]` | `positive/range-subtypes` | none | A range-subtype value carries its proof between constrained positions; the recorded IR has no second check. A run cannot observe an elided check, so R7.10 moved this row here from its former principle class. |
+| `[1830]` | none | `negative/float-type-not-enabled`, `negative/indexing-not-enabled` | A construct the tour describes and the kernel has not enabled is refused with a diagnostic that names it and the work that enables it; the observable behaviour is that diagnostic. |
 | `[1860]` | none | `negative/name-declared-nowhere`, `negative/condition-declaration-out-of-scope` | Every name must resolve in its scope; the observable failure is a compiler diagnostic. |
 
 ## Prototype derivation coverage

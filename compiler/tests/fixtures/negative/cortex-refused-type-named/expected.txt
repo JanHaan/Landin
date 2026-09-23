@@ -1,0 +1,7 @@
+error[L0304]: `f16` is not in this version of the language
+  --> ../tests/fixtures/negative/cortex-refused-type-named/program.ldn:1:8
+  |
+1 | ratio: f16 = 1.0
+  |        ^^^
+  = note: the tour describes it at [0170]
+  = note: ROADMAP.md R7.20 transfers this to Language evolution

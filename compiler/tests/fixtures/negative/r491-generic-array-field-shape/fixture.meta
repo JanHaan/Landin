@@ -2,7 +2,7 @@ class: negative
 summary: generic field arguments preserve exact array lengths
 program: main.ldn
 codes: L0301
-constructs: 0420, 0520, 0910, 0950, 1300, 1880, 1910
+constructs: 0420, 0520, 0950, 1300, 1880, 1910
 targets: linux-x86-64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/r491-generic-array-field-shape/main.ldn

@@ -1,6 +1,6 @@
 class: negative
 summary: a finite loop that can finish without a value is refused wherever a value belongs, a function or struct context included
-constructs: 1130, 1140, 1170, 1190
+constructs: 1140, 1150, 1170, 1190
 program: program.ldn
 codes: L0301, L0301, L0301, L0301
 targets: linux-x86-64, macos-arm64

@@ -38618,6 +38618,12 @@ file negative/core-vec-used-wrong-from/main.ldn tokens 48
   142 143 )
   144 147 end
   148 151 bad
+file negative/cortex-refused-type-named/program.ldn tokens 5
+  0 5 ratio
+  5 6 :
+  7 10 f16
+  11 12 =
+  13 16 1.0
 file negative/cstring-literal-write/program.ldn tokens 19
   0 3 bad
   3 4 :

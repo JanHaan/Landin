@@ -4,5 +4,5 @@ summary: core/vec geometric growth rejects doubling past usize without a provide
 program: main.ldn
 with: ../../../../../core/vec/growth.ldn
 status: 42
-constructs: 0300, 0320, 0940, 1130, 1920
+constructs: 0300, 0320, 0940, 1920
 targets: linux-x86-64, macos-arm64

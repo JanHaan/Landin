@@ -6,5 +6,5 @@ c-sources: peer.c
 c-args: -O2
 run_expect: expected.txt
 status: 42
-constructs: 1570, 1580, 1600, 1610
+constructs: 1570, 1580, 1600
 targets: linux-x86-64

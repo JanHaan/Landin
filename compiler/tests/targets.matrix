@@ -208,6 +208,7 @@ negative/core-vec-used-live-growth | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-live-release | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/cortex-refused-type-named | cortex-m
 negative/cstring-literal-write | linux-x86-64, macos-arm64
 negative/cstring-range-slicing-has-no-length | linux-x86-64, macos-arm64
 negative/deep-nested-child-copy-unassigned | linux-x86-64, macos-arm64

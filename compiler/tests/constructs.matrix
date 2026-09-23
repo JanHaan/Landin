@@ -19,7 +19,7 @@
 #  gaps and owner come from the inventory, whose
 #  disposition column explains every row.
 #  201 constructs, 196 with fixture evidence, 5 with none.
-#  States: 192 executed, 4 compiled, 2 transferred, 3 advisory.
+#  States: 191 executed, 5 compiled, 2 transferred, 3 advisory.
 #  7 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
@@ -206,7 +206,7 @@
 1800 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function is a value with a body, and its returns are named
 1810 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Statements do one thing each, and only exits carry 'when'
 1820 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Precedence, tightest first, and comparison does not chain
-1830 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What is not enabled is refused, and named
+1830 | spec | accepted emitted refused | compiled | compiled | refused | - | compiled | all | none | none | What is not enabled is refused, and named
 1840 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's scopes, outermost first
 1850 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | One scope gives one name to one thing
 1860 | spec | refused | refused | compiled | refused | - | compiled | all | none | none | A name that names nothing is refused

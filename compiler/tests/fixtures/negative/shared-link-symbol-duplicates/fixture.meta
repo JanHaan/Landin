@@ -1,7 +1,7 @@
 class: negative
 summary: every name of a shared linked binding carries the written link prefix, so one datum symbol given to two names is one duplicate refusal
 program: program.ldn
-constructs: 0100, 1640
+constructs: 0100, 1610
 targets: cortex-m
 codes: L0301
 args: --target=cortex-m0 ../tests/fixtures/negative/shared-link-symbol-duplicates/program.ldn

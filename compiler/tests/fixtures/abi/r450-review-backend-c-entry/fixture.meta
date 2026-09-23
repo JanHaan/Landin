@@ -5,5 +5,5 @@ program: program.ldn
 c-sources: peer.c
 run_expect: expected.txt
 status: 0
-constructs: 1570, 1580, 1600, 1610
+constructs: 1570, 1580, 1600
 targets: linux-x86-64, macos-arm64

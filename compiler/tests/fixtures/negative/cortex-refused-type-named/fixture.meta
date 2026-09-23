@@ -1,0 +1,9 @@
+class: negative
+summary: [1830]'s refusal of a construct the kernel has not enabled is the checker naming it, so the Cortex-M0 verdict is the hosted one
+program: program.ldn
+codes: L0304
+constructs: 0170, 1830
+targets: cortex-m
+args: --target=cortex-m0 ../tests/fixtures/negative/cortex-refused-type-named/program.ldn
+expect: expected.txt
+status: 1
