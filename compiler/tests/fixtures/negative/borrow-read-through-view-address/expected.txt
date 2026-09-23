@@ -3,8 +3,8 @@ error[L0315]: this `inout` or `sink` use may move storage while a derived view i
    |
 21 |     grow(l)
    |          ^
-  --> ../tests/fixtures/negative/borrow-read-through-view-address/program.ldn:19:5
+  --> ../tests/fixtures/negative/borrow-read-through-view-address/program.ldn:20:5
    |
-19 |     xs: []i32 = l.items
-   |     ^^^^^^^^^^^^^^^^^^^ the live derived view
+20 |     pxs: ptr []i32 = addr xs
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
   = note: [0800]/[0830]: take the view again after mutating its source

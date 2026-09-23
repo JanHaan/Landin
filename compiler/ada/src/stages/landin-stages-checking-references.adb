@@ -436,10 +436,11 @@ package body Landin.Stages.Checking.References is
       function Has_Future_Use
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset) return Boolean;
-      function Has_Live_Holder
+      function Live_Holder
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset;
-         Except   : Res.Declaration_Id := Res.No_Declaration) return Boolean;
+         Except   : Res.Declaration_Id := Res.No_Declaration)
+         return Res.Declaration_Id;
 
       procedure Check_Borrows
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
@@ -1473,15 +1474,20 @@ package body Landin.Stages.Checking.References is
       --  storage is.  `addr xs` derives from `xs` alone, so a read
       --  through that address is a use of every view `xs` borrows;
       --  follow the holders until no new one is found.  Except is the
-      --  storage being replaced: what it holds afterwards is new.
-      function Has_Live_Holder
+      --  storage being replaced: what it holds afterwards is new.  The
+      --  answer is the view that is used, the borrower itself first.
+      function Live_Holder
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset;
-         Except   : Res.Declaration_Id := Res.No_Declaration) return Boolean
+         Except   : Res.Declaration_Id := Res.No_Declaration)
+         return Res.Declaration_Id
       is
          Seen : Declaration_Bits := [others => False];
          Grew : Boolean := True;
       begin
+         if Has_Future_Use (Borrower, After) then
+            return Borrower;
+         end if;
          Seen (Positive (Borrower)) := True;
          while Grew loop
             Grew := False;
@@ -1507,11 +1513,11 @@ package body Landin.Stages.Checking.References is
             if Seen (Positive (Holder))
               and then Has_Future_Use (Holder, After)
             then
-               return True;
+               return Holder;
             end if;
          end loop;
-         return False;
-      end Has_Live_Holder;
+         return Res.No_Declaration;
+      end Live_Holder;
 
       function Check_Payload_Borrows
         (Tree : Syn.Tree; Place : Syn.Node_Id;
@@ -1706,6 +1712,7 @@ package body Landin.Stages.Checking.References is
             end loop;
             return Left_Known and Right_Known;
          end Disjoint_Frame_Storage;
+         Used : Res.Declaration_Id;
       begin
          for Pattern in Origins'Range loop
             if Pattern_Subject (Pattern) /= Syn.No_Node
@@ -1714,28 +1721,31 @@ package body Landin.Stages.Checking.References is
                         or else Replaces_Aliased_Storage (Pattern))
             then
                for Borrower in Origins'Range loop
-                  if (Borrower = Pattern
-                      or else (Has_References (Borrower)
-                               and then Origins (Borrower).Value.Derives
-                                 (Positive (Pattern))))
-                    and then Has_Live_Holder
-                      (Borrower, After, Root_Declaration (Tree, Place))
+                  if Borrower = Pattern
+                    or else (Has_References (Borrower)
+                             and then Origins (Borrower).Value.Derives
+                               (Positive (Pattern)))
                   then
-                     Bad.Report
-                       (Item    => Bad.Borrowed_Place,
-                        Source  => Syn.Source_Of (Tree),
-                        Where   => Syn.Where (Tree, Place),
-                        Message => "this may replace a variant while its"
-                                   & " payload storage is still in use",
-                        Note    => "D78/D85: payload aliases refer to the"
-                                   & " selected case's storage",
-                        Related => Syn.Origin
-                          (Tree_For
-                             (Res.Source_Of (Meanings.all, Borrower)).all,
-                           Res.Node_Of (Meanings.all, Borrower)),
-                        Because => "the live payload alias or derived view",
-                        Into    => Sink.all);
-                     return True;
+                     Used := Live_Holder
+                       (Borrower, After, Root_Declaration (Tree, Place));
+                     if Used /= Res.No_Declaration then
+                        Bad.Report
+                          (Item    => Bad.Borrowed_Place,
+                           Source  => Syn.Source_Of (Tree),
+                           Where   => Syn.Where (Tree, Place),
+                           Message => "this may replace a variant while its"
+                                      & " payload storage is still in use",
+                           Note    => "D78/D85: payload aliases refer to the"
+                                      & " selected case's storage",
+                           Related => Syn.Origin
+                             (Tree_For
+                                (Res.Source_Of (Meanings.all, Used)).all,
+                              Res.Node_Of (Meanings.all, Used)),
+                           Because => "the live payload alias or derived"
+                                      & " view",
+                           Into    => Sink.all);
+                        return True;
+                     end if;
                   end if;
                end loop;
             end if;
@@ -1765,6 +1775,7 @@ package body Landin.Stages.Checking.References is
                  (if Argument = Syn.No_Node
                   then Res.No_Declaration
                   else Root_Declaration (Tree, Argument));
+               Used : Res.Declaration_Id := Res.No_Declaration;
             begin
                if Part.Convention
                     in Syn.Inout_Convention | Syn.Sink_Convention
@@ -1781,13 +1792,15 @@ package body Landin.Stages.Checking.References is
                        and then Has_References (Borrower)
                        and then Origins (Borrower).Value.Derives
                          (Positive (Mutated))
-                       and then Has_Live_Holder
-                         (Borrower, Syn.Where (Tree, Call).Last, Mutated)
                      then
+                        Used := Live_Holder
+                          (Borrower, Syn.Where (Tree, Call).Last, Mutated);
+                     end if;
+                     if Used /= Res.No_Declaration then
                         declare
-                           Borrower_Tree : constant not null access constant
+                           Used_Tree : constant not null access constant
                              Syn.Tree := Tree_For
-                               (Res.Source_Of (Meanings.all, Borrower));
+                               (Res.Source_Of (Meanings.all, Used));
                         begin
                            Bad.Report
                              (Item    => Bad.Borrowed_Place,
@@ -1799,8 +1812,8 @@ package body Landin.Stages.Checking.References is
                               Note    => "[0800]/[0830]: take the view again"
                                          & " after mutating its source",
                               Related => Syn.Origin
-                                (Borrower_Tree.all,
-                                 Res.Node_Of (Meanings.all, Borrower)),
+                                (Used_Tree.all,
+                                 Res.Node_Of (Meanings.all, Used)),
                               Because => "the live derived view",
                               Into    => Sink.all);
                         end;
