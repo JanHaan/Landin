@@ -1,6 +1,11 @@
 {
   "schema": 1,
   "fixtures": {
+    "abi/darwin-stack-composite-slots": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/darwin-stack-composite-slots/fixture.meta"
+    },
     "abi/r440-bindings-generated": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",

@@ -7,6 +7,7 @@ prototype-1 | cortex-m
 prototype-2 | linux-x86-64, macos-arm64
 prototype-3 | linux-x86-64, macos-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, macos-arm64
+abi/darwin-stack-composite-slots | linux-x86-64, macos-arm64
 abi/r440-bindings-generated | linux-x86-64
 abi/r440-errno-interposition | linux-x86-64, macos-arm64
 abi/r440-errno-thread-local | linux-x86-64, macos-arm64

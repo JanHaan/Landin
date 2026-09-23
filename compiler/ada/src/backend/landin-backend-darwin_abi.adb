@@ -179,6 +179,18 @@ package body Landin.Backend.Darwin_ABI is
                Answer.GP_Used := 8;
                Item.On_Stack := True;
             end if;
+            --  Apple packs scalars and HFAs at natural size, but stage B
+            --  still rounds any other composite to whole eightbytes, and
+            --  C.14 aligns it to at least eight: clang puts a three-byte
+            --  struct in an eight-byte slot.
+            if Item.On_Stack and then not Variadic
+              and then Item.Shape.Aggregate
+              and then not Item.Shape.Indirect
+              and then Item.Shape.Float_Bytes = 0
+            then
+               Alignment := Landin.Targets.Byte_Alignment'Max (8, Alignment);
+               Bytes := Stack_Align (Bytes, 8, Maximum);
+            end if;
             if Item.On_Stack then
                Item.Stack_At := Stack_Align (Stack_End, Alignment, Maximum);
                Stack_End := Stack_Add (Item.Stack_At, Bytes, Maximum);

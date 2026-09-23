@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: A small non-HFA composite on the stack takes whole eightbytes while scalars and HFAs pack
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600
+targets: linux-x86-64, macos-arm64

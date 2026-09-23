@@ -1681,8 +1681,11 @@ A homogeneous aggregate of one through four f32 or one through four f64 leaves
 (including nested C records and arrays) uses consecutive floating registers.
 Other aggregates through sixteen bytes use integer chunks; larger aggregates
 use a pointer to a caller-owned copy. A register aggregate that cannot fit its
-bank goes wholly to the stack, exhausting that bank. Fixed stack arguments
-have their natural size and alignment rather than a mandatory eight-byte slot.
+bank goes wholly to the stack, exhausting that bank. Fixed scalar and
+homogeneous floating aggregate stack arguments have their natural size and
+alignment rather than a mandatory eight-byte slot; any other aggregate on the
+stack occupies whole eight-byte slots aligned to at least eight, as AAPCS64's
+B.5 and C.14 require.
 The caller extends narrow integer arguments to at least 32 bits. Results use
 x0–x1 or v0–v3; an indirect result uses caller storage addressed by x8 without
 consuming an ordinary argument register. Copies stay within the object extent.
@@ -13848,7 +13851,8 @@ focused generic/erased cases additionally run none/all and speed/all.
 
 **Chosen in R5.30:** [1975] enables Apple's arm64 C subset with its own
 `compiler.c_darwin_lp64` fact, aggregate/HFA transport, x8 indirect results,
-packed fixed stack arguments and stack-only variadic tails. The scalar alias
+fixed stack scalars and HFAs packed at natural size while any other stack
+composite takes whole eight-byte slots, and stack-only variadic tails. The scalar alias
 layer admits either supported LP64 ABI explicitly. The binding generator
 verifies the selected Apple triple, macros, sysroot and C layouts. Logical
 link names keep the R5.20 platform-prefix rule. Static archive directives
@@ -13862,8 +13866,11 @@ remain unchanged; source debugging and full hosted parity have separate gates.
 
 **Pinned by** `compiler/tests/darwin/transport.ldn`, `varargs.ldn`, the native
 platform program and the generated-binding/archive execution runner, together
-with the shared native aggregate and callback differential cases. They run
-natively on a Mac, and nothing runs them automatically.
+with the shared native aggregate and callback differential cases, and
+`abi/darwin-stack-composite-slots` for which stack arguments pack. They run
+natively on a Mac, and nothing runs them automatically: the gate runs that
+fixture on Linux alone, so its Darwin placement is checked by
+`compiler/tests/darwin/check.py --parity`.
 
 ### D227 — Explicit memory events, synchronization and external writers
 
