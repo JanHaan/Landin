@@ -112,7 +112,12 @@ negative/borrow-read-above-inout-in-loop | linux-x86-64, macos-arm64
 negative/borrow-read-after-inout-loop | linux-x86-64, macos-arm64
 negative/borrow-survives-untaken-replacement | linux-x86-64, macos-arm64
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
+negative/call-array-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
+negative/call-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
+negative/call-results-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
+negative/call-struct-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
+negative/call-value-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
 negative/caller-parameter-extra-field | linux-x86-64, macos-arm64, synthetic-32
 negative/caller-parameter-field-order | linux-x86-64, macos-arm64, synthetic-32
@@ -382,6 +387,7 @@ negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
 negative/integer-to-bool-known-out-of-range | linux-x86-64, macos-arm64
 negative/iterable-retained-item-source | linux-x86-64, macos-arm64, synthetic-32
 negative/keyword-as-name | linux-x86-64, macos-arm64
+negative/labelled-call-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
 negative/lenof-array-literal-element-mismatch | linux-x86-64, macos-arm64
 negative/lenof-array-literal-needs-scalar-elements | linux-x86-64, macos-arm64
@@ -951,6 +957,7 @@ negative/raw-literal-write | linux-x86-64, macos-arm64
 negative/read-before-it-is-assigned | linux-x86-64, macos-arm64
 negative/readonly-slice-write | linux-x86-64, macos-arm64, synthetic-32
 negative/recover-infallible-call | linux-x86-64, synthetic-32
+negative/recovered-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
 negative/recovery-clause-unclosed | linux-x86-64, synthetic-32
 negative/recursive-module-image-cycle | linux-x86-64, synthetic-32
 negative/recursive-module-image-nominal-mismatch | linux-x86-64, synthetic-32
@@ -1498,6 +1505,7 @@ runtime/deep-nested-struct-leaves | linux-x86-64, macos-arm64
 runtime/defer-call-shapes | linux-x86-64, macos-arm64
 runtime/defer-cleanups-follow-control-edges | linux-x86-64, macos-arm64
 runtime/defer-does-not-unwind-traps | linux-x86-64, macos-arm64
+runtime/deferred-call-drops-its-result | linux-x86-64, macos-arm64
 runtime/derived-address-empty-slice-traps | linux-x86-64, macos-arm64
 runtime/derived-array-slice-origin | linux-x86-64, macos-arm64
 runtime/derived-containers | linux-x86-64, macos-arm64
@@ -1848,6 +1856,7 @@ runtime/slice-index-read-traps | linux-x86-64, macos-arm64
 runtime/slice-index-write-traps | linux-x86-64, macos-arm64
 runtime/slice-lower-after-upper-traps | linux-x86-64, macos-arm64
 runtime/stack-arguments-cross-calls | linux-x86-64, macos-arm64
+runtime/standalone-try-discards-a-stored-result | linux-x86-64, macos-arm64
 runtime/statements-run-as-they-read | linux-x86-64, macos-arm64
 runtime/struct-arguments-cross-calls | linux-x86-64, macos-arm64
 runtime/struct-array-field-computed-index-traps | linux-x86-64, macos-arm64

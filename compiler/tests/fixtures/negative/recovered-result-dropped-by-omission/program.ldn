@@ -1,0 +1,5 @@
+bad: atom
+one: () -> (r: i32) ! bad = r = 1 end one
+f: () -> none =
+    one() else 0
+end f

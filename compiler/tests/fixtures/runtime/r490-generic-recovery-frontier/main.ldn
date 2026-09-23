@@ -21,7 +21,7 @@ deny: () -> none ! ... = fail denied end deny
 
 recover: (t: type, value: t) -> none ! ... =
     _ = value
-    leaf(true) else (error)
+    _ = leaf(true) else (error)
         held := copy(error)
         observe(held)
         try relay(held)

@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: D244 a deferred or undone call registers a call rather than standing alone, so its scalar, struct, several or array result is dropped where it runs
+program: main.ldn
+status: 42
+constructs: 1020, 1100, 1110, 1810
+targets: linux-x86-64, macos-arm64

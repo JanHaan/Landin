@@ -496,6 +496,9 @@
       ],
       "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
     },
+    "runtime/deferred-call-drops-its-result": {
+      "mode": "execute"
+    },
     "runtime/derived-address-empty-slice-traps": {
       "mode": "execute"
     },
@@ -1716,6 +1719,9 @@
       "mode": "execute"
     },
     "runtime/stack-arguments-cross-calls": {
+      "mode": "execute"
+    },
+    "runtime/standalone-try-discards-a-stored-result": {
       "mode": "execute"
     },
     "runtime/statements-run-as-they-read": {

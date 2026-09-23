@@ -1,0 +1,7 @@
+class: runtime
+profiles: specialization
+summary: [1810] a standalone try propagates failure and discards a struct, several results or an array it would otherwise have to store
+program: main.ldn
+status: 42
+constructs: 0520, 0920, 0960, 1020, 1810
+targets: linux-x86-64, macos-arm64

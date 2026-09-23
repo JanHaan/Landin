@@ -512,14 +512,14 @@ payload-free atom on the declared channel and does not read the successful
 named return.
 A direct or selected call, with positional or named arguments, is a statement
 as well as an expression, because a function returning none has nothing to
-bind and [1020] wants a result discarded
-on purpose rather than by omission. A call whose result is dropped that way is
-the one place the kernel accepts an ordinary expression standing
-alone. A labelled application in this position must resolve to a function
+bind. That is the only call the position takes: one that hands a result back
+is refused there, recovered or not, because [1020] wants a result discarded
+on purpose rather than by omission, and `_ = call` is how it is written (D244).
+A labelled application in this position must resolve to a function
 call; the shared construction syntax still requires its ordinary value
 context and does not make constructed values standalone statements. A
 standalone `try call` explicitly propagates its failure and discards
-any successful result. `defer` and `undo` each register one call when their
+any successful result, whatever its shape. `defer` and `undo` each register one call when their
 statement is reached and evaluate the callee and arguments only on applicable
 exits from the lexical block [1100] [1110]. They are statements rather than
 expressions and so cannot supply a block's final value. A match is D77's
@@ -1376,7 +1376,9 @@ A `break with` must target a loop used as an expression [1190]. A statement
 loop has no result consumer; write `_ = loop ...` to discard its result, or
 use a plain `break` when no result is intended.
 What may not is a call of a function returning none [1920]. Discarding is for
-a result, and that call has none. A call with a declared error is also refused
+a result, and that call has none. The converse holds as well: a call that
+does hand a result back is not a statement on its own, so the only
+discard is the written one (D244). A call with a declared error is also refused
 when a discard would ignore that outcome; `try` propagates it and call-site
 `else` handles it explicitly. D241 makes the rest mechanical: a discard takes
 every place and call, and every expression an inferred binding `x := e`
@@ -10752,6 +10754,51 @@ throw away its result.
 generated token and IR records; and the explicit discards in
 `runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
 Linux x86-64.
+
+### D244 — A call that hands a result back is not a statement
+
+**The tour said** that discarding a result must be explicit [1020], and
+wrote the discard as `_ = double(5)`. [0960] adds that a call that can fail
+and whose result is discarded is an error, to be written `try f()` or
+discarded through an else. [1810] made a call a statement because a function
+returning none has nothing to bind, and in the same paragraph called a
+dropped result "the one place the kernel accepts an ordinary expression
+standing alone".
+
+**Chosen:** a call standing alone must return none. One with a named return,
+several, a struct, an array or an `any` result, whether called directly,
+through a function value or with labels, is refused with L0301 and a note
+citing [1020]; so is a recovered call, `g() else 0`, whose recovery still
+produces a value. [0960]'s "discard through an else" is `_ = g() else 0`.
+A standalone `try call` stays a statement: [1810] says it discards any
+successful result, and the word is what makes the discard deliberate. That
+holds for every result shape, and a stored one — a struct, several results or
+an array — is given a temporary to land in, exactly as `_ = try call` gives it
+one; before this decision that path failed inside the compiler.
+
+`defer` and `undo` register a call and are unchanged: the call they name runs
+at a block exit, and its result, of any shape, is dropped there. There is no
+`defer _ = call` to write instead, and the statement's own word already says
+the call is run for its effect.
+
+**A competent reader could have** kept [1810]'s sentence, under which a
+dropped result was simply accepted, and every compiler through 0.2.0 did.
+That reading makes [1020] a rule about bindings only and leaves `double(5)`
+and `_ = double(5)` meaning the same thing, so the underscore would record
+nothing. The other alternative, refusing a result-bearing `defer` or `undo`
+too, was declined because it would need a second spelling for a registered
+discard and buys nothing a reader cannot already see.
+
+**Pinned by** `negative/call-result-dropped-by-omission`,
+`negative/call-struct-result-dropped-by-omission`,
+`negative/call-results-dropped-by-omission`,
+`negative/call-array-result-dropped-by-omission`,
+`negative/call-value-result-dropped-by-omission`,
+`negative/labelled-call-result-dropped-by-omission`,
+`negative/recovered-result-dropped-by-omission`,
+`runtime/standalone-try-discards-a-stored-result` and
+`runtime/deferred-call-drops-its-result`; the one bare discard the corpus
+held, in `runtime/r490-generic-recovery-frontier`, is now written out.
 
 ### D113 — An inferred function value is a code address
 

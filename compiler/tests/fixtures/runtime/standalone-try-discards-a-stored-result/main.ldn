@@ -1,0 +1,48 @@
+bad: atom
+pair: type = struct
+    a: i32
+    b: i32
+end pair
+mut calls: i32 = 0
+
+make: (stop: bool) -> (p: pair) ! bad =
+    inc calls
+    fail bad when stop
+    p = (a: 1, b: 2)
+end make
+split: (stop: bool) -> (a: i32, b: i32) ! bad =
+    inc calls
+    fail bad when stop
+    a = 3
+    b = 4
+end split
+four: (stop: bool) -> (row: [4]i32) ! bad =
+    inc calls
+    fail bad when stop
+    row = [5, 6, 7, 8]
+end four
+
+run: (stop: bool) -> none ! bad =
+    try make(false)
+    try split(false)
+    try four(false)
+    try make(stop)
+    calls = 100
+end run
+
+public main: () -> (code: i32) =
+    run(false) else (error)
+        code = 1
+        return
+    end
+    if calls <> 100 then
+        code = 2
+        return
+    end if
+    calls = 0
+    run(true) else (error)
+        code = if calls == 4 then 42 else 3 end if
+        return
+    end
+    code = 4
+end main

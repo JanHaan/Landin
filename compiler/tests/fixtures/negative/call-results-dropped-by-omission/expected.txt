@@ -1,0 +1,10 @@
+error[L0301]: this hands back a result, and a call standing alone would drop it; discard it with `_ =`
+  --> ../tests/fixtures/negative/call-results-dropped-by-omission/program.ldn:6:5
+  |
+6 |     split()
+  |     ^^^^^
+  --> ../tests/fixtures/negative/call-results-dropped-by-omission/program.ldn:6:5
+  |
+6 |     split()
+  |     ^^^^^^^ the call standing alone
+  = note: [1020]: discarding a result must be explicit

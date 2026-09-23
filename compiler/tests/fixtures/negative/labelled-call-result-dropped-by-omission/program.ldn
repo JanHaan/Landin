@@ -1,0 +1,4 @@
+scale: (x: i32, by: i32) -> (r: i32) = r = x * by end scale
+f: () -> none =
+    scale(x: 2, by: 3)
+end f

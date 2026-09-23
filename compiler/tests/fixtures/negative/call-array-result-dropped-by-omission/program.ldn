@@ -1,0 +1,6 @@
+two: () -> (p: [2]i32) =
+    p = [1, 2]
+end two
+f: () -> none =
+    two()
+end f

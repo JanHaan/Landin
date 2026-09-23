@@ -26501,11 +26501,11 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Call | Syn.Labeled_Application =>
-               --  [1920]: a call standing alone is a statement, and one
-               --  that hands a value back is [1020]'s omitted discard --
-               --  which R2 will refuse; the kernel accepts it because
-               --  nothing in the tour refuses it yet.  A construction
-               --  shares the labelled syntax and is a value, never a call.
+               --  [1920]: a call standing alone is a statement only when
+               --  it hands nothing back.  One that hands a value back is
+               --  [1020]'s discard by omission, and [1020] wants it
+               --  written out; D244 records why.  A construction shares
+               --  the labelled syntax and is a value, never a call.
                if Is_Struct_Construction (Of_Tree, Node) then
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
@@ -26521,7 +26521,21 @@ package body Landin.Stages.Checking is
                declare
                   Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
                begin
-                  pragma Unreferenced (Got);
+                  if Got in Ty.Settled then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where
+                          (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                        Message => "this hands back a result, and a call"
+                                   & " standing alone would drop it;"
+                                   & " discard it with `_ =`",
+                        Note    => "[1020]: discarding a result must be"
+                                   & " explicit",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "the call standing alone",
+                        Into    => Found);
+                  end if;
                end;
 
             when others =>

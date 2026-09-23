@@ -1,0 +1,9 @@
+class: negative
+summary: [1020]/[1810] a call returning a struct cannot stand alone
+constructs: 0710, 1020, 1810
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/call-struct-result-dropped-by-omission/program.ldn
+status: 1

@@ -13673,15 +13673,32 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Try_Expression =>
+                     --  [1810]: a standalone `try` discards any successful
+                     --  result, so a stored one is given a temporary to
+                     --  land in, exactly as `_ = try call` gives it one.
                      declare
-                        Ignored : constant IR.Value_Id :=
-                          Lower_Call
-                            (Of_Tree, Syn.Operand_Of (Of_Tree, Stmt), Scope,
-                             Propagate => True);
+                        Operand : constant Syn.Node_Id :=
+                          Syn.Operand_Of (Of_Tree, Stmt);
                      begin
-                        pragma Assert
-                          (Ignored /= IR.No_Value
-                           or else Current = IR.No_Block);
+                        if Type_At (Of_Tree, Operand)
+                          in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                             | Ty.Any_Value
+                        then
+                           Lower_Stored_Expression
+                             (Of_Tree, Stmt, Scope,
+                              Add_Value_Temporary (Of_Tree, Operand));
+                        else
+                           declare
+                              Ignored : constant IR.Value_Id :=
+                                Lower_Call
+                                  (Of_Tree, Operand, Scope,
+                                   Propagate => True);
+                           begin
+                              pragma Assert
+                                (Ignored /= IR.No_Value
+                                 or else Current = IR.No_Block);
+                           end;
+                        end if;
                      end;
 
                   when Syn.Call | Syn.Labeled_Application =>

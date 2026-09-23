@@ -1,0 +1,9 @@
+pair: type = struct
+    a: i32
+end pair
+make: () -> (p: pair) =
+    p = (a: 1)
+end make
+f: () -> none =
+    make()
+end f

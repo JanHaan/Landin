@@ -1,0 +1,9 @@
+class: negative
+summary: [1020]/[1810] a call returning an array cannot stand alone
+constructs: 0520, 1020, 1810
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/call-array-result-dropped-by-omission/program.ldn
+status: 1

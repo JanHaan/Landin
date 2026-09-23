@@ -1,0 +1,5 @@
+one: () -> (r: i32) = r = 1 end one
+f: () -> none =
+    k := one
+    k()
+end f
