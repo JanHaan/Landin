@@ -258,8 +258,6 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
-
 R4.91 closes the reviewed compiler, tooling and documentation repairs. Its
 completion is bound to its closure revision's exact native acceptance, approval
 and canonical delivery recorded in ROADMAP.md. R5.10 has established the native
@@ -303,48 +301,6 @@ runs on the selected QEMU profile; synthetic Renode tests execute actual Cortex
 register and ordinary-slice DMA code. The external test startup/linker harness
 does not enable those language surfaces. Exact-revision validation and closure
 remain recorded in ROADMAP.md.
-
-`refine --debug=full --emit=exe program.ldn -o program` requests Linux source
-debugging. The default is `--debug=none`; debugging metadata is independent of
-the program's optimization and source build-mode settings. Add
-`--target=darwin-arm64` for native macOS output, then open `lldb ./program`.
-See [source debugging and identity](docs/targets.md#native-source-debugging).
-
-D209--D211 specify compact numeric-array arithmetic, explicit optimal field
-placement and optional evidence-proved specialization. The driver selects
-size/auto by default; `--optimize=none --specialize=off` selects the reference,
-and `--build-report=PATH` requests deterministic off-target JSON. Build mode
-remains independent. The mandatory runtime-profile matrix and
-`./scripts/quality.sh` object acceptance passed; ROADMAP.md records the
-native-gate closure rather than inferring it from implemented switches alone.
-
-Language and architecture questions are resolved when the first vertical
-slice needs them.
-
-The first major compiler milestone is R3: a complete derived version of the
-parser prototype with useful diagnostics, evidence-table dispatch, and `any`;
-specialization is explicitly not part of that gate. Target work then proceeds
-through the complete hosted Linux x86-64 path, native macOS arm64, and
-emulator-first Cortex-M.
-
-That endpoint was reached, and the first roadmap closed there.
-Feature-complete pre-v1 is a claim about coverage and nothing else. The
-current roadmap starts where it stopped; a build tool, package acquisition,
-release versioning and self-hosting stay outside it. No version or release
-designation changes automatically.
-
-## License
-
-Copyright (c) 2026 Jan Haan. `MIT OR Apache-2.0`: use this under either
-[the MIT license](LICENSE-MIT) or [the Apache License, Version
-2.0](LICENSE-APACHE), at your option. [`LICENSE`](LICENSE) says which file
-governs what.
-
-What `refine` produces is not a derivative work of `refine`. Compiling a
-program places no licensing condition on that program, and neither does
-linking `core/*` into it — which is the point of a language that has to fit
-in 32 KB of somebody else's flash.
-
 
 R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
 typed interrupt/naked functions, vector references, placement/retention and
@@ -468,3 +424,46 @@ verdicts, the lines-and-functions Cortex-M debugging contract, the end-to-end
 evidence-provenance gap and the Darwin shared-region placement limit — stand
 exactly as measured. Its exact-revision dual-native milestone binding in
 ROADMAP.md owns closure.
+
+`refine --debug=full --emit=exe program.ldn -o program` requests Linux source
+debugging. The default is `--debug=none`; debugging metadata is independent of
+the program's optimization and source build-mode settings. Add
+`--target=darwin-arm64` for native macOS output, then open `lldb ./program`.
+See [source debugging and identity](docs/targets.md#native-source-debugging).
+
+D209--D211 specify compact numeric-array arithmetic, explicit optimal field
+placement and optional evidence-proved specialization. The driver selects
+size/auto by default; `--optimize=none --specialize=off` selects the reference,
+and `--build-report=PATH` requests deterministic off-target JSON. Build mode
+remains independent. The mandatory runtime-profile matrix and
+`./scripts/quality.sh` object acceptance passed; ROADMAP.md records the
+native-gate closure rather than inferring it from implemented switches alone.
+
+Language and architecture questions are resolved when the first vertical
+slice needs them.
+
+The first major compiler milestone is R3: a complete derived version of the
+parser prototype with useful diagnostics, evidence-table dispatch, and `any`;
+specialization is explicitly not part of that gate. Target work then proceeds
+through the complete hosted Linux x86-64 path, native macOS arm64, and
+emulator-first Cortex-M.
+
+That endpoint was reached, and the first roadmap closed there.
+Feature-complete pre-v1 is a claim about coverage and nothing else. The
+current roadmap starts where it stopped; a build tool, package acquisition,
+release versioning and self-hosting stay outside it. No version or release
+designation changes automatically.
+
+**Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
+
+## License
+
+Copyright (c) 2026 Jan Haan. `MIT OR Apache-2.0`: use this under either
+[the MIT license](LICENSE-MIT) or [the Apache License, Version
+2.0](LICENSE-APACHE), at your option. [`LICENSE`](LICENSE) says which file
+governs what.
+
+What `refine` produces is not a derivative work of `refine`. Compiling a
+program places no licensing condition on that program, and neither does
+linking `core/*` into it — which is the point of a language that has to fit
+in 32 KB of somebody else's flash.

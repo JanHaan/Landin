@@ -141,8 +141,9 @@ interface files, header parsing.
 1. Start with the smallest executable vertical slice; do not require
    unrelated language foundations to be settled first.
 2. Resolve language and architecture questions when the first slice
-   needs them, and record the decision, dependencies, evidence, and
-   disposition in `ROADMAP.md`.
+   needs them. Record the decision, its alternative and the fixture that
+   pins it in `spec.md`'s register of decisions, and any work it leaves in
+   `ROADMAP.md`.
 3. Turn the prototypes into derived positive and negative conformance
    tests while preserving their historical finding sections.
 4. When implementation changes semantics, update `tour.md`, the
@@ -253,7 +254,8 @@ failing allocators threaded as capabilities; `core/vec`, `core/small`,
 `core/map`, `core/tree` and `core/sort` over honest raw storage; `core/text`
 with validated conversions; and the system and memory I/O worlds. Every
 container transition, allocation rollback and unsafe obligation is written
-down, and the ten running examples exercise the slice with exact output
+down. Of the ten running examples, the four that write output — FizzBuzz and
+the three Benchmark Game programs — import `core` and are held to exact output
 oracles.
 
 R4.21 repairs the earlier review's flow, origin, lowering and diagnostic gaps.
@@ -294,8 +296,6 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
-
 R4.91 closes the reviewed repairs through the containing revision's exact
 native acceptance, approval and canonical delivery binding in ROADMAP.md.
 R5.10 has established the native macOS compiler environment; R5.20 isolates
@@ -333,44 +333,6 @@ transport, failures/evidence, checked packed images and memory/barriers.
 Generated programs execute through an external test harness in QEMU and the
 synthetic Renode lane; ROADMAP.md binds exact-revision closure. R6.80 retains
 generated-device fixtures.
-
-`refine` runs the frontend, lowers and
-verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
-assembly, and
-can assemble and link hosted executables checked by the Linux gate.
-R6.100 closes Cortex line/function debugging and bounded resource evidence
-through its exact-revision dual-native milestone binding;
-the broader standard library remains successor
-work. D229 enables compiler-owned firmware startup, vectors and linking. `ROADMAP.md` is the sole work authority. Outstanding
-grammar, representation, ABI, guarantee, and diagnostic questions are settled
-by the first phase that needs them rather than forming one blanket front-end
-barrier.
-
-The first major compiler milestone is R3: a complete derived version of
-the parser prototype with useful diagnostics, evidence-table dispatch,
-and `any`, explicitly without specialization. Work then proceeds through
-the complete hosted Linux x86-64 path, native macOS arm64, and
-emulator-first Cortex-M.
-
-The first roadmap's endpoint was feature-complete pre-v1, and R7.70
-reached it and closed that roadmap. The current `ROADMAP.md` starts where it
-stopped: a frontend that scales and serves an editor, assembly with operands,
-more hosted targets, the RP2040, RP2350, STM32 and ESP32 families, a library
-split into freestanding and hosted halves, concurrency, Windows and measured
-optimization. A build tool, package acquisition, release versioning and
-self-hosting stay outside it, owned by the successor families its register
-names. Its identities are cited in `ROADMAP.md` and nowhere else.
-
----
-
-## Working style
-
-German conversation, English keywords, identifiers and documents
-throughout. Backticks mark code, names and paths, never emphasis. Prefer
-deciding over deferring, and
-say plainly where a decision is a guess. Push back with reasons rather
-than agreeing.
-
 
 R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
 typed interrupt/naked functions, vector references, placement/retention and
@@ -438,3 +400,42 @@ given a terminal disposition, and every transferred one owned by a successor
 family, which the current roadmap's register carries. Feature-complete pre-v1 is a claim about coverage and nothing
 else, and the recorded boundaries stand exactly as measured. Its
 exact-revision dual-native milestone binding in ROADMAP.md owns closure.
+
+`refine` runs the frontend, lowers and
+verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
+assembly, and
+can assemble and link hosted executables checked by the Linux gate.
+R6.100 closes Cortex line/function debugging and bounded resource evidence
+through its exact-revision dual-native milestone binding;
+the broader standard library remains successor
+work. D229 enables compiler-owned firmware startup, vectors and linking. `ROADMAP.md` is the sole work authority. Outstanding
+grammar, representation, ABI, guarantee, and diagnostic questions are settled
+by the first phase that needs them rather than forming one blanket front-end
+barrier.
+
+The first major compiler milestone is R3: a complete derived version of
+the parser prototype with useful diagnostics, evidence-table dispatch,
+and `any`, explicitly without specialization. Work then proceeds through
+the complete hosted Linux x86-64 path, native macOS arm64, and
+emulator-first Cortex-M.
+
+The first roadmap's endpoint was feature-complete pre-v1, and R7.70
+reached it and closed that roadmap. The current `ROADMAP.md` starts where it
+stopped: a frontend that scales and serves an editor, assembly with operands,
+more hosted targets, the RP2040, RP2350, STM32 and ESP32 families, a library
+split into freestanding and hosted halves, concurrency, Windows and measured
+optimization. A build tool, package acquisition, release versioning and
+self-hosting stay outside it, owned by the successor families its register
+names. Its identities are cited in `ROADMAP.md` and nowhere else.
+
+**Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
+
+---
+
+## Working style
+
+German conversation, English keywords, identifiers and documents
+throughout. Backticks mark code, names and paths, never emphasis. Prefer
+deciding over deferring, and
+say plainly where a decision is a guess. Push back with reasons rather
+than agreeing.
