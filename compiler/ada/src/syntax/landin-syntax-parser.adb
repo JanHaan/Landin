@@ -2169,6 +2169,16 @@ package body Landin.Syntax.Parser is
                         Index   : Node_Id;
                      begin
                         Count_Selector;
+                        --  The index is an expression, read recursively,
+                        --  and every walk after the parser recurses into
+                        --  it as well; `x[x[x[...]]]` is a nest.
+                        if Too_Deep (At_Open) then
+                           Resync_Brackets;
+                           return Add
+                             (Error_Expression, At_Open,
+                              Join (At_Open, After_Previous));
+                        end if;
+                        Depth := Depth + 1;
                         Advance;
                         Index := Parse_Delimited_Expression;
 
@@ -2181,6 +2191,7 @@ package body Landin.Syntax.Parser is
                            begin
                               Advance;
                               Upper := Parse_Delimited_Expression;
+                              Depth := Depth - 1;
                               if not Expect
                                 (Wanted  => Tok.Right_Bracket,
                                  Message => "a slice is closed with `]`",
@@ -2203,6 +2214,7 @@ package body Landin.Syntax.Parser is
                               end if;
                            end;
                         else
+                           Depth := Depth - 1;
                            if not Expect
                                     (Wanted  => Tok.Right_Bracket,
                                      Message => "an index is closed with `]`",

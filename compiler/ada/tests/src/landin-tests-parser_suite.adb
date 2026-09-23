@@ -3375,6 +3375,25 @@ package body Landin.Tests.Parser_Suite is
            (Text, "call() end f g: () -> (r: i32) = call(0) end g");
          return Unbounded.To_String (Text);
       end Recovered;
+      function Indexed (Count : Positive; Opener : String) return String;
+
+      function Indexed (Count : Positive; Opener : String) return String is
+         Text : Unbounded.Unbounded_String;
+      begin
+         Unbounded.Append (Text, "f: () -> (r: i32) = ");
+         for Position in 1 .. Count loop
+            pragma Unreferenced (Position);
+            Unbounded.Append (Text, Opener);
+         end loop;
+         Unbounded.Append (Text, "0");
+         for Position in 1 .. Count loop
+            pragma Unreferenced (Position);
+            Unbounded.Append (Text, "]");
+         end loop;
+         Unbounded.Append
+           (Text, " end f g: () -> (r: i32) = call(0) end g");
+         return Unbounded.To_String (Text);
+      end Indexed;
       function Binary_Chain (Count : Positive; Operator : String)
         return String;
 
@@ -3406,6 +3425,14 @@ package body Landin.Tests.Parser_Suite is
          Nested (Landin.Syntax.Parser.Nesting_Limit + 1), "L0111", "f,g");
       Check ("first refused labelled call",
          Nested (Landin.Syntax.Parser.Nesting_Limit + 1, Labelled => True),
+         "L0111", "f,g");
+      Check ("last permitted index",
+         Indexed (Landin.Syntax.Parser.Nesting_Limit, "x["), "", "f,g");
+      Check ("first refused index",
+         Indexed (Landin.Syntax.Parser.Nesting_Limit + 1, "x["),
+         "L0111", "f,g");
+      Check ("first refused slice bound",
+         Indexed (Landin.Syntax.Parser.Nesting_Limit + 1, "x[0 .. "),
          "L0111", "f,g");
       Check ("recovery contributes to nesting", Recovered, "L0111", "f,g");
       Check ("recovery restores depth",
