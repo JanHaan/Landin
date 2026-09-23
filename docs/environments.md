@@ -204,8 +204,9 @@ R0.20 and R0.70 require of recorded evidence.
 | 2026-08-20 | Apple Container 1.2.2, `linux/amd64` under Rosetta, Linux 6.18.15 | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | build from an empty build directory; debug |
 | 2026-08-20 | builds.sr.ht `debian/stable`, Linux 6.12.94 x86-64 hardware, [job 1867022](https://builds.sr.ht/~sinnfrei/job/1867022) | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | both archives verified against their checksums; clean build; debug and release; `check.py` clean; 47 seconds |
 
-The gate job also printed `refine --identify`, so "no release version is
-assigned" appeared in the log of every run rather than only inside a test.
+The retired builds.sr.ht gate job also printed `refine --identify`, so "no
+release version is assigned" appeared in the log of every run rather than
+only inside a test; the GitHub gate does not.
 
 Case and check counts move as the suite grows, so they are not recorded here;
 the run itself is the record, and `scripts/toolchain.sh` output heads every
