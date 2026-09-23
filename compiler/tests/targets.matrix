@@ -975,6 +975,7 @@ negative/refused-field-type-in-written-struct | linux-x86-64, macos-arm64
 negative/refused-result-beside-error-set | linux-x86-64, macos-arm64
 negative/refused-results-answered-by-control | linux-x86-64, macos-arm64
 negative/refused-struct-inline-argument | linux-x86-64, macos-arm64, synthetic-32
+negative/refused-width-conversion | linux-x86-64, macos-arm64
 negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, macos-arm64, synthetic-32

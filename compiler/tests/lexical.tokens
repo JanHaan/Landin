@@ -76613,6 +76613,41 @@ file negative/refused-struct-inline-argument/program.ldn tokens 45
   151 152 )
   153 156 end
   157 165 exercise
+file negative/refused-width-conversion/main.ldn tokens 34
+  0 5 widen
+  5 6 :
+  7 8 (
+  8 9 x
+  9 10 :
+  11 14 u64
+  14 15 ,
+  16 17 y
+  17 18 :
+  19 22 f64
+  22 23 )
+  24 26 ->
+  27 31 none
+  32 33 =
+  38 39 _
+  40 41 =
+  42 46 u128
+  46 47 (
+  47 48 x
+  48 49 )
+  54 55 _
+  56 57 =
+  58 62 i128
+  62 63 (
+  63 64 x
+  64 65 )
+  70 71 _
+  72 73 =
+  74 77 f16
+  77 78 (
+  78 79 y
+  79 80 )
+  81 84 end
+  85 90 widen
 file negative/refused-widths-name-their-owner/main.ldn tokens 15
   0 4 wide
   4 5 :

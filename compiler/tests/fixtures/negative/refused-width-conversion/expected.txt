@@ -1,0 +1,21 @@
+error[L0304]: `u128` is not in this version of the language
+  --> ../tests/fixtures/negative/refused-width-conversion/main.ldn:2:9
+  |
+2 |     _ = u128(x)
+  |         ^^^^
+  = note: the tour describes it at [0150]
+  = note: ROADMAP.md R7.20 transfers this to Language evolution
+error[L0304]: `i128` is not in this version of the language
+  --> ../tests/fixtures/negative/refused-width-conversion/main.ldn:3:9
+  |
+3 |     _ = i128(x)
+  |         ^^^^
+  = note: the tour describes it at [0150]
+  = note: ROADMAP.md R7.20 transfers this to Language evolution
+error[L0304]: `f16` is not in this version of the language
+  --> ../tests/fixtures/negative/refused-width-conversion/main.ldn:4:9
+  |
+4 |     _ = f16(y)
+  |         ^^^
+  = note: the tour describes it at [0170]
+  = note: ROADMAP.md R7.20 transfers this to Language evolution

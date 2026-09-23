@@ -1,0 +1,8 @@
+class: negative
+summary: D237's named refusal holds where a refused width is written as [0700]'s conversion, not only where it is written as a type
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/refused-width-conversion/main.ldn
+codes: L0304, L0304, L0304
+status: 1
+constructs: 0150, 0170, 0700, 1830

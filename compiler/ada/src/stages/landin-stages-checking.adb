@@ -19925,6 +19925,45 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Call | Syn.Labeled_Application =>
+               --  D237/[1830]: a refused type name written as a conversion
+               --  is refused by name exactly as it is in type position.
+               --  Resolution left the unbound callee to this stage.
+               declare
+                  Callee : constant Syn.Node_Id :=
+                    Syn.Callee_Of (Of_Tree, Node);
+               begin
+                  if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                      /= Res.Bound
+                  then
+                     for Named in Bad.Refused_Type_Name loop
+                        if Bad.Spelling (Named)
+                          = Spelled (Syn.Name (Of_Tree, Callee))
+                        then
+                           if Landin.Checking.Type_Of
+                                (Types.all, Of_Tree, Callee) = Ty.Undecided
+                           then
+                              Landin.Checking.Note
+                                (Types.all, Of_Tree, Callee, Ty.Ill_Typed);
+                              Bad.Report
+                                (Item    => Bad.Unsupported_Use,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Callee),
+                                 Message =>
+                                   (if Bad."=" (Named, Bad.Arena_Handle)
+                                    then "the builtin `arena` type is"
+                                         & " withdrawn"
+                                    else "`" & Bad.Spelling (Named)
+                                         & "` is not in this version of"
+                                         & " the language"),
+                                 Refused => Bad.Refusal (Named),
+                                 Into    => Found);
+                           end if;
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                     end loop;
+                  end if;
+               end;
                if Landin.Configuration.Assembly_Call
                  (Spellings.all, Of_Tree, Node)
                then

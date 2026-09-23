@@ -2639,8 +2639,9 @@ the language should lose them, only that nothing yet needs them.
 
 **Pinned by** `negative/wide-integer-not-enabled`,
 `negative/float-type-not-enabled`, `negative/refused-widths-name-their-owner`,
-whose recorded report carries the transfer note, and the `types.values`
-guarantee row.
+whose recorded report carries the transfer note,
+`negative/refused-width-conversion`, which records the same refusal where a
+width is written as a conversion, and the `types.values` guarantee row.
 
 ### D245 — A number ends where its spelling ends
 

@@ -1,5 +1,6 @@
 with Landin.Memory;
 with Landin.Configuration;
+with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Resolution;
 with Landin.Modules;
 with Landin.Provenance;
@@ -401,6 +402,15 @@ package body Landin.Stages.Resolution is
          end loop;
          for View in Landin.Types.Text_View loop
             if Landin.Types.Spelling (View)
+              = Spelled (Syn.Name (Of_Tree, Callee))
+            then
+               return True;
+            end if;
+         end loop;
+         --  D237: a refused type name written as a conversion is the
+         --  checker's to refuse by name, as it is in type position.
+         for Refused in Landin.Diagnostics.Checking.Refused_Type_Name loop
+            if Landin.Diagnostics.Checking.Spelling (Refused)
               = Spelled (Syn.Name (Of_Tree, Callee))
             then
                return True;

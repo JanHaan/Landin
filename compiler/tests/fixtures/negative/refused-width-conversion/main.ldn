@@ -1,0 +1,5 @@
+widen: (x: u64, y: f64) -> none =
+    _ = u128(x)
+    _ = i128(x)
+    _ = f16(y)
+end widen
