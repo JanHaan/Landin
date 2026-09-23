@@ -1,0 +1,6 @@
+HIT seed=201739 rc=70 src=negative/immutable-struct-field/program.ldn :: refine: internal compiler defect 
+HIT seed=205764 rc=70 src=negative/struct-copy-across-types/program.ldn :: refine: internal compiler defect 
+HIT seed=207488 rc=70 src=positive/r440-origin-untaken-cleanups/program.ldn :: refine: internal compiler defect 
+HIT seed=207711 rc=70 src=positive/r720-labelled-bare-blocks/program.ldn :: refine: internal compiler defect 
+HIT seed=207836 rc=70 src=positive/struct-array-field-element-zeroed/program.ldn :: refine: internal compiler defect 
+total=8064 hits=5

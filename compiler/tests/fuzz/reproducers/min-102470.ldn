@@ -1,0 +1,6 @@
+unavailable: atom
+bad: (cell: ptr u32, choose: bool)
+     -> (result: maybe_pointer from cell) ! unavailable =
+    fail begin
+    end when choose
+end bad

@@ -1,0 +1,52 @@
+demo: (x: i32) -> (out: i32) =
+    out = 0
+    scope: begin
+    end scope
+end demo
+nested: (x: i32) -> (out: i32) =
+    out = x
+    outer: begin
+        inner: begin
+        end inner
+    end outer
+end nested
+first_even: (items: []i32) -> (found: i32) =
+    found = -1
+    search: begin
+typed: () -> (result: block_value) =
+        for item in items do
+            if item % 2 == 0 then
+            end if
+        end for
+    end search
+end first_even
+keep: (cell: ptr u32, other: ptr u32, early: bool)
+        -> (result: ptr u32 from cell, other) =
+    mut held: ptr u32 = cell
+    pick: begin
+        if early then
+            held = other
+        end if
+    end pick
+    result = held
+end keep
+first, second: atom
+kind: type = first | second
+arm: (which: kind) -> (out: i32) =
+    out = 0
+    match which
+        first: early: begin
+        end early
+        second: out = 2
+    end match
+end arm
+prefix: () -> (out: i32) =
+    ready: begin
+    end ready
+    3
+end prefix
+block_value: type = i32
+typed: () -> (result: block_value) =
+    scope: block_value = 3
+    result = scope
+end typed

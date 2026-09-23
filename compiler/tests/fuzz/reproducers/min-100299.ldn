@@ -1,0 +1,7 @@
+site: type = struct
+    line: u32
+    column: u3
+end site
+bad: (caller where: site) -> none =
+    where.line = 1
+end bad

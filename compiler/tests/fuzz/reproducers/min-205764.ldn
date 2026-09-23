@@ -1,0 +1,10 @@
+here: type = struct
+    x: however
+end here
+there: type = struct
+    x: u32
+end there
+f: () -> none =
+    mut p: here
+    p.x = 1
+end f

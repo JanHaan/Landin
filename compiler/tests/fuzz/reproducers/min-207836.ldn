@@ -1,0 +1,10 @@
+holder: type = struct
+    flags: [1]truth
+end holder
+mut state: holder
+set: (at: usize) -> (result: u32) =
+    mut local: holder
+    state.flags[0] = zeroed
+    if local.flags[0] then
+    end if
+end set

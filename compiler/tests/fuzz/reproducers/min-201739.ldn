@@ -1,0 +1,7 @@
+counters: type = struct
+    hits: may
+end counters
+state: counters
+f: () -> none =
+    state.hits = 1
+end f

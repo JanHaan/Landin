@@ -1,0 +1,7 @@
+image: type = layout(packed) struct
+    field: mode at 0..2
+end image
+public main: () -> (code: i32) =
+    mut value: image = zeroed
+    value.field = zeroed
+end main

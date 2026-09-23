@@ -1,0 +1,9 @@
+HIT seed=100299 rc=70 src=negative/caller-parameter-read-only/program.ldn :: refine: internal compiler defect 
+HIT seed=100930 rc=70 src=negative/function-field-unassigned/program.ldn :: refine: internal compiler defect 
+HIT seed=102470 rc=70 src=negative/r440-origin-guarded-fail-value/program.ldn :: refine: internal compiler defect 
+HIT seed=103330 rc=70 src=negative/r640-zero-field/program.ldn :: refine: internal compiler defect 
+HIT seed=103339 rc=1 src=negative/r660-materialization/program.ldn ::   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this placement   = note: [1640]: sections use .text.*, .ramtext.*, .rodata.*, .data.* or .bss.*; alignment is a decimal power of two through 256; decimal vectors require a unique implemented exception and interrupt/naked convention 
+HIT seed=103712 rc=70 src=negative/struct-array-field-element-zeroed-immutable/program.ldn :: refine: internal compiler defect 
+HIT seed=103790 rc=70 src=negative/struct-array-field-repetition-element-mismatch/program.ldn :: refine: internal compiler defect 
+HIT seed=104991 rc=70 src=positive/r440-origin-forwarding-positions/program.ldn :: refine: internal compiler defect 
+total=5376 hits=8

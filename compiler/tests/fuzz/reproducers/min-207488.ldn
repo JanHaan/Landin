@@ -1,0 +1,46 @@
+unavailable: atom
+consume: (value: i32) -> none =
+end consume
+return_edge: (cell: ptr u32, choose: bool)
+             -> (result: maybe_pointer from cell) =
+    defer consume(begin
+    end)
+end return_edge
+break_edge: (cell: ptr u32, choose: bool)
+            -> (result: maybe_pointer from cell) =
+    loop do
+        defer consume(begin
+        end)
+    end loop
+end break_edge
+continue_edge: (cell: ptr u32, choose: bool)
+               -> (result: maybe_pointer from cell) =
+    loop do
+        defer consume(begin
+        end)
+    end loop
+end continue_edge
+fail_edge: (cell: ptr u32, choose: bool)
+           -> (result: maybe_pointer from cell) ! unavailable =
+    undo consume(begin
+    end)
+end fail_edge
+break_value: (cell: ptr u32, choose: bool)
+             -> (result: maybe_pointer from cell) =
+    value: i32 = loop do
+        break with begin
+        end when choose
+    end loop
+end break_value
+fail_value: (cell: ptr u32, choose: bool)
+            -> (result: maybe_pointer from cell) ! unavailable =
+    fail begin
+    end when choose
+end fail_value
+post_guard_empty: (cell: ptr u32, choose: bool)
+                  -> (result: maybe_pointer from cell) =
+    defer consume(begin
+    end)
+    return when begin
+    end
+end post_guard_empty

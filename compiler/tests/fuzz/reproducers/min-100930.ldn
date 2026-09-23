@@ -1,0 +1,8 @@
+box: type = struct
+    callback: handler
+    other: i32
+end box
+read_early: () -> (result: i32) =
+    mut local: box
+    local.other = 1
+end read_early
