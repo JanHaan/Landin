@@ -1,0 +1,10 @@
+table: [2]u32 = [1, 2]
+store: (inout s: []u32) -> none =
+    s = table[0..<2]
+end store
+f: () -> none =
+    mut xs: [2]u32 = [3, 4]
+    mut s: []mut u32 = xs[0..<2]
+    store(s)
+    s[0] = 7
+end f

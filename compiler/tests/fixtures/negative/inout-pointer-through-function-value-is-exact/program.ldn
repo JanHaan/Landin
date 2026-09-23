@@ -1,0 +1,12 @@
+anchor: u32 = 5
+storer: type = (inout slot: ptr u32) -> none
+store: (inout slot: ptr u32) -> none =
+    slot = addr anchor
+end store
+f: () -> none =
+    s: storer = store
+    mut x: u32 = 1
+    mut p: ptr mut u32 = addr x
+    s(p)
+    p.val = 7
+end f

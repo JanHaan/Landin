@@ -1,0 +1,7 @@
+anchor: u32 = 5
+store: (inout slot: ptr u32) -> none =
+    slot = addr anchor
+end store
+mid: (inout slot: ptr mut u32) -> none =
+    store(slot)
+end mid

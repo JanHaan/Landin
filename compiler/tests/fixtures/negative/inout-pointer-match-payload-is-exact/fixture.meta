@@ -1,0 +1,9 @@
+class: negative
+summary: [0440]/[0900]/[1220] an `inout` match payload keeps its exact pointer type when passed on as an `inout` place
+constructs: 0440, 0900, 1210, 1220
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-pointer-match-payload-is-exact/program.ldn
+status: 1

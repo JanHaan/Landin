@@ -1,0 +1,9 @@
+class: negative
+summary: [0440]/[0900] a `ptr mut` field is not an `inout` place for a read-only pointer parameter
+constructs: 0440, 0670, 0900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-pointer-field-is-exact/program.ldn
+status: 1

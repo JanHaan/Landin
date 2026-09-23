@@ -1,0 +1,9 @@
+class: negative
+summary: [0440]/[0900]/[1000] calling through a function value keeps an `inout` pointer parameter exact
+constructs: 0440, 0900, 1000
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-pointer-through-function-value-is-exact/program.ldn
+status: 1

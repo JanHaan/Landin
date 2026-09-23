@@ -1,0 +1,13 @@
+anchor: u32 = 5
+store: (inout slot: ptr u32) -> none =
+    slot = addr anchor
+end store
+o: type = struct
+    k: variant empty | full: (p: ptr mut u32) end k
+end o
+f: (inout v: o) -> none =
+    match v.k
+        empty: _ = 0
+        full(inout p): store(p)
+    end match
+end f

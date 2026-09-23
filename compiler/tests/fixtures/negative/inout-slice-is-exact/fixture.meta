@@ -1,0 +1,9 @@
+class: negative
+summary: [0440]/[0900] an `inout` slice parameter takes a place of exactly its type, so a callee cannot store a read-only view the caller then writes through
+constructs: 0440, 0570, 0900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-slice-is-exact/program.ldn
+status: 1

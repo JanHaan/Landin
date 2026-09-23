@@ -1,0 +1,13 @@
+anchor: u32 = 5
+rw: type = struct
+    p: ptr mut u32
+end rw
+store: (inout slot: ptr u32) -> none =
+    slot = addr anchor
+end store
+f: () -> none =
+    mut x: u32 = 1
+    mut h: rw = rw(p: addr x)
+    store(h.p)
+    h.p.val = 7
+end f

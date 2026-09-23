@@ -1049,8 +1049,10 @@ two bools.
 Reference agreement includes the complete referred type and shallow
 permission. [0440] is the sole relaxation: `ptr mut T` satisfies `ptr T`, and
 `[]mut T` satisfies `[]T`; neither direction changes bits, and the reverse is
-refused. Function signature agreement also includes parameter conventions,
-`escaping`, and each result's ordered `from` positions; omitted and explicit
+refused. It relaxes a value that flows in: an `inout` place of reference type
+also flows back out, so it agrees exactly, as D243 records. Function signature
+agreement also includes parameter conventions, `escaping`, and each result's
+ordered `from` positions; omitted and explicit
 `in` have the same semantic convention. [1975] additionally includes C versus
 Landin convention and variadicness recursively, including function-valued
 fields and nested signature parts.
@@ -3627,6 +3629,48 @@ the withdrawal note, `runtime/r640-register-images`,
 `negative/r640-register-no-read`, `negative/r640-register-no-write`, the
 complete driver of `compiler/tests/driver/DERIVATION.md`, and the
 `packed.register` guarantee row.
+
+### D243 — An `inout` reference place keeps its exact type
+
+**The tour said** that a mut reference satisfies a plain one and never the
+reverse [0440], and that an `inout` parameter may replace the value it was
+handed and the change comes back [0900]. It did not say which of the two
+directions an `inout` argument is. [0440]'s own example is an `in` parameter.
+
+**Chosen:** an `inout` argument whose parameter is a pointer or a slice must
+have exactly the parameter's reference type, permission included. `ptr mut T`
+does not fill `inout slot: ptr T`, and `[]mut T` does not fill
+`inout s: []T`. This holds however the call is made: directly, through a
+function value, with a field or an element as the place, forwarding an
+`inout` parameter, or passing an `inout` match payload on. An `in` reference
+parameter keeps [0440]'s relaxation, and a pointer union place was already
+exact [1870].
+
+**A competent reader could have** applied [0440] at every reference argument,
+which is what the compiler did through 0.2.0. It is unsound: the callee
+stores a read-only reference into the place, and the caller then holds it as
+`ptr mut T` and writes through it. The program
+
+```landin
+anchor: u32 = 5
+store: (inout slot: ptr u32) -> none =
+    slot = addr anchor
+end store
+```
+
+called as `store(p)` with `mut p: ptr mut u32` then wrote 7 into the
+immutable `anchor` without `unchecked`, which is [0440]'s reverse direction
+reached through [0900]'s way back. The other reading, that `inout` checks
+only the way in and the way out is the caller's problem, was declined because
+nothing the caller writes afterwards can show it: the store happened in
+another function.
+
+**Pinned by** `negative/inout-pointer-is-exact`,
+`negative/inout-slice-is-exact`,
+`negative/inout-pointer-through-function-value-is-exact`,
+`negative/inout-pointer-field-is-exact`,
+`negative/inout-pointer-forwarded-is-exact` and
+`negative/inout-pointer-match-payload-is-exact`.
 
 ## DECISIONS: ARRAYS, SLICES AND TEXT
 

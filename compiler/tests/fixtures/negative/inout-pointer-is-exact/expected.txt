@@ -1,0 +1,10 @@
+error[L0301]: this `inout` reference argument does not have exactly the parameter's type
+  --> ../tests/fixtures/negative/inout-pointer-is-exact/program.ldn:8:11
+  |
+8 |     store(p)
+  |           ^
+  --> ../tests/fixtures/negative/inout-pointer-is-exact/program.ldn:2:9
+  |
+2 | store: (inout slot: ptr u32) -> none =
+  |         ^^^^^^^^^^^^^^^^^^^ this `inout` reference parameter
+  = note: [0440]/[0900]: permission relaxes only on a value that flows in; an `inout` place also flows out

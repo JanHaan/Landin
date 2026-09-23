@@ -12995,6 +12995,7 @@ package body Landin.Stages.Checking is
                       others => <>),
                      Parameter.Site, "this runtime-dispatch parameter");
                elsif Wants = Ty.Pointer_Value
+                 and then Parameter.Convention /= Syn.Inout_Convention
                  and then Landin.Checking.Is_Optional_Pointer
                    (Types.all, Parameter.Reference)
                then
@@ -13003,6 +13004,44 @@ package body Landin.Stages.Checking is
                      (Kind => Wants, Reference => Parameter.Reference,
                       others => <>),
                      Parameter.Site, "this reference parameter");
+               elsif Wants in Ty.Pointer_Value | Ty.Slice_Value
+                 and then Parameter.Convention = Syn.Inout_Convention
+               then
+                  --  [0440] relaxes a value that flows in, and an `inout`
+                  --  place also flows back out: a callee may store a
+                  --  read-only reference that the caller then writes
+                  --  through.  The place keeps its exact type, as a
+                  --  pointer union's does above.
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Argument);
+                  begin
+                     if Got /= Ty.Ill_Typed
+                       and then
+                         (Got /= Wants
+                          or else not Landin.Checking.References_Agree
+                            (Types.all,
+                             Landin.Checking.Reference_Of
+                               (Types.all, Of_Tree, Argument),
+                             Parameter.Reference))
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this `inout` reference argument"
+                                      & " does not have exactly the"
+                                      & " parameter's type",
+                           Note    => "[0440]/[0900]: permission relaxes"
+                                      & " only on a value that flows in;"
+                                      & " an `inout` place also flows out",
+                           Related => Parameter.Site,
+                           Because => "this `inout` reference parameter",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Argument);
+                     end if;
+                  end;
                elsif Wants in Ty.Pointer_Value | Ty.Slice_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
