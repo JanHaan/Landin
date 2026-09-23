@@ -436,6 +436,10 @@ package body Landin.Stages.Checking.References is
       function Has_Future_Use
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset) return Boolean;
+      function Has_Live_Holder
+        (Borrower : Res.Declaration_Id;
+         After    : Landin.Source.Byte_Offset;
+         Except   : Res.Declaration_Id := Res.No_Declaration) return Boolean;
 
       procedure Check_Borrows
         (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
@@ -1465,6 +1469,50 @@ package body Landin.Stages.Checking.References is
          return False;
       end Has_Future_Use;
 
+      --  [0830]: a view is still in use while anything holding its
+      --  storage is.  `addr xs` derives from `xs` alone, so a read
+      --  through that address is a use of every view `xs` borrows;
+      --  follow the holders until no new one is found.  Except is the
+      --  storage being replaced: what it holds afterwards is new.
+      function Has_Live_Holder
+        (Borrower : Res.Declaration_Id;
+         After    : Landin.Source.Byte_Offset;
+         Except   : Res.Declaration_Id := Res.No_Declaration) return Boolean
+      is
+         Seen : Declaration_Bits := [others => False];
+         Grew : Boolean := True;
+      begin
+         Seen (Positive (Borrower)) := True;
+         while Grew loop
+            Grew := False;
+            for Holder in Origins'Range loop
+               if not Seen (Positive (Holder))
+                 and then Holder /= Except
+                 and then Has_References (Holder)
+               then
+                  for Held in Origins'Range loop
+                     if Seen (Positive (Held))
+                       and then Origins (Holder).Value.Derives
+                         (Positive (Held))
+                     then
+                        Seen (Positive (Holder)) := True;
+                        Grew := True;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+         end loop;
+         for Holder in Origins'Range loop
+            if Seen (Positive (Holder))
+              and then Has_Future_Use (Holder, After)
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Live_Holder;
+
       function Check_Payload_Borrows
         (Tree : Syn.Tree; Place : Syn.Node_Id;
          After : Landin.Source.Byte_Offset; Storage : Reference_Fact)
@@ -1670,7 +1718,8 @@ package body Landin.Stages.Checking.References is
                       or else (Has_References (Borrower)
                                and then Origins (Borrower).Value.Derives
                                  (Positive (Pattern))))
-                    and then Has_Future_Use (Borrower, After)
+                    and then Has_Live_Holder
+                      (Borrower, After, Root_Declaration (Tree, Place))
                   then
                      Bad.Report
                        (Item    => Bad.Borrowed_Place,
@@ -1732,8 +1781,8 @@ package body Landin.Stages.Checking.References is
                        and then Has_References (Borrower)
                        and then Origins (Borrower).Value.Derives
                          (Positive (Mutated))
-                       and then Has_Future_Use
-                         (Borrower, Syn.Where (Tree, Call).Last)
+                       and then Has_Live_Holder
+                         (Borrower, Syn.Where (Tree, Call).Last, Mutated)
                      then
                         declare
                            Borrower_Tree : constant not null access constant

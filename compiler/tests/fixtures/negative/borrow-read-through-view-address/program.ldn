@@ -1,0 +1,40 @@
+--  [0830]: a view is in use while anything holding it is read.  A
+--  pointer to the view derives from the view, not from the local the
+--  view borrows, so reading through it after `grow` is a use of the
+--  view.  Before this fixture only the direct read was refused.  A
+--  view replaced before the call, or stored back into the local the
+--  call replaces, is no longer in use and stays accepted.
+list: type = struct
+    items: []i32
+end list
+
+backing: [4]i32 = [1, 2, 3, 4]
+
+grow: (inout l: list) -> none =
+    l.items = backing[0..<4]
+end grow
+
+through_address: () -> (r: i32) =
+    mut l: list = list(items: backing[0..<1])
+    xs: []i32 = l.items
+    pxs: ptr []i32 = addr xs
+    grow(l)
+    r = pxs.val[0]
+end through_address
+
+replaced_first: () -> (r: i32) =
+    mut l: list = list(items: backing[0..<1])
+    mut xs: []i32 = l.items
+    pxs: ptr []i32 = addr xs
+    xs = backing[0..<2]
+    grow(l)
+    r = pxs.val[0]
+end replaced_first
+
+stored_back: () -> (r: i32) =
+    mut l: list = list(items: backing[0..<1])
+    xs: []i32 = l.items
+    l = list(items: xs)
+    grow(l)
+    r = l.items[0]
+end stored_back

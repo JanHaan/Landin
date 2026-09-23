@@ -1,0 +1,9 @@
+class: negative
+summary: a read through the address of a live view keeps the view borrowed, while a view replaced first or stored back into the mutated local does not
+constructs: 0430, 0800, 0830
+program: program.ldn
+codes: L0315
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/borrow-read-through-view-address/program.ldn
+status: 1

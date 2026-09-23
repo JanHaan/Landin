@@ -110,6 +110,7 @@ negative/bare-block-scope-does-not-leak | linux-x86-64, macos-arm64, synthetic-3
 negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
 negative/borrow-read-above-inout-in-loop | linux-x86-64, macos-arm64
 negative/borrow-read-after-inout-loop | linux-x86-64, macos-arm64
+negative/borrow-read-through-view-address | linux-x86-64, macos-arm64
 negative/borrow-survives-untaken-replacement | linux-x86-64, macos-arm64
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-array-result-dropped-by-omission | linux-x86-64, macos-arm64, synthetic-32
