@@ -139,7 +139,12 @@ package body Landin.Platform.Native is
          return;
       end if;
 
-      Stream_IO.Open (File, Stream_IO.In_File, Path);
+      --  Its own stream, even if this process already has the file open.
+      --  Without a sharing form GNAT refuses a second open of the same full
+      --  name with Use_Error, so two test workers reading one fixture's
+      --  golden at once saw it as unreadable, one run in four on the gate.
+      --  A read never needs another opener's position.
+      Stream_IO.Open (File, Stream_IO.In_File, Path, Form => "shared=no");
 
       loop
          declare

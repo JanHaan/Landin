@@ -809,7 +809,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   & Run_Expect (Case_Item), Expected, Read);
                if Read /= Landin.Platform.Read_Ok then
                   Landin.Testing.Fail
-                    (Item, Label & ": runtime expectation is unreadable");
+                    (Item, Label & ": runtime expectation is unreadable ("
+                     & Landin.Platform.Read_Status'Image (Read) & ")");
                else
                   Check_Output
                     (Case_Item, Label, Outcome,
@@ -966,7 +967,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                  (Directory & "/" & Run_Expect (Case_Item), Expected, Read);
                if Read /= Landin.Platform.Read_Ok then
                   Landin.Testing.Fail
-                    (Item, Label & ": runtime expectation is unreadable");
+                    (Item, Label & ": runtime expectation is unreadable ("
+                     & Landin.Platform.Read_Status'Image (Read) & ")");
                else
                   Check_Output
                     (Case_Item, Label, Outcome,

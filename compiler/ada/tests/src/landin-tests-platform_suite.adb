@@ -1,6 +1,7 @@
 with Ada.Calendar.Formatting;
 with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.Streams.Stream_IO;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -915,6 +916,44 @@ package body Landin.Tests.Platform_Suite is
       end if;
    end Only_Ordinary_Files_Are_Read;
 
+   --  A file this process already has open is still readable.  GNAT
+   --  refuses a second open of the same full name unless the opener asks
+   --  for its own stream, and the reader did not ask: two test workers
+   --  reading one fixture's golden at once saw it as unreadable, one gate
+   --  run in four.  Holding the file open here is that second reader,
+   --  without the race that made it rare.
+   procedure Native_Reads_Share_An_Open_File
+     (Item : in out Landin.Testing.Context);
+
+   --  Touches the real filesystem, under compiler/ada/build.
+   procedure Native_Reads_Share_An_Open_File
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Path    : constant String := Scratch & "/held-open.txt";
+      Held    : Ada.Streams.Stream_IO.File_Type;
+      Content : Unbounded.Unbounded_String;
+      Written : Landin.Platform.Write_Status;
+      Read    : Landin.Platform.Read_Status;
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Host.Write_File (Path, "held", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok, "the file was written");
+
+      Ada.Streams.Stream_IO.Open
+        (Held, Ada.Streams.Stream_IO.In_File, Path);
+      Host.Read_File (Path, Content, Read);
+      Ada.Streams.Stream_IO.Close (Held);
+
+      Landin.Testing.Check
+        (Item, Read = Landin.Platform.Read_Ok,
+         "a file another reader holds open is still readable");
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Content), "held",
+         "and it is read whole, from its own start");
+   end Native_Reads_Share_An_Open_File;
+
    --  Deliberately uses the real host: inode and symbolic-link identity
    --  cannot be established by the fake's declared overlap pairs.
    procedure Native_Path_Identity (Item : in out Landin.Testing.Context);
@@ -1053,6 +1092,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "only ordinary files are read",
          Only_Ordinary_Files_Are_Read'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native reads share an open file",
+         Native_Reads_Share_An_Open_File'Access);
    end Register;
 
 end Landin.Tests.Platform_Suite;
