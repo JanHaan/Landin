@@ -145,7 +145,7 @@ navigation. It reported every word present while 79 citations had gone inert.
 
 The front page holds no document, so it is checked against the pieces it is
 built from instead: the tour's opening prose, the README's status line and the
-three constructs it shows. Each of those readers now fails loudly rather than
+whole program it shows, read from its runtime fixture. Each of those readers now fails loudly rather than
 returning nothing, because a blank section is exactly what a word count cannot
 see.
 
@@ -164,7 +164,7 @@ because of what they weigh.
 | `apple-touch-icon.png` | iOS, for a home-screen icon | wants a raster |
 | `fonts/*.woff2` | the browser's font loader, once for the whole site | thirty subsets are close to a megabyte, and a page carrying even the three an English reader needs would be 140 KB heavier for glyphs the next page would carry again |
 
-The icons in the bar, the filter field and the copy buttons come from
+The icons in the bar and the copy buttons come from
 [`assets/icons.py`](../../assets/README.md) as one inline `<symbol>` sprite
 per page, referenced with `<use>`: a page carries 140 copy buttons, and as
 inline copies their identical path data came to tens of kilobytes.

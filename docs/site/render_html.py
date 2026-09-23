@@ -49,7 +49,6 @@ HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.2.1"
-LANDING_LINE = "built from scratch"
 REPO = "https://github.com/JanHaan/Landin"
 #  The canonical host.  The pages are served from GitHub Pages under
 #  the CNAME the publishing workflow writes; every page still says
@@ -204,152 +203,148 @@ FINDING = re.compile(r"^([XYZW]\d+)\s+(\S.*)$")
 # the page
 # --------------------------------------------------------------------------
 
+#  The dark values, written once and substituted into both halves of the
+#  theme question below.
+DARK = """
+    color-scheme: dark;
+    --bg:oklch(0.2 0.012 255); --bg-soft:oklch(0.215 0.012 255);
+    --panel:oklch(0.23 0.013 255); --panel-2:oklch(0.25 0.014 255);
+    --ink:oklch(0.93 0.006 250); --ink-soft:oklch(0.8 0.012 250);
+    --ink-faint:oklch(0.68 0.014 250);
+    --rule:oklch(0.31 0.014 255); --rule-soft:oklch(0.27 0.013 255);
+    --accent:oklch(0.76 0.12 40); --accent-soft:oklch(0.6 0.1 40);
+    --accent-bg:oklch(0.28 0.04 40);
+    --code-bg:oklch(0.175 0.012 255);
+    --k:oklch(0.8 0.09 350); --t:oklch(0.8 0.08 195); --f:oklch(0.8 0.08 255);
+    --n:oklch(0.8 0.09 305); --q:oklch(0.8 0.09 135); --b:oklch(0.82 0.1 75);
+    --cd:oklch(0.74 0.06 140);
+    --sh:0 8px 24px oklch(0 0 0 / .45);"""
+
 CSS = """
 :root{
   color-scheme: light;
-  --bg:#f7f6f2; --bg-soft:#efece5; --panel:#fffefb; --panel-2:#f2efe8;
-  --ink:#1c2128; --ink-soft:#5a6270; --ink-faint:#6b7178;
-  --rule:#dedad0; --rule-soft:#e9e5dc;
-  --accent:#a03526; --accent-soft:#c4705f; --accent-bg:#f6ece9;
-  --code-bg:#fbfaf6; --code-rule:#e4e0d5;
-  --k:#9a2f6b; --t:#0f6f68; --f:#2c4c8c; --d:#243b6b; --n:#7a4bab;
-  --q:#4a6a1f; --c:#72716a; --cd:#5f6f4a; --o:#6d7179; --b:#8a5a12;
-  --sh:0 1px 2px rgba(20,20,20,.05), 0 6px 20px rgba(20,20,20,.04);
-  /*  The two faces, named so a `font:` shorthand can reach them.  The
-      interface one was used in three of those and defined in none, and a
-      shorthand whose family does not resolve is thrown away whole: every
-      construct heading and every table rendered at inherited body size.
-
-      Both stacks come from assets/fonts.py, which is the only place that
-      knows which faces are vendored -- so a page cannot ask for a family
-      the site does not ship beside it, and neither can a rule below.  */
-  /*  The sticky bar's height.  Four rules used to clear it with
-      four different numbers, so landing on a section stopped half
-      a rem higher than landing on a construct.  */
-  --bar:3.1rem;
+  /*  Every colour is oklch: lightness, chroma, hue.  The light surfaces
+      share one warm hue (85) and differ only in lightness; the ink leans
+      cool (255-260) so text never reads as brown; the accent is brick
+      (30).  The dark theme turns the surfaces cool (255) as well -- warm
+      darks read as brown -- and lifts the accent to coral (40).
+      The syntax colours share one lightness and one chroma and differ
+      only in hue, so no token shouts louder than another.  */
+  --bg:oklch(0.975 0.006 85); --bg-soft:oklch(0.955 0.008 85);
+  --panel:oklch(0.99 0.004 85); --panel-2:oklch(0.945 0.009 85);
+  --ink:oklch(0.24 0.018 260); --ink-soft:oklch(0.45 0.02 255);
+  --ink-faint:oklch(0.53 0.015 250);
+  --rule:oklch(0.88 0.012 85); --rule-soft:oklch(0.92 0.01 85);
+  --accent:oklch(0.5 0.15 30); --accent-soft:oklch(0.66 0.1 30);
+  --accent-bg:oklch(0.95 0.02 30);
+  --code-bg:oklch(0.985 0.005 85); --code-rule:var(--rule);
+  --k:oklch(0.48 0.1 350); --t:oklch(0.48 0.1 190); --f:oklch(0.48 0.1 260);
+  --n:oklch(0.48 0.1 300); --q:oklch(0.48 0.1 130); --b:oklch(0.48 0.1 60);
+  --cd:oklch(0.48 0.06 140);
+  --d:var(--ink); --c:var(--ink-faint); --o:var(--ink-faint);
+  --sh:0 8px 24px oklch(0.2 0.02 60 / .12);
+  /*  The sticky bar's height, which every scroll target clears.  */
+  --bar:3.25rem;
   --ui:{UI_STACK};
   --mono:{MONO_STACK};
 }
 /*  The switch is a checkbox, and it inverts: checked means the theme the
     system did not ask for.  CSS cannot read which theme that is, only
-    match on it, so the dark variables are written under both halves of
-    the question -- system dark and not inverted, system light and
-    inverted.  Nothing here needs a script, which is the point: with
-    scripting off the switch still works, it just does not outlive the
-    page.  There is no script half at all: the choice is the box's,
-    it is not stored anywhere, and it lasts as long as the page does.  */
+    match on it, so the dark values are written under both halves of the
+    question -- system dark and not inverted, system light and inverted.
+    The choice itself is remembered by THEME_JS, which runs as the box is
+    parsed and before anything is painted.
+    They are one string substituted twice, so the two copies cannot
+    drift apart.  */
 @media (prefers-color-scheme: dark){
-  :root:not(:has(#theme:checked)){
-    color-scheme: dark;
-    --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
-    --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
-    --rule:#2a313c; --rule-soft:#222933;
-    --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
-    --code-bg:#0f1319; --code-rule:#232a34;
-    --k:#f0919d; --t:#6fd3c2; --f:#93bcff; --d:#b9cdf5; --n:#cbaaf2;
-    --q:#b3d178; --c:#7a828f; --cd:#a9bd93; --o:#8b93a1; --b:#e0ae6a;
-    --sh:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.28);
+  :root:not(:has(#theme:checked)){{DARK}
   }
 }
 @media (prefers-color-scheme: light), (prefers-color-scheme: no-preference){
-  :root:has(#theme:checked){
-    color-scheme: dark;
-    --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
-    --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
-    --rule:#2a313c; --rule-soft:#222933;
-    --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
-    --code-bg:#0f1319; --code-rule:#232a34;
-    --k:#f0919d; --t:#6fd3c2; --f:#93bcff; --d:#b9cdf5; --n:#cbaaf2;
-    --q:#b3d178; --c:#7a828f; --cd:#a9bd93; --o:#8b93a1; --b:#e0ae6a;
-    --sh:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.28);
+  :root:has(#theme:checked){{DARK}
   }
 }
 
 *{box-sizing:border-box}
-/*  Every citation click and every '/' jump animated, with nothing asking
-    whether the reader wanted motion.  */
 @media (prefers-reduced-motion: reduce){
   html{scroll-behavior:auto}
   *{transition-duration:.01ms !important; animation-duration:.01ms !important}
 }
 a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible{
-  outline:2px solid var(--accent-soft); outline-offset:2px; border-radius:3px;
+  outline:2px solid var(--accent); outline-offset:2px;
 }
-/*  The keyboard route past a sidebar that is ~200 links deep on the tour. */
 a.skip{
   position:absolute; left:.5rem; top:-3rem; z-index:60;
   padding:.45rem .7rem; background:var(--panel); color:var(--ink);
-  border:1px solid var(--accent-soft); border-radius:5px; font-size:.85rem;
+  border:1px solid var(--accent); font-size:.85rem;
 }
 a.skip:focus{top:.5rem}
-/*  The offset lives on the targets, as scroll-margin-top.  Setting
-    scroll-padding-top here as well made the two add up, so a section
-    landed 130px down the page instead of just under the bar.  */
 html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font-family:var(--ui);
-  font-size:16.5px; line-height:1.62;
+  font-family:var(--ui); font-size:16px; line-height:1.6;
   font-feature-settings:"kern" 1,"liga" 1;
 }
-/*  The code face was customised with four features and no others:
-    calt, liga and dlig draw `->`, `<>` and `:=` as one shape each,
-    and zero slashes the digit so `0` and `O` cannot be read for each
-    other in a fixture.  Named here because the body's own settings
-    would otherwise decide for the code, and the body is set in a
-    different family with different features.  */
-code,pre,.mono,.tag,.cite{
+/*  The code face's four features: calt, liga and dlig draw `->`, `<>`
+    and `:=` as one shape each, and zero slashes the digit.  */
+code,pre,.mono,.tag,.cite,.label{
   font-family:var(--mono);
   font-feature-settings:"kern" 1,"calt" 1,"liga" 1,"dlig" 1,"zero" 1;
 }
 code{
-  font-size:.88em; padding:.05rem .28rem; color:var(--ink);
-  background:var(--panel-2); border:1px solid var(--rule-soft); border-radius:3px;
+  font-size:.85em; padding:.05rem .28rem; color:var(--ink);
+  background:var(--panel-2); border-radius:2px;
 }
-a{color:var(--accent); text-decoration-color:color-mix(in srgb, var(--accent) 35%, transparent); text-underline-offset:2px}
+a{
+  color:var(--accent); text-underline-offset:.18em;
+  text-decoration-thickness:1px;
+  text-decoration-color:color-mix(in oklch, var(--accent) 40%, transparent);
+}
+a:hover{text-decoration-color:currentColor}
+/*  A mono label: the small lowercase line that says what a thing is.  */
+.label{font-size:.75rem; color:var(--ink-faint); letter-spacing:0}
 
 /* ---- top bar ---- */
 header.bar{
   position:sticky; top:0; z-index:40;
-  display:flex; align-items:center; gap:.75rem;
-  padding:.5rem .9rem;
-  background:color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter:saturate(1.4) blur(10px);
+  display:flex; align-items:center; gap:.9rem;
+  height:var(--bar); padding:0 1.5rem 0 1.25rem;
+  background:color-mix(in oklch, var(--bg) 90%, transparent);
+  backdrop-filter:saturate(1.3) blur(10px);
   border-bottom:1px solid var(--rule);
 }
 header.bar .brand{
-  font-weight:700; letter-spacing:.16em; font-size:.72rem; text-transform:uppercase;
-  color:var(--accent); text-decoration:none; white-space:nowrap;
-  display:inline-flex; align-items:center; gap:.5rem;
+  font-weight:700; font-size:.98rem; letter-spacing:-.01em;
+  color:var(--ink); text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:baseline; gap:.5rem;
 }
-/*  The mark is assets/icon.svg inlined, taking the colour of the word
-    beside it, which is how it follows the theme without a second drawing
-    and without a request.  */
-header.bar .brand svg{height:.82rem; width:auto; fill:currentColor; display:block}
+/*  The mark is 701 in figures, which stand on the baseline and rise to
+    the cap height, so it is set exactly that tall and aligned to the
+    baseline: an svg has no baseline of its own, and a flex item without
+    one aligns its bottom edge.  Centring the box on the line box put it
+    against the line-height rather than the letters.  The crop box is the
+    drawing's own extremes, so overflow stays visible or the antialiased
+    edge pixels are cut off.  */
+header.bar .brand svg{height:.705em; width:auto; color:var(--accent);
+  display:block; overflow:visible}
+header.bar .brand:hover{color:var(--accent)}
 header.bar .where{
-  font-size:.74rem; color:var(--ink-faint); letter-spacing:.06em;
-  text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-family:var(--mono); font-size:.75rem; color:var(--ink-faint);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 header.bar .grow{flex:1}
-/*  Everything in the bar is the same control: the source link sat beside
-    the theme button at a different size, in a different case and with
-    different padding, because it was added with a rule of its own.  */
-/*  An icon is 1em of the label beside it, so the two scale together and
-    the control keeps the bar's rhythm.  */
 svg.i{width:1em; height:1em; flex:none; vertical-align:-.12em}
-header.bar button, header.bar .src, header.bar label[for="theme"]{
-  display:inline-flex; align-items:center; gap:.4rem;
-  font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--ink-soft); background:var(--panel); cursor:pointer;
-  text-decoration:none; border:1px solid var(--rule); border-radius:5px;
-  padding:.3rem .55rem; white-space:nowrap;
+header.bar .src, header.bar label{
+  display:inline-flex; align-items:center; gap:.45rem;
+  font-family:var(--mono); font-size:.72rem;
+  color:var(--ink-soft); background:none; cursor:pointer;
+  text-decoration:none; border:1px solid var(--rule);
+  padding:.32rem .6rem; white-space:nowrap;
 }
-header.bar button:hover, header.bar .src:hover, header.bar label[for="theme"]:hover{
-  color:var(--ink); border-color:var(--ink-faint);
+header.bar .src:hover, header.bar label:hover,
+input.menu-x:checked + label{
+  color:var(--accent); border-color:var(--accent-soft);
 }
-/*  The toggle offers the theme you are not in: a moon on a light page,
-    a sun on a dark one.  Both are in the markup and CSS picks, so no
-    script is needed to draw the right one.  */
 .dark-only{display:none}
 .light-only{display:inline-block}
 @media (prefers-color-scheme: dark){
@@ -360,149 +355,152 @@ header.bar button:hover, header.bar .src:hover, header.bar label[for="theme"]:ho
   :root:has(#theme:checked) .dark-only{display:inline-block}
   :root:has(#theme:checked) .light-only{display:none}
 }
-/*  The box itself is never seen, but it is what is focused and what is
-    typed at, so it is clipped rather than `display:none` -- which would
-    take it out of the tab order and leave the label unreachable by
-    keyboard.  The ring is drawn on the label instead.  */
-input.theme-x{
+input.theme-x, input.menu-x{
   position:absolute; width:1px; height:1px; margin:-1px; padding:0;
   border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
 }
-input.theme-x:focus-visible + label{outline:2px solid var(--accent); outline-offset:2px}
-/*  A phone has room for the actions, but not for three copies of what their
-    icons already say.  Keep every action and its accessible name, collapse
-    only the visible labels, and give the resulting icon controls a useful
-    touch target.  The changing document/section label is expendable here;
-    the page heading says the same thing below the bar.  */
+input.theme-x:focus-visible + label, input.menu-x:focus-visible + label{
+  outline:2px solid var(--accent); outline-offset:2px;
+}
 @media (max-width:35rem){
   :root{--bar:3.75rem}
-  header.bar{gap:.45rem; padding:.45rem .65rem}
+  header.bar{gap:.45rem; padding:0 .65rem}
   header.bar .where{display:none}
-  header.bar .src, header.bar button, header.bar label[for="theme"]{
+  header.bar .src, header.bar label{
     width:2.75rem; height:2.75rem; justify-content:center; gap:0; padding:0;
   }
-  header.bar .src span, header.bar button span,
-  header.bar label[for="theme"] span{
+  header.bar .src span, header.bar label span{
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
   }
 }
-#menu{display:none}
+header.bar label[for="menu"]{display:none}
 
 /* ---- layout ---- */
-.wrap{display:grid; grid-template-columns:17rem minmax(0,1fr); gap:0; align-items:start}
+.wrap{display:grid; grid-template-columns:16.5rem minmax(0,1fr); align-items:start}
+
+/* ---- the sidebar: the documents in five groups, and the sections of
+        the one being read nested under it ---- */
 nav.side{
   position:sticky; top:var(--bar); align-self:start;
-  height:calc(100vh - var(--bar)); overflow:auto;
-  padding:1.4rem 1rem 3rem 1.4rem; border-right:1px solid var(--rule);
+  height:calc(100vh - var(--bar)); overflow:auto; overscroll-behavior:contain;
+  padding:1.2rem 0 3rem; border-right:1px solid var(--rule);
+  font-size:.875rem; scrollbar-width:thin;
 }
-nav.side .nav-group{
-  margin:1.4rem 0 .45rem; font-size:.66rem; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-faint); font-weight:600;
+nav.side a{display:block; color:var(--ink-soft); text-decoration:none; line-height:1.35}
+nav.side a.doc{padding:.26rem 1rem .26rem 1.25rem; border-left:2px solid transparent}
+nav.side a.doc:hover{color:var(--accent)}
+nav.side a.doc.here{color:var(--accent); border-left-color:var(--accent); font-weight:650}
+nav.side a.doc.retired{color:var(--ink-faint)}
+nav.side details{margin-top:1rem}
+nav.side summary{
+  list-style:none; cursor:pointer; user-select:none;
+  display:flex; align-items:center; gap:.5rem;
+  padding:.2rem 1rem .4rem 1.25rem;
+  font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
 }
-nav.side .nav-group:first-child{margin-top:0}
-nav.side a{
-  display:block; padding:.22rem .45rem; margin-left:-.45rem;
-  color:var(--ink-soft); text-decoration:none; font-size:.86rem;
-  border-radius:4px; line-height:1.35;
+nav.side summary::-webkit-details-marker{display:none}
+nav.side summary .count{margin-left:auto; font-size:.68rem}
+/*  A chevron drawn from two borders, so it needs neither an icon nor a
+    glyph the face might not have.  */
+nav.side summary::after{
+  content:""; width:.34rem; height:.34rem; flex:none;
+  border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor;
+  transform:translateY(-.1rem) rotate(45deg); transition:transform .15s;
 }
-nav.side a:hover{background:var(--panel-2); color:var(--ink)}
-nav.side a.here{color:var(--accent); background:var(--accent-bg); font-weight:600}
-nav.side a.doc{font-size:.88rem}
-/*  The icon sits in the field rather than beside it, so the field is
-    still the full width of the column.  */
-.finder{position:relative; display:flex; align-items:center}
-.finder .i{position:absolute; left:.55rem; color:var(--ink-faint);
-  pointer-events:none}
-#find{
-  width:100%; font:inherit; font-size:.85rem;
-  padding:.4rem .55rem .4rem 1.9rem;
-  color:var(--ink); background:var(--panel); border:1px solid var(--rule); border-radius:5px;
+nav.side details:not([open]) > summary::after{transform:rotate(-45deg)}
+nav.side details[open] > summary .count{visibility:hidden}
+nav.side summary:hover{color:var(--ink)}
+nav.side .toc{margin:.2rem 0 .55rem 1.35rem; border-left:1px solid var(--rule)}
+/*  The documents write their section titles in three cases -- THE
+    GRAMMAR OF THE ENABLED KERNEL, chip/vendor/gpio, Canonical release --
+    so the list of them is set in one.  */
+nav.side a.sect{
+  padding:.2rem .75rem .2rem .8rem; margin-left:-1px;
+  border-left:1px solid transparent;
+  font-size:.72rem; letter-spacing:.035em; text-transform:uppercase;
+  color:var(--ink-faint);
 }
-#find:focus{outline:2px solid var(--accent-soft); outline-offset:1px}
-#find:focus + .i, .finder:focus-within .i{color:var(--accent)}
-#found{font-size:.72rem; color:var(--ink-faint); padding:.35rem .1rem 0}
+nav.side a.sect:hover{color:var(--ink)}
+nav.side a.sect.here{color:var(--ink); border-left-color:var(--accent)}
 
-main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
+main{padding:2.75rem 3rem 6rem; min-width:0; max-width:62rem}
 
 /* ---- hero ---- */
-.hero{border-bottom:1px solid var(--rule); padding-bottom:1.6rem; margin-bottom:.6rem}
-/*  The front door wears the plated icon.  It is the same drawing the tab
-    carries, at the one size where the plate is worth having.  */
+.hero{border-bottom:1px solid var(--rule); padding-bottom:2rem; margin-bottom:.5rem}
 .hero .logo{
-  float:right; width:5.5rem; height:5.5rem; margin:0 0 1rem 1.4rem;
-  border:1px solid var(--rule); border-radius:1.2rem;
+  float:right; width:5.25rem; height:5.25rem; margin:0 0 1rem 1.5rem;
+  border:1px solid var(--rule); border-radius:1.15rem;
 }
-/*  Inline, so the stylesheet can reach into it: the drawing carries the
-    light colours as attributes for anything that renders it alone, and
-    here the page's own two variables win and it follows the theme.  */
 .hero .logo rect{fill:var(--panel)}
 .hero .logo path{fill:var(--accent)}
 .hero.wide::after{content:""; display:block; clear:both}
-@media (max-width:35rem){ .hero .logo{width:3.6rem; height:3.6rem; border-radius:.8rem} }
-.hero .kind{font-size:.7rem; letter-spacing:.16em; text-transform:uppercase; color:var(--accent)}
+/* On a phone the bar already carries the mark, and a float beside the
+   opening line only breaks it into a ragged first few words.  */
+@media (max-width:35rem){ .hero .logo{display:none} }
 .hero h1{
-  margin:.5rem 0 .9rem; font-size:clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem);
-  line-height:1.15; letter-spacing:-.015em; font-weight:700;
+  margin:.45rem 0 1rem; font-size:clamp(1.8rem, 1.3rem + 1.9vw, 2.6rem);
+  line-height:1.08; letter-spacing:-.025em; font-weight:650; text-wrap:balance;
 }
-.hero p{margin:.55rem 0; max-width:44rem; color:var(--ink-soft)}
-.hero p:first-of-type{color:var(--ink); font-size:1.06rem}
+.hero p{margin:.6rem 0; max-width:42rem; color:var(--ink-soft)}
+.hero p:first-of-type{color:var(--ink); font-size:1.1rem; line-height:1.55}
 .hero pre{
-  margin:.7rem 0; padding:.7rem .85rem; overflow-x:auto;
-  background:var(--panel-2); border-left:2px solid var(--rule);
-  font-size:.82rem; line-height:1.5; color:var(--ink-soft);
+  margin:.7rem 0; padding:.7rem .9rem; overflow-x:auto;
+  background:var(--code-bg); border:1px solid var(--rule);
+  font-size:.8rem; line-height:1.55; color:var(--ink-soft);
 }
 .hero blockquote{
-  margin:.7rem 0; padding:.1rem 0 .1rem .95rem;
-  border-left:2px solid var(--rule); color:var(--ink-soft); max-width:44rem;
+  margin:.7rem 0; padding:.1rem 0 .1rem 1rem;
+  border-left:2px solid var(--rule); color:var(--ink-soft); max-width:42rem;
 }
 
 /* ---- sections ---- */
-section{padding-top:2.4rem; scroll-margin-top:var(--bar)}
+section{padding-top:3rem; scroll-margin-top:var(--bar)}
 section > h2{
-  margin:0 0 1.1rem; font-size:.82rem; font-weight:700;
-  letter-spacing:.13em; text-transform:uppercase; color:var(--ink);
-  display:flex; align-items:center; gap:.7rem;
+  margin:0 0 1.2rem; font-size:.9rem; font-weight:750;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--ink);
+  display:flex; align-items:center; gap:.8rem;
 }
 section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 
 /* ---- one construct ---- */
-.item{position:relative; padding:0 0 1.5rem 0;
+.item{position:relative; padding:0 0 1.6rem 0;
       scroll-margin-top:calc(var(--bar) + .6rem)}
 .item .tag{
-  display:inline-block; font-size:.68rem; letter-spacing:.04em;
-  color:var(--ink-faint); background:var(--panel-2);
-  border:1px solid var(--rule-soft); border-radius:4px;
-  padding:.05rem .3rem; text-decoration:none; margin-bottom:.3rem;
+  display:inline-block; font-size:.75rem; color:var(--ink-faint);
+  text-decoration:none; margin-bottom:.2rem;
 }
-.item .tag:hover{color:var(--accent); border-color:var(--accent-soft)}
-.item:target .tag, .item.lit .tag{color:var(--accent); background:var(--accent-bg); border-color:var(--accent-soft)}
-.item p{margin:0 0 .75rem; max-width:44rem}
+.item .tag:hover{color:var(--accent)}
+.item:target .tag, .item.lit .tag{color:var(--accent); font-weight:700}
+/*  Arriving at a construct draws a brick rule down its left edge.  */
+.item:target::before, .item.lit::before{
+  content:""; position:absolute; left:-1.1rem; top:.3rem; bottom:1.4rem;
+  width:2px; background:var(--accent);
+}
+.item p{margin:0 0 .75rem; max-width:42rem}
 .item p:last-child{margin-bottom:0}
 @media (min-width:70rem){
   .item{padding-left:4.2rem}
-  .item .tag{position:absolute; left:0; top:.28rem; margin:0}
+  .item .tag{position:absolute; left:0; top:.3rem; margin:0}
 }
 
 /* ---- code ---- */
-.listing{position:relative; margin:.35rem 0 1rem}
+.listing{position:relative; margin:.4rem 0 1.1rem}
 .listing pre{
-  margin:0; padding:.8rem 1rem; overflow-x:auto;
+  margin:0; padding:.85rem 1rem; overflow-x:auto;
   background:var(--code-bg); border:1px solid var(--code-rule);
-  border-left:2px solid var(--accent-soft); border-radius:5px;
-  font-size:.845rem; line-height:1.55; tab-size:4;
+  font-size:.82rem; line-height:1.6; tab-size:4;
 }
 .listing .copy{
-  position:absolute; top:.4rem; right:.4rem; opacity:0;
+  position:absolute; top:.45rem; right:.45rem; opacity:0;
   display:inline-flex; align-items:center; justify-content:center;
   min-width:2rem; min-height:2rem; padding:0;
   font:inherit; font-size:.8rem; line-height:1;
   color:var(--ink-faint); background:var(--panel); cursor:pointer;
-  border:1px solid var(--rule); border-radius:4px;
+  border:1px solid var(--rule);
   transition:opacity .12s;
 }
-.listing .copy:hover{color:var(--ink); border-color:var(--ink-faint)}
-/*  Having copied, the tick replaces the sheets for a moment. */
+.listing .copy:hover{color:var(--accent); border-color:var(--accent-soft)}
 .listing .copy .done{display:none}
 .listing .copy.done .i{display:none}
 .listing .copy.done .done{display:inline-block; color:var(--q)}
@@ -511,89 +509,50 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
   .listing .copy{opacity:1}
   .listing pre{padding-right:2.8rem}
 }
-/*  A sample inside a listing is a listing: .listing pre and pre.sample
-    have the same specificity, so this rule used to win and the
-    highlighted Landin blocks -- the ones that carry the argument -- got
-    the muted treatment while the plain shell blocks got the accented
-    one.  Only a sample standing on its own in prose keeps this.  */
 pre.sample:not(.listing > pre){
-  margin:.15rem 0 .85rem; padding:.5rem .8rem; overflow-x:auto;
-  background:var(--panel-2); border-left:2px solid var(--rule);
-  font-size:.82rem; line-height:1.55;
+  margin:.15rem 0 .85rem; padding:.55rem .85rem; overflow-x:auto;
+  background:var(--code-bg); border:1px solid var(--rule);
+  font-size:.8rem; line-height:1.55;
 }
-.k{color:var(--k)} .t{color:var(--t)} .f{color:var(--f)} .d{color:var(--d); font-weight:600}
+.k{color:var(--k)} .t{color:var(--t)} .f{color:var(--f)} .d{color:var(--d); font-weight:650}
 .n{color:var(--n)} .q{color:var(--q)} .v{color:var(--b)} .b{color:var(--b); font-weight:600}
 .s{color:var(--ink)} .o{color:var(--o)}
 .c{color:var(--c); font-style:italic} .cd{color:var(--cd)}
 pre a.cite, pre a.cite:hover{color:inherit; text-decoration-style:dotted}
 
 /* ---- citations ---- */
-a.cite{font-size:.92em; text-decoration:none; border-bottom:1px dotted var(--accent-soft)}
+a.cite{font-size:.9em; text-decoration:none; border-bottom:1px dotted var(--accent-soft)}
 a.cite:hover{background:var(--accent-bg)}
 #pop{
   position:absolute; z-index:60; max-width:29rem; display:none;
-  padding:.6rem .75rem; font-size:.86rem; line-height:1.5;
+  padding:.65rem .8rem; font-size:.86rem; line-height:1.5;
   color:var(--ink); background:var(--panel); box-shadow:var(--sh);
-  border:1px solid var(--rule); border-radius:6px;
+  border:1px solid var(--rule);
 }
-#pop .tag{font-size:.68rem; color:var(--accent); display:block; margin-bottom:.2rem}
+#pop .tag{font-size:.72rem; color:var(--accent); display:block; margin-bottom:.2rem}
 
-/* ---- findings ---- */
-@media (min-width:70rem){
-    }
-
-/* ---- index page ---- */
-.cards{display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); margin:2rem 0}
-/*  One card.  .card and .route were the same nine declarations twice,
-    differing only in an accent border and an accent title.  */
-.card, .route{
-  display:block; padding:1rem 1.1rem; text-decoration:none; color:inherit;
-  background:var(--panel); border:1px solid var(--rule); border-radius:8px;
-}
-.card:hover, .route:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
-.card strong, .route strong{display:block; font-size:.95rem; margin-bottom:.3rem}
-.card span, .route span{display:block; color:var(--ink-soft); font-size:.87rem;
-  line-height:1.5}
-.card em{display:block; margin-top:.5rem; font-style:normal; font-size:.7rem;
-  letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
-
-/*  The footer sits outside <main> so it is a landmark of its own, which
-    put it in the grid's next cell -- under the sidebar, in a 17rem column,
-    wrapping after four words.  It belongs in the content column, aligned
-    with the document it describes.  */
 footer{
   grid-column:2; justify-self:start;
-  margin:0 0 4rem; padding:1.2rem 2.4rem 0;
+  margin:0 0 4rem; padding:1.25rem 3rem 0;
   border-top:1px solid var(--rule);
-  color:var(--ink-faint); font-size:.8rem; max-width:44rem;
+  color:var(--ink-faint); font-size:.78rem; line-height:1.7; max-width:56rem;
 }
 footer code{font-size:.9em; color:var(--ink-soft)}
-.hide{display:none !important}
-/*  The body uppercases every section heading, so the list of them does
-    too: the documents write their own titles in three different cases --
-    THE GRAMMAR OF THE ENABLED KERNEL, chip/vendor/gpio, Canonical
-    release -- and untransformed they read as three different lists.  */
-nav.side a.sect{display:flex; gap:.55rem; align-items:baseline}
-nav.side a.sect span:last-child{text-transform:uppercase; letter-spacing:.04em;
-  font-size:.8rem}
-nav.side a.sect .num{
-  font-size:.66rem; color:var(--ink-faint); min-width:1.5rem;
-  text-align:right; font-variant-numeric:tabular-nums;
-  font-family:var(--mono);
-}
 .anchor{position:absolute; scroll-margin-top:calc(var(--bar) + .6rem)}
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
-  footer{grid-column:1; padding-left:1.2rem; padding-right:1.2rem}
+  footer{grid-column:1; padding-left:1.15rem; padding-right:1.15rem}
   nav.side{
-    position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:75vh;
+    position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:78vh;
     background:var(--bg); border-right:0; border-bottom:1px solid var(--rule);
-    z-index:35; display:none;
+    box-shadow:var(--sh); z-index:35; display:none;
   }
-  nav.side.open{display:block}
-  #menu{display:inline-flex}
-  main{padding:1.5rem 1.1rem 5rem}
+  /*  A checkbox rather than a button, so the drawer opens without a
+      script; the script only closes it again after a link is followed.  */
+  :root:has(#menu:checked) nav.side{display:block}
+  header.bar label[for="menu"]{display:inline-flex}
+  main{padding:1.75rem 1.15rem 5rem}
 }
 @media print{
   header.bar, nav.side, .listing .copy{display:none}
@@ -603,6 +562,7 @@ nav.side a.sect .num{
   a{color:inherit}
 }
 """
+CSS = CSS.replace("{DARK}", DARK)
 
 #  The stacks are substituted rather than written above, because the list
 #  of vendored families is assets/fonts.py's to keep, and the CSS is one
@@ -626,27 +586,41 @@ for _family in fonts.missing():
     print("render_html: %s is not available on this host; the pages "
           "fall back to the stack behind it" % _family, file=sys.stderr)
 
+#  The theme switch remembers itself.  It stores the theme chosen rather
+#  than the box's state, because the box means "not what the system
+#  asked for" and the system can change its mind between two pages; a
+#  choice that agrees with the system is forgotten, so the page follows
+#  the system again.  It runs inline, straight after the box, so the box
+#  is set before the first paint and no page flashes the other theme.
+THEME_JS = (
+    "(function(){var b=document.getElementById('theme');"
+    "var d=matchMedia('(prefers-color-scheme: dark)').matches;"
+    "try{var s=localStorage.getItem('landin-theme');"
+    "if(s)b.checked=(s==='dark')!==d;}catch(e){}"
+    "b.addEventListener('change',function(){"
+    "try{if(b.checked)localStorage.setItem('landin-theme',d?'light':'dark');"
+    "else localStorage.removeItem('landin-theme');}catch(e){}});})();")
+
+#  How much of a paragraph a citation preview shows.  The longest
+#  construct opens with four thousand characters, which is a page and not
+#  a preview; the median is under three hundred and is shown whole.
+PREVIEW = 400
+
 JS = """
 (function(){
+  var PREVIEW=%d;
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
   function closeMenu(focus){
-    if(!side || !menu) return;
-    side.classList.remove('open');
-    menu.setAttribute('aria-expanded','false');
+    if(!menu || !menu.checked) return;
+    menu.checked=false;
     if(focus) menu.focus();
   }
-  if(menu) menu.addEventListener('click',function(){
-    var open=side.classList.toggle('open');
-    menu.setAttribute('aria-expanded',open?'true':'false');
-  });
   if(side) side.addEventListener('click',function(e){
     if(e.target.closest('a')) closeMenu(false);
   });
   document.addEventListener('keydown',function(e){
-    if(e.key==='Escape' && side && side.classList.contains('open')){
-      closeMenu(true);
-    }
+    if(e.key==='Escape') closeMenu(true);
   });
 
   /* copy a listing */
@@ -701,9 +675,15 @@ JS = """
     }
     /*  Coalesced on a clock rather than on an animation frame: a frame
         never arrives in a hidden tab, and a pending flag waiting for one
-        stays set, so the highlight stopped updating for good.  */
+        stays set, so the highlight stopped updating for good.  The last
+        event of a burst is always marked, on a timer: dropping it left
+        the highlight wherever a smooth scroll was 50ms before it
+        stopped, which is the section before the one it landed on.  */
+    var trailing=0;
     function schedule(){
       var now=Date.now();
+      clearTimeout(trailing);
+      trailing=setTimeout(mark,60);
       if(now-last<50) return;
       last=now;
       mark();
@@ -714,98 +694,48 @@ JS = """
     mark();
   }
 
-  /* filter
-
-     What a page is made of differs: the tour and the specification are
-     constructs, a prototype is its findings, the front page is cards, and
-     a guide is only its sections.  The filter takes the first of those it
-     actually finds, so the box does something on every page rather than
-     on two of them. */
-  var find=document.getElementById('find'), count=document.getElementById('found');
-  var UNITS=['.item', '.route, .card, figure.shown', 'main section'];
-  function scope(){ return document.querySelector('.doc.on') || document; }
-  function pick(here){
-    for(var i=0;i<UNITS.length;i++){
-      var l=[].slice.call(here.querySelectorAll(UNITS[i]));
-      if(l.length) return {sel:UNITS[i], list:l};
-    }
-    return {sel:'', list:[]};
-  }
-  /* A link to a section the filter has hidden is a control that does
-     nothing, so it is hidden with it -- and shown again when cleared. */
-  function syncNav(){
-    document.querySelectorAll('nav.side a.sect').forEach(function(a){
-      var t=document.getElementById(a.getAttribute('href').slice(1));
-      a.classList.toggle('hide',!!t&&t.classList.contains('hide'));
-    });
-  }
-  function filter(){
-    var here=scope(), chosen=pick(here), units=chosen.list;
-    var secs=[].slice.call(here.querySelectorAll('main section'));
-    var q=find.value.trim().toLowerCase();
-    if(!q){
-      units.forEach(function(u){ u.classList.remove('hide'); });
-      secs.forEach(function(s){ s.classList.remove('hide'); });
-      syncNav();
-      count.textContent=''; return;
-    }
-    var hits=0;
-    units.forEach(function(u){
-      if(!u.dataset.text) u.dataset.text=(u.textContent||'').toLowerCase();
-      var ok=u.dataset.text.indexOf(q)>=0 || (u.id||'').indexOf(q)===0;
-      u.classList.toggle('hide',!ok); if(ok) hits++;
-    });
-    /*  A section that held units and now shows none goes too -- unless the
-        sections are themselves what is being filtered. */
-    if(chosen.sel && chosen.sel.indexOf('section')<0){
-      var vis=chosen.sel.split(',').map(function(x){
-        return x.trim()+':not(.hide)'; }).join(',');
-      secs.forEach(function(s){
-        s.classList.toggle('hide', !s.querySelector(vis)
-                                   && !!s.querySelector(chosen.sel));
-      });
-    }
-    syncNav();
-    count.textContent=hits+(hits===1?' match':' matches')
-      +(q?' for “'+q+'”':'');
-  }
-  window.landinFilter=filter;
-  if(find){
-    find.addEventListener('input',filter);
-    find.addEventListener('keydown',function(e){
-      if(e.key==='Escape'){
-        e.stopPropagation(); find.value=''; filter(); find.blur();
-      }
-    });
-  }
-  /* A bare '/' used to be swallowed anywhere on the page, which breaks
-     speech input and anything else that emits one (WCAG 2.1.4).  It now
-     only reaches the filter when no field has focus. */
-  document.addEventListener('keydown',function(e){
-    if(e.key!=='/'||!find) return;
-    var on=document.activeElement;
-    if(on&&on!==document.body&&/^(INPUT|TEXTAREA|SELECT)$/.test(on.tagName)) return;
-    if(on===find) return;
-    e.preventDefault(); find.focus();
-  });
-
   /* what a citation says, without leaving the line */
   var pop=document.getElementById('pop');
   function hide(){ if(pop) pop.style.display='none'; }
+  /* A citation of another page cannot read its paragraph out of this
+     one, so the page carries what each of those says; before it did,
+     only the specification's own citations of itself had a preview. */
+  var says=null;
+  function brief(text){
+    if(text.length<=PREVIEW) return text;
+    var cut=text.lastIndexOf(' ',PREVIEW);
+    return text.slice(0,cut>0?cut:PREVIEW)+'\u2026';
+  }
+  function said(id){
+    if(says===null){
+      var s=document.getElementById('says');
+      try{ says=s?JSON.parse(s.textContent):{}; }catch(e){ says={}; }
+    }
+    return says[id];
+  }
   function show(a){
     if(!a||!pop) return;
-    var href=a.getAttribute('href');
-    if(href.charAt(0)!=='#') return;
-    var t=document.getElementById(href.slice(1)); if(!t) return;
-    /* A construct whose body is only code has no paragraph -- [0010] is
-       one line of comment and a fence -- and the preview used to show
-       nothing at all for those.  Its heading says what it is. */
-    var p=t.querySelector('p')||t.querySelector('h3'); if(!p) return;
+    var href=a.getAttribute('href'), text;
+    if(href.charAt(0)==='#'){
+      var t=document.getElementById(href.slice(1)); if(!t) return;
+      /* A construct whose body is only code has no paragraph -- [0010] is
+         one line of comment and a fence -- and the preview used to show
+         nothing at all for those.  Its heading says what it is.  A
+         finding's anchor sits inside the paragraph it opens. */
+      var p=t.closest('p')||t.querySelector('p')||t.querySelector('h3');
+      if(!p) return;
+      text=brief(p.textContent);
+    } else {
+      text=said(a.dataset.cite); if(!text) return;
+    }
     pop.innerHTML='<span class="tag mono">['+a.dataset.cite+']</span>';
-    pop.appendChild(document.createTextNode(p.textContent));
+    pop.appendChild(document.createTextNode(text));
     pop.style.display='block';
     var r=a.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight;
-    var left=Math.min(r.left+window.scrollX, window.scrollX+innerWidth-w-16);
+    /* clientWidth, not innerWidth: the latter counts the scrollbar, and the
+       preview slid under it at the right edge. */
+    var room=document.documentElement.clientWidth;
+    var left=Math.min(r.left+window.scrollX, window.scrollX+room-w-16);
     var top=r.top+window.scrollY-h-8;
     if(top<window.scrollY+8) top=r.bottom+window.scrollY+8;
     pop.style.left=Math.max(window.scrollX+8,left)+'px';
@@ -815,10 +745,11 @@ JS = """
   /* A citation is a link, so it is already in the tab order; hovering was
      the only way to read what it says, which left the keyboard and every
      touch device out. */
-  document.addEventListener('mouseover',function(e){ show(e.target.closest('a.cite')); });
-  document.addEventListener('focusin',function(e){ show(e.target.closest('a.cite')); });
+  var CITED='a[data-cite]';
+  document.addEventListener('mouseover',function(e){ show(e.target.closest(CITED)); });
+  document.addEventListener('focusin',function(e){ show(e.target.closest(CITED)); });
   function drop(e){
-    var a=e.target.closest('a.cite');
+    var a=e.target.closest(CITED);
     if(a){ a.removeAttribute('aria-describedby'); hide(); }
   }
   document.addEventListener('mouseout',drop);
@@ -836,7 +767,7 @@ JS = """
   }
   window.addEventListener('hashchange',lit); lit();
 })();
-"""
+""" % PREVIEW
 
 
 def esc(text):
@@ -1052,82 +983,137 @@ GUIDE_CSS = """
   vertical-align:top}
 .guide tr:last-child td{border-bottom:0}
 .guide td code,.guide th code{white-space:nowrap}
-.cards h3.group{grid-column:1/-1;font:600 13px/1 var(--ui);
-  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);
-  margin:18px 0 2px}
-.cards h3.group:first-child{margin-top:0}
 
 /* ---- the front page ---- */
-.hero.wide h1{
-  font-size:clamp(1.75rem, 1.35rem + 1.8vw, 2.5rem); text-wrap:balance;
-}
-.hero.wide p:first-of-type{font-size:1.125rem; text-wrap:pretty}
-.hero-actions{display:flex; flex-wrap:wrap; gap:.65rem; margin:1.15rem 0}
+.hero.wide h1{font-size:clamp(2rem, 1.4rem + 2.4vw, 3rem)}
+.hero.wide p:first-of-type{font-size:1.15rem; text-wrap:pretty}
+.hero-actions{display:flex; flex-wrap:wrap; gap:.6rem; margin:1.4rem 0 0}
 .hero-actions a{
-  display:inline-flex; align-items:center; justify-content:center;
-  min-height:2.5rem; padding:.45rem .8rem; border:1px solid var(--rule);
-  border-radius:5px; background:var(--panel); font-size:.88rem;
-  font-weight:600; text-decoration:none;
+  display:inline-flex; align-items:center; min-height:2.5rem;
+  padding:.45rem .95rem; border:1px solid var(--rule);
+  font-size:.9rem; font-weight:600; text-decoration:none; color:var(--ink);
 }
-.hero-actions a.primary{
-  color:var(--panel); background:var(--accent); border-color:var(--accent);
-}
-.hero-actions a:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
+.hero-actions a.primary{color:var(--bg); background:var(--accent); border-color:var(--accent)}
+.hero-actions a:hover{border-color:var(--accent)}
+.hero-actions a.primary:hover{background:color-mix(in oklch, var(--accent) 88%, var(--ink))}
+
+/*  The status: what the README says on the left, where the roadmap is on
+    the right.  */
 .hero .status{
-  max-width:52rem; margin-top:1.8rem; padding:1rem 1.1rem 1.15rem;
-  border-left:2px solid var(--accent-soft); background:var(--panel-2);
-  color:var(--ink-soft); font-size:.93rem;
+  display:grid; grid-template-columns:2fr 1fr; margin-top:2.2rem;
+  border:1px solid var(--rule); background:var(--panel);
+  color:var(--ink-soft); font-size:.92rem;
 }
-.hero .status .status-meta{
-  margin:0 0 .35rem; color:var(--ink-faint); font-size:.7rem;
-  font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+.hero .status > .said{padding:1.1rem 1.25rem 1.25rem}
+.hero .status .said p.status-meta{margin:0 0 .5rem; font-family:var(--mono);
+  font-size:.72rem; line-height:1.4; color:var(--accent)}
+.hero .status h2{margin:0 0 .6rem; color:var(--ink); font-size:1.05rem;
+  line-height:1.4; font-weight:650; text-wrap:balance}
+.hero .status .said p:not(.status-meta){margin:0; color:var(--ink-soft); font-size:.92rem; line-height:1.6}
+.roadmap-track{border-left:1px solid var(--rule); background:var(--bg-soft);
+  padding:.9rem 1.1rem 1rem}
+.roadmap-track > div{margin-bottom:.8rem}
+.roadmap-track > div:last-child{margin-bottom:0}
+.roadmap-label{display:block; margin-bottom:.3rem; font-family:var(--mono);
+  font-size:.7rem; color:var(--ink-faint)}
+.roadmap-item{display:grid; grid-template-columns:3.2rem 1fr; gap:.5rem;
+  padding:.15rem 0; color:var(--ink-soft); text-decoration:none;
+  line-height:1.35; font-size:.82rem}
+.roadmap-item strong{font-family:var(--mono); font-weight:500;
+  font-size:.75rem; color:var(--ink-faint)}
+.roadmap-item:hover span{color:var(--accent)}
+.roadmap-now .roadmap-item strong{color:var(--accent)}
+.roadmap-now .roadmap-item span{color:var(--ink); font-weight:600}
+
+section.landing{padding-top:4rem}
+section.landing > p.lead{max-width:42rem; color:var(--ink-soft); margin:-.2rem 0 1.4rem}
+
+/*  The program: one whole fixture, with what it uses beside it.  */
+/*  The listing asks for its longest line and gets it: a code panel that
+    scrolls sideways on a desktop is a layout that ran out of room, not a
+    program that is too wide.  What it uses keeps its column only while
+    both fit, and otherwise wraps underneath at full width.  Only a phone
+    is left to scroll.  */
+.program{display:flex; flex-wrap:wrap; gap:1.75rem; align-items:flex-start}
+figure.panel{margin:0; border:1px solid var(--rule); background:var(--code-bg);
+  min-width:0; flex:1 1 max-content; max-width:100%}
+figure.panel figcaption, figure.panel .foot{
+  display:flex; align-items:center; gap:.8rem; padding:.5rem .9rem;
+  font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
+  background:var(--panel-2);
 }
-.hero .status h2{
-  margin:0 0 .55rem; color:var(--ink); font-size:1.05rem;
-  line-height:1.35; text-wrap:balance;
+figure.panel figcaption{border-bottom:1px solid var(--rule)}
+figure.panel figcaption .path{min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; direction:rtl; text-align:left}
+figure.panel figcaption > span:last-child{white-space:nowrap}
+figure.panel figcaption .dot{width:.5rem; height:.5rem; background:var(--accent); flex:none}
+figure.panel figcaption .grow, figure.panel .foot .grow{flex:1}
+figure.panel .foot{border-top:1px solid var(--rule)}
+figure.panel .foot code{background:none; padding:0; font-size:1em; color:var(--ink-soft)}
+figure.panel .foot a{white-space:nowrap}
+figure.panel .listing{margin:0}
+figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
+.uses{position:sticky; top:calc(var(--bar) + 1.5rem); flex:1 0 13.5rem}
+.uses .label{display:block; margin-bottom:.5rem}
+.uses ul{list-style:none; margin:0; padding:0; border-top:1px solid var(--rule);
+  columns:13.5rem; column-gap:1.5rem}
+.uses li{border-bottom:1px solid var(--rule); break-inside:avoid}
+/*  Under a program on a page, rather than beside one.  */
+.uses.strip{position:static; margin:.2rem 0 1.4rem}
+.uses.strip ul{columns:15rem}
+.uses li a{display:grid; grid-template-columns:2.9rem 1fr; gap:.4rem;
+  padding:.38rem 0; text-decoration:none; color:var(--ink-soft);
+  font-size:.84rem; line-height:1.35}
+.uses li a .tag{font-family:var(--mono); font-size:.72rem; color:var(--ink-faint);
+  padding-top:.08rem}
+.uses li a:hover{color:var(--accent)}
+.uses li a:hover .tag{color:var(--accent)}
+.uses p{margin:.8rem 0 0; font-size:.8rem; color:var(--ink-faint); line-height:1.5}
+.uses p a{color:var(--ink-soft)}
+
+/*  Four ways in, as one block of four cells split by hairlines.  */
+.routes{display:grid; grid-template-columns:1fr 1fr; gap:1px;
+  background:var(--rule); border:1px solid var(--rule)}
+.route{display:block; padding:1.1rem 1.25rem 1.2rem; background:var(--bg);
+  text-decoration:none; color:inherit}
+.route .label{display:block; margin-bottom:.35rem}
+.route strong{display:block; color:var(--ink); font-size:1.02rem; margin-bottom:.3rem}
+.route span.text{display:block; color:var(--ink-soft); font-size:.88rem; line-height:1.5}
+.route:hover{background:var(--panel)}
+.route:hover strong{color:var(--accent)}
+
+/*  Every document, as rows under the sidebar's own groups.  */
+.shelf{border-top:1px solid var(--ink)}
+.shelf .group{display:grid; grid-template-columns:10.5rem minmax(0,1fr);
+  border-bottom:1px solid var(--rule)}
+.shelf .group > h3{margin:0; padding:.8rem 1rem .8rem 0; font-family:var(--mono);
+  font-weight:500; font-size:.75rem; color:var(--ink-faint)}
+.card{display:grid; grid-template-columns:12rem minmax(0,1fr) auto; gap:1.25rem;
+  padding:.72rem 0; text-decoration:none; color:inherit;
+  border-bottom:1px solid var(--rule-soft); align-items:baseline}
+.shelf .group .card:last-child{border-bottom:0}
+.card strong{font-weight:600; font-size:.92rem; color:var(--ink)}
+.card span{color:var(--ink-soft); font-size:.86rem; line-height:1.5}
+.card em{font-style:normal; font-family:var(--mono); font-size:.7rem;
+  color:var(--ink-faint); text-align:right; white-space:nowrap}
+.card:hover strong{color:var(--accent)}
+.card.retired strong{color:var(--ink-faint); font-weight:500}
+
+@media (max-width:70rem){
+  .uses{position:static}
+  .card{grid-template-columns:minmax(0,1fr) auto}
+  .card span{grid-column:1/-1; grid-row:2}
 }
-.hero .status p{margin:0; color:var(--ink-soft); font-size:1em}
-.roadmap-track{
-  display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:1.35rem;
-  margin-top:1.25rem; padding-top:1.2rem; border-top:1px solid var(--rule);
+@media (max-width:48rem){
+  .hero .status{grid-template-columns:1fr}
+  .roadmap-track{border-left:0; border-top:1px solid var(--rule)}
+  .routes{grid-template-columns:1fr}
+  .shelf .group{grid-template-columns:1fr}
+  .shelf .group > h3{padding-bottom:0}
+  figure.panel .foot code{display:none}
 }
-.roadmap-label{
-  display:block; margin-bottom:.55rem; color:var(--ink-faint);
-  font-size:.66rem; font-weight:700; letter-spacing:.11em;
-  text-transform:uppercase;
-}
-.roadmap-item{
-  display:block; margin:.45rem 0 0; padding-left:.65rem;
-  border-left:2px solid var(--rule); color:var(--ink-soft);
-  text-decoration:none; line-height:1.35;
-}
-.roadmap-item:first-of-type{margin-top:0}
-.roadmap-item strong{color:var(--ink); font-size:.75rem}
-.roadmap-item span{display:block; margin-top:.08rem; font-size:.78rem}
-.roadmap-item:hover{border-color:var(--accent-soft)}
-.roadmap-now .roadmap-item{border-color:var(--accent); color:var(--ink)}
-section.landing{padding-top:4.25rem}
-figure.shown{margin:0 0 1.7rem}
-figure.shown figcaption{
-  display:flex; align-items:baseline; gap:.6rem; margin:0 0 .4rem;
-  color:var(--ink-soft); font-size:.9rem;
-}
-figure.shown figcaption .tag{
-  font-size:.68rem; letter-spacing:.04em; color:var(--accent);
-  text-decoration:none; border:1px solid var(--rule); border-radius:3px;
-  padding:.05rem .3rem;
-}
-figure.shown figcaption .tag:hover{border-color:var(--accent-soft)}
-section.landing p.more{
-  margin-top:1.5rem; color:var(--ink-soft); font-size:.93rem; max-width:44rem;
-}
-.routes{display:grid; gap:1.35rem; margin:0;
-  grid-template-columns:repeat(auto-fit,minmax(17rem,1fr))}
-.route{border-left:2px solid var(--accent-soft)}
-.route strong{color:var(--accent); text-wrap:balance}
 @media (max-width:35rem){
-  figure.shown .listing pre{white-space:pre-wrap; overflow-wrap:anywhere}
-  .roadmap-track{grid-template-columns:1fr; gap:1.1rem}
+  figure.panel .listing pre{font-size:.74rem}
 }
 """
 
@@ -1397,9 +1383,8 @@ def render_guide_blocks(blocks, links, targets, hl):
             #
             #  The id sits on a wrapper rather than on the heading, and the
             #  prose and code that follow sit inside it, because a construct
-            #  is the thing a reader filters for and the thing a citation
-            #  quotes.  With the id on a bare <h3> the filter had nothing to
-            #  hide and the hover preview had no paragraph to read.
+            #  is the thing a citation quotes.  With the id on a bare <h3>
+            #  the hover preview had no paragraph to read.
             found = re.match(r"^\[(\d{4})\]", payload)
             if found:
                 if open_item:
@@ -1491,23 +1476,40 @@ def render_guide(text, links, targets, hl):
     return title, hero, "\n".join(body), nav_sections
 
 
+#  The sidebar's groups, in reading order.  A reader looking for the
+#  language should not have to scan past fifteen implementation guides, so
+#  the documents are grouped by who they are for, numbered so a group can
+#  be named in conversation, and only the groups that matter to the page
+#  being read start open.  The front page's shelf uses the same table, so
+#  the two cannot disagree about where a document lives.
+NAV_GROUPS = [
+    ("the language", ["tour", "spec", "examples", "documents"]),
+    ("the prototypes", ["p1", "p2", "p3", "p4"]),
+    ("the project", ["readme", "roadmap", "handoff"]),
+    ("the compiler", ["compiler", "ir", "targets", "core", "toolchain",
+                      "editors"]),
+    ("tests and evidence", ["fixtures", "registers", "harness", "process",
+                            "environments", "devices", "driver",
+                            "cortex-m", "native-ci"]),
+]
+RETIRED = {"native-ci"}
+
+
+def nav_groups(docs):
+    """The documents in NAV_GROUPS order, each exactly once."""
+    by_key = {d["key"]: d for d in docs}
+    listed = [k for _, keys in NAV_GROUPS for k in keys]
+    if sorted(listed) != sorted(by_key):
+        raise SystemExit("render_html: NAV_GROUPS and the documents differ: "
+                         + ", ".join(sorted(set(listed) ^ set(by_key))))
+    return [(f"{i:02d}", name, [by_key[k] for k in keys])
+            for i, (name, keys) in enumerate(NAV_GROUPS, 1)]
+
+
 def nav_html(docs, current, sections):
-    out = ['<div class="nav-group">documents</div>']
-    out.append(f'<a class="doc" href="index.html">the front page</a>')
-    for d in docs:
-        here = ' here' if d["out"] == current else ""
-        now = ' aria-current="page"' if d["out"] == current else ""
-        out.append(f'<a class="doc{here}"{now} href="{d["out"]}">'
-                   f'{esc(d["nav"])}</a>')
-    out.append('<div class="nav-group">filter this page</div>')
-    out.append('<div class="finder">' + icons.use("search", "i")
-               + '<input id="find" type="search" '
-                 'placeholder="filter this page — press /" '
-                 'aria-label="filter this page" '
-                 'autocomplete="off" spellcheck="false"></div>')
-    out.append('<div id="found" role="status" aria-live="polite"></div>')
-    if sections:
-        out.append('<div class="nav-group">in this document</div>')
+    def toc():
+        if not sections:
+            return ""
         #  Module-like headings use "name  —  purpose".  The compact name
         #  is enough until it repeats: prototype 3 has four core/mem
         #  sections, and reducing all four to CORE/MEM made the navigation
@@ -1515,12 +1517,32 @@ def nav_html(docs, current, sections):
         #  only the collisions with the full heading.
         compact = [title.split("  —  ")[0] for _, title, _ in sections]
         repeats = {label for label in compact if compact.count(label) > 1}
-        for sid, title, count in sections:
+        out = ['<div class="toc">']
+        for sid, title, _ in sections:
             short = title.split("  —  ")[0]
             label = esc(title if short in repeats else short)
-            n = str(count) if count else ""
-            out.append(f'<a class="sect" href="#{sid}">'
-                       f'<span class="num">{n}</span><span>{label}</span></a>')
+            out.append(f'<a class="sect" href="#{sid}">{label}</a>')
+        out.append("</div>")
+        return "".join(out)
+
+    def link(out, label, retired=False):
+        here = out == current
+        cls = "doc" + (" here" if here else "") + (" retired" if retired else "")
+        now = ' aria-current="page"' if here else ""
+        return f'<a class="{cls}"{now} href="{out}">{esc(label)}</a>' + (
+            toc() if here else "")
+
+    out = [link("index.html", "the front page")]
+    for num, name, members in nav_groups(docs):
+        holds = any(d["out"] == current for d in members)
+        #  The language is open everywhere; any other group only when the
+        #  page being read is in it.
+        opened = " open" if holds or num == "01" else ""
+        out.append(f'<details{opened}><summary>{num} · {esc(name)}'
+                   f'<span class="count">{len(members)}</span></summary>')
+        for d in members:
+            out.append(link(d["out"], d["nav"], d["key"] in RETIRED))
+        out.append("</details>")
     return "\n".join(out)
 
 
@@ -1551,8 +1573,68 @@ def social(title, description, out):
     return "\n".join(tags)
 
 
+def brief(text):
+    """A preview's text: the paragraph whole, or its first PREVIEW
+    characters cut at a word."""
+    if len(text) <= PREVIEW:
+        return text
+    cut = text.rfind(" ", 0, PREVIEW)
+    return text[:cut if cut > 0 else PREVIEW] + "\u2026"
+
+
+def construct_says(source, docs):
+    """What every construct and finding says, as a citation preview.
+
+    A construct's is its opening paragraph, or its title when it opens
+    with code; a finding's is its own paragraph.  Read out of the sources
+    rather than out of a rendered page, so the order the pages are
+    written in does not matter.
+    """
+    says = {}
+    for entry in docs:
+        targets = guide_targets(docs, entry["src"])
+        _, lead, sections = parse_guide((source / entry["src"]).read_text())
+        blocks = list(lead)
+        for section in sections:
+            blocks.extend(section["blocks"])
+        open_id = None
+        for kind, payload in blocks:
+            if kind == "sub":
+                found = re.match(r"^\[(\d{4})\]\s*(.*)$", payload)
+                open_id = found.group(1) if found else None
+                if open_id:
+                    says[open_id] = html.unescape(TAG.sub(
+                        "", inline(found.group(2), lambda ref: None, targets)))
+                continue
+            if kind != "para":
+                continue
+            text = html.unescape(TAG.sub(
+                "", inline(payload[0], lambda ref: None, targets)))
+            finding = FINDING.match(text)
+            if finding:
+                says[finding.group(1)] = brief(finding.group(2))
+            elif open_id:
+                says[open_id] = brief(text)
+                open_id = None
+    return says
+
+
+def says_json(region, says):
+    """The previews a page needs and cannot read off itself: those of the
+    citations that lead to another page."""
+    wanted = sorted({cid for href, cid in re.findall(
+        r'<a\b[^>]*\bhref="([^"#]+)#[^"]*"[^>]*\bdata-cite="([^"]+)"', region)
+        if cid in says})
+    if not wanted:
+        return ""
+    data = json.dumps({cid: says[cid] for cid in wanted},
+                      ensure_ascii=False, separators=(",", ":"))
+    return ('<script type="application/json" id="says">'
+            + data.replace("</", "<\\/") + "</script>")
+
+
 def page(title, kind, heading, hero, body, nav, docname, logo=False,
-         out="index.html", description="", extra=""):
+         out="index.html", description="", extra="", says=None):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1573,9 +1655,11 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
   <a class="src" href="{REPO}">{icons.use("git-branch")}<span>source</span></a>
-  <button id="menu" type="button" aria-label="documents and sections"
-          aria-expanded="false" aria-controls="side">{icons.use("menu")}<span>menu</span></button>
+  <input class="menu-x" id="menu" type="checkbox" autocomplete="off"
+         aria-label="documents and sections" aria-controls="side">
+  <label for="menu">{icons.use("menu")}<span>menu</span></label>
   <input class="theme-x" id="theme" type="checkbox">
+  <script>{THEME_JS}</script>
   <label for="theme">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></label>
 </header>
 <div class="wrap">
@@ -1585,7 +1669,6 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <main id="document">
 <div class="hero{' wide' if logo else ''}" id="{slug(heading)}">
   {landin_icon.inline("light", classes="logo") if logo else ''}
-  <div class="kind">{esc(kind)}</div>
   <h1>{esc(heading)}</h1>
   {hero}
 </div>
@@ -1601,6 +1684,7 @@ Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 </footer>
 </div>
 <div id="pop"></div>
+{says_json(hero + body, says or {})}
 <script>{JS}</script>
 </body>
 </html>
@@ -1613,7 +1697,9 @@ Licensed under <a href="{REPO}/blob/main/LICENSE-MIT">MIT</a> or
 #  surrounding active work, and a few constructs to show.  None of it is
 #  written here -- a second copy is a copy that goes stale.
 
-LANDING_IDS = ["0040", "0870", "0940"]
+#  One whole program rather than three fragments: the fragments showed
+#  syntax, and a program shows how the pieces are meant to be used together.
+LANDING_PROGRAM = "compiler/tests/fixtures/runtime/sensors"
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
 ROADMAP_ITEM = re.compile(
@@ -1706,34 +1792,67 @@ def roadmap_progress(text, recent_count=3):
     return track(ready[0], following=items[ready[0]])
 
 
-def landing_samples(text, ids=LANDING_IDS):
-    """A few constructs, taken whole from the tour and kept citable.
+def landing_program(source, titles, construct_page):
+    """The front page's program, and the constructs its fixture declares.
 
-    By id rather than by position: [NNNN] is stable and the order is not,
-    which is what the tour says the numbering is for.
+    Only the constructs the tour teaches are listed: the rest are the
+    specification's rules about calls and entry shapes, which say how the
+    program is checked rather than what a reader sees in it.
     """
-    lines = text.split("\n")
-    found = {}
-    for i, line in enumerate(lines):
-        m = re.match(r"^### \[(\d{4})\] (.*)$", line)
-        if not m or m.group(1) not in ids:
+    where = source / LANDING_PROGRAM
+    meta = fixture_meta(where)
+    lines = (where / meta["program"]).read_text().rstrip("\n").split("\n")
+    return (f"{LANDING_PROGRAM}/{meta['program']}", lines,
+            fixture_uses(meta, titles, construct_page))
+
+
+def fixture_meta(where):
+    return dict(line.split(": ", 1) for line in
+                (where / "fixture.meta").read_text().splitlines()
+                if ": " in line)
+
+
+def fixture_uses(meta, titles, construct_page):
+    """The constructs a fixture says it exercises, as the tour names them."""
+    uses = []
+    for cid in re.split(r",\s*", meta.get("constructs", "")):
+        if construct_page.get(cid) == "tour.html":
+            uses.append((cid, titles[cid].split(": ")[0], "tour.html"))
+    return uses
+
+
+def uses_list(uses, here=""):
+    return "".join(
+        f'<li><a href="{"" if where == here else where}#{cid}" '
+        f'data-cite="{cid}">'
+        f'<span class="tag">{cid}</span><span>{esc(label)}</span></a></li>'
+        for cid, label, where in uses)
+
+
+#  A running example names its fixture in one line of prose, and the
+#  fixture says which constructs it exercises.  The strip goes at the end
+#  of the example's section, under its listing.
+FIXTURE_SOURCE = re.compile(
+    r'Fixture source: <code>(compiler/tests/fixtures/runtime/[\w-]+)/'
+    r'main\.ldn</code>')
+
+
+def with_uses(body, source, titles, construct_page):
+    parts = re.split(r"(?=<section )", body)
+    for at, part in enumerate(parts):
+        found = FIXTURE_SOURCE.search(part)
+        if not found:
             continue
-        j = i + 1
-        while j < len(lines) and not FENCE_OPEN.match(lines[j]):
-            if lines[j].startswith("### "):
-                j = len(lines)
-                break
-            j += 1
-        if j >= len(lines):
+        uses = fixture_uses(fixture_meta(source / found.group(1)), titles,
+                            construct_page)
+        if not uses:
             continue
-        k = j + 1
-        while k < len(lines) and not lines[k].startswith("```"):
-            k += 1
-        code = lines[j + 1:k]
-        while code and not code[-1].strip():
-            code.pop()
-        found[m.group(1)] = (m.group(2), code)
-    return [(i, *found[i]) for i in ids if i in found]
+        strip = ('<aside class="uses strip" aria-label="Constructs this '
+                 'program uses"><span class="label">what it uses</span>'
+                 f'<ul>{uses_list(uses)}</ul></aside>')
+        end = part.rindex("</section>")
+        parts[at] = part[:end] + strip + part[end:]
+    return "".join(parts)
 
 
 def write_resources(docs):
@@ -1814,42 +1933,60 @@ def tab_title(title, nav):
     return f"{t} — Landin"
 
 
-def index_page(docs, counts, intro, status, progress, samples, symbols):
+#  The pitch is the tour's own opening, which is plain prose, so the one
+#  name a newcomer may not know is linked here rather than in the tour.
+PITCH_LINKS = {
+    "Peter Landin": "https://en.wikipedia.org/wiki/Peter_Landin",
+}
+
+
+def pitch_html(text):
+    out = esc(text)
+    for name, href in PITCH_LINKS.items():
+        out = out.replace(esc(name), f'<a href="{esc(href)}">{esc(name)}</a>', 1)
+    return out
+
+
+def index_page(docs, counts, intro, status, progress, program, symbols,
+               says):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
     one document should not have to read the introduction again.
     """
-    groups = []
-    for d in docs:
-        name = d.get("group", "the specification")
-        if not groups or groups[-1][0] != name:
-            groups.append((name, []))
-        groups[-1][1].append(d)
-
     body = []
 
-    #  What it looks like, in constructs taken from the tour itself.  Each
-    #  keeps its number, and the number is the link back to the full entry.
-    if samples:
-        shown = []
-        for cid, title, code in samples:
-            hl = Highlighter(*symbols, links=lambda ref: None)
-            shown.append(
-                f'<figure class="shown">'
-                f'<figcaption><a class="tag" href="tour.html#{cid}">{cid}</a>'
-                f'<span>{esc(title)}</span></figcaption>'
-                f'{listing(hl.block(code))}</figure>')
-        body.append(
-            '<section class="landing" id="what-it-looks-like">'
-            '<h2>what it looks like</h2>'
-            f'{chr(10).join(shown)}'
-            '<p class="more">These samples come from the tour and show the '
-            'designed language. The status above says which subset refine '
-            'accepts today; <a href="examples.html">the running examples</a> '
-            'show complete programs from that kernel. Every construct is '
-            'numbered, and the numbers do not move. '
-            '<a href="tour.html">Read the tour</a> for the rest.</p></section>')
+    #  What it looks like: one whole program the gate runs, not a handful
+    #  of lines chosen to fit.  It is read from its fixture, so what is
+    #  shown is what compiles; beside it, the constructs it leans on, each
+    #  a link to where the language explains it.
+    path, lines, uses = program
+    hl = Highlighter(*collect_symbols(lines), links=lambda ref: None)
+    used = uses_list(uses)
+    body.append(
+        '<section class="landing" id="what-it-looks-like">'
+        '<h2>what it looks like</h2>'
+        '<p class="lead">Sensors of two kinds behind one concept, polled '
+        'through runtime dispatch. The poll is generic over its allocator, '
+        'which the caller lends as an arena over a stack buffer; each '
+        'failure is declared in a signature and either skipped or passed '
+        'on at the call. This is the whole file, as the Linux gate compiles '
+        'and runs it.</p>'
+        '<div class="program">'
+        '<figure class="panel">'
+        f'<figcaption><span class="dot"></span><span class="path">{esc(path)}</span>'
+        f'<span class="grow"></span><span>{len(lines)} lines</span></figcaption>'
+        f'{listing(hl.block(lines))}'
+        '<div class="foot"><code>$ refine --emit=exe -o sensors … '
+        '&amp;&amp; ./sensors; echo $?</code><span class="grow"></span>'
+        '<a href="examples.html">more programs →</a></div>'
+        '</figure>'
+        '<aside class="uses" aria-label="Constructs the program uses">'
+        '<span class="label">what it uses</span>'
+        f'<ul>{used}</ul>'
+        '<p>The source above is what refine accepts today. The '
+        '<a href="tour.html">tour</a> teaches the whole designed language.'
+        '</p></aside></div></section>')
 
     #  Four ways in, because the documents answer different questions and
     #  a reader who starts in the wrong one finds it slow going.
@@ -1865,43 +2002,49 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
         ("examples.html", "run real programs",
-         "A sensor poll, FizzBuzz, Euclid, searching, a prime sieve, "
+         "The sensors above, FizzBuzz, Euclid, searching, a prime sieve, "
          "run-length encoding and sorting, plus fannkuch-redux, Mandelbrot "
          "and FASTA: complete sources the Linux gate builds and executes."),
     ]
     cards = "".join(
-        f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'
-        f'<span>{esc(text)}</span></a>' for href, head, text in routes)
+        f'<a class="route" href="{href}"><span class="label">{"abcd"[i]} · '
+        f'{href}</span><strong>{esc(head)}</strong>'
+        f'<span class="text">{esc(text)}</span></a>'
+        for i, (href, head, text) in enumerate(routes))
     body.append('<section class="landing" id="start-here">'
                 f'<h2>start here</h2><div class="routes">{cards}</div>'
                 '</section>')
 
-    #  The contents, as they were.
-    cards = []
-    for name, members in groups:
-        cards.append(f'<h3 class="group">{esc(name)}</h3>')
+    #  The contents, in the sidebar's groups.
+    rows = []
+    for num, name, members in nav_groups(docs):
+        rows.append(f'<div class="group"><h3>{num} · {esc(name)}</h3><div>')
         for d in members:
             n = counts.get(d["out"], "")
-            cards.append(
-                f'<a class="card" href="{d["out"]}"><strong>{esc(d["nav"])}'
-                f'</strong><span>{esc(d["blurb"])}</span>'
-                f'<em>{esc(n)}</em></a>')
+            retired = " retired" if d["key"] in RETIRED else ""
+            rows.append(
+                f'<a class="card{retired}" href="{d["out"]}">'
+                f'<strong>{esc(d["nav"])}</strong>'
+                f'<span>{esc(d["blurb"])}</span><em>{esc(n)}</em></a>')
+        rows.append("</div></div>")
     body.append('<section class="landing" id="every-document">'
                 '<h2>every document</h2>'
-                f'<div class="cards">{chr(10).join(cards)}</div>'
+                f'<div class="shelf">{"".join(rows)}</div>'
                 '</section>')
 
-    hero = "".join(f"<p>{esc(t)}</p>" for t in intro)
+    hero = "".join(f"<p>{pitch_html(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
              '<a class="primary" href="tour.html">read the tour</a>'
              '<a href="spec.html">browse the specification</a></div>')
     if status:
         version, headline, detail = status_parts(status)
         hero += ('<aside class="status" aria-label="Project status">'
+                 '<div class="said">'
                  f'<p class="status-meta">Status · {esc(version)}.</p>'
                  f'<h2>{prose_html(headline, lambda ref: None)}</h2>')
         if detail:
             hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
+        hero += '</div>'
         if progress:
             def progress_item(item):
                 heading = f'{item["key"]} — {item["title"]}'
@@ -1963,9 +2106,9 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
     extra = ('<script type="application/ld+json">'
              + json.dumps(ld, ensure_ascii=False) + "</script>")
     return page("Landin — a systems language from 32 KB to 32 TB",
-                LANDING_LINE, "Landin", hero, chr(10).join(body), nav,
+                "", "Landin", hero, chr(10).join(body), nav,
                 "the repository", logo=True, out="index.html",
-                description=summary, extra=extra)
+                description=summary, extra=extra, says=says)
 
 
 # --------------------------------------------------------------------------
@@ -2077,6 +2220,17 @@ def body_region(page_html):
     return ASIDE.sub(" ", found.group(1) if found else page_html)
 
 
+def page_words(raw):
+    """A page region as the text a reader sees.
+
+    Inside a listing a span sits between the halves of one name, so tags
+    go without a space there and with one everywhere else.
+    """
+    return html.unescape("\n".join(
+        TAG.sub("", part) if part.startswith("<pre") else TAG.sub(" ", part)
+        for part in PRE.split(raw)))
+
+
 def verify(src: Path, out: Path):
     """Nothing may be lost on the way to the page.
 
@@ -2091,8 +2245,6 @@ def verify(src: Path, out: Path):
     #  missing from it.  `landin` appears 145 times in the tour as a tag.
     text = re.sub(r"(?m)^```\S*$", "```", src.read_text())
     want = Counter(WORD.findall(text))
-    # inside a listing a span sits between the halves of one name, so tags
-    # go without a space there and with one everywhere else
     #  A link's target lives in an attribute rather than in the text, and
     #  stripping tags takes it with them, so the targets are collected and
     #  counted alongside what a reader sees.
@@ -2108,11 +2260,7 @@ def verify(src: Path, out: Path):
     raw = re.sub(r'(<a href=")[^"]*" data-source-href="([^"]*)"',
                  r'\1\2"', raw)
     targets = " ".join(ATTR.findall(raw))
-    parts = PRE.split(raw)
-    page_text = html.unescape("\n".join(
-        TAG.sub("", part) if part.startswith("<pre") else TAG.sub(" ", part)
-        for part in parts))
-    got = Counter(WORD.findall(page_text + " " + targets))
+    got = Counter(WORD.findall(page_words(raw) + " " + targets))
     lost = {w: (n, got.get(w, 0)) for w, n in want.items() if got.get(w, 0) < n}
     if lost:
         print(f"  {out.name}: {len(lost)} words come out short")
@@ -2128,14 +2276,13 @@ def verify_front(out: Path, pieces, docs):
     against the pieces it was built from.
 
     It was the one page with no check at all: the pitch, the status line,
-    the roadmap window and the three samples are lifted out of their source
+    the roadmap window and the program are lifted out of their source
     documents, and any reader could quietly return nothing -- a renamed
     status line, a moved rule, a construct that lost its fence -- leaving a
     blank section that no word count would notice.
     """
     from collections import Counter
-    got = Counter(WORD.findall(html.unescape(
-        TAG.sub(" ", body_region(out.read_text())))))
+    got = Counter(WORD.findall(page_words(body_region(out.read_text()))))
     short = []
     for what, text in pieces:
         for word, n in Counter(WORD.findall(text)).items():
@@ -2233,13 +2380,15 @@ def main(argv):
     #  construct's page is where it is DEFINED, read off the headings
     #  rather than assumed: the kernel's rules moved to spec.md and 872
     #  citations outside the documents name the construct and not the file.
-    construct_page, finding_page = {}, {}
+    construct_page, finding_page, construct_title = {}, {}, {}
     for entry in DOCS:
         held = (source / entry["src"]).read_text()
-        for found in re.findall(r"^### \[(\d{4})\] ", held, re.M):
+        for found, named in re.findall(r"^### \[(\d{4})\] (.*)$", held, re.M):
             construct_page[found] = entry["out"]
+            construct_title[found] = named
         for found in re.findall(r"^([XYZW]\d+)\s", held, re.M):
             finding_page[found] = entry["out"]
+    says = construct_says(source, DOCS)
 
     for d in docs:
         text = (source / d["src"]).read_text()
@@ -2264,7 +2413,7 @@ def main(argv):
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
         out = page(tab_title(title, d["nav"]), d["nav"],
                    title or d["nav"], hero, body, nav, d["src"],
-                   out=d["out"], description=d["blurb"])
+                   out=d["out"], description=d["blurb"], says=says)
         (SITE / d["out"]).write_text(out)
         counts[d["out"]] = shelf_count(
             sum(1 for c, w in construct_page.items() if w == d["out"]),
@@ -2293,10 +2442,12 @@ def main(argv):
         title, hero, body, nav_sections = render_guide(
             text, links, guide_targets(DOCS + GUIDES, g["src"]),
             Highlighter(*guide_symbols, links=links))
+        if g["key"] == "examples":
+            body = with_uses(body, source, construct_title, construct_page)
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],
                    hero, body, nav, g["src"],
-                   out=g["out"], description=g["blurb"])
+                   out=g["out"], description=g["blurb"], says=says)
         (SITE / g["out"]).write_text(out)
         counts[g["out"]] = shelf_count(0, 0, len(nav_sections))
         print(f"{SITE.name}/{g['out']:<20} {len(out) // 1024:4d} KB  "
@@ -2306,9 +2457,14 @@ def main(argv):
     if len(docs) == len(DOCS) and len(guides) == len(GUIDES):
         tour_text = (source / "tour.md").read_text()
         intro = tour_intro(tour_text)[:2]
+        missing = [name for name in PITCH_LINKS
+                   if not any(name in para for para in intro)]
+        if missing:
+            raise SystemExit("render_html: the tour's opening no longer names "
+                             + ", ".join(missing) + "; update PITCH_LINKS")
         status = readme_status((source / "README.md").read_text())
         progress = roadmap_progress((source / "ROADMAP.md").read_text())
-        samples = landing_samples(tour_text)
+        program = landing_program(source, construct_title, construct_page)
 
         #  Each reader must have found something.  Failing loudly here is
         #  the contract this renderer keeps everywhere else: refuse what
@@ -2319,16 +2475,13 @@ def main(argv):
         if not status:
             raise SystemExit("render_html: README.md has no **Status:** "
                              "line for the front page")
-        if len(samples) != len(LANDING_IDS):
-            missing = set(LANDING_IDS) - {cid for cid, _, _ in samples}
-            raise SystemExit("render_html: the front page shows "
-                             + ", ".join(sorted(missing))
-                             + ", which tour.md does not define with a "
-                               "landin fence")
+        if not program[2]:
+            raise SystemExit("render_html: " + LANDING_PROGRAM
+                             + " declares no construct the tour defines")
 
         (SITE / "index.html").write_text(
-            index_page(DOCS + GUIDES, counts, intro, status, progress, samples,
-                       guide_symbols))
+            index_page(DOCS + GUIDES, counts, intro, status, progress, program,
+                       guide_symbols, says))
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
@@ -2342,8 +2495,8 @@ def main(argv):
                                                     progress["following"],
                                                     progress.get("endpoint"))
                                     if one])]
-                 + [(f"sample [{cid}]", "\n".join(code))
-                    for cid, _, code in samples])
+                 + [("the program", "\n".join(program[1]))]
+                 + [(f"uses [{cid}]", label) for cid, label, _ in program[2]])
 
     if check:
         print("checking that nothing was dropped:")
