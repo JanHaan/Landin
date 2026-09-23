@@ -295,7 +295,10 @@ package body Landin.Tests.Catalogue_Suite is
       Check ("0x_FF");
       Check ("1__0", Accepted => True);
       Check ("0xDEAD_BEEF", Accepted => True);
-      Check ("12z", Accepted => True);
+      --  D245: the letter belongs to the number, and a space ends it.
+      Check ("12z");
+      Check ("1u64");
+      Check ("12 z", Accepted => True);
    end Integer_Guidance_Covers_Missing_Digits;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

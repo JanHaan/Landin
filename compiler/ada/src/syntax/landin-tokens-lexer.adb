@@ -253,6 +253,24 @@ package body Landin.Tokens.Lexer is
             return True;
          end Good_Run;
 
+         --  D245: a number ends where its spelling ends, and a letter,
+         --  digit or underscore directly after it belongs to it.  `1u64`
+         --  is one malformed literal, not `1` and a name that is then not
+         --  declared.  Reads that run and says whether there was one.
+         function Runs_On return Boolean;
+
+         function Runs_On return Boolean is
+            From : constant Natural := Position;
+         begin
+            while Position <= Last
+              and then (Is_Name_Byte (Text (Position))
+                        or else Text (Position) in 'A' .. 'Z')
+            loop
+               Position := Position + 1;
+            end loop;
+            return Position > From;
+         end Runs_On;
+
          procedure Finish_Float
            (Fraction_From : Natural; Hexadecimal : Boolean);
 
@@ -301,7 +319,8 @@ package body Landin.Tokens.Lexer is
             --  D162/D166 apply the same digit-run rule on both sides
             --  of the dot. The whole run may be empty after a hex prefix.
             Good :=
-              Good_Run (Digits_From, Whole_Last, Base)
+              not Runs_On
+              and then Good_Run (Digits_From, Whole_Last, Base)
               and then Good_Run
                 (Fraction_From, Fraction_Last,
                  (if Hexadecimal then Landin.Tokens.Hexadecimal
@@ -373,9 +392,10 @@ package body Landin.Tokens.Lexer is
             if Text (Position) in '+' | '-' then
                Position := Position + 1;
             end if;
+            --  The exponent's digits and whatever runs on after them.
             while Position <= Last
-              and then (Is_Digit (Text (Position))
-                        or else Text (Position) = '_')
+              and then (Is_Name_Byte (Text (Position))
+                        or else Text (Position) in 'A' .. 'Z')
             loop
                Position := Position + 1;
             end loop;
@@ -384,23 +404,10 @@ package body Landin.Tokens.Lexer is
             return;
          end if;
 
-         --  Preserve the original one-run diagnosis for a decimal digit
-         --  followed by a base-only digit: `12a` is not `12` and a name.
-         if not Prefixed
-           and then Position <= Last
-           and then Text (Position) in 'a' .. 'f' | 'A' .. 'F'
-         then
-            while Position <= Last
-              and then (Is_Hex (Text (Position))
-                        or else Text (Position) = '_')
-            loop
-               Position := Position + 1;
-            end loop;
-         end if;
-
          declare
-            Good : constant Boolean :=
-              Good_Run (Digits_From, Position - 1, Base);
+            Digits_Last : constant Natural := Position - 1;
+            Good        : constant Boolean :=
+              not Runs_On and then Good_Run (Digits_From, Digits_Last, Base);
          begin
             if Good then
                Into.Items.Append

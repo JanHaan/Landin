@@ -339,6 +339,59 @@ package body Landin.Tests.Lexer_Suite is
       Check ("0xA.0P+1", Landin.Tokens.Hex_Float_Literal);
    end Float_Digit_Runs_Have_Both_Boundaries;
 
+   --  D245: a number ends where its spelling ends.  A letter, digit or
+   --  underscore directly after it is part of one malformed literal, so
+   --  `1u64` is one refusal rather than `1` and an undeclared `u64`.
+   procedure Numbers_Run_To_The_End_Of_Their_Spelling
+     (Item : in out Landin.Testing.Context);
+
+   procedure Numbers_Run_To_The_End_Of_Their_Spelling
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+
+      procedure Check (Text : String; Expected : Landin.Tokens.Token_Kind);
+
+      procedure Check (Text : String; Expected : Landin.Tokens.Token_Kind) is
+         Stream : Landin.Tokens.Token_Stream;
+         Fault  : constant Landin.Tokens.Fault_Kind :=
+           (if Expected = Landin.Tokens.Malformed_Float
+            then Landin.Tokens.Malformed_Float_Literal_Run
+            else Landin.Tokens.Malformed_Integer_Run);
+      begin
+         Lex_Text (Text & " tail", Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Count (Stream) = 3
+            and then Landin.Tokens.Kind (Stream, 1) = Expected
+            and then Landin.Tokens.Where (Stream, 1).Last
+                       = Landin.Source.Byte_Offset (Text'Length),
+            Text & " is one literal spanning its whole spelling");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Stream), 1,
+            Text & " makes exactly one fault");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Fault_Count (Stream) = 1
+            and then Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Stream, 1))
+                       = Fault,
+            Text & " keeps its literal's diagnostic category");
+      end Check;
+   begin
+      Check ("1u64", Landin.Tokens.Malformed_Integer);
+      Check ("1_000u8", Landin.Tokens.Malformed_Integer);
+      Check ("12abc", Landin.Tokens.Malformed_Integer);
+      Check ("1U", Landin.Tokens.Malformed_Integer);
+      Check ("0xffg", Landin.Tokens.Malformed_Integer);
+      Check ("0x1p3", Landin.Tokens.Malformed_Integer);
+      Check ("0o17z", Landin.Tokens.Malformed_Integer);
+      Check ("0b1012", Landin.Tokens.Malformed_Integer);
+      Check ("1e5", Landin.Tokens.Malformed_Float);
+      Check ("1e5x", Landin.Tokens.Malformed_Float);
+      Check ("1.5f32", Landin.Tokens.Malformed_Float);
+      Check ("1.5e3x", Landin.Tokens.Malformed_Float);
+      Check ("0x1.8p3q", Landin.Tokens.Malformed_Float);
+   end Numbers_Run_To_The_End_Of_Their_Spelling;
+
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
 
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context) is
@@ -1037,6 +1090,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "float digit runs have both boundaries",
          Float_Digit_Runs_Have_Both_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "numbers run to the end of their spelling",
+         Numbers_Run_To_The_End_Of_Their_Spelling'Access);
       Landin.Testing.Register
         (Into, "lexer", "kinds and spans", Kinds_And_Spans'Access);
       Landin.Testing.Register

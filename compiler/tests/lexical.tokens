@@ -40646,7 +40646,7 @@ file negative/float-literal-overflows-context/program.ldn tokens 5
   11 14 f32
   15 16 =
   17 23 3.5e38
-file negative/float-literal-without-fraction/program.ldn refused '1e' is not an integer the rules spell
+file negative/float-literal-without-fraction/program.ldn refused '1e10' is not an integer the rules spell
 file negative/float-remainder-is-integer-only/program.ldn tokens 24
   0 6 public
   7 11 main
@@ -40672,6 +40672,7 @@ file negative/float-remainder-is-integer-only/program.ldn tokens 24
   71 72 1
   73 76 end
   77 81 main
+file negative/float-runs-into-a-name/main.ldn refused '1.5f32' runs into a name; a number ends where its spelling ends
 file negative/float-special-name-unknown/program.ldn tokens 7
   0 5 wrong
   5 6 :
@@ -46780,6 +46781,7 @@ file negative/integer-literal-not-a-float/program.ldn tokens 5
   7 10 f32
   11 12 =
   13 14 1
+file negative/integer-runs-into-a-name/main.ldn refused '1u64' is not an integer the rules spell
 file negative/integer-to-bool-known-out-of-range/program.ldn tokens 13
   0 6 source
   6 7 :

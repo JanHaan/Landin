@@ -257,6 +257,8 @@ with a digit of that base. Underscores may repeat between digits, as in
 `1__000`; a base prefix alone and a trailing underscore are refused.
 Each float component follows that digit-run rule too: both sides of the dot
 and a written exponent need digits, with underscores only between digits.
+A number has no suffix: a letter directly after one is part of it, so
+`1u64` is refused and the type goes on the binding, as in `mask: u64 = 1`.
 
 ```landin
 hex_value := 0xDEAD_BEEF

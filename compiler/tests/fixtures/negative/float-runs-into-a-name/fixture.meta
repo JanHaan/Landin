@@ -1,0 +1,6 @@
+class: negative
+summary: D245 a letter directly after a float belongs to it, so a C-style width suffix is one malformed float and not a float and an undeclared name
+program: main.ldn
+codes: L0321
+constructs: 0210, 1770
+targets: linux-x86-64, macos-arm64

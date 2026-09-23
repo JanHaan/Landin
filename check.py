@@ -739,12 +739,29 @@ def landin_tokens(source, signs, trees=None):
     out, i, n = [], 0, len(source)
     ordered = sorted(signs, key=len, reverse=True)
 
+    def name_byte(char):
+        return char in LETTERS or char in DIGITS or char in UPPER \
+            or char == "_"
+
     # Membership depends on spelling and this invocation's grammar, not on
     # the token offset. Keep the cache local so edited grammars cannot reuse
     # old answers, and bounded so generated identifiers do not accumulate.
     @lru_cache(maxsize=4096)
     def matches(rule, text):
         return lexical_matches(trees, rule, text)
+
+    #  D245: a number ends where its spelling ends, so a name byte directly
+    #  after a float makes one malformed float rather than a float and a
+    #  name.  The integer runs absorb those bytes themselves, and the
+    #  integer rule refuses them.
+    def runs_on(start, at):
+        if at >= n or not name_byte(source[at]):
+            return None
+        end = at
+        while end < n and name_byte(source[end]):
+            end += 1
+        return "%r runs into a name; a number ends where its spelling " \
+            "ends" % source[start:end]
 
     while i < n:
         char = source[i]
@@ -811,6 +828,8 @@ def landin_tokens(source, signs, trees=None):
                         i += 1
                     if exponent == i:
                         return None, "a float exponent has no digit run"
+                    if runs_on(start, i):
+                        return None, runs_on(start, i)
                     run = source[start:i]
                     if trees and not matches("float", run):
                         return None, "%r is not a float the rules spell" % run
@@ -829,6 +848,8 @@ def landin_tokens(source, signs, trees=None):
                         i += 1
                     if exponent == i:
                         return None, "a float exponent has no digit run"
+                if runs_on(start, i):
+                    return None, runs_on(start, i)
                 run = source[start:i]
                 if trees and not matches("float", run):
                     return None, "%r is not a float the rules spell" % run
@@ -836,8 +857,7 @@ def landin_tokens(source, signs, trees=None):
                 continue
 
             if not prefixed:
-                while i < n and (source[i] in LETTERS
-                                 or source[i] in UPPER or source[i] == "_"):
+                while i < n and name_byte(source[i]):
                     i += 1
             run = source[start:i]
 

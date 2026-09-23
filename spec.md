@@ -172,6 +172,9 @@ Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. Each integer digit run starts and ends in
 a digit of its base; any internal run of underscores separates digits.
+A number ends where its spelling ends: a letter, digit or underscore
+directly after one belongs to it, so `1u64` or `1.5f32` is one malformed
+literal rather than a number and a name (D245).
 `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
@@ -2639,6 +2642,39 @@ the language should lose them, only that nothing yet needs them.
 whose recorded report carries the transfer note, and the `types.values`
 guarantee row.
 
+### D245 — A number ends where its spelling ends
+
+**The tour said** that a token is as long as it can be [1750], and that an
+integer starts and ends its digit run with a digit of its base [0220]. It
+writes no literal with a suffix, and nothing in it says what a letter
+directly after a number does. Before this decision the scanner answered
+three ways: `12abc` was one malformed integer, `1e5` one malformed float,
+and `1u64`, `0xffg` or `1.5f32` a number followed by a name, which was then
+refused as undeclared. `check.py`'s tokeniser refused all of them as one
+lexeme, so the two implementations of the lexical rules disagreed.
+
+**Chosen:** a letter, digit or underscore directly after a number belongs to
+it, and the whole run is one malformed literal: L0011 for an integer, L0321
+for a float. `1u64` is one refusal pointing at four bytes, not a valid `1`
+and an unknown `u64`, and the same holds for a hexadecimal run with a letter
+past `f`, an octal or binary run with a digit past its base, and every float
+form. [1770] states the rule. A width belongs on the binding, as in
+`mask: u64 = 1`, since an integer literal takes the type of its context
+[0190].
+
+**A competent reader could have** stopped the number at the last byte its
+base spells and let the rest begin a name, which is what most of the scanner
+did. That reading turns a C or Rust suffix into a confusing undeclared-name
+report about `u64` — a type name, not a value — and it makes `0xffg` a
+hexadecimal number and a variable `g`. The other alternative, admitting
+width suffixes, was declined because [0190] already gives a literal its type
+from its context and a suffix would be a second way to say the same thing.
+
+**Pinned by** `negative/integer-runs-into-a-name`,
+`negative/float-runs-into-a-name`, the existing
+`negative/float-literal-without-fraction`, and the lexer case "numbers run to
+the end of their spelling".
+
 ## DECISIONS: OPERATORS, CONVERSIONS AND TRAPS
 
 What an operator takes, what a conversion checks, and where a program
@@ -2761,14 +2797,14 @@ question reachable, since the amount takes the left operand's type and a
 signed left operand admits an amount of any size.
 
 **Chosen:** the zeros sentence governs every shift, so an amount at or past
-the width gives zero and a signed `>>` is not an exception. `-1i32 >> 31` is
--1 and `-1i32 >> 32` is 0. A backend therefore tests the amount against the
+the width gives zero and a signed `>>` is not an exception. With
+`minus_one: i32 = -1`, `minus_one >> 31` is -1 and `minus_one >> 32` is 0. A backend therefore tests the amount against the
 type's own width rather than letting the processor mask the count — x86-64
 masks to five bits at 32-bit and six at 64, which is the masking [0320]
 already declined for over-wide amounts.
 
 **The alternative:** let "keeps the sign" govern at every amount, so a signed
-`>>` saturates to all sign bits and `-1i32 >> 32` is -1. It is continuous
+`>>` saturates to all sign bits and `minus_one >> 32` is -1. It is continuous
 where this rule has a step, and it is what x86-64's `sar` gives for free once
 the count is clamped. It was declined because it makes one operator answer
 two ways — zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` —
@@ -2777,7 +2813,8 @@ sign rule about which bits `>>` brings in, not about what an exhausted shift
 leaves behind.
 
 **Pinned by** `runtime/shifts-fill-with-zeros-beyond-the-width`, whose
-`-1i32 >> 32`, `-1i8 >> 8` and `1u64 << 64` are each zero on the hardware.
+`i32` and `i8` bindings of `-1 >> 32` and `-1 >> 8` and whose `u64` binding
+of `1 << 64` are each zero on the hardware.
 
 ### D14 — A measurement is a `usize`, and only the target knows it
 

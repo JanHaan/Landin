@@ -1,0 +1,6 @@
+class: negative
+summary: D245 a letter directly after an integer belongs to it, so a C-style width suffix is one malformed literal and not an integer and an undeclared name
+program: main.ldn
+codes: L0011
+constructs: 1770
+targets: linux-x86-64, macos-arm64, synthetic-32

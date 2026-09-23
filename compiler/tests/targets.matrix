@@ -259,6 +259,7 @@ negative/float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/float-literal-overflows-context | linux-x86-64, macos-arm64
 negative/float-literal-without-fraction | linux-x86-64, macos-arm64
 negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
+negative/float-runs-into-a-name | linux-x86-64, macos-arm64
 negative/float-special-name-unknown | linux-x86-64, macos-arm64
 negative/float-special-on-integer-type | linux-x86-64, macos-arm64
 negative/float-special-width-mismatch | linux-x86-64, macos-arm64
@@ -386,6 +387,7 @@ negative/inout-slice-is-exact | linux-x86-64, macos-arm64, synthetic-32
 negative/integer-conversion-known-binding-out-of-range | linux-x86-64, macos-arm64
 negative/integer-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
+negative/integer-runs-into-a-name | linux-x86-64, macos-arm64, synthetic-32
 negative/integer-to-bool-known-out-of-range | linux-x86-64, macos-arm64
 negative/iterable-retained-item-source | linux-x86-64, macos-arm64, synthetic-32
 negative/keyword-as-name | linux-x86-64, macos-arm64
