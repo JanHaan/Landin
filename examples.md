@@ -28,9 +28,9 @@ test $? -eq 42
 FizzBuzz writes its conventional one hundred lines, and the three Benchmark
 Game programs write their official correctness output; the other six programs
 print nothing. Status 42 means the checks in `main` passed, and any other
-returned status makes the runtime fixture fail. Exact-revision native
-acceptance checks all four output oracles and all ten programs on both hosted
-targets. On a Mac, select `--target=darwin-arm64` in the command above.
+returned status makes the runtime fixture fail. The Linux gate checks
+all four output oracles and all ten programs on every push; Darwin runs by
+hand on a Mac. On a Mac, select `--target=darwin-arm64` in the command above.
 
 ## FizzBuzz
 

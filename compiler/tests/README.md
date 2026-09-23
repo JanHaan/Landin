@@ -336,11 +336,12 @@ ASCII case folding are distinct, because no filesystem equates them; the
 platform suite holds that rule at the C boundary. Other absent names there
 remain conservatively indeterminate: a case-folded match, a non-ASCII byte,
 a `~` or `:`, or a trailing dot or space. In particular, a Linux container
-cannot infer the host volume's case rules from its virtiofs mount. For local object-quality measurements, put the
-runner's `--output` on the container's own filesystem (for example `/tmp`),
-then retain its `measurements.json` in the host build tree. This changes no
-source, profile, execution oracle or acceptance threshold; the native gate's
-ordinary `scripts/quality.sh` output already resides on its Linux filesystem.
+cannot infer the host volume's case rules from its virtiofs mount. For local
+object-quality measurements, put the runner's `--output` on the container's
+own filesystem (for example `/tmp`), then retain its `measurements.json` in
+the host build tree. This changes no source, profile, execution oracle or
+acceptance threshold; the native gate's ordinary `scripts/quality.sh` output
+already resides on its Linux filesystem.
 
 ## Complete programs to try
 

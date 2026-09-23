@@ -337,7 +337,7 @@ generated-device fixtures.
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
 assembly, and
-can assemble and link hosted executables checked by each native target gate.
+can assemble and link hosted executables checked by the Linux gate.
 R6.100 closes Cortex line/function debugging and bounded resource evidence
 through its exact-revision dual-native milestone binding;
 the broader standard library remains successor

@@ -370,9 +370,8 @@ def index(pages, site_url, release, sizes):
                  "than what to write." % (site_url, sizes["full"])),
             ("handoff", "the design in one page, and which decisions must "
                         "not be quietly reversed."),
-            ("roadmap", "the sole durable authority for open work. Closed "
-                        "at its endpoint; successor roadmaps own what is "
-                        "left."),
+            ("roadmap", "the sole authority for open work: phases "
+                        "R8-R16, their items and gates, and the register."),
             ("ir", "how checked source becomes verified target-neutral IR."),
             ("targets", "target descriptions, ABI capabilities and backend "
                         "boundaries."),

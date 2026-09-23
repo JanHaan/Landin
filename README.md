@@ -33,7 +33,7 @@ targets and the microcontrollers people buy.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | ten complete programs the compiler emits and the native hosted gates run today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
+| `examples.md` | ten complete programs the compiler emits and the Linux gate runs today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
@@ -75,9 +75,6 @@ with installation paths for the Landin extensions and plugins for Zed, VS
 Code and its relatives, Neovim, Vim, Emacs, Helix, Sublime Text, Visual
 Studio, JetBrains IDEs, Eclipse, Notepad++, Kate and Nano, plus the Pygments
 lexer.
-
-The canonical repository the pages are generated from is at
-**<https://git.sr.ht/~sinnfrei/landin>**:
 
 ```sh
 git clone https://github.com/JanHaan/Landin
@@ -146,7 +143,7 @@ exact `--suite` or `--case` selector while editing. Every selected case must
 pass. Run Linux workloads and GDB in native Linux development slots; run Darwin
 workloads and LLDB natively on the Mac. The unfiltered harness includes Linux
 execution and cannot supply a successful Mac compiler-host result.
-See [the development and acceptance workflow](docs/process.md).
+See [the development and validation workflow](docs/process.md).
 
 For checksum-safe focused feedback during an edit, use
 `./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
@@ -171,8 +168,9 @@ roadmap item that enables it.
 Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete. The compiler builds
-on macOS arm64; exact-revision runtime acceptance runs natively on
-Linux x86-64 and Darwin arm64 for their respective target contracts. The pinned
+on macOS arm64; exact-revision runtime acceptance ran natively on
+Linux x86-64 and Darwin arm64 through 0.2.0, and the Linux gate runs the
+corpus today. The pinned
 container remains available for explicit environment troubleshooting. R2.10 establishes target-derived sizes, alignments and checked
 layout arithmetic, including synthetic 32-bit evidence. R2.20's
 target-parametric aggregate and variant representation and
@@ -272,10 +270,7 @@ R5.40 implements native LLDB source debugging, dSYM packaging and exact Mach-O
 source identity. R5.50 closes complete hosted parity through the dual-native milestone binding
 in ROADMAP.md, retaining its explicit large-image loader limitation.
 R5.51 closes the retained-debt and acceptance-workflow follow-up through its
-exact-revision dual-native binding in ROADMAP.md. Routine policy retains full
-release hosted coverage; debugger risk adds full release GDB/LLDB. Retained
-debt has explicit owners and activation conditions; R6/R7 language work remains
-scheduled and Nix CI deferred. R6.10 establishes the pinned
+exact-revision dual-native binding in ROADMAP.md. R6.10 establishes the pinned
 [Cortex-M execution profile](environments/cortex-m/README.md): QEMU M0
 CPU/startup probes and a deterministic Renode peripheral lane. Its completion
 has the same exact-revision dual-native binding. R6.20 instantiates 32-bit

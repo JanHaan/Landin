@@ -27,7 +27,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | publishes www.701.dev from GitHub Pages; not a gate | working |
+| GitHub Actions | `gate.yml` runs the documents and the complete Linux debug corpus on every push; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
 
 The acceptance controller runs the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion runs debug compiler-host
@@ -114,7 +114,6 @@ checking while avoiding a clean rebuild for every Ada edit:
 ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
 
 ./scripts/dev-test.sh --host --suite=checking
-python3 scripts/ci/controller.py dev --slot my-change -- ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
 ```
 
 The selectors are exact, accept one selection at a time, and print `FILTERED`
@@ -122,8 +121,8 @@ in the transcript. They are fast feedback, not validation evidence. The
 developer build asks the pinned GPRbuild for checksum-based Ada recompilation;
 a changed source inventory or project file still makes it clean. The ordinary
 `build.sh` and `test.sh` remain complete native Linux commands; `--host`
-selects Mac compiler checks. Exact-revision acceptance owns approval. The
-container command is retained troubleshooting, not a routine gate.
+selects Mac compiler checks. Nothing approves a revision now. The container
+command is retained troubleshooting, not a routine gate.
 
 `LANDIN_BUILD_MODE` accepts only `debug` or `release`, before any build path
 is used. Builds and tests hold an OS lock for their host tag and mode through
@@ -205,8 +204,8 @@ R0.20 and R0.70 require of recorded evidence.
 | 2026-08-20 | Apple Container 1.2.2, `linux/amd64` under Rosetta, Linux 6.18.15 | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | build from an empty build directory; debug |
 | 2026-08-20 | builds.sr.ht `debian/stable`, Linux 6.12.94 x86-64 hardware, [job 1867022](https://builds.sr.ht/~sinnfrei/job/1867022) | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | both archives verified against their checksums; clean build; debug and release; `check.py` clean; 47 seconds |
 
-The gate job also prints `refine --identify`, so "no release version is
-assigned" appears in the log of every run rather than only inside a test.
+The gate job also printed `refine --identify`, so "no release version is
+assigned" appeared in the log of every run rather than only inside a test.
 
 Case and check counts move as the suite grows, so they are not recorded here;
 the run itself is the record, and `scripts/toolchain.sh` output heads every
@@ -310,12 +309,12 @@ translates them — so since R1.80 produces runnable executables, instruction-le
 timing-sensitive results from this loop are not authority. That distinction is
 why the roadmap named the native gate before there was any code to run in it,
 and it is why the gate now exists: from R1.80 onwards, `refine` emits
-instructions. The original SourceHut gate ran them on their target hardware;
-explicit native acceptance now preserves that requirement.
+instructions. The original SourceHut gate ran them on their target hardware,
+the native acceptance did so through 0.2.0, and the Linux gate does now.
 
-Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions publishes
-the pages and checks host-independent emission; `scripts/ci/` is retained but
-dead, since nothing submits it and no revision is accepted. The underlying
+Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions runs the
+gate, publishes the pages and checks host-independent emission; `scripts/ci/`
+was removed with the acceptance, and no revision is accepted. The underlying
 compiler and test commands remain ordinary repository scripts.
 
 R5.40 adds native LLDB acceptance through `scripts/debug.sh --target=darwin-arm64`

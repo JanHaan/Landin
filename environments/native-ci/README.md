@@ -2,8 +2,8 @@
 
 > **Retired.** This describes the exact-revision gate that approved every
 > revision through 0.2.0. Nothing submits it now and no revision is accepted;
-> `scripts/ci/` is retained but dead. Kept because it is the operational
-> record of how those approvals were produced. `.github/workflows/gate.yml`
+> `scripts/ci/` was removed with it and survives only in the history. Kept
+> because it is the operational record of how those approvals were produced. `.github/workflows/gate.yml`
 > is the smaller gate that replaced it, and [`ROADMAP.md`](../../ROADMAP.md)
 > schedules the rest.
 

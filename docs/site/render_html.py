@@ -998,19 +998,21 @@ GUIDES = [
     dict(key="environments", src="docs/environments.md",
          out="environments.html",
          nav="the environments", group="the implementation",
-         blurb="Which machine produces which kind of evidence, and which "
-               "one is the authority."),
+         blurb="Which machine produces which kind of evidence, and what "
+               "runs where now that the native acceptance is retired."),
     dict(key="cortex-m", src="environments/cortex-m/README.md",
          out="cortex-m.html", nav="Cortex-M execution profile", group="the implementation",
          blurb="Pinned QEMU CPU probes and a deterministic Renode peripheral lane, "
                "with executable evidence and explicit model limits."),
     dict(key="native-ci", src="environments/native-ci/README.md",
-         out="native-ci.html", nav="native acceptance", group="the implementation", blurb="Committed native acceptance, retained evidence, "
-         "approval and publication operations."),
+         out="native-ci.html", nav="native acceptance, retired",
+         group="the implementation",
+         blurb="The exact-revision acceptance that approved every revision "
+               "through 0.2.0, kept as the record of how it worked."),
     dict(key="process", src="docs/process.md", out="process.html",
          nav="the validation workflow", group="the implementation",
-         blurb="Focused development, routine acceptance, major milestones "
-               "and measured validation costs."),
+         blurb="The edit, test and push loop that runs now, and the "
+               "retired acceptance scopes and what they cost."),
     dict(key="editors", src="highlight/README.md", out="editors.html",
          nav="editor and IDE support", group="the implementation",
          blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "

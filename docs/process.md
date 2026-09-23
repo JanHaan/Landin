@@ -1,11 +1,36 @@
-# Development, acceptance and publication
+# Development and validation
 
-`ROADMAP.md` owns this process and its remaining work. R5.20 records the
-maintainer's decision: full gates only at major milestones, Linux work on
-native Linux, debugger checks only for substantial regression risk, and Nix
-CI deferred.
+`ROADMAP.md` owns this process and its remaining work. The loop below is the
+one that runs now. Everything after it describes the exact-revision native
+acceptance that approved every revision through 0.2.0 and was retired with
+SourceHut: nothing submits it, `scripts/ci/` is gone, and no revision is
+accepted. It is kept as the record of how those approvals were chosen and
+what they cost.
 
-## Choose checks for their consequence
+## The loop that runs now
+
+| stage | command | what it says |
+|---|---|---|
+| edit/test loop | `./scripts/dev-test.sh` with one exact `--suite`, `--case` or `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
+| Mac compiler host | `./scripts/dev-test.sh --host` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
+| before pushing | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
+| after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
+| every push and pull request | `.github/workflows/gate.yml` | the documents, and the complete corpus on Linux x86-64 in debug mode |
+| Darwin and LLDB | the suite and `scripts/debug.sh` run by hand on a Mac | nothing automates them, so a Darwin claim needs a Mac run behind it |
+
+Choose the smallest test that can expose the changed behavior first, broaden
+only for another affected subsystem, and run the complete suite once before
+pushing. The gate is a safety net rather than a verdict: it is Linux only and
+debug only, with no Darwin, no Cortex-M execution, no debugger, no bindings
+and no release mode, and `ROADMAP.md` schedules the rest. Documentation
+changes still receive the full `check.py`.
+
+## Historical: choosing acceptance scope
+
+R5.20 recorded the maintainer's decision for the retired acceptance: full
+gates only at major milestones, Linux work on native Linux, debugger checks
+only for substantial regression risk, and Nix CI deferred. The rest of this
+section is that policy as it stood at 0.2.0.
 
 | stage | work | evidence |
 |---|---|---|
@@ -203,9 +228,10 @@ introducing nested worker pools into the routine gate.
 
 ## Nix later
 
-The current `flake.nix` supplies development shells. It does not define a
-cached `refine` package or the project's test derivations. More `nix develop`
-invocations alone would not remove repeated compilation.
+The current `flake.nix` supplies development shells and two `refine`
+packages, one built from the checkout and one fetched from a release. It does
+not define the project's test derivations. More `nix develop` invocations
+alone would not remove repeated compilation.
 
 Nix could later own compiler packages and suitable `checks` with narrow,
 complete inputs, and schedule them on the correct native builders. Its flake
