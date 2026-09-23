@@ -2429,8 +2429,9 @@ literal image is already accepted. All were declined.
 D228 subsequently enables packed unsigned field representations in R6.40;
 the historical quotation below records the earlier kernel boundary. D237
 later transfers u128, i128 and f16 to the Language evolution successor with
-new consumer, target and compiler evidence; the refusal below keeps its code
-and changes its note to that transfer.
+new consumer, target and compiler evidence; the refusal below keeps its code,
+now says "`u128` is not in this version of the language", and its note now
+names that transfer.
 
 **The tour said** that the integers are u8, u16, u32, u64, u128, i8, i16,
 i32, i64 and i128 [0150], and that the floating-point types are f16, f32 and
@@ -2536,8 +2537,8 @@ today: none that has been recorded.
 **Pinned by** `negative/wide-integer-not-enabled`,
 `negative/float-type-not-enabled`,
 `negative/refused-widths-name-their-owner`, whose recorded report is where
-"ROADMAP.md R7.20 is where it is enabled" is executable text rather than a
-comment and which is the only fixture in the corpus that reaches `i128` at
+"ROADMAP.md R7.20 transfers this to Language evolution" is executable text
+rather than a comment and which is the only fixture in the corpus that reaches `i128` at
 all, and the `types.values` guarantee row.
 
 ### D219 — Either integer range endpoint supplies literal context
@@ -2679,7 +2680,9 @@ target pay for a value nobody asked for. Leaving it to the machine is the
 same alternative D4 refused, in the same words.
 
 **Pinned by** `negative/divisor-is-zero`, `negative/remainder-by-zero`,
-`negative/divisor-is-zero-in-a-body`, `positive/divisor-is-not-known`.
+`negative/divisor-is-zero-in-a-body`, `positive/divisor-is-not-known`, and
+for the trap `runtime/a-zero-divisor-traps` and
+`runtime/a-zero-remainder-divisor-traps`.
 
 ### D9 — A negative shift amount is refused when it is known, and traps when it is not
 
@@ -2704,7 +2707,8 @@ around, so masking here would make one operator answer two ways.
 
 **Pinned by** `negative/shift-amount-is-negative`,
 `negative/shift-amount-is-negative-in-a-body`,
-`positive/shift-amount-is-not-known`.
+`positive/shift-amount-is-not-known`, and for the trap
+`runtime/negative-left-shift-traps` and `runtime/negative-right-shift-traps`.
 
 ### D11 — A trap is a deliberate synchronous stop
 
@@ -3482,9 +3486,9 @@ the existing one-atom union already expresses the state. All are declined.
 `runtime/null-pointer-unchecked-traps`, `runtime/null-pointer-union-call-else`,
 `negative/null-pointer-union-call-else-frame-escape`,
 `negative/r440-parser-frame-arena` and
-`runtime/core-mem-dispose-empty`. Their native execution and the static
-folded/target-width refusals have the historical R4.40 evidence recorded in
-ROADMAP.md; subsequent repairs and acceptance are recorded under R4.91.
+`runtime/core-mem-dispose-empty`, with `negative/r440-null-pointer-folded-zero`
+and `negative/r440-null-pointer-unchecked-zero` for the static refusals of a
+folded zero and of `unchecked` construction.
 
 ### D235 — Several atoms beside a pointer store the atom's own code beside the pointer
 
@@ -5539,8 +5543,9 @@ rejected. SIMD and reassociated reductions are not required by this slice.
 
 **Pinned by** the 4- and 4096-element programs generated from
 `compiler/tests/quality/arrays.ldn.in` and the numeric compactness checks in
-`compiler/tests/quality/check.py`. Their presence is an acceptance contract,
-not a claim of passing native execution; ROADMAP.md owns that evidence.
+`compiler/tests/quality/check.py`, and by the `arrays.arithmetic` and
+`arrays.element-traps` guarantee rows, whose `r450` fixtures pin the refusals,
+the operand snapshots and the element order of every trap.
 
 ### D240 — Fixed arrays are the vector type, and the atomic wrapper is a library's
 
@@ -6061,9 +6066,7 @@ unsigned carriers or pointers use the existing C boundary.
 `runtime/r640-packed-small-space` and `runtime/r640-packed-hole` distinguish
 images, validated extraction, copies, calls and indexed updates. The independent
 `targets/packed image algebra and access plans` case and the retained Renode
-contract define separate image and transaction oracles. ROADMAP.md records the
-implementation audits, limits and actual results; these pins do not by
-themselves assert R6.40 closure.
+contract define separate image and transaction oracles.
 
 ### D236 — A range subtype constrains scalar positions only
 
@@ -6137,7 +6140,7 @@ forbids it. A whole program links one definition per name [1610], and the
 compiler-owned vector image of D229 fills each unimplemented slot, which is
 what weak default handlers do in C firmware. The five words stay ordinary
 identifiers: `big u16` remains an L0103 field error and `link(weak)` an
-unknown link label, and no named refusal is owed because the tour no longer
+L0103 link label without its `:`, and no named refusal is owed because the tour no longer
 describes them [1830]. [0750] and [0760] are rewritten.
 
 No prototype, derived program, `core` module or example writes any of the
@@ -13596,9 +13599,13 @@ standalone native link form, and `negative/r440-link-does-not-change-convention`
 for the independence of linkage and convention. The target-contract suite pins
 ELF/Darwin spelling, leading underscores and punctuation; the lowering seam
 keeps an explicit native `_entry` identity equal across both 64-bit targets.
-ROADMAP.md's completed
-R4.40 entry records the compiler and ABI differential evidence for its exact
-historical gate input; R4.91 records subsequent repairs and acceptance.
+`negative/r440-c-variadic-identity` and
+`negative/r440-checker-recursive-inner-signature` pin variadicness and
+convention as structural identity, down to an inner callback's element;
+`negative/r440-c-error-channel`, `negative/r440-c-variadic-aggregate-tail` and
+`negative/r440-c-variadic-label` the refusals at the C boundary; and
+`negative/r440-link-assembly-expression` that a link override is a symbol
+spelling.
 
 ### D204 — C layout and transport follow one selected target ABI
 
@@ -13622,9 +13629,11 @@ declined in favor of target-selected layout and signature-selected transport.
 
 **Pinned by** `positive/r440-c-aliases`, `positive/r440-external-float` and
 `runtime/r440-c-aliases` for the ordinary aliases and admitted f64 signature.
-Bidirectional aggregate, callback and variadic interoperation and
-target-description cases have the historical gate evidence recorded under
-R4.40 in ROADMAP.md. That evidence does not approve later R4.91 revisions.
+`abi/r440-native-aggregates`, `abi/r440-native-banks` and
+`abi/r440-sret-pointer-observation` pin aggregate transport in both directions,
+the independent register banks and the hidden result pointer;
+`abi/r440-native-callbacks`, `abi/r440-native-varargs` and
+`abi/r440-varargs-pointer-callback` pin callbacks and the variadic tail.
 
 ### D205 — Headers describe ABI shapes, not lifetime policy
 
@@ -13651,10 +13660,9 @@ freestanding path. Handwritten signature replacement disguises the old
 workflow as generation. These alternatives are declined.
 
 **Pinned by** `bindings/generate.py`, its Clang-backed `bindings/test.py`
-suite and `abi/r440-bindings-generated`. ROADMAP.md's completed R4.40 entry
-records deterministic regeneration, compiled adapters and end-to-end
-interoperation at its exact historical gate input. R4.91 acceptance is
-separately recorded there; the files' presence is not execution evidence.
+suite and `abi/r440-bindings-generated`, with
+`negative/r440-c-variadic-definition` for the receiving variadic definition
+that has to go through a generated adapter instead.
 
 ### D207 — Foreign failure detail stays in the provider
 
@@ -13677,10 +13685,10 @@ repeat completed output. Adding exception payloads changes the error model
 rather than preserving foreign detail. All are declined.
 
 **Pinned by** `runtime/r440-errno-detail` and
-`runtime/r440-io-partial-progress` record the explicit-state and progress
-contracts. ROADMAP.md's completed R4.40 entry records the historical native
-verification, including interrupted-host-call and close evidence. R4.91
-records subsequent repairs and exact-revision acceptance.
+`runtime/r440-io-partial-progress` for the explicit-state and progress
+contracts, and by `abi/r440-errno-interposition` and
+`abi/r440-errno-thread-local`, which hold errno and the partial-I/O policy
+under C interposition and across threads.
 
 ### D208 — Hosted argument capabilities retain one C startup root
 
@@ -13715,8 +13723,9 @@ startup-independent file and stream work. All are declined.
 
 **Pinned by** `abi/r440-native-startup-initialized`,
 `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized` and
-`abi/r440-native-startup-replaced` are recorded cases. R4.40's authoritative
-native evidence is recorded in ROADMAP.md.
+`abi/r440-native-startup-replaced`, which pin one initialization across
+callbacks, an empty table that is still nonnull, the trap before C
+initializes the root and the refusal to replace a live one.
 
 ### D211 — Optimization changes implementation, not authority or outcomes
 
@@ -13796,7 +13805,6 @@ and aggregate calls, or change existing programs' outcomes. All are rejected.
 `compiler/tests/quality/check.py`. The fixture harness requires each original
 runtime and ABI oracle under none/off, size/off, size/auto and speed/auto;
 focused generic/erased cases additionally run none/all and speed/all.
-ROADMAP.md retains the implementation and authoritative native completion gate.
 
 ### D226 — Darwin C transport is a separate platform contract
 
@@ -13816,9 +13824,8 @@ remain unchanged; source debugging and full hosted parity have separate gates.
 
 **Pinned by** `compiler/tests/darwin/transport.ldn`, `varargs.ldn`, the native
 platform program and the generated-binding/archive execution runner, together
-with the shared native aggregate and callback differential cases. ROADMAP.md
-R5.30 owns exact-revision native acceptance; R5.40 owns source debugging and
-Mach-O debug identity, and R5.50 owns full hosted parity.
+with the shared native aggregate and callback differential cases. They run
+natively on a Mac, and nothing runs them automatically.
 
 ### D227 — Explicit memory events, synchronization and external writers
 
@@ -14086,8 +14093,7 @@ masking does not stop DMA and a notification alone is insufficient.
 **Pinned by:** `compiler/ada/tests/src/landin-tests-cortex_suite.adb` and
 `environments/cortex-m/firmware.py`, its retained source, assembly, linker,
 GDB and device inputs, plus the unchanged R6.10–R6.50 independent and generated
-lanes. These pins state semantics and boundaries; ROADMAP.md alone records
-actual results, acceptance, closure and successor ownership.
+lanes.
 
 ### D230 — Scalar transport through the ordinary assembly boundary
 
@@ -14253,7 +14259,7 @@ A returning or failing handler would contradict D11 and [1670].
 
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
-default-trap fixtures. ROADMAP.md owns results and remaining acceptance work.
+default-trap fixtures.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
