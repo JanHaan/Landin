@@ -66,7 +66,7 @@ checked. Overflow traps and wrapping is a separate operator.
 Concepts are named requirement bundles with explicit conformances,
 declared anywhere, and a collision is simply an error. The inherited
 design also requires a closed, named set of representation-derived
-compiler-supplied conformances. D143 settled `zeroable` at R2.60 as a closed
+compiler-supplied conformances. D143 settled `zeroable` as a closed
 compiler concept family: source conformances can neither add an entry nor
 override one. Generic code is a value plus evidence that its type
 satisfies a concept; `any C` is the same evidence with the type erased,
@@ -197,236 +197,107 @@ exist and all their findings are worked in. Independent reviews are folded
 back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
-**The bootstrap compiler is working.** R0's Ada chassis, R1's executable
-kernel, R2.10's target sizes, alignments and checked layout arithmetic,
-R2.20's aggregate/value-layout work and R2.30's functions, control,
-declared errors, function fields, recursive module images, computed aggregate
-elements and lexical `defer`/failure-only `undo` cleanup are complete. R2.40's
-fixed parameters, compile-time substitution, generic routine instances and
-fixed conditional declarations are complete. R2.50's pointers, slices,
-conventions, local origins and borrows, `escaping`, `from`, consume checking
-and target reference carriers are complete. R2.60's concepts, constraints,
-whole-program conformance register and closed compiler `zeroable` family are
-complete.
+**The bootstrap compiler is working.** It scans, parses, resolves and checks
+whole programs, lowers them into verified target-neutral IR and emits
+assembly for three targets. What it covers, by capability:
 
-R2.70's target-neutral evidence order, target-derived Linux/synthetic-32 table
-layout, hidden evidence arguments, indirect concept calls and
-representation-compatible shared machine bodies are complete. R2.80's exact
-`any C` identity, explicit/inferred pointer erasure, object-safe
-mutable/immutable dispatch, flattened composed tables, two-word target layout,
-origin propagation and aggregate/shaped ABI are complete. R2.90's guarantee,
-diagnostic, conformance/evidence, prototype-derivation and target-applicability
-registers are complete, mechanically closed over the implementation corpus and
-owned by executable rejection, trap or explicit non-guarantee evidence.
-R3.10's directory modules, file-local import scopes, public qualified lookup,
-ordered roots, deterministic graph closure and entry-module selection are
-complete. R3.20's allocator/vector pressure case derives honest raw-storage
-transitions from executable non-zeroable pointer storage, including
-transactional growth and drain-before-free. R3.30's repository-owned
-`core/mem` enforces that initialized-prefix state machine, keeps its
-representation private and exercises rollback and publication through compiled
-Landin code. R3.40 adds the allocator interface, explicit and deliberately
-failing arenas, a transactional pointer-capable `core/vec`, and the parser's
-byte-oriented `core/text` positions and subslices, with backing origins and
-failure behavior pinned by compiled fixtures. R3.50 adds the scalar/pointer
-`extern(c)` seam, captures hosted arguments through a libc-backed runtime
-bridge, and builds `core/io` as an ordinary world capability with declared
-file and stream failures. R3.60 adds the object-safe `core/diag.log` capability,
-bounded and streaming providers, ordered dispatch through `any`, direct bounded
-overflow accounting and propagated hosted-write failure. Fixed formals used in
-routine bodies lower as instance constants, and aggregate storage reached
-through pointer `.val` uses the neutral runtime-address path.
-R3.70 composes the hosted, allocation, container, text and diagnostic layers
-into a complete recursive configuration parser. It retains valid nested AST
-nodes while recovering three ordered syntax faults, runs unchanged through
-bounded and streaming `any diag.log` implementations, and separately executes
-allocation and diagnostic-delivery failures. Its derivation manifest keeps the
-executable evidence traceable to prototype 2.
-R4.10 closes the hosted construct surface: loop transfers, labels, values and
-every traversal form; the quoted, raw, character and float literal families;
-compound assignment; the complete enabled scalar conversion matrix; and
-condition declarations, caller parameters, `unchecked` regions, range subtypes
-and the atom-or-pointer union. Every hosted construct row now carries fixture
-evidence or a refusal that names the item enabling it, and `check.py` audits
-that whenever the item is not active.
-R4.20 completes the hosted `core` library slice: heap, arena, pool and
-failing allocators threaded as capabilities; `core/vec`, `core/small`,
-`core/map`, `core/tree` and `core/sort` over honest raw storage; `core/text`
-with validated conversions; and the system and memory I/O worlds. Every
-container transition, allocation rollback and unsafe obligation is written
-down. Of the eleven running examples, the four that write output — FizzBuzz and
-the three Benchmark Game programs — import `core` and are held to exact output
-oracles.
+- **The language.** Functions, aggregates and variants, function fields,
+  recursive module images, block-valued control, declared errors, lexical
+  `defer` and failure-only `undo` cleanup, every loop and literal family, the
+  enabled scalar conversions, condition declarations, caller parameters,
+  range subtypes, `unchecked` regions and the atom-or-pointer unions.
+  Generics take fixed parameters by compile-time substitution, with fixed
+  conditional declarations and per-instance inferred errors. Concepts carry a
+  whole-program conformance register and the closed compiler `zeroable`
+  family. One target-neutral evidence order serves hidden evidence arguments,
+  indirect concept calls, shared machine bodies and `any C`'s two-word pair
+  with object-safe dispatch and flattened composed tables. Pointers and slices
+  get local origins and borrows, `escaping`, `from` and consume checking.
+  Directory modules have file-local import scopes, aliases, selected imports,
+  public qualified lookup, typed global options, compiler facts, assertions
+  and ordered roots with deterministic graph closure. D227's concurrency
+  memory model supplies scalar atomics, volatile accesses and explicit
+  barriers, and D228 packed raw images with checked encoded-field extraction
+  and explicit reserved-bit and access policies. Every normative construct has
+  a row in `compiler/tests/constructs.matrix` with its state, targets and
+  evidence, and `check.py` refuses a missing, stale or unexplained one.
+- **The library.** `core` threads heap, arena, pool and failing allocators as
+  capabilities, and `core/mem`, `core/vec`, `core/small`, `core/map`,
+  `core/tree` and `core/sort` sit on honest raw storage with every container
+  transition, allocation rollback and unsafe obligation written down.
+  `core/text` has byte-oriented positions and validated conversions, `core/io`
+  interchangeable system and memory worlds, `core/diag.log` bounded and
+  streaming providers dispatched through `any`, and `core/region` explicit
+  bulk cleanup over a supplied provider. D212 withdraws both builtin arena
+  forms and W7's transitive escape promise while preserving ordinary local
+  origins. A freestanding slice adds CPU support, nonreturning signatures and
+  panic dispatch with optional source maps. Of the eleven running examples, the
+  four that write output — FizzBuzz and the three Benchmark Game programs —
+  import `core` and are held to exact output oracles.
+- **The C boundary.** Each hosted target's C ABI, `layout(c)`, callbacks and
+  variadic call transport. A separate header generator and policy-driven C
+  adapters cover the supported enum, union, bitfield, global/TLS and
+  incoming-varargs boundaries; unsupported C forms receive explicit refusals.
+- **Targets.** Linux x86-64 and Darwin arm64 build and run hosted executables,
+  Darwin with an explicit large-image loader limitation. Cortex-M0 lowers to
+  ARMv6-M Thumb with 32-bit layouts, the external AAPCS and Landin's internal
+  ABI, r11 frame chains and soft scalar arithmetic. D229 enables its
+  compiler-owned reset, data/RAM-code copying, BSS clearing, typed
+  interrupt/naked functions, vector references, placement/retention and fixed
+  assembly with explicit effects, within the selected 32 KiB flash, 16 KiB RAM
+  and 4 KiB stack reservation. The
+  [firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
+  runs it on pinned QEMU and synthetic Renode peripherals beside independent
+  C/assembly controls, and thirty RP2040 registers are checked in as generated
+  device fixtures.
+- **Code generation.** Deterministic baseline code: target code and the build
+  report are identical under a stated relation of build directory, working
+  directory, output path, environment, repetition and order on all three
+  targets, and the hosted linked image is deliberately not claimed. Compact
+  numeric-array loops, strict-saving `layout(optimal)` placement and
+  independently controlled evidence-proved specialization are optional and
+  reported factually.
+- **Debugging.** DWARF source lines, symbolic frames and inspectable
+  parameters and locals under GDB on Linux, including optimized caller frames;
+  LLDB with exact Mach-O/dSYM identity on Darwin; line and function debugging
+  on Cortex-M0. Debug provenance remains independent of DWARF encoding for a
+  possible future PDB emitter; PDB support is not implemented.
+- **Derived programs.** Prototype 2's recursive configuration parser retains
+  valid nested AST nodes while recovering three ordered syntax faults, and
+  runs unchanged through bounded and streaming `any diag.log`
+  implementations. Prototype 3's container client and prototype 4's log
+  filter — runtime-selected filters and destinations, complete lines across
+  arbitrary chunks, copied arguments and explicit delivery retry — run beside
+  it on Linux and macOS with native debugging coverage. Prototype 1's driver
+  runs on the Cortex-M0 emulators. Each derivation row carries a generated
+  oracle, and its derivation manifest keeps the evidence traceable to its
+  prototype.
 
-R4.21 repairs the earlier review's flow, origin, lowering and diagnostic gaps.
-R4.30 adds import aliases, selected imports, typed global options, compiler
-facts, assertions and ordered static-library directives. R4.40 implements the
-selected Linux x86-64 C ABI and `layout(c)`, callbacks and variadic call
-transport. Its separate header generator and policy-driven C adapters cover
-the supported enum, union, bitfield, global/TLS and incoming-varargs boundaries;
-unsupported C forms receive explicit refusals. ROADMAP.md records their
-contracts and historical closure evidence; R4.91 records the subsequent
-review repairs and their acceptance binding.
-
-R4.50 completes deterministic baseline code generation: compact numeric-array
-loops, strict-saving `layout(optimal)` placement, independently controlled
-evidence-proved specialization and factual build reports. The authoritative
-native Linux x86-64 gate passed for the exact implementation revision; the
-closure evidence is recorded in ROADMAP.md.
-
-R4.60 completes usable Linux source debugging: DWARF source lines, symbolic
-frames and inspectable parameters/locals, including optimized caller frames.
-The authoritative native gate passed scripted GDB acceptance with debug and
-release compiler builds. ROADMAP.md records the complete closure evidence.
-Debug provenance remains independent of DWARF encoding for a possible future
-PDB emitter; PDB support is not implemented.
-
-R4.80's complete hosted log filter composes ordinary text, diagnostics, vector,
-world and allocator capabilities. It copies retained arguments, reads complete
-lines across arbitrary chunks, and selects heterogeneous filters and
-destinations at runtime. Messages retain a delivery cursor for explicit retry.
-`core/region` records allocations against a supplied provider for explicit bulk
-cleanup. D212 withdraws both builtin arena forms and W7's transitive escape
-promise while preserving ordinary local origins and independent allocations.
-
-R4.90 closes Linux hosted parity, including distinct representations,
-inline struct declarations, homogeneous field fills, parameterized atom unions,
-atom storage and recovered-error generic discovery. Complete derived prototypes
-2, 3 and 4 retain native execution and debugging coverage. ROADMAP.md binds the
-exact containing revision's acceptance and delivery evidence to its annotated
-approval tag and durable native bundle.
-
-R4.91 closes the reviewed repairs through the containing revision's exact
-native acceptance, approval and canonical delivery binding in ROADMAP.md.
-R5.10 has established the native macOS compiler environment; R5.20 isolates
-target contracts and records every inherited resource disposition. R5.30 adds
-native Darwin arm64 lowering and matching-revision native acceptance.
-R5.40 adds native LLDB source debugging and exact Mach-O/dSYM identity;
-R5.50 closes hosted parity through the dual-native milestone binding in
-ROADMAP.md, with its explicit large-image loader limitation.
-R5.51 repairs loop-transfer ownership and compatible dual-native routine
-acceptance, reconciles current guidance and evidence, and records every retained
-disposition with its owner and trigger before R6.10. Its completion is bound to the
-exact-revision dual-native acceptance and delivery record in ROADMAP.md.
-R6.10 establishes the pinned QEMU Cortex-M0 CPU/startup and synthetic Renode
-peripheral lanes, with live probe evidence bound into native acceptance.
-R6.20 instantiates 32-bit layouts and separate external AAPCS/internal Landin
-ABI planning, with independent C/assembly execution evidence agreeing with
-synthetic-32 goldens. Its exact-revision dual-native binding owns closure.
-That [contract](environments/cortex-m/README.md) preceded R6.50 emission;
-R6.60 adds compiler-owned startup/linking; R6.100 adds line/function debugging.
-
-R6.30 defines D227's concurrency memory model and implements scalar atomics,
-volatile accesses and explicit barriers on both hosted targets. Ordinary-slice
-DMA visibility, interrupt exclusion and cache obligations have independent
-executable/model controls, bound by the same exact-revision dual-native gate.
-R6.50 lowers the admitted Cortex-M memory operations with their exact widths
-and retained alignment checks.
-
-R6.40 implements D228's packed raw images and checked encoded-field extraction,
-including holes, indexed updates and explicit reserved-bit/access policies.
-Native compiler execution, independent C controls and actual Renode traces
-remain distinct evidence, bound by the exact-revision dual-native closure.
-D187 and D227, including the ordinary-slice DMA contract, are unchanged.
-R6.50 implements Cortex-M lowering, r11 frame chains, scalar and aggregate
-transport, failures/evidence, checked packed images and memory/barriers.
-Generated programs execute through an external test harness in QEMU and the
-synthetic Renode lane; ROADMAP.md binds exact-revision closure. R6.80 retains
-generated-device fixtures.
-
-R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
-typed interrupt/naked functions, vector references, placement/retention and
-fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
-16 KiB RAM and 4 KiB stack reservation. The
-[firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
-checks generated boot, nested exceptions, PSP return, veneers and peripheral
-traces alongside independent C/assembly controls. Its exact-revision dual-native
-binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding
-core and adds ordinary CPU support, nonreturning signatures and panic dispatch
-with optional source maps. Its closure is bound to the containing revision’s dual-native approval and
-guarded delivery in ROADMAP.md; R6.80 retains generated-device fixtures.
-
-R7.10 audits every normative construct into the generated construct
-inventory in `compiler/tests/constructs.matrix`: each of the 201 rows records
-its state, applicable targets, per-target evidence, named refusals and open
-owner, and `check.py` refuses a missing, stale, unowned or unexplained row.
-The described forms it found unfinished are routed to R7.20, target gaps and
-stale refusal notes to R7.40. Its exact-revision dual-native routine binding
-in ROADMAP.md owns closure.
-
-R7.20 decides every one of those rows from measured evidence. Shared names,
-labelled bare blocks, the several-atom pointer union and the remaining general
-aggregate values are implemented on Linux x86-64, Darwin arm64 and Cortex-M0,
-with GDB and LLDB presentation of the new union. Range-subtype composition is
-a recorded boundary; `volatile ptr`, `register(...)`, `set(X)`, per-field byte
-order, the machine attribute words and the vector intrinsics are withdrawn in
-favour of existing mechanisms; u128, i128 and f16 go to the Language evolution
-successor and the atomic wrapper type to the Broader standard library. Spec
-decisions D233-D241 record each choice with its alternative, and the
-exact-revision dual-native routine binding with debugger coverage in
-ROADMAP.md owns closure.
-
-R7.30 gives every inherited item and every later discovery a terminal
-disposition. Nineteen of the 32 inherited appendix rows are implemented and
-thirteen are transferred to named successors. No parked item's trigger fired
-and no watch concluded in the four complete derived programs, so C1-C5, the
-E1-E3 watches and the stackful-fibre exploration join D237's scalars with the
-Language evolution successor, each with its trigger and completion evidence.
-A new ledger does the same for the limits R6.10-R7.20
-recorded, giving physical-board evidence to Release readiness and the
-structural editor grammar's drift to R7.40, and `check.py` now refuses a row
-without a terminal disposition. Its exact-revision dual-native routine
-binding in ROADMAP.md owns closure.
-
-R7.40 closes every evidence register. The four compile-time rows whose
-Cortex-M column was empty now carry a measured verdict rather than an argument
-that the frontend is target-neutral: the same sources compile to a
-byte-identical verdict on all three targets, and `check.py` counts such a
-claim only from a fixture that selects the target it names. That rule found
-five fixtures claiming hosted refusals their programs do not make. [1610]'s
-Cortex-M link names are attributed to the firmware probe that resolves them,
-recorded where the runner can be checked. The two notes that still promised a
-finished item are gone: [1350]'s says which boundary R2.40 records, and
-[1580]'s refusal entry, which nothing raised, is removed in favour of the C
-signature error the boundary actually reports. D242 gives a refused selected
-import a continuation identity, so its verdict and exact report stand while
-later uses of the name stop repeating a misspelling they are not, and the
-structural editor grammar is transcribed back onto the enabled kernel. Its
-exact-revision dual-native routine binding in ROADMAP.md owns closure.
-
-R7.70 declared the first roadmap's endpoint: every work item complete, every
-durable item across the two debt ledgers and the inherited review register
-given a terminal disposition, and every transferred one owned by a successor
-family, which the current roadmap's register carries. Feature-complete pre-v1 is a claim about coverage and nothing
-else, and the recorded boundaries stand exactly as measured. Its
-exact-revision dual-native milestone binding in ROADMAP.md owns closure.
-
-`refine` runs the frontend, lowers and
-verifies target-neutral IR, emits Linux x86-64, Darwin arm64 or Cortex-M0
-assembly, and
-can assemble and link hosted executables checked by the Linux gate.
-R6.100 closes Cortex line/function debugging and bounded resource evidence
-through its exact-revision dual-native milestone binding;
-the broader standard library remains successor
-work. D229 enables compiler-owned firmware startup, vectors and linking. `ROADMAP.md` is the sole work authority. Outstanding
-grammar, representation, ABI, guarantee, and diagnostic questions are settled
-by the first phase that needs them rather than forming one blanket front-end
+The Linux gate runs the corpus; Darwin and Cortex-M results come from native
+runs nothing automates. Every inherited item and later discovery has a
+terminal disposition, and the transferred ones are owned by the successor
+families the current roadmap's register carries. Feature-complete pre-v1 is a
+claim about coverage and nothing else, and the recorded boundaries stand
+exactly as measured. The broader standard library remains successor work.
+`ROADMAP.md` is the sole work authority. Outstanding grammar,
+representation, ABI, guarantee, and diagnostic questions are settled by the
+first slice that needs them rather than forming one blanket front-end
 barrier.
 
-The first major compiler milestone is R3: a complete derived version of
+The first major compiler milestone was a complete derived version of
 the parser prototype with useful diagnostics, evidence-table dispatch,
-and `any`, explicitly without specialization. Work then proceeds through
+and `any`, explicitly without specialization. Work then proceeded through
 the complete hosted Linux x86-64 path, native macOS arm64, and
 emulator-first Cortex-M.
 
-The first roadmap's endpoint was feature-complete pre-v1, and R7.70
-reached it and closed that roadmap. The current `ROADMAP.md` starts where it
-stopped: a frontend that scales and serves an editor, assembly with operands,
-more hosted targets, the RP2040, RP2350, STM32 and ESP32 families, a library
-split into freestanding and hosted halves, concurrency, Windows and measured
-optimization. A build tool, package acquisition, release versioning and
-self-hosting stay outside it, owned by the successor families its register
-names. Its identities are cited in `ROADMAP.md` and nowhere else.
+The first roadmap's endpoint was feature-complete pre-v1, and it closed
+there. The current `ROADMAP.md` starts where it stopped: a frontend that
+scales and serves an editor, assembly with operands, more hosted targets, the
+RP2040, RP2350, STM32 and ESP32 families, a library split into freestanding
+and hosted halves, concurrency, Windows and measured optimization. A build
+tool, package acquisition, release versioning and self-hosting stay outside
+it, owned by the successor families its register names. Its identities are
+cited in `ROADMAP.md` and nowhere else.
 
 **Next roadmap item: R8.10 — Remove the first roadmap's citations (planned).**
 
