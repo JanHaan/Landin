@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture R5.10 native bootstrap evidence; never approve a Linux revision."""
+"""Capture native macOS bootstrap evidence; never approve a Linux revision."""
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -30,7 +30,7 @@ def sha256(path):
 
 def native_host(system, machine, translated):
     require((system, machine, translated) == ("Darwin", "arm64", "0"),
-            "R5.10 requires native macOS arm64 without translation")
+            "the environment requires native macOS arm64 without translation")
 
 
 def probe_source(kind, count):
@@ -74,7 +74,7 @@ def classify(code, output, timed_out=False):
 def harness_result(code, output, timed_out=False, host_only=False):
     """Host scope is explicit; full historical runs retain the Linux refusal."""
     require(not timed_out, "native harness exceeded its wall limit")
-    require("FILTERED" not in output, "filtered harness is not R5.10 evidence")
+    require("FILTERED" not in output, "filtered harness is not environment evidence")
     summaries = re.findall(
         r"^cases (\d+), passed (\d+), failed (\d+), checks (\d+)$",
         output, re.M)

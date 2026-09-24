@@ -1,4 +1,4 @@
--- The admitted M0 subset of the shared R6.30 scalar memory corpus.
+-- The admitted M0 subset of the shared scalar memory-model corpus.
 public main: () -> (code: i32) =
     mut byte: u8 = 0
     mut half: u16 = 0

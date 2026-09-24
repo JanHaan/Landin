@@ -1,5 +1,5 @@
 /* Independent internal-Landin caller. The C controls remain in abi.S/abi.c.
- * These literal words and offsets come from the accepted R6.20 contract. */
+ * These literal words and offsets come from the Cortex-M0 layout and ABI contract. */
 .syntax unified
 .cpu cortex-m0
 .thumb

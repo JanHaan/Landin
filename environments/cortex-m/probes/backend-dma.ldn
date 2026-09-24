@@ -1,4 +1,4 @@
--- Bounded ordinary-slice DMA observation, not the complete R6.90 driver.
+-- Bounded ordinary-slice DMA observation, not the complete derived driver.
 -- The independent synthetic device publishes four bytes before completion.
 -- Interrupts are disabled in the device contract; no interrupt entry is used.
 mut buffer: [4]u8 = zeroed

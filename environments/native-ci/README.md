@@ -7,7 +7,7 @@
 > is the smaller gate that replaced it, and [`ROADMAP.md`](../../ROADMAP.md)
 > schedules the rest.
 
-`ROADMAP.md` R0.70 owns this environment. `scripts/ci/policy.json` is the
+`scripts/ci/policy.json` is the
 canonical acceptance job list; `scripts/ci/common.py` independently requires
 every job and command for the committed scope. SourceHut runs only approved-main Pages publication
 and GitHub mirroring. A development run cannot authorize publication.
@@ -43,7 +43,7 @@ symlink escapes and reserved cache/evidence paths before transfer. All selected
 jobs receive the same archive. Each slot recomputes the inventory before and
 after its commands and checks the initialized policy and environment.
 
-The committed policy has two scopes. Routine R5/R6 promotion runs five jobs:
+The committed policy has two scopes. Routine promotion runs five jobs:
 clean debug compiler-host checks (`test.sh --host`), the complete release
 suite and native report identity, release object quality, Clang-19 bindings,
 and documents/tooling with full `check.py` and verified rendering. A routine
@@ -66,8 +66,8 @@ tracking, unwind or frame conventions, debugger transport/tests, or acceptance
 selection/verification of debugger coverage.
 An ordinary documentation, scanner or unrelated tooling change does not
 trigger GDB. Record the decision in the change's review/roadmap evidence.
-Major phase/parity closure, including R5.50 and R6.100, requires milestone
-scope; routine approval is not evidence of full milestone coverage. Return
+Major phase/parity closure, including complete hosted parity and the
+freestanding Cortex-M0 evidence, requires milestone scope; routine approval is not evidence of full milestone coverage. Return
 to routine scope in the next development commit after milestone delivery.
 
 Schema-1 policies and approvals retain their historical eight-job meaning.
@@ -158,7 +158,7 @@ workload to fail: retain that failure and diagnose it rather than silently
 raising the limit or approving incomplete evidence.
 
 Containment does not authorize giant-image assembly or replace an input audit.
-R4.91 retains its forbidden giant fixtures as source/IR evidence, and the
+The forbidden giant fixtures stay source/IR evidence, and the
 remaining native execution plan must be reviewed before launching the gate.
 No assembler sweep is run to validate these controls. They are tested using
 fake cgroup files and tiny supervised Python processes.
@@ -286,7 +286,7 @@ nix develop --command sh -eu -c './scripts/toolchain.sh; ./scripts/test.sh'
 
 This checks the Nix environment and is supplemental. It is neither an automatic
 SourceHut job nor a required job in the native acceptance policy. Historical
-Nix and SourceHut results remain in `docs/environments.md` and `ROADMAP.md`.
+Nix and SourceHut results remain in `docs/environments.md`.
 
 
 ## Matching Darwin evidence
@@ -310,7 +310,7 @@ requires Linux milestone scope. Only Linux supports resume. See the
 
 ## Cortex-M environment evidence
 
-R6.10 adds the [embedded profile](../cortex-m/README.md) to the Linux
+The [embedded profile](../cortex-m/README.md) runs in the Linux
 documents job. Install its pinned private tools with
 `python3 environments/cortex-m/setup.py` before acceptance. The job runs
 `test.py` and `run.py`, and retains `artifacts/cortex-m` in the verified
@@ -318,20 +318,20 @@ export. Missing tools fail; these are mandatory environment probes on the
 Linux host, separate from the hosted Landin workloads. The unchanged
 dual-native approval binds this job together with Darwin's native evidence.
 
-R6.20 keeps that mandatory path and adds the QEMU layout/ABI controls to
+That mandatory path includes the QEMU layout/ABI controls in
 `run.py`. The same exported `cortex-m` directory retains their contract inputs,
 measurements, assembly witnesses, ELF/maps/disassembly and GDB assertions.
 The annotated approval binds their actual execution to the accepted revision;
 a planner golden alone cannot satisfy this obligation.
 
-R6.30 extends the same mandatory embedded job with independent M0 memory and
+The same mandatory embedded job runs independent M0 memory and
 interrupt controls plus bounded SC, release-sequence, DMA and cache models.
 `memory-model.json`, tool commands, inputs, ELF and GDB results are exported
-with the unchanged R6.10/R6.20 lanes. Hosted release fixtures additionally
+with the unchanged CPU, peripheral and layout/ABI lanes. Hosted release fixtures additionally
 execute Landin-generated memory operations. Routine debugger-risk scope keeps
 native release GDB; model success alone cannot approve this compiler change.
 
-R6.40 extends that mandatory probe command with `--refine {refine}` and a
+The mandatory probe command takes `--refine {refine}` and a
 committed debug build in the documents job. The compiler-generated Linux/Renode
 transport lane and its six profiles remain beside the independent M0 C controls
 in `artifacts/cortex-m`; the existing inventory/export checks bind both to the
@@ -340,37 +340,35 @@ routine acceptance with debugger risk on both hosts. Development transcripts
 and model success never substitute for identical-revision dual-native approval.
 
 
-R6.50 extends that same mandatory embedded path with the complete inventoried
+The same mandatory embedded path runs the complete inventoried
 Cortex-M corpus, generated ABI/frame and arithmetic controls, and direct
 synthetic peripheral/DMA execution. `artifacts/cortex-m/backend` retains its
 ELF/object/map/disassembly, scripts, commands, identities, results and explicit
-physical-limit records. Existing R6.10/R6.20/R6.30/R6.40 evidence and Renode lock
-cleanup remain required. These artifacts belong to the accepted archive;
+physical-limit records. The earlier environment, layout/ABI, memory and packed
+evidence and Renode lock cleanup remain required. These artifacts belong to the accepted archive;
 development selectors cannot approve a revision.
 
-R6.60's compiler-owned startup lane retains `artifacts/cortex-m/firmware`.
-R6.70's active library increment additionally retains
+The compiler-owned startup lane retains `artifacts/cortex-m/firmware`.
+The freestanding library lane additionally retains
 `artifacts/cortex-m/freestanding`, including explicit module/linker closure,
 CPU and allocator consumers, ordinary-slice DMA traces and fresh artifact
 comparisons. `run.py` executes these after every inherited lane and the existing
 recursive export hashes bind them to the accepted archive. The old corpus,
-firmware counts and Renode lock-cleanup obligations remain mandatory. These
-additional controls do not by themselves close the remaining R6.70 panic and
-noreturn obligations.
+firmware counts and Renode lock-cleanup obligations remain mandatory. The
+panic and noreturn consumers run in the same lane.
 
-R6.80 adds `devices.py` after the inherited Cortex lanes. Its checked-in vendor
+`devices.py` runs after the inherited Cortex lanes. Its checked-in vendor
 inputs, regeneration checks, source refusals, compiler-owned firmware and
 independent C/assembly peripheral control are mandatory; recursive artifact
 hashes bind `artifacts/cortex-m/devices` to the same accepted archive.
 
-R6.90 appends `driver.py` to the same mandatory embedded runner and recursive
+`driver.py` is appended to the same mandatory embedded runner and recursive
 export. Its complete application, API client and separate layout control
 retain compiler-owned firmware, independent assertions and every inherited
 lane. Matching routine debugger-risk policies cover the checker/context and
-BSS ELF load-address repairs. See the [derivation](../../compiler/tests/driver/DERIVATION.md);
-R6.100 still owns full Cortex source-debugging and measured-stack closure.
+BSS ELF load-address repairs. See the [derivation](../../compiler/tests/driver/DERIVATION.md).
 
-R6.100 uses compatible dual-native milestone policies. The documents job's
+The freestanding evidence closure used compatible dual-native milestone policies. The documents job's
 mandatory embedded entry includes `evidence.py` after the complete driver:
 Cortex line/function GDB, complete measured application scenarios, debug/load
 identity checks and independent stack/exception controls. Its recursive export

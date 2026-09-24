@@ -1,4 +1,4 @@
---  The R3.70 parser's byte lexer.  R4.10 owns full UTF-8 text; this
+--  The derived parser's byte lexer.  `core/text` owns full UTF-8; this
 --  derivation classifies its deliberately ASCII configuration grammar and
 --  retains unknown bytes as tokens so the parser can recover.
 

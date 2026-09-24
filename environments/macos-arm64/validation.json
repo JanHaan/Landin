@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "scope": "R5.10 native bootstrap observations; ROADMAP.md owns completion",
+  "scope": "native macOS bootstrap environment observations",
   "compiler_base_revision": "4f74a45c1eedef4ce79382cda23a1b159c340416",
   "tested_input_files": 4221,
   "tested_input_inventory_sha256": "b268448b6e4f39140779b79a86dbe2dbfd1f369469251a4e17e309241820bf31",

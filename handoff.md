@@ -338,7 +338,7 @@ R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
 typed interrupt/naked functions, vector references, placement/retention and
 fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
 16 KiB RAM and 4 KiB stack reservation. The
-[firmware execution lane](environments/cortex-m/README.md#r660-compiler-owned-firmware)
+[firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
 checks generated boot, nested exceptions, PSP return, veneers and peripheral
 traces alongside independent C/assembly controls. Its exact-revision dual-native
 binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding

@@ -1,4 +1,4 @@
-/* External R6.50 execution harness, not a language linker/startup feature. */
+/* External generated-code execution harness, not a language linker/startup feature. */
 ENTRY(reset)
 MEMORY {
   FLASH (rx) : ORIGIN = 0, LENGTH = 32K

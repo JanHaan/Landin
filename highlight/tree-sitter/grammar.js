@@ -400,7 +400,7 @@ module.exports = grammar({
     returns: $ => choice(
       seq('(', optional(commaSep1($.named_return)), ')'),
       'none',
-      // D231's distinct `noreturn` return form (R6.70).
+      // D231's distinct `noreturn` return form.
       'noreturn',
     ),
     // D233: several return names may share one type; a comma reaching ':'
@@ -448,7 +448,7 @@ module.exports = grammar({
       $.labeled_block,
     )),
 
-    // R4.10's loops, [1130]-[1190]. D225 reserves their control words
+    // The loops, [1130]-[1190]. D225 reserves their control words
     // globally, including in every ordinary identifier position.
     loop_statement: $ => choice(
       seq('loop', 'do', optional($.block), 'end', 'loop'),

@@ -1,4 +1,4 @@
-// R6.40 bounded access contract, independent of the firmware bit algorithms.
+// Packed-image bounded access contract, independent of the firmware bit algorithms.
 // Synthetic device only: no vendor identification or physical bus claim.
 using System;
 using System.Collections.Generic;

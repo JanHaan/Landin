@@ -1,4 +1,4 @@
-// R6.90 separately justified synthetic protocol, NOT an RP2040 emulator.
+// Derived driver's separately justified synthetic protocol, NOT an RP2040 emulator.
 // Literal register oracle; consumes neither generated sources nor metadata.
 using System;
 using System.Collections.Generic;

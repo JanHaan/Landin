@@ -12,7 +12,7 @@ LANDIN_GNAT_VERSION=16.1.0-1
 LANDIN_GPRBUILD_VERSION=26.0.0-1
 LANDIN_RELEASES=https://github.com/alire-project/GNAT-FSF-builds/releases/download
 #  The container recipe's Debian 13 (trixie-20260824) base image, by its
-#  multi-platform index digest; R4.40 aligns its clang-19/libc6-dev package set
+#  multi-platform index digest, which aligns its clang-19/libc6-dev package set
 #  with the native Debian stable gate.  check.py holds the recipe to it.
 #  Nothing else reads it.
 LANDIN_BASE_IMAGE=docker.io/library/debian@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1

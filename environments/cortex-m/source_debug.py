@@ -1,4 +1,4 @@
-"""R6.100 executable Cortex line/function debugger contract, on the Linux host."""
+"""Executable Cortex line/function debugger contract, on the Linux host."""
 import json
 from pathlib import Path
 import socket

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the pinned R6.80 projection; not a general CMSIS-SVD generator."""
+"""Reproduce the pinned device fixture projection; not a general CMSIS-SVD generator."""
 import argparse
 import hashlib
 import json
@@ -195,7 +195,7 @@ def main():
             dest.write_bytes(data)
     else:
         verify(HERE / 'generated', outputs)
-    print('R6.80 fixture projection verified: '+str(len(outputs))+' files')
+    print('device fixture projection verified: '+str(len(outputs))+' files')
 
 
 if __name__ == '__main__':

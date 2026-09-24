@@ -1,4 +1,4 @@
-/* R6.30 independent C/assembly control: cacheless ARMv6-M, no Landin code. */
+/* Memory-model independent C/assembly control: cacheless ARMv6-M, no Landin code. */
 typedef unsigned int u32;
 #define REG(a) (*(volatile u32 *)(a))
 volatile u32 result, fault_seen;

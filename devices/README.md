@@ -1,11 +1,10 @@
 # Checked-in device fixtures
 
-ROADMAP.md R6.80 owns this bounded fixture set and its completion gate. These
-are reproducibly generated ordinary Landin modules, not a general SVD importer
+This is a bounded fixture set. These are reproducibly generated ordinary Landin modules, not a general SVD importer
 or a supported RP2040 board port. The compiler consumes the checked-in `.ldn`
 files without Python, network access, package acquisition or generator tooling.
 
-R6.100's source/resource evidence uses these unchanged modules through the
+The freestanding source/resource evidence uses these unchanged modules through the
 complete derived driver. Source breakpoints can enter generated accessors;
 the line/function debugger exposes no device-variable display and performs no
 hidden register reads. Generator provenance and source snapshots remain off
@@ -95,7 +94,7 @@ unchanged; no width is inferred from an eight-bit data field. Errata E12 warns
 against inferring DMA progress from channel addresses (including ring cases);
 these consumers use TRANS_COUNT. E13's abort/completion limitation is not
 resolved by an interrupt or barrier; no abort convenience or complete recovery
-protocol is offered by these small consumers. R6.90's separate
+protocol is offered by these small consumers. The separate
 [complete driver](../compiler/tests/driver/DERIVATION.md) uses the unchanged
 public accessors under an explicitly different synthetic protocol.
 
@@ -151,8 +150,8 @@ inherited lanes in `run.py`. Five consumers run at the inherited six profiles
 `none/off`, `size/off`, `size/auto`, `speed/auto`, `none/all`, `speed/all`; the new lane records six QEMU sessions, 24 generated
 Renode runs, one independent C/assembly Renode control, seven precise source
 refusals and 168 fresh-directory ELF/object/assembly/linker/map/source-map
-comparisons. Exact accepted results belong to ROADMAP.md and the verified
-native bundle, not this interface guide.
+comparisons. Exact accepted results belonged to the verified native bundle of
+the retired acceptance, not this interface guide.
 
 The QEMU consumer cold-boots compiler-generated reset/vectors/linker output,
 checks initialized data and BSS, immutable flash, RAM-code copying, literal
@@ -196,7 +195,9 @@ member hashes, traces and assertions. Closure permits only the generated object,
 pinned `thumb/v6-m/nofp/libgcc.a` and applicable linker stubs. Undefined symbols,
 hosted startup/libc/heap dependencies fail. Optional panic maps stay off target;
 JSON provenance is never linked. Existing Renode process/lock cleanup remains
-mandatory. R6.100 owns complete firmware/stack measurement and source debugging;
-R6.90 owns the [complete driver derivation](../compiler/tests/driver/DERIVATION.md); R551-33 retains the general SVD generator,
-package acquisition and sandboxed generator orchestration; the broader standard
-library retains its own disposition. This guide creates no additional work owner.
+mandatory. Complete firmware/stack measurement and source debugging belong to
+the freestanding evidence lane, and the driver to its
+[derivation](../compiler/tests/driver/DERIVATION.md). A general SVD generator,
+package acquisition, sandboxed generator orchestration and the broader
+standard library are open work in `ROADMAP.md`. This guide creates no
+additional work owner.

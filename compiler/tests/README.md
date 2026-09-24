@@ -320,7 +320,7 @@ Cortex source debugging is a separate mandatory embedded lane under
 It uses `--debug=lines`, source/function/ordinary-frame assertions and fail-closed
 artifact selection, with no advertised variable/type interface. Complete-driver
 Renode execution, QEMU CPU/startup and independent exception/stack controls stay
-distinct. See the [embedded evidence guide](../../environments/cortex-m/README.md#freestanding-evidence-r6100)
+distinct. See the [embedded evidence guide](../../environments/cortex-m/README.md#freestanding-evidence)
 and [target contract](../../docs/targets.md#cortex-source-debugging).
 
 `python3 compiler/tests/test_native_report_identity.py --refine ABSOLUTE_PATH`
@@ -917,7 +917,7 @@ and matching-revision approval are documented in
 R6.20's `cortex ABI` compiler-host suite compares scalar, nested/variant,
 evidence/any and call-plan results with `cortex-m.contract`; it also checks
 real lowered source and target/budget/refusal boundaries. The independent
-[Cortex-M probes](../../environments/cortex-m/README.md#r620-layout-and-abi-evidence)
+[Cortex-M probes](../../environments/cortex-m/README.md#layout-and-abi-evidence)
 compare every original synthetic-32 golden with GCC measurements and run
 C/assembly ABI controls in QEMU on the supported native Linux host. The native
 acceptance documents job retains their evidence. These are executable ABI
@@ -967,7 +967,7 @@ profile, checks precise source refusals, and retains physical limits separately.
 `cortex-m/counterparts.json` pins exact 32-bit/architecture differences without
 editing the hosted originals. Independent numeric layout expectations stay
 literal, including pointer/slice carriers and nested variant placement.
-The [embedded guide](../../environments/cortex-m/README.md#r650-compiler-generated-execution)
+The [embedded guide](../../environments/cortex-m/README.md#compiler-generated-execution)
 describes generated execution, independent ABI/instruction controls, peripheral
 traces, helper provenance and the external startup/linker boundary. GDB observes
 machine instructions and frame records; this is not R6.100 Landin debugging.
@@ -979,7 +979,7 @@ machine functions and placement without enabling hosted machine semantics.
 suite exercises firmware request failures, conventions/conversions, naked body
 restrictions, placement conflicts and unsupported hosted assembly. Actual
 compiler-generated firmware and independent machine controls live in the
-[embedded execution lane](../../environments/cortex-m/README.md#r660-compiler-owned-firmware);
+[embedded execution lane](../../environments/cortex-m/README.md#compiler-owned-firmware);
 those QEMU/Renode results are not hosted fixture passes or source-debugging
 acceptance. Existing runtime/ABI fixtures and their Cortex dispositions remain
 unchanged.
@@ -988,7 +988,7 @@ D230's `positive/r670-scalar-assembly` pins the target-fixed syntax without
 enabling hosted assembly. `cortex ABI/scalar assembly IR` independently corrupts carrier,
 ordering, operation and target metadata. The machine-directive cases check
 source operands, registers, arity, naked restrictions and hosted refusals.
-The [freestanding library lane](../../environments/cortex-m/README.md#r670-freestanding-library-consumers)
+The [freestanding library lane](../../environments/cortex-m/README.md#freestanding-library-consumers)
 executes CPU, allocation, pool, vector and ordinary-slice DMA consumers through
 compiler-owned firmware. It retains the original shared fixture oracles and
 the reviewed raw-storage 32-bit counterpart. This is additional target evidence;

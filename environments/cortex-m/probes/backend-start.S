@@ -1,4 +1,4 @@
-/* External R6.50 test harness. These are not Landin startup, vector,
+/* External generated-code test harness. These are not Landin startup, vector,
  * interrupt or section capabilities. The tested entry is ordinary main. */
 .syntax unified
 .cpu cortex-m0

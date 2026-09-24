@@ -6,7 +6,7 @@
 #  GPRbuild's checksum-based minimum recompilation instead; it is feedback,
 #  never a substitute for the ordinary clean debug and release gates.
 #
-#  Two rules from R4.21.  One build per tag and mode at a time: an OS lock
+#  Two rules from a review repair.  One build per tag and mode at a time: an OS lock
 #  beside the build tree serialises concurrent runs, because two
 #  gprbuilds sharing one object directory corrupted each other's archive.
 #  A manifest is written only after both projects built, and a build tree

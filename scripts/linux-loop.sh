@@ -3,8 +3,8 @@
 #
 #  Builds the pinned linux/amd64 image and runs the ordinary build and test
 #  commands inside it, against a bind mount of this repository.  The result
-#  is convenience, not authority: ROADMAP.md R0.70 keeps native Linux
-#  x86-64 as the gate, and this runs amd64 userspace under Rosetta.
+#  is convenience, not authority: native Linux x86-64 stays the gate,
+#  and this runs amd64 userspace under Rosetta.
 #
 #  Usage: scripts/linux-loop.sh [command ...]
 #  With no command, it builds and runs the test program.

@@ -1,6 +1,6 @@
 # Development and validation environments
 
-`ROADMAP.md` R0.70 owns this document. Canonical hosting is GitHub; git.sr.ht
+Canonical hosting is GitHub; git.sr.ht
 is a mirror. The exact-revision native acceptance described below approved
 every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
 is what runs now, a smaller gate on Linux, and [`ROADMAP.md`](../ROADMAP.md)
@@ -24,7 +24,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 | environment | role | status |
 |---|---|---|
 | native macOS arm64 | compiler-host development and exact-revision Darwin acceptance | working |
-| Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the R5/R6 workflow | available |
+| Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
 | GitHub Actions | `gate.yml` runs the documents and the complete Linux debug corpus on every push; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
@@ -48,21 +48,21 @@ GitHub-mirror manifests are retired with the SourceHut gate, and
 retired earlier, in favor of explicit supplemental native Nix checks when the
 shell's inputs change.
 
-Native macOS arm64 is a *development* loop at R0. It becomes a validated
-target of its own at R5, with its own compiler build, platform tools and
+Native macOS arm64 began as a *development* loop and became a validated
+target of its own, with its own compiler build, platform tools and
 debugger gate; a result produced here is not Linux evidence, and a Linux
 container is never Darwin evidence.
 
-R5.10 adds `./scripts/macos.sh --output .scratch/macos-validation-1` to capture
+`./scripts/macos.sh --output .scratch/macos-validation-1` captures
 the native environment, assemble/link/run an arm64 smoke program, exercise
 LLDB, build and run compiler-host checks in both modes, and sample
 the inherited resource limits. The Apple tool policy, reproduction commands
 and the historical full-harness option are documented in
 [`environments/macos-arm64/README.md`](../environments/macos-arm64/README.md).
-This established the compiler host at R5.10; R5.30/R5.40 subsequently added
-Darwin lowering and source debugging. R5.51 selects compatible native policies
-with full release hosted coverage for routine changes and full release GDB/LLDB
-for debugger risk. Historical schema 3 remains both-mode milestone evidence.
+This established the compiler host; Darwin lowering and source debugging
+followed. The retired acceptance selected compatible native policies with full
+release hosted coverage for routine changes and full release GDB/LLDB for
+debugger risk. Historical schema 3 remains both-mode milestone evidence.
 
 QEMU full-system x86 is supplemental. It is not the daily loop and it is not
 the Linux gate.
@@ -82,12 +82,12 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild for this host
 ```
 
 On a Mac use `./scripts/dev-test.sh --host`, optionally with an exact
-`--suite` or `--case`. Every selected check must pass. R5.10's unfiltered
-missing-Linux-driver result is a historical environment observation, not a
+`--suite` or `--case`. Every selected check must pass. The first native Mac
+run's unfiltered missing-Linux-driver result is a historical environment observation, not a
 current success rule.
 
-Linux work during R5/R6 runs on the native Linux runner, using focused
-development slots or committed acceptance. The container commands below are
+Linux work during the macOS and Cortex-M work ran on the native Linux runner,
+using focused development slots or committed acceptance. The container commands below are
 retained for explicit environment troubleshooting; they are not part of the
 Mac development or delivery loop:
 
@@ -100,8 +100,8 @@ Artifact-writing checks need a guest filesystem with known name rules. The
 shared virtiofs mount cannot prove the host volume's rules for absent output
 names, so the collision guard can refuse distinct-looking output paths there.
 For runtime and quality checks, copy the sources and place the executable and
-its output directory on the container's own `/tmp` filesystem. R4.50's local
-evidence in `ROADMAP.md` records the same requirement. Building the bootstrap
+its output directory on the container's own `/tmp` filesystem. The baseline
+code generation work's local evidence met the same requirement. Building the bootstrap
 and comparing its recorded IR can still use the shared mount.
 
 For the edit/test loop, two developer wrappers retain checksum-safe staleness
@@ -133,7 +133,7 @@ and tags can run concurrently. Host cleanup waits for both modes; `clean.sh
 standard-library `fcntl` supplies these locks on the supported macOS and Linux
 hosts; the kernel releases them when the last using process exits.
 
-The R2.20 session profile had enough timestamps to set the priority: clean
+A session profile taken while aggregates and value layout were implemented had enough timestamps to set the priority: clean
 debug and release builds and whole-fixture runs occupied almost all measured
 time, while all six measured container lifecycle phases rounded to zero
 seconds and the complete one-shot startup stayed below one second. Keeping a
@@ -161,17 +161,17 @@ defect in one file and cost an investigation once already.
 `environments/linux-amd64/Containerfile` pins its base image by digest and
 verifies both Ada toolchain archives against the checksums in
 `environments/pins.sh` before unpacking either of them. It also installs the
-versioned Debian stable `clang-19` package beside `libc6-dev` for R4.40 header
+versioned Debian stable `clang-19` package beside `libc6-dev` for C header
 extraction and generated-adapter tests. The frontend is deliberately separate
 from the pinned GNAT that builds `refine`: Clang supplies an external JSON AST,
 not a product backend. Its package comes from the container's existing Debian
-channel rather than a third download authority. R4.40 refreshed that one base
-pin from Debian 12 to the official Debian 13 `trixie-20260824` image index so
+channel rather than a third download authority. The C boundary work refreshed
+that one base pin from Debian 12 to the official Debian 13 `trixie-20260824` image index so
 the local loop and the native `debian/stable` gate select the same Clang
 19.1.7 frontend and Debian 13 C-header baseline. GNAT and GPRbuild retain their
 existing versions and archive checksums.
 
-R4.60 adds GDB from that same Debian channel for `scripts/debug.sh`; the Linux
+GDB comes from that same Debian channel for `scripts/debug.sh`; the Linux
 nix shell provides GDB from its locked package set. The native gate runs the
 script in both compiler build modes. It checks source debugging of emitted
 programs, which is separate from debugging the Ada compiler itself.
@@ -194,7 +194,7 @@ one directory is a build that fails confusingly.
 `scripts/toolchain.sh` prints the host, the build mode and the exact compiler
 and builder versions, and `build.sh` and `test.sh` print it before doing
 anything. A captured log therefore names its own toolchain, which is what
-R0.20 and R0.70 require of recorded evidence.
+recorded evidence requires.
 
 ## Recorded results
 
@@ -261,7 +261,8 @@ never patched. That is the paragraph above read from the other side — the
 same sensitivity, met by the translation rather than by the toolchain — and
 it is why this shell is answered for on hardware.
 
-R1.80 needed one more thing of it, and only running programs found it. nixpkgs
+The first native Linux path needed one more thing of it, and only running
+programs found it. nixpkgs
 wraps a compiler under the names `gcc`, `cc`, `g++` and `cpp`, and prefixes a
 driver's name with a GNU triplet only when it is cross-compiling; `refine`
 names its driver by triplet, so it reached the pinned archive's own
@@ -283,7 +284,7 @@ reported `cannot find Scrt1.o` and the reason any of this was looked at.
 That is a result for this shell and for nothing else: the table above is
 still what the three environments say.
 
-R4.30's static-library fixture also needs nixpkgs' separate static glibc
+The static-library directive's fixture also needs nixpkgs' separate static glibc
 output. The Linux shell includes it as a library input so an explicit
 `linker.library("m")` request can find `libm.a`. The shared glibc output
 precedes the archive output so the driver's own `-lc` stays dynamic; the
@@ -306,11 +307,11 @@ that depends on the operating system, the C library, the linker and the
 real evidence, and it is why the Linux checksums in
 `compiler/ada/TOOLCHAIN.md` are now verified rather than transcribed. What it
 does not do is execute x86-64 instructions on x86-64 hardware — Rosetta
-translates them — so since R1.80 produces runnable executables, instruction-level and
-timing-sensitive results from this loop are not authority. That distinction is
-why the roadmap named the native gate before there was any code to run in it,
-and it is why the gate now exists: from R1.80 onwards, `refine` emits
-instructions. The original SourceHut gate ran them on their target hardware,
+translates them — so now that `refine` produces runnable executables,
+instruction-level and timing-sensitive results from this loop are not
+authority. That distinction is why the roadmap named the native gate before
+there was any code to run in it, and it is why the gate now exists: `refine`
+emits instructions. The original SourceHut gate ran them on their target hardware,
 the native acceptance did so through 0.2.0, and the Linux gate does now.
 
 Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions runs the
@@ -318,78 +319,79 @@ gate, publishes the pages and checks host-independent emission; `scripts/ci/`
 was removed with the acceptance, and no revision is accepted. The underlying
 compiler and test commands remain ordinary repository scripts.
 
-R5.40 adds native LLDB acceptance through `scripts/debug.sh --target=darwin-arm64`
-and the committed Mac policy. It validates emitted Landin programs with the
-pinned Apple debugger, dsymutil and dwarfdump, retaining dSYM/UUID and source-map
-matching evidence. The shared DWARF change selects routine Linux release GDB;
-R5.50 adds full hosted parity and its dual-native milestone matrix in both
-compiler modes. See [the native parity guide](../compiler/tests/darwin/README.md)
+Native LLDB runs through `scripts/debug.sh --target=darwin-arm64` and the
+committed Mac policy. It validates emitted Landin programs with the pinned
+Apple debugger, dsymutil and dwarfdump, retaining dSYM/UUID and source-map
+matching evidence. The shared DWARF change selected routine Linux release GDB,
+and full hosted parity ran its dual-native milestone matrix in both compiler
+modes. See [the native parity guide](../compiler/tests/darwin/README.md)
 for the complete coverage and explicit physical-image limitation.
 
 ## Embedded environment probes
 
-R6.10 selects native Debian 13 x86-64 for the pinned QEMU and Renode
-[execution profile](../environments/cortex-m/README.md). The native Linux
-acceptance documents job executes and retains these small C/assembly probes
+Native Debian 13 x86-64 is the host for the pinned QEMU and Renode
+[execution profile](../environments/cortex-m/README.md). The retired native
+Linux acceptance's documents job executed and retained these small C/assembly probes
 from its exact archive. The Mac continues native compiler-host and Darwin
 workload/LLDB validation; it does not run Linux containers for embedded tests.
 QEMU owns CPU/startup evidence and Renode owns the explicit synthetic
 peripheral lane. Neither is physical hardware fidelity or Landin backend proof.
 
-R6.20 extends the mandatory QEMU lane with independently compiled C layouts
+The mandatory QEMU lane also runs with independently compiled C layouts
 and C/assembly ABI witnesses, compared with the compiler's Cortex-M planner
-and original synthetic-32 goldens. The existing verified export retains all
-new artifacts beside R6.10's CPU and peripheral evidence. No embedded tools
+and original synthetic-32 goldens. The verified export retains those
+artifacts beside the CPU and peripheral evidence. No embedded tools
 run on the Mac; both native hosted acceptance policies retain their own work.
 
-R6.30 adds M0 scalar atomic, barrier and nested interrupt controls and bounded
-memory/cache models to this same Linux path. Native hosted fixtures execute
+M0 scalar atomic, barrier and nested interrupt controls and bounded
+memory/cache models run on this same Linux path. Native hosted fixtures execute
 Landin atomics, generic evidence calls, SC fences and an escaping ordinary DMA
 slice on each real host. Cacheless emulator results never stand in for cached
 DMA maintenance. The containing dual-native archive binds all three evidence
 classes; the memory [probe guide](../environments/cortex-m/README.md) records limits.
 
-R6.40 adds compiler-generated packed image execution on both native hosts and
+Compiler-generated packed image execution runs on both native hosts and
 the Linux/Renode transport lane, including unnamed-encoding traps at all six
 optimization/specialization profiles. Independent M0 C controls and literal
 access traces remain separate from native Landin execution. The mandatory
 documents job builds the archived compiler and exports these new lanes beside
-all previous embedded evidence; it does not imply a Cortex-M compiler backend.
+all previous embedded evidence; that lane on its own is not a Cortex-M
+compiler backend.
 
-R6.50 extends the same pinned tool and evidence path with compiler-generated
+The same pinned tool and evidence path carries compiler-generated
 Cortex-M0 execution of the inventoried shared runtime corpus and direct
 Renode packed/byte/ordinary-slice DMA transactions. The external startup and
 linker test harness does not enable Landin firmware entry or vectors. The
 export retains objects, ELF/map/disassembly, literal ABI and device oracles,
 helper identities and bounded image/stack observations; complete measured
-firmware and Landin source debugging remain R6.100. Native GDB/LLDB coverage
-still checks each hosted backend at the identical accepted revision.
+firmware and Landin source debugging belong to the freestanding evidence lane.
+Native GDB/LLDB coverage checks each hosted backend separately.
 
 
-R6.60's compiler-owned Cortex firmware lane runs only in the existing native
+The compiler-owned Cortex firmware lane runs only in the existing native
 Linux embedded environment. It extends the same pinned tool inventory and
 acceptance export with generated startup/vector/linker inputs and fresh-image
 comparisons. The external backend harness, hosted Renode transport and
 independent C/assembly probes remain separate evidence. See the
-[firmware execution contract](../environments/cortex-m/README.md#r660-compiler-owned-firmware).
+[firmware execution contract](../environments/cortex-m/README.md#compiler-owned-firmware).
 The Mac remains the native compiler-host/Darwin/LLDB lane; no local Linux
 container or Nix CI path is introduced.
 
-R6.80's generated-device lane is also mandatory in the native Linux documents
-job, after the inherited R6.10–R6.70 probes. It exports separate `devices`
+The generated-device lane is also mandatory in the native Linux embedded
+entry, after the inherited probes. It exports separate `devices`
 artifacts; vendor-input and regeneration checks run offline on both hosts.
 The selected vendor is provenance, not a replacement QEMU board.
 
-R6.90 appends the complete [derived driver](../compiler/tests/driver/DERIVATION.md)
+The complete [derived driver](../compiler/tests/driver/DERIVATION.md) is appended
 to mandatory native Linux embedded execution. Its QEMU boot, separate Renode
 protocol model and independent layout control retain their distinct evidence
-roles. Native GDB/LLDB routine risk coverage validates the checking and linker
-repairs; full Cortex source debugging and measured stack closure remain R6.100.
+roles. Native GDB/LLDB routine risk coverage validated the checking and linker
+repairs it needed.
 
-R6.100's mandatory `evidence.py` lane adds actual Cortex line/function GDB
-sessions and complete-application resource scenarios to that Linux documents
-job. It preserves the fixed board map and separate CPU/peripheral/control
+The mandatory `evidence.py` lane adds actual Cortex line/function GDB
+sessions and complete-application resource scenarios to that Linux embedded
+entry. It preserves the fixed board map and separate CPU/peripheral/control
 identities, and recursively exports source/debug matching, ELF load accounting,
 SP/paint/frame observations and bounded results. The dual-native milestone
 policies retain both compiler modes and native GDB/LLDB; no Cortex debugger
-session replaces a native one. See the [evidence contract](../environments/cortex-m/README.md#freestanding-evidence-r6100).
+session replaces a native one. See the [evidence contract](../environments/cortex-m/README.md#freestanding-evidence).

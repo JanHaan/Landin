@@ -1,11 +1,10 @@
 # Cortex-M execution profile
 
-ROADMAP.md owns selection, implementation and completion evidence. R6.10-R6.40
-retain their independent C/assembly, memory-model and hosted transport controls.
-R6.50 adds compiler-generated ARMv6-M execution and direct synthetic peripheral
-access. R6.60 adds the separate compiler-owned startup and firmware-linking lane.
-R6.70 adds rooted `core/mem`, `core/vec`, `core/pool`
-and `core/cpu`/`core/panic` consumers through that compiler-owned firmware path.
+The profile keeps independent C/assembly, memory-model and hosted transport
+controls beside compiler-generated ARMv6-M execution with direct synthetic
+peripheral access. A separate lane runs compiler-owned startup and firmware
+linking, and rooted `core/mem`, `core/vec`, `core/pool`
+and `core/cpu`/`core/panic` consumers run through that compiler-owned firmware path.
 
 ## Selected lanes and pins
 
@@ -30,11 +29,11 @@ and retains that inventory. Debian 13 supplies the base libc and Python;
 this is a supported host profile, not a hermetic operating-system image.
 
 These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
-R6.20 separately selects the internal Landin transport described in the
-[target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
-The R6.50 assembly lane retains external startup/linking test support. The
-R6.60 firmware lane uses compiler-owned reset, vectors and linking. The general
-C source surface remains disabled.
+The internal Landin transport is selected separately, as the
+[target guide](../../docs/targets.md#cortex-m0-layout-and-abi-planning) describes.
+The compiler-generated assembly lane retains external startup/linking test
+support. The firmware lane uses compiler-owned reset, vectors and linking. The
+general C source surface remains disabled.
 
 ## Memory and device map
 
@@ -67,7 +66,7 @@ identifies the micro:bit's M0 and Nordic devices. Selection also inspects the
 and runs the controls below. Device presence does not prove the prototype's
 behavior: Nordic GPIO/UART addresses differ, clock registers include stubs,
 and this is not a prototype DMA model. QEMU retains the mandatory CPU/startup
-role and R6.90's QEMU obligation is unchanged.
+role and the derived driver's QEMU obligation is unchanged.
 
 Renode's [official documentation](https://renode.readthedocs.io/en/latest/)
 and [peripheral modeling guide](https://renode.readthedocs.io/en/latest/advanced/writing-peripherals.html)
@@ -93,21 +92,21 @@ UART reception: this control proves no baud or idle-line behavior.
 
 ## Executable routes and limits
 
-| Prototype pressure | Route and current evidence | Limit / semantic owner |
+| Prototype pressure | Route and current evidence | Limit / where the language covers it |
 |---|---|---|
-| Reset, zeroed static storage, vector table and kept handlers | `start.S`, `memory.ld`, QEMU GDB initial MSP/PC/vector assertions, step, reset and second boot | handwritten environment startup; Landin sections/keep/entry R6.60 |
-| Traps, exceptions, timer and wait-for-interrupt | `cpu.c`: SVC, PendSV, SysTick/WFI, IRQ0; `fault_probe` UDF reaches HardFault with IPSR 3 | no cycle timing, every fault class or general priority/nesting proof; R6.50/R6.60 |
-| Debugger control | QEMU GDB breakpoint, step, memory/register inspection, resume, reset, rerun; exact log assertions | C/assembly debug only; Landin source debug/stack evidence R6.100 |
-| GPIO whole images, indexed packed fields, AF selection, reserved bits | `peripheral.c`: explicit mask/shift RMW, retained high bits, AF image, set/reset; model input injection | stored image behavior, not electrical pins/pull/speed/alternate routing; packed-language legality R6.40 |
+| Reset, zeroed static storage, vector table and kept handlers | `start.S`, `memory.ld`, QEMU GDB initial MSP/PC/vector assertions, step, reset and second boot | handwritten environment startup; Landin sections/keep/entry are compiler-owned firmware |
+| Traps, exceptions, timer and wait-for-interrupt | `cpu.c`: SVC, PendSV, SysTick/WFI, IRQ0; `fault_probe` UDF reaches HardFault with IPSR 3 | no cycle timing, every fault class or general priority/nesting proof; generated code and firmware lanes |
+| Debugger control | QEMU GDB breakpoint, step, memory/register inspection, resume, reset, rerun; exact log assertions | C/assembly debug only; Landin source debug/stack evidence under Freestanding evidence |
+| GPIO whole images, indexed packed fields, AF selection, reserved bits | `peripheral.c`: explicit mask/shift RMW, retained high bits, AF image, set/reset; model input injection | stored image behavior, not electrical pins/pull/speed/alternate routing; packed-language legality is D228's |
 | UART configuration and bytes | QEMU exact TX bytes; stock UART-to-DMA control; synthetic `Feed` writes its DR and transfers one supplied byte | synthetic divisor is storage only; no serial line, baud accuracy, FIFO overrun or framing/parity model |
-| DMA descriptor, escaping static buffer, enable handoff | `peripheral.c` supplies a static ordinary byte array and descriptor; feed while disabled leaves it untouched | C pointer handoff only; Landin origin refusals and complete driver R6.90 |
+| DMA descriptor, escaping static buffer, enable handoff | `peripheral.c` supplies a static ordinary byte array and descriptor; feed while disabled leaves it untouched | C pointer handoff only; Landin origin refusals and the complete derived driver |
 | DMA count, increment, circular wrap and CPU visibility | five ordered feeds into four bytes, checked halfword count 4/2/4/3, wrap replaces first byte, CPU reads the transferred bytes | model serializes byte copy before count/status; no asynchronous bus races or cache-coherence proof |
 | Completion, half-transfer and transfer error | model status `0x20/40/80`, enables in config bits 1/2/3, NVIC IRQ0, firmware records three IRQs and clears status | synthetic status convention follows sketch stream 5; not stock STM32 status layout |
-| Critical section and event collection | PRIMASK masks delivery while DMA updates RAM/count; restoring it permits pending completion handler | proves this model's mask/delivery behavior, not Landin happens-before; R6.30 |
-| One-clears and access modes | firmware clears pending bits; `model-checks.py` proves writing zero preserves error, one clears it, read-only/write-only/unknown accesses refuse | other access modes are absent; normative register rules remain R6.40/R6.80 |
-| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `bad_baud` and recovery execute in R6.90 over this lane |
-| Ordinary-slice read, head/tail and short output | current lane exposes count and circular RAM for the complete derived driver | R6.90 must execute its `available`/`read` cases and failure oracles; this environment is not that driver |
-| SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | R6.40 packed encodings; R6.70 `noreturn`; R6.80 generated `.ldn` fixtures; general generator stays with companion tooling |
+| Critical section and event collection | PRIMASK masks delivery while DMA updates RAM/count; restoring it permits pending completion handler | proves this model's mask/delivery behavior, not Landin happens-before; D227 |
+| One-clears and access modes | firmware clears pending bits; `model-checks.py` proves writing zero preserves error, one clears it, read-only/write-only/unknown accesses refuse | other access modes are absent; normative register rules are D228's and the generated device fixtures' |
+| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `bad_baud` and recovery execute in the derived driver over this lane |
+| Ordinary-slice read, head/tail and short output | current lane exposes count and circular RAM for the complete derived driver | the derived driver executes its `available`/`read` cases and failure oracles; this environment is not that driver |
+| SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | D228 packed encodings; D231 `noreturn`; generated `.ldn` device fixtures; general generator stays with companion tooling |
 
 Feeds happen while virtual execution is paused, followed by a fixed 1 ms
 virtual run and a checked firmware stage. No host sleep decides firmware
@@ -116,7 +115,7 @@ The [Renode time framework](https://renode.readthedocs.io/en/latest/advanced/tim
 is execution scheduling, not physical bus timing. The model's transfer order
 is an explicit harness assumption. The ordinary C buffer is reloaded across
 opaque memory-clobber barriers; that is no definition of Landin DMA visibility.
-R6.30 must define races, tearing, atomics, compiler/hardware barriers and cache
+D227 defines races, tearing, atomics, compiler/hardware barriers and cache
 maintenance, with models for behaviors this cacheless M0 profile cannot expose.
 Supplemental hardware can test actual bus/interrupt timing, electrical behavior
 and a real device's DMA visibility; it cannot replace the emulator gates or
@@ -156,23 +155,21 @@ logs as well as successes. Evidence includes exact commands, version replies,
 installed file hashes, input hashes, linker maps, ELF headers/attributes, sizes,
 ELFs, generated GDB/Monitor scripts, logs, UART bytes and `result.json`.
 
-The Linux acceptance documents job executes both the failure controls and
-these live probes from the same committed archive as every native job.
-`job.py` copies its `cortex-m` evidence into the exported, hash-verified bundle.
-Thus the annotated dual-native approval binds the environment's actual run,
-not only this document or a development transcript. Darwin retains native
-compiler/workload/LLDB evidence and does not impersonate this probe host.
-R6.10 selects routine scope with debugger coverage because it adds debugger
-control checks and changes acceptance commands/evidence retention. This is
-not the full R6.100 milestone matrix. Nix CI and scheduler/cache/resume work
-retain R5.51's dispositions.
+The retired Linux acceptance's documents job executed both the failure
+controls and these live probes from the same committed archive as every native
+job, and `job.py` copied its `cortex-m` evidence into the exported,
+hash-verified bundle. Thus the annotated dual-native approval bound the
+environment's actual run, not only this document or a development transcript.
+Darwin retains native compiler/workload/LLDB evidence and does not impersonate
+this probe host. The environment's debugger control checks ran at routine
+scope with debugger coverage, which is not the full milestone matrix.
 
 The retained development result is indexed by [validation.json](validation.json).
 Its successful probe images contain 643 and 836 text bytes respectively, no
 initialized data and 24 BSS bytes each. These are environment-control sizes,
 not measurements of the future Landin driver or a stack-usage guarantee.
 
-## R6.20 layout and ABI evidence
+## Layout and ABI evidence
 
 The same mandatory `run.py` now also builds `probes/abi.c` and `abi.S` with
 the original pinned flags, startup and memory limits, then executes them in
@@ -222,7 +219,7 @@ and a target-overflowing argument without materializing it. Source checks
 cover pointer-sized integer/address overflow and the array byte-extent boundary.
 The Python controls refuse duplicate/missing/invalid contract rows, synthetic
 mismatches, missing markers, subprocess errors and timeouts. They preserve the
-R6.10 lock cleanup refusal for linked or nonempty replacements.
+original lock cleanup refusal for linked or nonempty replacements.
 
 Every subprocess retains the original deadlines (GDB 20 seconds, build/tools
 30, debugger readiness three) and owned process-group cleanup. The final
@@ -230,20 +227,20 @@ exact-archive Linux documents job repeats all lanes and retains tool/input
 hashes alongside the new ABI artifacts. Its ordinary dual-native approval binds
 these results to the same revision as the hosted checks. Development results
 are indexed separately in `abi-validation.json`; `validation.json` keeps its
-historical R6.10 meaning.
+historical meaning as the CPU and peripheral environment's record.
 
 These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
-physical hardware behavior nor a Cortex-M compiler backend. R6.50 must consume
-the plans with native selection and frame code; R6.60 must implement image
-placement/startup; R6.100 establishes the bounded Landin debugging and stack evidence below.
-R6.30/R6.40 retain concurrency and invalid packed encodings. Existing resource,
-evidence, scheduling, Nix and general-generator dispositions are unchanged.
+physical hardware behavior nor a Cortex-M compiler backend. The backend
+consumes the plans with native selection and frame code, compiler-owned
+firmware implements image placement and startup, and the freestanding evidence
+below establishes the bounded Landin debugging and stack evidence. D227 and
+D228 cover concurrency and invalid packed encodings.
 
-## R6.30 memory evidence
+## Memory evidence
 
 The mandatory `run.py` path additionally executes `memory.py`, without changing
-R6.10/R6.20's CPU, peripheral, independent ABI or lock-cleanup obligations.
+the CPU, peripheral, independent ABI or lock-cleanup obligations above.
 `probes/memory.c` executes GCC's scalar 8/16/32-bit atomic loads/stores, DMB,
 DSB and ISB, nested PRIMASK save/restore, pending interrupt exclusion and
 ordinary RAM publication in both directions across handler delivery. QEMU/GDB
@@ -280,10 +277,10 @@ directory. Native Linux and Darwin separately execute the Landin scalar and
 pthread ABI fixtures over their selected optimization profiles. Those results
 are compiler-generated hosted execution, not embedded or model evidence.
 
-## R6.40 image and access controls in development
+## Image and access controls in development
 
 The mandatory `run.py` path executes `packed.py` and `packed_native.py`. It preserves every
-R6.10/R6.20/R6.30 lane and the verified empty Renode lock cleanup. The new
+earlier lane and the verified empty Renode lock cleanup. The new
 `EncodingPeripheral.cs` is a separate, synthetic peripheral at `0x40030000`:
 
 | offset | access | explicit device contract |
@@ -361,11 +358,11 @@ reserved-bit write policy. The
 [Arm Cortex-M0 user guide](https://documentation-service.arm.com/static/5ea6ce5e9931941038def8c1)
 requires aligned accesses for this core. These documents were consulted on
 2026-09-16; they inform the explicit control contracts, not an assertion that
-this synthetic map describes vendor hardware. R6.80 retains generated-device
-fixture provenance, and general SVD tooling remains outside this item.
+this synthetic map describes vendor hardware. The generated device fixtures
+keep their own provenance, and general SVD tooling remains companion-tool work.
 
 
-## R6.50 compiler-generated execution
+## Compiler-generated execution
 
 `run.py` preserves every earlier lane, then requires `backend_acceptance.py`.
 The same installed tool inventory is verified before and after all lanes.
@@ -386,7 +383,7 @@ when it fits, it must execute successfully. Only a demonstrated oversized
 frame/static extent or the selected linker's flash/RAM overflow can produce a
 limit record. Missing helpers, bad instructions, wrong results and timeouts
 cannot. The original multi-gigabyte image and oversized hosted stress programs
-retain their original oracles and R551-07/R6.50/R6.60 dispositions. Their
+retain their original oracles and recorded image-limit dispositions. Their
 unchanged hosted execution does not become a Cortex execution claim.
 
 `backend-start.S` and `backend-memory.ld` are small external test support:
@@ -397,7 +394,7 @@ not reset or interrupt entries. The map remains 32 KiB flash, 16 KiB RAM and
 recorded as a profile limit. Returned SP, terminated r11 chain, callee-saved
 sentinels and a bottom watermark are asserted. The lowest changed watermark
 word is retained as an observation, explicitly not a proved stack bound.
-R6.100 records measured stack/firmware and source-debugging acceptance below.
+Freestanding evidence below records measured stack/firmware and source debugging.
 
 QEMU uses exactly `microbit`, single-threaded TCG and a loopback-only GDB port.
 Each program has a bounded startup wait and a 20-second debugger deadline;
@@ -430,7 +427,7 @@ profiles. The standalone encoding control remains independent assembly.
 PrototypePeripheral's added count-width telemetry leaves its earlier C control
 and interrupt behavior intact. Renode remains a synthetic device lane and its
 verified empty lock file is removed before evidence inventory/export. The
-R6.40 hosted Landin transport remains separately identified and required.
+hosted Landin packed-image transport remains separately identified and required.
 
 For focused development on the supported native Linux host:
 
@@ -445,13 +442,13 @@ acceptance ran the complete mandatory path and exported
 `artifacts/cortex-m/backend` with all prior evidence; nothing runs it now, and
 [`ROADMAP.md`](../../ROADMAP.md) schedules these lanes into the gate. The [target guide](../../docs/targets.md#cortex-m0-assembly-implementation)
 records instruction, allocation, ABI, runtime-helper and memory decisions.
-R6.60 owns language startup/linking/sections/interrupt/naked/inline-assembly
-surfaces; R6.70 freestanding core/noreturn; R6.80 checked-in device fixtures;
-R6.90 the complete driver; R6.100 the milestone. General SVD generation stays
+Language startup/linking/sections/interrupt/naked/inline-assembly surfaces,
+the freestanding core and `noreturn`, the checked-in device fixtures and the
+complete driver each have their own lane below. General SVD generation stays
 with its companion tool. No scheduler, interrupt-masking abstraction, C source
 expansion or new DMA ownership model is introduced.
 
-## R6.60 compiler-owned firmware
+## Compiler-owned firmware
 
 `firmware.py` is a mandatory addition to `run.py` and its existing evidence
 export, separate from every earlier lane. It invokes the compiler with
@@ -528,21 +525,21 @@ and GNU binutils' [section flags](https://sourceware.org/binutils/docs/as/Sectio
 and [Arm veneers](https://sourceware.org/binutils/docs/ld/ARM.html).
 Executable controls establish behavior on the pinned microbit/ARMv6-M profile;
 they do not generalize to another core, board, real peripheral or timing model.
-R6.70 owns core/CPU-library packaging and noreturn, R6.80 generated fixtures,
-R6.90 the complete driver, and R6.100 source debugging and complete measured
-stack/firmware evidence. General SVD generation remains companion-tool work.
+Core/CPU-library packaging and `noreturn`, the generated fixtures, the complete
+driver, source debugging and complete measured stack/firmware evidence have
+their own lanes below. General SVD generation remains companion-tool work.
 
-## R6.70 freestanding library consumers
+## Freestanding library consumers
 
 `freestanding.py` compiles rooted ordinary modules through the same generated
 reset/vector/linker path. It is mandatory after `firmware.py` in `run.py`, with
 its own `artifacts/cortex-m/freestanding` export directory. The old 533-fixture
-backend corpus and R6.60's 37 QEMU/24 Renode sessions and 270 comparisons are
+backend corpus and the firmware lane's 37 QEMU/24 Renode sessions and 270 comparisons are
 unchanged. The shared inventory adds two explicitly restricted hosted C peers
 for D231/D232; neither replaces an inherited case. The declared additional lane
 has eleven consumers at six profiles: 198 QEMU sessions, six Renode runs and 336
 fresh-directory comparisons. Panic consumers additionally compare optional
-source-map bytes. ROADMAP.md distinguishes focused runs from complete acceptance.
+source-map bytes. A focused run is development feedback, not complete acceptance.
 
 | Consumer | Independent observation |
 |---|---|
@@ -554,7 +551,7 @@ source-map bytes. ROADMAP.md distinguishes focused runs from complete acceptance
 | `core-zero.ldn` | Zero-sized vector elements retain maximum u32 `usize` capacity, one logical element and zero arena byte consumption; release follows the existing provider contract. |
 | `core-vec.ldn` | Successful reserve/push followed by injected exhaustion preserves capacity, length and values. Byte-count overflow refuses before allocation and release remains idempotent. |
 | Inherited `core-mem-allocators`, `core-mem-arena-boundaries`, `core-mem-raw-storage` | Original status-42 oracles run from compiler startup; only the already-reviewed Cortex raw-storage counterpart supplies its 32-bit expected pointer extent. The complete original corpus inventory is checked before using these sources. |
-| Library-derived DMA | The unchanged R6.60 peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
+| Library-derived DMA | The unchanged firmware-lane peripheral oracle checks independent register state, exact halfword count accesses, handler delivery, half/completion states, externally written ordinary storage and subsequent ordinary reads. Only CPU/barrier calls are replaced with the new library surface. |
 
 The runner copies only its declared `core/mem`, `core/vec`, `core/pool` and
 `core/cpu`/`core/panic` import closure. Maps must list the generated object and pinned
@@ -579,9 +576,9 @@ AAELF32 and GNU contracts. Actual controls run on ARMv6-M. WFI is not a
 completion proof and masking does not stop DMA. The selected profile remains
 32 KiB flash/16 KiB RAM/4 KiB reserved stack. Stack paint measures observed
 writes only. [The core guide](../../core/README.md) documents the public surface;
-ROADMAP.md owns exact-revision completion and the successor measurement gates.
+`ROADMAP.md` owns the successor measurement gates.
 
-## R6.80 checked-in generated devices
+## Checked-in generated devices
 
 [The device guide](../../devices/README.md) records pinned RP2040 provenance,
 manual corrections, regeneration, public interfaces and unsupported metadata.
@@ -604,10 +601,10 @@ traces, FIFO reads, commands and bounded interrupt/DMA handoff. Its feeds and
 half notification are explicit premises; no circular-buffer or physical timing
 claim follows. Linker closure, stack paint and optional panic maps are retained
 with the fixed map and runtime contract. The new runner uses unchanged process
-and Renode lock cleanup. R6.90 owns the complete derived driver; R6.100 retains
-source debugging, full measurements and milestone closure.
+and Renode lock cleanup. The complete derived driver, source debugging and full
+measurements have their own lanes below.
 
-## Complete derived driver (R6.90)
+## Complete derived driver
 
 [`compiler/tests/driver/DERIVATION.md`](../../compiler/tests/driver/DERIVATION.md)
 is the subordinate declaration/finding map and public driver contract.
@@ -619,7 +616,7 @@ flash and application RAM-code copying. Renode's separate `driver.repl` and
 DMA consumption, loss detection, stop and recovery. Existing models and
 C/assembly/hosted transport controls retain their separate identities.
 
-The model uses unchanged R6.80 RP2040 images/accessors at explicit synthetic
+The model uses unchanged generated RP2040 images/accessors at explicit synthetic
 bases. Its finite, non-reloading count and EN-clear/BUSY-clear drain protocol
 are not RP2040 hardware claims. Masked/coalesced notifications cannot hide
 producer progress. More-than-capacity unread data fails with sticky `overrun`
@@ -627,7 +624,7 @@ and explicit discard/restart. Device faults require external maintenance; an
 eight-poll stop timeout preserves the storage lifetime obligation. The
 application executes echo/GPIO commands, periodic partial-data polling, overrun
 recovery and observable terminal policy. Detailed premises and limitations are
-in the derivation; ROADMAP.md alone owns completion and successor disposition.
+in the derivation.
 
 Evidence under `artifacts/cortex-m/driver` retains compiler/tool identities,
 source roots, assertions, timeouts, QEMU/GDB and Renode scripts, startup/linker
@@ -645,10 +642,10 @@ python3 environments/cortex-m/driver.py --refine PATH/TO/refine \
 ```
 
 Use `--all-profiles` for this complete lane. Normal acceptance invokes it
-through `run.py`, preserving every mandatory R6.10–R6.80 lane. Source refusal
+through `run.py`, preserving every earlier mandatory lane. Source refusal
 checks are also safe compiler-host feedback via `compiler/tests/driver/check_sources.py`.
 
-## Freestanding evidence (R6.100)
+## Freestanding evidence
 
 The mandatory `run.py` entry invokes `evidence.py` after every inherited lane.
 It builds the complete application, protocol client and layout control with
@@ -708,6 +705,5 @@ records, closure and resource JSON, source-selection failures, measured SP/frame
 snapshots and repeat-emission comparisons. Debug CUs retain their compilation
 directory, so deterministic debug comparisons repeat within that directory;
 relocation does not imply identical source identity. Acceptance binds the
-entire artifact tree to its committed archive. ROADMAP.md alone owns completion,
-actual milestone measurements, limitations and successor handoffs. Physical
-board testing remains supplemental and is not claimed by these emulator lanes.
+entire artifact tree to its committed archive. Physical board testing remains
+supplemental and is not claimed by these emulator lanes.

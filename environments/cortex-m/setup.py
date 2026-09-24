@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the pinned R6.10 tools privately on Debian 13 x86-64 (no sudo)."""
+"""Install the pinned Cortex-M tools privately on Debian 13 x86-64 (no sudo)."""
 import argparse
 import hashlib
 import json

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R6.70 library consumers through compiler-owned startup and linking."""
+"""Freestanding library consumers through compiler-owned startup and linking."""
 import argparse
 import json
 from pathlib import Path

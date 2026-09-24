@@ -1,6 +1,6 @@
 # Development and validation
 
-`ROADMAP.md` owns this process and its remaining work. The loop below is the
+`ROADMAP.md` owns the work left on this process. The loop below is the
 one that runs now. Everything after it describes the exact-revision native
 acceptance that approved every revision through 0.2.0 and was retired with
 SourceHut: nothing submits it, `scripts/ci/` is gone, and no revision is
@@ -27,7 +27,7 @@ changes still receive the full `check.py`.
 
 ## Historical: choosing acceptance scope
 
-R5.20 recorded the maintainer's decision for the retired acceptance: full
+The maintainer's decision for the retired acceptance was: full
 gates only at major milestones, Linux work on native Linux, debugger checks
 only for substantial regression risk, and Nix CI deferred. The rest of this
 section is that policy as it stood at 0.2.0.
@@ -43,11 +43,12 @@ section is that policy as it stood at 0.2.0.
 | major phase/parity milestone | full Linux suite/quality/GDB and Darwin host/source/runtime/ABI/bindings/LLDB in both compiler modes, plus documents/tooling | exact-commit milestone approval |
 | publication | verified export, annotated approval, atomic main/tag promotion, guarded Pages rendering | delivery of the approved revision |
 
-Do not run Linux containers or Linux workload matrices on the Mac during R5/R6
+Do not run Linux containers or Linux workload matrices on the Mac during
 development. In-process compiler units may still inspect target-specific data;
 that is host-compiler coverage, not Linux execution. `--host` excludes the two
 native target-workload cases and requires every remaining case to pass. The
-IR comparison that exposed R5.10's Ada argument-order defect remains included.
+IR comparison that exposed the first native Mac run's Ada argument-order defect
+remains included.
 
 Choose the smallest test that can expose the changed behavior first. When it
 passes, broaden only for another affected subsystem or a remaining concern.
@@ -62,78 +63,38 @@ Debugger risk means changed debug metadata, source/variable locations,
 unwind/frame conventions, debugger transport, debugger checks, or acceptance
 selection/verification of debugger evidence. Record the
 reason for enabling it. A status-page edit or an unrelated tool change is not
-a reason to run debugger matrices. Historically, the R5.10 ordering repair preserves the existing Linux IR
-and copy behavior, changes no debug encoding/location/unwind code, and passed
-the unchanged IR golden and traversal execution checks in both compiler modes;
-that delivery used routine scope without GDB. R5.51 changes debugger selection
-and verification, so its closure uses routine scope with full release GDB/LLDB.
+a reason to run debugger matrices. An Ada evaluation-order repair that changed
+no debug encoding, location or unwind code and passed the unchanged IR golden
+used routine scope without GDB; a change to debugger selection and
+verification used routine scope with full release GDB and LLDB.
 
-R6.70's noreturn/panic control flow, frames and source-site identity
-require native debugger-risk coverage at closure. Focused CPU/library firmware
-development is recorded separately and cannot approve the still-active item.
+The judgments made under these definitions ran as follows. Noreturn and panic
+control flow, frames and source-site identity needed debugger-risk coverage,
+and so did the generated device fixtures' debugger-controlled boot and stack
+assertions. A new debugger-visible type — the several-atom pointer union, with
+GDB and LLDB presentation checks — selected routine scope with debugger
+coverage; it closed no phase and added no target, ABI convention or
+instruction selection, so milestone scope was not warranted. Committing a
+check that reads and verifies debug metadata on all three targets forced
+debugger coverage even though no emission changed, because selecting or
+verifying debugger evidence is itself debugger risk; the size of the run did
+not make it a milestone. The derived prototype coverage register changed no
+debug metadata and selected or verified no debugger evidence, so it ran at
+routine scope without debugger coverage: every result it records came from a
+job routine scope runs anyway, and running the prototypes according to the
+applicability matrix is not a parity claim.
 
-R6.80 preserves routine debugger-risk scope for its new debugger-controlled
-boot/stack assertions and independent panic-site evidence checks. It adds
-fixture provenance/regeneration and embedded consumers without changing the
-compiler or claiming a freestanding milestone.
+Milestone scope was selected for a phase or parity closure: complete hosted
+parity, the freestanding evidence that closed the Cortex-M0 work, and the
+first roadmap's endpoint. The endpoint changed no compiler code, which is why
+the items before it that closed no phase ran routine; a phase closure is
+answered by milestone scope whatever the code change, because a routine
+approval cannot later be cited as a milestone result. Its debugger coverage
+arrived with the full matrix rather than with a risk.
 
-R7.20 selects routine scope with debugger coverage. Its several-atom pointer
-union is a new debugger-visible type with GDB and LLDB presentation checks, and
-the debugger scripts changed. It is not a phase closure and adds no target, ABI
-convention or instruction selection: the one backend change generalizes an
-existing reserved-zero load predicate, and complete release Darwin parity runs
-every new runtime fixture, so milestone scope is not warranted.
-
-R7.50 selects routine scope with debugger coverage, and the selection is
-forced rather than chosen. Debugger risk above includes the acceptance
-selection or verification of debugger evidence, and this item commits a check
-that reads and verifies debug metadata on all three targets into every suite
-job of both native policies. It changes no emission and no debugger script;
-the compiler is untouched. Milestone scope is judged on phase closure, new
-parity or backend scope, none of which applies, so the size of the run does
-not make it one.
-
-R7.60 selects routine scope **without** debugger coverage, and both judgments
-are made on the definitions above. It changes no debug metadata, source or
-variable location, unwind or frame convention, debugger transport or debugger
-check, and it neither selects nor verifies debugger evidence: it does not touch
-`scripts/debug.sh`, `compiler/tests/debugging/check.py` or the schedule check
-that holds the complete P2/P3/P4 workloads to three profiles, and its new
-coverage column reports `executed`, `compiled` or `refused` and no debugger
-claim. Re-running unchanged workloads is not a reason to run a debugger matrix.
-Every result its register records is established by a job routine scope runs
-anyway: the Linux release suite for each hosted execution, Darwin's release
-parity execution command for every runtime and ABI fixture, the release object
-quality job for the six-profile repeats of the three complete hosted workloads,
-and the embedded lane in the documents job for the firmware driver. Milestone
-scope is not warranted either. It is the item that most resembles a parity
-claim and is not one: it runs the prototypes according to the applicability
-matrix, and that matrix records that they deliberately do not all reach all
-targets. There is no phase closure here, no new target, ABI convention,
-instruction selection or parity scope, and the compiler is untouched.
-
-R7.70 selects `milestone` scope, and it is the only R7 item that does. The
-category above is "major phase/parity milestone", and the disjunction is
-satisfied by phase closure: this item closes R7 and the roadmap, which R7.60's
-record already located here when it declined milestone scope for itself. It is
-also the last chance to select one. A routine approval cannot later be cited
-as a milestone result and no subsequent item can correct the choice, so an
-endpoint that deserves a milestone has to have one selected now. The claim
-being bound is the widest the roadmap makes, and the two earlier items that
-made claims of comparable width, R5.50 and R6.100, were both milestones. That
-the item changes no compiler code is why milestone scope was not warranted for
-R7.40, R7.50 or R7.60, none of which closed a phase; it does not answer a
-phase closure, and the run here is the evidence under the declaration rather
-than regression detection. Debugger coverage is judged separately and is not
-forced: this item changes no debug metadata, source or variable location,
-unwind or frame convention, debugger transport or debugger check, and neither
-selects nor verifies debugger evidence, exactly as R7.60 records. Milestone
-scope runs GDB and LLDB in both compiler modes as part of the full matrix, so
-that coverage arrives with the scope rather than with a risk.
-
-Before a major milestone such as R5.50 or R6.100, select and commit milestone
-scope with the closure candidate. A routine approval cannot be cited as a full
-milestone result. Subsequent development returns to routine scope.
+Before a major milestone, select and commit milestone scope with the closure
+candidate. A routine approval cannot be cited as a full milestone result.
+Subsequent development returns to routine scope.
 
 ```sh
 python3 scripts/ci/policy.py routine
@@ -162,8 +123,8 @@ concurrently. Its slowest job determined about 91 minutes of wall time:
 | native debugger command | 2823.9 | 555.8 |
 
 The document/tooling job took 111.0 seconds, including 88.2 in `check.py`,
-10.5 in CI failure-path tests and 2.1 in rendering. The complete R5.10 Mac
-harness took 2522.2 seconds in debug and 911.3 in release, largely compiling
+10.5 in CI failure-path tests and 2.1 in rendering. The complete first native
+Mac harness took 2522.2 seconds in debug and 911.3 in release, largely compiling
 Linux workloads before the inevitable missing-tool refusal. Those runs remain
 historical evidence, not the future development cadence.
 
@@ -200,7 +161,7 @@ identities, not mutable output paths. Use one aggregate CPU/memory budget;
 nested unrestricted worker pools would oversubscribe the runner. Keep
 GPRbuild's existing Ada dependency and checksum handling.
 
-R5.20 evaluated one versus two workers on native Linux using the same
+An evaluation compared one and two workers on native Linux using the same
 immutable release compiler and fresh outputs for the parser/container
 programs under none/off and size/auto. The four compilations took 111.15
 seconds sequentially and 55.55 with two workers; every assembly hash matched.
@@ -218,7 +179,7 @@ under today's acceptance identity records. Their builds already overlap, so
 sharing would save CPU but is not a measured 112-second wall-time improvement.
 
 The production scheduler/cache remains deferred to the scale and self-hosting
-successor under ROADMAP.md's R5.20 disposition. Integrating bounded workers
+successor that `ROADMAP.md`'s register names. Integrating bounded workers
 requires shared cancellation, timeout ownership and aggregate resource tests;
 artifact sharing requires an acceptance-schema change for producer identities.
 The quality command's second compilation deliberately checks determinism and
@@ -249,104 +210,103 @@ Darwin, Linux or freestanding executions required at a milestone.
 
 ## Historical Darwin acceptance progression
 
-R5.30 adds `scripts/ci/darwin.py accept COMMIT` to ordinary promotion. It runs
-the committed native Mac policy and exports source, tools, artifacts and
-execution evidence. Approval uses `approve LINUX_BUNDLE --darwin DARWIN_BUNDLE`;
-the two bundles must describe exactly the same archive. The annotated approval
-binds both. R5.40 adds native LLDB source-debugger acceptance and selects the sixth Linux
-routine job, release GDB, because DWARF serialization is now shared. Full
-hosted parity is the separate R5.50 milestone scope.
+Native Darwin lowering added `scripts/ci/darwin.py accept COMMIT` to ordinary
+promotion. It ran the committed native Mac policy and exported source, tools,
+artifacts and execution evidence. Approval used `approve LINUX_BUNDLE --darwin
+DARWIN_BUNDLE`; the two bundles had to describe exactly the same archive, and
+the annotated approval bound both. macOS source debugging added native LLDB
+acceptance and selected the sixth Linux routine job, release GDB, because DWARF
+serialization became shared. Full hosted parity was a separate milestone scope.
 
-R5.30 used a focused LLDB session to locate an Ada precondition failure in
-variant emission and a native C frame-chain probe for the newly implemented
-arm64 frame convention. No Linux GDB matrix is selected: Linux frame layout,
-DWARF and instruction selection are unchanged. Nix CI remains deferred.
+The Darwin lowering work used a focused LLDB session to locate an Ada
+precondition failure in variant emission and a native C frame-chain probe for
+the newly implemented arm64 frame convention. No Linux GDB matrix was selected:
+Linux frame layout, DWARF and instruction selection were unchanged. Nix CI
+remained deferred.
 
-R5.40 uses the exact same archived source for the native LLDB policy and Linux
-routine acceptance with GDB. Native debugger, dsymutil and dwarfdump versions
-are checked against the Mac policy, with binary hashes retained. Source maps,
-Mach-O UUIDs, dSYM identities and stripped behavior are required evidence.
-The production scheduler/cache and broader resource dispositions remain as
-recorded in R5.20; Nix CI stays deferred.
+macOS source debugging used the exact same archived source for the native LLDB
+policy and Linux routine acceptance with GDB. Native debugger, dsymutil and
+dwarfdump versions were checked against the Mac policy, with binary hashes
+retained. Source maps, Mach-O UUIDs, dSYM identities and stripped behavior were
+required evidence. The production scheduler/cache and broader resource
+dispositions stayed as recorded; Nix CI stayed deferred.
 
-R5.50 selects and commits `policy.py milestone` before its closure candidate.
-Its Linux gate runs complete suite, quality and native GDB in both compiler
-modes, plus bindings and documents/tooling. Matching Mac schema-3 acceptance
-runs compiler-host checks, the complete shared source/runtime/ABI corpus and
-all three derived programs with native LLDB in both compiler modes. The
-[parity guide](../compiler/tests/darwin/README.md) records exact coverage and
-platform limits. The accepted revision keeps its milestone policy; routine
-scope returns only in subsequent development. No local Linux containers,
-production scheduler/cache changes or Nix CI are added.
+Hosted parity selected and committed `policy.py milestone` before its closure
+candidate. Its Linux gate ran the complete suite, quality and native GDB in both
+compiler modes, plus bindings and documents/tooling. Matching Mac schema-3
+acceptance ran compiler-host checks, the complete shared source/runtime/ABI
+corpus and all three derived programs with native LLDB in both compiler modes.
+The [parity guide](../compiler/tests/darwin/README.md) records exact coverage
+and platform limits. The accepted revision kept its milestone policy; routine
+scope returned only in subsequent development. No local Linux containers,
+production scheduler/cache changes or Nix CI were added.
 
-## R6.10 environment acceptance
+## Historical Cortex-M environment acceptance
 
-The Linux documents job additionally runs the pinned
+The Linux documents job additionally ran the pinned
 [Cortex-M environment probes](../environments/cortex-m/README.md) and their
-failure controls. Its exported `cortex-m` artifacts bind the live result to
-the accepted archive. Missing tools or failed probes refuse acceptance.
-This addition selects routine debugger-risk coverage for R6.10's debugger
-controls and acceptance command/retention changes; it does not select the
-R6.100 full milestone matrix. Darwin keeps native hosted/LLDB validation.
+failure controls. Its exported `cortex-m` artifacts bound the live result to
+the accepted archive. Missing tools or failed probes refused acceptance.
+Adding the environment selected routine debugger-risk coverage for its debugger
+controls and acceptance command/retention changes, not the full milestone
+matrix. Darwin kept native hosted/LLDB validation.
 
-R6.20 retains compatible routine policies with release native GDB/LLDB because
-it adds ABI/frame obligations and executable debugger assertions. The Linux
-embedded path now also runs the layout/ABI controls; the original CPU,
-peripheral and Renode-lock regression obligations remain mandatory. This is
-not R6.100 milestone acceptance. Pure target/compiler checks use the Mac host
-selector; embedded execution uses only the supported Linux runner.
+The Cortex-M0 layout and ABI work kept compatible routine policies with release
+native GDB/LLDB because it added ABI/frame obligations and executable debugger
+assertions. The Linux embedded path also ran the layout/ABI controls; the
+original CPU, peripheral and Renode-lock regression obligations stayed
+mandatory. Pure target/compiler checks used the Mac host selector; embedded
+execution used only the supported Linux runner.
 
-R6.30 retains compatible routine debugger-risk policies: new instruction
-selection, scratch use, alignment traps and verifier coverage affect the native
-code/debug boundary. Full release GDB/LLDB accompanies complete release hosted
-coverage and both Mac compiler-host modes. This is not R6.100 milestone scope.
-The existing Linux embedded evidence export also includes the memory controls
-and models, from the identical candidate archive. Nix CI remains deferred.
+The concurrency memory model kept compatible routine debugger-risk policies:
+new instruction selection, scratch use, alignment traps and verifier coverage
+affect the native code/debug boundary. Full release GDB/LLDB accompanied
+complete release hosted coverage and both Mac compiler-host modes. The Linux
+embedded evidence export also included the memory controls and models, from
+the identical candidate archive. Nix CI remained deferred.
 
-R6.40 selects routine debugger risk because packed extraction/selection,
-verification and raw-carrier DWARF change. Its Linux documents job builds the
-committed debug compiler before the mandatory combined embedded probe. The
-probe exports compiler-generated native/Renode execution alongside independent
-M0 C/assembly and model controls, with existing lock cleanup and ABI/memory
-lanes preserved. These development or model results do not authorize promotion;
-matching native archive acceptance and the guarded publication path still do.
+Packed images selected routine debugger risk because packed
+extraction/selection, verification and raw-carrier DWARF changed. The Linux
+documents job built the committed debug compiler before the mandatory combined
+embedded probe. The probe exported compiler-generated native/Renode execution
+alongside independent M0 C/assembly and model controls, with existing lock
+cleanup and ABI/memory lanes preserved. These development or model results did
+not authorize promotion; matching native archive acceptance and the guarded
+publication path did.
 
+Generated Cortex-M0 code ran through the supported native Linux runner and the
+existing Cortex probe/export path. The complete corpus ran under an external
+startup/linker test harness. Its physical-limit and source-restriction records
+remain distinct from execution passes. This changed neither native
+Linux/Darwin acceptance nor the firmware publication path; the identical
+archive still needed both native bindings before approval and promotion.
 
-R6.50 generated embedded evidence uses the supported native Linux runner and
-the existing Cortex probe/export path. The complete corpus runs under an
-external startup/linker test harness. Its physical-limit and source-restriction
-records remain distinct from execution passes. This does not change native
-Linux/Darwin acceptance or grant a firmware publication path; the identical
-archive still needs both native bindings before approval and promotion.
-
-
-R6.60 adds mandatory compiler-owned firmware execution to that same embedded
+Compiler-owned firmware added mandatory execution to that same embedded
 probe/export command. Its fresh-image comparisons, QEMU boot/exception runs,
-Renode device traces and independent C/assembly controls remain distinguishable
-from the old external backend harness. Startup/frame/exception changes select
-routine acceptance **with debugger risk**: full release Linux GDB and Darwin
-LLDB, debug compiler-host checks and complete release hosted execution. This
-is not R6.100 milestone/source-debugging closure. Both policies are committed
-before the closure candidate; all embedded artifacts bind to that archive.
+Renode device traces and independent C/assembly controls remain
+distinguishable from the old external backend harness. Startup, frame and
+exception changes selected routine acceptance **with debugger risk**: full
+release Linux GDB and Darwin LLDB, debug compiler-host checks and complete
+release hosted execution. Both policies were committed before the closure
+candidate, and all embedded artifacts bound to that archive.
 
-R6.90 retains routine debugger-risk scope because the complete driver exposed
-a checking control-flow defect and a firmware ELF load-address defect. Both
-native policies must match; the mandatory embedded lane includes every
-inherited probe plus `environments/cortex-m/driver.py`. Its complete program
-and protocol run on native Linux, while Mac development uses `--host`.
-The exact accepted archive binds the source, model premises, literal oracles,
-firmware/linker artifacts and bounded resource observations. None supplies
-R6.100's later source-debugging or complete measured firmware/stack closure.
+The derived driver kept routine debugger-risk scope because it exposed a
+checking control-flow defect and a firmware ELF load-address defect. Both native
+policies had to match; the mandatory embedded lane included every inherited
+probe plus `environments/cortex-m/driver.py`. Its complete program and protocol
+ran on native Linux, while Mac development used `--host`. The exact accepted
+archive bound the source, model premises, literal oracles, firmware/linker
+artifacts and bounded resource observations.
 
-R6.100 selects compatible **milestone** policies on both native hosts before
-the closure candidate. They retain debug/release compiler-host, hosted execution,
-quality and native debugger coverage plus every inherited embedded lane.
-The mandatory embedded entry now also invokes `evidence.py`: complete-driver
-resource scenarios, Cortex source sessions, source/debug selection refusals
-and independent stack/exception controls. Cortex remote GDB is distinct from
-native Linux GDB and native Darwin LLDB. An isolated development function call
-does not replace execution through this mandatory entry or exact-revision
-acceptance. Failed/interrupted resource runs remain failed evidence. R6.100
-cannot close until both native archives and all of its embedded gates pass;
-delivery promotes precisely that shared revision, without a later bookkeeping
-commit. Nix and all companion-tool/release programmes retain their dispositions.
+The freestanding evidence selected compatible **milestone** policies on both
+native hosts before the closure candidate. They kept debug/release
+compiler-host, hosted execution, quality and native debugger coverage plus every
+inherited embedded lane. The mandatory embedded entry also invoked
+`evidence.py`: complete-driver resource scenarios, Cortex source sessions,
+source/debug selection refusals and independent stack/exception controls.
+Cortex remote GDB is distinct from native Linux GDB and native Darwin LLDB. An
+isolated development function call did not replace execution through this
+mandatory entry or exact-revision acceptance, and failed or interrupted
+resource runs remained failed evidence. That closure needed both native
+archives and all of its embedded gates to pass; delivery promoted precisely
+that shared revision, without a later bookkeeping commit.

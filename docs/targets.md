@@ -1,9 +1,7 @@
 # Target contracts
 
-`spec.md` [1975] owns the language-facing C and link-name rules. ROADMAP.md
-R5.20/R5.30/R5.40/R5.50 record implementation evidence; R5.51 consolidates
-retained debt and current acceptance dispositions; this page explains
-the package boundaries, not a second work list.
+`spec.md` [1975] owns the language-facing C and link-name rules. This page
+explains the package boundaries, not a second work list.
 
 | fact or operation | owner |
 |---|---|
@@ -48,7 +46,7 @@ w8 declared-error carrier. The backend emits already verified cleanup edges.
 Stack growth touches each 4 KiB page. Frame/incoming/outgoing/copy preflight
 retains a signed-2-GiB budget. Conditional branches expand through adjacent
 inverted branches; the baseline still requires direct branches to fit the
-architecture's 128-MiB reach. R5.20's explicit broader resource/scaling
+architecture's 128-MiB reach. The recorded broader resource/scaling
 limitations remain; this adds no recovery guarantee for arbitrary exhaustion.
 
 Darwin's minimal hosted bridge supplies argument access, malloc-backed aligned
@@ -120,7 +118,7 @@ matches, named-result destructuring and loops remain inspectable in their
 live scopes. The native backend currently uses stack homes under baseline
 optimization; it does not claim x86's saved-register allocation. Uninitialized
 or unavailable variables have no valid location, and ranges end before frame
-restoration. R5.50 adds the complete parser, containers and hosted application to the
+restoration. The complete parser, containers and hosted application run in the
 native LLDB matrix, using the existing Linux source/value oracles.
 
 ### Exact identity and optional deployment
@@ -131,8 +129,8 @@ The backend adds that digest to `__TEXT,__landin_id`, without filenames. It
 therefore contributes to the native linker's `LC_UUID`, including when only a
 source comment changes. The map separately hashes the final emitted assembly.
 The Apple-generated UUID matches the linked executable to its dSYM; the full
-Landin digest matches that executable to its caller/source table. R5.30's
-caller sidecars alone did not provide this Mach-O binding.
+Landin digest matches that executable to its caller/source table. The
+original caller sidecars alone did not provide this Mach-O binding.
 
 ```sh
 python3 scripts/source-location.py program.sources.json 2 11 12 \
@@ -165,7 +163,7 @@ and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging
 adds DWARF 4 line tables, source function identities and ordinary-frame CFI.
 The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane or the
 separate synthetic Renode peripheral lane. Native Linux GDB and Darwin LLDB
-acceptance remain separate. R6.100 in ROADMAP.md owns milestone acceptance.
+acceptance remain separate.
 
 `--debug=full` remains refused on Cortex. `lines` advertises no source locals,
 arguments, types, expression evaluation or optimized-value locations. It emits
@@ -241,15 +239,15 @@ semantics. Darwin now emits the complete wide element address, and all four
 profiles retain successful assembly/linking followed by the original failed
 status-42 execution and matching control. The result is explicitly
 `platform-limited`; no passing runtime verdict or general large-image support
-is claimed. R5.51 R551-07 retains R5.20's large-image placement/preflight transfer to the
-scale and self-hosting successor, with an explicit activation condition. No giant materialized object sweep or
+is claimed. Large-image placement and preflight belong to the scale and
+self-hosting successor, with an explicit activation condition. No giant materialized object sweep or
 new exhaustion guarantee is introduced.
 
 ## Deterministic artifacts
 
 [1550] says the compiler emits deterministic assembly text and relies on the
-platform's assembler and linker. R7.50 states the relation that sentence needs
-and gates it with
+platform's assembler and linker. The relation that sentence needs is stated
+here and gated by
 [`compiler/tests/test_determinism.py`](../compiler/tests/test_determinism.py),
 which runs in every suite job of both native policies.
 
@@ -274,8 +272,8 @@ the same command, because `x86_64-pc-linux-gnu-gcc` writes its random
 temporary object name (`ccXXXXXX.o`) into the symbol table. Darwin's came out
 identical, which is one toolchain's tidiness rather than a contract. The gate
 therefore checks that the assembly the link consumed was byte-identical and
-reports the image residue; R730-23 owns a reproducible hosted image with its
-activation.
+reports the image residue; a reproducible hosted image belongs to the
+release readiness successor.
 
 The debug row is a declared record and not a defect: `comp_dir` and `.file`
 are how a debugger finds source, and the panic map resolves an off-target
@@ -288,16 +286,16 @@ instruction that followed the build directory fails.
 
 ## Cortex-M environment boundary
 
-R6.10's [execution profile](../environments/cortex-m/README.md) pins QEMU's
+The [execution profile](../environments/cortex-m/README.md) pins QEMU's
 Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
-probes establish the environment. R6.20 adds layout and ABI planning below;
-R6.50 adds compiler-generated M0 execution; R6.60 adds compiler-owned firmware startup and linking.
+probes establish the environment. Layout and ABI planning follow below, then
+compiler-generated M0 execution and compiler-owned firmware startup and linking.
 The original synthetic-32 goldens
 remain unchanged.
 
 ## Cortex-M0 layout and ABI planning
 
-R6.20 adds `Targets.Cortex_M` (`cortex-m0`), selecting ARMv6-M Thumb,
+`Targets.Cortex_M` (`cortex-m0`) selects ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly against these facts. The toolchain
 identity is `arm-none-eabi`. Executable requests require the explicit
@@ -370,8 +368,8 @@ leaves, pointing to an eight-byte record: previous r11 then incoming lr.
 Publish the frame pointer only after constructing that record. Preserve
 r4–r11 and sp, reserve r9 from allocation, treat r0–r3/r12/lr and condition
 flags as call-clobbered, maintain sp modulo four at all times and modulo eight
-at calls, and allocate no red zone below sp. R6.50 implements this record and
-checks its construction through instruction stepping, including leaves and
+at calls, and allocate no red zone below sp. The backend implements this record
+and checks its construction through instruction stepping, including leaves and
 nested calls. The earlier handwritten witness remains independent evidence. GCC's C routines may use r7 as a local frame base; no continuous mixed-C
 r11 chain or foreign-exception unwinding is promised. Code addresses retain
 the Thumb low bit for tables and indirect calls; data pointers gain no such bit.
@@ -381,19 +379,19 @@ and [GCC Arm options](https://gcc.gnu.org/onlinedocs/gcc-14.2.0/gcc/ARM-Options.
 are checked against the pinned tools. Their unsigned plain C char and ILP32
 model are measured, not inherited from the hosted `core/c` aliases.
 
-The [probe guide](../environments/cortex-m/README.md#r620-layout-and-abi-evidence)
+The [probe guide](../environments/cortex-m/README.md#layout-and-abi-evidence)
 distinguishes Ada planner/IR tests, GCC layout measurements and executed
 C/assembly witnesses. No language semantic decision, instruction selection,
 Landin startup or source debugger is supplied by these plans.
 
 ## Explicit memory operations
 
-R6.30/D227 admits unsigned scalar memory primitives through
+D227 admits unsigned scalar memory primitives through
 `Targets.Capabilities.Memory_Access`, independently of backend availability.
 Widths are 1/2/4/8 bytes on hosted targets and 1/2/4 on Cortex-M0. Every implemented access
 checks natural alignment at runtime, including inside `unchecked`. The M0
-source contract refuses exchange/add/compare-exchange. R6.50 emits the admitted
-loads/stores and barriers; it introduces no atomic runtime helper. Synthetic-32 refuses these operations.
+source contract refuses exchange/add/compare-exchange. The backend emits the
+admitted loads/stores and barriers; it introduces no atomic runtime helper. Synthetic-32 refuses these operations.
 
 The initial hosted lowering deliberately strengthens every atomic ordering.
 x86 uses aligned MOV for loads, XCHG for stores/exchanges, LOCK XADD for wrapping
@@ -429,7 +427,7 @@ The cache model demonstrates stale reads and destructive maintenance, under an
 explicit two-byte cache-line abstraction; the cacheless emulator cannot test
 physical cache behavior. See the [probe guide](../environments/cortex-m/README.md).
 
-R6.40 connects `Targets.Packed` to source declarations and neutral field
+D228 connects `Targets.Packed` to source declarations and neutral field
 geometry. One carrier of 1/2/4/8 bytes uses the selected target's size and
 alignment, with least-significant-bit numbering and little-endian byte order.
 Unsigned field widths through 64 bits do not add ordinary scalar widths or
@@ -527,11 +525,13 @@ retains requested helper names, archive path/hash, ELF/map/disassembly and an
 empty undefined-symbol inventory. This links no libc, allocator, scheduler or
 atomic emulation. Division guards prevent entering the archive's divide-zero
 fallback; dependency members remain visible in the map. The firmware linker explicitly selects the pinned thumb/v6-m/nofp archive
-with `-lgcc`. General runtime/CPU-library packaging remains R6.70.
+with `-lgcc`. Runtime and CPU-library packaging belong to the freestanding
+`core` slice.
 
-The [execution guide](../environments/cortex-m/README.md#r650-compiler-generated-execution)
+The [execution guide](../environments/cortex-m/README.md#compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical
-limits. Compiler-owned startup is D229; R6.100 supplies the bounded Landin source-debugging contract above.
+limits. Compiler-owned startup is D229; the bounded Landin source-debugging
+contract is above.
 
 
 ## Cortex-M0 firmware images
@@ -576,13 +576,13 @@ synthetic entry/root violations use site zero. Naked fallthrough and hardware
 faults retain separate machine obligations. `--panic-map` is optional off-target
 mapping, not Cortex source-debugger acceptance.
 
-R6.80's [device fixture interface](../devices/README.md) preserves vendor
+The [device fixture interface](../devices/README.md) preserves vendor
 32-bit transaction sizes independently of field masks. Its real RP2040 address
 constants are data, not a target/board selection. Execution explicitly remaps
 a bounded peripheral subset while retaining the accepted M0 map and ABI;
 RP2040's dual M0+ hardware is not claimed as an executable target.
 
-R6.90's [driver evidence](../compiler/tests/driver/DERIVATION.md) uses the same
+The [driver evidence](../compiler/tests/driver/DERIVATION.md) uses the same
 32 KiB flash, 16 KiB RAM and 4 KiB stack reservation. Compiler-owned firmware
 links NOLOAD BSS with an explicit RAM LMA; initialized data and RAM code retain
 flash load images. This prevents a zero-fill ELF segment inheriting a spurious

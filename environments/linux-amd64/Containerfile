@@ -1,7 +1,7 @@
 #  The local Linux loop for the Landin bootstrap compiler.
 #
-#  ROADMAP.md R0.70 makes this the convenient Linux loop and native Linux
-#  x86-64 the authority.  Nothing here may become the authority by accident,
+#  This is the convenient Linux loop, and native Linux x86-64 is the
+#  authority.  Nothing here may become the authority by accident,
 #  so the image is pinned as tightly as the archives it installs: a base
 #  image by digest, and the same GNAT and GPRbuild versions, with the same
 #  checksums, that compiler/ada/TOOLCHAIN.md records.
@@ -9,7 +9,7 @@
 FROM docker.io/library/debian@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
 
 #  Only what the pinned Ada toolchain needs to link a program and fetch itself,
-#  plus R4.40's deliberately separate C frontend and R4.60's GDB. clang-19
+#  plus the deliberately separate C header frontend and GDB. clang-19
 #  reads external headers and compiles generated adapters; libc6-dev supplies
 #  the Linux x86-64 C headers and link-time sysroot. qemu-user supplies a GDB
 #  remote stub for the local debugger loop: Rosetta does not implement the

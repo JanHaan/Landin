@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R6.80 generated device consumers; separate from all inherited lanes."""
+"""Generated device fixture consumers; separate from all inherited lanes."""
 import argparse
 import json
 from pathlib import Path

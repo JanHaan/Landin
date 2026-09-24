@@ -1,4 +1,4 @@
-"""Execute R6.30 independent M0 instructions and bounded abstract models."""
+"""Execute memory-model independent M0 instructions and bounded abstract models."""
 import json
 import socket
 import subprocess

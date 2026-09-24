@@ -1,4 +1,4 @@
-"""Mandatory R6.100 source-debugging and constrained firmware evidence."""
+"""Mandatory freestanding source-debugging and constrained firmware evidence."""
 import json
 from pathlib import Path
 import shutil

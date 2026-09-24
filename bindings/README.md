@@ -1,7 +1,7 @@
 # Landin C binding generator
 
 `generate.py` is the repository-owned, standard-library-only binding generator
-for R4.40. It asks an external Clang for a JSON AST; it does not parse C header
+for the C boundary. It asks an external Clang for a JSON AST; it does not parse C header
 text and it does not make `refine` a header parser. Its supported ABIs are
 Linux x86-64 ELF System V AMD64 LP64 and Darwin arm64 with Apple's AAPCS64
 platform differences, both with signed plain `char` and ordinary (non-short)

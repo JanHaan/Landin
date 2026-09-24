@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compiler-generated ARMv6-M execution through the external R6.50 harness.
+"""Compiler-generated ARMv6-M execution through the external test harness.
 
 This development selector is not the complete applicability/acceptance gate.
 """

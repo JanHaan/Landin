@@ -1,9 +1,9 @@
 # Repository-owned core modules
 
 These ordinary Landin modules use explicit roots and imports, with no user-code
-module initialization. `spec.md` owns their language contracts;
-[R6.70](../ROADMAP.md#r670--implement-the-freestanding-landin-core-slice)
-owns freestanding implementation and acceptance.
+module initialization. `spec.md` owns their language contracts, and the
+[freestanding library lane](../environments/cortex-m/README.md#freestanding-library-consumers)
+executes them on Cortex-M0.
 
 ## Constrained Cortex-M0 consumers
 
@@ -53,8 +53,8 @@ exclusive-access primitives or VTOR. Ordinary DMA buffers remain slices.
 ## Other modules and closure
 
 `core/failing`, `core/region`, `core/small`, `core/map`, `core/tree`, `core/sort`
-and `core/text` contain reusable target-neutral code. Existing tests and R6.50
-image dispositions remain authoritative; absence of hosted imports does not
+and `core/text` contain reusable target-neutral code. Existing tests and the
+Cortex-M0 corpus's image-limit dispositions remain authoritative; absence of hosted imports does not
 promise that every composition fits 32 KiB. `core/io`, `core/diag`, `core/heap`
 and the hosted C aliases in `core/c` are outside this consumer closure. Even
 unused hosted declarations in a selected module must meet target checks.
@@ -69,21 +69,21 @@ fresh-directory comparisons are retained. The profile remains 32 KiB flash,
 runs, not a complete maximum-depth proof. D231 enables infallible `noreturn`
 without changing allocator errors into traps. A direct nonreturning call does
 not run a pending deferred mask restoration; a nonreturning cleanup stops
-later cleanups. ROADMAP.md records panic implementation and milestone status.
+later cleanups. D232 specifies panic dispatch and its optional source map.
 
-R6.80's [generated device fixtures](../devices/README.md) import no core module.
+The [generated device fixtures](../devices/README.md) import no core module.
 Their consumers explicitly import `core/cpu` and optionally `core/panic`;
 ordinary DMA slices retain the completion/boundary/lifetime obligations above.
 No allocator, heap, scheduler or hosted initialization enters that closure.
 
-R6.90's [derived driver](../compiler/tests/driver/DERIVATION.md) uses caller-owned
+The [derived driver](../compiler/tests/driver/DERIVATION.md) uses caller-owned
 initialized static byte storage and the ordinary `core/cpu` interface. It
 requires no allocator, hosted initialization or reporting storage. Successful
 device drain precedes ordinary reads and storage reuse; failed stop retains
 the caller's manual lifetime obligation. The allocator, initialized-prefix,
 origin, rollback and broader-library contracts above are unchanged.
 
-R6.100's separate Cortex line/function debugger controls execute the real pool
+The separate Cortex line/function debugger controls execute the real pool
 and vector consumers, generic/specialized allocation calls and noreturn/panic
 paths. The complete driver's resource lane continues to use its static,
 caller-owned storage. Debugger snapshots and stack instrumentation are host

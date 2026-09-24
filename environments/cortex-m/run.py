@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Independent M0 controls and native Landin/Renode peripheral execution.
 
-Retained hosted transport is separate from R6.50's generated M0 execution.
+Retained hosted transport is separate from the compiler-generated M0 execution.
 """
 import argparse
 import hashlib

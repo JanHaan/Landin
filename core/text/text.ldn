@@ -1,4 +1,4 @@
---  R3's parser-support text layer is deliberately byte-oriented. D181--D184
+--  The parser-support text layer is deliberately byte-oriented. D181--D184
 --  add the hosted text identities, literals, indexing, direct ranges and
 --  scalar traversal without changing this module's opaque positions or
 --  bounded byte views.
@@ -42,7 +42,7 @@ end copied
 
 --  Reify an ordinal as an opaque position for byte-oriented scanners.  The
 --  source argument makes the intended coordinate space explicit even though
---  R3's compact representation stores only the offset.
+--  The compact representation stores only the offset.
 public at: (source: []u8, offset: usize) -> (result: position) =
     _ = source
     result = (offset: offset)

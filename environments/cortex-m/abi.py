@@ -1,4 +1,4 @@
-"""R6.20 independent target measurements and hand-written calling witnesses."""
+"""Independent Cortex-M0 layout measurements and hand-written calling witnesses."""
 import json
 from pathlib import Path
 import shutil
@@ -72,7 +72,7 @@ def synthetic_agreement(rows, text):
 
 
 def execute(run):
-    # Use the existing timeout/session owner and tool inventory. R6.10's CPU
+    # Use the existing timeout/session owner and tool inventory. The original CPU
     # and Renode lanes still run independently before this additional lane.
     from run import require, oracle, stop
     rows = contract(CONTRACT.read_text())

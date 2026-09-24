@@ -1,4 +1,4 @@
-"""Mandatory R6.50 additions, within run.py's pinned tool/evidence boundary."""
+"""Mandatory compiler-generated execution lanes, within run.py's pinned tool/evidence boundary."""
 import json
 from backend import build, execute as qemu
 from backend_corpus import execute as corpus

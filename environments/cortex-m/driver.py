@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R6.90 complete driver CPU/application/protocol execution, independent oracles."""
+"""Complete derived driver CPU/application/protocol execution, independent oracles."""
 import argparse
 import json
 from pathlib import Path

@@ -1,4 +1,4 @@
-// Independent literal R6.80 contract. Not a faithful RP2040 emulation.
+// Independent literal device fixture contract. Not a faithful RP2040 emulation.
 // No SVD, generated Landin, or projection tables are consumed here.
 using System;
 using System.Collections.Generic;

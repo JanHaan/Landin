@@ -296,7 +296,7 @@ Cortex-M instruction-selection path, while R6.80 retains generated-device fixtur
 R6.50 adds ARMv6-M Thumb assembly, reusable stack homes, the always-present r11
 frame chain, internal calls/results/failures/evidence, soft scalar arithmetic,
 packed-image checks and the admitted memory/barrier operations. Its
-[generated-code corpus](environments/cortex-m/README.md#r650-compiler-generated-execution)
+[generated-code corpus](environments/cortex-m/README.md#compiler-generated-execution)
 runs on the selected QEMU profile; synthetic Renode tests execute actual Cortex
 register and ordinary-slice DMA code. The external test startup/linker harness
 does not enable those language surfaces. Exact-revision validation and closure
@@ -306,7 +306,7 @@ R6.60 implements compiler-owned reset, data/RAM-code copying, BSS clearing,
 typed interrupt/naked functions, vector references, placement/retention and
 fixed assembly with explicit effects. Firmware uses the selected 32 KiB flash,
 16 KiB RAM and 4 KiB stack reservation. The
-[firmware execution lane](environments/cortex-m/README.md#r660-compiler-owned-firmware)
+[firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
 checks generated boot, nested exceptions, PSP return, veneers and peripheral
 traces alongside independent C/assembly controls. Its exact-revision dual-native
 binding and remaining limits belong to ROADMAP.md. R6.70 owns the freestanding

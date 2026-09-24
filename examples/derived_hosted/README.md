@@ -72,7 +72,7 @@ The full source/support/fixture mapping is in
 [DERIVATION.md](../../compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md).
 
 The complete derivative and its failure/recovery oracles also run on native
-Darwin arm64 in R5.50's shared six-profile runtime matrix. Native GDB and LLDB
+Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB
 inspect the same complete sources at none/off, size/auto and size/all; see the
 [hosted parity guide](../../compiler/tests/darwin/README.md). The retired native acceptance
 required the same committed source archive on both hosted targets; nothing

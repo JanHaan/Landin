@@ -11,7 +11,7 @@ This is a maintained, non-authoritative explanation derived from the
 implementation and its tests. It defines no language rule, compiler contract
 or future work. The [specification](../spec.md) decides language semantics;
 the implementation and executable tests establish the current IR; the
-[roadmap](../ROADMAP.md) owns plans and acceptance evidence. When any of those
+[roadmap](../ROADMAP.md) owns plans. When any of those
 change, this account follows them. It must never be used to justify changing
 the compiler to match the prose.
 
@@ -371,8 +371,8 @@ of that capability. The IR carries logical conventions, source link names and
 neutral shapes;
 ABI carrier assignment, object symbol prefixes and debug format selection stay
 in target/backend packages. The Linux and Darwin description seam compares
-canonical IR for native generic, aggregate and control-flow source. R5.20 adds
-no opcode or serialized IR field; the existing complete IR golden is unchanged.
+canonical IR for native generic, aggregate and control-flow source. Isolating
+the target contracts added no opcode or serialized IR field; the existing complete IR golden is unchanged.
 
 
 The Darwin backend gives every routine an x29/x30 frame record and every value
@@ -384,29 +384,30 @@ to the emitter; error propagation and cleanup edges arrive already verified.
 Neutral specialization and simplification run before either emitter. Darwin
 currently uses baseline stack homes without the x86 register allocator or body
 folding. Its reports record frame size; backend quality optimization is not a
-parity claim. R5.40 consumes these same stack placement plans for DWARF locations.
+parity claim. macOS source debugging consumes these same stack placement plans
+for DWARF locations.
 The shared `Backend.Dwarf` encoder uses neutral source identities and
 `Backend.Debug_Locations` availability; Mach-O sections, x29 CFI and dSYM
 packaging stay at the backend/toolchain boundary.
 
-R5.50's full hosted audit preserves these boundaries. Scalar part addressing
+The full hosted parity audit preserved these boundaries. Scalar part addressing
 on Darwin carries wide IR element positions through target-byte placement,
 rather than narrowing them through the Ada host index type. Complete derived
 programs share the same source/provenance and location facts across GDB and
 LLDB acceptance; physical encodings and packaging remain backend-owned.
 
-R6.20 adds a real Cortex-M0 description and `Backend.Arm32_ABI` planning while
-leaving this neutral representation unchanged. Eight existing source controls
+A real Cortex-M0 description and `Backend.Arm32_ABI` planning leave this
+neutral representation unchanged. Eight existing source controls
 compare detailed IR, including pointer metadata, against synthetic-32 and plan
 their entry/direct/indirect signatures. The planner consumes lowered pointer,
 atom, slice/any, distinct and evidence carriers; it adds the physical result
 address before the signature's existing evidence/parameter run. External C
 and internal Landin transport remain separate. Independent C/assembly probes
-execute the selected contract. R6.50's Cortex emitter now consumes those same
+execute the selected contract. The Cortex emitter consumes those same
 plans; no new target-neutral opcode or effect category was needed.
 See [the target contract](targets.md#cortex-m0-layout-and-abi-planning).
 
-R6.30 adds `Memory_Access`, retaining operation, scalar width identity and
+D227's `Memory_Access` retains operation, scalar width identity and
 success/failure orderings. Its variable operand run carries only runtime
 values; compile-time ordering atoms do not become machine arguments. The
 verifier checks operation/order combinations, arity, operand/result types,
@@ -422,7 +423,7 @@ Specialization copies the complete instruction metadata; it neither erases
 boundaries nor invents alias facts. Aggregate transfers remain ordinary copies,
 with no atomicity promise. Target instructions are described in the target guide.
 
-R6.40 adds packed geometry to neutral field shapes: first bit, element width
+D228 adds packed geometry to neutral field shapes: first bit, element width
 and total carrier width. Encoded atom sets retain a separate unsigned encoding
 table; ordinary values retain their existing atom identities. The verifier
 checks geometry, field kinds, encoding membership tables and typed array/address
@@ -456,8 +457,7 @@ memory instruction; fixed modes are checked before lowering and reserved-bit
 requirements become retained guards before a write. The operation still has
 one scalar transaction. No packed field is an independently addressable object.
 Debug information exposes a packed nominal as its unsigned `raw` carrier;
-field-level bit-array presentation is not claimed. ROADMAP.md owns validation,
-limits and exact-revision closure.
+field-level bit-array presentation is not claimed.
 
 
 Cortex-M selection uses pinned source places and reusable eight-byte homes for
@@ -503,7 +503,7 @@ copies initialized data and RAM code, clears BSS and transfers to the selected
 source entry. Neither module-image lowering nor startup executes user module
 initializers. Target ELF relocations distinguish Thumb code pointers from data
 addresses. The generated firmware probes test these boundaries through actual
-QEMU and Renode execution; source-level Cortex debugging remains R6.100.
+QEMU and Renode execution; source-level Cortex debugging is described below.
 
 D232's panic plan is compilation metadata beside the verified IR. It validates
 the entry hook before emission and binds byte-position sites to canonical
@@ -522,7 +522,7 @@ breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
 source line; those native sessions remain separate from Cortex source debugging.
 
-R6.80's [generated device consumers](../devices/README.md) add no IR operation.
+The [generated device consumers](../devices/README.md) add no IR operation.
 Constant addresses and image arithmetic use existing folding; retained data,
 volatile accesses, encoded extraction traps and opaque CPU assembly keep their
 existing effects. The six optimization/specialization profiles independently
@@ -530,7 +530,7 @@ check identical device traces and D232 failure sites, including discarded
 extraction under `unchecked`. Existing enum-domain-sensitive body sharing,
 array-versus-struct stored-shape and private call-status rules are unchanged.
 
-R6.90's [complete driver](../compiler/tests/driver/DERIVATION.md) likewise adds
+The [complete derived driver](../compiler/tests/driver/DERIVATION.md) likewise adds
 no IR operation. It exposed a checking defect: initializer inference visited
 a concrete call's recovery `continue` before its enclosing loop existed.
 Recovery bindings settle during inference, but body checking waits for the
@@ -546,7 +546,7 @@ avoiding GNU ld's inherited RAM-code VMA/LMA delta. BSS has no file payload;
 reset still clears it. A nearly full driver image executes under the original
 flash limit, with independent ELF load-header and poisoned-reset assertions.
 
-R6.100's Cortex line/function debugger consumes the existing source origins and
+The Cortex line/function debugger consumes the existing source origins and
 generic-template identities. It introduces no target register, DWARF record or
 debugger artifact into the IR. `Backend.Dwarf.Line_Sections` emits the bounded
 ELF32 function/line contract; `Backend.Cortex_M` describes its own physical CFI,
