@@ -4,14 +4,14 @@ error[L0304]: a counted repetition infers only a scalar element
 5 |     row := [2 of value]
   |                  ^^^^^
   = note: the tour describes it at [0520]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary
 error[L0304]: a counted repetition infers only a scalar element
   --> ../tests/fixtures/negative/r491-inferred-repetition-refusals/main.ldn:9:18
   |
 9 |     row := [2 of value]
   |                  ^^^^^
   = note: the tour describes it at [0520]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary
 error[L0301]: this hands back nothing, so it cannot supply an array element type
   --> ../tests/fixtures/negative/r491-inferred-repetition-refusals/main.ldn:13:18
    |

@@ -4,18 +4,18 @@ error[L0304]: `u128` is not in this version of the language
 1 | wide: u128 = 1
   |       ^^^^
   = note: the tour describes it at [0150]
-  = note: ROADMAP.md R7.20 transfers this to Language evolution
+  = note: this is transferred to Language evolution
 error[L0304]: `i128` is not in this version of the language
   --> ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn:2:9
   |
 2 | signed: i128 = 1
   |         ^^^^
   = note: the tour describes it at [0150]
-  = note: ROADMAP.md R7.20 transfers this to Language evolution
+  = note: this is transferred to Language evolution
 error[L0304]: `f16` is not in this version of the language
   --> ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn:3:8
   |
 3 | ratio: f16 = 1.0
   |        ^^^
   = note: the tour describes it at [0170]
-  = note: ROADMAP.md R7.20 transfers this to Language evolution
+  = note: this is transferred to Language evolution

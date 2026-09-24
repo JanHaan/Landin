@@ -13,7 +13,8 @@
 --  only the parser
 --  knows it met one, and only from where it was standing.  The parser says
 --  which construct it met; this package says which paragraph of the tour
---  describes it and which roadmap item enables it, and may invent neither.
+--  describes it and what the construct's standing is, and may invent
+--  neither.
 --
 --  Two facts about the codes.  L0010 is reused rather than reinvented: the
 --  parser retains the code born in lexical refusal, though the scanner no
@@ -147,29 +148,31 @@ package Landin.Diagnostics.Syntactic is
 
 private
 
-   --  Where the roadmap says a refused construct becomes available.  The
-   --  note [1830] promises has to name work, and this package may not
-   --  invent it: it records what ROADMAP.md already says, exactly as
-   --  Landin.Diagnostics.Lexical does for a refused lexeme.
-   function Enabled_By (Item : Refused_Construct) return String
+   --  What each refused construct is, which is what the second note [1830]
+   --  promises says.  This package records what spec.md decided and may
+   --  not decide it, exactly as Landin.Diagnostics.Lexical does for a
+   --  refused lexeme.
+   function Standing (Item : Refused_Construct) return Refusal_Standing
      is (case Item is
-            --  R2.20 implements the types a program declares.
-            when Declared_Type        => "R2.20",
-            --  The remaining R2.20 constructs each wait for their own
-            --  aggregate slice.
-            when Struct_Type
+            --  A type is declared by name, an aggregate is written
+            --  against a named type, an element is read through a named
+            --  place, and a type parameter is written where a type is.
+            --  Each shape is the source-form boundary of a construct the
+            --  kernel enables.
+            when Declared_Type
+               | Struct_Type
                | Array_Repetition
                | Indexing
-               | Struct_All_Of         => "R2.20",
-            --  D196 transfers D191's complete region questions to the
-            --  derived hosted application, before the hosted parity gate.
-            when Arena_Block           => "R4.80",
-            --  R2.40 implements type and fixed parameters.
-            when Type_Parameter => "R2.40",
-            --  R7.20 withdraws the volatile pointer type: D227's scalar
-            --  accesses and D228's register operations are volatile by the
-            --  operation, over an ordinary pointer.
-            when Volatile_Reference    => "R7.20",
-            when Shared_Declaration    => "R7.20");
+               | Struct_All_Of
+               | Type_Parameter        => Recorded_Boundary,
+            --  D233's inferred `a, b := e` and the declarations that keep
+            --  one name.
+            when Shared_Declaration    => Recorded_Boundary,
+            --  D212 withdraws the lexical arena block, and D238 the
+            --  volatile pointer type: D227's scalar accesses and D228's
+            --  register operations are volatile by the operation, over an
+            --  ordinary pointer.
+            when Arena_Block
+               | Volatile_Reference    => Withdrawn);
 
 end Landin.Diagnostics.Syntactic;

@@ -145,9 +145,9 @@ different responsibilities.
 | `Landin.Diagnostics.Text` | deterministic rendering, sharing a primary snippet with its first related label only when source and complete span agree | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
-| `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |
+| `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
-| `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a roadmap item |
+| `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |

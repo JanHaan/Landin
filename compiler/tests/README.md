@@ -35,9 +35,9 @@ began as R1.90's list of every construct either document defines against what
 the corpus says about it. R7.10 completed it as the construct inventory: each
 row also gives the strongest claim per product target, read from fixture
 metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
-`driver/fixture.json`; every named refusal with its item and whether its note
-says the construct is pending, a recorded boundary, withdrawn or (since R7.20)
-transferred to a named successor; and the state, applicable targets, gaps and
+`driver/fixture.json`; every named refusal with whether its note says the form
+is a recorded boundary, withdrawn or transferred to a named successor; and the
+state, applicable targets, gaps and
 open owner that [the construct inventory](registers.md#construct-inventory)
 records, whose disposition there explains the row. A full `check.py` refuses a missing, stale, unowned or
 unexplained row, and `scripts/tests/test_construct_inventory.py` proves each

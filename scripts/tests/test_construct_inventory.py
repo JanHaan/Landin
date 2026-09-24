@@ -107,11 +107,6 @@ class Inventory(unittest.TestCase):
             live=True, targets=self.without_cortex),
             "[1860] does not say what R7.99 owns")
 
-        def pending(refusals):
-            refusals.append(("1860", self.LIVE, "pending", "table", "Probe"))
-        self.refused(self.problems(refusals=pending, live=True),
-                     "refused pending R7.99 and the row does not name it")
-
     def test_a_finished_owner_makes_the_row_stale(self):
         (row, synthetic), = self.gapped().items()
         heading = self.LIVE_HEADING
@@ -212,22 +207,17 @@ class Inventory(unittest.TestCase):
             "transferred to no successor")
 
     def test_every_refusal_is_explained(self):
+        #  A row whose construct is refused by name says in its own
+        #  disposition what the refusal is, in the word its note uses.
         row = self.row("0820")
-        self.refused(self.problems({row: row.replace("R4.80", "the withdrawal")}),
-                     "does not explain its refusal recorded by R4.80")
-
-        #  R7.40 turned [1350]'s note from a promise into a boundary and
-        #  removed [1580]'s entry outright, so no refusal promises a finished
-        #  item any more; the control supplies one.
-        def promised(refusals):
-            refusals.append(("1350", "R2.40", "pending", "table", "Probe"))
-        self.refused(self.problems(refusals=promised),
-                     "still promises finished R2.40")
+        self.refused(self.problems({row: row.replace("withdraws", "drops")
+                                    .replace("withdrawal", "migration")}),
+                     "[0820] does not explain its withdrawn refusal")
 
         def boundary(refusals):
-            refusals.append(("0010", self.LIVE, "boundary", "table", "Probe"))
-        self.refused(self.problems(refusals=boundary, live=True),
-                     "boundary refusal names unfinished R7.99")
+            refusals.append(("0010", "boundary", "table", "Probe"))
+        self.refused(self.problems(refusals=boundary),
+                     "[0010] does not explain its boundary refusal")
 
     def test_a_transfer_names_its_successor(self):
         #  R7.20's transfers: the tour names each successor, and a refusal
@@ -261,22 +251,39 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems({line + "\n": ""}),
                      "compiled hosted row [1730] has no audited compile-time oracle")
 
-    def test_refusal_wording_is_read_from_each_report_body(self):
-        wording = {(one, item, how) for one, item, how, _, _
-                   in self.inputs["refusals"]}
-        for expected in (("0100", "R7.20", "boundary"),
-                         ("0120", "R2.20", "boundary"),
-                         ("0820", "R4.80", "withdrawn"),
-                         ("0850", "R7.20", "withdrawn"),
-                         ("0150", "R7.20", "transferred"),
-                         ("0170", "R7.20", "transferred"),
-                         ("0660", "R7.20", "boundary"),
-                         ("1350", "R2.40", "boundary")):
+    def test_refusal_wording_is_read_from_each_table(self):
+        wording = {(one, how) for one, how, _, _ in self.inputs["refusals"]}
+        for expected in (("0100", "boundary"),
+                         ("0120", "boundary"),
+                         ("0820", "withdrawn"),
+                         ("0850", "withdrawn"),
+                         ("0150", "transferred"),
+                         ("0170", "transferred"),
+                         ("0660", "boundary"),
+                         ("1350", "boundary")):
             self.assertIn(expected, wording)
-        #  R7.40 turned [1350]'s note into a boundary and removed [1580]'s
-        #  entry, which nothing raised, so no refusal is `pending` now.
-        self.assertNotIn("pending", {how for _, _, how in wording})
+        self.assertEqual({how for _, how in wording},
+                         {"boundary", "withdrawn", "transferred"})
         self.assertEqual(len(self.inputs["refusals"]), 19)
+
+    def test_a_standing_the_body_does_not_write_is_unreadable(self):
+        #  The table says what a refusal is and the Report body writes the
+        #  note; a standing with no note in the body is a table nobody can
+        #  trust, so the reader gives up rather than guessing.
+        path = ROOT / "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.adb"
+        real = path.read_text(encoding="utf-8")
+        note = CHECK.REFUSAL_NOTES["boundary"]
+        self.assertIn(note, real)
+
+        def read(name, *args, **kwargs):
+            opened = open(name, *args, **kwargs)
+            if str(name) == str(path):
+                opened.close()
+                import io
+                return io.StringIO(real.replace(note, "something else"))
+            return opened
+        with unittest.mock.patch.object(CHECK.io, "open", side_effect=read):
+            self.assertIsNone(CHECK.refusal_entries())
 
     def test_target_records_decide_where_a_fixture_runs(self):
         held = self.inputs["targets"]

@@ -25,25 +25,21 @@ package body Landin.Diagnostics.Checking is
               Message => Message);
    begin
       --  [1830] promises two facts and the checker writes neither: the
-      --  construct's paragraph and the work that enables it both come out
-      --  of the tables above.  Conformance failures use the ordinary note
-      --  argument; their exact note and related-source shape is catalogued.
+      --  construct's paragraph and what it is both come out of the tables
+      --  above.  Conformance failures use the ordinary note argument; their
+      --  exact note and related-source shape is catalogued.
       if Item = Unsupported_Use then
          Add_Note
            (Built, "the tour describes it at " & Construct (Refused));
          Add_Note
            (Built,
-            "ROADMAP.md " & Enabled_By (Refused)
-            & (if Refused = Arena_Region
-               then " withdraws this form; pass an ordinary allocator"
-               elsif Refused in Wide_Integer_Type | Narrow_Float_Type
-               then " transfers this to Language evolution"
-               elsif Refused in Constrained_Composition | Struct_Value
-                                | Variant_Value | Array_Value
-                                | Array_Element | Zeroed_Value
-                                | Parameterized_Type_Alias
-               then " records this source-form boundary"
-               else " is where it is enabled"));
+            (case Standing (Refused) is
+                when Recorded_Boundary =>
+                   "this is a recorded source-form boundary",
+                when Withdrawn =>
+                   "this form is withdrawn; pass an ordinary allocator",
+                when Transferred =>
+                   "this is transferred to Language evolution"));
       elsif Note /= "" then
          Add_Note (Built, Note);
       end if;

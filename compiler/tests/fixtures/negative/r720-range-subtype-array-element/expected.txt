@@ -4,4 +4,4 @@ error[L0304]: an array element cannot be a range subtype
 7 |     row: [4]percent = [first, first, first, first]
   |             ^^^^^^^
   = note: the tour describes it at [0660]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary

@@ -4,4 +4,4 @@ error[L0304]: an inferred module array takes a scalar element; write the array t
 11 | points := [first, second]
    |            ^^^^^
   = note: the tour describes it at [0520]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary

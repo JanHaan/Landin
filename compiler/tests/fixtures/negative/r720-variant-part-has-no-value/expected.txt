@@ -4,4 +4,4 @@ error[L0304]: a variant part is a struct member and has no value of its own
 13 |     part := h.kind
    |             ^^^^^^
   = note: the tour describes it at [0680]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary

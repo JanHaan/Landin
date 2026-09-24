@@ -39,8 +39,8 @@
 --  word it read; the checker refuses `u8(x)` because of what `u8` turned
 --  out to name, which is a fact no reading of the bytes could supply --
 --  `u8(x)` is a perfectly good `call` production.  So it carries [1830]'s
---  two notes, the construct and the work that enables it, and it is not a
---  misspelling and must never be reported as one.
+--  two notes, the construct and its standing, and it is not a misspelling
+--  and must never be reported as one.
 --
 --  Recursive_Nominal_Value is D137's finite-layout rule, distinct from
 --  Cyclic_Type_Alias: an alias cycle reaches no type, while a nominal cycle
@@ -247,40 +247,35 @@ package Landin.Diagnostics.Checking is
 
 private
 
-   --  Where the roadmap says each becomes available, or which item
-   --  records its boundary, transfer or withdrawal.
-   function Enabled_By (Item : Refused_Use) return String
+   --  What each refused use is, which is what the second note [1830]
+   --  promises says.
+   function Standing (Item : Refused_Use) return Refusal_Standing
      is (case Item is
-            --  D190 re-owned these two and D237 transfers them: R7.20
-            --  leaves u128, i128 and f16 to the Language evolution
+            --  D237 transfers u128, i128 and f16 to the Language evolution
             --  successor, whose trigger is a program that needs them.
-            --  R4.10 closed [0150] and [0170] as far as the kernel
-            --  enables them.
+            --  [0150] and [0170] are otherwise enabled.
             when Wide_Integer_Type
-               | Narrow_Float_Type  => "R7.20",
-            --  R2.20 enabled the aggregate values and R7.20 the discards,
-            --  inferred literals and payload arrays that were left.  What
-            --  remains is each form's permanent source boundary: a value
-            --  that needs a destination it was not given, a module image
-            --  [1940] cannot fold, or a guard no enabled source reaches.
+               | Narrow_Float_Type  => Transferred,
+            --  D241 leaves each aggregate form its permanent source
+            --  boundary: a value that needs a destination it was not
+            --  given, a module image [1940] cannot fold, or a guard no
+            --  enabled source reaches.
             when Struct_Value
                | Variant_Value
                | Array_Value
                | Array_Element
-               | Zeroed_Value      => "R7.20",
-            --  R2.40 enabled [1350]'s declaration form and D135 fixed what
-            --  an application may be: fully applied and positional.  An
-            --  unapplied constructor or a malformed application is that
-            --  rule's permanent source boundary, not work R2.40 left; R7.40
-            --  stops the note promising a finished item.
-            when Parameterized_Type_Alias => "R2.40",
-            --  D236 records the composite, reference and generic
-            --  positions as [0660]'s permanent source-form boundary: a
-            --  constraint belongs to a scalar binding, parameter, return
-            --  or conversion.  R4.10 closed [0660] itself.
-            when Constrained_Composition => "R7.20",
-            --  D212 closes both forms with permanent withdrawal and
-            --  explicit ordinary allocator migration guidance.
-            when Arena_Region       => "R4.80");
+               | Zeroed_Value      => Recorded_Boundary,
+            --  D135 fixed what an application of [1350]'s declaration may
+            --  be: fully applied and positional.  An unapplied constructor
+            --  or a malformed application is that rule's boundary.
+            when Parameterized_Type_Alias => Recorded_Boundary,
+            --  D236 records the composite, reference and generic positions
+            --  as [0660]'s permanent source-form boundary: a constraint
+            --  belongs to a scalar binding, parameter, return or
+            --  conversion.
+            when Constrained_Composition => Recorded_Boundary,
+            --  D212 withdraws both forms, with explicit ordinary allocator
+            --  migration guidance.
+            when Arena_Region       => Withdrawn);
 
 end Landin.Diagnostics.Checking;

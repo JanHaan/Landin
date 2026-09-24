@@ -4,7 +4,7 @@ error[L0304]: `f16` is not in this version of the language
 2 |     level: f16
   |            ^^^
   = note: the tour describes it at [0170]
-  = note: ROADMAP.md R7.20 transfers this to Language evolution
+  = note: this is transferred to Language evolution
 error[L0201]: `zzz` is not declared in any scope this reaches
   --> ../tests/fixtures/negative/r720-refused-field-adds-no-cascade/main.ldn:12:14
    |

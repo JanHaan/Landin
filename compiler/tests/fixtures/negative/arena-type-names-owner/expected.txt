@@ -4,4 +4,4 @@ error[L0304]: the builtin `arena` type is withdrawn
 1 | report: (a: arena) -> none =
   |             ^^^^^
   = note: the tour describes it at [0820]
-  = note: ROADMAP.md R4.80 withdraws this form; pass an ordinary allocator
+  = note: this form is withdrawn; pass an ordinary allocator

@@ -4,4 +4,4 @@ error[L0304]: a variant case is written where its variant part is the destinatio
 12 |     alone := dot
    |              ^^^
   = note: the tour describes it at [0680]
-  = note: ROADMAP.md R7.20 records this source-form boundary
+  = note: this is a recorded source-form boundary

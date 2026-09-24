@@ -538,7 +538,7 @@ package Landin.Diagnostics.Catalogue is
             when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct
-   --  and says which work enables it, which is two facts and so two notes.
+   --  and says what it is, which is two facts and so two notes.
    function Required_Notes (Of_Code : Code_Name) return Natural
      is (case Of_Code is
             when No_Frontend           => 1,
@@ -556,7 +556,7 @@ package Landin.Diagnostics.Catalogue is
             when Not_Definitely_Assigned => 1,
             when Immutable_Target      => 1,
             --  [1830]'s two facts, the same two L0010 carries: which
-            --  construct this is, and which work enables it.
+            --  construct this is, and what it is.
             when Unsupported_Use       => 2,
             when Not_Known_At_Compile_Time => 1,
             when Impossible_Operand    => 1,

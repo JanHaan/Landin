@@ -2778,33 +2778,21 @@ def check_refused_constructs(full_run):
                 "%s names [%s], which neither document defines"
                 % (name, construct)))
 
-    #  Every refused construct names the work that enables it, and the
-    #  roadmap has to have that item.  Both refusal tables, because [1830]'s
-    #  note is a promise about where a reader should look and the checker's
-    #  half of it can go stale exactly as the parser's can: D190 moved a
-    #  refusal from one item to another by editing one string, and nothing
-    #  here held that string to naming an item that exists.
-    roadmap = os.path.join(ROOT, "ROADMAP.md")
+    #  Every refused construct says what it is, a boundary, a withdrawal or
+    #  a transfer, and both tables have to say it for every entry in a way
+    #  their Report bodies write.  refusal_entries reads that, and a table
+    #  it cannot read is a fault here rather than an empty inventory.
     checking_relative = ("compiler/ada/src/diagnostics"
                          "/landin-diagnostics-checking.ads")
     checking_source = ""
     checking_path = os.path.join(ROOT, checking_relative)
     if os.path.exists(checking_path):
         checking_source = io.open(checking_path, encoding="utf-8").read()
-    if os.path.exists(roadmap):
-        items = set(roadmap_statuses(
-            io.open(roadmap, encoding="utf-8").read()))
-        for relative, text in (
-                ("compiler/ada/src/diagnostics"
-                 "/landin-diagnostics-syntactic.ads", codes_text),
-                (checking_relative, checking_source)):
-            for named in sorted(set(re.findall(r'=>\s*"(R\d+\.\d+)"',
-                                               text))):
-                if named not in items:
-                    out.append((
-                        relative, 1,
-                        "%s is named as enabling work and ROADMAP.md has no "
-                        "such item" % named))
+    if refusal_entries() is None:
+        out.append((
+            "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
+            1, "a refusal table has an entry whose standing its Report body"
+            " does not write, or cannot be read"))
 
     #  And every paragraph either table cites has to be one a document
     #  defines.  The parser's half was already held to this; the checker's
@@ -3611,31 +3599,49 @@ REFUSAL_TABLES = (
      "Refused_Use"))
 
 
-def case_table(text, header):
-    """One Ada `(case Item is when A | B => "x", ...)` expression, as a dict."""
+def case_table(text, header, quoted=True):
+    """One Ada `(case Item is when A | B => "x", ...)` expression, as a dict.
+
+    `quoted` reads string values; otherwise each value is a bare name.
+    """
     found = re.search(re.escape(header) + r".*?is \(case Item is(.*?)\)"
                       r"\s*(?:with Post|;)", text, re.S)
     if not found:
         return None
     body = re.sub(r"--[^\n]*", "", found.group(1))
+    value = r"\"([^\"]*)\"" if quoted else r"([A-Za-z_]\w*)"
     out = {}
-    for names, value in re.findall(r"when\s+([\w\s|]+?)\s*=>\s*\"([^\"]*)\"",
-                                   body):
+    for names, found_value in re.findall(r"when\s+([\w\s|]+?)\s*=>\s*"
+                                         + value, body):
         for name in names.split("|"):
-            out[name.strip()] = value.strip("[]")
+            out[name.strip()] = found_value.strip("[]")
     return out
 
 
-def refusal_entries():
-    """Every named refusal: its construct, its item and what its note says.
+#  [1830]'s second note, as each Report body writes it for a standing.
+REFUSAL_STANDINGS = {"Recorded_Boundary": "boundary",
+                     "Withdrawn": "withdrawn",
+                     "Transferred": "transferred"}
+REFUSAL_NOTES = {"boundary": "this is a recorded source-form boundary",
+                 "withdrawn": "this form is withdrawn",
+                 "transferred": "this is transferred to "}
+#  What an inventory row has to say about a refusal of its construct.
+REFUSAL_EXPLAINED = {"boundary": r"\bboundar(y|ies)\b",
+                     "withdrawn": r"\bwithdr[ae]w",
+                     "transferred": r"\btransfer"}
 
-    [1830] gives a refusal two facts, the paragraph and the work, and the
-    note says which of four things that work is: where the construct *is
-    enabled* (pending), where a source-form boundary *is recorded*, where
-    a form *is withdrawn*, or which successor roadmap it *is transferred*
-    to.  Only the first is a promise, and a promise that names a finished
-    item is one nobody is left to keep -- which is why this reads the
-    wording out of each Report body and not only the item.
+
+def refusal_entries():
+    """Every named refusal: its construct and what its note says it is.
+
+    [1830] gives a refusal two facts, the paragraph and what the construct
+    is, and the second is one of three: a recorded source-form boundary of
+    an enabled construct, a withdrawn form, or one transferred to a
+    successor roadmap.  None is a promise that the construct is coming,
+    which is why the note names a state and not the work that set it: an
+    item is finished long before the note citing it stops being printed.
+    The standing is read out of each table, and the body has to write the
+    note for every standing its table uses, so the two cannot disagree.
     """
     out = []
     for stem, kind in REFUSAL_TABLES:
@@ -3647,26 +3653,15 @@ def refusal_entries():
                                 for path in paths)
         constructs = case_table(spec_text,
                                 "function Construct (Item : %s)" % kind)
-        items = case_table(
-            spec_text, "function Enabled_By (Item : %s) return String" % kind)
-        if not constructs or not items or set(constructs) != set(items):
+        standings = case_table(
+            spec_text, "function Standing (Item : %s)" % kind, quoted=False)
+        if not constructs or not standings or set(constructs) != set(standings):
             return None
-        withdrawn = set(re.findall(
-            r"Refused = (\w+)\s+then \" withdraws", body_text))
-
-        def listed(phrase):
-            found = re.search(r"elsif Refused in ([\w\s|]+?)\s+then \" %s"
-                              % phrase, body_text)
-            return ({name.strip() for name in found.group(1).split("|")}
-                    if found else set())
-
-        boundary = listed("records this source-form boundary\"")
-        transferred = listed("transfers this to ")
         for name in sorted(constructs):
-            wording = ("withdrawn" if name in withdrawn else
-                       "boundary" if name in boundary else
-                       "transferred" if name in transferred else "pending")
-            out.append((constructs[name], items[name], wording,
+            wording = REFUSAL_STANDINGS.get(standings[name])
+            if wording is None or REFUSAL_NOTES[wording] not in body_text:
+                return None
+            out.append((constructs[name], wording,
                         os.path.basename(stem), name))
     return out
 
@@ -3993,8 +3988,8 @@ def inventory_problems(inputs):
     successors = successor_families(text)
     known = {one for one, _, _ in inputs["titles"]}
     refusals = collections.defaultdict(list)
-    for construct, item, wording, _, _ in inputs["refusals"]:
-        refusals[construct].append((item, wording))
+    for construct, wording, _, _ in inputs["refusals"]:
+        refusals[construct].append(wording)
     out = []
     seen = {}
 
@@ -4109,25 +4104,14 @@ def inventory_problems(inputs):
                         " paragraph nor one it cites says so"
                         % (one, owner))
 
-        for item, wording in refusals.get(one, ()):
-            finished = statuses.get(item) == "complete"
-            if wording == "pending" and not finished:
-                if item not in planned:
-                    problem(line, "[%s] is refused pending %s and the row"
-                            " does not name it" % (one, item))
-            elif wording == "pending":
-                if not planned or item not in disposition:
-                    problem(line, "[%s]'s refusal still promises finished %s"
-                            " and no open owner explains it" % (one, item))
-            elif not finished:
-                problem(line, "[%s]'s %s refusal names unfinished %s"
-                        % (one, wording, item))
-            elif item not in disposition:
-                problem(line, "[%s] does not explain its refusal recorded by"
-                        " %s" % (one, item))
-            elif wording == "transferred" and not handed:
+        for wording in refusals.get(one, ()):
+            if wording == "transferred" and not handed:
                 problem(line, "[%s]'s refusal transfers it and the row hands"
                         " work to no successor" % one)
+            elif not re.search(REFUSAL_EXPLAINED[wording], disposition,
+                               re.I):
+                problem(line, "[%s] does not explain its %s refusal"
+                        % (one, wording))
 
     for one in sorted(known - set(seen)):
         problem(1, "construct [%s] has no inventory row" % one)
@@ -4190,8 +4174,8 @@ def construct_matrix():
     evidence = inputs["evidence"]
     held = inputs["targets"]
     refused = collections.defaultdict(set)
-    for construct, item, wording, _, _ in inputs["refusals"]:
-        refused[construct].add("%s:%s" % (item, wording))
+    for construct, wording, _, _ in inputs["refusals"]:
+        refused[construct].add(wording)
     rows = markdown_table(inputs["registers"].splitlines(), INVENTORY_HEADING,
                           INVENTORY_COLUMNS) or []
     inventory = {}
@@ -4237,9 +4221,8 @@ def construct_matrix():
              "#",
              "#  linux-x86-64, macos-arm64 and cortex-m are the strongest",
              "#  claim a target's own records make: executed, compiled or",
-             "#  refused.  Refusals are item:pending, item:boundary,",
-             "#  item:withdrawn or item:transferred, as their [1830] note",
-             "#  says.  State, targets,",
+             "#  refused.  Refusals are boundary, withdrawn or",
+             "#  transferred, as their [1830] note says.  State, targets,",
              "#  gaps and owner come from the inventory, whose",
              "#  disposition column explains every row.",
              "#  %d constructs, %d with fixture evidence, %d with none."
@@ -4742,32 +4725,13 @@ def check_coverage_registers(full_run):
     roadmap_text = (io.open(roadmap_path, encoding="utf-8").read()
                     if os.path.exists(roadmap_path) else "")
     statuses = roadmap_statuses(roadmap_text)
-    r410_status = statuses.get("R4.10")
     out += hosted_parity_problems(
         statuses, applicability, hosted_compile_time_rows(), fixtures)
 
-    #  R7.10's inventory replaced R4.10's applicability register; its
-    #  completeness, owners and evidence are check_matrix's.  What R4.10
-    #  itself promised still holds: no refusal may name it as enabling work.
+    #  The construct inventory's completeness, owners and evidence are
+    #  check_matrix's.
     if applicability is None:
         out.append((REGISTERS, 1, "the construct inventory cannot be read"))
-    if r410_status is None:
-        out.append((ROADMAP, 1, "R4.10 has no readable status"))
-    elif r410_status != "active":
-        for relative in (
-                "compiler/ada/src/diagnostics/"
-                "landin-diagnostics-syntactic.ads",
-                "compiler/ada/src/diagnostics/"
-                "landin-diagnostics-checking.ads"):
-            path = os.path.join(ROOT, relative)
-            if not os.path.exists(path):
-                continue
-            for line, text_line in enumerate(
-                    io.open(path, encoding="utf-8"), 1):
-                if '"R4.10"' in text_line:
-                    out.append((relative, line,
-                                "R4.10 cannot close while a refusal still"
-                                " names it as enabling work"))
 
     if guarantees is None:
         out.append((where, 1, "D148's guarantee register cannot be read"))

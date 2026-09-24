@@ -33,13 +33,17 @@ SUMMARY = (
 #  The two halves of [1830], as the compiler dispatches on them.  The
 #  parser owns the spellings only it can tell from an enabled form; the
 #  checker owns the ones that are a question about what a name resolved
-#  to.  Both name the work that recorded the boundary.
+#  to.  Both say what each refused form is.
 REFUSAL_TABLES = (
     ("the parser", "compiler/ada/src/diagnostics/"
                    "landin-diagnostics-syntactic.ads", "Refused_Construct"),
     ("the checker", "compiler/ada/src/diagnostics/"
                     "landin-diagnostics-checking.ads", "Refused_Use"),
 )
+#  What each standing is called where a reader sees it.
+STANDINGS = {"Recorded_Boundary": "a recorded source-form boundary",
+             "Withdrawn": "withdrawn",
+             "Transferred": "transferred to Language evolution"}
 
 
 def read(source, name):
@@ -112,10 +116,10 @@ def contextual(rules, reserved):
 def cases(text, function, kind):
     """Read an Ada expression-function case table into a dict.
 
-    `when A | B => "x"` binds both names, which is how the enabling tables
+    `when A | B => "x"` binds both names, which is how the refusal tables
     are written and why the arms are split rather than matched whole. The
-    value is a string literal in three of these tables and a bare
-    enumeration name in `Refusal`, so both are read.
+    value is a string literal in some of these tables and a bare
+    enumeration name in `Refusal` and `Standing`, so both are read.
     """
     found = re.search(
         r"function %s\s*\(Item\s*:\s*%s\)[^()]*?is\s*\(case Item is(.*?)\);"
@@ -133,11 +137,10 @@ def cases(text, function, kind):
 def refusals(source):
     """Every spelling the compiler refuses by name, with its paragraph.
 
-    Ordered as the tables are, and reported as what they are. Most of
-    these are not unimplemented work: [1830] distinguishes a construct the
-    kernel has not reached from a source form an implemented construct
-    does not admit, and the item named is the work that recorded the
-    boundary either way.
+    Ordered as the tables are, and reported as what they are. None of
+    these is unimplemented work: [1830] distinguishes a source form an
+    implemented construct does not admit from a form the language withdrew
+    and one a successor roadmap owns, and each table says which.
     """
     out = []
     for whose, path, kind in REFUSAL_TABLES:
@@ -145,7 +148,7 @@ def refusals(source):
         if not text:
             continue
         where = cases(text, "Construct", kind)
-        item = cases(text, "Enabled_By", kind)
+        standing = cases(text, "Standing", kind)
         spelling = cases(text, "Spelling", "Refused_Type_Name")
         names = cases(text, "Refusal", "Refused_Type_Name")
         written = {}
@@ -154,7 +157,7 @@ def refusals(source):
         for name in where:
             out.append((whose, name.replace("_", " ").lower(),
                         ", ".join(sorted(written.get(name, []))),
-                        where[name], item.get(name, "")))
+                        where[name], STANDINGS.get(standing.get(name), "")))
     return out
 
 
@@ -283,21 +286,22 @@ def primer(source, release):
             "a form",
             "the compiler recognises and declines, with the paragraph that "
             "describes",
-            "it and the work that recorded the boundary. Most are not "
-            "pending work:",
-            "[1830] separates a construct the kernel has not reached from a "
-            "source",
-            "form an implemented construct does not admit, and `spec.md`'s "
-            "register", "says which each one is.", ""]
+            "it and what it is. None is pending work: [1830] separates a "
+            "source form",
+            "an implemented construct does not admit from a form the "
+            "language",
+            "withdrew and one a successor roadmap owns, and `spec.md`'s "
+            "register", "says why for each.", ""]
     named = titles(source)
     for where in sorted({row[3] for row in refused}):
         out.append("  %s %s" % (where, named.get(where.strip("[]"), "")))
-        for whose, name, written, at, item in refused:
+        for whose, name, written, at, standing in refused:
             if at != where:
                 continue
-            out.append("      %s refuses `%s`%s; boundary recorded by %s"
+            out.append("      %s refuses `%s`%s; %s"
                        % (whose, name,
-                          ", spelled %s" % written if written else "", item))
+                          ", spelled %s" % written if written else "",
+                          standing))
     out.append("")
 
     if codes:

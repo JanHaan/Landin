@@ -3822,7 +3822,7 @@ package body Landin.Tests.Parser_Suite is
                   "the deferred construct owns the diagnostic code");
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Note_Count (Report), 2,
-                  "the refusal names both the construct and its work");
+                  "the refusal names both the construct and its standing");
                if Landin.Diagnostics.Note_Count (Report) = 2 then
                   Landin.Testing.Check
                     (Item, Contains
@@ -3830,8 +3830,8 @@ package body Landin.Tests.Parser_Suite is
                      "the first note names the shared declaration rule");
                   Landin.Testing.Check_Equal
                     (Item, Landin.Diagnostics.Nth_Note (Report, 2),
-                     "ROADMAP.md R7.20 records this source-form boundary",
-                     "the second note records the boundary's owner");
+                     "this is a recorded source-form boundary",
+                     "the second note says the form is a boundary");
                end if;
             end;
          end if;
@@ -4117,7 +4117,7 @@ package body Landin.Tests.Parser_Suite is
                   "the deferred construct owns the diagnostic code");
                Landin.Testing.Check_Equal
                  (Item, Landin.Diagnostics.Note_Count (Report), 2,
-                  "the refusal names both the construct and its work");
+                  "the refusal names both the construct and its standing");
                if Landin.Diagnostics.Note_Count (Report) = 2 then
                   Landin.Testing.Check
                     (Item, Contains
@@ -4126,8 +4126,8 @@ package body Landin.Tests.Parser_Suite is
                   Landin.Testing.Check
                     (Item, Contains
                        (Landin.Diagnostics.Nth_Note (Report, 2),
-                        "R7.20 withdraws this form"),
-                     "the second note names the withdrawing work");
+                        "this form is withdrawn"),
+                     "the second note says the form is withdrawn");
                   Landin.Testing.Check
                     (Item, Contains
                        (Landin.Diagnostics.Nth_Note (Report, 2),

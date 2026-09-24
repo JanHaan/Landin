@@ -4,4 +4,4 @@ error[L0010]: a volatile pointer type is not part of the language
 1 | port: volatile ptr mut u32
   |       ^^^^^^^^
   = note: the tour describes it at [0850]
-  = note: ROADMAP.md R7.20 withdraws this form; use compiler.volatile_load, compiler.volatile_store, compiler.register_read or compiler.register_write through an ordinary pointer
+  = note: this form is withdrawn; use compiler.volatile_load, compiler.volatile_store, compiler.register_read or compiler.register_write through an ordinary pointer

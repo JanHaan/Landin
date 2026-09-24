@@ -94,6 +94,13 @@ package Landin.Diagnostics is
    --  fixture assertable.
    function Sorted (List : Diagnostic_List) return Diagnostic_List;
 
+   --  What a construct refused by name is, which [1830]'s second note
+   --  says: a recorded boundary of a construct that is otherwise enabled,
+   --  a form the language withdrew, or one a successor roadmap owns.  The
+   --  note names the state and never the work that set it, because a work
+   --  item is finished long before the note citing it stops being printed.
+   type Refusal_Standing is (Recorded_Boundary, Withdrawn, Transferred);
+
 private
 
    package ASU renames Ada.Strings.Unbounded;

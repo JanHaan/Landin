@@ -809,28 +809,33 @@ expression  ::= logical_and ("or" logical_and)*
 What is not enabled is refused, and named.
 A construct this tour describes and this grammar omits is not a
 guess the compiler gets to make. Meeting one is a diagnostic that
-names the construct and says which work enables it, so a program
-written against the whole tour fails with a list rather than with a
-parse error. The roadmap owns that list; this grammar owns what is
-already true. A named diagnostic for a disallowed source shape within an
-implemented construct instead identifies the source-form boundary recorded by
-that work; it must not claim that the complete construct remains unimplemented.
-For example, indexing requires a named place, inline structs require a named
-type declaration, and a labelled construction starts with a labelled field.
-R4.30 enables [1430]'s import alias and [1440]'s selected import forms;
-D201 states their binding and visibility rules.
-D212 withdraws [0820]'s formerly promised lexical `arena` block and builtin
-`arena` type. Both retain a named diagnostic citing R4.80's decision and the
-ordinary allocator replacement; their refusal is permanent rather than pending
-implementation. `arena` is not a keyword: a declared type, parameter, local,
-call or label with that spelling remains ordinary. Only the statement shape
-`arena name do` and an otherwise-unresolved builtin type spelling receive the
-migration diagnostic. No compiler rule recognizes the module `core/mem`.
-R7.20's notes are of the same permanent kind. D237's u128, i128 and f16 name
-their transfer to Language evolution; D238's `volatile ptr` names its
-withdrawal and the explicit operations that replace it; D236's constrained
-compositions and the shapes D233 and D241 leave outside their constructs name
-recorded boundaries.
+names the construct's paragraph and says what the refused form is, so a
+program written against the whole tour fails with a list rather than with a
+parse error. This grammar owns what is already true. The note says one of
+three things, and never names the work that decided it (D246).
+
+- A source-form boundary is a disallowed shape within an implemented
+  construct, and the note says it is a recorded boundary; it must not claim
+  that the complete construct remains unimplemented. For example, indexing
+  requires a named place, inline structs require a named type declaration,
+  and a labelled construction starts with a labelled field. D236's
+  constrained compositions and the shapes D233 and D241 leave outside their
+  constructs are of this kind.
+- A withdrawn form is one the language no longer has, and the note says it
+  is withdrawn and names what replaces it. D212 withdraws [0820]'s formerly
+  promised lexical `arena` block and builtin `arena` type, and both notes name
+  the ordinary allocator replacement. `arena` is not a keyword: a declared
+  type, parameter, local, call or label with that spelling remains ordinary.
+  Only the statement shape `arena name do` and an otherwise-unresolved builtin
+  type spelling receive the migration diagnostic. No compiler rule recognizes
+  the module `core/mem`. D238's `volatile ptr` names its withdrawal and the
+  explicit operations that replace it.
+- A transferred form is one a successor roadmap owns, and the note names the
+  successor. D237's u128, i128 and f16 name their transfer to Language
+  evolution.
+
+[1430]'s import alias and [1440]'s selected import forms are enabled; D201
+states their binding and visibility rules.
 
 ## THE RULES THE TOUR LEFT UNSAID
 
@@ -2131,7 +2136,7 @@ because it reads as a destructuring [1810] and nothing written once could be
 shared. A condition binding (D185), a type declaration, a type or fixed
 formal, a function and a variant part keep one name each and meet the same
 L0010. These are recorded boundaries, and the second note says
-"ROADMAP.md R7.20 records this source-form boundary".
+"this is a recorded source-form boundary".
 
 **The alternatives:** evaluating the initializer once per name, as though the
 declaration were retyped, was declined: an expression written once runs once,
@@ -2147,6 +2152,47 @@ type was declined for the destructuring reading.
 `runtime/shared-declarations-evaluate-once`, `negative/r491-shared-declaration`,
 `negative/shared-type-names-nothing`, `negative/shared-packed-fields-overlap`
 and `negative/shared-link-symbol-duplicates`.
+
+### D246 — A refusal by name says what the form is, not which work decided it
+
+**The discrepancy:** [1830] required a named refusal's second note to say
+"which work enables it", and every note printed `ROADMAP.md` and a work item
+of the first roadmap, followed by what the item did: recorded the boundary,
+withdrew the form or transferred it. By the time the first roadmap closed no
+note was a promise any more. Each named a finished item that had
+recorded a boundary, withdrawn a form or transferred one to a successor, so
+the item told a reader nothing the rest of the sentence did not. Pointing at
+`ROADMAP.md` for it pointed at a file that no longer holds that item's text.
+D190 had already had to move one refusal's item by editing a string, and
+D196 another, because an item finishes long before the diagnostic that names
+it stops being printed.
+
+**Chosen:** the second note states what the refused form is: "this is a
+recorded source-form boundary", "this form is withdrawn; " followed by what
+replaces it, or "this is transferred to Language evolution". The compiler
+records that as a standing in each refusal table, a recorded boundary, a
+withdrawal or a transfer, in place of the item it named, and the Report body
+writes the note from the standing alone. The first note, the paragraph, the
+codes L0010 and L0304 and every primary message are unchanged. The construct
+inventory holds each row with a refusal to explaining it in the row's own
+disposition, and a transferred refusal's row to naming the successor.
+
+**The alternatives:** keeping a pointer that outlives its item was declined
+for the reason above. Naming the decision, D212 or D236, in place of the item
+was declined: a decision is stable, but it is the reason for the refusal and
+not what the refusal is, and a reader who wants the reason reaches it from
+the paragraph the first note names. A fourth standing, "pending", for a
+construct the kernel will enable was left out because no refusal is one. If
+one is added, its note says the construct is not enabled yet, and which work
+enables it stays `ROADMAP.md`'s to say.
+
+**Pinned by** `negative/r491-shared-declaration`,
+`negative/arena-block-names-owner`, `negative/arena-type-names-owner`,
+`negative/r491-volatile-pointer`, `negative/refused-widths-name-their-owner`,
+`negative/r740-parameterized-application-boundary`,
+`negative/r720-range-subtype-array-element` and
+`negative/cortex-refused-type-named`, whose recorded reports carry the notes,
+and the parser case `shared declarations have a named refusal`.
 
 ## DECISIONS: NUMBERS AND LITERALS
 
@@ -2543,7 +2589,7 @@ today: none that has been recorded.
 **Pinned by** `negative/wide-integer-not-enabled`,
 `negative/float-type-not-enabled`,
 `negative/refused-widths-name-their-owner`, whose recorded report is where
-"ROADMAP.md R7.20 transfers this to Language evolution" is executable text
+"this is transferred to Language evolution" is executable text
 rather than a comment and which is the only fixture in the corpus that reaches `i128` at
 all, and the `types.values` guarantee row.
 
@@ -2594,8 +2640,8 @@ should lose them.
 Language evolution successor roadmap owns them, with a program that needs
 128-bit arithmetic or binary16 values as the trigger. The checker keeps its
 named L0304 for the three spellings; its message says the type is not in this
-version of the language and its second note says "ROADMAP.md R7.20 transfers
-this to Language evolution". [1790]'s thirteen scalar names, `Landin.Types`,
+version of the language and its second note says "this is transferred to
+Language evolution". [1790]'s thirteen scalar names, `Landin.Types`,
 the parser's scalar table and the highlighters are unchanged.
 
 New evidence answers D190's reason, and it is of three kinds.
@@ -6124,8 +6170,8 @@ composes.
 parameter, a named return and a conversion, which are exactly the positions
 where D188's check runs on the way in. The five refused positions keep their
 L0304 permanently: its primary message now says the position cannot be a
-range subtype, and its second note says "ROADMAP.md R7.20 records this
-source-form boundary". The external signature keeps [1580]'s report. [0660]
+range subtype, and its second note says "this is a recorded source-form
+boundary". The external signature keeps [1580]'s report. [0660]
 now states the boundary and names `distinct` as the carrier for a checked
 value in storage, which is [1730]'s habit.
 
@@ -9912,7 +9958,7 @@ a number is compared with `if` rather than matched. The grammar has no literal
 arm, D77 left scalar subjects refused, and the derived parser needed none.
 
 Recorded as boundaries: the rest keep L0304 and their second note says
-"ROADMAP.md R7.20 records this source-form boundary". An untyped struct
+"this is a recorded source-form boundary". An untyped struct
 literal needs a named type from its destination [0670]. An array literal takes
 its shape from an array destination or an inferred binding, and an uncounted
 repetition its length from an array destination, so a count-less inferred

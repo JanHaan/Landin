@@ -53,14 +53,14 @@ with every named refusal and the wording of its [1830] note.
 | `[0070]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0080]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[0090]` | executed | all | none | R3.10 | none | matrix evidence |
-| `[0100]` | executed | all | none | R1.50 | none | Atom name lists and D233's shared binding, field, parameter and return names are matrix evidence on all three targets. The inferred `a, b := e` shape and the declarations that keep one name are D233's recorded boundary, named by R7.20 in the refusal note. |
+| `[0100]` | executed | all | none | R1.50 | none | Atom name lists and D233's shared binding, field, parameter and return names are matrix evidence on all three targets. The inferred `a, b := e` shape and the declarations that keep one name are D233's recorded boundary, which the refusal note names. |
 | `[0110]` | executed | all | none | R1.50 | none | matrix evidence |
-| `[0120]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named `type` source-form boundary |
+| `[0120]` | executed | all | none | R2.20 | none | matrix evidence; a named refusal records the `type` source-form boundary |
 | `[0130]` | executed | all | none | R1.50 | none | matrix evidence |
 | `[0140]` | executed | all | none | R1.50 | none | matrix evidence |
-| `[0150]` | executed | all | none | R4.10 | Language evolution | The enabled widths are matrix evidence. D237 transfers u128 and i128 to Language evolution, triggered by a program that needs 128-bit arithmetic; the checker's named refusal says R7.20 transfers them. Arbitrary packed widths are D228's, admitted only in packed fields [0730]. |
+| `[0150]` | executed | all | none | R4.10 | Language evolution | The enabled widths are matrix evidence. D237 transfers u128 and i128 to Language evolution, triggered by a program that needs 128-bit arithmetic, and the checker's named refusal says so. Arbitrary packed widths are D228's, admitted only in packed fields [0730]. |
 | `[0160]` | executed | all | none | R2.10 | none | matrix evidence |
-| `[0170]` | executed | all | none | R4.10 | Language evolution | f32 and f64 are matrix evidence. D237 transfers f16 to Language evolution, triggered by a program that needs binary16 values; the checker's named refusal says R7.20 transfers it. |
+| `[0170]` | executed | all | none | R4.10 | Language evolution | f32 and f64 are matrix evidence. D237 transfers f16 to Language evolution, triggered by a program that needs binary16 values, and the checker's named refusal says so. |
 | `[0180]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[0190]` | executed | all | none | R1.60 | none | matrix evidence |
 | `[0200]` | executed | all | none | R1.60 | none | matrix evidence |
@@ -95,12 +95,12 @@ with every named refusal and the wording of its [1830] note.
 | `[0490]` | advisory | none | none | none | none | Usage guidance: pointers serve hardware, the C boundary and library internals, while everyday code uses slices, handles and indices. It states no rule the compiler enforces or a fixture could discriminate; the operations it points to are [0430]-[0480]'s rows. |
 | `[0500]` | executed | all | none | R4.20 | none | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
 | `[0510]` | executed | all | none | R3.30 | none | matrix evidence |
-| `[0520]` | executed | all | none | R2.20 | none | Array values, bounds and copies are matrix evidence; D241 adds whole-array discards and inferred literals of any element shape. Its checker refusals of the remaining forms are D241's recorded boundaries, named by R7.20 in the note, and genuine type errors among them are L0301. |
+| `[0520]` | executed | all | none | R2.20 | none | Array values, bounds and copies are matrix evidence; D241 adds whole-array discards and inferred literals of any element shape. Its checker refusals of the remaining forms are D241's recorded boundaries, which the note names, and genuine type errors among them are L0301. |
 | `[0530]` | executed | all | none | R2.20 | none | matrix evidence |
-| `[0540]` | executed | all | none | R2.20 | none | Zero images are matrix evidence. The local-array `zeroed` refusal is a guard no source reaches; D241 keeps it with R7.20's boundary wording, and `zeroed` as an operand is an L0301 type error. |
+| `[0540]` | executed | all | none | R2.20 | none | Zero images are matrix evidence. The local-array `zeroed` refusal is a guard no source reaches; D241 keeps it as a recorded boundary, and `zeroed` as an operand is an L0301 type error. |
 | `[0550]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[0560]` | executed | all | none | R2.20 | none | Typed, counted and mixed repetition are matrix evidence; R2.20 records the named repetition source-form boundary. D241, an R7.20 decision, records the count-less inferred initializer, non-scalar counted inference and zero lengths as the paragraph's boundary. |
-| `[0570]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named indexing source-form boundary, which requires a named place |
+| `[0560]` | executed | all | none | R2.20 | none | Typed, counted and mixed repetition are matrix evidence, and a named refusal records the repetition source-form boundary. D241 records the count-less inferred initializer, non-scalar counted inference and zero lengths as the paragraph's boundary. |
+| `[0570]` | executed | all | none | R2.20 | none | matrix evidence; a named refusal records the indexing source-form boundary, which requires a named place |
 | `[0580]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0590]` | executed | all | none | R4.50 | none | D209 and matrix evidence |
 | `[0600]` | executed | all | none | R4.10 | none | matrix evidence |
@@ -109,13 +109,13 @@ with every named refusal and the wording of its [1830] note.
 | `[0630]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0640]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0650]` | executed | all | none | R2.20 | none | named refusal |
-| `[0660]` | executed | all | none | R4.10 | none | Scalar range subtypes are matrix evidence under D188. D236 records the struct-field, array-element, reference-target, `addr` and generic-argument positions as the paragraph's permanent boundary, and their named refusals say R7.20 records it. |
-| `[0670]` | executed | all | none | R2.20 | none | Both struct forms are matrix evidence; R2.20 records the named inline-struct source-form boundary. D241 adds whole-struct discards and inferred struct copies, makes misused struct values L0301 type errors, and records the untyped literal and module-image forms as boundaries whose note names R7.20. |
-| `[0680]` | executed | all | none | R2.20 | none | Variant declaration, storage, construction and matching are matrix evidence, and D241 gives payload arrays every ordinary array-field expression. A variant part as a value, a case outside its part and a copied part are D241's recorded boundaries, named by R7.20 in the note. |
+| `[0660]` | executed | all | none | R4.10 | none | Scalar range subtypes are matrix evidence under D188. D236 records the struct-field, array-element, reference-target, `addr` and generic-argument positions as the paragraph's permanent boundary, and their named refusals say so. |
+| `[0670]` | executed | all | none | R2.20 | none | Both struct forms are matrix evidence, and a named refusal records the inline-struct source-form boundary. D241 adds whole-struct discards and inferred struct copies, makes misused struct values L0301 type errors, and records the untyped literal and module-image forms as boundaries the note names. |
+| `[0680]` | executed | all | none | R2.20 | none | Variant declaration, storage, construction and matching are matrix evidence, and D241 gives payload arrays every ordinary array-field expression. A variant part as a value, a case outside its part and a copied part are D241's recorded boundaries, which the note names. |
 | `[0690]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0700]` | executed | all | none | R2.20 | none | matrix evidence |
 | `[0710]` | executed | all | none | R2.20 | none | matrix evidence |
-| `[0720]` | executed | all | none | R2.20 | none | matrix evidence; R2.20 records the named all-`of` literal source-form boundary |
+| `[0720]` | executed | all | none | R2.20 | none | matrix evidence; a named refusal records the all-`of` literal source-form boundary |
 | `[0730]` | executed | all | none | R6.80 | Companion tool and ecosystem | D228 packed images, encoded unions and named-boolean set fields are matrix evidence on all three targets, the derived driver on Cortex-M. D238, an R7.20 decision, withdraws the `set(X)` former, whose unresolved application meets [1350]'s ordinary refusal. General SVD generation stays with Companion tool and ecosystem under R551-33, as the paragraph says. |
 | `[0740]` | executed | all | none | R6.80 | none | D228 access modes and register operations are matrix evidence, including the generated RP2040 consumers and the derived driver. D238, an R7.20 decision, withdraws the `register(t, read:, write:, reset:)` wrapper, which remains an ordinary parse error. |
 | `[0750]` | executed | all | none | R2.20 | none | Source order, optimal and C layout are matrix evidence. D239, an R7.20 decision, withdraws per-field byte order; `negative/r720-field-byte-order-withdrawn` pins that `big u16` is an ordinary field error. |
@@ -125,10 +125,10 @@ with every named refusal and the wording of its [1830] note.
 | `[0790]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0800]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0810]` | executed | all | none | R4.20 | none | D196 states [0470]'s actual derivation cut; the `pointer.integer-origin` evidence pins its non-guarantee |
-| `[0820]` | executed | all | none | R4.80 | none | D212 withdraws the lexical block and builtin parameter type, and R4.80 keeps their named withdrawal diagnostics; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
+| `[0820]` | executed | all | none | R4.80 | none | D212 withdraws the lexical block and builtin parameter type, and both keep a named withdrawal diagnostic; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
 | `[0830]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0840]` | executed | all | none | R2.50 | none | matrix evidence |
-| `[0850]` | executed | all | none | R6.80 | none | D227 volatile scalar access is matrix evidence on all three targets. D238 withdraws the `volatile ptr` type; its named L0010 now says R7.20 withdraws it and names the explicit volatile and register operations. |
+| `[0850]` | executed | all | none | R6.80 | none | D227 volatile scalar access is matrix evidence on all three targets. D238 withdraws the `volatile ptr` type; its named L0010 says the form is withdrawn and names the explicit volatile and register operations. |
 | `[0860]` | executed | all | none | R2.50 | none | matrix evidence |
 | `[0870]` | executed | all | none | R2.30 | none | matrix evidence |
 | `[0880]` | executed | all | none | R2.30 | none | matrix evidence |
@@ -172,13 +172,13 @@ with every named refusal and the wording of its [1830] note.
 | `[1260]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1270]` | compiled | all | none | R2.60 | none | Hosted compile-time rule audited by R4.90: conformance keys include their input tuples. R7.40 supplies the Cortex-M verdict rather than arguing the rule is target-neutral: `negative/r740-cortex-conformance-input-keys` compiles the colliding program for `cortex-m0` and records the same L0317 report, byte for byte, as the two hosted targets make. |
 | `[1280]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[1290]` | executed | all | none | R2.40 | none | matrix evidence; R2.40 records the named type-parameter source-form boundary |
+| `[1290]` | executed | all | none | R2.40 | none | matrix evidence; a named refusal records the type-parameter source-form boundary |
 | `[1300]` | executed | all | none | R2.40 | none | matrix evidence |
 | `[1310]` | executed | all | none | R2.70 | none | Evidence tables from R2.70 and D211's proved specialization and build report from R4.50 are matrix evidence; no delayed part remains, so R7.20's exit clause for [1310] can cite this evidence. |
 | `[1320]` | executed | all | none | R2.60 | none | matrix evidence |
 | `[1330]` | executed | all | none | R4.10 | none | matrix evidence |
 | `[1340]` | executed | all | none | R2.60 | none | matrix evidence |
-| `[1350]` | executed | all | none | R2.40 | none | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, and R7.40 corrected the note that promised them from the finished R2.40: it now says R2.40 records this source-form boundary, which `negative/r740-parameterized-application-boundary` pins byte for byte. `set(X)`, which D238 withdrew, meets this refusal as an unresolved application. |
+| `[1350]` | executed | all | none | R2.40 | none | Parameterized declarations are matrix evidence. Malformed applications are D135's recorded boundary, and the named refusal says so, which `negative/r740-parameterized-application-boundary` pins byte for byte. `set(X)`, which D238 withdrew, meets this refusal as an unresolved application. |
 | `[1360]` | executed | all | none | R3.20 | none | matrix evidence |
 | `[1370]` | executed | all | none | R2.80 | none | matrix evidence |
 | `[1380]` | executed | all | none | R2.80 | none | matrix evidence |
@@ -260,7 +260,7 @@ construct.
 | `[1270]` | `positive/r490-conformance-input-keys` | `negative/conformance-collision`, `negative/r490-conformance-input-alias-collision` | Whole-program conformance keys include normalized input tuples; unequal keys coexist and equal keys collide before runtime. |
 | `[1400]` | none | `negative/local-array-literal-inferred-element-mismatch` | Heterogeneous implicit boxing is deliberately absent; mismatched element types are rejected. Ordinary explicit `any` dispatch has separate executed rows. |
 | `[1730]` | `positive/range-subtypes` | none | A range-subtype value carries its proof between constrained positions; the recorded IR has no second check. A run cannot observe an elided check, so R7.10 moved this row here from its former principle class. |
-| `[1830]` | none | `negative/float-type-not-enabled`, `negative/indexing-not-enabled` | A construct the tour describes and the kernel has not enabled is refused with a diagnostic that names it and the work that enables it; the observable behaviour is that diagnostic. |
+| `[1830]` | none | `negative/float-type-not-enabled`, `negative/indexing-not-enabled` | A construct the tour describes and the kernel has not enabled is refused with a diagnostic that names it and says what it is; the observable behaviour is that diagnostic. |
 | `[1860]` | none | `negative/name-declared-nowhere`, `negative/condition-declaration-out-of-scope` | Every name must resolve in its scope; the observable failure is a compiler diagnostic. |
 
 ## Prototype derivation coverage

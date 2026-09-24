@@ -25,25 +25,27 @@ package body Landin.Diagnostics.Syntactic is
               Message => Message);
    begin
       --  [1830] promises two facts, so a refusal carries two notes and the
-      --  parser writes neither: the construct's paragraph and the work
-      --  that enables it both come out of tables above.
+      --  parser writes neither: the construct's paragraph and what it is
+      --  both come out of tables above.
       if Item = Construct_Not_Enabled then
          Add_Note
            (Built, "the tour describes it at " & Construct (Refused));
          Add_Note
            (Built,
-            "ROADMAP.md " & Enabled_By (Refused)
-            & (if Refused = Arena_Block
-               then " withdraws this form; pass an ordinary allocator"
-               elsif Refused = Volatile_Reference
-               then " withdraws this form; use compiler.volatile_load,"
-                    & " compiler.volatile_store, compiler.register_read or"
-                    & " compiler.register_write through an ordinary pointer"
-               elsif Refused in Declared_Type | Struct_Type | Type_Parameter
-                 | Array_Repetition | Indexing | Struct_All_Of
-                 | Shared_Declaration
-               then " records this source-form boundary"
-               else " is where it is enabled"));
+            (case Standing (Refused) is
+                when Recorded_Boundary =>
+                   "this is a recorded source-form boundary",
+                when Withdrawn =>
+                   "this form is withdrawn; "
+                   & (if Refused = Arena_Block
+                      then "pass an ordinary allocator"
+                      else "use compiler.volatile_load,"
+                           & " compiler.volatile_store,"
+                           & " compiler.register_read or"
+                           & " compiler.register_write through an ordinary"
+                           & " pointer"),
+                when Transferred =>
+                   "this is transferred to Language evolution"));
       elsif Note /= "" then
          Add_Note (Built, Note);
       end if;
