@@ -1,5 +1,5 @@
 class: negative
-summary: R7.40 [1860]'s refusal of a name that names nothing is name resolution, so the Cortex-M0 verdict is the hosted one
+summary: [1860]'s refusal of a name that names nothing is name resolution, so the Cortex-M0 verdict is the hosted one
 program: program.ldn
 codes: L0201
 constructs: 1860

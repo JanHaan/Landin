@@ -1,6 +1,6 @@
--- [1090]'s scoping block may carry [1180]'s label.  Before R7.20 the parser
+-- [1090]'s scoping block may carry [1180]'s label.  Once the parser
 -- read `scope: begin` as a binding and let `end scope` close the function
--- (J40); the statements after it and the next declaration show it does not.
+-- by mistake; the statements after it and the next declaration show it does not.
 demo: (x: i32) -> (out: i32) =
     out = 0
     scope: begin

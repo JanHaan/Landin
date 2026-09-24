@@ -1,7 +1,8 @@
-"""Complete inventoried R6.50 corpus, with explicit target/image dispositions.
+"""Complete inventoried Cortex-M corpus, with explicit target/image dispositions.
 
-ROADMAP.md owns the decisions. corpus.json is the executable selection record;
-physical limits are retained as limits, never as successful executions.
+corpus.json is the executable selection record and says why each shared
+fixture runs or does not; physical limits are retained as limits, never as
+successful executions.
 """
 import argparse
 import json
@@ -31,7 +32,7 @@ def inventory():
         for old, new in replacements:
             require(old in source, 'stale counterpart source difference: ' + name)
             source = source.replace(old, new)
-        expected = '-- R6.50 counterpart: the original hosted fixture remains unchanged.\n' + source
+        expected = '-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.\n' + source
         require((COUNTERPARTS / 'cases' / name / 'main.ldn').read_text() == expected,
                 'unreviewed counterpart change: ' + name)
     for name, row in rows.items():

@@ -1,5 +1,5 @@
 class: negative
-summary: [0170] leaves f16 to Language evolution, so the checker refuses that width by name citing D237's R7.20 transfer
+summary: [0170] leaves f16 to Language evolution, so the checker refuses that width by name citing D237's transfer
 constructs: 0170, 1790, 1830
 program: program.ldn
 codes: L0304

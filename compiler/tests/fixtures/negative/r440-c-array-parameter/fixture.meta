@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 refuses a by-value array parameter even though fixed arrays are admitted as C layout fields
+summary: the C boundary refuses a by-value array parameter even though fixed arrays are admitted as C layout fields
 program: program.ldn
 codes: L0301
 constructs: 0520, 1580

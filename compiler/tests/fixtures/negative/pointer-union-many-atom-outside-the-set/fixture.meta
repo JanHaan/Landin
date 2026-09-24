@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] an atom widens into the union only when the union holds its identity
+summary: [0480]/[1870] an atom widens into the union only when the union holds its identity
 constructs: 0480, 0640, 1870
 program: program.ldn
 codes: L0301

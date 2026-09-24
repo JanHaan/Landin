@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] `addr` of a `.val` reached through a union of several atoms and a pointer would hand out an atom case as an address
+summary: [0480]/[1870] `addr` of a `.val` reached through a union of several atoms and a pointer would hand out an atom case as an address
 constructs: 0380, 0430, 0480
 program: program.ldn
 codes: L0301

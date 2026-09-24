@@ -1,5 +1,5 @@
 class: positive
-summary: R7.20 [0480]/[1870] an atom, an atom subset, a pointer or a `ptr mut` relaxing to a `ptr` member, a one-atom union and a narrower union widen into a union of several atoms and a pointer through branches, matches, loop values, call-else, fields, elements, payloads, generic actuals, module images and every parameter convention
+summary: [0480]/[1870] an atom, an atom subset, a pointer or a `ptr mut` relaxing to a `ptr` member, a one-atom union and a narrower union widen into a union of several atoms and a pointer through branches, matches, loop values, call-else, fields, elements, payloads, generic actuals, module images and every parameter convention
 constructs: 0440, 0480, 0520, 0640, 0670, 0680, 0790, 0900, 0910, 0940, 1210, 1350, 1870, 1940
 program: program.ldn
 targets: linux-x86-64, macos-arm64

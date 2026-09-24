@@ -1,9 +1,9 @@
 # Complete prototype-4 application derivation
 
 This is the executable derivative of `prototype-4-app.md`, including the
-R4.20 handoffs and D191/D196/W7 resolution. The prototype remains a historical
-stress sketch; this program has no placeholder bodies. ROADMAP.md R4.80 owns
-acceptance and closure evidence.
+application obligations the hosted library left to it and the D191/D196/W7
+resolution. The prototype remains a historical stress sketch; this program
+has no placeholder bodies.
 
 | Prototype section | Complete source and behavior |
 | --- | --- |
@@ -69,8 +69,8 @@ input file, comparing counts and summary. `runtime/r480-hosted-text` runs that
 same root with an output path and a 9011-byte final unterminated line, reads
 back and checks every byte from the real file, closes it, and removes it.
 The runtime/quality/debugger matrices retain the original fixture oracles and
-native execution requirements; independent review and exact acceptance are
-recorded by the roadmap, not inferred from focused development checks.
+native execution requirements; a focused development check is not a verdict
+on the complete suite.
 
 `negative/r480-reader-live-line` preserves the refusal of a genuine second
 refill while the first line remains live. Separate loop-local line scopes may

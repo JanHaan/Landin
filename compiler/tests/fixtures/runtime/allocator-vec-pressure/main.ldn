@@ -1,9 +1,9 @@
 out_of_memory: atom
 exhausted: atom
 
---  This bounded variant is R3.20's executable state model. It exposes the
---  transitions R3.30's raw-storage type must represent; it is not proposed
---  raw-storage syntax.
+--  This bounded variant is the allocator pressure case's executable state
+--  model. It exposes the transitions raw storage must represent; it is not
+--  proposed raw-storage syntax.
 
 allocator: type = concept (a: type)
     alloc: (inout state: a, size: usize, alignment: usize)

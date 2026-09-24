@@ -1,4 +1,4 @@
--- R7.20's constructs meeting each other: shared names of a several-atom
+-- D233-D241's constructs meeting each other: shared names of a several-atom
 -- pointer union (D233, D235), an inferred array of that union (D241), whole
 -- discards (D241), shared union fields (D233) and a labelled block left from
 -- inside a loop over the array (D234).  Exit 42 means every step agreed.

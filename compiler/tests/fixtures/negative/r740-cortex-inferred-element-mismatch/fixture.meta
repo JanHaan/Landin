@@ -1,5 +1,5 @@
 class: negative
-summary: R7.40 [1400]'s refusal of heterogeneous implicit boxing is a type identity, so the Cortex-M0 verdict is the hosted one
+summary: [1400]'s refusal of heterogeneous implicit boxing is a type identity, so the Cortex-M0 verdict is the hosted one
 program: program.ldn
 codes: L0301
 constructs: 0520, 0530, 1400

@@ -1,4 +1,4 @@
---  D84/R7.20: a fixed-array payload takes every value an ordinary array
+--  D84: a fixed-array payload takes every value an ordinary array
 --  field takes.  An element, a call, `try`, array arithmetic, a control
 --  expression, a deeper field and a parameter each fill the payload, in
 --  construction and in case assignment, after the tag is selected.

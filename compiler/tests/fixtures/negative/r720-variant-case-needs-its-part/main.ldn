@@ -5,7 +5,7 @@ holder: type = struct
     end kind
 end holder
 
---  R7.20: a case is written where its variant part is the destination.
+--  A case is written where its variant part is the destination.
 f: () -> none =
     mut h: holder = zeroed
     h.kind = dot

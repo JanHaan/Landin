@@ -32,7 +32,7 @@
       "c-args": "-Wl,-alias,_r550_open,_open -Wl,-alias,_r550_write,_write -Wl,-alias,_r550_close,_close"
     },
     "runtime/large-array-offset-is-addressed": {
-      "reason": "The pinned Darwin loader cannot map the 2 GiB static reservation beside its shared cache; the matching native Clang control also aborts before main. Retain the original status-42 failure, native control and loader evidence as a platform limit, never a passing runtime verdict. General large-image placement remains the R5.20 successor disposition.",
+      "reason": "The pinned Darwin loader cannot map the 2 GiB static reservation beside its shared cache; the matching native Clang control also aborts before main. Retain the original status-42 failure, native control and loader evidence as a platform limit, never a passing runtime verdict. General large-image placement remains open work.",
       "limit": "darwin-shared-region"
     }
   },

@@ -1,4 +1,4 @@
--- R6.50 counterpart: the original hosted fixture remains unchanged.
+-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.
 --  [0480]: there is no null.  A union of one atom and a pointer type is a
 --  plain pointer whose empty case is zero, and matching is the only way to
 --  reach the pointer.

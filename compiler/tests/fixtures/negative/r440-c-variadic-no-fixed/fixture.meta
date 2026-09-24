@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 a native C variadic declaration requires at least one fixed parameter
+summary: a native C variadic declaration requires at least one fixed parameter
 program: program.ldn
 codes: L0103
 constructs: 1580

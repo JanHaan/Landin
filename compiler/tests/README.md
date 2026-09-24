@@ -31,8 +31,8 @@ generated files and refuses each when it is stale; the last two are written
 by `./scripts/test.sh --record`, because producing them means running compiler
 stages and asking the target model, which `check.py` cannot do. It will not
 tell you those two are stale — the harness and the gate will. `constructs.matrix`
-began as R1.90's list of every construct either document defines against what
-the corpus says about it. R7.10 completed it as the construct inventory: each
+began as the list of every construct either document defines against what
+the corpus says about it, and is now the construct inventory: each
 row also gives the strongest claim per product target, read from fixture
 metadata together with `darwin/parity.json`, `cortex-m/corpus.json` and
 `driver/fixture.json`; every named refusal with whether its note says the form
@@ -54,7 +54,7 @@ Fixture classes, and the directory each uses:
 | ABI | `abi` | emitted Landin assembly compiled with ordered C11 companions, then executed |
 | end-to-end | `end-to-end` | the toolchain from source to result |
 
-R4.60's scripted debugger programs live in `debugging/` and run through
+The scripted source-debugger programs live in `debugging/` and run through
 `scripts/debug.sh`, independently of the Ada fixture harness. The `debugger`
 metadata class has no directory; these sessions use debugger assertions
 rather than the harness's process-output fixture contract.
@@ -82,9 +82,9 @@ transcript begins with `FILTERED`, and an unknown selection fails: focused
 feedback cannot look like the complete suite by accident. On macOS use
 `--host`, optionally with one `--suite` or `--case`; native workload cases
 remain excluded and cannot be selected through that combination. `--fixture`
-and recording cannot combine with `--host`. Run Linux workloads in native
-Linux development slots and Darwin workloads natively. Exact-revision native
-acceptance owns closure.
+and recording cannot combine with `--host`. Run Linux workloads on a native
+Linux host and Darwin workloads natively; a filtered run is never a verdict
+on the complete suite.
 
 `./scripts/dev-test.sh --host` runs every compiler case except the two
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
@@ -94,7 +94,7 @@ The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
 acceptance ran the complete suite in both modes. Nothing runs either now:
 `.github/workflows/gate.yml` runs the complete suite in debug mode on Linux,
-and [`ROADMAP.md`](../../ROADMAP.md) schedules the rest. See
+and [`ROADMAP.md`](../../ROADMAP.md) schedules the fuller gate. See
 [`docs/process.md`](../../docs/process.md).
 
 D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
@@ -107,7 +107,7 @@ boundary in both directions for integer, float, pointer and mixed C-record
 bases. The IR atom-image unit case accepts a member identity and rejects a
 stored identity absent from the field's set.
 
-The R4.91 construction regressions distinguish runtime field/payload/fill
+The construction regressions distinguish runtime field/payload/fill
 arguments from static type arguments. `negative/r491-construction-type-arguments`
 pins value diagnostics in module and local contexts.
 `negative/r491-construction-type-fills` pins expression diagnostics for
@@ -124,7 +124,7 @@ invokes no tool.
 The checker case `nested calls retain flow effects` uses paired small sources
 to pin labelled-call assignment checks, nested sink and try effects, descriptor
 reads and assignment-destination order. Slice descriptor reads preserve
-independent element liveness. It preserves unevaluated fixed-array measurements and separately checked anonymous bodies. The R4.91 driver refusal
+independent element liveness. It preserves unevaluated fixed-array measurements and separately checked anonymous bodies. The driver refusal
 case requires the corresponding invalid sources to produce one L0302 before
 any output or tool invocation, for both assembly and executable requests.
 
@@ -162,7 +162,7 @@ it cannot write a delayed marker after the runner stops the group. These tests
 invoke no compiler, assembler or linker. Existing native cases retain ordinary
 exit, signal and default-capture coverage.
 
-The R4.91 readiness regressions cover static concept labels in both
+The readiness regressions cover static concept labels in both
 instantiation orders and a separately renamed receiver; computed callees
 retain unhandled/undeclared error diagnostics, inference, propagation and
 recovery. The driver exercises those refusals and over-limit binary chains
@@ -234,7 +234,7 @@ regression allowance. Source threshold decisions are checked against both
 measured cost inputs and actual direct/indirect machine sites, including shared
 fallback bodies. The runner retains disassembly, symbol and size output and
 compiler/assembly/object hashes in JSON after all acceptance checks pass.
-`ROADMAP.md` R4.50 owns the numeric bounds and completion evidence. The script
+The numeric bounds live in `quality/check.py` itself. The script
 writes actual observations to the selected build tree's
 `quality/measurements.json`; it never updates an acceptance bound or recorded
 fixture. Acceptance is the current command's zero exit, not the presence of
@@ -253,8 +253,8 @@ debugger operations are unavailable; missing debugger evidence is not a pass.
 
 On native macOS arm64, use `./scripts/debug.sh --target=darwin-arm64 --output DIR`
 with a fresh output directory. `debugging/darwin.py` checks the shared selected
-R4.60 fixture under none/off, size/auto and size/all, plus all thirteen scalar
-types in `darwin-scalars.ldn`. LLDB's SB API asserts source lines, stepping,
+Linux source-debugging fixture under none/off, size/auto and size/all, plus
+all thirteen scalar types in `darwin-scalars.ldn`. LLDB's SB API asserts source lines, stepping,
 nested caller values, represented aggregate/variant members, generic instances,
 source aliases and unavailable locals. It requires the packaged dSYM and a
 normal status-42 inferior exit; missing assertions or transport is a failure.
@@ -268,7 +268,7 @@ filenames or source breakpoint locations. Malformed identity controls run
 without a native debugger in `scripts/tests/test_macho_identity.py`.
 When debugging is selected, committed Mac acceptance requires all profiles
 and verifies their artifact identities; routine uses release and milestones
-use both compiler modes. R5.50 adds `--parity`, which runs the complete P2/P3/P4 LLDB
+use both compiler modes. `--parity` also runs the complete P2/P3/P4 LLDB
 workloads before these selected checks; see [the native parity guide](darwin/README.md).
 
 The complete `derived-parser` program runs in the same runner using none/off,
@@ -308,8 +308,8 @@ without GDB; `scripts/debug.sh` runs those regressions before the real sessions.
 
 The current Linux transport is native GDB on the native runner. The historical
 translated troubleshooting path uses `--runner=qemu`; `--qemu=PATH` selects
-the emulator explicitly. It is outside the R5/R6 development/acceptance loop.
-This uses QEMU's GDB remote
+the emulator explicitly. It stayed outside the development and acceptance loop
+of the macOS and Cortex-M work. This uses QEMU's GDB remote
 stub with the same assertions and reports its transport. It never turns a
 failed native session into a pass by automatically falling back to emulation.
 
@@ -349,7 +349,7 @@ already resides on its Linux filesystem.
 
 The runtime fixtures include small, complete programs rather than only
 single-construct probes. Eleven of them are collected in `examples.md` and
-use the language and hosted library implemented through R4.20:
+use the language and the hosted library:
 
 - [sensors](fixtures/runtime/sensors/main.ldn) polls two kinds of sensor
   through `any`, grows a list of readings in an arena its caller lends, and
@@ -544,8 +544,8 @@ stdout must match `run_expect` when present, and stderr must be empty even
 without an output file. The default `merged` policy preserves combined bytes.
 Recorded compiler expectations use the same stream contract.
 
-`constructs` is what R1.90 indexes the corpus by, and it is a written list
-rather than a reading of the summary. A citation in prose is prose: it is
+`constructs` is what the construct matrix indexes the corpus by, and it is a
+written list rather than a reading of the summary. A citation in prose is prose: it is
 there to explain the fixture to a person, it may name a paragraph the fixture
 merely mentions, and a heuristic over English is how a check ends up
 believing 114 lines of it were code. `check.py` holds every id to a paragraph
@@ -566,8 +566,8 @@ asserted values come from literals earns it. The failure this rule prevents
 is the one a matrix is most prone to: a full column that means nothing. When
 a claim turns out not to be earned, the honest repairs are to drop it or to
 make it true — `runtime/statements-run-as-they-read` claimed [1840] before
-it declared anything inside an arm, and grew a function that does. R7.10
-dropped [1550] from four fixtures whose passing another backend would not
+it declared anything inside an arm, and grew a function that does. The
+construct audit dropped [1550] from four fixtures whose passing another backend would not
 change, and [1730] from two that could not observe an elided check, and added
 [1570] to the firmware driver, whose interrupt handlers execute on Cortex-M.
 A claim that would fit every fixture discriminates none.
@@ -581,12 +581,12 @@ perfectly good: `negative/convention-not-enabled` names [1830] for the
 refusal and [0900] for the thing being refused, and [0900] is a paragraph
 about a construct no fixture can yet use.
 
-`targets` is required by R2.90 and checked against the targets `ROADMAP.md`
-names: `linux-x86-64`, `macos-arm64`, `cortex-m`, `synthetic-32`. A fixture
-may name a target the
-chassis does not describe yet — `macos-arm64` arrives at R5 — but not one the
-roadmap has never heard of, because that is how a fixture quietly stops
-applying to anything.
+`targets` is required, and `check.py` holds each name to the targets
+[the target applicability register](registers.md#target-applicability-coverage)
+allows: the three product targets `linux-x86-64`, `macos-arm64` and
+`cortex-m`, and `synthetic-32`, the 32-bit model that preceded the Cortex-M
+backend. A name outside that list is refused, because that is how a fixture
+quietly stops applying to anything.
 
 `expect` and `args` come as a pair. An expectation with no way to produce it
 is dead data that looks like coverage, and arguments with nothing to compare
@@ -653,8 +653,8 @@ requires `c-sources`; `c-args`, `run_args`, and `run_expect` remain optional.
 Accepted, emitted and executed are three claims and not one, which is why
 three classes make them. A positive fixture is a program the compiler must
 accept, and asking only that was how four of [1810]'s statement forms reached
-R1.80's audit having never been handed to a backend: every stage accepted
-them and no case asked for a byte of assembly. So the positive class now
+the first Linux backend's audit without ever having been handed to it: every
+stage accepted them and no case asked for a byte of assembly. So the positive class now
 emits as well, and a construct that reaches a compiler defect on the way to
 `.s` fails there rather than waiting for a runtime fixture to happen to use
 it. It is still not executed — most of the corpus is a fragment with no
@@ -695,7 +695,7 @@ that every construct in the grammar section is named by at least one fixture,
 so a production nothing pins is a reported fault rather than a quiet one.
 
 The corpus made the specification and its examples check each other before a
-compiler existed. R1.40's parser now has to agree with the same corpus, and a
+compiler existed. The parser now has to agree with the same corpus, and a
 disagreement between the parser and the grammar is a defect in one of them
 rather than a matter of opinion.
 
@@ -759,8 +759,8 @@ prototype finding they cite, requires every fixture to name applicable targets,
 and recovers prototype finding line numbers from the prototype sources. The
 copies are generated for reading; editing one cannot change its source.
 
-R7.60 added three columns to `prototypes.matrix`: `inputs`, `outputs` and
-`results`. All three are derived, never asserted beside the row. `inputs` and
+`prototypes.matrix` carries three derived columns: `inputs`, `outputs` and
+`results`, never asserted beside the row. `inputs` and
 `outputs` come from the fixture's own record — its program, root, arguments,
 C peer, status, ordered codes and a digest of every golden it cites — so an
 edited expected output or a changed code list moves the column and a stale
@@ -783,8 +783,8 @@ Every full `check.py` run fails if any generated copy is stale, and it refuses
 a code literal written anywhere else under `compiler/ada/src`.
 
 The catalogue check earned itself immediately: the driver had held `L0001` to `L0004`
-as literals since R0.50, and moving them into the catalogue was the first
-thing it demanded.
+as literals since it was first written, and moving them into the catalogue was
+the first thing it demanded.
 
 ## lowering.ir and layout.targets
 
@@ -802,10 +802,11 @@ these files means running compiler stages and asking the target model, so the
 Ada harness is what can produce them and **`python3 check.py` will not tell
 you either is stale.** `./scripts/test.sh` will, and so will the gate.
 
-`layout.targets` exists for an ordering reason R2.10 states: a description is
-the only thing a compiler with no such machine can be held to, and the
-synthetic 32-bit target has no backend. R6.20 separately instantiates its
-layout for Cortex-M0 and preserves these original goldens. Recording both targets rather than that one is deliberate —
+`layout.targets` exists for an ordering reason: target-parametric layout came
+before any 32-bit backend, a description is the only thing a compiler with no
+such machine can be held to, and the synthetic 32-bit target has no backend.
+The Cortex-M0 target separately instantiates its layout and preserves these
+original goldens. Recording both targets rather than that one is deliberate —
 what a reader needs is not "the 32-bit model says four" but the two columns
 beside each other, because the defect being guarded against is a description
 quietly inheriting the development host's answers. A `usize` that read eight
@@ -851,8 +852,7 @@ Providers remain explicit capabilities and cleanup is observable; no
 fixture-private replacement container library or implicit resource ownership
 stands in for the prototype. This same workload is mandatory in the six-profile
 runtime matrix, object-quality measurements and source-debugger acceptance
-above. These local runners do not replace the exact-revision native gate in
-`ROADMAP.md`.
+above.
 
 `runtime/derived-hosted-memory` hosts the complete prototype-4-derived
 application in `examples/derived_hosted/app`. The runnable hosted entry and
@@ -875,10 +875,10 @@ The table entry supplies the provider's concrete evidence arguments to the
 ordinary generic body; its source calling convention and the two-word `any`
 representation remain unchanged.
 
-R4.90 strengthens hosted parity closure beyond a populated construct column.
+Hosted parity asks for more than a populated construct column.
 Every hosted row must cite a Linux runtime or ABI program, except the explicitly
 registered compile-time rules whose exact acceptance/refusal is the oracle.
-`check.py` enforces this boundary when the parity item closes; it does not infer
+`check.py` enforces this boundary; it does not infer
 semantic adequacy from metadata. The audit adds distinct and inline nominal
 types, exact once-evaluated field fills, atom comparisons across structural
 sets, atom-bearing arrays/fields/payloads, parameterized union aliases,
@@ -886,16 +886,17 @@ conformance-key controls and recovered-error generic deduction. Review probes
 include static distinct Boolean/pointer images, type-name misuse, exact union
 application diagnostics and unused symbolic pointer obligations. Original
 refusal sources promoted to enabled grammar remain byte-for-byte positive
-fixtures, and all unchanged R4.80 recovery and provider oracles remain required.
+fixtures, and all unchanged derived-application recovery and provider oracles
+remain required.
 D212's
 ordinary allocator authority and all existing workload profiles remain required.
 
 
 ## Native Darwin lowering
 
-`compiler/tests/darwin/cases.json` selects the R5.30 lowering and ABI corpus,
-run by `compiler/tests/darwin/check.py` with none/off, size/auto and speed/all
-profiles. It reuses shared source/verdicts and has separate Apple varargs,
+`compiler/tests/darwin/cases.json` selects the first Darwin lowering and ABI
+corpus, run by `compiler/tests/darwin/check.py` with none/off, size/auto and
+speed/all profiles. It reuses shared source/verdicts and has separate Apple varargs,
 packed-stack/HFA/indirect-result and errno probes. Each run retains command
 arguments, outputs, hashes, assembly and native artifacts. Every emitted
 routine's frame record and reserved-register exclusion are checked; a C peer
@@ -914,17 +915,17 @@ and matching-revision approval are documented in
 [the Mac guide](../../environments/macos-arm64/README.md).
 
 
-R6.20's `cortex ABI` compiler-host suite compares scalar, nested/variant,
+The `cortex ABI` compiler-host suite compares scalar, nested/variant,
 evidence/any and call-plan results with `cortex-m.contract`; it also checks
 real lowered source and target/budget/refusal boundaries. The independent
 [Cortex-M probes](../../environments/cortex-m/README.md#layout-and-abi-evidence)
 compare every original synthetic-32 golden with GCC measurements and run
-C/assembly ABI controls in QEMU on the supported native Linux host. The native
-acceptance documents job retains their evidence. These are executable ABI
-contract controls. R6.50 adds separately identified generated M0 execution;
+C/assembly ABI controls in QEMU on the supported native Linux host. The retired
+native acceptance's documents job retained their evidence. These are executable ABI
+contract controls. Generated M0 execution is separately identified;
 these earlier controls retain their independent role.
 
-R6.30's `r630-memory-scalars` runs all supported widths, old-value and
+`r630-memory-scalars` runs all supported widths, old-value and
 compare-exchange outcomes, wrapping addition, volatile access and barriers.
 `abi/r630-native-memory` runs Landin-generated operations under independent
 pthread scheduling and compares increments with a C atomic control; publication
@@ -935,13 +936,13 @@ The `ir opt/memory events` case checks event preservation under every policy and
 malformed memory metadata refusals. Embedded controls and abstract cache models
 are separate evidence described in the Cortex-M guide.
 
-The R6.30 ABI counter passes through a concept provider and inferred generic
-call, so specialization profiles exercise real evidence dispatch. Its bounded
+The memory-model ABI counter passes through a concept provider and inferred
+generic call, so specialization profiles exercise real evidence dispatch. Its bounded
 SC-fence store-buffer litmus rejects 0/0, but the absence of that observation
 is not proof of a memory model. Every new negative pins exact diagnostic text;
 M0 RMW and eight-byte load requests retain their explicit target selection.
 
-The R6.40 development case `targets/packed image algebra and access plans`
+The development case `targets/packed image algebra and access plans`
 checks the compiler library with an independent bit-by-bit reference over
 257024 combinations, enum holes, 64-bit boundaries, indexed fields and the
 complete bounded access-mode table. It also compares four target descriptions.
@@ -957,11 +958,11 @@ bitfield/array display is not claimed.
 `packed.py` executes independent M0 C firmware. `packed_native.py` executes
 compiler-generated hosted instructions against Renode through a C bus transport,
 with literal independent image/trace assertions. Both are mandatory in the
-embedded probe/export path, alongside all R6.10/R6.20/R6.30 controls. ROADMAP.md
-owns results, assumptions, limits and exact-revision closure.
+embedded probe/export path, alongside the profile, layout/ABI and memory
+controls. The Cortex-M guide records their results, assumptions and limits.
 
 
-R6.50's `cortex-m/corpus.json` inventories every shared runtime/ABI fixture.
+`cortex-m/corpus.json` inventories every shared runtime/ABI fixture.
 The mandatory embedded runner executes every selected optimization/specialization
 profile, checks precise source refusals, and retains physical limits separately.
 `cortex-m/counterparts.json` pins exact 32-bit/architecture differences without
@@ -970,7 +971,7 @@ literal, including pointer/slice carriers and nested variant placement.
 The [embedded guide](../../environments/cortex-m/README.md#compiler-generated-execution)
 describes generated execution, independent ABI/instruction controls, peripheral
 traces, helper provenance and the external startup/linker boundary. GDB observes
-machine instructions and frame records; this is not R6.100 Landin debugging.
+machine instructions and frame records; this is not Landin source debugging.
 
 
 D229's `positive/r660-machine-directives` pins target-fixed parsing of typed
@@ -992,7 +993,7 @@ The [freestanding library lane](../../environments/cortex-m/README.md#freestandi
 executes CPU, allocation, pool, vector and ordinary-slice DMA consumers through
 compiler-owned firmware. It retains the original shared fixture oracles and
 the reviewed raw-storage 32-bit counterpart. This is additional target evidence;
-it neither removes a shared verdict nor asserts completion of R6.70.
+it neither removes a shared verdict nor claims a complete freestanding core.
 
 D232 adds `abi/r670-panic` on both native hosts, with independently pinned kinds
 and source-byte sites, no later actions/cleanup, recursion and hosted-root
@@ -1004,7 +1005,7 @@ injection. Optional map mismatch tests run under full `check.py`. These remain
 additional evidence and preserve the inherited fixture verdicts and lane
 boundaries.
 
-R6.80 generated-device source fixtures live under `devices/`, outside the
+Generated-device source fixtures live under `devices/`, outside the
 shared runtime corpus. `devices/test.py` verifies offline provenance and fresh
 regeneration; `devices/check_sources.py` records seven exact diagnostic-code
 refusals. The mandatory Cortex device lane compiles all six generated modules

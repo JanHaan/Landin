@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] `ptr` cannot mint a value for a union of several atoms and a pointer
+summary: [0480]/[1870] `ptr` cannot mint a value for a union of several atoms and a pointer
 constructs: 0470, 0480
 program: program.ldn
 codes: L0301

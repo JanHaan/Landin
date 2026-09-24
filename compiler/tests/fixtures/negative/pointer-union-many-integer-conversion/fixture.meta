@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] a union of several atoms and a pointer has no address to convert
+summary: [0480]/[1870] a union of several atoms and a pointer has no address to convert
 constructs: 0470, 0480
 program: program.ldn
 codes: L0301

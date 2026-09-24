@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 refuses Landin sink consumption convention in a C signature
+summary: the C boundary refuses Landin sink consumption convention in a C signature
 program: program.ldn
 codes: L0301
 constructs: 0910, 1580

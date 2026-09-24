@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] the union has one pointer case, so a second `ptr` arm names it twice
+summary: [0480]/[1870] the union has one pointer case, so a second `ptr` arm names it twice
 constructs: 0480, 1210
 program: program.ldn
 codes: L0311

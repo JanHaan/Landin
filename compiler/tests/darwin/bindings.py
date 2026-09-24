@@ -48,7 +48,7 @@ def main():
                 (generated / "bindings.ldn").read_text(), "missing Darwin guard")
         shutil.copyfile(inputs / "program.ldn", generated / "program.ldn")
         profiles = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')] if args.parity else [('none', 'off')]
-        summary['scope'] = 'R5.50' if args.parity else 'R5.30'
+        summary['scope'] = 'parity' if args.parity else 'selected'
         summary['profiles'] = []
         for optimize, specialize in profiles:
             label = 'bindings-' + optimize + '-' + specialize if args.parity else 'bindings'

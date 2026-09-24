@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] a union of several atoms and a pointer does not narrow to the pointer a named return wants
+summary: [0480]/[1870] a union of several atoms and a pointer does not narrow to the pointer a named return wants
 constructs: 0480, 1870
 program: program.ldn
 codes: L0301

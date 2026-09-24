@@ -1,6 +1,6 @@
 # Prototype 3 derivation
 
-This fixture is the executable R4.70 derivative of
+This fixture is the executable derivative of
 `prototype-3-containers.md`. The prototype remains the historical design and
 finding record; its raw-storage sketches and obsolete spellings are not edited
 or silently treated as current APIs. The reusable program is
@@ -27,7 +27,7 @@ status 42 is its complete oracle.
 | `app` — heterogeneous `any drawable` values | A `vec.list(any drawable)` contains interleaved `circle` and `label` values. The two implementations have different sizes and field offsets, and their draw entries make different counter/total contributions. `draw_all` invokes each erased `ptr mut T` entry, mutating the original provider counters and a shared canvas; exact totals, per-type call counts, and two label sentinels detect incorrect evidence routing. The initialized any pairs survive vector storage and traversal; explicit release leaves the counted hosted allocator at zero live allocations. |
 | Cross-prototype support | Prototype 2's rule that unknown `any` evidence remains indirect is exercised by the drawable calls. Prototype 4's heterogeneous mutable capability-chain pressure is represented by different erased layouts in one list, original-pointee mutation, initialized-prefix traversal, explicit allocator threading, and no assumption that optional specialization replaces semantic evidence. |
 
-## R4.70 compositions
+## Derived compositions
 
 The derivative keeps all three previously isolated compositions in ordinary
 workload code rather than in unreachable probes:
@@ -112,5 +112,5 @@ copies under a new prefix would:
   `negative/generic-any-carrier-frame-escape`
 - source-bearing traversal mismatch: `negative/iterable-retained-item-source`
 
-These citations are intentional reuse of the R4.20 corpus, not omitted R4.70
-coverage.
+These citations are intentional reuse of the hosted library corpus, not
+omitted derivative coverage.

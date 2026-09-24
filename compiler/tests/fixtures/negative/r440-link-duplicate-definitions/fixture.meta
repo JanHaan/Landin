@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 refuses two definitions sharing one link symbol even when their signatures agree
+summary: linking refuses two definitions sharing one link symbol even when their signatures agree
 program: program.ldn
 codes: L0301
 constructs: 1580, 1610

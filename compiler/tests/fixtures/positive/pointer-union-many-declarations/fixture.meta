@@ -1,5 +1,5 @@
 class: positive
-summary: R7.20 [0480]/[1870] a union of several atoms and one pointer is one structural identity whatever its written order, repeated members or aliases, and flattens an atom set, a one-atom union and another such union as members, while its pointer permission stays part of it
+summary: [0480]/[1870] a union of several atoms and one pointer is one structural identity whatever its written order, repeated members or aliases, and flattens an atom set, a one-atom union and another such union as members, while its pointer permission stays part of it
 constructs: 0440, 0480, 0640, 1795, 1870
 program: program.ldn
 targets: linux-x86-64, macos-arm64

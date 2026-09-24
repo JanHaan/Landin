@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 refuses incompatible C signatures sharing one external symbol
+summary: linking refuses incompatible C signatures sharing one external symbol
 program: program.ldn
 codes: L0301
 constructs: 1000, 1580, 1610

@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] a union of several atoms and a pointer is matched before it is read, so `.val` cannot name its referent
+summary: [0480]/[1870] a union of several atoms and a pointer is matched before it is read, so `.val` cannot name its referent
 constructs: 0430, 0480, 1210
 program: program.ldn
 codes: L0301

@@ -1,4 +1,4 @@
--- R6.50 counterpart: the original hosted fixture remains unchanged.
+-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.
 --  [0370], D14 and D17: a measurement is a usize the target decides.
 --  These answers are checked against what the System V ABI says for x86-64.
 row: type = [3]u16

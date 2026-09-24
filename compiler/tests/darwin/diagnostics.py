@@ -27,7 +27,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     run = Run(output)
-    summary = dict(scope='filtered' if args.case else 'R5.50', status='failed',
+    summary = dict(scope='filtered' if args.case else 'parity', status='failed',
                    refine_sha256=hash_file(args.refine), results=[])
     selected = list(candidates(ROOT))
     differences = json.loads((ROOT / 'compiler/tests/darwin/parity.json').read_text())['diagnostics']

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: R4.40 unchecked preserves the always-on guard against dynamically zero bare-pointer construction
+summary: unchecked preserves the always-on guard against dynamically zero bare-pointer construction
 program: main.ldn
 constructs: 0400, 0470, 1580, 1960
 traps: yes

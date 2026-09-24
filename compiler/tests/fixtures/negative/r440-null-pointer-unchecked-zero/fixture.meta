@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 unchecked never permits construction of a known null pointer
+summary: unchecked never permits construction of a known null pointer
 program: program.ldn
 codes: L0301
 constructs: 0460, 0480, 1690

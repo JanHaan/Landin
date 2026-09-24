@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] a union built from a frame address cannot leave through a named return, even beside an atom case
+summary: [0480]/[1870] a union built from a frame address cannot leave through a named return, even beside an atom case
 constructs: 0480, 0770, 0790, 1210
 program: program.ldn
 codes: L0314, L0314, L0314

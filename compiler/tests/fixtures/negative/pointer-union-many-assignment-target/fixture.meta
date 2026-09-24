@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] `.val` names no referent on the assignment side of a union of several atoms and a pointer either
+summary: [0480]/[1870] `.val` names no referent on the assignment side of a union of several atoms and a pointer either
 constructs: 0430, 0480
 program: program.ldn
 codes: L0301

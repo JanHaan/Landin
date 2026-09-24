@@ -1,4 +1,4 @@
--- R6.90 synthetic driver. DERIVATION.md states the device/lifetime premises.
+-- Synthetic driver. DERIVATION.md states the device/lifetime premises.
 -- Vendor images/accessors are unchanged; this is not an RP2040 board port.
 import rp2040/io_bank0
 import rp2040/uart0

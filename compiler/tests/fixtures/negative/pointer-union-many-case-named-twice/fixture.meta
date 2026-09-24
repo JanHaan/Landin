@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] each atom case of the union is named at most once, the rule an atom set already has
+summary: [0480]/[1870] each atom case of the union is named at most once, the rule an atom set already has
 constructs: 0480, 1210
 program: program.ldn
 codes: L0311

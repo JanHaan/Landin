@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 rejects an unknown external convention with a complete syntactic diagnostic rather than a catalogue-contract failure
+summary: the C boundary rejects an unknown external convention with a complete syntactic diagnostic rather than a catalogue-contract failure
 program: program.ldn
 codes: L0103
 constructs: 1580

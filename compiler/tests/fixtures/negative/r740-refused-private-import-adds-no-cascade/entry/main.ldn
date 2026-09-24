@@ -1,6 +1,6 @@
 import lib (private_value, offered)
 
---  R7.40: the import already said why `private_value` is not available
+--  The import already said why `private_value` is not available
 --  here.  Each later use of it adds no second report, while `offered`,
 --  imported in the same list, keeps resolving.
 public main: () -> (code: i32) =

@@ -1,5 +1,5 @@
 class: negative
-summary: R2.20 admits contextual module array images, but an indexed scalar is not an array initializer or a general array value
+summary: contextual module array images are admitted, but an indexed scalar is not an array initializer or a general array value
 constructs: 0520, 1740
 program: program.ldn
 codes: L0304

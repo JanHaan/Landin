@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] an `inout` union parameter takes a place of exactly its own union, never a narrower one
+summary: [0480]/[1870] an `inout` union parameter takes a place of exactly its own union, never a narrower one
 constructs: 0480, 0900, 1870
 program: program.ldn
 codes: L0301

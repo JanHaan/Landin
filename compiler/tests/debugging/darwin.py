@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native Darwin DWARF, identity, unwind and LLDB acceptance (R5.40)."""
+"""Native Darwin DWARF, identity, unwind and LLDB source-debugging acceptance."""
 import argparse
 import hashlib
 import json
@@ -222,7 +222,7 @@ def main():
     }, indent=2) + '\n')
     for tool in tools.values():
         assert digest(tool['path']) == tool['sha256'], 'tool changed during acceptance'
-    summary = {'scope': 'R5.40', 'status': 'passed', 'filtered': args.profile is not None,
+    summary = {'scope': 'source-debugging', 'status': 'passed', 'filtered': args.profile is not None,
                'refine_sha256': digest(args.refine), 'tools': tools, 'results': results,
                'panic': panic_evidence,
                'sources': {str(s.relative_to(ROOT)): digest(s) for s in all_sources}}

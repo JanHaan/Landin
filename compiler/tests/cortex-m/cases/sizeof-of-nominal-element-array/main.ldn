@@ -1,4 +1,4 @@
--- R6.50 counterpart: the original hosted fixture remains unchanged.
+-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.
 point: type = struct
     x: i32
     y: i32

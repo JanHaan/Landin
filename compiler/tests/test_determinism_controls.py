@@ -3,10 +3,10 @@
 
 `test_determinism.py` passes today, which proves nothing on its own: a check
 that cannot fail reports success forever while the property it named rots.
-R730-18's editor grammar drifted for exactly that reason, and R730-22 records
-that the pass nobody runs still cannot fail.  So every refusal in the
-determinism contract is exercised here against a synthetic artifact that
-violates it, and this file runs in the same acceptance jobs.
+The structural editor grammar drifted for exactly that reason, and its
+integration pass still cannot fail while nobody runs it.  So every refusal
+in the determinism contract is exercised here against a synthetic artifact
+that violates it, and this file runs in the same acceptance jobs.
 """
 from __future__ import annotations
 

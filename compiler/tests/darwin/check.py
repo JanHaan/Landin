@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native Darwin lowering/ABI execution; R5.50 owns the full parity corpus."""
+"""Native Darwin lowering/ABI execution, and with --parity the full hosted parity corpus."""
 import argparse
 import hashlib
 import json
@@ -113,7 +113,7 @@ def main(argv=None):
     if args.parity:
         retained_driver.write_text('#!/bin/sh\nexec /usr/bin/clang -save-temps=obj -x assembler "$@"\n')
         retained_driver.chmod(0o755)
-    summary = {"schema": 1, "scope": "filtered" if args.case or args.profile else "R5.50" if args.parity else "R5.30",
+    summary = {"schema": 1, "scope": "filtered" if args.case or args.profile else "parity" if args.parity else "selected",
                "refine_sha256": hash_file(refine), "cases_sha256": hash_file(HERE / "cases.json"),
                "results": [], "status": "failed"}
     try:

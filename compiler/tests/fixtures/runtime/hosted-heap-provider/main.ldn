@@ -19,7 +19,7 @@ is_absent: (value: allocation) -> (empty: bool) =
 end is_absent
 
 --  This fixture-local provider is an observer, not the reusable failure
---  wrapper owned by the next R4.20 increment.  It delegates every operation
+--  wrapper `core/failing` supplies.  It delegates every operation
 --  to the real heap while retaining the two simultaneously live extents.
 audit: type = struct
     inner: heap.system

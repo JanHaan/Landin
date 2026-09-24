@@ -1,5 +1,5 @@
 class: negative
-summary: R7.40 pins the report [1580]'s refused categories actually make, a C-signature type error naming the paragraph, after removing the refusal entry nothing raised
+summary: the report [1580]'s refused categories actually make is a C-signature type error naming the paragraph, and no refusal entry that nothing raised remains
 program: program.ldn
 expect: expected.txt
 args: ../tests/fixtures/negative/r740-c-category-boundary/program.ldn

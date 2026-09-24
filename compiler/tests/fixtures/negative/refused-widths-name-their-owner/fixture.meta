@@ -1,5 +1,5 @@
 class: negative
-summary: D237 makes the three refused widths name R7.20's transfer to Language evolution, in the rendered report
+summary: D237 makes the three refused widths name their transfer to Language evolution, in the rendered report
 expect: expected.txt
 targets: linux-x86-64, macos-arm64
 args: ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn

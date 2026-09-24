@@ -1,5 +1,5 @@
 class: negative
-summary: R7.40 reports a private selected import once, at its import, and its three later uses add no follow-on refusal
+summary: a private selected import is reported once, at its import, and its three later uses add no follow-on refusal
 expect: expected.txt
 args: --root=../tests/fixtures/negative/r740-refused-private-import-adds-no-cascade/root ../tests/fixtures/negative/r740-refused-private-import-adds-no-cascade/entry
 codes: L0202

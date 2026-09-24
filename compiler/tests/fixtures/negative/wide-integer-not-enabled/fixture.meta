@@ -1,5 +1,5 @@
 class: negative
-summary: [0150] leaves u128 and i128 to Language evolution and [1790]'s types stop at 64 bits, so the checker refuses one by name citing D237's R7.20 transfer
+summary: [0150] leaves u128 and i128 to Language evolution and [1790]'s types stop at 64 bits, so the checker refuses one by name citing D237's transfer
 constructs: 0150, 1790, 1830
 program: program.ldn
 codes: L0304

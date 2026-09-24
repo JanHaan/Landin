@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 native link-only syntax does not turn a native function into a C callback
+summary: native link-only syntax does not turn a native function into a C callback
 program: program.ldn
 codes: L0301
 constructs: 1000, 1580, 1610

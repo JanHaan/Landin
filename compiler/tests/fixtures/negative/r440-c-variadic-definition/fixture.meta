@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 diagnoses a direct receiving variadic definition and requires a generated incoming-varargs adapter
+summary: the C boundary diagnoses a direct receiving variadic definition and requires a generated incoming-varargs adapter
 program: program.ldn
 codes: L0301
 constructs: 1580

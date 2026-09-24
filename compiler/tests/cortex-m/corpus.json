@@ -3,162 +3,162 @@
   "fixtures": {
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/darwin-stack-composite-slots/fixture.meta"
     },
     "abi/r440-bindings-generated": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-bindings-generated/fixture.meta"
     },
     "abi/r440-errno-interposition": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-errno-interposition/fixture.meta"
     },
     "abi/r440-errno-thread-local": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-errno-thread-local/fixture.meta"
     },
     "abi/r440-native-aggregates": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-aggregates/fixture.meta"
     },
     "abi/r440-native-banks": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-banks/fixture.meta"
     },
     "abi/r440-native-bounds": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-bounds/fixture.meta"
     },
     "abi/r440-native-callback-array-fields": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-callback-array-fields/fixture.meta"
     },
     "abi/r440-native-callbacks": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-callbacks/fixture.meta"
     },
     "abi/r440-native-dollar-link": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-dollar-link/fixture.meta"
     },
     "abi/r440-native-hosted": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-hosted/fixture.meta"
     },
     "abi/r440-native-link-namespace": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-link-namespace/fixture.meta"
     },
     "abi/r440-native-nested-shape": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-nested-shape/fixture.meta"
     },
     "abi/r440-native-recursive-array-fields": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-recursive-array-fields/fixture.meta"
     },
     "abi/r440-native-renamed-main": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-renamed-main/fixture.meta"
     },
     "abi/r440-native-scalars": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-scalars/fixture.meta"
     },
     "abi/r440-native-startup-empty": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-startup-empty/fixture.meta"
     },
     "abi/r440-native-startup-initialized": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-startup-initialized/fixture.meta"
     },
     "abi/r440-native-startup-replaced": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-startup-replaced/fixture.meta"
     },
     "abi/r440-native-startup-uninitialized": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-startup-uninitialized/fixture.meta"
     },
     "abi/r440-native-varargs": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-native-varargs/fixture.meta"
     },
     "abi/r440-smoke": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-smoke/fixture.meta"
     },
     "abi/r440-sret-pointer-observation": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-sret-pointer-observation/fixture.meta"
     },
     "abi/r440-varargs-pointer-callback": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r440-varargs-pointer-callback/fixture.meta"
     },
     "abi/r450-review-backend-c-entry": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r450-review-backend-c-entry/fixture.meta"
     },
     "abi/r450-x86-callee-probes": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r450-x86-callee-probes/fixture.meta"
     },
     "abi/r490-distinct-c-roundtrip": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r490-distinct-c-roundtrip/fixture.meta"
     },
     "abi/r630-dma-slice": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r630-dma-slice/fixture.meta"
     },
     "abi/r630-native-memory": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r630-native-memory/fixture.meta"
     },
     "abi/r640-dma-packed": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r640-dma-packed/fixture.meta"
     },
     "abi/r640-exhaustive-encodings": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r640-exhaustive-encodings/fixture.meta"
     },
     "abi/r640-reserved-trap": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. R6.20 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
       "witness": "compiler/tests/fixtures/abi/r640-reserved-trap/fixture.meta"
     },
     "abi/r670-noreturn": {
@@ -260,21 +260,21 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/benchmark-game-fasta": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/benchmark-game-mandelbrot": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/binary-search": {
       "mode": "execute"
@@ -300,7 +300,7 @@
     "runtime/calls-return-through-the-abi": {
       "mode": "execute",
       "counterpart": "calls-return-through-the-abi",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/character-literal-codepoints": {
       "mode": "execute"
@@ -364,7 +364,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-allocators": {
       "mode": "execute"
@@ -380,14 +380,14 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-initialized-prefix": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-owned-bytes": {
       "mode": "refuse",
@@ -395,26 +395,26 @@
         "L0300",
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-raw-storage": {
       "mode": "execute",
       "counterpart": "core-mem-raw-storage",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/core-mem-reference-prefix": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-zero-prefix": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-text-byte-positions": {
       "mode": "execute"
@@ -422,28 +422,28 @@
     "runtime/core-text-runtime-helpers": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/core-tree-count-overflow": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-tree-indices": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-tree-provider-failures": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-vec-pointer-storage": {
       "mode": "execute"
@@ -453,28 +453,28 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-vec-used-sort": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/cstring-first-nul-validation": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/cstring-traversal-invalid-traps": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/declared-errors-direct-and-inferred": {
       "mode": "execute"
@@ -499,7 +499,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/deferred-call-drops-its-result": {
       "mode": "execute"
@@ -512,7 +512,7 @@
     },
     "runtime/derived-containers": {
       "mode": "refuse",
-      "reason": "The complete hosted derivative imports core/heap, whose allocator/releaser require extern(c). R6.70 owns the freestanding core path. This is not an emulator execution verdict.",
+      "reason": "The complete hosted derivative imports core/heap, whose allocator/releaser require extern(c); the freestanding core slice has no such provider. This is not an emulator execution verdict.",
       "codes": [
         "L0301"
       ]
@@ -522,14 +522,14 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/derived-parser": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/derived-storage-address-origin": {
       "mode": "execute"
@@ -539,7 +539,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
@@ -574,7 +574,7 @@
     "runtime/fixed-conditional-generic-runtime": {
       "mode": "execute",
       "counterpart": "fixed-conditional-generic-runtime",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/fixed-conditional-runtime": {
       "mode": "execute",
@@ -586,7 +586,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/float-decimal-rounding": {
       "mode": "execute"
@@ -720,14 +720,14 @@
         "L0300",
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/hosted-io-reads-parser-input": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/hosted-text-traversal": {
       "mode": "execute"
@@ -786,7 +786,7 @@
     "runtime/large-array-offset-is-addressed": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/lenof-array-literal-is-compile-time": {
       "mode": "execute"
@@ -851,7 +851,7 @@
     "runtime/measurements-answer-for-the-target": {
       "mode": "execute",
       "counterpart": "measurements-answer-for-the-target",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/merge-sort": {
       "mode": "execute"
@@ -936,7 +936,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/narrow-scalars-in-stack-slots": {
       "mode": "execute"
@@ -965,7 +965,7 @@
     "runtime/nested-struct-measurements-answer-for-the-target": {
       "mode": "execute",
       "counterpart": "nested-struct-measurements-answer-for-the-target",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/nested-struct-returns-cross-calls": {
       "mode": "execute"
@@ -1009,7 +1009,7 @@
     "runtime/pointer-unions": {
       "mode": "execute",
       "counterpart": "pointer-unions",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/r230-composition": {
       "mode": "execute"
@@ -1020,14 +1020,14 @@
     "runtime/r250-references": {
       "mode": "execute",
       "counterpart": "r250-references",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/r420-argument-text-worlds": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-array-place-recovery": {
       "mode": "execute"
@@ -1035,14 +1035,14 @@
     "runtime/r420-buffer-real-exhaustion": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-failing-providers": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-fixed-array-pointer-whole-copy": {
       "mode": "execute"
@@ -1053,78 +1053,78 @@
     "runtime/r420-list-real-exhaustion": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-map-arena": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-map-failure-rollback": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-map-operations": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-map-reference-providers": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-memory-delivery": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-memory-world": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-memory-world-boundaries": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-object-buffer-providers": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-pool-provider": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-reader-cleanup": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-reference-provider-matrix": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-runtime-array-writes": {
       "mode": "execute"
@@ -1134,31 +1134,31 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-small-real-exhaustion": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-small-vector": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-small-vector-providers": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-stateful-filter-list": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-static-nested-array-stores": {
       "mode": "execute"
@@ -1166,12 +1166,12 @@
     "runtime/r420-tree-real-exhaustion": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-vec-capacity-boundaries": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-vec-growth-boundary": {
       "mode": "execute"
@@ -1179,24 +1179,24 @@
     "runtime/r420-vec-growth-transaction": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r420-vec-large-list": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r430-fixed-tools": {
       "mode": "execute",
       "counterpart": "r430-fixed-tools",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/r430-static-library": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r440-aggregate-shaped-copy-endpoints": {
       "mode": "execute"
@@ -1206,14 +1206,14 @@
       "codes": [
         "L0324"
       ],
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. R6.20 does not enable a Cortex core/c surface; R6.70 owns freestanding core."
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
     },
     "runtime/r440-callback-pointer-witness": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r440-checker-qualified-alias-conversions": {
       "mode": "execute"
@@ -1223,7 +1223,7 @@
       "codes": [
         "L0324"
       ],
-      "reason": "The inherited core/c module asserts its hosted LP64 target guard. R6.20 does not enable a Cortex core/c surface; R6.70 owns freestanding core."
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
     },
     "runtime/r440-checker-qualified-range-traps": {
       "mode": "execute"
@@ -1236,14 +1236,14 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r440-io-partial-progress": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r440-optional-origin-edges": {
       "mode": "execute"
@@ -1269,7 +1269,7 @@
     "runtime/r450-array-large-loop": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r450-array-later-division-zero": {
       "mode": "execute"
@@ -1315,12 +1315,12 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r450-review-backend-large-routine": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r450-review-frontend-imports": {
       "mode": "execute"
@@ -1360,7 +1360,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r480-arena-nested-exhaustion": {
       "mode": "execute"
@@ -1379,14 +1379,14 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r480-hosted-text": {
       "mode": "refuse",
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r480-loop-fresh-view": {
       "mode": "execute"
@@ -1493,7 +1493,7 @@
     "runtime/r491-cleanup-verifier-storage": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/r491-consumed-place-restoration": {
       "mode": "execute"
@@ -1536,7 +1536,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "D227 and R6.20 target capabilities refuse M0 RMW and eight-byte memory intrinsics; backend-memory.ldn executes every admitted width/order instead."
+      "reason": "D227 and the Cortex-M0 target capabilities refuse M0 RMW and eight-byte memory intrinsics; backend-memory.ldn executes every admitted width/order instead."
     },
     "runtime/r630-volatile-load-alignment": {
       "mode": "execute"
@@ -1706,7 +1706,7 @@
     "runtime/sizeof-of-nominal-element-array": {
       "mode": "execute",
       "counterpart": "sizeof-of-nominal-element-array",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/slice-half-open-upper-traps": {
       "mode": "execute"
@@ -1813,7 +1813,7 @@
     "runtime/text-range-slicing": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "R6.10 selected profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. R551-07 and R6.50/R6.60 own this boundary."
+      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
     },
     "runtime/try-nominal-inference": {
       "mode": "execute"
@@ -1871,7 +1871,7 @@
       "codes": [
         "L0301"
       ],
-      "reason": "R6.20 retains refusal of the general C source surface; freestanding core remains R6.70."
+      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"
@@ -1930,7 +1930,7 @@
     "runtime/variant-part-measurements-answer-for-the-target": {
       "mode": "execute",
       "counterpart": "variant-part-measurements-answer-for-the-target",
-      "reason": "R6.20 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
+      "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/variant-returns-cross-calls": {
       "mode": "execute"

@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 explicitly refuses labels even for the fixed prefix of a C variadic call
+summary: the C boundary explicitly refuses labels even for the fixed prefix of a C variadic call
 program: program.ldn
 codes: L0301
 constructs: 0980, 1580

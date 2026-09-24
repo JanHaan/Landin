@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 refuses a slice descriptor as a native C parameter
+summary: the C boundary refuses a slice descriptor as a native C parameter
 program: program.ldn
 codes: L0301
 constructs: 0570, 1580

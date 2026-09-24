@@ -1,5 +1,5 @@
 class: negative
-summary: R4.40 scalar-tail integration refuses C structs in a variadic tail rather than misclassifying an address as by-value storage
+summary: C variadic scalar-tail integration refuses C structs in a variadic tail rather than misclassifying an address as by-value storage
 program: program.ldn
 codes: L0301
 constructs: 0670, 1580

@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] an arm may name only an atom the matched union holds
+summary: [0480]/[1870] an arm may name only an atom the matched union holds
 constructs: 0480, 0640, 1210
 program: program.ldn
 codes: L0301

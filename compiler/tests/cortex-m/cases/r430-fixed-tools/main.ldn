@@ -1,4 +1,4 @@
--- R6.50 counterpart: the original hosted fixture remains unchanged.
+-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.
 option count: u32 = 41
 option next: u32 = count + 1
 compiler.assert(next == 42)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The declared determinism contract, checked on every target.
 
-R4.90 closed "equivalent builds produce identical assembly and behavior under
-the pinned toolchain" for Linux x86-64 alone, and it closed it under the
+Hosted Linux parity claimed "equivalent builds produce identical assembly and
+behavior under the pinned toolchain" for Linux x86-64 alone, under the
 weakest equivalence there is: `compiler/tests/quality/check.py` runs one
 command twice in one directory.  A property that only holds when nothing
 differs is not a determinism property, and a claim without a stated
@@ -38,7 +38,7 @@ the build directory fails here, which is the whole point of checking a
 boundary instead of excusing it.
 
 What is deliberately NOT claimed: bit-identity of a linked HOSTED image.
-R4.90's exit clause says "identical assembly and behavior", and the measured
+The hosted parity claim says "identical assembly and behavior", and the measured
 reason that wording is right is recorded in `linked_image` below: on the
 pinned Linux toolchain two links of one unchanged assembly differ in six
 bytes, in the same directory, from the same command, because the GNU driver
@@ -261,7 +261,7 @@ def equivalent_closures(refine: Path, source, root: Path | None, target: str,
             label + ": build report is not deterministic beyond its paths")
     check_canonical_sources(runs[0][1], label)
 
-    #  Repetition in one directory: R4.90's Linux-only property, on every
+    #  Repetition in one directory: the old Linux-only property, on every
     #  target, and now over the report's paths as well.
     again = alpha / "out-again.s"
     again_report = alpha / "out-again.json"

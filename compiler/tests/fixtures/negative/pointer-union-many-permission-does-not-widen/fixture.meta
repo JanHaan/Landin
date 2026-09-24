@@ -1,5 +1,5 @@
 class: negative
-summary: R7.20 [0480]/[1870] a read-only pointer or a read-only union does not widen into a union whose member is `ptr mut`
+summary: [0480]/[1870] a read-only pointer or a read-only union does not widen into a union whose member is `ptr mut`
 constructs: 0440, 0480, 1870
 program: program.ldn
 codes: L0301, L0301

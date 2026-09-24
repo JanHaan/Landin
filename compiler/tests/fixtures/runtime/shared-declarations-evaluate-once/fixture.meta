@@ -1,7 +1,7 @@
 class: runtime
 profiles: standard
 summary: a shared declaration evaluates its value once for the first name, copies it into independent later names, and distributes type, fields, conventions and `from`
-# `mut first, second: i32` is R4.91's refused shared declaration, now module
+# `mut first, second: i32` was once a refused shared declaration, and is now module
 # state whose two names hold zero and change independently.
 constructs: 0060, 0100, 0670, 0680, 0790, 0900, 1790, 1795, 1800
 program: main.ldn
