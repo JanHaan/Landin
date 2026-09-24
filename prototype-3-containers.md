@@ -69,11 +69,11 @@ question is written out at the end.
 
 ## core/mem  —  allocation as a capability
 
-R3.40 implements the allocator interface below in repository `core/mem`, plus
-an explicit monotonic arena and a budgeted failing arena. R3.30's private
-`raw(t)` supersedes the later `slice_from` sketch: the public `storage(t)` alias
-lets `core/vec` name that nominal identity without exposing its fields, and a
-checked one-slot transfer copies initialized values during growth. The
+The repository `core/mem` implements the allocator interface below, plus an
+explicit monotonic arena and a budgeted failing arena. Its private raw storage
+`raw(t)` (D151) supersedes the later `slice_from` sketch: the public
+`storage(t)` alias lets `core/vec` name that nominal identity without exposing
+its fields, and a checked one-slot transfer copies initialized values during growth. The
 initialized slice witness holds exactly that prefix: a complete typed store
 precedes each extension, and `mem.used` returns the witness `from storage`.
 It never turns capacity into a slice length; `mem.replace` checks an existing
@@ -152,8 +152,8 @@ than checked, which is [1730] with the check missing. [Z8]
 
 The original relative `align_up(used, alignment)` sketch was insufficient for
 caller storage whose base address is not already aligned, and its addition
-could overflow. R4.20 replaces it with a checked internal operation over the
-absolute base address and the complete request:
+could overflow. The hosted library replaces it with a checked internal
+operation over the absolute base address and the complete request:
 
 ```landin
 allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
@@ -277,7 +277,7 @@ binder, which is invented. [Z1]
 ## core/mem  —  slices from an allocator
 
 The `new_slice`/`drop_slice` sketch below preserves the original pressure, not
-the R4.20 allocation API. Spare capacity has no typed slice image: the private
+the hosted library's allocation API. Spare capacity has no typed slice image: the private
 raw state and `used` expose only initialized items. `mem.new(state, value)`
 stores a complete value before returning its pointer; `mem.delete` releases
 that object through the same allocator. The byte-specific `mem.new_bytes`
@@ -340,15 +340,16 @@ end drop_slice
 
 ## core/vec  —  a growing array
 
-R3.40 implements the parser-support subset with honest raw storage rather than
-the spare-capacity slice sketched below. It supplies construction, reserve,
-push, pop, indexed get, length, capacity and release. R4.20 adds `used`,
-which exposes only the initialized prefix with its storage-derived origin.
+The parser-support core implements the subset with honest raw storage rather
+than the spare-capacity slice sketched below. It supplies construction,
+reserve, push, pop, indexed get, length, capacity and release. The hosted
+library adds `used`, which exposes only the initialized prefix with its
+storage-derived origin.
 The executable pointer-vector case already proves allocation rollback and
 publication order. Traversal uses `for value in vec.used(list)`; a universal
 list conformance to [1320] is not supplied.
 
-R4.20's D194 hardens that implementation: reserve checks the byte product and
+D194 hardens that implementation: reserve checks the byte product and
 push checks geometric doubling before provider calls; impossible arithmetic
 reports `out_of_memory` and preserves the old list. Copy and drain now use
 loops, with a real 65,536-item list exercising growth and release. Enabled
@@ -468,9 +469,9 @@ end release
 The following original family-conformance sketch remains design pressure
 [Z1]. Its `item` signature is source-free, as [1320] requires, whereas a
 reference-valued element read from vector storage retains `from` that storage.
-Those contracts do not match. R4.20 therefore traverses `vec.used(list)` with
-the existing slice traversal rules instead of discarding the returned origin
-or widening `iterable`. `negative/iterable-retained-item-source` pins the exact
+Those contracts do not match. The library therefore traverses
+`vec.used(list)` with the existing slice traversal rules instead of discarding
+the returned origin or widening `iterable`. `negative/iterable-retained-item-source` pins the exact
 signature refusal. The cursor sketch below is not an implemented conformance.
 
 ```landin
@@ -501,18 +502,18 @@ honest form of [Z8]: the inline slots have to hold something and
 [0540] gives no honest value for a `t` without one. So
 small(ptr node, 4) does not exist in this inline shape [0510]. Raw storage now
 lets `vec(ptr node)` exist, but it does not give `[capacity]t` an initialized image
-and therefore does not remove this constraint. The current R2.40 resolution
-gives an unconstrained fully applied
-struct instance the nominal identity `(template, normalized actual tuple)` and
-substitutes fixed bounds, nested ordinary structs and existing variants without
-runtime formals or a synthetic declaration. R2.60 now checks the `is zeroable`
-constraint through its closed compiler conformance family. R3.20's executable
-pointer-vector pressure case derived the raw storage transitions used by the
-spilled list: capacity is distinct from the initialized prefix, which grows and
-shrinks one tail slot at a time and must be empty before the allocation is
-freed. R4.20 composes that list behind the variant rather than exposing a
-capacity slice; nominal parameterization and constraint lookup are no longer
-what this sketch waits on.
+and therefore does not remove this constraint. The current resolution for
+fixed parameters gives an unconstrained fully applied struct instance the
+nominal identity `(template, normalized actual tuple)` and substitutes fixed
+bounds, nested ordinary structs and existing variants without runtime formals
+or a synthetic declaration. The checker now checks the `is zeroable`
+constraint through its closed compiler conformance family (D143). The
+executable pointer-vector pressure case derived the raw storage transitions
+used by the spilled list: capacity is distinct from the initialized prefix,
+which grows and shrinks one tail slot at a time and must be empty before the
+allocation is freed. The hosted library composes that list behind the variant
+rather than exposing a capacity slice; nominal parameterization and
+constraint lookup are no longer what this sketch waits on.
 
 ```landin
 public small: type (t: type is zeroable, fixed capacity: u32) = struct
@@ -852,9 +853,9 @@ make the node representation serializable: copying a text descriptor does not
 copy or relocate its backing. [0860]'s shallow reference-field limits still
 apply to the retained names.
 
-R4.90's library uses the `distinct u32` representation shown above for
+The library uses the `distinct u32` representation shown above for
 `node_id`. Construction and extraction are explicit; the `id` and `ordinal`
-convenience functions retain that same boundary. This replaces R4.20's
+convenience functions retain that same boundary. This replaces the earlier
 one-field nominal workaround. New branches may name only existing contiguous
 children. Empty
 branches are allowed, and shared children are counted once per incoming path.
@@ -863,8 +864,8 @@ stack space even for deep structures. Overflow is a declared refusal before
 publication. The recursive code below remains the equivalent counting sketch,
 not the library's execution strategy.
 
-R4.20 corrects that original representation claim without rewriting the
-historical sketch: `name` is a reference-bearing `utf8` value. A name produced
+The hosted library corrects that original representation claim without
+rewriting the historical sketch: `name` is a reference-bearing `utf8` value. A name produced
 by `text.from_bytes` or `text.from_c` retains its input origin, so storing it in
 a tree requires the corresponding escaping argument or longer-lived backing.
 Neither the tree nor the text adapter copies encoded bytes, and a raw flash
@@ -1031,13 +1032,14 @@ end draw_all
 
 ```
 
-R2.80 now pins that erased element as D145's direct-concept type and D147's
-two-word data/table pair. Its object-safe `draw` entry receives the hidden data
-pointer first, while the list/slice storage carries the pair and D146's pointee
-origin rather than copying the hidden object. R4.20's bounded reference
-transport fixtures additionally carry pointer and slice fields through generic
-construction, copy and return, and deduce the same erased concept back from a
-nominal actual tuple. `runtime/fixed-array-reference-shapes` adds genuine
+The `any C` implementation now pins that erased element as D145's
+direct-concept type and D147's two-word data/table pair. Its object-safe
+`draw` entry receives the hidden data pointer first, while the list/slice
+storage carries the pair and D146's pointee origin rather than copying the
+hidden object. The hosted library's bounded reference transport fixtures
+additionally carry pointer and slice fields through generic construction,
+copy and return, and deduce the same erased concept back from a nominal
+actual tuple. `runtime/fixed-array-reference-shapes` adds genuine
 singleton and larger pointer arrays, nested slices and fixed-array elements
 through generic normalization, typed pointer stores, copies and slicing.
 Allocator-backed initialized views are exercised by
@@ -1090,7 +1092,7 @@ This is the finding of the file. Without it there is no generic
 container that can be traversed, sorted, or handed to any other
 generic code, so nothing above works at all.
 
-R4.20 executes the quantified allocator case directly:
+The hosted library executes the quantified allocator case directly:
 `failing.counted(A)` has an ordinary parameterized conformance for every
 `A is mem.allocator`, and wraps both the fixed pool and hosted heap.
 
@@ -1114,7 +1116,7 @@ privilege is defensible under [0490], but it should be stated
 rather than assumed, because the alternative reading is that the
 language cannot express its own allocator.
 
-Z4  RESOLVED at R2.70. Evidence begins with the represented type's target
+Z4  RESOLVED by the generic evidence schema. Evidence begins with the represented type's target
 `usize` size and alignment, followed by direct concept functions in declaration
 order. The semantic positions are target-neutral; Linux x86-64 and the
 synthetic 32-bit description derive different physical offsets and extents
@@ -1206,7 +1208,7 @@ into a private replacement and publishes it only after the old prefix is
 drained. The caller still owns pointer validity, alignment and the
 capacity-derived allocator extent.
 
-R4.20's D198 applies that state machine to the map without the sparse `[]K`
+D198 applies that state machine to the map without the sparse `[]K`
 and `[]V` claim in the sketch above. Fully initialized bucket records name
 positions in dense initialized K/V prefixes. A free bucket appends both real
 values; a reused tombstone replaces both real values at its existing dense
@@ -1252,7 +1254,7 @@ is empty, then shows button is widget supplying only focus, with
 no sign of the drawable and clickable conformances it also needs.
 The rule is right; the example undercuts it.
 
-R4.20's D198 executes the rule at the map boundary: a concrete K declares
+D198 executes the rule at the map boundary: a concrete K declares
 both `map.equatable` and `map.hashable`, and the map's `K is hashable`
 constraint dispatches equality through the separate parent evidence.
 
@@ -1261,7 +1263,7 @@ A.alloc(c.inner.val, size, align). Ordinary and surely intended,
 never shown. RESOLVED by [0900] and D149: the target is an ordinary
 place, one provably identical binding-rooted path cannot be passed
 twice, and aliasing through distinct pointer paths remains outside
-the local guarantee. R4.20 executes this exact shape in
+the local guarantee. The hosted library executes this exact shape in
 `failing.counted(A)`: the wrapper retains `ptr mut A`, dereferences it for
 allocation and free, and requires a writable actual without requiring a
 module-global provider.
@@ -1360,7 +1362,7 @@ in this language. Decide it, and fix the three examples.
 Z19 RESOLVED at 0.0.11 as undo, and the argument moved twice on the
 way, so both corrections belong here.
 
-R4.20 adds the real hosted-heap pressure the original resolution was waiting
+The hosted library adds the real hosted-heap pressure the original resolution was waiting
 for: `runtime/hosted-heap-provider` observes both old and replacement vector
 allocations live during growth, then observes their exact extents released.
 `runtime/r420-failing-providers` also injects the replacement failure over a

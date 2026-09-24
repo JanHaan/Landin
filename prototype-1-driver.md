@@ -10,13 +10,15 @@ SPECIFICATION WAS SILENT.
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.
 
-R4.40's [1975] selects Linux SysV AMD64 LP64, not this hardware ABI. Its
-`layout(c)` subset does not enable the register, packed-field or vector-table
-forms below; SVD generation remains distinct from C header adapters. Interrupt,
+[1975]'s hosted C boundary selects Linux SysV AMD64 LP64, not this hardware
+ABI. Its `layout(c)` subset does not enable the register, packed-field or
+vector-table forms below; SVD generation remains distinct from C header adapters. Interrupt,
 naked, ordinary Landin and C function conventions are not interchangeable merely
-because a vector entry or field holds a code address. R6.20 instantiates the ordinary 32-bit layout and ABI with independent
-C/assembly controls. Language interrupt/startup entry rules remain with R6.60;
-no vector table is enabled by the ordinary function-address representation.
+because a vector entry or field holds a code address. The Cortex-M0 target
+instantiates the ordinary 32-bit layout and ABI with independent C/assembly
+controls. Language interrupt/startup entry rules are the compiler-owned
+firmware rules [1990] (D229); no vector table is enabled by the ordinary
+function-address representation.
 
 D210's explicit optimal layout likewise never reorders a register image or a
 vector table. Natural/C layouts keep their existing rules, and packed storage
@@ -30,8 +32,8 @@ D228 distinguishes each packed register image from the validated atom values
 extracted from it. A copied hardware image may contain unnamed encodings;
 reading an encoded field checks membership. Configuration updates preserve
 unselected image bits, while a one-clears command starts from a zero image.
-The R6.40 record in ROADMAP.md owns source/compiler and bounded peripheral
-evidence. R6.80's [device fixtures](devices/README.md) derive a bounded real
+D228's fixtures carry the source, compiler and bounded peripheral evidence.
+The checked-in [device fixtures](devices/README.md) derive a bounded real
 RP2040 surface into explicit D228 images, encoded unions and D227/D228 scalar
 accesses. The conceptual map below is not an RP2040 description: pin count,
 DMA stream/count geometry and addresses differ. Separate modules preserve
@@ -42,8 +44,8 @@ a device access is D227's or D228's explicit operation over an ordinary
 pointer, and a generator writes the per-register functions and named bool
 fields. The sketch below keeps those spellings as its design record, and the
 derivation maps each one to that form. The historical findings below remain
-historical. R6.90 owns the complete driver and its full derivation
-mapping, consumption and overrun protocol. Prototype 3's caller-backed storage,
+historical. The complete derived driver owns its full derivation mapping,
+consumption and overrun protocol. Prototype 3's caller-backed storage,
 explicit allocator capabilities and local origin obligations remain unchanged;
 these fixtures acquire no allocator. The ordinary-slice DMA and D227 barrier
 contract are unchanged.
@@ -51,8 +53,8 @@ contract are unchanged.
 The complete executable derivation is indexed in
 [`compiler/tests/driver/DERIVATION.md`](compiler/tests/driver/DERIVATION.md).
 It maps every module, omission and X1-X9 finding to source, execution or an
-explicit device adaptation. ROADMAP.md R6.90 owns its acceptance; this sketch
-and its historical syntax remain unchanged.
+explicit device adaptation. That derivation is the executable evidence; this
+sketch and its historical syntax remain unchanged.
 
 ## chip/vendor/gpio  —  generated from the SVD
 
@@ -350,7 +352,7 @@ The following barrier invalidates compiler knowledge of the ordinary slice;
 on a cached noncoherent target a platform cache protocol is required too.
 This sketch assumes the consumed interval is not overwritten during the copy
 and that a full wrap cannot go undetected. Interrupt masking cannot establish
-those conditions. R6.90 owns their complete executable driver controls.
+those conditions. The complete derived driver owns their executable controls.
 
 ---
 
@@ -594,8 +596,8 @@ to the toolchain — two things [0760] separated on purpose.
 
 ---
 
-R6.10's [execution profile](environments/cortex-m/README.md) retains the
+The Cortex-M [execution profile](environments/cortex-m/README.md) retains the
 M0 CPU pressure in QEMU and supplies a separately named synthetic Renode
 peripheral lane for this sketch's register/DMA behavior. It does not identify
 this combined map as a real vendor part or turn these sketches into an
-implemented Landin program. ROADMAP.md R6.20-R6.100 retain their owners.
+implemented Landin program.

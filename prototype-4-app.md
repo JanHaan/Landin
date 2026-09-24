@@ -73,7 +73,8 @@ backing and is not a sink place. Whole descriptor fields keep the container
 consumption form shared with prototype 3.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
-contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose
+contracts. The complete derived hosted application is
+`examples/derived_hosted`, whose
 `compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md` maps `read`, `filter`, `dest`,
 `config` and the command-line root to their executable sources and support.
 
@@ -279,8 +280,8 @@ end shut
 
 ## app/filter  —  runtime dispatch, one
 
-R4.20's `runtime/generic-any-nominal-transport` derives the mutable-dispatch
-pressure below without allocating an uninitialized object: two initialized
+The hosted library's `runtime/generic-any-nominal-transport` derives the
+mutable-dispatch pressure below without allocating an uninitialized object: two initialized
 providers with different layouts and methods retain their data and evidence
 through generic nominal copies and typed pointer reads. Their original
 pointees receive the mutations. `runtime/fixed-array-any-shapes` extends this
@@ -704,7 +705,7 @@ test_drops_debug_lines: () -> none =
 end test_drops_debug_lines
 ```
 
-The bounded R4.20 executable slice keeps this sketch's provider distinction but
+The bounded executable library slice keeps this sketch's provider distinction but
 uses D146's exact object-safe receiver shape: every `world` entry starts with a
 `ptr world_type` or `ptr mut world_type`, and both system and memory providers may travel through
 `any world`. The system provider retains the actual host argument table and
@@ -729,7 +730,7 @@ not restore the arena's used offset. A new explicitly backed arena is a
 separate lifetime chosen by its caller. W7's former block-escape argument is
 not a guarantee of either provider.
 
-R2.80 makes this prototype's `any` pressure executable without changing the
+The `any C` implementation makes this prototype's `any` pressure executable without changing the
 sketch: construction erases an exact pointer/conformance, every `filter` and
 `dest` entry uses the object-safe first `self` pointer already written here —
 `world` and `diag.log` gain theirs in the executable slice above — and the pair

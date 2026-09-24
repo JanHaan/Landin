@@ -11,7 +11,7 @@ Version 0.2.1 — the specification arranged by subject, under a
 second implementation roadmap. 0.1.0 was the first version of the
 specification proper, arrived at over seventeen pre-release revisions,
 four prototype programs and two outside reviews; 0.2.0 sealed the
-roadmap that followed, R0 through R7.70, over which a working compiler
+first implementation roadmap that followed, over which a working compiler
 was built and the specification was held to what that compiler could
 be made to do. 0.2.1 adds the rules an outside review of that work
 found unwritten or wrong — D243 to D245 in `spec.md`, and where Darwin
@@ -650,8 +650,8 @@ an arbitrary allocation into a slice that claims every slot already contains
 `t`. The repository `core/mem` instead keeps pointer arithmetic inside its
 private raw-storage operations. It can copy one initialized slot directly into
 the next slot of a private replacement, but it exposes neither spare capacity
-nor a general pointer-to-slice conversion. R4.20 records `offset` and `base_of`
-as unneeded conveniences: allocator internals use [0470]'s explicit address
+nor a general pointer-to-slice conversion. The library records `offset` and
+`base_of` as unneeded conveniences: allocator internals use [0470]'s explicit address
 conversion, and consumers obtain an element address only after checking that
 a slice is nonempty. Neither name is a compiler primitive or an enabled
 library API. D196 records the disposition without reopening `slice_from`.
@@ -1288,7 +1288,7 @@ the hole this section closed. Inside a larger image the
 same fields sit at the image's bits, offset by where the
 set begins. A generator reading a vendor's SVD writes those
 fields out as it writes every other register declaration
-[1540]; R6.80's checked-in vendor fixtures are that output.
+[1540]; the checked-in vendor device fixtures are that output.
 General SVD generation retains the companion-tool owner.
 The language adds no `set(X)` type former that would write
 them for it (D238), and the expansion does not change the
@@ -1797,8 +1797,8 @@ The complete prototype-1 [driver derivation](compiler/tests/driver/DERIVATION.md
 uses these ordinary slices with an explicit synthetic device completion
 contract. Its memory barrier follows acknowledged drain; neither an interrupt
 nor interrupt masking grants permission to reuse active DMA storage.
-ROADMAP.md R6.90 owns that executable library protocol, not a new language
-lifetime guarantee.
+The derived driver program in `compiler/tests/driver` owns that executable
+library protocol, not a new language lifetime guarantee.
 
 ### [0860] What this does not catch
 
@@ -2132,7 +2132,7 @@ ordinary parameter. A diagnostics sink is a capability by
 [1680]: a function that was given none cannot report, which
 is enforced by an argument list and nothing else.
 
-The R3 parser-support library spells that capability `core/diag.log`. Its
+The parser-support library spells that capability `core/diag.log`. Its
 object-safe `note` entry accepts a byte position, severity and escaping byte
 slice, and declares `io_failed`: a bounded implementation never raises that
 outcome, while a streaming implementation must propagate a failed write.
@@ -2780,7 +2780,7 @@ could quietly change the behaviour of generic code inside
 a library, which is a strange thing for a language whose
 whole point is that costs and effects are visible.
 
-The enabled R2.60 register collects every source file before constrained
+The conformance register collects every source file before constrained
 instantiation. It matches labels to all input types and direct entries, checks
 concrete supplying functions against the substituted entry signature, requires
 separate conformances for every composed parent, and diagnoses an ordinary
@@ -2789,10 +2789,10 @@ complete nominal type family: the target applies the leading binder once, in
 the same positions and kinds as the nominal declaration. One such family owns
 the target-template/concept space, so another family or a concrete exception is
 a collision rather than specialization. Lookup binds that family and records
-one concrete key; R2.70 later turns the retained generic supplying functions
-into physical evidence entries.
+one concrete key; the generic evidence schema then turns the retained generic
+supplying functions into physical evidence entries.
 
-Under R3.10, “every source file” means every module reachable from the entry
+In a program of modules, “every source file” means every module reachable from the entry
 directory after ordered-root selection, including unused conformances and
 excluding unreachable and later-root-shadowed directories. Conformances are
 registrations rather than imported names: every reached one enters the single
@@ -2814,7 +2814,7 @@ deduced from whatever argument pins it down.
 Concept entries are reached through the type parameter, so
 two constrained parameters never collide: `left_type.less`, `right_type.less`.
 
-The enabled R2.40 kernel admits the same collected signature scope with
+The kernel admits the same collected signature scope with
 unconstrained type formals and fixed integer formals. A direct call either
 leaves every static formal for deduction, or names every one explicitly in its
 single call list; partial explicit/deduced tuples are refused. A direct call
@@ -2914,7 +2914,7 @@ layout savings and frame/register/stack-traffic evidence separately from source
 diagnostics. It introduces no runtime report storage. Measured object bytes
 come from the Linux object-quality harness, not an IR cost estimate.
 
-The enabled R2.70 bootstrap gives every constrained routine instance hidden
+The bootstrap compiler gives every constrained routine instance hidden
 table pointers for the direct constraint and its separate transitive
 constraint/parent closure, in generic-formal and concept declaration order. A table begins with
 the represented type's target `usize` size and alignment, then carries direct
@@ -3258,7 +3258,7 @@ end paint
 
 ```
 
-The enabled R2.80 form reserves `any` and gives `any C` the identity of that
+The enabled form reserves `any` and gives `any C` the identity of that
 direct concept, not of one hidden concrete type or one of C's parents.
 `any(pointer)` uses the contextual C; without one it requires exactly one
 collected exact conformance. Every erased entry has an object-safe first
@@ -3288,7 +3288,7 @@ A module is a directory. Every file in it sees the others
 with no import. Two levels of visibility: module-internal
 (the default) and public. No separate interface file.
 
-The enabled R3.10 compiler reads every direct `.ldn` child in bytewise filename
+The compiler reads every direct `.ldn` child in bytewise filename
 order. Other files are ignored and subdirectories are modules of their own.
 An empty directory is therefore a legal empty module. Declaration order still
 has no language meaning: the ordering fixes identities and diagnostics, not
@@ -3318,7 +3318,7 @@ characters that some filesystem somewhere will not carry.
 The separator in source is always '/', on every host. The
 compiler turns it into whatever the filesystem wants.
 
-The enabled R3.10 loader requires each directory entry to have the exact
+The module loader requires each directory entry to have the exact
 lowercase spelling in the import even on a case-insensitive host. It loads the
 entry module first, then its sorted files, follows imports in source order and
 loads newly reached modules first-in-first-out. A module is loaded once, so
@@ -3446,9 +3446,9 @@ locally. The three compiler-owned modules retain their reserved identities.
 The bootstrap request spells that narrow seam as repeated `--root=DIR`
 options followed by one entry-module directory. With no root option it retains
 the earlier explicit-file compatibility mode as one synthetic module. Root
-defaults and environment policy remain the companion tool's work. R4.30
-keeps that explicit contract: the compiler neither consults a user's home
-nor inserts a system root, and the supplied order alone decides precedence.
+defaults and environment policy remain the companion tool's work. The
+compiler keeps that explicit contract: it neither consults a user's home nor
+inserts a system root, and the supplied order alone decides precedence.
 
 ## COMPILE TIME
 
@@ -3650,13 +3650,13 @@ traps. Neither convention implies `keep`.
 
 ### [1580] Importing from C
 
-Importing from C. `refine` reads Landin, not headers. R4.40 supplies a
+Importing from C. `refine` reads Landin, not headers. The bootstrap supplies a
 separate deterministic clang-AST generator for declarations and explicit C
 adapters, with policy for facts a header does not say: nullability, ownership,
 `from`, retention and incoming-varargs extraction. That policy is not a
 handwritten replacement signature. [1975] defines the selected Linux x86-64
-SysV AMD64 LP64 boundary; ROADMAP.md records the authoritative native closures
-of R4.40 and R4.50 rather than treating normative rules alone as completion.
+SysV AMD64 LP64 boundary; the normative rules alone are not treated as
+evidence that the boundary or its code generation is complete.
 
 A C pointer may be null and a Landin pointer may not. A foreign declaration
 that permits absence therefore names [0480]'s one-atom pointer union, which
@@ -3993,9 +3993,9 @@ its supplied slices and performs no allocation or host call. Its public
 representation and copied handles remain subject to manual invariants:
 backing must remain valid, transfer ranges must not overlap, counters need
 headroom, and stale handles can address a reopened slot. D153 records these
-bounds. R4.80's complete `examples/derived_hosted` application uses this same
-world interface, copies retained arguments, assembles complete lines and
-selects heterogeneous filters and destinations at runtime. Its derivation
+bounds. The complete derived hosted application, `examples/derived_hosted`,
+uses this same world interface, copies retained arguments, assembles complete
+lines and selects heterogeneous filters and destinations at runtime. Its derivation
 manifest records exact argument, buffering, retry and cleanup policies.
 
 Both providers expose each user argument as a pointer and byte length, never as
@@ -4110,8 +4110,8 @@ That is a smaller claim than 'safe' and a larger one than
 C's. D148's guarantee register now puts every implemented
 observable failure boundary in one of four columns and links it
 to executable evidence. New operations have to enter that
-register as they are implemented, and R7.40 closed the final
-feature-complete matrix. Read the claim as: deliberately unsafe,
+register as they are implemented, and the registers were closed
+over the final feature-complete matrix. Read the claim as: deliberately unsafe,
 with static help that is worth having.
 Checks stay on by default. unchecked [1120] removes the
 edges D187 names, in the region where it is written, and
@@ -4151,26 +4151,26 @@ no header parsing inside refine (the separate binding generator reads headers)
 ROADMAP.md, and not a second list here. `spec.md` is the normative
 authority for language semantics and this file explains them; ROADMAP.md
 is the sole durable
-authority for open work, implementation dependencies, phase gates,
-dispositions and completion evidence. Every inherited item is traced to
-the construct, prototype finding or archived review section it came from,
-and each has a terminal disposition there: implemented, rejected with
-evidence, or transferred to one named successor roadmap with what would
-bring it back. What this file keeps parked or deferred, structure-of-arrays
-[0620], affine values [0910], restricting where roots are minted [1680] and
-a third generated-source case [1540], is held by the Language evolution
-successor.
+authority for open work, implementation dependencies, phase gates and the
+register of work that waits for a trigger. Every item the bootstrap
+inherited was traced to the construct, prototype finding or archived
+review section it came from, and each was given a terminal disposition:
+implemented, rejected with evidence, or transferred to one named successor
+family with what would bring it back. What this file keeps parked or
+deferred, structure-of-arrays [0620], affine values [0910], restricting
+where roots are minted [1680] and a third generated-source case [1540], is
+held by the Language evolution successor.
 
-The bootstrap compiler now exists. R0 through R6 are complete: `refine`
-checks and lowers a program, emits Linux x86-64, Darwin arm64 and Cortex-M0
-assembly, links hosted executables and compiler-owned firmware, and runs
-all four complete derived programs, the parser, containers and hosted
-application on the hosts and the driver on Cortex-M. R7 closes the
-remaining coverage and dispositions.
+The bootstrap compiler now exists: `refine` checks and lowers a program,
+emits Linux x86-64, Darwin arm64 and Cortex-M0 assembly, links hosted
+executables and compiler-owned firmware, and runs all four complete derived
+programs, the parser, containers and hosted application on the hosts and
+the driver on Cortex-M. Every construct was audited and every inherited
+item dispositioned before the first roadmap closed.
 
-The endpoint is feature-complete pre-v1. Production status, release
+That compiler is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and
-self-hosting are outside this roadmap. A future roadmap may replace
+self-hosting are outside the current roadmap. A future roadmap may replace
 tested Ada stages incrementally; no self-hosting work or serialized
 cross-language stage protocol is scheduled now.
 

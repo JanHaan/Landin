@@ -32,13 +32,13 @@ This also applies to the blocks, loops and cleanup forms used by prototypes
 
 ## core/text  —  the parts this file leans on
 
-R3.40 implements the byte-oriented pressure this parser needs: `core/text`
-accepts byte slices, gives byte offsets an opaque `position` identity, retains
+The parser-support core implements the byte-oriented pressure this parser
+needs: `core/text` accepts byte slices, gives byte offsets an opaque `position` identity, retains
 origins through subslices, and reports an end read directly. D181 later adds
 the `utf8` distinct view plus contextual literals and scalar decoding without
 changing that byte API. D182 adds [0610]'s text-view indexing, D183 adds
 identity-preserving direct ranges over validated text, and D184 adds scalar
-traversal over the hosted identities; none changes the R3 byte API. The R3
+traversal over the hosted identities; none changes that byte API. The
 derived parser may classify its ASCII grammar from bytes while preserving
 unknown input as recoverable tokens.
 
@@ -151,8 +151,8 @@ streaming is log (note: stream_note, failed: stream_failed)
 
 ```
 
-R3.60 derives this sketch as `core/diag` against the smaller kernel that then
-preceded D181. Its executable messages remain escaping byte slices and its
+The repository core derives this sketch as `core/diag` against the smaller
+kernel that then preceded D181. Its executable messages remain escaping byte slices and its
 positions remain the byte positions from `core/text`. The object-safe entry
 has a declared `io_failed` outcome: the bounded logger never raises it and counts
 overflow directly, while the streaming logger propagates a failed hosted write.

@@ -546,7 +546,7 @@ the right-hand expression [0410], must already be assigned [1910], and needs
 the same write permission as `=` [1900]. The operator keeps its ordinary
 type, known-operand, trapping and wrapping rules.
 
-R4.10 admits the statement forms of [1130], [1140], [1170], [1180], and
+The kernel admits the statement forms of [1130], [1140], [1170], [1180], and
 [1190]. An unconditional loop tests nothing; a `while` condition
 is evaluated before every iteration and must be `bool`. `break` transfers to
 the point after its target loop and `continue` transfers to that loop's next
@@ -712,7 +712,7 @@ a struct field or [0430]'s `val` pointee; that classification belongs to later
 checking. It binds tighter than every operator because it is part of naming a
 thing rather than an operation on one, and it is left to right, so 'a.b.c'
 selects from what 'a.b' named.
-R3.10 uses that same retained selection for a qualified declaration reference.
+Module resolution uses that same retained selection for a qualified declaration reference.
 When its first name is this file's imported namespace, the first selected name
 is public module lookup and the namespace produces no runtime value. Otherwise
 the selection is the ordinary runtime form above. Later selections from a
@@ -1161,8 +1161,8 @@ table, and is not a third rule. Its quotient is the case
 [0300] already covers: that type does not hold it, and
 [1890] gives '/' no wrapping form to opt out with. Its
 remainder is 0, which the type does hold, so nothing traps
-and the machines that fault on it anyway are R1.80's and
-R5.30's to know about.
+and the machines that fault on it anyway are the x86-64 and
+arm64 backends' to know about.
 The report names the operand and not the operator, because
 the zero and the negative amount are what a reader changes.
 
@@ -1591,7 +1591,7 @@ refuse.
 
 ### [1970] The first hosted path has one entry shape
 
-The minimal Linux x86-64 path implemented by R1.80 accepts one
+The minimal Linux x86-64 path accepts one
 hosted entry shape: a public function named `main`, with no
 arguments and the one named return `code` of type `i32`. Its
 declaration therefore starts
@@ -1603,7 +1603,7 @@ restriction on every hosted executable: [1650]'s C `argc` and
 use this rule; its build description names the entry [1650]. The first hosted
 entry is infallible: this boundary has no host mapping for a declared Landin
 error.
-In a rooted R3.10 program, only a declaration in the designated entry module
+In a rooted program, only a declaration in the designated entry module
 can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
 
@@ -1717,7 +1717,7 @@ No declared or inferred Landin error set, exception unwinding, or `longjmp`
 across Landin frames is part of this boundary.
 
 Header processing belongs to the separate deterministic clang-AST binding
-generator, never to `refine`. The R4.40 generator contract covers declarations
+generator, never to `refine`. The generator contract covers declarations
 and C adapters for integer-backed enums, untagged unions, bitfields, globals,
 thread-local access, nullable callbacks and schema-defined incoming varargs.
 It does not introduce native C union, bitfield or TLS grammar. Policy supplies
@@ -1731,8 +1731,8 @@ arrays, unsafe, stale or missing policies, and unsupported `va_list` forwarding
 receive explicit generator refusals rather than guessed layout or a fallback
 ABI. Enums, unions, bitfields, globals and TLS, nullable callbacks and bounded
 incoming-varargs schemas cannot be refused wholesale as a completion shortcut.
-ROADMAP.md records which implementation and differential evidence is still
-pending for this contract; this rule is not a native-gate completion claim.
+This rule states the generator's contract; it is not a claim that its
+implementation or differential evidence is complete.
 
 A known integer-to-pointer construction whose value is zero after target
 `usize` conversion is refused, including a closed folded expression. A dynamic
@@ -1958,8 +1958,8 @@ A decision leaves this register only when new evidence closes it: a program
 that cannot be written, a target that cannot be reached, or a paragraph of the
 tour that turns out to have settled it after all. Completed implementation
 does not remove a decision, because its alternative and fixture remain useful
-review evidence. The completed roadmap item records the delivered vertical
-slice; this register does not repeat its implementation diary.
+review evidence. The history records the delivered vertical slice; this
+register does not repeat its implementation diary.
 
 The register is the fourteen sections that follow, and they are the subjects
 `tour.md` teaches, in the order it teaches them, so a question about arrays is
@@ -2029,8 +2029,8 @@ which is tidy, and costs `mut counter: u32 = 0` at every declaration of
 module state, where the `= 0` says nothing a reader did not know. Or keep
 the declaration and refuse the read, which is [0080] taken literally — but
 at module level "before use" is a question about which function runs first,
-and that is a whole-program analysis this specification does not have and R1
-is not equipped to answer.
+and that is a whole-program analysis this specification does not have and the
+kernel is not equipped to answer.
 
 **Pinned by** `positive/binding-declared-only`,
 `positive/module-binding-with-no-value-reads-zero`.
@@ -2072,8 +2072,8 @@ copy derived from prototype 3, `negative/r491-local-self-reference`,
 ### D225 — Control words are reserved everywhere
 
 **The discrepancy:** [1760] reserved `if`, `then` and `end`, while other
-already enabled control forms still used identifier tokens. R4.91 J104 first
-repaired declarations and assignments under that contextual contract, but
+already enabled control forms still used identifier tokens. An earlier review repair first fixed
+declarations and assignments under that contextual contract, but
 ordinary expression reads remained ambiguous. The intended language rule is
 that a control word cannot also be an identifier.
 
@@ -2091,7 +2091,7 @@ name escape preserves dual meanings, while broader contextual lookahead must
 resolve genuinely ambiguous expressions. Reserving the words removes both
 problems at the lexical boundary. Existing declarations using these words must
 be renamed; this compatibility change is explicit and supersedes the earlier
-contextual-name part of J104 and D187.
+contextual-name repair and the matching part of D187.
 
 **Pinned by** `negative/r491-reserved-control-assignment`,
 `positive/r491-contextual-statements`, `positive/r491-bare-block-examples`,
@@ -2105,9 +2105,9 @@ and cleanup contracts; reservation adds no execution or aliasing rule.
 
 **The tour said** that several names may share one declaration, the same form
 field lists already use [0100], and showed `public red, green, blue: u8`
-beside an atom list. Atom lists were enabled; R4.91 refused shared bindings,
-fields, parameters and returns by name against R7.20, which was to decide the
-initializer and convention questions their implementation needs.
+beside an atom list. Atom lists were enabled; shared bindings, fields,
+parameters and returns were refused by name until the initializer and
+convention questions their implementation needs were decided.
 
 **Chosen:** `binding`, `field`, `parameter` and `named_return` take [1740]'s
 `identifiers` list where they took one name. A shared declaration means the
@@ -2260,7 +2260,7 @@ contextless float, whether one width could arrive before the others, how a
 finite decimal overflow is treated, or whether module folding may inherit the
 compiler host's arithmetic.
 
-**Chosen:** the eighth R4.10 increment enables f32 and f64. A decimal literal
+**Chosen:** f32 and f64 are enabled. A decimal literal
 has digits on both sides of its dot and may have `e` or `E`, an optional sign,
 and a nonempty decimal exponent; underscores follow the integer digit-run
 rule. It takes f32 or f64 from context and otherwise defaults to f32. Integer
@@ -2276,13 +2276,13 @@ inequality true, and every ordered comparison false. Values retain their raw
 bits through local and module scalar storage, fixed arrays, ordinary structs,
 internal parameters and returns. Representation-class routine sharing treats
 a float as distinct from a same-width integer. The first external C boundary
-continues to refuse float signatures until R4.40 supplies its register classes.
-D204 and the current [1975] subsequently define that separate C float path;
-the limit in this increment does not override them.
+continued to refuse float signatures until its float register classes were
+supplied. D204 and the current [1975] subsequently define that separate C
+float path; the limit in this decision does not override them.
 
-A module float at this increment may use a literal, its unary minus or
+A module float at this decision may use a literal, its unary minus or
 `zeroed`, also inside a static aggregate image. Float arithmetic in a module
-image remains a named R4.10 refusal: the target-neutral folder does not borrow
+image remained a named refusal: the target-neutral folder does not borrow
 the compiler host's rounding mode or NaN behavior. D166 subsequently enables
 hexadecimal floats [0230], D167 enables the named `infinity` and `nan` members
 [0240], and D175 enables module float arithmetic and comparison. f16 and
@@ -2301,7 +2301,7 @@ make cross-compilation depend on the host.
 `negative/float-remainder-is-integer-only`,
 `negative/float-type-not-enabled`,
 `negative/integer-literal-not-a-float`,
-`negative/malformed-float-exponent`, `positive/r440-external-float` for R4.40's
+`negative/malformed-float-exponent`, `positive/r440-external-float` for the
 later f64 C-boundary admission, `negative/external-aggregate-boundary` and
 `negative/r440-c-slice-parameter` for the boundary's continuing carrier
 refusals, the lexer cases, and the `float.ieee` guarantee row.
@@ -2313,7 +2313,7 @@ and [0270] gives literals one closed escape set. It did not say whether the
 byte escape denotes a character, whether raw source may contain more than one
 scalar, or which stage rejects a nonscalar `\u{...}` value.
 
-**Chosen:** the ninth R4.10 increment admits a single-quoted literal only when
+**Chosen:** the kernel admits a single-quoted literal only when
 its content decodes to exactly one Unicode scalar value. Raw content is one
 shortest-form UTF-8 scalar. The simple escapes `\n`, `\r`, `\t`, `\e`, `\\`,
 `\"` and `\'` denote their codepoints, and `\u{...}` denotes one scalar written
@@ -2350,7 +2350,7 @@ closing delimiter's indentation from every line. It did not define whether a
 longer quote run closes a literal, how indentation mismatches are handled, or
 which currently enabled text carrier receives the bytes.
 
-**Chosen:** the tenth R4.10 increment admits raw literals in D161's direct
+**Chosen:** the kernel admits raw literals in D161's direct
 read-only `[]u8` context. The maximal opening quote run chooses `N`; the first
 later run of at least `N` quotes closes the token, consumes exactly `N`, and
 leaves any additional quotes for following tokens. Runs shorter than `N` are
@@ -2441,7 +2441,7 @@ is unordered. It did not say whether the qualifier or the surrounding context
 chooses the width, which NaN payload a source name denotes, whether a signed
 NaN retains that sign, or whether the names are valid module images.
 
-**Chosen:** the thirteenth R4.10 increment enables exactly `f32.infinity`,
+**Chosen:** the kernel enables exactly `f32.infinity`,
 `f64.infinity`, `f32.nan` and `f64.nan`. The type before the dot is an inherent
 part of the value: it does not convert to another contextual float width, so a
 width mismatch is L0301. No other scalar type has these members, and no other
@@ -2476,14 +2476,14 @@ literal image is already accepted. All were declined.
 `negative/float-special-width-mismatch`, the direct checking case, and the
 `float.ieee` guarantee row.
 
-### D190 — u128, i128 and f16 are refused by name against R7.20
+### D190 — u128, i128 and f16 are refused by name
 
-D228 subsequently enables packed unsigned field representations in R6.40;
-the historical quotation below records the earlier kernel boundary. D237
-later transfers u128, i128 and f16 to the Language evolution successor with
-new consumer, target and compiler evidence; the refusal below keeps its code,
-now says "`u128` is not in this version of the language", and its note now
-names that transfer.
+D228 subsequently enables packed unsigned field representations; the
+historical quotation below records the earlier kernel boundary. D237 later
+transfers u128, i128 and f16 to the Language evolution successor with new
+consumer, target and compiler evidence; the refusal below keeps its code, now
+says "`u128` is not in this version of the language", and its note now names
+that transfer.
 
 **The tour said** that the integers are u8, u16, u32, u64, u128, i8, i16,
 i32, i64 and i128 [0150], and that the floating-point types are f16, f32 and
@@ -2493,38 +2493,41 @@ have to be built for the rest. [1870] answers the first half — "u128 and i128
 [0150], the packed widths [0730] and f16 [0170] are described in this tour and
 are not enabled yet" — and answered the second half nowhere.
 
-**Chosen:** the work that enables u128, i128 and f16 is R7.20's. The refusal
-itself is unchanged in every respect a program can observe: the checker still
-matches the resolved spelling, still reports L0304 with "`u128` is not enabled
-yet", and still attaches [1830]'s two notes naming the paragraph and the
-enabling work. The second note now reads R7.20, and that is the whole of the
-behavioural change.
+**Chosen:** the refusal of u128, i128 and f16 is the specification's, and the
+work that would enable them is not the text, literal and loop work that
+enabled f32 and f64. The refusal itself was unchanged in every respect a
+program can observe: the checker still matched the resolved spelling, still
+reported L0304 with "`u128` is not enabled yet", and still attached [1830]'s
+two notes naming the paragraph and the enabling work. Only the second note
+changed, to name work that would decide the widths rather than the work that
+had deferred them; D237 later made that note "this is transferred to Language
+evolution" and D246 made it state the form's standing.
 
 This is an ownership correction and not a language change, and the reason it
 can be one is that the refusal was already normative. [1790]'s `scalar_name`
 production spells thirteen names and has never spelled these three, so the
 enabled kernel grammar does not admit them and never has; a program writing
 one is refused by the specification and not by a schedule. What was wrong was
-a single word in the compiler's own table, which said R4.10 because D162
-happened to be an R4.10 increment when it enabled f32 and f64 and deferred
-f16 — not because R4.10's scope, "text, literals, patterns, loops,
-`unchecked`, modules, builtin directives and hosted entry behavior", ever
-included widening the scalar set. [0150] is already a paragraph split across
-owners: the packed widths u4, u12 and u23 that the same paragraph names
-belong to the freestanding register work [0730] under R6.40 and R6.80, and
-nobody reads that as R4.10 owing a bit-field allocator.
+a single entry in the compiler's own table, which named the hosted construct
+work because D162 happened to belong to it when it enabled f32 and f64 and
+deferred f16 — not because that work's scope, "text, literals, patterns,
+loops, `unchecked`, modules, builtin directives and hosted entry behavior",
+ever included widening the scalar set. [0150] is already a paragraph split
+across owners: the packed widths u4, u12 and u23 that the same paragraph names
+belong to the freestanding register work [0730], and nobody reads that as the
+hosted construct work owing a bit-field allocator.
 
-The construct-applicability register keeps R4.10 as the owner of [0150] and
-[0170], because R4.10 is the item that accounted for those paragraphs as far
-as the kernel enables them — D162 gave [0170] its two enabled widths and D168
-through D176 gave [0150]'s enabled ones the complete conversion matrix. Only
-the residual refusal moves, which is exactly what D188 did for [0660]'s
-composite positions and D189 for [0480]'s multi-atom form. A row whose
-construct one item accounts for and whose remaining refusal another item owns
-is the register's ordinary shape, not an exception made here.
+The construct-applicability register keeps [0150] and [0170] accounted for by
+the hosted construct work, because that work accounted for those paragraphs
+as far as the kernel enables them — D162 gave [0170] its two enabled widths
+and D168 through D176 gave [0150]'s enabled ones the complete conversion
+matrix. Only the residual refusal moves, which is exactly what D188 did for
+[0660]'s composite positions and D189 for [0480]'s multi-atom form. A row
+whose construct one piece of work accounts for and whose remaining refusal
+another decides is the register's ordinary shape, not an exception made here.
 
-What R7.20 inherits is written down so that the refusal is scoped rather than
-vague, and it is five things and not one.
+What enabling them would inherit is written down so that the refusal is
+scoped rather than vague, and it is five things and not one.
 
 - `Landin.Types.Magnitude` is `range 0 .. 2 ** 64 - 1` and `Landin.Types.Folded`
   is `range -(2 ** 64 - 1) .. 2 ** 64 - 1`. At
@@ -2557,29 +2560,29 @@ vague, and it is five things and not one.
   `conversion.integer-to-float` guarantee row would move from class `static`
   to class `trap` and would owe trapping runtime evidence.
 
-One design answer is recorded here so R7.20 does not rediscover it: f16
+One design answer is recorded here so it is not rediscovered: f16
 arithmetic should promote through f32 and round once. binary32 carries 24
 significand bits and 24 >= 2 * 11 + 2, so a single rounding of the f32 result
 to binary16 is the correctly rounded binary16 result for `+`, `-`, `*` and
 `/`, and the double rounding is innocuous. Whether the promotion is emitted
 or the operations are done in software is a target question and stays open.
 
-**The alternatives:** implementing them inside R4.10 was weighed and declined
-as out of proportion to what the item is for. It is four to six increments —
-the two carriers above, the backend pair, the float programme at a third
-width, and the reopened conversion guarantee — and R4.10's exit evidence
-needs none of it. Giving the two widths a dedicated R4-series item so they
-land before the macOS arm64 and Cortex-M slices was the closest alternative;
-it was declined because f16 must exist on every target once it is enabled and
-the baseline Linux x86-64 ISA cannot do binary16 arithmetic at all, which
-makes it target work and not hosted work. Splitting the two owners — f16 to
-the freestanding float slice, u128 and i128 to R7.20 — was declined for the
-same reason. Amending [0150] or [0170] to delete the three names was declined
+**The alternatives:** implementing them inside the hosted construct work was
+weighed and declined as out of proportion to what that work is for. It is four
+to six increments — the two carriers above, the backend pair, the float
+programme at a third width, and the reopened conversion guarantee — and none
+of the hosted path's evidence needs any of it. Giving the two widths dedicated
+hosted work so they land before the macOS arm64 and Cortex-M slices was the
+closest alternative; it was declined because f16 must exist on every target
+once it is enabled and the baseline Linux x86-64 ISA cannot do binary16
+arithmetic at all, which makes it target work and not hosted work. Splitting
+the two owners — f16 to the freestanding float slice, u128 and i128 to the
+deferred-behaviour decisions — was declined for the same reason. Amending [0150] or [0170] to delete the three names was declined
 because they are language the tour teaches and no evidence says the language
-should lose them. Leaving the compiler's table saying R4.10 while the roadmap
-said otherwise was declined because [1830]'s note is a promise to a user
-about where to look, and a note naming a closed item is a wrong answer to
-that question.
+should lose them. Leaving the compiler's table naming the hosted construct
+work while the widths were decided elsewhere was declined because [1830]'s
+note was then a promise to a user about where to look, and a note naming
+finished work is a wrong answer to that question.
 
 No document exercises any of the three. Nothing in `tour.md`, `spec.md`,
 `examples.md` or the four prototypes writes u128, i128 or f16 in an example,
@@ -2630,8 +2633,8 @@ fixture retains the independent evaluation and terminal-bound evidence.
 ### D237 — u128, i128 and f16 leave this slice for Language evolution
 
 **The tour said** that the integers include u128 and i128 [0150] and the
-floats include f16 [0170]. D190 kept all three refused by name against R7.20,
-recorded the x86-64 cost R7.20 would inherit, and declined deleting them
+floats include f16 [0170]. D190 kept all three refused by name, recorded the
+x86-64 cost enabling them would inherit, and declined deleting them
 because they are language the tour teaches and no evidence said the language
 should lose them.
 
@@ -2646,7 +2649,7 @@ the parser's scalar table and the highlighters are unchanged.
 
 New evidence answers D190's reason, and it is of three kinds.
 
-- Consumers. D190 counted documents; R7.20 counts programs. The four complete
+- Consumers. D190 counted documents; this decision counts programs. The four complete
   derived prototypes, the repository `core` library, `examples.md` and the
   1849 fixture directories write none of the three types outside the refusal
   fixtures below.
@@ -2760,7 +2763,7 @@ divisor, trapped where it does not, and refused at module level always.
 
 **The alternative:** a defined value, which is the only other thing on
 offer. AArch64's `SDIV` answers 0 and x86-64's `IDIV` raises a hardware
-fault, both measured — so R1.80's target and R5.30's already disagree, and
+fault, both measured — so the Linux x86-64 and Darwin arm64 targets already disagree, and
 adopting either would make one program mean two things or make the other
 target pay for a value nobody asked for. Leaving it to the machine is the
 same alternative D4 refused, in the same words.
@@ -2833,7 +2836,7 @@ Neither says which signal ended it, because this decision is what says that
 question has no stable answer.
 
 **Pinned by** `runtime/checked-overflow-traps`, `runtime/a-zero-divisor-traps`,
-and since R4.10 the conversion traps the paragraph above asked for:
+and the conversion traps the paragraph above asked for:
 `runtime/float-to-integer-out-of-range-traps`,
 `runtime/float-to-integer-nan-traps` and `runtime/range-subtype-store-traps`.
 
@@ -2977,7 +2980,7 @@ does not fit. It did not say whether signedness changes reinterpret a pattern,
 whether every enabled integer width participates, or how a module conversion
 is folded without compile-time execution.
 
-**Chosen:** the fourteenth R4.10 increment enables an application of any
+**Chosen:** the kernel enables an application of any
 enabled integer type to one integer value. The source keeps its own integer
 type and the destination is the applied type; no contextual or implicit
 conversion is introduced. The mathematical source value must lie between the
@@ -3025,7 +3028,7 @@ cannot convert. It did not say how f64 narrows to f32, whether underflow or
 loss of precision is impossible, or what happens to signed zero, infinity and
 NaN.
 
-**Chosen:** the fifteenth R4.10 increment enables f32 or f64 applied to one
+**Chosen:** the kernel enables f32 or f64 applied to one
 float value. An untyped float literal is checked directly in the destination
 context, as every contextual literal is under [1880]. A typed f32-to-f64
 conversion is exact. A typed f64-to-f32 conversion rounds to nearest with ties
@@ -3071,7 +3074,7 @@ impossible known conversion from one which traps at runtime. It did not say
 whether integer-to-float conversion requires exact representation, how it
 rounds, or whether the upper half of u64 participates.
 
-**Chosen:** the sixteenth R4.10 increment enables f32 or f64 applied to a value
+**Chosen:** the kernel enables f32 or f64 applied to a value
 of any enabled integer type. The source is the integer's mathematical value,
 not its carrier bits. An untyped integer operand first takes [0200]'s default
 i32 source type; a wider literal therefore writes an explicit integer
@@ -3112,7 +3115,7 @@ compile-time conversion, and traps when a runtime value cannot convert. It did
 not say how a fractional float becomes an integer, whether the fractional part
 participates in the range check, or what infinity and NaN mean as integers.
 
-**Chosen:** the seventeenth R4.10 increment enables every enabled integer type
+**Chosen:** the kernel enables every enabled integer type
 applied to an f32 or f64 value. A typed source retains its float width. An
 untyped float operand first takes [0210]'s default f32 type, so the source is
 rounded to f32 before conversion; there is still no implicit conversion
@@ -3155,7 +3158,7 @@ values a mathematical integer they do not have. All were declined.
 explicit type application [0310]. It did not assign a numeric image to false
 or true, or say whether every numeric value has a truth value.
 
-**Chosen:** the eighteenth R4.10 increment enables any enabled integer type
+**Chosen:** the kernel enables any enabled integer type
 applied to a bool value. False converts to zero and true converts to one. Both
 values lie in every enabled signed and unsigned integer range, so this
 direction is total: it cannot report L0300 or trap. Typed and inferred module
@@ -3184,7 +3187,7 @@ refused when known or traps at runtime [0310]. D172 fixed bool's integer images
 at zero and one, but did not say whether conversion back accepts only those
 images or assigns truth to every nonzero integer.
 
-**Chosen:** the nineteenth R4.10 increment enables bool applied to any enabled
+**Chosen:** the kernel enables bool applied to any enabled
 integer value. Integer zero converts to false and integer one converts to true;
 every other value is impossible. An untyped integer first takes [0200]'s
 default i32 type, preserving the rule that conversions retain a typed source
@@ -3220,7 +3223,7 @@ mathematical integer images zero and one, while D173 accepted only those
 integer images on conversion back. Neither decided how the IEEE values around
 those images behave.
 
-**Chosen:** the twentieth R4.10 increment enables bool applied to f32 or f64.
+**Chosen:** the kernel enables bool applied to f32 or f64.
 Positive and negative zero both convert to false because they compare equal as
 IEEE numbers. Exactly positive `1.0` converts to true. Every other value,
 including negative one, fractions, infinity and NaN, is impossible. An untyped
@@ -3256,7 +3259,7 @@ module float operators deferred because using the compiler host's float
 operations would make cross-compilation inherit that host's rounding mode and
 NaN behavior.
 
-**Chosen:** the twenty-first R4.10 increment enables module-level f32 and f64
+**Chosen:** the kernel enables module-level f32 and f64
 `+`, `-`, `*`, `/` and all six comparisons. Operands may be any [1940]-known
 float expression, including forward or chained module names, conversions,
 named infinities and NaNs. Their results may initialize scalar bindings or
@@ -3298,7 +3301,7 @@ D172 fixed bool's mathematical images at zero and one but deliberately left a
 float type applied to bool refused. D174 was then recorded as completing the
 enabled scalar conversion matrix even though that refusal remained.
 
-**Chosen:** the twenty-second R4.10 increment enables f32 or f64 applied to a
+**Chosen:** the kernel enables f32 or f64 applied to a
 bool value. False converts to exactly positive floating zero and true converts
 to exactly positive floating one. Both images are exact in binary32 and
 binary64, so this direction is total: it cannot report L0300 or trap, and it
@@ -3331,7 +3334,7 @@ applies those rules to scalar leaves of module aggregate images. The remaining
 scalar path nevertheless lowered `and` and `or` through routine-style CFG, and
 the backend's datum fold correctly rejected its `Branch` instruction.
 
-**Chosen:** the twenty-third R4.10 increment makes every scalar module bool a
+**Chosen:** the kernel makes every scalar module bool a
 target-neutral static image. The one shared lowering-time folder evaluates
 literal, named, forward and chained module-known operands, comparisons, `not`,
 `and` and `or`; its existing logical cases visit the left operand first and
@@ -3397,7 +3400,7 @@ without changing what the compiler accepts today.
 ### D224 — Ordinary module arithmetic has a wider folding range
 
 **The tour said** that a module value is known before entry [1460] and ordinary
-runtime arithmetic traps on overflow [0300]. The bootstrap's R1.70 decision
+runtime arithmetic traps on overflow [0300]. The bootstrap IR's decision
 explicitly admitted `x: u8 = 200 + 100 - 100`: the intermediate 300 exists only
 in the folder. [1940]'s phrase about a fold that no type holds left the final
 image and its intermediates insufficiently distinguished.
@@ -3450,9 +3453,10 @@ atom names, and a union that flattens to exactly one atom identity and
 exactly one pointer type is the type `ptr [mut] T` carrying that atom as its
 empty case. It occupies one target pointer carrier with zero reserved for the
 atom, which is what `Landin.Checking.Reference_Union_Extent`'s one-atom arm
-has measured since R2.50 and now has a caller for. Order does not matter:
-`ptr mut u32 | none_found` and `none_found | ptr mut u32` are the same type,
-because [1870] already says a union is structural. The atom's singleton
+has measured since local lifetime checks were built and now has a caller for.
+Order does not matter: `ptr mut u32 | none_found` and
+`none_found | ptr mut u32` are the same type, because [1870] already says a
+union is structural. The atom's singleton
 widens into the union and so does the bare pointer, in the direction [1870]
 gives atom sets; neither direction reverses, so a plain pointer fills a union
 parameter and a union does not fill a `ptr T` one.
@@ -3464,7 +3468,7 @@ the reserved zero: `.val` in a read or an assignment target, `addr` of a
 comparison, and an argument or result position wanting `ptr T`. The first
 five are L0301 here; the last is [0440]'s existing reference-agreement
 refusal. `ptr(n)` into a union position is L0301 for the same reason, and
-`zeroed` stays R2.20's L0304 because [1870] states that no zero or default
+`zeroed` stays the aggregate-value L0304 because [1870] states that no zero or default
 atom exists — an all-zero image is not the atom even though the atom's
 representation is zero.
 
@@ -3491,7 +3495,7 @@ case lowers to a `usize` zero rather than the atom's dense nonzero code, which
 is the one place a wrong carrier could be produced.
 
 Two or more atoms beside a pointer is refused by name with L0304 citing
-[0480] and owned by R7.20. The tagged carrier [1870] describes needs an IR
+[0480] until its layout is decided (D235). The tagged carrier [1870] describes needs an IR
 pair, storage, an ABI position and a backend of its own, which is a
 representation increment and not this one; [1870]'s sentence about that
 placement is kept and qualified rather than deleted, and
@@ -3522,9 +3526,9 @@ permission to construct a null pointer.
 `ptr(0)` remains accepted [0470] and `runtime/core-mem-allocators` uses it as
 a failure sentinel five times, so null is still mintable on the pointer side
 even though [1580] states that it is refused. That contradiction is real, it
-is not resolved here, and it belongs to [1580] and R4.40 with the rest of the
-foreign-boundary work; ROADMAP.md records it against that item rather than
-leaving [0480] looking closed while its headline sentence is evadable.
+is not resolved here, and it belongs to [1580] and the C boundary with the rest of the
+foreign-boundary work, which records it rather than leaving [0480] looking
+closed while its headline sentence is evadable.
 
 **Pinned by** `positive/pointer-unions`, `runtime/pointer-unions`,
 `positive/pointer-union-several-atoms`,
@@ -3583,8 +3587,8 @@ folded zero and of `unchecked` construction.
 pointer type, and that the spelling does not decide how a union of several
 atoms and a pointer is laid out [0480]; [1870] placed that form as a tag beside
 the pointer. D189 enabled the one-atom form as a pointer reserving zero and
-refused two or more atoms beside a pointer by name against R7.20, recording
-that the tagged form needs an IR pair, storage, an ABI position and a backend
+refused two or more atoms beside a pointer by name until its layout was
+decided, recording that the tagged form needs an IR pair, storage, an ABI position and a backend
 of its own.
 
 **Chosen:** a union that flattens — through aliases, parameterized aliases and
@@ -3675,8 +3679,9 @@ that `set(X)` generates a packed struct of bool from an encoded union [0540]
 `compiler.volatile_store`. D228 enabled the register image with its two
 explicit operations `compiler.register_read` and `compiler.register_write`,
 refused every synthesized device field update, and left the wrapper and
-`set(X)` unenabled. The `volatile ptr` shape was refused by name against
-R6.80, which translated prototype 1 to D227 and D228 forms instead.
+`set(X)` unenabled. The `volatile ptr` shape was refused by name, and the
+checked-in device fixtures translated prototype 1 to D227 and D228 forms
+instead.
 
 **Chosen:** all three are withdrawn. A device access is an operation — D227's
 two scalar operations or D228's two register operations — over an ordinary
@@ -3685,16 +3690,16 @@ over them, with the image's decode and encode beside it and its reset value
 as a constant. The encoded union still places each named bool field of a
 set, and the generator writes those fields out; inside a larger image they
 are offset by where the set begins, as D228 already says. The `volatile ptr`
-shape keeps its named L0010, now a withdrawal naming R7.20 with the four
-operations as its migration guidance. `register(...)` and `set(X)` never had
+shape keeps its named L0010, now a withdrawal with the four operations as
+its migration guidance. `register(...)` and `set(X)` never had
 a named refusal and remain an ordinary parse error and an unresolved type
 application. [0070], [0460], [0470], [0540], [0730], [0740], [0760] and
 [0850] are rewritten to the operation form, and prototype 1's preamble
 records the withdrawal while its sketch keeps the historical spelling as the
-design record, as R6.80 already did for `register` and `set`.
+design record, as the device fixtures already did for `register` and `set`.
 
-The evidence is the executed derivation. The complete prototype-1 driver
-(R6.90) runs on Cortex-M under QEMU and Renode through the generated RP2040
+The evidence is the executed derivation. The complete derived prototype-1
+driver runs on Cortex-M under QEMU and Renode through the generated RP2040
 modules' accessors and explicit bool image fields; it needed no volatile
 pointer type, no wrapper and no set former, and its derivation maps every
 sketch use to that form. D228 had already made the wrapper's central promise
@@ -3706,7 +3711,7 @@ permission on every reference beside `mut`, which [0440]'s relaxation, `addr`,
 field projection and generic identity would all have to carry, while D227
 already says what each access orders. `set(X)` is a type-level generator,
 which D3 and [1540] place in generator programs, and general SVD generation
-is the companion tool's (R551-33).
+is the companion tool's.
 
 **The alternatives:** a pointer qualifier with volatile `.val` accesses and
 field projection was declined as a second permission axis for a surface no
@@ -3806,7 +3811,7 @@ is structural and the element is whatever it is: two `[4]point` are one type
 exactly when the two `point`s are, which is [0710] doing its own work inside
 this rule and not an exception to it. D122 supplies the aggregate element
 carrier, D127 its known whole-element contexts, and D134 the computed ones;
-the earlier R2.20 layout evidence did not pretend its scalar-only array shape
+the earlier aggregate layout evidence did not pretend its scalar-only array shape
 represented them.
 
 **Pinned by** `positive/array-type-is-declared`,
@@ -3865,7 +3870,7 @@ scalar local's fact. The compiler keeps only facts the function actually
 reaches, rather than allocating bookkeeping proportional to the array length.
 
 This decision does not define what a write through a computed local index
-establishes. Computed local indexing remains refused in this R2.20 slice;
+establishes. Computed local indexing remains refused in this aggregate slice;
 computed indexing of module arrays remains enabled because D10 gives module
 state every element from the start. Whole-array local values and initializers
 remain refused as well; D20 admits the one direct storage-to-storage copy.
@@ -3918,7 +3923,7 @@ D50 later lets either endpoint be a directly selected fixed-array field. D21
 reuses only the direct-name storage read for initializers; D51 later admits a
 directly selected fixed-array field as the source of a local initializer only.
 Parameters, returns, discards, and other general value positions remain refused
-until their own R2.20 or R2.30 slices. No array literal is enabled by this
+until their own aggregate or function slices. No array literal is enabled by this
 decision; D23 later admits one contextual initializer.
 
 **Why:** expanding a copy into one operation per element would make compiler
@@ -4065,7 +4070,7 @@ re-established a position at a time, and no sparse column of D19's fits an
 extent D18 permits.
 
 **The alternative:** admit a computed read without a prior whole assignment
-(and leave every out-of-order write undiagnosed until R6.70's runtime), or
+(and leave every out-of-order write undiagnosed until run time), or
 have a computed write clear the whole-array fact. Both were declined for
 the same reason D19 refused to widen one element write to the whole local:
 they trade a compile-time refusal for a runtime that this compiler has no
@@ -5281,13 +5286,13 @@ byte escapes from codepoint escapes. It did not state whether one literal
 context could be enabled before the text types, whether equal literals share
 an object, or which stage owns malformed spelling.
 
-**Chosen:** the seventh R4.10 increment admits a quoted literal only where a
+**Chosen:** the kernel admits a quoted literal only where a
 direct context supplies read-only `[]u8`. Its unescaped source content must be
 shortest-form UTF-8; `\n`, `\r`, `\t`, `\e`, `\\`, `\"`, `\'` and `\xNN` decode
 to bytes, including an arbitrary byte from `\xNN`. A well-formed `\u{...}` is
 text rather than bytes and is L0301 in this context. A literal with no context
 still defaults to the deferred `utf8` and is L0304; `utf8`, `utf16`, `cstring`
-and their codepoint representation remain later R4.10 work at this decision.
+and their codepoint representation remain later text work at this decision.
 D181 supplies them.
 
 Malformed UTF-8 source content or an unknown, incomplete or nonscalar escape
@@ -5338,7 +5343,7 @@ the direct `[]u8` contexts. The tour did not settle whether representation
 identity could leak through structural generics, whether the terminator was a
 byte or an element, or how static pointer images name pooled data.
 
-**Chosen:** the next R4.10 text increment admits quoted and raw literals in
+**Chosen:** the kernel admits quoted and raw literals in
 direct `utf8`, `utf16` and `cstring` contexts and makes contextless literals
 `utf8`. Each is a canonical immutable reference identity distinct from the
 other two and from its backing pointer or slice type. That identity is carried
@@ -5376,7 +5381,7 @@ does not permit an ordinary pointer to acquire `cstring` identity.
 
 This decision does not inherit operations from a representation. `lenof`
 continues to expose the existing slice length for `utf8` and `utf16`, but
-integer or position indexing remains [0610]'s separate R4.10 work. Range
+integer or position indexing remains [0610]'s separate work. Range
 slicing and collection traversal likewise require their own text operation or
 evidence instead of treating a hosted view as an ordinary slice. Existing
 byte-slice literals, ranges, arrays, origins and evidence behavior are
@@ -5638,16 +5643,17 @@ the operand snapshots and the element order of every trap.
 
 **The tour said** that the `compiler` module reaches the atomic and vector
 intrinsics [1560] and that the standard library wraps the atomics into a
-pleasant type [1620]. The note on a `compiler.vector_*` reference said R4.50
-enables it; R4.50 implemented D209's element-wise operators over fixed arrays
-instead and never enabled an intrinsic.
+pleasant type [1620]. The note on a `compiler.vector_*` reference said the
+baseline code-generation work enables it; that work implemented D209's
+element-wise operators over fixed arrays instead and never enabled an
+intrinsic.
 
 **Chosen:** the vector intrinsics are withdrawn. [0590] already makes fixed
 arrays the vector type, and a second spelling of the same operation is the
 second vector shape [0590] was written to refuse. A `compiler.vector_*`
 reference keeps its L0203, and its note now says it is withdrawn and points
 at element-wise operators. The wrapper type is transferred to the Broader
-standard library successor (R551-34), which [1620] now names. Cortex-M0
+standard library successor, which [1620] now names. Cortex-M0
 refuses every read-modify-write atomic (D227), so a wrapper portable across
 the three targets would offer only loads, stores and fences there, and which
 operations a wrapper exposes is a design question for the program that needs
@@ -5658,7 +5664,7 @@ one. No derived program or `core` module needed one: the driver uses
 declined as two spellings of one operation. A `core/atomic` wrapper now was
 declined: it has no consumer, and on the smallest target it would be a type
 whose operations change with the target. Leaving [1620]'s sentence as a
-promise with no owner was declined because [1830] and R7.10's inventory
+promise with no owner was declined because [1830] and the construct inventory
 refuse an unowned promise.
 
 **Pinned by** `negative/r720-vector-intrinsic-withdrawn`,
@@ -5689,7 +5695,7 @@ a representation to stop being interchangeable.
 type that is nominal, because there is no existing type for it to be another
 name for, and [0710] says a value typed as an anonymous struct "never
 becomes a same-shaped named type". That is a different sentence from this
-one and R2.20's later slices are where it is implemented.
+one and the later aggregate slices are where it is implemented.
 
 **The alternative:** every `type` declaration introduces a distinct type,
 reading [0120]'s "like any other value" as a definition and treating
@@ -5722,8 +5728,8 @@ a `bool`, `sizeof percent` measures `u8`, and there is no constrained
 arithmetic and no constraint join rule. That is why [1730]
 names distinct types and range subtypes as two habits and not one: [0650]'s
 `distinct` is this rule's complement. D213 implements distinct identities;
-composing them with a constrained representation retains the R7.20 ownership
-of the constrained compositions refused below.
+composing them with a constrained representation keeps the constrained
+compositions refused below, which D236 decides.
 
 The base is written as a scalar name or a declared name whose alias chain
 reaches an enabled integer scalar; a float, a bool, a struct, an array or a
@@ -5775,7 +5781,7 @@ guarantee true rather than decorative, because each is a path by which an
 unchecked value could enter constrained storage: a struct field, a fixed-array
 element, a `ptr`/`[]` target, `addr` of a constrained place, an `extern (c)`
 signature whose named return Landin never assigns, and a generic type
-argument. The first four and the last report L0304 against R7.20; the
+argument. The first four and the last report L0304 by name; the
 external signature is refused by [1580]'s existing hosted-scalar boundary and
 keeps that report. `[]percent` and `[]u8` would be one slice type, so a
 `[]u8` write of 200 would enter constrained storage with no check; a generic
@@ -5916,8 +5922,8 @@ module images and [1940]'s folds; they introduce no startup code or compile-time
 execution of user functions. A type declaration is not itself a runtime value.
 Static Boolean extraction uses Boolean bounds; optional-null, numeric-pointer
 and C-string images retain the ordinary pointer construction and relocation
-rules. A module storage address remains outside [1940]'s known-value forms and
-is owned by R6.60; wrapping it does not change that existing boundary.
+rules. A module storage address remains outside [1940]'s known-value forms, and
+wrapping it does not change that existing boundary.
 
 **The alternatives:** accepting `distinct` as an alias would erase the property
 for which both prototypes use it. Rewriting source uses as ordinary named
@@ -5961,8 +5967,7 @@ keys.
 holes, and [0740] forbids field writes through a volatile pointer. It did not
 say whether a hardware image containing an unnamed pattern was a language
 value, whether copying it inspected every field, or what an exhaustive match
-could assume. D227 deliberately left those questions here. R6.40's completion
-record owns implementation coverage and acceptance of this decision.
+could assume. D227 deliberately left those questions here.
 
 **Chosen representation:** a `layout(packed)` struct is a nominal raw image.
 Every stored bit belongs to the image, including omitted bits; there is no
@@ -6163,8 +6168,8 @@ type, placed its one check where a value is stored into a place declared with
 the subtype, and refused by name the positions where that check could not
 hold: a struct field, a fixed-array element, a `ptr` or `[]` target, `addr`
 of a constrained place and a generic type argument, with an `extern (c)`
-signature kept by [1580]'s own report. R7.20 was to decide how the check
-composes.
+signature kept by [1580]'s own report. It left how the check composes
+undecided.
 
 **Chosen:** it does not compose. A range subtype constrains a binding, a
 parameter, a named return and a conversion, which are exactly the positions
@@ -8362,8 +8367,8 @@ the parser stable recovery evidence without committing either mistake.
 and layout together, reserve `variant`, or postpone all variant evidence. The
 first has no owning report for the missing layout; the second crosses every
 representation layer in one unmeasured step; the third breaks the tour's
-contextual spelling and user types of that name; and the last leaves R2.20's
-variant work with only accidental cascades. All were declined.
+contextual spelling and user types of that name; and the last leaves the
+later variant work with only accidental cascades. All were declined.
 
 **Pinned by** the parser public-seam recovery cases and the corpus truncation
 sweep. D74 migrates the parser refusal into enabled declaration syntax and
@@ -8662,7 +8667,7 @@ refer directly to the matched object: reading loads that payload field, and an
 arm's sibling scope. Duplicate names retain L0200 and a use outside the arm
 retains L0201. [1910] keeps the selected payload storage live through each
 alias's last use, including scalar writes and addresses derived from the
-payload. Retagging or replacing that storage earlier is L0315. The R4.91
+payload. Retagging or replacing that storage earlier is L0315. The
 live-payload negative fixture and last-use runtime fixture pin this rule.
 
 This slice binds scalar payload fields. D85 later binds a fixed-array payload
@@ -9564,7 +9569,7 @@ applied after the scaled index, which is the only new thing an instruction
 holds: an index is a value and cannot be a step. Two shapes are the same shape
 when they hold the same thing, not when their runs start in the same place.
 
-Two forms stayed refused and named this item: a whole element as a value or a
+Two forms stayed refused by name: a whole element as a value or a
 place, and an array whose element is a struct with a variant part. D127 admits
 both, by making a known index one step of the run rather than a value.
 
@@ -9791,7 +9796,7 @@ stored function value.
 
 **Why an internal checked address:** expanding one operation per scalar leaf
 cannot represent a target-sized fixed-array field compactly; exposing a source
-pointer would enable aliasing and pointer syntax R2.50 owns; and one special
+pointer would enable aliasing and pointer syntax the reference rules own; and one special
 computed-element opcode per construction, copy, call, control or variant form
 would duplicate the contextual operation family. One verified shaped address
 lets those existing forms compose without freezing target offsets in IR.
@@ -9815,7 +9820,7 @@ verifier case, the generated IR record, and
 **The tour said** [0720] permits `of false` when the remaining fields are bool
 and requires the fill to typecheck for every omitted field. D65 had refused all
 nonzero fills because one syntax node cannot have several types or be evaluated
-several times. R4.90's audit found that its homogeneous refusal was broader than
+several times. The hosted-parity audit found that its homogeneous refusal was broader than
 that reasoning: one exact descriptor needs neither conversion nor re-evaluation.
 
 **Chosen:** a nonzero trailing fill requires at least one omitted field, and all
@@ -9914,10 +9919,10 @@ from its literal [0530], that `zeroed` is an image its destination gives
 context [0540], that ordinary and variant-bearing structs are types [0670]
 [0680], that a case with no payload is an atom [0690] and that matching has
 constant patterns [1210]; [1930] says anything with a type may be thrown
-away. R2.20's increments admitted aggregate values position by position, and
-every position not yet admitted was one L0304 whose note said R2.20 enables
-it. At R7.10 thirty-four checker sites still carried that note, with R2.20
-complete.
+away. The aggregate work admitted aggregate values position by position, and
+every position not yet admitted was one L0304 whose note said that work
+enables it. At the construct audit thirty-four checker sites still carried
+that note, with the aggregate work complete.
 
 **Chosen:** each site was reproduced and classified against the text that
 governs it, and the construct that owns it now says one of three things.
@@ -9980,8 +9985,8 @@ general variant value D76 refused, a union with no struct around it. Copying a
 match alias of an array was declined for D85's reason. Matching numbers with
 literal arms was declined for the reasons above. Leaving the discards refused
 was declined because [1930] is kernel text. Keeping every site a pending
-promise was declined because R2.20 is complete and [1830] forbids a note that
-promises nobody's work.
+promise was declined because the aggregate work is complete and [1830] forbids
+a note that promises nobody's work.
 
 **Pinned by** `positive/r720-discard-aggregate-places`,
 `positive/r720-discard-inferred-values`,
@@ -10070,8 +10075,8 @@ conformance supplies allocation and free. The existing inout-receiver
 `mem.allocator` is a generic evidence contract, not itself object-safe; an
 ordinary pointer-receiver adapter permits calls through `any` without changing
 that contract. The frontend has no privileged knowledge of `core/mem`. The
-named refusals remain migration diagnostics pointing to R4.80's decision, not promises to
-enable these forms later. Declared names spelled `arena` remain ordinary.
+named refusals remain migration diagnostics pointing to this decision, not
+promises to enable these forms later. Declared names spelled `arena` remain ordinary.
 
 The caller chooses backing and capacity on every target: a real array, static
 storage, or storage explicitly acquired from another provider. Target-sized
@@ -10298,9 +10303,9 @@ one source parameter consume a target-dependent number of argument positions,
 while aliasing caller storage would change `in` from a value convention into a
 hidden reference convention. The neutral carrier keeps offsets, padding and
 extent out of verified IR; the callee-side copy makes the observable value
-independent and leaves R4.40 to classify C aggregates separately.
+independent and leaves the C boundary to classify C aggregates separately.
 
-**The alternative:** pass a struct argument by reference and let the callee copy on write, or expand the struct into one register per scalar field. The first makes a later argument's side effect visible to the callee, which R4.21 later met as a defect even under this convention; the second has no answer for a struct wider than the register run.
+**The alternative:** pass a struct argument by reference and let the callee copy on write, or expand the struct into one register per scalar field. The first makes a later argument's side effect visible to the callee, which a later soundness repair met as a defect even under this convention; the second has no answer for a struct wider than the register run.
 
 **Pinned by** the checker, lowering, malformed-IR verifier and backend public
 seams; `negative/struct-argument-unassigned`; the generated token and IR
@@ -10673,7 +10678,7 @@ byte extent enter only when the backend emits the final copy.
 **Why not return a pointer to callee storage:** that pointer would escape a dead
 frame and would turn by-value semantics into an alias. Returning fields in
 registers would instead require target ABI classification in neutral IR and
-pre-empt R4.40. Caller storage preserves value lifetime and the established
+pre-empt the C boundary. Caller storage preserves value lifetime and the established
 one-position internal convention without either error.
 
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
@@ -11138,7 +11143,8 @@ named returns, exactly as D124 requires.
 **Why one aggregate rather than one hidden pointer or register per return:** the
 latter makes source arity rewrite the ABI and duplicates D106's caller-storage
 rule. One structural image gives whole binding, field selection, destructuring
-and control joins the same value while leaving target classification to R4.40.
+and control joins the same value while leaving target classification to the C
+boundary.
 Making the result nominal would invent a declaration the source never wrote and
 would contradict [0990].
 
@@ -11206,7 +11212,7 @@ the generated lexical, construct and IR records.
 **The tour said** that a function is an ordinary code-address value [0870]
 [1000], that a struct field may have any ordinary type [0670], and illustrated
 a callback as a function field plus explicit state [1000]. D117 and D123 kept
-function-valued struct fields as the remaining R2.30 storage form while the
+function-valued struct fields as the remaining function storage form while the
 aggregate path and image carriers were still being established.
 
 **Chosen:** an ordinary struct field or variant payload field may have a
@@ -11401,7 +11407,7 @@ resolving a triple. A manually linked assembly can use the assembly check.
 Neither the filename map nor a lookup routine enters the running program;
 without the map a diagnostic can still print all three coordinates. This is
 bootstrap artifact packaging, not a frozen debug format or stage protocol.
-R4.60's `--debug=full` also emits this map, with every compilation source,
+Source debugging's `--debug=full` also emits this map, with every compilation source,
 and uses these same file IDs for native debugger line information. The default
 `--debug=none` retains the caller-only map. Debugger sections are optional
 off-target data and can be stripped from the executable without changing
@@ -11424,7 +11430,7 @@ then be unstated. Privileging a particular core type was unnecessary.
 
 D232's compiler-check handler takes its separate site number. Both features
 follow [1670]'s no-mandatory-filename rule and share optional source/build
-identity packaging, without changing this R4.10 caller-value contract.
+identity packaging, without changing this caller-value contract.
 
 **Pinned by** `positive/caller-parameters`, `runtime/caller-parameters`,
 `runtime/caller-is-an-ordinary-name`, the `negative/caller-parameter-*` corpus,
@@ -11480,7 +11486,7 @@ never returns. Cortex retains its general C source refusals; no toolchain
 helper becomes source-callable through this rule. Interrupt and naked
 signatures remain exactly `() -> none`, with their separate machine return
 obligations. An ordinary nongeneric firmware entry can be `() -> noreturn`;
-a `none` entry retains R6.60's return trap. Hosted entry selection remains
+a `none` entry retains the firmware entry's return trap. Hosted entry selection remains
 `public main: () -> (code: i32)` and the established linkage rules.
 
 IR represents the return form in signature identity and a nonreturning call
@@ -11503,8 +11509,8 @@ These alternatives are declined.
 
 **Pinned by:** `checking/nonreturning control and identity` checks all three target
 descriptions through verified IR; `positive/r491-noreturn-signatures` retains
-the former refusal's exact source as accepted syntax. R6.70 owns executable
-acceptance and remaining integration evidence; D232 supplies panic dispatch.
+the former refusal's exact source as accepted syntax; D232 supplies panic
+dispatch.
 
 ## DECISIONS: CONTROL FLOW
 
@@ -11561,8 +11567,8 @@ recursive function signature, not merely the broad `Fixed_Array`, `Aggregate`
 or function-value kind. Without a surrounding context the first written answer
 supplies that complete shape and every other answer must agree. Each arm and
 bare block retains [1840]'s own lexical scope. This decision introduces no loop
-syntax or loop edge: `loop`, `while`, `for`, `break` and `continue` were
-R4.10's, which has since enabled them.
+syntax or loop edge: `loop`, `while`, `for`, `break` and `continue` belonged
+to later loop work, which has since enabled them.
 
 **Why two facts rather than one exited Boolean:** one Boolean cannot distinguish
 "no path reaches the join" from "this construct may return but also has a
@@ -11591,7 +11597,7 @@ with the parser, checker, flow and IR public-seam cases.
 ### D125 — A control join writes storage owned by its consumer
 
 **The tour said** that a branch-chosen value has one joined origin [0840], while
-R2.20's aggregate decisions keep layout out of checked shapes and D106 returns
+the aggregate decisions keep layout out of checked shapes and D106 returns
 aggregates through caller-owned storage. It did not supply a target-neutral
 value carrier for a join, especially when an array or struct is not one scalar
 IR value.
@@ -11669,8 +11675,8 @@ The neutral selector has five edge kinds: ordinary fallthrough, successful
 return, failure propagation, structured transfer, and trap stop. A deferred
 call applies to every language edge that unwinds a block and never to a trap;
 a failure cleanup applies only to failure propagation. D133 enables that
-failure-only policy as [1110]'s `undo`, while every loop transfer was
-R4.10's. No trap unwinds, whether it occurs in the body, in a final expression,
+failure-only policy as [1110]'s `undo`, while every loop transfer belonged
+to later loop work. No trap unwinds, whether it occurs in the body, in a final expression,
 or while a cleanup call is running.
 
 Cleanup has no target-specific IR form. Once selected, a call lowers through
@@ -11730,7 +11736,7 @@ the failure left the callee.
 Undo never applies to ordinary fallthrough, successful return, structured
 transfer, or trap stop. No trap is converted to declared failure and no trap
 unwinds, including one raised while evaluating a cleanup. Loops and their
-transfers were R4.10's, so this decision enables none of them.
+transfers belonged to later loop work, so this decision enables none of them.
 
 Definite assignment uses only the failure edges on which an undo call actually
 runs. A delayed argument may consequently be unassigned on every normal,
@@ -11769,7 +11775,7 @@ cases and the generated lexical, construct and IR records.
 
 **The tour said** that Landin makes a deliberately smaller claim than memory
 or resource safety [1720], and named four kinds of answer for the operation
-table R2.90 would establish. It did not say what counted as one operation, so
+table a guarantee register would establish. It did not say what counted as one operation, so
 two inventories could both look complete while one listed syntax nodes and
 the other listed only machine instructions.
 
@@ -11892,9 +11898,9 @@ and no others; `subtype.range` is deliberately not among them, because a
 value outside a range subtype's bounds is not a value the destination type
 holds and removing that edge would leave no stated behaviour. D203--D208 add
 the selected C-call, export, linkage, allocation and hosted-startup boundaries
-now that R4.40 implements their source and backend paths; its generated binding
-integration and authoritative native closure are recorded in ROADMAP.md rather
-than additional guarantee classes. D209--D210 add arithmetic snapshots, retained
+now that the C boundary implements their source and backend paths; its
+generated binding integration is evidence rather than additional guarantee
+classes. D209--D210 add arithmetic snapshots, retained
 element traps and explicit placement without extending the pointer-validity
 guarantee. Driver and backend inability have diagnostic
 owners in `diagnostics.matrix`, but are host failures rather than source semantic
@@ -11942,7 +11948,7 @@ executes deferred calls when a lexical block is left. It did not state the
 definite-assignment approximation at a back edge or whether a transfer selects
 [1110]'s failure-only cleanup.
 
-**Chosen:** the first R4.10 increment enables unlabelled `loop` and `while`
+**Chosen:** the first loop increment enables unlabelled `loop` and `while`
 statements and their unlabelled, valueless `break` and `continue` transfers.
 The neutral IR represents them only with its existing blocks, branches and
 jumps: the loop header is an ordinary backward target, and no loop opcode or
@@ -11957,8 +11963,8 @@ assignment made only in an iteration does not establish a fact after the loop.
 This is sound for a `while` that may run zero times and avoids claiming a fixed
 point the checker has not computed. Origins join the incoming and one-body
 facts because that analysis is monotone union. Labels, `break with`,
-`complete`, value-producing loops and iterable `for` remain in R4.10 rather
-than being approximated in this first increment; D157 subsequently enables
+`complete`, value-producing loops and iterable `for` remain later loop work
+rather than being approximated in this first increment; D157 subsequently enables
 the labels and completion edge without changing this representation.
 
 **The alternatives:** lower a loop to recursion, add a neutral loop opcode,
@@ -12069,7 +12075,7 @@ exactly once; natural exhaustion selects [1170]'s completion block and
 are ordinary local declarations inside that scope, so name resolution,
 definite assignment and lowering use the same declaration side tables as any
 other local. The parser retains collection traversal too, but checking reports
-its named R4.10 deferral until [1160]'s permission-sensitive element binding
+its named deferral until [1160]'s permission-sensitive element binding
 and iterable evidence are implemented.
 
 **The alternatives:** re-evaluate the upper bound per iteration, desugar the
@@ -12109,7 +12115,7 @@ body could assign, which is the same question `items[k] = v` asks of
 L0303 with [1160]'s note. An element whose type is a scalar, pointer, atom,
 function or struct is enabled. An array, slice or `any` element, and a source
 that is a struct or `any` value awaiting [1320]'s iterable evidence, keep the
-named R4.10 refusal, L0304.
+named refusal, L0304.
 
 Lowering keeps this inside the existing alias table that D78's payload
 bindings and [0990]'s named returns already use: the element declaration
@@ -12171,7 +12177,7 @@ transport handles the complete fixed-array copy. No new IR operation, verifier
 rule, backend-only type fact or host-width query is introduced.
 
 An `any` element and a struct or `any` source requiring [1320]'s iterable
-evidence remain the named R4.10 refusal, L0304. They need erased element
+evidence remain the named refusal, L0304. They need erased element
 identity or evidence-driven value production, neither of which is implied by
 the fixed-size storage shapes enabled here.
 
@@ -12219,7 +12225,7 @@ The address-shaped alias and the existing two-cell storage-copy path are
 representation mechanisms only. No operation interprets an `any` data pointer
 as a slice base, interprets evidence as a length, or admits `any C` itself as a
 collection source. A struct or `any` source requiring [1320]'s iterable
-evidence remains the named R4.10 refusal, L0304.
+evidence remains the named refusal, L0304.
 
 **The alternatives:** copy the element into a detached local, infer C again
 from the data pointer, treat the pair as a slice, or enable evidence-driven
@@ -12384,8 +12390,8 @@ and an anonymous function body [1010] written inside it is a separate item
 whose region depth starts at zero, because a function value runs where it is
 called and the region's visibility claim would otherwise be false at that call
 site. The region grants an optimiser nothing: it emits fewer checks and makes
-no fact available to a later pass. D211 preserves that rule under optimization;
-C6's applicable target parity remains R5 and R6.
+no fact available to a later pass. D211 preserves that rule under optimization,
+and the Darwin arm64 and Cortex-M0 targets keep it as Linux x86-64 does.
 
 Cleanup is the one place the compiler emits an instruction for source written
 somewhere else, so lexical has to be said of it in particular: a [1100]
@@ -12418,8 +12424,8 @@ at the place it is written and would need a second lowering of every callee.
 A counter-word re-enabling checks inside a region would make the outer word
 mean less than it says, and [1120] spells none. Removing the divisor, shift,
 bool, float and text edges would make the same source mean different things on
-the targets R5 and R6 add, which is exactly what C6 asked to be proved rather
-than assumed. Letting the region license an optimiser assumption is [1720]'s
+the Darwin arm64 and Cortex-M0 targets, whose parity with Linux was to be
+proved rather than assumed. Letting the region license an optimiser assumption is [1720]'s
 open question and not this one. All were declined.
 
 **Pinned by** `positive/unchecked-regions`,
@@ -12450,8 +12456,8 @@ records, and the `unchecked.region` guarantee row.
 blocks only, and that `break` and `continue` take one [1180]; [1090] showed
 only the unlabelled block. D157 retained loop labels on loop syntax and on each
 targeted transfer. A labelled block was outside the grammar: `scope: begin`
-parsed as a binding and its `end` closed the enclosing function (R4.91's J40),
-and `break scope` met L0110.
+parsed as a binding and its `end` closed the enclosing function, a defect a
+review found, and `break scope` met L0110.
 
 **Chosen:** `labeled_block ::= identifier ":" "begin" block "end" identifier`
 is a statement. Its closer repeats the label with the same diagnostics a
@@ -12486,7 +12492,7 @@ which can only report more.
 languages whose blocks are search expressions, was declined because [1190]
 already gives that job to loops and a second value exit would duplicate D158's
 join for no program that needed it. Removing labels from bare blocks was
-declined under inherited E1's own rule that a program not needing a construct
+declined under the inherited rule that a program not needing a construct
 is evidence, not automatic removal; the construct costs no new IR. Letting an
 unlabelled `break` leave the innermost labelled block was declined because it
 would change what every existing `break` inside a labelled block means.
@@ -12498,7 +12504,7 @@ would change what every existing `break` inside a labelled block means.
 `negative/r720-labelled-block-break-origin`,
 `negative/r720-labelled-block-borrow-after-break`,
 `negative/r720-labelled-block-not-an-expression`, the driver case
-`R7.20 labelled block refusals` for the closer and `continue` reports, and the
+`labelled block refusals` for the closer and `continue` reports, and the
 `control.loops` guarantee row.
 
 ## DECISIONS: CONCEPTS, GENERICS AND RUNTIME DISPATCH
@@ -12519,8 +12525,8 @@ fixed n: u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its
 arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
-formal list before an alias type, atom-union body or struct body. R4.90 closes
-the earlier parameterized atom-union exclusion by applying the existing
+formal list before an alias type, atom-union body or struct body. The
+hosted-parity audit closed the earlier parameterized atom-union exclusion by applying the existing
 structural-set and alias-substitution rules. D142 later adds one direct concept
 constraint to a type formal without changing this positional substitution. The
 same compile-time-only binders are admitted in declared-routine syntax and
@@ -12546,7 +12552,7 @@ as the primary source and its template member as the related source. The resulti
 ordinary error-set, assignment and generic-key rules. A one-atom pointer union
 uses D189's existing descriptor, including the empty atom of a substituted
 optional-pointer alias. Two pointer members are still refused. Two or more
-atoms beside a pointer were refused against R7.20 here; D235 later gives them
+atoms beside a pointer were refused by name here; D235 later gives them
 its two-cell union, including through a parameterized alias such as
 `opt(t) = a | b | ptr t`.
 
@@ -12888,7 +12894,7 @@ conformance registers a type [1240], a leading binder quantifies a
 parameterized type [1250], the key is `(type, concept, input types)` [1270],
 and every collision is an error [1280]. It did not settle the enabled grammar,
 the scopes, how an uninstantiated parameterized collision is found, or where a
-constraint lookup is performed without already having R2.70's evidence table.
+constraint lookup is performed without already having a generic evidence table.
 
 **Chosen:** `concept` and `is` are contextual words. A concept declaration
 carries one nonempty collected type-formal list, zero or more direct parent
@@ -12907,7 +12913,7 @@ Concrete supplied functions have exactly the substituted concept signature.
 Composed concepts require separate conformances to every named parent; having
 the child never synthesizes a parent.
 
-R3.10 makes the whole program the closed graph of modules reachable from the
+The program is the closed graph of modules reachable from the
 entry directory after first-matching ordered-root selection. Every conformance
 in that graph is collected whether used or public; unreachable directories and
 later root matches contribute nothing. A conformance declares no module name,
@@ -12925,9 +12931,10 @@ key. There is no search by return context, conversion, precedence, weak entry,
 or orphan rule.
 
 Collection retains parameterized supplying functions and the concrete binder
-tuple selected by lookup. R2.70 owns turning that retained selection into an
-evidence schema and validating the substituted generic entry at that ABI
-boundary; R2.60 emits no table and adds no generic dispatch operation.
+tuple selected by lookup. The generic evidence schema turns that retained
+selection into evidence and validates the substituted generic entry at that
+ABI boundary (D144); collection emits no table and adds no generic dispatch
+operation.
 
 **Why the family restriction:** arbitrary overlapping type patterns require a
 general unification and specialization order the language has neither stated
@@ -12956,7 +12963,7 @@ having a zero image from accepting the contextual word `zeroed`. It did not
 say whether `zeroable` needs a source declaration, whether users may add a
 missing entry, or how zero-length and nested enabled shapes enter the set.
 
-**Chosen:** `zeroable` is the sole compiler concept identity in R2.60 and needs
+**Chosen:** `zeroable` is the sole compiler concept identity and needs
 no source declaration. A source declaration cannot impersonate that identity,
 and every source conformance naming it is L0319: users can neither synthesize a
 false entry nor override a true one. Lookup supplies a conformance for every
@@ -13040,7 +13047,7 @@ and allowed operations have one physical meaning on that target. Evidence
 identity may differ because it arrives through the hidden parameter; signed
 arithmetic, aggregates, static table addresses and every unproved operation
 prevent folding. A failed sharing proof emits separate concrete bodies and
-cannot affect source correctness. This is baseline code folding, not R4.50's
+cannot affect source correctness. This is baseline code folding, not the
 direct-call specialization policy.
 
 **The alternatives:** putting function words first was viable, but makes the
@@ -13205,8 +13212,8 @@ checks, and the generated target/lowering artefacts.
 that generic calls deduce their type from their arguments [1300]. D138 requires
 complete normalized instance keys. The inherited implementation nevertheless
 froze its signature inventory before the recovered error's type could discover
-an ordinary generic call. R4.90 reproduced the resulting compiler defect on the
-accepted R4.80 baseline without changing the program's inferred error spelling.
+an ordinary generic call. The hosted-parity audit reproduced the resulting
+compiler defect on the accepted derived hosted application without changing the program's inferred error spelling.
 
 **Chosen:** error inference and generic discovery advance together. A recovery
 binding has the finalized complete set of its callee; an inferred local alias
@@ -13333,7 +13340,7 @@ evaluated even after a true arm; the final answer must be bool.
 **Why an activity table:** deleting branches would destroy parser diagnostics
 and mutate a shared syntax authority; making ordinary resolution decide the
 condition would introduce a compiler module and runtime execution before
-R4.30. A selected immutable view preserves the whole-program declaration set
+the hosted modules and toolchain directives. A selected immutable view preserves the whole-program declaration set
 without pulling options, build modes, widths, byte order or general builtin
 modules forward.
 
@@ -13552,8 +13559,8 @@ Inactive directives add no arguments. D227 enables scalar atomic operations;
 D229 enables Cortex-M0 body assembly, placement annotations and explicit
 firmware requests. Other targets refuse those uses. `assembler.block` is a
 body operation, not a module initializer; Cortex firmware refuses
-`linker.library`. No fourth namespace or general build language is introduced. R6.80's vendor
-provenance and fixture policies are off-target generator inputs/comments, not
+`linker.library`. No fourth namespace or general build language is introduced. The
+checked-in device fixtures' vendor provenance and fixture policies are off-target generator inputs/comments, not
 compiler-recognized directives. Its checked-in declarations derive into D228
 images and D227/D228 scalar accesses without enabling new syntax.
 
@@ -13634,7 +13641,7 @@ no-argument form ordinary and keeps the C `argc` and `argv` form available
 `public main: () -> (code: i32)` [1660], but an example does not say which
 shape the first native slice must implement.
 
-**Chosen:** [1970]. R1.80's minimal Linux x86-64 path accepts one public
+**Chosen:** [1970]. The minimal Linux x86-64 path accepts one public
 no-argument `main` and returns its host status through the one named `i32`
 return `code`. This is an implementation boundary for that slice; it does not
 remove [1650]'s C form from the language.
@@ -13725,7 +13732,7 @@ the independent register banks and the hidden result pointer;
 ### D205 — Headers describe ABI shapes, not lifetime policy
 
 **The tour said** at [1580] that declarations were handwritten and no header
-was read. That workflow cannot meet R4.40's complete binding pressure without
+was read. That workflow cannot meet a complete C binding's pressure without
 repeating signatures manually.
 
 **Chosen:** the separate deterministic clang-AST generator described at [1975]
@@ -13895,13 +13902,13 @@ focused generic/erased cases additionally run none/all and speed/all.
 
 ### D226 — Darwin C transport is a separate platform contract
 
-**Chosen in R5.30:** [1975] enables Apple's arm64 C subset with its own
+**Chosen for Darwin arm64:** [1975] enables Apple's arm64 C subset with its own
 `compiler.c_darwin_lp64` fact, aggregate/HFA transport, x8 indirect results,
 fixed stack scalars and HFAs packed at natural size while any other stack
 composite takes whole eight-byte slots, and stack-only variadic tails. The scalar alias
 layer admits either supported LP64 ABI explicitly. The binding generator
 verifies the selected Apple triple, macros, sysroot and C layouts. Logical
-link names keep the R5.20 platform-prefix rule. Static archive directives
+link names keep the isolated target contracts' platform-prefix rule. Static archive directives
 resolve exact files through the selected driver before Darwin linking.
 
 **The alternatives:** treating LP64 as SysV would misplace floats, aggregates,
@@ -13920,7 +13927,7 @@ fixture on Linux alone, so its Darwin placement is checked by
 
 ### D227 — Explicit memory events, synchronization and external writers
 
-**Chosen in R6.30:** [1620] supplies the scalar primitives below. Their names
+**Chosen for the concurrency memory model:** [1620] supplies the scalar primitives below. Their names
 are compiler members, not ordinary callable values. Each call evaluates its
 runtime arguments once, from left to right. Ordering operands are the fixed
 compiler atoms `compiler.relaxed`, `compiler.acquire`, `compiler.release`,
@@ -13962,7 +13969,7 @@ ordinary coherent RAM. The Cortex-M0 contract admits one-, two- and four-byte
 loads/stores and barriers, and refuses exchange, add and compare-exchange:
 ARMv6-M has no exclusive instruction pair. It does not silently substitute
 interrupt masking, an unavailable `libatomic` helper, or a stronger core.
-R6.50 implements Cortex-M emission for that admitted subset. Synthetic-32
+The Cortex-M backend emits that admitted subset. Synthetic-32
 admits no memory intrinsics.
 Device addresses must use volatile accesses, never CPU atomics. Even a CPU
 instruction that is atomic in RAM says nothing about peripheral bus semantics.
@@ -14086,9 +14093,10 @@ shared only with those excluded handlers are serialized: a completed handler
 precedes subsequent protected CPU accesses; protected writes precede a handler
 admitted after restoration. Nested sections preserve the prior mask. This
 contract excludes NMI, HardFault, unmasked priorities, other cores and DMA.
-A handler must not spin waiting for interrupted code to release a lock. R6.60
-owns interrupt entry, and R6.70 owns the ordinary target CPU module; this item
-introduces neither a scheduler nor a second Io implementation.
+A handler must not spin waiting for interrupted code to release a lock. Interrupt
+entry belongs to the compiler-owned firmware rules, and the ordinary target CPU
+module to the freestanding `core`; this decision introduces neither a scheduler
+nor a second Io implementation.
 
 Prototype 1 deliberately keeps `escaping buf: []mut u8`, retained as ordinary
 `[]u8`. The origin check prevents a tracked frame buffer from escaping;
@@ -14109,7 +14117,8 @@ count observation supplies the device premise only for that model. A circular
 counter is not a stable snapshot: the caller must ensure the consumed interval
 cannot be overwritten during the copy, and must prevent/latch overrun rather
 than confusing a full wrap with empty. A concurrently overwritten byte has the
-external-write/race limit above. R6.90 instantiates these obligations in the complete derived driver; its
+external-write/race limit above. The complete derived driver instantiates these
+obligations; its
 explicit synthetic drain/count contract and failure evidence are indexed in
 `compiler/tests/driver/DERIVATION.md`. That device protocol is not an additional
 language guarantee. Ordinary slices are retained.
@@ -14165,14 +14174,14 @@ This is a toolchain slice, not a new initialization language or package system.
 
 | Choice | Alternative and reason for declining it | Executable pin |
 | --- | --- | --- |
-| Explicit source entry and compiler-owned initialization | Treating R6.50's external harness as language startup hides initialization and cannot validate the compiler/toolchain request | `cortex ABI/firmware path`, `firmware.py` cold boot/reset |
+| Explicit source entry and compiler-owned initialization | Treating the Cortex-M backend's external test harness as language startup hides initialization and cannot validate the compiler/toolchain request | `cortex ABI/firmware path`, `firmware.py` cold boot/reset |
 | Kept compiler vector image with typed slot references | A heterogeneous raw array conflates SP, reset, reserved zero slots and handler conventions; unrestricted vector replacement could bypass reset initialization | `cortex ABI/machine directives`, generated SVC/IRQ and RAM vectors |
 | Distinct interrupt/naked signatures with no failures | Ordinary-call conversion loses EXC_RETURN and invents a caller for failures | machine signature/call/conversion refusals and nested execution |
 | Ordinary frames in handlers; programmer-owned naked bodies | Omitting ordinary leaf/handler frames contradicts the frame contract; applying that prologue to naked code contradicts no-prologue semantics | independent C/assembly frame control, generated MSP/PSP and nested-handler controls |
 | Conservative opaque assembly with restricted ordinary registers/control flow | Unstated clobbers corrupt live values; treating a compiler boundary as a hardware barrier invents ordering/completion | generic opaque-memory and ordinary-live-value execution, generated interrupt/DMA trace |
 | Flash immutable images, RAM data/BSS and explicit RAM code load images | Leaving initialization to test setup or treating load addresses as execution addresses conceals relocation failures | poisoned boot, copied RAM handler, veneer and libgcc execution |
 | Section retention separate from calling convention | Keeping every handler changes reachability and code size; dropping relocation targets breaks vector/data images | kept/discarded sections, first-class handler and text relocations |
-| Explicit constrained script and bounded materialization | A larger board hides overflows; a general script/build ecosystem exceeds this item; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505 and misplaced-vector controls |
+| Explicit constrained script and bounded materialization | A larger board hides overflows; a general script/build ecosystem exceeds this slice; materializing giant unreachable images before GC wastes unbounded resources | flash/stack overflow, L0505 and misplaced-vector controls |
 
 The physical startup/exception premises are outside language memory safety;
 shape, convention, placement and assembly restrictions are static checks;
@@ -14183,8 +14192,9 @@ masking does not stop DMA and a notification alone is insufficient.
 
 **Pinned by:** `compiler/ada/tests/src/landin-tests-cortex_suite.adb` and
 `environments/cortex-m/firmware.py`, its retained source, assembly, linker,
-GDB and device inputs, plus the unchanged R6.10–R6.50 independent and generated
-lanes.
+GDB and device inputs, plus the unchanged independent and generated lanes of
+the Cortex-M execution profile, layout, memory model, packed encodings and
+backend.
 
 ### D230 — Scalar transport through the ordinary assembly boundary
 
@@ -14226,7 +14236,6 @@ interrupted hardware/software state in QEMU. The independently asserted
 peripheral trace in `freestanding.py` uses the same ordinary-slice completion
 protocol as `firmware.py`. Assembly instructions and indirect writes remain
 programmer obligations; no ownership or interrupt-safety proof is introduced.
-ROADMAP.md owns actual results and the remaining R6.70 obligations.
 
 **Pinned by:** `positive/r670-scalar-assembly`, the Cortex source/IR cases and
 the compiler-generated `core-cpu.ldn` and ordinary-slice DMA execution in
@@ -14338,7 +14347,7 @@ filename guess. Stripping source/debug tables does not change the scalar site;
 constrained builds need no map, filenames, formatting, heap or reporting storage.
 The optional identity section is accounted for in an image that requests it.
 Caller coordinates remain their separate three-scalar D192 contract; they do
-not become panic numbers. Cortex source-debugging acceptance remains R6.100.
+not become panic numbers. Cortex source debugging is separate evidence.
 
 **Alternatives declined:** linker interposition does not validate a source
 signature; a new panic intrinsic namespace is unnecessary; per-emission dense
@@ -14363,15 +14372,16 @@ because writing the text layer is what forced them.
 ### D151 — Raw storage is a private library state machine
 
 **The tour said** that `slice_from` lies by describing uninitialized bytes as
-`[]mut T` [0510]. R3.20 derived the necessary transitions with a non-zeroable
-pointer element, but deliberately proposed no spelling.
+`[]mut T` [0510]. The allocator and container pressure case derived the
+necessary transitions with a non-zeroable pointer element, but deliberately
+proposed no spelling.
 
 **Chosen:** the repository-owned `core/mem` module declares a private
 parameterized nominal `raw(item)` with a byte pointer, capacity, a private
 singleton pointer and an initialized slice witness. The witness length is the
 initialized count. D150 permits public routines to carry that private identity,
 so callers hold it through inferred bindings without being able to name its type or
-select its fields. R3.40 adds the public parameterized alias `storage(item)` so
+select its fields. The parser-support core adds the public parameterized alias `storage(item)` so
 another core module may name the same identity in a field or signature without
 exposing its representation. D135's alias introduces no second nominal
 identity. Cross-module field selection through such a value is L0202, related
@@ -14393,7 +14403,8 @@ only the initialized witness, with mutable element permission and
 and then shortens the witness. `dispose` checks for `raw_not_empty`, returns
 the original byte pointer and clears both pointers, witness and capacity.
 The caller saves the capacity-derived byte extent before disposal; allocator
-ownership remains R3.40's composition rather than state stored in `raw`.
+ownership remains the container's composition rather than state stored in
+`raw`.
 
 Growth is transactional by composition: a replacement begins empty; reads of
 the old prefix and admissions to the private replacement may be rolled back by
@@ -14449,8 +14460,9 @@ foreseeable container state into process termination. All were declined.
 
 **The prototypes said** that parser support needs allocator-threaded vectors,
 arena allocation and text positions, while Z3, Z9 and Z10 left their exact
-minimum unresolved. R3.20 and D151 established the honest raw-storage
-boundary, but did not compose it into the modules the derived parser can use.
+minimum unresolved. The allocator pressure case and D151 established the
+honest raw-storage boundary, but did not compose it into the modules the
+derived parser can use.
 
 **Chosen:** `core/mem.allocator(provider)` has `alloc` and `free` entries.
 Allocation reports the declared `out_of_memory` atom. `arena_over` builds a
@@ -14484,7 +14496,7 @@ source`. Positions are byte offsets because the parser consumes source bytes.
 This is not the complete [0600] text design: D161 subsequently adds the
 read-only `[]u8` literal view, while the other literal contexts, UTF-8 scalar
 decoding, codepoint indexing and the permanent text/string boundary were
-later R4.10 work.
+later text work.
 
 The composition exposed four language rules needed by ordinary modules. D135
 aliases may normalize to a nominal aggregate, selected calls are statement
@@ -14494,7 +14506,8 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 `inout` storage. These are general language rules rather than privileges for
 `core/*`.
 
-The R3 parser did not require maps and trees. R4.20 supplies those libraries,
+The derived parser did not require maps and trees. The hosted core library
+slice supplies those libraries,
 the typed initialized-prefix slice witness and `core/small.small(item, N)`.
 Its honest initialized inline array keeps the written `zeroable` constraint,
 while its spilled arm owns a `core/vec.list(item)` and reuses that list's
@@ -14641,13 +14654,14 @@ the explicit foreign-symbol contract.
 **The alternatives:** direct Linux syscalls would couple the first hosted
 library to kernel numbers and conventions without reducing the already-linked
 C boundary. Enabling aggregate returns, unions, variadics, callbacks, foreign
-allocation ownership or generated header bindings would pre-empt R4.40.
+allocation ownership or generated header bindings would pre-empt the complete
+C boundary.
 Making I/O a compiler intrinsic or global singleton would defeat [1660]'s
 replaceable capability. Passing C-shaped parameters to Landin `main` would
 reverse [1650]'s chosen ordinary no-argument entry.
 
 This selects the bootstrap provider, not permanent compiler ownership of I/O.
-R4.30 and R4.40 retain both direct libc declarations with explicit library
+The hosted modules and the C boundary retain both direct libc declarations with explicit library
 linkage and target-specific `core` providers built over inline assembly or
 separately linked syscall wrappers. Either may implement the same `world`
 capability without changing its callers.
@@ -14682,8 +14696,7 @@ retains the first `capacity` entries in order, counts every later note in
 `dropped`, and counts error severity even when that note is dropped. Overflow
 therefore returns normally and never raises `io_failed`. Entry and logger
 representation stay private; checked accessors report `out_of_bounds` rather
-than exposing unused storage. R4.10 had not yet supplied the final text
-types, so one entry retains the message address and byte length internally.
+than exposing unused storage. The final text types did not yet exist, so one entry retains the message address and byte length internally.
 The `escaping` parameter prevents a frame-backed slice at the capability
 boundary; explicit integer-pointer conversion remains subject to [0470]'s
 honest validity limit.
@@ -14726,7 +14739,7 @@ recorded merged output.
 reports foreseeable syntax faults through a replaceable sink, recovers and
 keeps valid nodes, while allocation, nesting and delivery failures take
 explicit paths. It used loops and the future text surface, and therefore did
-not settle what the enabled R3 kernel could honestly execute.
+not settle what the enabled kernel of the time could honestly execute.
 
 **Chosen:** the derived lexer and parser are ordinary rooted Landin modules.
 The lexer classifies an intentionally ASCII configuration grammar over
@@ -14739,9 +14752,9 @@ the public error set. Excess nesting is reported and recovered internally.
 Only `core/mem.out_of_memory` and `core/io.io_failed` leave `parse_file`.
 
 The same parser body runs with bounded and streaming D154 providers. No
-specialized parser copy is emitted or required. R4.10 had not yet enabled
-loops and the complete UTF-8 text model, so scanner, recovery and sequence
-walks use recursion over R3's byte positions; that is an implementation
+specialized parser copy is emitted or required. Loops and the complete UTF-8
+text model were not yet enabled, so scanner, recovery and sequence walks use
+recursion over `core/text`'s byte positions; that is an implementation
 substitution, not a second parser design.
 
 The program also pins general compilation rules already implied by the
@@ -14784,13 +14797,13 @@ have and two that do not exist.
 
 **Chosen:** all three constructs belong to `core` and to the allocator surface,
 not to this kernel. [0500] and [0810] describe library functions with no
-compiler privilege, and R4.20 owns them with the library slice that would add
-them. [0820] is language syntax, and it is recognized and refused by name here
+compiler privilege, and the hosted core library slice owns them because it
+would add them. [0820] is language syntax, and it is recognized and refused by name here
 rather than enabled: the parser reports L0010 on the `arena` of `arena name do`
 and swallows the block's own `end name`, and the checker reports L0304 on a
-written `arena` type. At this increment both notes name [0820] and R4.20. The construct
-applicability register moves all three rows to `later-r4` under R4.20, the
-shape [1430] and [1440] already have.
+written `arena` type. At this increment both notes name [0820] and the hosted
+core library slice. The construct applicability register moves all three rows
+to that later hosted work, the shape [1430] and [1440] already have.
 
 The pointer half is settled by evidence rather than by scheduling. [0810] says
 the three primitives are the cut that lets an allocator hand out storage
@@ -14851,15 +14864,16 @@ Reopening `slice_from` was declined: D151 closed it and no new evidence
 argues otherwise. Leaving the block to the ordinary parse error was declined
 against [1830] — a program written against the whole tour must meet a named
 diagnostic and not a four-report cascade, and before this decision it met the
-cascade. Keeping the three rows `hosted-now` with a refusal naming R4.10 was
-declined because R4.10 cannot close over a refusal that names R4.10, which is
-a rule `check.py` enforces.
+cascade. Keeping the three rows as work already done on the hosted path, with
+a refusal naming the hosted construct work, was declined because that work
+cannot close over a refusal that names it, which is a rule `check.py`
+enforced.
 
 **Pinned by** `negative/arena-block-not-enabled`,
 `negative/arena-type-not-enabled`, `runtime/arena-is-an-ordinary-name`, and
 the `pointer.integer-origin` guarantee row. D196 completes the [0500]/[0810]
 disposition and transfers both [0820] refusals and all four questions to
-R4.80; the compiler still grants no privilege to a `core` name.
+the derived hosted application; the compiler still grants no privilege to a `core` name.
 
 ### D193 — Arena requests align absolute addresses and fail atomically at arithmetic boundaries
 
@@ -15048,9 +15062,9 @@ D212 now discharges the arena handoff below with explicit-authority library
 semantics and permanent withdrawal of both builtin forms. The pointer
 convenience dispositions remain unchanged.
 
-**R4.20 inherited** D191's [0500], [0810] and [0820] dispositions. Its exit
-explicitly permits recording the two pointer conveniences as unneeded and
-naming the item that inherits the lexical block. The working caller-backed
+**The hosted core library slice inherited** D191's [0500], [0810] and [0820]
+dispositions. Its scope explicitly permitted recording the two pointer
+conveniences as unneeded and naming the work that inherits the lexical block. The working caller-backed
 allocator does not implement the block's promised region semantics.
 
 **Chosen:** `offset` and `base_of` are unnecessary for this library slice.
@@ -15062,13 +15076,14 @@ longer implies that an omitted accessor exists. D151's rejection of an
 arbitrary-pointer `slice_from` remains in force.
 
 Both `arena name do` and the builtin `arena` parameter type remain refused by
-name, now against R4.80. That item owns the first complete program using
-prototype 4's W7 helper-returned configuration, and precedes the R4 hosted
-parity gate. It inherits all four D191 questions: builtin type and ordinary
+name, now against the derived hosted application. That work owns the first
+complete program using prototype 4's W7 helper-returned configuration, and
+precedes the hosted parity gate. It inherits all four D191 questions: builtin type and ordinary
 allocator conformance without frontend dependence on `core/mem`; authority,
 backing and capacity on hosted and constrained targets; exhaustion behavior;
 and the relationship between direct frame-origin allocations and independent
-results of ordinary allocator calls. R4.20 gains no dependency on R4.80.
+results of ordinary allocator calls. The library slice gains no dependency on
+the application.
 
 The last question has a concrete counterexample to W7's historical argument.
 A helper passed the allocator can allocate through its no-`from` signature
@@ -15076,7 +15091,7 @@ and store that independent pointer in module storage as a side effect. The
 reference never returns through the lexical block's boundary. Even an
 ordinary helper return carries no signature fact reconnecting its allocation
 to that block. Merely checking the block's returned value therefore does not
-establish its promise. R4.80 must implement the promised checks with explicit
+establish its promise. The application must implement the promised checks with explicit
 semantics or amend the promise on evidence before claiming the complete
 application. It must cover direct, helper-returned and helper-side-effect
 escapes, including aggregates, slices and `any`, while allowing simultaneous
@@ -15087,16 +15102,16 @@ pointer conversion remains a documented non-guarantee.
 independent pointers, so it still fails D191. Adding `from allocator` revives
 prototype 3's rejected Z5 behavior: a live allocation borrows the allocator
 and prevents another allocation. Neither is a region implementation. Sending
-the questions to an unspecified future library would leave R4.80's complete
-prototype and the hosted gate without an owner. Leaving the three-primitives
+the questions to an unspecified future library would leave the complete
+hosted prototype and the hosted gate without an owner. Leaving the three-primitives
 claim above a contradictory caveat would retain a false rule. All are declined.
 
 **Pinned by** `negative/arena-block-not-enabled`,
 `negative/arena-type-not-enabled`, `negative/arena-block-names-owner`,
 `negative/arena-type-names-owner`, `runtime/arena-is-an-ordinary-name`,
 `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, and the
-`pointer.integer-origin` guarantee row. The refusal transcripts name R4.80;
-the working allocator fixtures provide no claim about lexical arena escapes.
+`pointer.integer-origin` guarantee row. The refusal transcripts then named the
+hosted application; the working allocator fixtures provide no claim about lexical arena escapes.
 
 ### D197 — Fixed slots use caller metadata and failure injection wraps a provider
 
