@@ -1,9 +1,9 @@
 --  Where the trees of one compilation live.
 --
---  R1.40 dropped every tree as soon as it was parsed and recorded why: a
---  vector of a limited type is not a thing Ada has, so the answer had to be
---  a decision rather than a guess.  This is the decision, and it is the one
---  Landin.Source already made one level down.  The trees are on the heap,
+--  The first parser dropped every tree as soon as it was parsed and recorded
+--  why: a vector of a limited type is not a thing Ada has, so the answer had
+--  to be a decision rather than a guess.  This is the decision, and it is the
+--  one Landin.Source already made one level down.  The trees are on the heap,
 --  one per source, and none is freed while the process lives: a compilation
 --  owns its trees for as long as it exists, the process is short, and a
 --  compiler that frees a tree while a diagnostic still points into it has
@@ -27,9 +27,9 @@
 --
 --  Nothing here hands a tree back as a value.  Tree_Of hands out a
 --  read-only reference, because a tree is finished when it arrives: the
---  parse is its only writer, and R1.50's names, R1.60's types and R1.70's
---  values are each an array indexed by Node_Id rather than a field a stage
---  adds to a node.
+--  parse is its only writer, and resolved names, checked types and IR values
+--  are each an array indexed by Node_Id rather than a field a stage adds to a
+--  node.
 
 private with Ada.Containers.Vectors;
 

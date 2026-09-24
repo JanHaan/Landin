@@ -22,7 +22,7 @@ package body Landin.Tests.Platform_Suite is
    use type Landin.Platform.Write_Status;
 
    --  Inside this host's own build tree, so two tags or modes running at
-   --  once do not write over each other's scratch files (R4.21).
+   --  once do not write over each other's scratch files.
    Scratch : constant String :=
      "build/"
      & Ada.Environment_Variables.Value ("LANDIN_BUILD_TAG", "host")
@@ -528,10 +528,9 @@ package body Landin.Tests.Platform_Suite is
    --  recording is what a later stage will assert against.  Untested, a
    --  fake that silently dropped every write would look like a passing
    --  host.
-   --  R4.21: the real runner reports a program's own status and stops one
-   --  that runs past its limit.  This case spawns `sh` on the real host,
-   --  which is the deliberate exception the suite's other native case
-   --  already makes.
+   --  The real runner reports a program's own status and stops one that runs
+   --  past its limit.  This case spawns `sh` on the real host, which is the
+   --  deliberate exception the suite's other native case already makes.
    procedure Native_Runs_Report_Status_And_Are_Bounded
      (Item : in out Landin.Testing.Context);
 
@@ -874,8 +873,8 @@ package body Landin.Tests.Platform_Suite is
 
    --  Touches the real host, deliberately: how a killed process is reported
    --  is a fact about the host and the pinned runtime, and a fake would
-   --  only repeat what this adapter was told to believe.  R1.80 rests on
-   --  it, since [1960]'s trap is observable in no other way, and the
+   --  only repeat what this adapter was told to believe.  Running a program
+   --  rests on it, since [1960]'s trap is observable in no other way, and the
    --  decoding it rests on -- a status of -1 and never an ordinary one --
    --  is measured here on whichever host runs the suite rather than
    --  measured once on Linux and assumed for the other.

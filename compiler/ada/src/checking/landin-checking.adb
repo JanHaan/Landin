@@ -1172,7 +1172,7 @@ package body Landin.Checking is
          end;
       end loop;
 
-      --  R2.60's compiler concept is a closed identity, not a spelling a
+      --  The compiler concept is a closed identity, not a spelling a
       --  source declaration can impersonate.  It is always position one;
       --  every source concept follows in deterministic collection order.
       Into.Concepts.Append

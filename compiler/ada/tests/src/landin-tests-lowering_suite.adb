@@ -384,9 +384,9 @@ package body Landin.Tests.Lowering_Suite is
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran  : Natural;
    begin
-      --  [1890]: two operands of one type, and these are two.  R1.70
-      --  assigns the lowering no diagnostic code at all, and the argument
-      --  for that is only sound while nothing lowers a refused program.
+      --  [1890]: two operands of one type, and these are two.  The catalogue
+      --  assigns the lowering no diagnostic code at all, and the argument for
+      --  that is only sound while nothing lowers a refused program.
       Lower
         (Work,
          "f: (a: u64, b: usize) -> (r: u64) =" & LF
@@ -1010,9 +1010,9 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
-   --  R2.20: a direct-name initial image does not alias its source.  Each
-   --  declaration remains a separate fixed-array datum; the currently
-   --  possible image is zero and therefore needs no run-before-main copy.
+   --  A direct-name initial image does not alias its source.  Each declaration
+   --  remains a separate fixed-array datum; the currently possible image is
+   --  zero and therefore needs no run-before-main copy.
    procedure Module_Array_Images_Keep_Distinct_Datums
      (Item : in out Landin.Testing.Context);
 
@@ -8641,10 +8641,10 @@ package body Landin.Tests.Lowering_Suite is
       end loop;
    end Recursive_Repetition_Stays_Compact;
 
-   procedure R470_Field_Ranges_Lower_Recursive_Shapes
+   procedure Field_Ranges_Lower_Recursive_Shapes
      (Item : in out Landin.Testing.Context);
 
-   procedure R470_Field_Ranges_Lower_Recursive_Shapes
+   procedure Field_Ranges_Lower_Recursive_Shapes
      (Item : in out Landin.Testing.Context)
    is
       Work : Landin.Stages.Compilation :=
@@ -8741,12 +8741,12 @@ package body Landin.Tests.Lowering_Suite is
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts every recursive range shape");
       end;
-   end R470_Field_Ranges_Lower_Recursive_Shapes;
+   end Field_Ranges_Lower_Recursive_Shapes;
 
-   procedure R470_Direct_Array_Inout_Uses_One_Address
+   procedure Direct_Array_Inout_Uses_One_Address
      (Item : in out Landin.Testing.Context);
 
-   procedure R470_Direct_Array_Inout_Uses_One_Address
+   procedure Direct_Array_Inout_Uses_One_Address
      (Item : in out Landin.Testing.Context)
    is
       use type IR.Storage_Kind;
@@ -8887,7 +8887,7 @@ package body Landin.Tests.Lowering_Suite is
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the direct array address operations");
       end;
-   end R470_Direct_Array_Inout_Uses_One_Address;
+   end Direct_Array_Inout_Uses_One_Address;
 
    procedure Callback_Slices_And_Inout_Keep_Metadata
      (Item : in out Landin.Testing.Context);
@@ -13151,11 +13151,11 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering", "construction storage stays addressable",
          Construction_Storage_Stays_Addressable'Access);
       Landin.Testing.Register
-        (Into, "lowering", "R4.70 field ranges lower recursive shapes",
-         R470_Field_Ranges_Lower_Recursive_Shapes'Access);
+        (Into, "lowering", "field ranges lower recursive shapes",
+         Field_Ranges_Lower_Recursive_Shapes'Access);
       Landin.Testing.Register
-        (Into, "lowering", "R4.70 direct array inout uses one address",
-         R470_Direct_Array_Inout_Uses_One_Address'Access);
+        (Into, "lowering", "direct array inout uses one address",
+         Direct_Array_Inout_Uses_One_Address'Access);
       Landin.Testing.Register
         (Into, "lowering", "erased shaped arguments keep spill types",
          Erased_Shaped_Arguments_Keep_Spill_Types'Access);

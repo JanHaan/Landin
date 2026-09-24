@@ -635,12 +635,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
    ------------------------------------------------------------------
    --  Every positive fixture is emitted, and not merely accepted
    --
-   --  A positive fixture is a program the compiler must accept, and until
-   --  R1.90 that was the whole of what any case asked of one.  Accepting
-   --  is not emitting: R1.80's audit found four of [1810]'s statement
-   --  forms that every stage accepted and no case had ever asked a
-   --  backend for, so a construct could reach a compiler defect and the
-   --  corpus would say nothing.  This asks the backend for all of them.
+   --  A positive fixture is a program the compiler must accept, and until the
+   --  construct matrix that was the whole of what any case asked of one.
+   --  Accepting is not emitting: an audit of the first native path found four
+   --  of [1810]'s statement forms that every stage accepted and no case had
+   --  ever asked a backend for, so a construct could reach a compiler defect
+   --  and the corpus would say nothing.  This asks the backend for all of
+   --  them.
    --
    --  It does not run them.  What a positive fixture claims is that the
    --  program is legal, and most of the corpus is a fragment with no

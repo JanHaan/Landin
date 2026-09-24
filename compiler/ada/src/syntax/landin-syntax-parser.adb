@@ -2592,8 +2592,8 @@ package body Landin.Syntax.Parser is
                end if;
 
                --  [0850]'s withdrawn qualifier is identified by its pointer
-               --  shape and keeps a named migration report (R7.20).  A type
-               --  or ordinary name spelled volatile stays legal.
+               --  shape and keeps a named migration report (D238).  A type or
+               --  ordinary name spelled volatile stays legal.
                if not C_ABI and then Peek = Tok.Identifier
                  and then Named_Here = Volatile_Id
                  and then Ahead (1) = Tok.Kw_Ptr
@@ -2760,7 +2760,7 @@ package body Landin.Syntax.Parser is
                --
                --  Permission is a retained syntax fact.  Whether the target
                --  is a legal pointee and how it is represented belong to the
-               --  later R2.50 checking and layout increments.
+               --  reference checker and the layout.
                if Peek = Tok.Kw_Ptr then
                   declare
                      Writable : Boolean := False;
@@ -7588,7 +7588,7 @@ package body Landin.Syntax.Parser is
 
                --  [0380]/[0430]: `addr` takes the ordinary place syntax.
                --  The parser retains that place without deciding whether it
-               --  is addressable; later R2.50 checking owns that question.
+               --  is addressable; the reference checker owns that question.
                if Peek = Tok.Kw_Addr then
                   Advance;
                   declare

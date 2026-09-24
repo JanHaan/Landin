@@ -1,12 +1,12 @@
 --  The frame a routine gets, and the assembly emitted against it.
 --
 --  These cases read the text, because the text is what an assembler is
---  handed and R1.80's exit evidence asks for it to be deterministic.  The
---  first case asserts a whole program's assembly rather than a substring
---  of it: what is being pinned is every instruction and its order, and a
---  containment check would pass on a prologue that had lost its frame
---  pointer.  That the assembly is also *correct* is what running it on
---  Linux x86-64 says, and this suite does not claim to say it.
+--  handed and it has to be deterministic.  The first case asserts a whole
+--  program's assembly rather than a substring of it: what is being pinned is
+--  every instruction and its order, and a containment check would pass on a
+--  prologue that had lost its frame pointer.  That the assembly is also
+--  *correct* is what running it on Linux x86-64 says, and this suite does not
+--  claim to say it.
 --
 --  The frame cases are separate from the emission ones on purpose.  A
 --  cell's offset is target arithmetic and `Landin.Backend` computes it
@@ -866,11 +866,11 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Six_Arguments_Reach_Their_Own_Widths;
 
-   --  R2.30 completes the scalar half of the internal convention: arguments
-   --  after the six-register prefix occupy eight-byte stack slots in source
-   --  order.  The caller rounds and reclaims the outgoing run; the callee
-   --  reads past its return address and saved frame pointer before copying
-   --  those values into ordinary slots.
+   --  The scalar half of the internal convention: arguments after the
+   --  six-register prefix occupy eight-byte stack slots in source order.  The
+   --  caller rounds and reclaims the outgoing run; the callee reads past its
+   --  return address and saved frame pointer before copying those values into
+   --  ordinary slots.
    procedure Stack_Arguments_Cross_The_Call
      (Item : in out Landin.Testing.Context);
 
@@ -935,9 +935,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Stack_Arguments_Cross_The_Call;
 
-   --  R4.21: a C callee reads a narrow integer argument as the 32-bit
-   --  register, so the caller extends it there; a Landin callee copies the
-   --  width it declared and gets the exact width as before.
+   --  A C callee reads a narrow integer argument as the 32-bit register, so
+   --  the caller extends it there; a Landin callee copies the width it
+   --  declared and gets the exact width as before.
    procedure Narrow_External_Arguments_Are_Extended
      (Item : in out Landin.Testing.Context);
 
@@ -1037,8 +1037,8 @@ package body Landin.Tests.Backend_Suite is
          --  Two copies are the callee's, one per aggregate parameter.
          --  The third is the caller's: [0410] evaluates `state.nested`
          --  before the arguments after it, so its bytes are taken into a
-         --  temporary there (R4.21), while the last argument's address
-         --  is passed as it stands.
+         --  temporary there, while the last argument's address is passed as it
+         --  stands.
          Landin.Testing.Check
            (Item,
             Occurrences (Text, HT & "popq %rsi" & LF) = 2
@@ -4490,11 +4490,11 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Pointer_Folds_Through_Its_Null_Check;
 
-   --  R1.80's exit evidence asks for deterministic assembly, and until this
-   --  case nothing held it to that.  Two runs of one source through two
-   --  separate compilations must agree byte for byte: an address, a hash
-   --  order or a clock reaching the text would show up here and nowhere
-   --  else, since a single run agrees with itself by construction.
+   --  The emitted assembly has to be deterministic, and until this case
+   --  nothing held it to that.  Two runs of one source through two separate
+   --  compilations must agree byte for byte: an address, a hash order or a
+   --  clock reaching the text would show up here and nowhere else, since a
+   --  single run agrees with itself by construction.
    procedure The_Same_Source_Emits_The_Same_Bytes
      (Item : in out Landin.Testing.Context);
 

@@ -13,13 +13,13 @@
 --  is not something to resume from.
 --
 --  Nothing here is a diagnostic. A Fault carries a kind and spans, no code
---  and no prose: R1.30 owns the catalogue and depends on this item, so this
---  item may not pre-empt it. An ill-formed program is data.
+--  and no prose: the catalogue owns codes and depends on this package, so this
+--  package may not pre-empt it. An ill-formed program is data.
 --
 --  Nothing here asks the host anything. A span is a byte offset into the
 --  snapshot it was read from, an integer literal keeps its base and not its
---  value, and how wide that value may be is Landin.Targets' question, asked
---  at R1.60.
+--  value, and how wide that value may be is Landin.Targets' question, asked by
+--  the checker.
 
 private with Ada.Containers.Vectors;
 
@@ -132,8 +132,8 @@ package Landin.Tokens is
 
    --  Which construct in the tour a refused lexeme belongs to, so a
    --  diagnostic can name it rather than call it a syntax error [1830].
-   --  Which roadmap item enables it is not answered here: ROADMAP.md is the
-   --  authority for that, and R1.30's catalogue is where it is read.
+   --  It names no work: a refusal says what the form is and never which work
+   --  decided it (D246).
    function Construct (Of_Kind : Described_Kind) return Construct_Reference
      with Post => Is_Valid_Construct (Construct'Result);
 
@@ -180,7 +180,7 @@ package Landin.Tokens is
      with Pre => Kind (Item) = Integer_Literal;
 
    --  The digits and separators without the `0x`, `0o` or `0b`, so that
-   --  whoever converts the value at R1.60 need not know a base prefix is
+   --  whoever converts the value in the checker need not know a base prefix is
    --  two bytes long. The value is not computed here: an integer literal is
    --  untyped [0190], and what it must fit in is not known until its
    --  context is.

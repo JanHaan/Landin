@@ -2,14 +2,14 @@
 --
 --  The checker asks what a module value or a fixed bound is before it
 --  decides a rule; lowering asks the same question again to form a static
---  image.  Until R4.21 each had its own seven-hundred-line copy, already
---  diverged, and lowering raised a defect wherever its copy knew less than
---  the checker's.  This generic is the one walk.  A stage instantiates it
---  with its tables and the few questions only that stage can answer: how
---  a name reaches its tree, which scalar a call-shaped conversion targets,
---  what a character literal is worth, whether a member selection names a
---  float special, and what to do when a module value is worked out from
---  itself, which the checker reports and lowering merely declines.
+--  image.  Once each had its own seven-hundred-line copy, already diverged,
+--  and lowering raised a defect wherever its copy knew less than the
+--  checker's.  This generic is the one walk.  A stage instantiates it with its
+--  tables and the few questions only that stage can answer: how a name reaches
+--  its tree, which scalar a call-shaped conversion targets, what a character
+--  literal is worth, whether a member selection names a float special, and
+--  what to do when a module value is worked out from itself, which the checker
+--  reports and lowering merely declines.
 --
 --  Values are Landin.Types.Folded.  An integer or bool node folds to its
 --  value; a float-typed node folds to the bit pattern of its IEEE value,

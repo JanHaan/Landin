@@ -70,11 +70,11 @@ package Landin.Testing.Fixtures is
    function Traps (Item : Fixture) return Boolean;
 
    --  The constructs this fixture is evidence about, in the order it named
-   --  them: `[NNNN]` ids without their brackets.  R1.90 indexes the corpus
-   --  by construct, and a citation in a summary is prose -- a matrix needs
-   --  a list that was written to be read.  Which paragraphs exist is
-   --  check.py's to know, because it is the thing that reads the
-   --  documents; this side holds the shape only.
+   --  them: `[NNNN]` ids without their brackets.  The construct matrix indexes
+   --  the corpus by construct, and a citation in a summary is prose -- a
+   --  matrix needs a list that was written to be read.  Which paragraphs exist
+   --  is check.py's to know, because it is the thing that reads the documents;
+   --  this side holds the shape only.
    function Constructs (Item : Fixture) return String;
 
    --  The rest of the module, when a fixture needs more than one file.

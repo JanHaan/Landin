@@ -49,7 +49,7 @@
 --
 --  Related is a Landin.Provenance.Origin and not a span, for the reason
 --  Landin.Diagnostics.Resolution found first: the declaration a mismatch
---  points at can be in another file.  R2.60 adds whole-program conformance
+--  points at can be in another file.  Concepts add whole-program conformance
 --  collisions, unsatisfied concept constraints, and compiler-reserved
 --  conformances; their related-source cardinalities are part of the rows.
 
@@ -143,27 +143,27 @@ package Landin.Diagnostics.Checking is
    --
    --  D190: [1790]'s scalar rule spells thirteen names and has never
    --  spelled u128, i128 or f16, so their refusal is the specification's
-   --  and not a schedule's, and what R7.20 inherits is written there.
+   --  and not a schedule's, and the specification records it.
    --  Narrow_Float_Type is narrow and not Float: f32 and f64 have been
    --  implemented since D162 and this row is only f16.
    type Refused_Use is
      (Wide_Integer_Type,
       Narrow_Float_Type,
-      --  [0670] declares one.  R2.20 admits contextual storage, copies,
-      --  zero images, labelled literals and constructions; R7.20 records
-      --  what is left as the form's boundary: an untyped literal with no
-      --  destination, a module image [1940] cannot fold, and a nested
-      --  body that could not be laid out.
+      --  [0670] declares one.  Contextual storage, copies, zero images,
+      --  labelled literals and constructions are admitted; what is left is the
+      --  form's recorded boundary: an untyped literal with no destination, a
+      --  module image [1940] cannot fold, and a nested body that could not be
+      --  laid out.
       Struct_Value,
       --  D74 lays out and measures [0680]'s declaration, D75 gives it
       --  storage and a zero image, and D76 admits contextual case writes.
       --  A variant part is a member of its struct and a case is written
       --  where its part is the destination, so neither has a value of its
-      --  own; R7.20 records that boundary.
+      --  own, and that is the recorded boundary.
       Variant_Value,
       --  [0520] declares one.  An array literal or repetition takes its
       --  shape from a destination or an inferred binding, and a module
-      --  image keeps [1940]'s boundary; R7.20 records both.
+      --  image keeps [1940]'s boundary; both are recorded boundaries.
       Array_Value,
       Array_Element,
       --  D135's parameterized aliases are checked here, including an
@@ -171,14 +171,14 @@ package Landin.Diagnostics.Checking is
       Parameterized_Type_Alias,
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Value,
-      --  [1580]'s entry stood here and R7.40 removed it.  Nothing raised it:
-      --  the categories that paragraph lists are refused where they are
-      --  written, as the C boundary's own type errors, which is what
-      --  "refused explicitly rather than guessed" already promises.  An
-      --  entry no report reaches cannot say which work records the boundary,
-      --  and its note still named the finished R4.40 as the item that would
-      --  enable them.  `negative/r740-c-category-boundary` pins the report
-      --  that is actually made.
+      --  [1580]'s entry stood here and was removed.  Nothing raised it: the
+      --  categories that paragraph lists are refused where they are written,
+      --  as the C boundary's own type errors, which is what "refused
+      --  explicitly rather than guessed" already promises.  An entry no report
+      --  reaches cannot say which work records the boundary, and its note
+      --  still named finished work as what would enable them.
+      --  `negative/r740-c-category-boundary` pins the report that is actually
+      --  made.
       --
       --  D188: [0660]'s range subtype is its base type constrained, so
       --  `[]percent` and `[]u8` would be one type and a `[]u8` write of an
@@ -187,7 +187,7 @@ package Landin.Diagnostics.Checking is
       --  a generic type argument therefore refuse one; D236 makes that the
       --  recorded boundary rather than a pending promise.  An `extern (c)`
       --  signature is not this refusal: [1580]'s hosted-scalar boundary
-      --  already refuses it and keeps that report, which R4.40 owns.
+      --  already refuses it and keeps that report, which the C boundary owns.
       Constrained_Composition,
       --  D212 withdraws [0820]'s builtin type and lexical block.  Keep
       --  migration guidance for the unresolved type spelling; a declared

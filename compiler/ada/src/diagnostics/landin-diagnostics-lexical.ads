@@ -1,11 +1,11 @@
 --  Turning a scanner fault into a diagnostic.
 --
---  R1.20 left a fault carrying a kind and spans and no code, because the
---  catalogue is R1.30's. This is the one place the two meet: every code it
---  raises comes from Landin.Diagnostics.Catalogue, and every diagnostic it
---  builds satisfies that code's row -- Report checks the row it just used,
---  so a diagnostic that does not carry what its code requires never leaves
---  this package.
+--  The scanner leaves a fault carrying a kind and spans and no code, because
+--  the catalogue is not the scanner's.  This is the one place the two meet:
+--  every code it raises comes from Landin.Diagnostics.Catalogue, and every
+--  diagnostic it builds satisfies that code's row -- Report checks the row it
+--  just used, so a diagnostic that does not carry what its code requires never
+--  leaves this package.
 
 with Landin.Diagnostics.Catalogue;
 with Landin.Tokens;

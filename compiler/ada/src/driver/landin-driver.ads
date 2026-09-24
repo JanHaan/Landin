@@ -5,12 +5,12 @@
 --  anything about the Landin language: what a program means is the four
 --  frontend stages', and what an instruction is is the backend's.
 --
---  Two host capabilities, for the same reason there was one.  R0.50's rule
---  is that every host effect reaches the compiler through a
---  `Landin.Platform` interface so a whole compilation can be driven against
---  fakes, and R1.80 is the first work that needs the second of them: a
---  request may now write a file and run a tool.  Both are parameters rather
---  than package state, so a test names exactly the host it wants.
+--  Two host capabilities, for the same reason there was one.  The compiler's
+--  rule is that every host effect reaches it through a `Landin.Platform`
+--  interface so a whole compilation can be driven against fakes, and the
+--  native path is the first work that needs the second of them: a request may
+--  now write a file and run a tool.  Both are parameters rather than package
+--  state, so a test names exactly the host it wants.
 
 with Ada.Strings.Unbounded;
 

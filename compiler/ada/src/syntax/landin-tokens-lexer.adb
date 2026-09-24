@@ -379,7 +379,7 @@ package body Landin.Tokens.Lexer is
          end if;
 
          --  `1e10` is a float that forgot its fraction, not an integer in
-         --  the wrong base: read the exponent run and say so (R4.21).
+         --  the wrong base: read the exponent run and say so.
          if not Prefixed
            and then Position + 1 <= Last
            and then Text (Position) in 'e' | 'E'

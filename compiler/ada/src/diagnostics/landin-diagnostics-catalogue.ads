@@ -21,15 +21,15 @@
 --
 --     L0001-L0009  the driver and the chassis
 --     L0010-L0099  lexical, and the refusal of what is not enabled
---     L0100-L0199  reserved for R1.40's syntax failures
---     L0200-L0299  name resolution, assigned at R1.50
---     L0300-L0399  types and definite assignment, assigned at R1.60
+--     L0100-L0199  the parser's syntax failures
+--     L0200-L0299  name resolution
+--     L0300-L0399  types and definite assignment
 --     L0400-L0499  deliberately unassigned; see below
---     L0500-L0599  the backend and its toolchain, assigned at R1.80
+--     L0500-L0599  the backend and its toolchain
 
---  `L0400`-`L0499` is the band R1.70 would have taken and did not, and it
---  stays empty on purpose.  Malformed IR cannot be caused by a source
---  program: the frontend refuses every ill-formed one, and the lowering
+--  `L0400`-`L0499` is the band the IR and its verifier would have taken and
+--  did not, and it stays empty on purpose.  Malformed IR cannot be caused by a
+--  source program: the frontend refuses every ill-formed one, and the lowering
 --  refuses to run on a program that was refused.  So a verifier failure is
 --  a `Landin.Compiler_Defect` and never a diagnostic, and a code here
 --  would be a promise that some program can provoke it -- the promise
@@ -40,27 +40,27 @@ package Landin.Diagnostics.Catalogue is
 
    type Code_Name is
      (
-      --  The driver, assigned at R0.50 because a driver that cannot
-      --  explain itself cannot be tested.
+      --  The driver, assigned first because a driver that cannot explain
+      --  itself cannot be tested.
       No_Frontend,
       Unknown_Option,
       Unreadable_Source,
       Unknown_Target,
-      --  Added at R1.80, when the driver first wrote a file.  It sits
-      --  beside Unreadable_Source because it is the same rule from the
-      --  other side, and a band records where a code was born.
+      --  Added when the driver first wrote a file.  It sits beside
+      --  Unreadable_Source because it is the same rule from the other side,
+      --  and a band records where a code was born.
       Unwritable_Output,
       Module_Not_Found,
       Module_Directory_Invalid,
-      --  The scanner, assigned at R1.30.
+      --  The scanner.
       Construct_Not_Enabled,
       Malformed_Integer,
       Unknown_Bytes,
       Unterminated_Comment,
       Unterminated_Literal,
-      --  The parser, assigned at R1.40. One per rule of the grammar the
-      --  parser can find broken, in the order the reader meets them:
-      --  what was required and absent, then what was present and refused.
+      --  The parser.  One per rule of the grammar the parser can find broken,
+      --  in the order the reader meets them: what was required and absent,
+      --  then what was present and refused.
       Name_Expected,
       Type_Expected,
       Expression_Expected,
@@ -80,12 +80,12 @@ package Landin.Diagnostics.Catalogue is
       Unresolved_Name,
       Inaccessible_Name,
       Reserved_Tool_Name,
-      --  The checker, assigned at R1.60.  Its rows cover type agreement,
-      --  definite assignment, references, layouts and the other semantic
-      --  rules the kernel can find.  Impossible_Operand joined them at
-      --  R1.70, where [1950] was written: it is the operand half of what
-      --  Literal_Out_Of_Range is the result half of.  R2.60 adds the
-      --  conformance foundation below.
+      --  The checker.  Its rows cover type agreement, definite
+      --  assignment, references, layouts and the other semantic rules the
+      --  kernel can find.  Impossible_Operand joined them with the IR,
+      --  where [1950] was written: it is the operand half of what
+      --  Literal_Out_Of_Range is the result half of.  Concepts and
+      --  conformances add the rows below.
       Literal_Out_Of_Range,
       Type_Mismatch,
       Not_Definitely_Assigned,
@@ -104,9 +104,9 @@ package Landin.Diagnostics.Catalogue is
       Reference_Escapes,
       Borrowed_Place,
       Return_Sources_Disagree,
-      --  R2.60's conformance foundation.  These are checker failures:
-      --  duplicate whole-program keys, a missing formal conformance, and
-      --  an attempt to provide a compiler-owned conformance.
+      --  The conformance foundation.  These are checker failures: duplicate
+      --  whole-program keys, a missing formal conformance, and an attempt to
+      --  provide a compiler-owned conformance.
       Conformance_Collision,
       Unsatisfied_Constraint,
       Compiler_Conformance_Reserved,
@@ -121,11 +121,12 @@ package Landin.Diagnostics.Catalogue is
       --  D164's raw literal has matching delimiters, UTF-8 source and one
       --  exact indentation prefix.
       Malformed_Raw_Literal,
-      --  The backend and its toolchain, assigned from R1.80 onwards.  None
-      --  is about a frontend construct: two are the host failing to finish
-      --  an accepted program, one is [1970]'s missing entry shape, one is a
-      --  verified shape this backend cannot encode, and L0503 is retained
-      --  after R2.30 retired the register-only argument limit.
+      --  The backend and its toolchain.  None is about a frontend
+      --  construct: two are the host failing to finish an accepted
+      --  program, one is [1970]'s missing entry shape, one is a verified
+      --  shape this backend cannot encode, and L0503 is retained after the
+      --  internal calling convention retired the register-only argument
+      --  limit.
       No_Toolchain,
       Toolchain_Failed,
       Entry_Point_Missing,
@@ -226,12 +227,12 @@ package Landin.Diagnostics.Catalogue is
                .. Malformed_Raw_Literal => Error,
             when No_Toolchain .. Panic_Contract_Invalid => Error);
 
-   --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
-   --  convention now places every argument after the sixth in an aligned
+   --  Argument_Not_In_A_Register was retired by the internal scalar
+   --  convention, which places every argument after the sixth in an aligned
    --  stack run.
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
-            --  Retired at R1.40: the frontend is wired to the
+            --  Retired when the frontend was wired to the
             --  driver, so nothing raises this any more.  The row
             --  stays so its number can never be handed to
             --  another rule.

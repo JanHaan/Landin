@@ -12,13 +12,14 @@
 --  the two codes; this owns the order in which the trees are read, which
 --  is the order the sources were added and then the order the declarations
 --  were written.  That is what makes the report source-stable, which is
---  the evidence R1.50 owes.
+--  the evidence name resolution owes.
 --
 --  Why a walk at all, when Landin.Syntax promises that 1 .. Last_Node is a
 --  post-order and a synthesising pass needs no recursion.  Resolution is
 --  not synthesising: what a name means depends on where it is, so the
---  scope has to be carried down rather than read off a node.  R1.60's
---  types are the pass that gets to be a forward loop.
+--  scope has to be carried down rather than read off a node.  The checker's
+--  types were expected to be the pass that gets to be a forward loop;
+--  `Landin.Stages.Checking` says why they are not.
 
 package Landin.Stages.Resolution is
 

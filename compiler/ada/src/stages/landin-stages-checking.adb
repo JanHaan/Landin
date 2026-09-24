@@ -8252,11 +8252,11 @@ package body Landin.Stages.Checking is
                return Ty.Ill_Typed;
             end if;
 
-            --  [1795] declares the type and R2.20 enabled the values of one:
-            --  a declaration-only module or local, a whole copy from storage,
-            --  a literal, a repetition, `zeroed`, a construction, a call,
-            --  array arithmetic and a control expression, each where it can
-            --  run.  R7.20 records what is left at this gate.  A module
+            --  [1795] declares the type and aggregates enable the values of
+            --  one: a declaration-only module or local, a whole copy from
+            --  storage, a literal, a repetition, `zeroed`, a construction, a
+            --  call, array arithmetic and a control expression, each where it
+            --  can run.  D241 records what is left at this gate.  A module
             --  initializer is a static image [1940], so a call, an index, a
             --  selection it cannot fold, runtime arithmetic and control are
             --  that form's boundary.  Every other initializer has the wrong
@@ -18775,8 +18775,8 @@ package body Landin.Stages.Checking is
             return Already;
          end if;
 
-         --  A subtree with a hole in it is not checked: R1.40 already said
-         --  what is wrong with it.
+         --  A subtree with a hole in it is not checked: the parser already
+         --  said what is wrong with it.
          if not Syn.Is_Sound (Of_Tree, Node) then
             return Kept (Ty.Ill_Typed);
          end if;
@@ -19041,7 +19041,7 @@ package body Landin.Stages.Checking is
                   return Kept (Ty.Usize);
                end;
 
-            --  R7.20: a literal, a repetition and an untyped struct literal
+            --  D241: a literal, a repetition and an untyped struct literal
             --  take their shape from where they are written.  An array
             --  destination, an inferred binding or a discard supplies one;
             --  reaching here means this position did not.
@@ -21835,8 +21835,8 @@ package body Landin.Stages.Checking is
             --  D82/D83 reuse D67--D71's static image forms inside D81's
             --  selected payload descriptor run.  D84 gives runtime case
             --  construction D65's same contextual array-destination forms,
-            --  and R7.20 every other form an ordinary array field takes:
-            --  an index, a call, `try`, array arithmetic and a control
+            --  and D241 every other form an ordinary array field takes: an
+            --  index, a call, `try`, array arithmetic and a control
             --  expression.  Selection has already written the tag; lowering
             --  fills the payload leaf in place or copies from a temporary.
             --  Only the static branch asks [1940] to fold its expressions.
@@ -29669,7 +29669,7 @@ package body Landin.Stages.Checking is
       end Validate_Function_Images;
 
       ------------------------------------------------------------
-      --  R2.20: every module array or struct image reaches static storage
+      --  Every module array or struct image reaches static storage
       ------------------------------------------------------------
 
       type Image_State is (Unseen, Visiting, Valid, Invalid);
@@ -30686,10 +30686,9 @@ package body Landin.Stages.Checking is
                             (Res.Declaration_Count (Meanings.all)))
                   of Boolean := [others => False];
 
-      --  R4.21: one folder for both stages.  What this stage adds is
-      --  the report when a module value is worked out from itself, which
-      --  [1940] says names nothing at all; the walk itself lives in
-      --  Landin.Stages.Folding.
+      --  One folder for both stages.  What this stage adds is the report when
+      --  a module value is worked out from itself, which [1940] says names
+      --  nothing at all; the walk itself lives in Landin.Stages.Folding.
       function Snapshot_For
         (Id : Landin.Source.Source_Id) return Landin.Source.Snapshot
         is (Source (Context, Id));
@@ -33815,9 +33814,9 @@ package body Landin.Stages.Checking is
       Landin.Checking.Prepare
         (Types.all, Trees.all, Meanings.all, Spellings.all);
 
-      --  R2.60 first interns every active concept identity, then validates
-      --  and registers concrete source conformances.  This order is whole-
-      --  program and independent of source-file or declaration placement.
+      --  First intern every active concept identity, then validate and
+      --  register concrete source conformances.  This order is whole-program
+      --  and independent of source-file or declaration placement.
       Collect_Concepts;
       Collect_Conformances;
       Validate_Composed_Conformances;
@@ -33876,9 +33875,9 @@ package body Landin.Stages.Checking is
               or else Generic_Routine_Owner (Id) = Id)
          then
             if Res.Sort_Of (Meanings.all, Id) = Res.Module_Concept then
-               --  R2.60 concept declarations are compile-time requirement
-               --  bundles.  They have neither a runtime value nor a type
-               --  alias shape of their own.
+               --  Concept declarations are compile-time requirement bundles.
+               --  They have neither a runtime value nor a type alias shape of
+               --  their own.
                Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             elsif Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
                --  A parameterized alias is compile-time-only template
@@ -33987,7 +33986,7 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
-      --  R2.70 freezes ordinary conformance providers before a generic body
+      --  Ordinary conformance providers are frozen before a generic body
       --  discovers `T.entry` calls.  The declarations and anonymous
       --  signatures they may name are settled above; table order remains the
       --  concept declaration's rather than the conformance label order.

@@ -1,5 +1,5 @@
 --  `refine` is the direct compiler executable.  It owns no semantics; it is
---  the request/result boundary described by ROADMAP.md R0.50.
+--  the request/result boundary between the compiler and its host.
 
 with "landin_common.gpr";
 with "landin_lib.gpr";

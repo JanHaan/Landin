@@ -7,27 +7,26 @@
 --  serialised protocol now.
 --
 --  A compilation also owns everything the stages build that outlives the
---  stage that built it, and R1.50 is where that became more than one: the
---  interned names, the declaration sites, the trees and what every name in
---  them means, with R1.60 adding what type everything has.  Run takes Item
---  as an `in` parameter of a limited interface,
---  so a stage cannot keep anything in itself; a Stage_Reference is a
---  library-level access type, so a stage object cannot be a local of one
---  compilation either.  Between them those two facts say where a tree can
---  live: not in the stage, and not in a Run that ends before the next
---  stage starts.  It lives here.
+--  stage that built it, and name resolution is where that became more than
+--  one: the interned names, the declaration sites, the trees and what every
+--  name in them means, with the checker adding what type everything has.  Run
+--  takes Item as an `in` parameter of a limited interface, so a stage cannot
+--  keep anything in itself; a Stage_Reference is a library-level access type,
+--  so a stage object cannot be a local of one compilation either.  Between
+--  them those two facts say where a tree can live: not in the stage, and not
+--  in a Run that ends before the next stage starts.  It lives here.
 --
 --  What that costs, said plainly.  This package gains one with clause per
---  representation -- the trees at R1.50, the types at R1.60, the IR at
---  R1.70 -- and a reader will ask whether a context that knows all of them
---  is still a seam.  It is, and the line is exact: this package may depend
---  on a representation and may never depend on a stage.  Ada enforces that
---  for this specification only, because a parent's spec may not with its
---  own child -- a parent's *body* may, so `landin-stages.adb` growing a
---  `with Landin.Stages.Syntax` to build a default pipeline is how the rule
---  would actually be broken, and nothing but this paragraph stops it.  The
---  other half is that nothing here asks which stages exist or what order
---  they run in, and Landin.Driver is what owns that.
+--  representation -- the trees, the types, the IR -- and a reader will ask
+--  whether a context that knows all of them is still a seam.  It is, and the
+--  line is exact: this package may depend on a representation and may never
+--  depend on a stage.  Ada enforces that for this specification only, because
+--  a parent's spec may not with its own child -- a parent's *body* may, so
+--  `landin-stages.adb` growing a `with Landin.Stages.Syntax` to build a
+--  default pipeline is how the rule would actually be broken, and nothing but
+--  this paragraph stops it.  The other half is that nothing here asks which
+--  stages exist or what order they run in, and Landin.Driver is what owns
+--  that.
 --
 --  The four are reached and not copied, because each is limited and each
 --  means nothing away from the compilation that issued its numbers: a
@@ -102,7 +101,8 @@ package Landin.Stages is
    function Modules (Context : in out Compilation)
      return not null access Landin.Modules.Table;
 
-   --  Where each declared thing is written.  R1.50 is its first writer.
+   --  Where each declared thing is written.  Name resolution is its first
+   --  writer.
    function Sites (Context : in out Compilation)
      return not null access Landin.Provenance.Table;
 
@@ -124,8 +124,8 @@ package Landin.Stages is
      return not null access Landin.Checking.Table;
 
    --  The target-neutral instructions the frontend was checking towards.
-   --  R1.70's, and the last representation this package gains: R1.80 emits
-   --  from it and keeps nothing here.
+   --  The last representation this package gains: the backend emits from it
+   --  and keeps nothing here.
    function Code (Context : in out Compilation)
      return not null access Landin.IR.Unit;
 

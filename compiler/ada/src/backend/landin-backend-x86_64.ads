@@ -103,7 +103,7 @@ package Landin.Backend.X86_64 is
 
    --  Meanings and Names put a symbol on an item and say whether [1740]
    --  made it `public`, for the same reason `Landin.IR.Dump` is handed
-   --  them: `Landin.IR` holds identities and refers to R1.50's table
+   --  them: `Landin.IR` holds identities and refers to the resolution table
    --  rather than copying it.
    function Text
      (Of_Unit  : Landin.IR.Unit;

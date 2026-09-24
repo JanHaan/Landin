@@ -23,10 +23,10 @@
 --
 --  Absent because it belongs to somebody else.  Whether a `Number` fits
 --  its type needs a width, and a width belongs to `Landin.Targets`.
---  Whether a `Scope_Id` names a real scope is R1.50's answer and asking
---  it again here would be the second authority `Landin.IR`'s header
---  refuses.  Whether a name is assigned before it is read is [1910]'s and
---  the checker's.
+--  Whether a `Scope_Id` names a real scope is name resolution's answer
+--  and asking it again here would be the second authority `Landin.IR`'s
+--  header refuses.  Whether a name is assigned before it is read is [1910]'s
+--  and the checker's.
 --
 --  A child of `Landin.IR` because run checks need the private part: item
 --  runs and call operand runs partition their vectors, and each block run

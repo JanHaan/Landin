@@ -18,12 +18,12 @@ with Landin.Packed;
 --  under new names and would buy nothing.  What it earns by being blocks
 --  is three things a tree cannot give.  A backend walks a run of
 --  instructions and needs one label per block and one transfer per
---  terminator, which is R1.80's shape and not this one's.  [0410] fixes
---  evaluation order, and a linear run of instructions *is* that order,
---  so nothing downstream may reorder by accident.  And "exactly one
---  terminator, in last position" is a property a tree cannot violate and
---  therefore a tree cannot test, while R1.70's exit evidence asks for
---  malformed IR to be rejected.
+--  terminator, which is the emitter's shape and not this one's.  [0410]
+--  fixes evaluation order, and a linear run of instructions *is* that
+--  order, so nothing downstream may reorder by accident.  And "exactly
+--  one terminator, in last position" is a property a tree cannot violate
+--  and therefore a tree cannot test, while the verifier exists to reject
+--  malformed IR.
 --
 --  No phi and no block parameter, and that is a fact about the kernel
 --  rather than a deferral.  Two paragraphs decide it.  [1820]'s `primary`
@@ -34,10 +34,10 @@ with Landin.Packed;
 --  and not after the branch closes", so nothing declared inside an arm
 --  can be read below it.  Between them: the only thing that survives a
 --  merge is a name declared outside the branch, and a name is a slot.
---  When R2.30 enables [1080] a value crosses a merge for the first time,
+--  When [1080] is enabled a value crosses a merge for the first time,
 --  and that is the evidence that makes a merge mechanism necessary.  Not
---  the absence of loops, which R4.10 owns: a loop needs a back edge and
---  changes nothing about what crosses a merge.
+--  the absence of loops: a loop needs a back edge and changes nothing
+--  about what crosses a merge.
 --
 --  Values are block-local, which is the same decision said from the
 --  other side.  [0410] makes `and` and `or` short-circuit, and [0300]
@@ -49,14 +49,14 @@ with Landin.Packed;
 --  the instruction using it, and that is a rule one comparison checks
 --  rather than a dominance relation over a graph.  It is the invariant
 --  Landin.Syntax already chose one level up -- "a child's index is lower
---  than its parent's" -- and it survives R4.10, because a loop does not
+--  than its parent's" -- and it survives loops, because a loop does not
 --  make a value cross a block.
 --
 --  What it costs, said plainly: a store and a load per short-circuit and
 --  per merged name, which is unoptimised code.  Promoting a slot to a
---  value is R4.50's, where a register allocator is being written and the
---  roadmap already puts "deterministic baseline code generation before
---  competitive optimization".
+--  value belongs to baseline code generation, where the register
+--  allocator is, and deterministic baseline code generation comes before
+--  competitive optimization.
 --
 --  A value's identity is the position, inside its item, of the
 --  instruction that defines it.  There is no second numbering: a
@@ -84,27 +84,28 @@ with Landin.Packed;
 --  Landin.Targets.Target_Facts.  Shift_Right on a signed type is
 --  [0320]'s sign-keeping shift with an amount "not bounded by the width"
 --  [1890]; that x86 masks a shift count, and therefore needs a guard, is
---  R1.80's to know and not this package's.
+--  the x86 backend's to know and not this package's.
 --
---  Scopes are referred to and not carried.  R1.50 built
+--  Scopes are referred to and not carried.  Name resolution built
 --  Landin.Resolution.Scope_Id with a parent link and a sort, and every
 --  slot here names a Declaration_Id whose scope that table already
 --  answers, so a scope tree here would be a second authority on a
---  question R1.50 answered once -- the argument Landin.Resolution itself
---  makes for not resolving type names.  What R4.60 cannot get by asking
---  is which instructions a scope covers, so a block names its scope and
---  that is the whole of it.  The kernel has no bare block [1090], so a
---  block's scope is a function body, an arm, an `else`, or the scope
---  enclosing a merge.
+--  question name resolution answered once -- the argument
+--  Landin.Resolution itself makes for not resolving type names.  What
+--  source debugging cannot get by asking is which instructions a scope
+--  covers, so a block names its scope and that is the whole of it.  The
+--  kernel has no bare block [1090], so a block's scope is a function
+--  body, an arm, an `else`, or the scope enclosing a merge.
 --
 --  What is deliberately not here.  There is no array from Node_Id to
---  Value_Id: R1.40 anticipated one, and the lowering wants a value only
---  while it is building the parent expression, while R4.60 wants the
---  other direction, which is the Origin every instruction carries.  There
---  is no textual reader: a dump is a recorded artefact the way
---  `compiler/tests/lexical.tokens` is, and a reader would be both a
---  second constructor of an IR and the first half of the serialised
---  stage protocol R0.60 refused to freeze.  Conversion and Range_Check are
+--  Value_Id: the parser anticipated one, and the lowering wants a value
+--  only while it is building the parent expression, while source
+--  debugging wants the other direction, which is the Origin every
+--  instruction carries.  There is no textual reader: a dump is a
+--  recorded artefact the way `compiler/tests/lexical.tokens` is, and a
+--  reader would be both a second constructor of an IR and the first half
+--  of the serialised stage protocol the stage seams refuse to freeze.
+--  Conversion and Range_Check are
 --  the two checked integer operations D168, [0470] and D188 need, not a
 --  generic coercion protocol; the checker still refuses every other [0700]
 --  conversion by name [1830].  They are separate because Range_Check's
@@ -185,7 +186,7 @@ package Landin.IR is
    --  [1770]'s two kinds of literal value open it, each carrying its own
    --  payload rather than one opcode carrying both.  A Truth is `false`
    --  or `true` [1870] and not a zero or a one: how a bool is stored is
-   --  [0150]'s question and R2.10 owns it.
+   --  [0150]'s question and the target's data layout answers it.
    type Opcode is
      (Number,
       Truth,
@@ -309,9 +310,10 @@ package Landin.IR is
       --  [0870]: a routine's target-neutral code identity and D117
       --  signature descriptor, lowered to one target code address.
       Function_Address,
-      --  R2.70's static table address and one source-order concept-function
-      --  word loaded from a hidden evidence parameter.  The semantic entry
-      --  index is retained; only a backend turns it into a target offset.
+      --  An evidence table's static address and one source-order
+      --  concept-function word loaded from a hidden evidence parameter.
+      --  The semantic entry index is retained; only a backend turns it
+      --  into a target offset.
       Evidence_Address,
       Evidence_Function,
       --  D147's self carrier is bound to the immediately preceding erased
@@ -1877,11 +1879,11 @@ package Landin.IR is
    --  the lowering introduces for a short-circuit's result, and a temporary
    --  that carries an earlier call or binary operand past the blocks a later
    --  operand can make.  The last two have no declaration; the first three
-   --  carry theirs, which is how R4.60 puts a name on one and how
-   --  Landin.Resolution answers which scope it is in.
+   --  carry theirs, which is how source debugging puts a name on one and
+   --  how Landin.Resolution answers which scope it is in.
    --
    --  A slot has no address, no offset and no size.  Where it lives is
-   --  R1.80's frame question and how wide it is comes from
+   --  the backend's frame question and how wide it is comes from
    --  Landin.Types.Width against a target description.
    --
    --  D117 represents a function-value slot as the neutral Usize carrier
@@ -2416,7 +2418,8 @@ package Landin.IR is
    --  holds, and a value outside a range subtype's bounds is not one.
 
    --  The scope [1840] this block's instructions are inside, which is
-   --  what R4.60 turns into a lexical block with a range of addresses.
+   --  what source debugging turns into a lexical block with a range of
+   --  addresses.
    function Scope_Of
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Scope_Id
      with Pre => Holds (Of_Unit, Item, Block);
@@ -2545,8 +2548,8 @@ package Landin.IR is
 
    --  Where the construct this instruction came from is written.  Taken
    --  from Landin.Syntax.Anchor and not from the extent, because that is
-   --  the one token the node is attributed to and R4.60 puts a line-table
-   --  row on it.
+   --  the one token the node is attributed to and source debugging puts a
+   --  line-table row on it.
    function Origin_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Provenance.Origin

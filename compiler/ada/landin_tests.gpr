@@ -1,5 +1,5 @@
 --  The repository-owned test harness.  No third-party test framework is
---  used, and none is permitted: ROADMAP.md R0.20 excludes AUnit.
+--  used, and none is permitted: the pinned toolchain excludes AUnit.
 
 with "landin_common.gpr";
 with "landin_lib.gpr";

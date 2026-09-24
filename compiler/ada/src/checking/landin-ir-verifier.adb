@@ -3474,7 +3474,7 @@ package body Landin.IR.Verifier is
          end;
       end loop;
 
-      --  R2.70 tables partition their direct-entry vector.  The represented
+      --  Evidence tables partition their direct-entry vector.  The represented
       --  shape is target-neutral; every code word names a routine carrying
       --  exactly the retained semantic signature.
       declare

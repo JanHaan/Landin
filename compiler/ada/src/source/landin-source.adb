@@ -19,9 +19,9 @@ package body Landin.Source is
    --  diagnostic about a missing closing token needs.
    --
    --  This is presentation, not lexis.  Which byte sequences a Landin
-   --  source may use to end a line is R1.20's to state normatively in
-   --  tour.md; until it does, the line map is deliberately generous so
-   --  that a diagnostic never points at the wrong line.
+   --  source may use to end a line is [1750]'s to state normatively, and it
+   --  names these three; the line map is deliberately generous so that a
+   --  diagnostic never points at the wrong line.
    ---------------------------------------------------------------------
 
    function Rebased (Text : String) return Text_Access;
@@ -71,7 +71,7 @@ package body Landin.Source is
            (Id          => Id,
             Name        => ASU.To_Unbounded_String (Name),
             --  Copied to a 1-based string: Slice and Line_Text index from
-            --  one, and a caller's slice keeps its own lower bound (R4.21).
+            --  one, and a caller's slice keeps its own lower bound.
             Bytes       => Rebased (Text),
             Line_Starts => Offsets_Access (Map));
       end;

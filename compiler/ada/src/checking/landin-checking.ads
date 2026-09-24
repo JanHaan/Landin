@@ -7,21 +7,21 @@ with Landin.Machine;
 --  between any two of them.  Landin.Types is those rules made addressable;
 --  this is where the answer for each node and each declaration is kept.
 --
---  It is R1.50's shape, and the two facts that forced that shape have not
---  changed.  Landin.Stages.Run takes Item as an `in` parameter of a
---  limited interface, so a stage cannot keep anything in itself, and a
---  Stage_Reference is library-level, so a stage object cannot be a local of
---  one compilation either.  So the compilation owns this table, exactly as
---  it owns the trees and what every name in them means.
+--  It is the resolution table's shape, and the two facts that forced that
+--  shape have not changed.  Landin.Stages.Run takes Item as an `in`
+--  parameter of a limited interface, so a stage cannot keep anything in
+--  itself, and a Stage_Reference is library-level, so a stage object
+--  cannot be a local of one compilation either.  So the compilation owns this
+--  table, exactly as it owns the trees and what every name in them means.
 --
 --  Two runs, not one, and each earns its place.
 --
---  A type per NODE is what R1.40 built the flat table for: a Node_Id is
---  dense in 1 .. Node_Count, so this is one array with one run per source
---  and a first index, and a lookup is one addition and one index with no
---  map and no order that depends on where the host put an object.  R1.70
---  lowers from it, and a lowering needs a type for every node it lowers,
---  not only for the ones a diagnostic mentioned.
+--  A type per NODE is what the parser built the flat table for: a Node_Id
+--  is dense in 1 .. Node_Count, so this is one array with one run per
+--  source and a first index, and a lookup is one addition and one index
+--  with no map and no order that depends on where the host put an object.
+--  The lowering reads it, and a lowering needs a type for every node it
+--  lowers, not only for the ones a diagnostic mentioned.
 --
 --  A type per DECLARATION is not derivable from that, and the reason is
 --  [1840].  The module scope is a set, so `f: () -> (r: u32) = later end`
@@ -137,7 +137,7 @@ package Landin.Checking is
    function Holds (Of_Table : Table; Id : Routine_Instance_Id)
      return Boolean;
 
-   --  A concept is either one source declaration or R2.60's sole closed
+   --  A concept is either one source declaration or the sole closed
    --  compiler concept, `zeroable`.  Keeping an explicit identity rather
    --  than recognizing arbitrary declarations by spelling prevents a user
    --  from opening the compiler-supplied set through reflection.
@@ -159,7 +159,7 @@ package Landin.Checking is
 
    function No_Concept return Concept_Id renames Concept_Identities.None;
 
-   --  R2.60 collects conformances as whole-program semantic identities.
+   --  Conformances are collected as whole-program semantic identities.
    --  A source declaration has no name of its own, so its checker identity
    --  is distinct from Declaration_Id; the key below remains the normalized
    --  represented type, concept identity and input-type tuple.
@@ -1179,7 +1179,7 @@ package Landin.Checking is
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
-   --  R2.40's nominal key is one source template plus an ordered tuple of
+   --  A generic nominal key is one source template plus an ordered tuple of
    --  normalized actuals.  The tuple deliberately has no source names,
    --  aliases, formal types, target widths or layout facts.  A fixed actual
    --  is its checked mathematical magnitude; the template implies the
@@ -1413,8 +1413,8 @@ package Landin.Checking is
 
    --  The exact normalized key lookup.  Parameterized source declarations
    --  are matched and substituted by the checking stage; each concrete
-   --  result is interned here, so R2.70 receives one selected identity and
-   --  never has to repeat source-pattern search.
+   --  result is interned here, so evidence selection receives one selected
+   --  identity and never has to repeat source-pattern search.
    function Find_Conformance
      (Of_Table : Table;
       Concept  : Concept_Id;
@@ -1497,7 +1497,7 @@ package Landin.Checking is
      (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
      with Pre => Holds (Of_Table, Id);
 
-   --  R2.70 retains direct concept-entry providers in concept declaration
+   --  Evidence retains direct concept-entry providers in concept declaration
    --  order.  A selected parameterized provider is a concrete generic
    --  routine instance; an ordinary provider remains declaration-backed.
    --  Exactly one side of each entry is present after evidence finalization.

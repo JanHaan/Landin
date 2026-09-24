@@ -2911,10 +2911,10 @@ package body Landin.Tests.Checking_Suite is
          "permission, referent and concept split keys; an alias reuses one");
    end Reference_Actuals_Keep_Complete_Identity;
 
-   procedure R470_Field_Ranges_Keep_Recursive_Children
+   procedure Field_Ranges_Keep_Recursive_Children
      (Item : in out Landin.Testing.Context);
 
-   procedure R470_Field_Ranges_Keep_Recursive_Children
+   procedure Field_Ranges_Keep_Recursive_Children
      (Item : in out Landin.Testing.Context)
    is
       package C renames Landin.Checking;
@@ -3048,7 +3048,7 @@ package body Landin.Tests.Checking_Suite is
             and then Mutable_Deep = 1 and then Readonly_Deep = 1,
             "all mutable and readonly recursive range descriptors survived");
       end;
-   end R470_Field_Ranges_Keep_Recursive_Children;
+   end Field_Ranges_Keep_Recursive_Children;
 
    procedure Array_Actuals_Keep_Complete_Identity
      (Item : in out Landin.Testing.Context);
@@ -5370,9 +5370,9 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Fixed_Bound_Arithmetic_And_Applications_Are_Bounded;
 
-   --  R2.20: inference from a direct storage name carries D17's exact shape
-   --  onto module and local declarations, independent of destination
-   --  mutability and whether the source is module or prior-local storage.
+   --  Inference from a direct storage name carries D17's exact shape onto
+   --  module and local declarations, independent of destination mutability and
+   --  whether the source is module or prior-local storage.
    procedure Inferred_Array_Bindings_Carry_Their_Source_Shape
      (Item : in out Landin.Testing.Context);
 
@@ -8115,8 +8115,8 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
    end Control_Edges_Merge_Only_Fallthrough;
 
-   --  R4.91: runtime calls carry consumption and failure edges through
-   --  enclosing expressions; measurement and callback bodies stay unevaluated.
+   --  Runtime calls carry consumption and failure edges through enclosing
+   --  expressions; measurement and callback bodies stay unevaluated.
    procedure Fresh_Bindings_Reset_Flow_Facts
      (Item : in out Landin.Testing.Context);
 
@@ -9961,10 +9961,10 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Inferred_Erased_Results_Use_Exact_Entry_Shapes;
 
-   procedure R440_Result_Locals_Are_Contextual
+   procedure Destructured_Result_Locals_Are_Contextual
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Result_Locals_Are_Contextual
+   procedure Destructured_Result_Locals_Are_Contextual
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Local (By_Inout, Copy_First : Boolean);
@@ -10046,12 +10046,12 @@ package body Landin.Tests.Checking_Suite is
             Check_Local (By_Inout, Copy_First);
          end loop;
       end loop;
-   end R440_Result_Locals_Are_Contextual;
+   end Destructured_Result_Locals_Are_Contextual;
 
-   procedure R440_Result_Binding_Refusals_Are_Stable
+   procedure Result_Binding_Refusals_Are_Stable
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Result_Binding_Refusals_Are_Stable
+   procedure Result_Binding_Refusals_Are_Stable
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Refusal (Duplicate : Boolean);
@@ -10105,12 +10105,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Check_Refusal (False);
       Check_Refusal (True);
-   end R440_Result_Binding_Refusals_Are_Stable;
+   end Result_Binding_Refusals_Are_Stable;
 
-   procedure R440_C_Array_Literals_Keep_Nominals
+   procedure C_Array_Literals_Keep_Nominals
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_C_Array_Literals_Keep_Nominals
+   procedure C_Array_Literals_Keep_Nominals
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Elements (Matching : Boolean);
@@ -10204,12 +10204,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Check_Elements (True);
       Check_Elements (False);
-   end R440_C_Array_Literals_Keep_Nominals;
+   end C_Array_Literals_Keep_Nominals;
 
-   procedure R440_Variadic_Carrier_Refusal_Is_Precise
+   procedure C_Variadic_Carrier_Refusal_Is_Precise
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Variadic_Carrier_Refusal_Is_Precise
+   procedure C_Variadic_Carrier_Refusal_Is_Precise
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Tail (Argument : String);
@@ -10260,12 +10260,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Check_Tail ("value");
       Check_Tail ("pair(left: 1, right: 2)");
-   end R440_Variadic_Carrier_Refusal_Is_Precise;
+   end C_Variadic_Carrier_Refusal_Is_Precise;
 
-   procedure R440_Recursive_Array_Foundations
+   procedure Recursive_Array_Foundations
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Recursive_Array_Foundations
+   procedure Recursive_Array_Foundations
      (Item : in out Landin.Testing.Context)
    is
       package C renames Landin.Checking;
@@ -10630,15 +10630,15 @@ package body Landin.Tests.Checking_Suite is
             end;
          end;
       end;
-   end R440_Recursive_Array_Foundations;
+   end Recursive_Array_Foundations;
 
-   procedure R440_Check_Source
+   procedure Check_C_Boundary_Source
      (Item : in out Landin.Testing.Context;
       Text : String;
       Expected : String := "";
       Code : String := "L0301");
 
-   procedure R440_Check_Source
+   procedure Check_C_Boundary_Source
      (Item : in out Landin.Testing.Context;
       Text : String;
       Expected : String := "";
@@ -10696,12 +10696,12 @@ package body Landin.Tests.Checking_Suite is
             end;
          end if;
       end;
-   end R440_Check_Source;
+   end Check_C_Boundary_Source;
 
-   procedure R440_Array_Field_Copies_Compare_Complete_Children
+   procedure Array_Field_Copies_Compare_Complete_Children
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Array_Field_Copies_Compare_Complete_Children
+   procedure Array_Field_Copies_Compare_Complete_Children
      (Item : in out Landin.Testing.Context)
    is
       Foundation : constant String :=
@@ -10732,7 +10732,7 @@ package body Landin.Tests.Checking_Suite is
       --  of D17's identity.  Generic result overlays may spell that carrier
       --  differently while retaining the same complete reference/concept
       --  child.  This is the path exercised by both existing runtime fixtures.
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Foundation
          & "use: () -> none =" & LF
          & "    mut local: node = (value: 0)" & LF
@@ -10750,7 +10750,7 @@ package body Landin.Tests.Checking_Suite is
          & "    erased_shelf: shelf(any counter) = (values: erased_copy)" & LF
          & "end use" & LF);
 
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Foundation
          & "bad: () -> none =" & LF
          & "    mut local: node = (value: 0)" & LF
@@ -10760,12 +10760,12 @@ package body Landin.Tests.Checking_Suite is
          & "    stored: shelf(ptr mut node) = (values: values)" & LF
          & "end bad" & LF,
          "this is not an array of the type named by the struct field");
-   end R440_Array_Field_Copies_Compare_Complete_Children;
+   end Array_Field_Copies_Compare_Complete_Children;
 
-   procedure R440_Helper_Source_Contracts
+   procedure Hosted_Helper_Source_Contracts
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Helper_Source_Contracts
+   procedure Hosted_Helper_Source_Contracts
      (Item : in out Landin.Testing.Context)
    is
       function Helper (Index : Positive) return String;
@@ -10788,7 +10788,7 @@ package body Landin.Tests.Checking_Suite is
         (Index : Positive; Signature, Requirement : String;
          Prefix : String := "") is
       begin
-         R440_Check_Source
+         Check_C_Boundary_Source
            (Item, Prefix & "extern(c) link(symbol: """ & Helper (Index)
             & """) bridge: " & Signature & LF,
             "compiler-owned helper `" & Helper (Index) & "` " & Requirement);
@@ -10813,7 +10813,7 @@ package body Landin.Tests.Checking_Suite is
                   elsif Form = 2 then "public extern(c) "
                   else "extern(c) link(symbol: """ & Helper (Index) & """) ");
             begin
-               R440_Check_Source
+               Check_C_Boundary_Source
                  (Item, Prefix & Name & ": () -> none =" & LF
                   & "end " & Name & LF,
                   "compiler-owned helper `" & Helper (Index)
@@ -10821,14 +10821,14 @@ package body Landin.Tests.Checking_Suite is
             end;
          end loop;
          --  Source spelling alone is not a forced linker identity.
-         R440_Check_Source
+         Check_C_Boundary_Source
            (Item, Helper (Index) & ": () -> none =" & LF
             & "end " & Helper (Index) & LF);
-         R440_Check_Source
+         Check_C_Boundary_Source
            (Item, "extern(c) " & Helper (Index) & ": () -> none =" & LF
             & "end " & Helper (Index) & LF);
       end loop;
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "link(symbol: ""_landin_host_not_a_helper"") local:"
          & " () -> none =" & LF & "end local" & LF
          & "extern(c) malloc: () -> none" & LF
@@ -10900,7 +10900,7 @@ package body Landin.Tests.Checking_Suite is
          "requires result `one atom | ptr mut u8`");
       Refuse (14, "(data: ptr u8) -> none",
               "requires parameter 1 to be `ptr mut u8`");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "byte: type = u8" & LF & "size: type = usize" & LF
          & "bytes: type = ptr byte" & LF & "table: type = ptr bytes" & LF
          & "no_memory: atom" & LF
@@ -10927,28 +10927,28 @@ package body Landin.Tests.Checking_Suite is
          & "extern(c) link(symbol: """ & Helper (1) & """) initialize:"
          & " (escaping count: i32, escaping pointers: ptr ptr u8) -> none"
          & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "extern(c) " & Helper (4)
          & ": (index: usize) -> (value: cstring)" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "extern(c) " & Helper (4)
          & ": (index: usize) -> (value: ptr u8)" & LF
          & "extern(c) link(symbol: """ & Helper (4) & """) text:"
          & " (index: usize) -> (value: cstring)" & LF,
          "this C link symbol collides with another declaration or definition");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "extern(c) " & Helper (1)
          & ": (argc: i32, escaping argv: ptr ptr u8) -> none" & LF
          & "forward: (argv: ptr ptr u8) -> none =" & LF
          & "    " & Helper (1) & "(0, argv)" & LF & "end forward" & LF,
          "this parameter is non-escaping, so its reference cannot be retained"
          & " by the called function", "L0314");
-   end R440_Helper_Source_Contracts;
+   end Hosted_Helper_Source_Contracts;
 
-   procedure R440_Hosted_Main_Linkage
+   procedure Hosted_Main_Linkage
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Hosted_Main_Linkage
+   procedure Hosted_Main_Linkage
      (Item : in out Landin.Testing.Context)
    is
       Main : constant String := "public main: () -> (code: i32) =" & LF
@@ -10961,30 +10961,30 @@ package body Landin.Tests.Checking_Suite is
       Expected : constant String :=
         "link symbol `main` collides with the selected native hosted entry";
    begin
-      R440_Check_Source (Item, Main & Import_Main, Expected);
-      R440_Check_Source (Item, Import_Main & Main, Expected);
-      R440_Check_Source (Item, Main & Define_Main, Expected);
-      R440_Check_Source (Item, Define_Main & Main, Expected);
-      R440_Check_Source
+      Check_C_Boundary_Source (Item, Main & Import_Main, Expected);
+      Check_C_Boundary_Source (Item, Import_Main & Main, Expected);
+      Check_C_Boundary_Source (Item, Main & Define_Main, Expected);
+      Check_C_Boundary_Source (Item, Define_Main & Main, Expected);
+      Check_C_Boundary_Source
         (Item, "public link(symbol: ""renamed"") main: () -> (code: i32) ="
          & LF & "    code = 0" & LF & "end main" & LF & Import_Main);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "public extern(c) link(symbol: ""c_entry"") main:"
          & " () -> (code: i32) =" & LF & "    code = 0" & LF
          & "end main" & LF & Import_Main);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "public extern(c) main: () -> (code: i32) =" & LF
          & "    code = 0" & LF & "end main" & LF & Import_Main);
-      R440_Check_Source (Item, Define_Main);
-      R440_Check_Source
+      Check_C_Boundary_Source (Item, Define_Main);
+      Check_C_Boundary_Source
         (Item, "public main: () -> (result: i32) =" & LF
          & "    result = 0" & LF & "end main" & LF & Import_Main);
-   end R440_Hosted_Main_Linkage;
+   end Hosted_Main_Linkage;
 
-   procedure R440_Recursive_Source_Contexts
+   procedure Recursive_C_Array_Source_Contexts
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Recursive_Source_Contexts
+   procedure Recursive_C_Array_Source_Contexts
      (Item : in out Landin.Testing.Context)
    is
       Numeric : constant String :=
@@ -11001,7 +11001,7 @@ package body Landin.Tests.Checking_Suite is
         & "extern(c) add: (value: i32) -> (result: i32) =" & LF
         & "    result = value + 1" & LF & "end add" & LF;
    begin
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Numeric
          & "identity: (t: type, value: t) -> (result: t) =" & LF
          & "    result = value" & LF & "end identity" & LF
@@ -11018,7 +11018,7 @@ package body Landin.Tests.Checking_Suite is
          & "    chosen: matrix = make(flag)" & LF
          & "    result = pointer.val[index][1] + chosen[0][0]"
          & " + zero[1][2] + again.values[1][0]" & LF & "end use" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Callbacks
          & "image: callbacks = callbacks(values: [[add, add], [2 of add]])"
          & LF & "copy: callbacks = image" & LF
@@ -11035,21 +11035,21 @@ package body Landin.Tests.Checking_Suite is
          & "    array_pointer.val[row][column] = add" & LF
          & "    result = array_pointer.val[row][column](41)" & LF
          & "end use" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "leaf: type = layout(c) struct" & LF
          & "    value: i32" & LF & "end leaf" & LF
          & "use: () -> (result: i32) =" & LF
          & "    values: [2][2]leaf = zeroed" & LF
          & "    result = values[1][1].value" & LF & "end use" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Callbacks & "use: () -> none =" & LF
          & "    values: [2][2]handler = zeroed" & LF & "end use" & LF,
          "this array has no all-bits-zero value");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "use: () -> none =" & LF
          & "    values: [2][2]ptr u8 = zeroed" & LF & "end use" & LF,
          "this array has no all-bits-zero value");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Callbacks
          & "wrapper: type = struct" & LF
          & "    tag: i32" & LF & "    values: [2][2]handler" & LF
@@ -11058,42 +11058,42 @@ package body Landin.Tests.Checking_Suite is
          & "    value: wrapper = wrapper(tag: 0, of zeroed)" & LF
          & "end use" & LF,
          "`of zeroed` cannot fill field `values`, which has no zero image");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "use: () -> none =" & LF
          & "    values: [2][2]i32 = [[1, 2], [3]]" & LF & "end use" & LF,
          "this literal has 1 element, and its array context has a"
          & " different length");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "bad: type = layout(c) struct" & LF
          & "    values: [2][0]i32" & LF & "end bad" & LF,
          "this layout(c) struct has a non-C representation");
-      --  R7.20: D25's first element supplies a callable element shape as
-      --  it supplies a scalar one; counted repetition keeps a scalar.
-      R440_Check_Source
+      --  D241: D25's first element supplies a callable element shape as it
+      --  supplies a scalar one; counted repetition keeps a scalar.
+      Check_C_Boundary_Source
         (Item, Callbacks & "use: () -> none =" & LF
          & "    values := [add, add]" & LF
          & "    _ = values[1](value: 2)" & LF & "end use" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Callbacks & "use: (flag: bool) -> none =" & LF
          & "    values := if flag then [add, add] else [add, add] end if" & LF
          & "    _ = values" & LF
          & "end use" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, Callbacks & "use: () -> none =" & LF
          & "    values := [2 of add]" & LF & "end use" & LF,
          "a counted repetition infers only a scalar element", "L0304");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "record: type = layout(c) struct" & LF
          & "    values: [1][1]u8" & LF & "end record" & LF
          & "alias: type = record" & LF
          & "image: alias = alias(values: [[255 + 1]])" & LF,
          "this image value works out to 256, and no `u8` holds it", "L0300");
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item, "record: type = layout(c) struct" & LF
          & "    values: [2][1]i32" & LF & "end record" & LF
          & "first: record = second" & LF & "second: record = first" & LF,
          "the initial image of `first` is worked out from itself", "L0305");
-   end R440_Recursive_Source_Contexts;
+   end Recursive_C_Array_Source_Contexts;
 
    procedure Variant_Array_Elements_Keep_Case_Identity
      (Item : in out Landin.Testing.Context);
@@ -11161,7 +11161,7 @@ package body Landin.Tests.Checking_Suite is
    procedure Construction_Arguments_Keep_Value_Forms
      (Item : in out Landin.Testing.Context) is
    begin
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item,
          "display: type = concept (t: type)" & LF
          & "get: (self: ptr t) -> (r: i32)" & LF
@@ -11176,7 +11176,7 @@ package body Landin.Tests.Checking_Suite is
          & "wrapped: holder = holder(item: any(addr local))" & LF
          & "contextual: holder = (item: any(addr local))" & LF
          & "end f" & LF);
-      R440_Check_Source
+      Check_C_Boundary_Source
         (Item,
          "triple: type = struct x: i32 y: i32 z: i32 end triple" & LF
          & "image: triple = triple(x: 1, of 2)" & LF
@@ -14023,8 +14023,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "large loop frames stay off the host stack",
          Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.70 field ranges keep recursive children",
-         R470_Field_Ranges_Keep_Recursive_Children'Access);
+        (Into, "checking", "field ranges keep recursive children",
+         Field_Ranges_Keep_Recursive_Children'Access);
       Landin.Testing.Register
         (Into, "checking", "try failures check reference cleanups",
          Try_Failures_Check_Reference_Cleanups'Access);
@@ -14039,32 +14039,32 @@ package body Landin.Tests.Checking_Suite is
          Match_Aliases_Keep_Backing_Origins'Access);
       Landin.Testing.Register
         (Into, "checking",
-         "R4.40 array field copies compare complete children",
-         R440_Array_Field_Copies_Compare_Complete_Children'Access);
+         "array field copies compare complete children",
+         Array_Field_Copies_Compare_Complete_Children'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 recursive array foundations",
-         R440_Recursive_Array_Foundations'Access);
+        (Into, "checking", "recursive array foundations",
+         Recursive_Array_Foundations'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 recursive source contexts",
-         R440_Recursive_Source_Contexts'Access);
+        (Into, "checking", "recursive C array source contexts",
+         Recursive_C_Array_Source_Contexts'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 helper source contracts",
-         R440_Helper_Source_Contracts'Access);
+        (Into, "checking", "hosted helper source contracts",
+         Hosted_Helper_Source_Contracts'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 hosted main linkage",
-         R440_Hosted_Main_Linkage'Access);
+        (Into, "checking", "hosted main linkage",
+         Hosted_Main_Linkage'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 result locals are contextual",
-         R440_Result_Locals_Are_Contextual'Access);
+        (Into, "checking", "destructured result locals are contextual",
+         Destructured_Result_Locals_Are_Contextual'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 result binding refusals are stable",
-         R440_Result_Binding_Refusals_Are_Stable'Access);
+        (Into, "checking", "result binding refusals are stable",
+         Result_Binding_Refusals_Are_Stable'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 C array literals keep nominals",
-         R440_C_Array_Literals_Keep_Nominals'Access);
+        (Into, "checking", "C array literals keep nominals",
+         C_Array_Literals_Keep_Nominals'Access);
       Landin.Testing.Register
-        (Into, "checking", "R4.40 variadic carrier refusal is precise",
-         R440_Variadic_Carrier_Refusal_Is_Precise'Access);
+        (Into, "checking", "C variadic carrier refusal is precise",
+         C_Variadic_Carrier_Refusal_Is_Precise'Access);
       Landin.Testing.Register
         (Into, "checking", "C metadata is independent of storage",
          C_Metadata_Is_Independent_Of_Storage'Access);

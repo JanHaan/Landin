@@ -8,11 +8,10 @@ package body Landin.Testing.Fixtures is
 
    Metadata_Name : constant String := "fixture.meta";
 
-   --  The targets ROADMAP.md names.  A fixture may apply to a target the
-   --  chassis does not describe yet -- macos-arm64 arrives at R5 and the
-   --  Cortex-M reference profile at R6 -- but it may not name one the
-   --  roadmap has never heard of, because that is how a fixture quietly
-   --  stops applying to anything.
+   --  The product targets -- Linux x86-64, macOS arm64 and the Cortex-M
+   --  reference profile -- and the synthetic 32-bit layout target.  A fixture
+   --  may name only these, because naming a target nothing describes is how a
+   --  fixture quietly stops applying to anything.
    function Is_Named_Target (Name : String) return Boolean is
      (Name in "linux-x86-64" | "macos-arm64" | "cortex-m" | "synthetic-32");
 
@@ -894,8 +893,8 @@ package body Landin.Testing.Fixtures is
       end if;
 
       --  A `.ldn` program is written in the language, so it is evidence
-      --  about some construct of it and R1.90 wants to know which.  A
-      --  fixture with no program is about the tool rather than the
+      --  about some construct of it and the construct matrix wants to know
+      --  which.  A fixture with no program is about the tool rather than the
       --  language -- an unknown option, the identity text, an
       --  implementation-side note -- and names no construct for the same
       --  reason.

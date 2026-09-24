@@ -6,9 +6,9 @@
 --
 --  It runs on nothing that was refused, and says so on its first line
 --  rather than relying on Landin.Stages.Run stopping at the first refusal.
---  That is not belt and braces.  R1.70 assigns this stage no diagnostic
---  code at all -- `L0400`-`L0499` is deliberately unassigned -- and the
---  argument for that is that malformed IR cannot be caused by a source
+--  That is not belt and braces.  The catalogue assigns this stage no
+--  diagnostic code at all -- `L0400`-`L0499` is deliberately unassigned -- and
+--  the argument for that is that malformed IR cannot be caused by a source
 --  program, because the frontend refused every ill-formed one first.  The
 --  argument is only true while nothing lowers a refused program, and
 --  nothing in `Landin.IR` enforces it; the pipeline's stop-at-a-refusal is
@@ -28,7 +28,7 @@
 --  Scopes are asked for, never worked out.  `Landin.Resolution.Scope_At`
 --  says which scope a node opened, and every `Add_Block` here passes what
 --  it answered.  Landin.IR's header is the rule: "a scope tree here would
---  be a second authority on a question R1.50 answered once".
+--  be a second authority on a question name resolution answered once".
 
 package Landin.Stages.Lowering is
 

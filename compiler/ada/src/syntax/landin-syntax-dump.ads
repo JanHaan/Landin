@@ -7,9 +7,10 @@
 --  checks negative sources according to their refusing stage.  This dump
 --  records the parser's structure, not independent semantic correctness.
 --
---  Not a stable interface, and not a serialisation.  R1.70 says the same of
---  its IR dumps for the same reason: the moment a dump is an interface, the
---  representation stops being free to change, and R2 has to change it.
+--  Not a stable interface, and not a serialisation.  `Landin.IR.Dump` says the
+--  same of the IR dumps for the same reason: the moment a dump is an
+--  interface, the representation stops being free to change, and the language
+--  keeps changing it.
 
 with Landin.Source.Names;
 

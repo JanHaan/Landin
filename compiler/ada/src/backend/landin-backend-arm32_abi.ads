@@ -1,4 +1,4 @@
---  R6.20: ARMv6-M base AAPCS and Landin transport planning, not emission.
+--  ARMv6-M base AAPCS and Landin transport planning, not emission.
 --  Inputs are verified neutral signatures. Generic evidence is already in
 --  their parameter run; only the aggregate result address is added here.
 with Landin.IR;

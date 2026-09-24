@@ -23,7 +23,7 @@
 --  one, and [1880] is why.  A literal has no type until a context gives it
 --  one, so a node is either *asked* what type it has or *required* to have
 --  one the position states -- and the second is the only way a literal ever
---  gets a type at all.  R1.50's entry guessed that R1.60 would be a single
+--  gets a type at all.  An early guess was that checking would be a single
 --  forward loop over 1 .. Last_Node; that is true of a pass that only
 --  synthesises, and typing is not one, because [0190] makes the
 --  information flow from a parent into a subtree the loop has already

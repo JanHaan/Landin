@@ -46,7 +46,7 @@ package body Landin.Driver is
 
    --  The codes come from the catalogue, which is the only place in this
    --  compiler where a code is written.  These four were literals here
-   --  until R1.30 built it, and check.py now refuses a code written
+   --  until the catalogue was built, and check.py now refuses a code written
    --  anywhere else.
    package Rows renames Landin.Diagnostics.Catalogue;
    package Module_Diagnostics renames Landin.Diagnostics.Modules;
@@ -93,8 +93,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Frame_Not_Addressable);
 
    --  What a request asked to be left behind.  Nothing is the state every
-   --  request had before R1.80 and most still have: a program is read,
-   --  checked and lowered, and no file is written.
+   --  request had before the native path and most still have: a program is
+   --  read, checked and lowered, and no file is written.
    type Emit_Kind is (Emit_Nothing, Emit_Assembly, Emit_Executable);
 
    function Identity return String is
@@ -207,7 +207,7 @@ package body Landin.Driver is
       --
       --  An index and not a cursor, because `-o` takes the argument after
       --  it.  Every other option carries its value with an `=`, which is
-      --  the shape `--target=` set and R1.80 kept.
+      --  the shape `--target=` set and every later option kept.
       while Index <= Natural (Arguments.Length) loop
          declare
             Argument : constant String := Arguments.Element (Index);
@@ -1344,7 +1344,7 @@ package body Landin.Driver is
                      --  there is the reader's to install; a capture file
                      --  that could not be removed is a host fault after
                      --  the tool ran, and naming it a missing toolchain
-                     --  sent the reader to install one they had (R4.21).
+                     --  sent the reader to install one they had.
                      declare
                         Why : constant String :=
                           Ada.Exceptions.Exception_Message (Failure);
@@ -1452,8 +1452,8 @@ package body Landin.Driver is
          end loop;
 
          --  A request to emit with nothing to compile exited zero and
-         --  wrote nothing, which a script read as success (R4.21).  An
-         --  empty root named the filesystem root and searched it.
+         --  wrote nothing, which a script read as success.  An empty root
+         --  named the filesystem root and searched it.
          if Natural (Inputs.Length) = 0
            and then (Emit /= Emit_Nothing
                      or else Unbounded.Length (Output) > 0)
@@ -1567,7 +1567,7 @@ package body Landin.Driver is
                --  its own failure, so a file with a missing `then` does not
                --  also report every name the hole swallowed, and one with
                --  an unknown name does not also report its type.  Four
-               --  since R1.70: the lowering is the last, and it refuses to
+               --  since the lowering joined: it is the last, and it refuses to
                --  run on a refused program itself rather than relying on
                --  being queued after the checker.
                if Ran not in 1 .. 5 then

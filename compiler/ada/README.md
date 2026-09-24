@@ -1,6 +1,6 @@
 # The Ada bootstrap compiler
 
-This directory holds the bootstrap implementation described by `ROADMAP.md`.
+This directory holds the bootstrap compiler for the language `spec.md` defines.
 It is a real compiler under construction, not a prototype: `spec.md` is the
 normative language specification and `tour.md` explains the language, and
 nothing here may quietly decide language semantics.
@@ -14,8 +14,7 @@ through r0, with the same conservative effects and ordinary register/frame
 restrictions as result-free assembly. `core/cpu` uses this ordinary source
 surface; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
-Linux freestanding lane executes the generated firmware. ROADMAP.md owns the
-R6.70 implementation and its exact-revision closure binding. D231/D232 now implement
+Linux freestanding lane executes the generated firmware. D231/D232 implement
 nonreturning control and selected panic handlers on all three backends.
 
 ## Layout
@@ -166,7 +165,7 @@ different responsibilities.
 | `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
-| `Landin.Driver` | argument and `--emit` classification, R3.10's private ordered-root graph discovery through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
+| `Landin.Driver` | argument and `--emit` classification, the private ordered-root graph discovery of modules through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
@@ -226,8 +225,7 @@ verification checks the same signature facts for direct and indirect calls.
 configuration bools, with no runtime storage. Ordinary `core/c` accepts either
 supported LP64 contract; generated bindings assert their selected contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
-the scanner, parser, type checker or native backend. The authoritative closures
-of R4.40 and R4.50 are recorded in ROADMAP.md.
+the scanner, parser, type checker or native backend.
 
 D209--D211 add independent `--optimize=none|size|speed` (default size) and
 `--specialize=off|auto|all` (default auto) controls. The driver runs verified
@@ -326,8 +324,8 @@ The outer JSON has `schema: 1`, a `build` object in
 emission sites, `estimated_growth` is an IR policy score, and neither claims
 assembled bytes. `scripts/quality.sh` obtains those from pinned Linux object
 tools. Complete mandatory runtime profiles and quantitative acceptance are
-recorded in `compiler/tests/README.md` and ROADMAP.md, not inferred from the
-existence of these packages.
+recorded in `compiler/tests/README.md`, not inferred from the existence of
+these packages.
 
 `--debug=full` requests Linux or Darwin source-debugger metadata; `--debug=none` is the
 default. This control is independent of `--build-mode`, `--optimize` and
@@ -404,9 +402,10 @@ The `darwin-arm64` description has 64-bit pointers, eight-byte pointer
 alignment, sixteen-byte stack/scalar maximum alignment and little-endian
 storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.
 A described ABI does not enable C signatures, C records, variadic calls,
-assembly or debugging: each capability is explicit. R5.30 enables Darwin
-C transport and assembly; R5.40 adds Mach-O DWARF and native LLDB acceptance.
-R5.50 runs full shared hosted and derived-program parity on both targets.
+assembly or debugging: each capability is explicit. The Darwin arm64 lowering
+enables Darwin C transport and assembly; Darwin source debugging adds Mach-O
+DWARF and native LLDB coverage, and the shared hosted and derived programs
+run on both targets.
 Darwin scalar part addressing retains `IR.Element_Total` through target-byte
 placement, including a field position beyond the Ada host `Natural` range.
 The bounded emission regression preserves the existing physical-layout seam;
@@ -427,9 +426,9 @@ A snapshot's bytes and line map are allocated once and not freed. A
 compilation owns its sources for as long as it exists, the process is short,
 and a compiler that frees source text while a diagnostic still points into it
 has traded a leak for a dangling span. That is a decision, not an oversight;
-when the roadmap needs a longer-lived process it will be revisited there. R1.50
-extends it to the trees for the same reason, and to the four tables a
-compilation now owns.
+when the roadmap needs a longer-lived process it will be revisited there. Name
+resolution extends it to the trees for the same reason, and to the four tables
+a compilation now owns.
 
 Frame and C argument-stack planning accept an explicit byte budget and check
 addition and alignment before exceeding it. Only `Stack_Limit_Exceeded` becomes
@@ -568,10 +567,10 @@ including concrete parameterized-alias application shapes and D136's canonical
 folded array counts but no template/formal syntax metadata; D142's closed
 compiler/source concept identities and concrete whole-program conformance
 register keyed by normalized represented type, concept and input tuple,
-retaining selected parameterized binders plus R2.70's declaration-ordered
-provider runs, constrained-routine evidence runs and per-view evidence
-selections, and D145/D146's exact any-concept, construction and
-flattened-dispatch positions without physical layout; opaque checker-owned
+retaining selected parameterized binders plus the generic evidence schema's
+declaration-ordered provider runs, constrained-routine evidence runs and
+per-view evidence selections, and D145/D146's exact any-concept, construction
+and flattened-dispatch positions without physical layout; opaque checker-owned
 nominal and routine instances interned by source template and an ordered
 normalized scalar, structural atom-set, exact fixed-array, nominal, structural
 function-signature or mathematical fixed-value actual tuple, with descriptor
@@ -602,7 +601,7 @@ owes its destination.
 
 **`Landin.IR`** owns the target-neutral instructions: items, slots, blocks and
 values, including signature-only external routine items, D161's read-only
-anonymous fixed-array datums and D177's canonical static bool images; R2.70
+anonymous fixed-array datums and D177's canonical static bool images; generic
 evidence descriptors with represented shapes, ordered routine/signature
 entries, static table addresses and signed function-word loads, including
 D147's direct and flattened erased table descriptors plus opaque-at-source
@@ -625,7 +624,7 @@ bounds the verifier holds to values that type holds.
 
 **`Landin.Stages.Checking`** owns the three type passes, D142
 concept/conformance collection, constrained concrete lookup, family collision
-checking, D143's closed compiler `zeroable` predicate, R2.70 provider
+checking, D143's closed compiler `zeroable` predicate, evidence provider
 finalization and `T.entry` evidence selection, D145--D147 any
 identity/construction/object-safety/permission/dynamic-selection checking,
 D161's contextual read-only byte-literal view, D181's canonical immutable
@@ -676,10 +675,10 @@ address, and refusing to run on a refused program.
 ## What is deliberately absent
 
 The detailed transport account below records the Linux implementation and
-its R2–R4 decisions. Darwin now covers the same enabled hosted language;
+the decisions made for it. Darwin now covers the same enabled hosted language;
 its register, stack, C ABI and object contracts are described in
 [target contracts](../../docs/targets.md). Neither native implementation
-enables the deferred language or freestanding work owned by ROADMAP.md.
+enables the deferred language or the freestanding target's own work.
 
 `Landin.Backend` lays out a routine's frame and
 `Landin.Backend.X86_64` emits assembly for every operation in the enabled
@@ -697,7 +696,7 @@ images in a neutral descriptor tree; only the selected target supplies their
 widths, offsets and padding. That is every
 opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
-compile rather than raising `Compiler_Defect` at run time. R2.30's internal
+compile rather than raising `Compiler_Defect` at run time. The internal
 scalar convention passes six arguments in registers and every later one in an
 aligned run of eight-byte stack slots, so `L0503`'s former register-only limit
 is retired. A flat ordinary-struct or fixed-array argument occupies one such
@@ -766,7 +765,7 @@ nominal descriptors with one unnameable representation child, preserving target
 layout and origins without exposing source fields or inherited operations.
 Conversion discovery preserves fixed-formal expression typing and contextual
 literal inference instead of treating either as an ordinary initialized binding.
-R4.90 closes inferred errors and generic discovery together (D215). Recovery
+Inferred errors and generic discovery are solved together (D215). Recovery
 subtrees are separate syntax members, and deferred recovery/type facts belong to
 the active routine-instance view. Only complete error components publish atom
 sets that can enter generic keys; newly enabled handlers may discover further
@@ -833,9 +832,8 @@ lexical deferred and failure-only undo cleanup, declared atom errors and source
 order, register/stack and recursive calls, folded module values, fixed arrays,
 ordinary structs and their target-derived module and frame layouts on the
 hardware the backend emits for. A host without the target toolchain fails
-rather than silently skipping that evidence. The completed R2 items extended
-the semantic and representation core; R5.50 establishes complete shared hosted
-coverage on both native targets, within its recorded physical-image limits.
+rather than silently skipping that evidence. The shared hosted coverage is
+complete on both native targets, within its recorded physical-image limits.
 
 The native path sits behind the whole frontend: `refine` scans and parses every
 `.ldn` file it is given, resolves every name in them as one module, collects
@@ -911,8 +909,8 @@ that is a fact about `u64`; a host width leaking in would be
 `Long_Long_Integer`, whose range is a fact about the machine running the
 compiler.
 `L0001` is retired — the catalogue said it retires when the frontend is wired
-to the driver, and R1.40 is where that happened — and its row stays so its
-number is never handed to another rule.
+to the driver, and the recovering parser is where that happened — and its row
+stays so its number is never handed to another rule.
 
 Both halves are held to the grammar from both sides. `check.py` compares
 `Landin.Tokens`' reserved words with `spec.md`'s own `keyword` production,
@@ -927,21 +925,21 @@ insertion, deletion and replacement, and parses fixed-seed raw byte streams.
 Each must yield a tree whose invariants hold rather than a crash.
 
 `Landin.Syntax` is a flat table, not a pointer structure: a `Node_Id` is a
-dense integer, so R1.50's names, R1.60's types and R1.70's values each go in
-an array of their own rather than a map keyed on an access value. R1.50 is the
-first to take that up, and it does it once for the whole compilation: one array
-of `Declaration_Id` with one run per source and a first index, which is what
-`Landin.Syntax` already does with a node's children. A child's
+dense integer, so resolved names, checked types and IR values each go in an
+array of their own rather than a map keyed on an access value. Name resolution
+is the first to take that up, and it does it once for the whole compilation:
+one array of `Declaration_Id` with one run per source and a first index, which
+is what `Landin.Syntax` already does with a node's children. A child's
 index is lower than its parent's and a child's extent lies inside it, both as
 postconditions. A construct the parser could not read becomes an error node of
 the band it needed — one per band, so a case over a band still covers the
 hole — and `Is_Sound` propagates upward so that one syntax mistake does not
 become a cascade of type errors about a hole. Trees live in the compilation's
-`Landin.Syntax.Forest`, one per source and none freed, which is R1.50's answer
-to where they live: a tree cannot be an element of a container, because it is
-limited with unknown discriminants, and an initialised allocator whose value is
-the parse is the one form Ada gives for building one where it will outlive the
-call.
+`Landin.Syntax.Forest`, one per source and none freed, which is name
+resolution's answer to where they live: a tree cannot be an element of a
+container, because it is limited with unknown discriminants, and an
+initialised allocator whose value is the parse is the one form Ada gives for
+building one where it will outlive the call.
 
 A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence — a source, a non-empty span, how many secondary labels, how many notes — is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 
@@ -1030,8 +1028,8 @@ Linux workload cases and is not the Mac compiler-host command.
 `scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
 and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
 selector. On the Mac add `--host`; run Linux workloads in native development
-slots. Filtered runs identify themselves and never replace exact-revision
-acceptance. [The process guide](../../docs/process.md) explains both native
+slots. Filtered runs identify themselves and never replace the complete
+suite. [The process guide](../../docs/process.md) explains both native
 policies, debugger selection and Linux-only resume.
 
 Darwin uses the shared DWARF encoder with x29-relative stack locations and
@@ -1041,11 +1039,11 @@ Landin source/assembly digest bind the executable, dSYM and optional source map.
 See [target contracts](../../docs/targets.md#native-source-debugging) for native
 commands, identity matching and the demonstrated debugger presentation limits.
 
-R6.10's [Cortex-M environment probes](../../environments/cortex-m/README.md)
+The [Cortex-M environment probes](../../environments/cortex-m/README.md)
 are separate C/assembly controls for QEMU and a synthetic Renode device lane.
-R6.20 adds `Targets.Cortex_M` and `Backend.Arm32_ABI` layout/transport planning,
+`Targets.Cortex_M` and `Backend.Arm32_ABI` supply layout/transport planning,
 with independent executable controls under that environment. The existing
-neutral shape machinery supplies storage. R6.50 adds `Backend.Cortex_M` assembly
+neutral shape machinery supplies storage. `Backend.Cortex_M` adds assembly
 emission and compiler-generated QEMU/Renode execution. `--target=cortex-m0`
 accepts checking, `--emit=asm` and D229 firmware linking with explicit
 `--firmware-entry=NAME`. General C source remains refused. Cortex
@@ -1054,7 +1052,7 @@ accepts checking, `--emit=asm` and D229 firmware linking with explicit
 startup/linker probes remain independently identified test harnesses. See
 [target contracts](../../docs/targets.md#cortex-m0-layout-and-abi-planning).
 
-R6.30's `Landin.Memory` owns the neutral operation/order vocabulary.
+`Landin.Memory` owns the neutral operation/order vocabulary.
 `Configuration` recognizes the exact compiler member syntax; resolution visits
 runtime operands and checking validates fixed orders, pointer permission,
 unsigned scalar identity and target capability. `IR.Memory_Access` retains
@@ -1063,18 +1061,17 @@ scalar atomics/volatile access and barriers. Cortex-M implements admitted
 one-, two- and four-byte loads/stores and barriers, retaining alignment checks
 and refusing RMW/eight-byte memory intrinsics. The [target guide](../../docs/targets.md#explicit-memory-operations)
 records actual instruction requirements. Packed/register/volatile-pointer type
-syntax and the ordinary CPU/cache modules retain their separate R6 owners.
+syntax and the ordinary CPU/cache modules are owned separately.
 
-R6.40 uses `Landin.Packed` for unsigned image algebra and access planning,
-`Targets.Packed` for target storage/capability queries, and syntax/checking for
+Packed storage uses `Landin.Packed` for unsigned image algebra and access
+planning, `Targets.Packed` for target storage/capability queries, and syntax/checking for
 encoded unions and explicit packed positions. Neutral shapes retain geometry
 and encoding tables through verification and optimization. Native backends
 implement checked extraction/insertion and raw aggregate copies; the DWARF
 consumer exposes the raw carrier. Explicit register-image intrinsics use the
 existing volatile IR boundary with retained reserved-bit guards. General
 register wrappers remain deferred; the Cortex emitter preserves the same raw
-image and validation contracts. ROADMAP.md owns the
-remaining audits, evidence and closure obligations.
+image and validation contracts.
 
 The native debugger gates include a D231/D232 program that enters a selected
 handler through erased evidence and a generic nonreturning callback. Source
@@ -1082,16 +1079,16 @@ breakpoints, values, operation sites and unwind frames execute under GDB/LLDB
 at three profiles. Darwin out-of-line panic edges carry their originating
 source line; those native sessions remain separate from Cortex line/function debugging.
 
-R6.80's [device modules](../../devices/README.md) use the existing frontend,
+The [device modules](../../devices/README.md) use the existing frontend,
 packed/volatile IR and Cortex firmware path without compiler changes. Vendor
 metadata is off target; the compiler does not parse SVD or run generators.
 
-R6.90's complete [prototype-1 derivation](../tests/driver/DERIVATION.md) compiles
+The complete [prototype-1 derivation](../tests/driver/DERIVATION.md) compiles
 through `--target=cortex-m0 --firmware-entry=start --emit=exe`. Its external
-CPU/peripheral runner is mandatory in native Linux acceptance. Initializer
-inference settles recovery bindings while deferring concrete recovery bodies
-to the enclosing routine walk, so inferred bindings can recover with existing
+CPU/peripheral runner was mandatory in the retired native Linux acceptance.
+Initializer inference settles recovery bindings while deferring concrete
+recovery bodies to the enclosing routine walk, so inferred bindings can recover with existing
 loop transfers. Firmware BSS has an explicit RAM LMA and no load payload.
 These repairs add no syntax, register metadata semantics, IR operation or
 general C support. Routine debugger-risk policy covers both native backends;
-R6.100 closes the explicit Cortex line/function source-debugging contract.
+Cortex has the explicit line/function source-debugging contract.

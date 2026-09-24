@@ -1,6 +1,6 @@
 --  The catalogue, and the diagnostics raised against it.
 --
---  R1.30's exit evidence is that a negative case asserts code and spans
+--  The catalogue's evidence is that a negative case asserts code and spans
 --  separately from prose, and that rendering has focused golden tests.
 --  These cases do the first; the golden is the last one.
 

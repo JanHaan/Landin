@@ -236,7 +236,7 @@ package body Landin.Stages.Resolution is
       --  structural association therefore serves declarations, anonymous
       --  routines and function types; no declaration is invented for a label
       --  in a written type [1800].  Missing and duplicated labels remain
-      --  retained for the later R2.50 checker to diagnose.
+      --  retained for the reference checker to diagnose.
       procedure Associate_Return_Sources
         (Of_Tree : Syn.Tree; Signature_Node : Syn.Node_Id) is
       begin
@@ -1115,13 +1115,13 @@ package body Landin.Stages.Resolution is
                       (Syn.Kind (Of_Tree, Node) = Syn.Concept_Reference
                        and then Spelled (Named) = "zeroable")
                   then
-                     --  Scalar type names and R2.60's closed compiler
-                     --  concept have no source declaration to bind.
+                     --  Scalar type names and the closed compiler concept have
+                     --  no source declaration to bind.
                      null;
-                  --  R7.40 (R551-30): an import of this name was refused in
-                  --  this file, so the name is not a misspelling and its
-                  --  visibility was already decided and reported once.  The
-                  --  refusal stands; only the repetition goes.
+                  --  D242: an import of this name was refused in this file, so
+                  --  the name is not a misspelling and its visibility was
+                  --  already decided and reported once.  The refusal stands;
+                  --  only the repetition goes.
                   elsif Res.Import_Refused
                     (Meanings.all, Syn.Source_Of (Of_Tree), Named)
                   then
@@ -1775,7 +1775,7 @@ package body Landin.Stages.Resolution is
                            Note => "[1440]: selected imports name public"
                                    & " declarations in the selected module",
                            Into => Found);
-                        --  R7.40 (R551-30): this name is answered.  The
+                        --  D242: a refused import answers for its name.  The
                         --  program is refused either way, and every later
                         --  use of it would otherwise be reported again as
                         --  a misspelling it is not.

@@ -425,7 +425,7 @@ package body Landin.Tests.Frontend_Review_Suite is
                     & " b := a + -(begin return end) end f");
          begin
             --  Modes 2 and 9 name an array type where a value belongs, which
-            --  R7.20 reports as the type error it is.
+            --  D241 reports as the type error it is.
             Run_Source (Item, Work, Text,
               (case Mode is
                   when 1 | 8 | 13 => "L0302",

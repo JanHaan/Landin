@@ -222,7 +222,7 @@ package body Landin.Targets is
 
       --  A layout that cannot be expressed is a defect in the compiler or
       --  an impossible target description, not a host that ran out of
-      --  something.  R0.50 keeps those two apart on purpose.
+      --  something.  The platform boundary keeps those two apart on purpose.
       if Byte_Count'Last - (Step - Remainder) < Offset then
          raise Compiler_Defect with "layout offset overflow";
       end if;

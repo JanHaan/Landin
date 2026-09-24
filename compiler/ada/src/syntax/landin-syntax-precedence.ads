@@ -13,9 +13,9 @@
 --  one loop, so a level cannot fold the wrong way while its neighbour
 --  folds correctly.  An expression nested `d` deep costs one frame per
 --  actual nesting rather than eleven, which matters because `-fstack-check`
---  is on and from R3 the input is machine-generated code.  And inserting a
---  level is one enumeration literal and one arm, because every use site is
---  written against `Level'Succ` rather than against a level's number.
+--  is on and some input is machine-generated code.  And inserting a level is
+--  one enumeration literal and one arm, because every use site is written
+--  against `Level'Succ` rather than against a level's number.
 --
 --  No body: every function here is an expression function, so there is
 --  nothing between the grammar and the code for a body to hide.

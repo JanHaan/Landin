@@ -13930,7 +13930,7 @@ package body Landin.Stages.Lowering is
             end;
          end if;
 
-         --  R2.70 evidence pointers are hidden runtime parameters after the
+         --  Evidence pointers are hidden runtime parameters after the
          --  aggregate destination and before every written parameter.  Their
          --  order is constrained generic-formal declaration order.
          declare
@@ -14308,7 +14308,7 @@ package body Landin.Stages.Lowering is
       ------------------------------------------------------------
 
       --  A datum's block describes its value.  [1460] says nothing runs
-      --  before the entry point, so this is not code and R1.80 reads it
+      --  before the entry point, so this is not code and the backend reads it
       --  rather than executing it.
       procedure Lower_Datum (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
@@ -14439,9 +14439,9 @@ package body Landin.Stages.Lowering is
 
    begin
       --  Nothing that was refused is lowered, and this stage says so
-      --  itself rather than trusting the order it was queued in.  R1.70
-      --  assigns no diagnostic code because malformed IR cannot come from
-      --  a source program, and that is only true while this holds.
+      --  itself rather than trusting the order it was queued in.  The IR has
+      --  no diagnostic code because malformed IR cannot come from a source
+      --  program, and that is only true while this holds.
       if Failed (Context) then
          Outcome := Stop;
          return;
@@ -15416,9 +15416,9 @@ package body Landin.Stages.Lowering is
             Folding (Id) := False;
          end Fold_Scalar_Datum;
 
-         --  R4.21: the one folder, instantiated with this stage's answers.
-         --  A chain that comes back to its own binding is declined here
-         --  without a word: the checker has already reported it.
+         --  The one folder, instantiated with this stage's answers.  A chain
+         --  that comes back to its own binding is declined here without a
+         --  word: the checker has already reported it.
          function Snapshot_For
            (Id : Landin.Source.Source_Id) return Landin.Source.Snapshot
            is (Landin.Stages.Source (Context, Id));

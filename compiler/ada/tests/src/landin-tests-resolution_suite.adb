@@ -2,11 +2,11 @@
 --
 --  The fixtures already hold [1840]'s sibling rule to what a program is
 --  allowed to name, which is the rule seen from the outside.  This asks the
---  table the question R1.70's lowering asks it -- which scope did this node
---  open -- because a wrong answer there is invisible from outside: an arm's
---  blocks landing in the function's body scope names every local correctly
---  and still puts the instructions in the wrong scope, and only R4.60 would
---  ever notice.
+--  table the question the lowering asks it -- which scope did this
+--  node open -- because a wrong answer there is invisible from outside: an
+--  arm's blocks landing in the function's body scope names every local
+--  correctly and still puts the instructions in the wrong scope, and only
+--  source debugging would ever notice.
 
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;

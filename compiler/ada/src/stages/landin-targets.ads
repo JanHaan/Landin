@@ -46,7 +46,8 @@ package Landin.Targets is
    --  The first target the roadmap requires to execute.
    function Linux_X86_64 return Target_Facts;
 
-   --  Description only; R5.30 supplies native emission and C support.
+   --  The description; the arm64 backend supplies native emission and C
+   --  support.
    function Darwin_Arm64 return Target_Facts;
 
    --  ARMv6-M Thumb, base AAPCS soft-float. Layout/ABI planning only;

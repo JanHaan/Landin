@@ -1,4 +1,4 @@
---  R1.70's exit evidence: malformed IR is rejected.
+--  The IR's evidence: malformed IR is rejected.
 --
 --  Every case here builds a shape the builder accepts and the verifier
 --  must not.  That set is not arbitrary: Landin.IR's preconditions are
@@ -3492,9 +3492,9 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Malformed_Multiple_Results_Are_Rejected;
 
-   --  R2.30: atom identity and the orthogonal failure edge stay explicit in
-   --  neutral IR.  Each malformed shape below is builder-reachable, so each
-   --  verifier rule can fail independently rather than existing only in prose.
+   --  Atom identity and the orthogonal failure edge stay explicit in neutral
+   --  IR.  Each malformed shape below is builder-reachable, so each verifier
+   --  rule can fail independently rather than existing only in prose.
    procedure Malformed_Error_IR_Is_Rejected
      (Item : in out Landin.Testing.Context);
 

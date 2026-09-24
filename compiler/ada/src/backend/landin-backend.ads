@@ -2,7 +2,8 @@
 --
 --  `tour.md` [1550] says the frame pointer is always set up, and
 --  `Landin.IR`'s header says a slot "has no address, no offset and no
---  size" because "where it lives is R1.80's frame question".  This is
+--  size" because "where it lives is the backend's frame question".  This
+--  is
 --  that answer, and it is deliberately target-neutral: an offset here is
 --  a count of target bytes and nothing below asks the host how wide a
 --  thing is.  Which register the frame pointer is, and how a store to
@@ -24,9 +25,10 @@
 --
 --  bool is one byte here.  [0150] says a one-bit field outside a packed
 --  struct "occupies the next machine width", and the next machine width
---  above one bit is a byte.  R2.10 owns layout in general and may have
---  more to say about a bool inside an aggregate; a frame cell is not an
---  aggregate, and this item cannot lay out a frame without an answer.
+--  above one bit is a byte.  The target's data layout owns layout in
+--  general and has more to say about a bool inside an aggregate; a frame
+--  cell is not an aggregate, and a frame cannot be laid out without an
+--  answer.
 
 private with Ada.Containers.Vectors;
 

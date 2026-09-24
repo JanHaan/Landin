@@ -90,8 +90,8 @@ package Landin.Platform is
    --  A tool run is described, not spelled: a program name and a list of
    --  arguments, never a shell command line to be re-parsed.  Which
    --  assembler and linker a target uses is not settled here and no target
-   --  description carries them yet; that arrives with R1.80, the first
-   --  work that has something to assemble.
+   --  description carries them: `Landin.Backend.Toolchain` names them from
+   --  the target's triplet.
    ---------------------------------------------------------------------
 
    --  How a run ended, which is not the same question as what it returned.
@@ -102,10 +102,10 @@ package Landin.Platform is
    --  separate: the adapter sends a signal to stop the child, but that does
    --  not make an overlong run a program-generated trap.
    --
-   --  R1.80 needs the distinction and not the encoding: `spec.md` [1960]
-   --  says a trap's operating-system signal or status is not stable program
-   --  behaviour, so a caller may ask whether a program ended normally and
-   --  may not ask which signal ended it.  Nothing here carries a signal
+   --  The native path needs the distinction and not the encoding: `spec.md`
+   --  [1960] says a trap's operating-system signal or status is not stable
+   --  program behaviour, so a caller may ask whether a program ended normally
+   --  and may not ask which signal ended it.  Nothing here carries a signal
    --  number, deliberately.
    type Termination is (Exited, Signaled, Timed_Out);
 

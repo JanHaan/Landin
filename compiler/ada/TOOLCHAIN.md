@@ -1,7 +1,7 @@
 # Pinned toolchain
 
-`ROADMAP.md` R0.20 requires one canonical Ada toolchain, recorded exactly,
-reproduced from a clean environment, and named without a provider.
+The bootstrap has one canonical Ada toolchain, recorded exactly, reproduced
+from a clean environment, and named without a provider.
 
 ## Canonical release
 
@@ -19,8 +19,8 @@ compiler; the pin is the compiler version, not the distributor.
 
 ## External binding-generator frontend
 
-R4.40's `bindings/generate.py` is a separate source tool, not part of the Ada
-bootstrap and not a C or LLVM product backend.  The Linux environments provide
+The C binding generator, `bindings/generate.py`, is a separate source tool,
+not part of the Ada bootstrap and not a C or LLVM product backend.  The Linux environments provide
 Clang 19.1.7 as the external C11 header frontend and compiler for its generated
 C adapters.  The selected target is always `x86_64-pc-linux-gnu`; on the
 gate and local container, `clang-19` comes from the existing `debian/stable`
@@ -39,7 +39,7 @@ uses its existing package-set provenance.
 
 ## Native macOS environment
 
-R5.10's `scripts/macos.sh` validates the native arm64 bootstrap in both modes.
+`scripts/macos.sh` validates the native arm64 bootstrap in both modes.
 GNAT and GPRbuild retain the canonical pins above. The Apple environment is
 recorded in `environments/macos-arm64/policy.json`:
 
@@ -58,12 +58,12 @@ linking, execution and an LLDB stop/resume before building and running
 `SDKROOT` to the builds. These are host validation tools, not new bootstrap
 libraries. See `environments/macos-arm64/README.md` for the commands, expected
 historical Linux runtime-case refusal and bounded resource probes. A Linux container
-cannot supply this evidence. R5.40 supplies emitted Darwin source debugging;
-R5.50 requires matching full hosted parity acceptance in both compiler modes.
+cannot supply this evidence, nor emitted Darwin source debugging, nor full
+hosted parity in both compiler modes: all three need a Mac run.
 
 ## External source debugger
 
-R4.60's `scripts/debug.sh` uses GDB and GNU binutils to inspect and run the
+`scripts/debug.sh` uses GDB and GNU binutils to inspect and run the
 emitted Linux x86-64 executable. They are external validation tools, not
 bootstrap dependencies. The Debian gate and local Linux image install `gdb`
 from their existing package channel; the Linux nix shell takes it from
@@ -174,14 +174,14 @@ not evidence: a result that only reproduces on an unpinned compiler is not a
 result. Changing the pin is a recorded decision, not a side effect of an
 upgrade.
 
-R5.40 additionally pins dsymutil and dwarfdump to `Apple LLVM version 21.0.0`
-in the native Mac policy. Their actual paths and binary hashes are retained
+Darwin source debugging additionally pins dsymutil and dwarfdump to
+`Apple LLVM version 21.0.0` in the native Mac policy. Their actual paths and binary hashes are retained
 with LLDB sessions and Mach-O debug artifacts.
 
 ## External embedded environment tools
 
-R6.10 separately pins Arm EABI GCC, binutils, GDB, QEMU and Renode in
-`environments/cortex-m/tools.lock.json`. The
+The Cortex-M execution profile separately pins Arm EABI GCC, binutils, GDB,
+QEMU and Renode in `environments/cortex-m/tools.lock.json`. The
 [profile guide](../../environments/cortex-m/README.md) gives exact versions,
 options and native Debian reproduction. They compile only small environment
 controls, are not Ada bootstrap dependencies and do not enable a Landin
@@ -190,12 +190,13 @@ Cortex-M backend.
 
 ## Cortex-M emitted-code runtime
 
-R6.50's external execution harness uses the existing pinned Arm tools in
+The Cortex-M backend's external execution harness uses the existing pinned
+Arm tools in
 [`environments/cortex-m/tools.lock.json`](../../environments/cortex-m/tools.lock.json).
 Generated arithmetic may require the GCC 14.2.1 `thumb/v6-m/nofp/libgcc.a`
 multilib. This is a target runtime dependency, not an Ada bootstrap dependency
 or a C backend. Each linked test records its archive hash, requested helpers,
 map members, ELF attributes and unresolved-symbol check. The
 [target guide](../../docs/targets.md#runtime-helper-boundary) records provenance,
-calling conventions and the R6.60/R6.70 freestanding handoff. Cortex executable
-linking through `refine` remains refused.
+calling conventions and the handoff to compiler-owned startup and the
+freestanding core. Cortex executable linking through `refine` remains refused.

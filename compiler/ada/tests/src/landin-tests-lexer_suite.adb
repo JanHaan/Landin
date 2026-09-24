@@ -411,7 +411,7 @@ package body Landin.Tests.Lexer_Suite is
         (Item,
          Landin.Tokens.Digit_Span
            (Landin.Tokens.Token_At (Stream, 1)).First = 2,
-         "and the digit span skips the prefix, so R1.60 need not");
+         "and the digit span skips the prefix, so the checker need not");
 
       declare
          Wrong : Landin.Tokens.Token_Stream;
@@ -622,9 +622,9 @@ package body Landin.Tests.Lexer_Suite is
         (Item, Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant,
          "a scalar escape is not accepted in a byte context");
 
-      --  R4.21: a literal that may still be text is read to its end, so
-      --  an escape after `\u{...}` is judged, and the codepoint answer
-      --  points at the first codepoint escape.
+      --  A literal that may still be text is read to its end, so an escape
+      --  after `\u{...}` is judged, and the codepoint answer points at the
+      --  first codepoint escape.
       Decode ("""\u{41}\q""");
       Landin.Testing.Check
         (Item, Fault = Landin.Tokens.Text.Unknown_Escape,

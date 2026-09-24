@@ -7,17 +7,17 @@ with Landin.Machine;
 --  its children.  It is a table and not a pointer structure on purpose, and
 --  the reason is the four stages that read it.
 --
---  R1.50 resolves names, R1.60 checks, R1.70 lowers and R4.60 needs the
---  provenance in debug information.  Each of those wants to say something
---  about every node -- which declaration a name resolves to, what type an
---  expression has, which IR value a node produced -- and none of them may
---  add a field here, because this package must not know that types or
---  values exist.  A Node_Id is an integer in 1 .. Node_Count, so each of
---  them says it in an array of its own, sized once, indexed in constant
---  time, with no map, no hashing and no order that depends on where the
---  host put an object.  A tree of tagged records would have made those side
---  tables maps keyed on access values, and an access value is not something
---  a deterministic report can be ordered by.
+--  Name resolution resolves names, the checker checks, the lowering lowers and
+--  source debugging needs the provenance in debug information.  Each of those
+--  wants to say something about every node -- which declaration a name
+--  resolves to, what type an expression has, which IR value a node produced --
+--  and none of them may add a field here, because this package must not know
+--  that types or values exist.  A Node_Id is an integer in 1 .. Node_Count, so
+--  each of them says it in an array of its own, sized once, indexed in
+--  constant time, with no map, no hashing and no order that depends on where
+--  the host put an object.  A tree of tagged records would have made those
+--  side tables maps keyed on access values, and an access value is not
+--  something a deterministic report can be ordered by.
 --
 --  Two invariants come out of building the table bottom up, and both are
 --  stated as contracts rather than described in a paragraph.  A child's
@@ -26,7 +26,7 @@ with Landin.Machine;
 --  is one forward loop with no recursion and no work list.  And a child's
 --  extent lies inside its parent's, because a parent's extent is the union
 --  of its own tokens and its children's, so a span taken here still names
---  bytes inside the construct that R4.60 will attribute code to.
+--  bytes inside the construct that source debugging attributes code to.
 --
 --  What it costs, said plainly.  Every node has one Ada type, so nothing
 --  stops a caller passing a statement where an expression is wanted; the
@@ -39,9 +39,9 @@ with Landin.Machine;
 --
 --  Nothing here is a diagnostic.  A node that stands for something the
 --  parser could not read is an Error node, and the diagnostic that explains
---  it was raised where the reading failed: R1.40's codes are the catalogue's
---  and Landin.Diagnostics.Syntactic's, never this package's.  An ill-formed
---  program is data.
+--  it was raised where the reading failed: the parser's codes are the
+--  catalogue's and Landin.Diagnostics.Syntactic's, never this package's.  An
+--  ill-formed program is data.
 --
 --  Nothing here asks the host anything, and nothing here is a language
 --  decision this package is allowed to make.  The scalar spellings
@@ -138,10 +138,10 @@ package Landin.Syntax is
       --  [0970]'s second early exit.  Its first slot is the atom and its
       --  second the optional `when` condition.
       Fail_Statement,
-      --  R4.10's loop control.  A break carries its optional `with` value,
-      --  both transfers carry an optional `when` guard and target label in
-      --  Name, and a loop carries its optional label, condition, body and
-      --  `complete` block separately.
+      --  Loop control.  A break carries its optional `with` value, both
+      --  transfers carry an optional `when` guard and target label in Name,
+      --  and a loop carries its optional label, condition, body and `complete`
+      --  block separately.
       Break_Statement,
       Continue_Statement,
       Loop_Statement,
@@ -243,11 +243,11 @@ package Landin.Syntax is
       Size_Of,
       Align_Of,
       --  [0370]'s array-length query.  Its one operand is deliberately only
-      --  a direct name in the first R2.20 slice.
+      --  a direct name.
       Len_Of,
       --  [0380]/[0430]'s address expression.  Its child is the ordinary
       --  place syntax whose address is taken; lifetime and addressability
-      --  are later R2.50 checking facts, not parser classifications.
+      --  are the reference checker's facts, not parser classifications.
       Address_Of,
       --  [0460]/[0470]'s context-typed integer-to-pointer conversion.
       Pointer_Conversion,
@@ -418,7 +418,7 @@ package Landin.Syntax is
    --  Which kinds carry a name at all, so Name's precondition is written
    --  once.  A declaration's own name is a field of the declaring node; a
    --  use of a name is always a Name_Reference node of its own, which is
-   --  what makes R1.50 a scan for one kind rather than a walk looking for
+   --  what makes resolution a scan for one kind rather than a walk looking for
    --  identifiers in seven positions.
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Atom_Declaration | Binding
@@ -487,11 +487,11 @@ package Landin.Syntax is
    --  The one token that decides what this node is: the operator of a
    --  binary node, the `if` of a branch, the declared name of a binding or
    --  a function, the literal itself.  Two readers want this and not the
-   --  extent: a diagnostic puts its caret here, and R4.60 puts a line-table
-   --  row here, because a statement spanning four lines is attributed to
-   --  one of them and this is the one.  For a declaration it is also where
-   --  the declared name is written, which is the span R1.50's duplicate
-   --  report has to point at.
+   --  extent: a diagnostic puts its caret here, and source debugging puts a
+   --  line-table row here, because a statement spanning four lines is
+   --  attributed to one of them and this is the one.  For a declaration it is
+   --  also where the declared name is written, which is the span name
+   --  resolution's duplicate report has to point at.
    --
    --  Empty only for an Error node that stands for something absent: there
    --  is no token to point at, and an empty span pointing between two bytes
@@ -501,9 +501,9 @@ package Landin.Syntax is
           Post => Landin.Source.Contains
                     (Where (Of_Tree, Id), Anchor'Result);
 
-   --  The pair R0.40 built for this: source identity and span together, in
-   --  the form the IR and the debug stages already carry.  Nothing here
-   --  writes to a Landin.Provenance.Table; see the header.
+   --  The pair the source foundations built for this: source identity and span
+   --  together, in the form the IR and the debug stages already carry.
+   --  Nothing here writes to a Landin.Provenance.Table; see the header.
    function Origin (Of_Tree : Tree; Id : Node_Id)
      return Landin.Provenance.Origin
      with Pre  => Contains (Of_Tree, Id),
@@ -513,7 +513,7 @@ package Landin.Syntax is
    --  What a node says
    ------------------------------------------------------------------
 
-   --  Identity, not bytes: interned by the scan, so R1.50 compares two
+   --  Identity, not bytes: interned by the scan, so resolution compares two
    --  integers.
    function Name (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Names.Name_Id
@@ -523,7 +523,7 @@ package Landin.Syntax is
    --  The base and the digits of an integer literal, carried over from the
    --  token rather than re-derived: a base prefix is a lexical fact and
    --  Landin.Tokens owns it.  The value is still not computed, because an
-   --  integer literal is untyped [0190] until R1.60 gives it a context.
+   --  integer literal is untyped [0190] until the checker gives it a context.
    function Base (Of_Tree : Tree; Id : Node_Id)
      return Landin.Tokens.Integer_Base
      with Pre => Contains (Of_Tree, Id)
@@ -664,9 +664,9 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                             in Pointer_Type | Slice_Type;
 
-   --  No Error node anywhere in this subtree, so R1.60 may check it and
-   --  R1.70 may lower it.  A hole poisons every node above it, which is how
-   --  a syntax error produces one diagnostic instead of a cascade of type
+   --  No Error node anywhere in this subtree, so the checker may check it and
+   --  the lowering may lower it.  A hole poisons every node above it, which is
+   --  how a syntax error produces one diagnostic instead of a cascade of type
    --  errors about a hole.
    function Is_Sound (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id);
@@ -925,7 +925,7 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Break_Statement;
 
-   --  R4.10's loop body.  It is a Block and therefore owns the same lexical
+   --  A loop's body.  It is a Block and therefore owns the same lexical
    --  cleanup and scope rules as a branch body.
    function Loop_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

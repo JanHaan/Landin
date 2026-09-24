@@ -13,10 +13,10 @@ package Landin.Platform.Native.Tools is
    --  that loops forever hung the whole gate without naming itself; a run
    --  past the limit has its process group killed and its direct child reaped,
    --  then is reported as Timed_Out, with a line in
-   --  its output saying so (R4.21).  Ten minutes is far past any tool the
-   --  compiler runs and any fixture the harness executes.
-   --  Descendants inherit the group. This is supervision of ordinary tools,
-   --  not confinement of a process that deliberately leaves its group.
+   --  its output saying so.  Ten minutes is far past any tool the compiler
+   --  runs and any fixture the harness executes.  Descendants inherit the
+   --  group. This is supervision of ordinary tools, not confinement of a
+   --  process that deliberately leaves its group.
    procedure Set_Limit (Host : in out Native_Tool_Runner; Seconds : Duration);
 
    --  A tool that cannot be started, or whose capture cannot be read, raises

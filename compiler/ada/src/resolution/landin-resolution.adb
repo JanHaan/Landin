@@ -347,7 +347,7 @@ package body Landin.Resolution is
 
       --  The anchor and not the extent: Landin.Syntax promises that a
       --  declaration's anchor is where its name is written, which is the
-      --  span a duplicate report and R4.60 both point at.
+      --  span a duplicate report and source debugging both point at.
       Site : constant Landin.Provenance.Origin :=
         (Source => Landin.Syntax.Source_Of (Of_Tree),
          Where  => Landin.Syntax.Anchor (Of_Tree, Node));

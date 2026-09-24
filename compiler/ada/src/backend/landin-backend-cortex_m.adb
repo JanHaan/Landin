@@ -49,7 +49,7 @@ package body Landin.Backend.Cortex_M is
 
    --  A source atom identity is neutral.  Cortex gives atoms dense,
    --  nonzero u32 codes in declaration-identity order; zero stays available
-   --  for the successful half of R2.30's failing-call carrier.
+   --  for the successful half of the failing-call carrier.
    function Atom_Code
      (Of_Unit : Landin.IR.Unit;
       Identity : Landin.IR.Declaration_Id) return Positive;

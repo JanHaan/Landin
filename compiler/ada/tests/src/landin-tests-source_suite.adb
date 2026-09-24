@@ -39,8 +39,8 @@ package body Landin.Tests.Source_Suite is
         (Item, Line_Text (Snap, 3), "three", "third line");
    end Line_Feed_Maps_Lines;
 
-   --  R4.21: a caller's string keeps its own lower bound, and the
-   --  snapshot's slices index from one whatever it was.
+   --  A caller's string keeps its own lower bound, and the snapshot's slices
+   --  index from one whatever it was.
    procedure Bounds_Are_The_Snapshots_Own
      (Item : in out Landin.Testing.Context);
 

@@ -275,13 +275,12 @@ package body Landin.Tests.Targets_Suite is
    ------------------------------------------------------------------
    --  The recorded layout
    --
-   --  R2.10 asks for synthetic 32-bit layout goldens before a Cortex
-   --  backend exists, and the reason is the ordering: a description is
-   --  the only thing a compiler with no such machine can be held to, and
-   --  a table nobody wrote down is a model that drifts while every case
-   --  still passes.  Both described targets are recorded, so the file
-   --  says what differs between a 64-bit and a 32-bit machine as well as
-   --  what each one is.
+   --  The synthetic 32-bit layout goldens were asked for before a Cortex
+   --  backend existed, and the reason is the ordering: a description is the
+   --  only thing a compiler with no such machine can be held to, and a table
+   --  nobody wrote down is a model that drifts while every case still passes.
+   --  Both described targets are recorded, so the file says what differs
+   --  between a 64-bit and a 32-bit machine as well as what each one is.
    ------------------------------------------------------------------
 
    type Size_List is array (Positive range <>) of Scalar_Size;

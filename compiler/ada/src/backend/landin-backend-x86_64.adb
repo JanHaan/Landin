@@ -57,7 +57,7 @@ package body Landin.Backend.X86_64 is
 
    --  A source atom identity is neutral.  Linux x86-64 gives atoms dense,
    --  nonzero u32 codes in declaration-identity order; zero stays available
-   --  for the successful half of R2.30's failing-call carrier.
+   --  for the successful half of the failing-call carrier.
    function Atom_Code
      (Of_Unit : Landin.IR.Unit;
       Identity : Landin.IR.Declaration_Id) return Positive;
@@ -180,9 +180,9 @@ package body Landin.Backend.X86_64 is
 
    --  The internal scalar convention uses the System V integer registers
    --  in their ordinary order, then one eight-byte stack slot per remaining
-   --  argument.  R4.40 owns C's complete classification; this is only the
-   --  scalar convention the enabled Landin kernel needs.  Naming the prefix
-   --  once keeps caller and callee placement in agreement.
+   --  argument.  C's complete classification is the C boundary's; this is
+   --  only the scalar convention the enabled Landin kernel needs.  Naming
+   --  the prefix once keeps caller and callee placement in agreement.
    Register_Arguments : constant := 6;
 
    function Argument_Register
@@ -793,7 +793,7 @@ package body Landin.Backend.X86_64 is
         is (Local_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
             & "_" & Trimmed (Landin.IR.Block_Id'Image (Block)));
 
-      --  R2.70's baseline sharing is representation-class sharing: two
+      --  Baseline evidence sharing is representation-class sharing: two
       --  concrete views may use one machine body only when every retained
       --  operation has the same physical meaning.  Evidence identity may
       --  differ, because the hidden table parameter supplies that choice;
@@ -4616,7 +4616,7 @@ package body Landin.Backend.X86_64 is
                      --  A C callee reads a narrow integer argument as the
                      --  32-bit register: GCC and Clang assume the caller
                      --  extended it, and passing only the low byte left the
-                     --  upper bits to chance (R4.21).  The internal
+                     --  upper bits to chance.  The internal
                      --  convention keeps the exact width for Landin callees,
                      --  which copy the width they declared.
                      External : constant Boolean :=

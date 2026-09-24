@@ -1092,8 +1092,8 @@ package body Landin.Tests.Parser_Suite is
 
    --  Every prefix of every corpus program, cut at every token boundary.
    --  A truncated file is the commonest broken file there is -- it is what
-   --  an editor holds halfway through a line -- and the claim R1.40 owes
-   --  is that none of them crashes and each still yields a tree.
+   --  an editor holds halfway through a line -- and the claim a recovering
+   --  parser owes is that none of them crashes and each still yields a tree.
    procedure Survives_Every_Truncation
      (Item : in out Landin.Testing.Context);
 
@@ -1407,8 +1407,8 @@ package body Landin.Tests.Parser_Suite is
          "the report uses the nesting code");
    end Deep_Nesting_Is_Reported;
 
-   --  R4.21: a selector chain and a run of `ptr` are read iteratively, but
-   --  every later walk recurses over them, so they meet the same floor.
+   --  A selector chain and a run of `ptr` are read iteratively, but every
+   --  later walk recurses over them, so they meet the same floor.
    procedure Deep_Chains_Are_Reported
      (Item : in out Landin.Testing.Context);
 
@@ -1890,7 +1890,7 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Parameterized_Structs_Are_Parsed;
 
-   --  R2.50's first increment is representation only.  This case keeps the
+   --  Reference syntax is representation only.  This case keeps the
    --  pointer/slice permission bit, parameter modifiers, return-source run,
    --  generic signature positions, `addr` place and ordinary `.val` member
    --  selection distinct without asking checking what any of them means.
@@ -2057,7 +2057,7 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Reference_Signature_Syntax_Is_Represented;
 
-   --  R2.60 begins at syntax only.  This holds the complete contextual
+   --  This case stays at syntax.  It holds the complete contextual concept
    --  source shape -- including names that remain ordinary outside it --
    --  without asking resolution or checking to validate a conformance.
    procedure Concepts_And_Conformances_Are_Represented

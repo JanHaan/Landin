@@ -9,12 +9,12 @@
 --
 --  There is no reader and there will be none.  `Landin.IR`'s header rules
 --  one out -- "a reader would be both a second constructor of an IR and
---  the first half of the serialised stage protocol R0.60 refused to
---  freeze" -- so R1.70's "round-trip textual dumps" cannot mean parse
+--  the first half of the serialised stage protocol the stage seams
+--  refuse to freeze" -- so a "round-trip textual dump" cannot mean parse
 --  back.  It is read here as regenerate and compare: the recorded
 --  artefact is a fixed point of this function over the corpus, and the
 --  trip is closed by re-running the suite after recording rather than by
---  a parser.  Whether that is what the sentence meant is R1.90's to say.
+--  a parser.
 --
 --  Not a stable interface.  Every word below that the language does not
 --  already spell -- item, slot, block, param, datum, callee, target,
@@ -28,9 +28,9 @@
 --  Every instruction carries one, and a byte offset in a golden moves
 --  when a comment above it is edited, so every documentation change would
 --  rewrite the artefact and the diff would stop meaning anything.  What
---  R4.60 needs pinned is that an instruction is attributed to the right
---  token, and that is a case about one program rather than a column in
---  every line of a corpus-wide file.
+--  source debugging needs pinned is that an instruction is attributed to
+--  the right token, and that is a case about one program rather than a
+--  column in every line of a corpus-wide file.
 --
 --  Nothing here asks how wide anything is.  A type is printed by name, so
 --  usize stays usize [1870]; a `Number` is [1770]'s magnitude and
@@ -52,7 +52,7 @@ with Landin.Source.Names;
 package Landin.IR.Dump is
 
    --  Meanings puts a name on an item and a slot and a sort on a block's
-   --  scope: `Landin.IR` holds identities and refers to R1.50's table
+   --  scope: `Landin.IR` holds identities and refers to the resolution table
    --  rather than copying it, so a dump that wants the names is handed
    --  the same two tables `Landin.Syntax.Dump` is.
    --

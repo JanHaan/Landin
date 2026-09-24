@@ -9,7 +9,7 @@
 --
 --  The parse never fails.  A construct it cannot read becomes an Error node
 --  of the band it needed and a diagnostic beside it, and the parse resumes:
---  an ill-formed program is data [0950], and R1.40's exit evidence is that a
+--  an ill-formed program is data [0950], and the parser's evidence is that a
 --  malformed file yields several ordered diagnostics and no crash.  The one
 --  thing that can raise is Landin.Compiler_Defect, and only for a defect in
 --  this package.

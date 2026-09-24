@@ -5,22 +5,23 @@
 --  declared.  It exists because [0130] and [0140] are two sentences about
 --  scopes -- order inside a module does not matter, an inner scope may
 --  shadow an outer name -- and a rule about an inner scope means nothing
---  until the inner ones are named.  R1.50 needed them named, so the tour
---  names them.  This package is [1840] made addressable, for the
+--  until the inner ones are named.  Name resolution needed them named, so the
+--  specification names them.  This package is [1840] made addressable, for the
 --  constructs [1740]-[1820] enable and no others.
 --
 --  Three shapes, and each one is here for a reason that is not taste.
 --
 --  A declared thing is a Landin.Provenance.Declaration_Id and not an
---  identity of this package's own.  R1.60 will want a type per
---  declaration, R1.70 an IR value per declaration and R4.60 a debug entry
+--  identity of this package's own.  The checker wants a type per declaration,
+--  the lowering an IR value per declaration and source debugging a debug entry
 --  per declaration, and each of those is an array indexed by that number.
 --  Whoever owns the numbering is depended on by all four, so it has to be
 --  the package that knows nothing: Landin.Provenance holds where a
 --  declaration is written and refuses to know what one means.  That is the
 --  same layering Node_Id already has -- the dense integer lives with the
 --  representation and the meanings live in side tables -- and it makes
---  R1.50 the first real writer of a table R0.40 built for it.
+--  name resolution the first real writer of a table the source foundations
+--  built for it.
 --
 --  A resolution is one array of Declaration_Id per compilation, laid out
 --  as one run per source with a first index, exactly as Landin.Syntax puts
@@ -47,23 +48,22 @@
 --  holds a Type_Name node to exactly those -- check.py compares that table
 --  with the tour's own `type` rule -- so a second table here would be a
 --  second authority on a question the tour has already answered once.
---  When R2.20 lets a program declare a type, a type position becomes a
---  reference like any other and nothing above changes.
+--  A program that declares a type makes a type position a reference like any
+--  other, and nothing above changes.
 --
 --  It also holds no diagnostic.  A duplicate is a lookup that found
 --  something and an unresolved name is one that did not; the codes belong
 --  to Landin.Diagnostics.Resolution, and this package's contracts say
 --  which of the two happened without spelling either.
 --
---  A refused import is the third answer, and R7.40 gives it a name here for
---  the same reason: an import that named a private or absent member binds
---  nothing, so every later use of that name is a lookup that did not find
---  something, and the stage above would report each one as a misspelling.
---  Refuse_Import records that the file's import scope already answered for
---  the name, and Import_Refused is what a caller asks before it reports.
---  Visible is deliberately unchanged -- the name still resolves to nothing,
---  which is what it does -- so this decides what is said and never what is
---  accepted.
+--  A refused import is the third answer, and D242 gives it a name here for the
+--  same reason: an import that named a private or absent member binds nothing,
+--  so every later use of that name is a lookup that did not find something,
+--  and the stage above would report each one as a misspelling.  Refuse_Import
+--  records that the file's import scope already answered for the name, and
+--  Import_Refused is what a caller asks before it reports.  Visible is
+--  deliberately unchanged -- the name still resolves to nothing, which is what
+--  it does -- so this decides what is said and never what is accepted.
 
 private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
@@ -251,7 +251,7 @@ package Landin.Resolution is
      with Pre  => Contains (Of_Table, Id),
           Post => Holds (Of_Table, Scope_Of'Result);
 
-   --  Which tree and which node declared it, so R1.60 can read the type
+   --  Which tree and which node declared it, so the checker can read the type
    --  the declaration was written with.  The source is here as well as in
    --  the site table because a Node_Id names nothing without its tree;
    --  the two cannot disagree, because Declare_Name writes both from one
@@ -266,9 +266,9 @@ package Landin.Resolution is
      with Pre  => Contains (Of_Table, Id),
           Post => Node_Of'Result /= Landin.Syntax.No_Node;
 
-   --  `public` as [1740] wrote it, carried so that R3.10 has it without
-   --  reading the tree again.  Always False below the program scope: the
-   --  parser refused the word on a statement and said so.
+   --  `public` as [1740] wrote it, carried so that module resolution has it
+   --  without reading the tree again.  Always False below the program scope:
+   --  the parser refused the word on a statement and said so.
    function Is_Public (Of_Table : Table; Id : Declaration_Id)
      return Boolean
      with Pre => Contains (Of_Table, Id);
@@ -345,11 +345,12 @@ package Landin.Resolution is
      with Pre => Is_Prepared (Of_Table)
                  and then Has_Import (Of_Table, Source, Name);
 
-   --  R7.40 (R551-30): the import itself was refused, so the name has no
-   --  continuation identity and no later use of it can be answered.  The
-   --  origin is the import that failed, which is where the one report the
-   --  program gets already points.  Repeating it is harmless: one refused
-   --  import name is one refusal however many times it is written.
+   --  A refused import answers for its name (D242): the import itself was
+   --  refused, so the name has no continuation identity and no later use of it
+   --  can be answered.  The origin is the import that failed, which is where
+   --  the one report the program gets already points.  Repeating it is
+   --  harmless: one refused import name is one refusal however many times it
+   --  is written.
    procedure Refuse_Import
      (Into   : in out Table;
       Source : Landin.Source.Source_Id;
@@ -386,7 +387,8 @@ package Landin.Resolution is
    --
    --  Sites gets the anchor and not the extent, because Landin.Syntax
    --  promises that a declaration's anchor is where its name is written,
-   --  and that is the span both a duplicate report and R4.60 point at.
+   --  and that is the span both a duplicate report and source debugging point
+   --  at.
    --
    --  A name already declared in this scope is refused by contract rather
    --  than recorded twice.  That is the recovery as well as the rule: the
@@ -430,9 +432,9 @@ package Landin.Resolution is
 
    --  Three answers and no fourth.  Unresolved is a value and not an
    --  absence, for the reason an unreadable construct is an Error node and
-   --  not a gap: the program is data, and R1.60 has to be able to decline
-   --  to type a node without re-deciding what kind of node it was.  One
-   --  number meaning both "not a name" and "not found" is how a missing
+   --  not a gap: the program is data, and the checker has to be able to
+   --  decline to type a node without re-deciding what kind of node it was.
+   --  One number meaning both "not a name" and "not found" is how a missing
    --  name becomes a cascade.
    --
    --  Derived rather than stored, which is what Landin.Syntax.Has_Name
@@ -465,14 +467,14 @@ package Landin.Resolution is
    --  signature and its body, an arm, and an `else`.
    --
    --  It is here and not worked out again by a later stage, and that is
-   --  the point of it.  R1.70's lowering has to give every block a scope,
-   --  and Landin.IR's header says why it may not derive one: "a scope tree
-   --  here would be a second authority on a question R1.50 answered once".
-   --  Rebuilding it is also the easy thing to get quietly wrong -- an
+   --  the point of it.  The lowering has to give every block a scope, and
+   --  Landin.IR's header says why it may not derive one: "a scope tree here
+   --  would be a second authority on a question name resolution answered
+   --  once".  Rebuilding it is also the easy thing to get quietly wrong -- an
    --  arm's blocks landing in the function's body scope reads correctly
    --  and breaks [1840]'s sibling rule, which is what
-   --  `positive/arm-scopes-are-siblings` exists to catch.  R4.60 wants the
-   --  same answer, to say which instructions a scope covers.
+   --  `positive/arm-scopes-are-siblings` exists to catch.  Source debugging
+   --  wants the same answer, to say which instructions a scope covers.
    function Scope_At
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -529,7 +531,7 @@ package Landin.Resolution is
    --  written function type whose labels declare nothing [1800].  Resolution
    --  therefore records a runtime position rather than inventing a lexical
    --  declaration for the label.  Zero means no matching position was found;
-   --  the later R2.50 checker owns that source diagnostic and the body-to-
+   --  the reference checker owns that source diagnostic and the body-to-
    --  signature agreement.
    function Source_Parameter_Position
      (Of_Table : Table;

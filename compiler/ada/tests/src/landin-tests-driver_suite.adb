@@ -144,8 +144,8 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "--wat"), "the option is named");
    end Unknown_Options_Are_Diagnosed;
 
-   --  R4.21: an emission request without a source, and an empty root,
-   --  are misuse rather than a silent success or a search from `/`.
+   --  An emission request without a source, and an empty root, are misuse
+   --  rather than a silent success or a search from `/`.
    procedure Emission_Without_Sources_Is_Misuse
      (Item : in out Landin.Testing.Context);
 
@@ -378,7 +378,7 @@ package body Landin.Tests.Driver_Suite is
    end An_Empty_Source_Is_Accepted;
 
    ------------------------------------------------------------------
-   --  R3.10: directory modules and ordered roots
+   --  Directory modules and ordered roots
    ------------------------------------------------------------------
 
    procedure Directory_Arguments_Allow_Trailing_Separators
@@ -853,8 +853,8 @@ package body Landin.Tests.Driver_Suite is
          "a refused target is not announced as selected");
    end Targets_Are_Selected_By_Name;
 
-   --  Help is a documented surface: R0.50 asks for deterministic help, and
-   --  nothing exercised it.
+   --  Help is a documented surface: it has to be deterministic, and nothing
+   --  exercised it.
    procedure Help_Is_Printed (Item : in out Landin.Testing.Context);
 
    procedure Help_Is_Printed (Item : in out Landin.Testing.Context) is
@@ -1093,7 +1093,7 @@ package body Landin.Tests.Driver_Suite is
 
 
    ------------------------------------------------------------------
-   --  R1.80: what a request leaves behind
+   --  What a request leaves behind
    --
    --  A fake filesystem and a fake tool runner, so the whole path from a
    --  request to an invocation is asserted without a disk or a process.
@@ -1488,9 +1488,9 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Killed_Toolchain_Is_Reported;
 
-   --  R2.30 retires the register-only backend limit.  A routine with a
-   --  seventh scalar parameter is ordinary accepted input to emission, not
-   --  a backend refusal.
+   --  The register-only backend limit is retired.  A routine with a seventh
+   --  scalar parameter is ordinary accepted input to emission, not a backend
+   --  refusal.
    procedure A_Seventh_Parameter_Is_Emitted
      (Item : in out Landin.Testing.Context);
 
@@ -2138,10 +2138,10 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Builtin_Imports_Never_Search_Roots;
 
-   procedure R440_Helper_Refusals_Have_No_Effects
+   procedure Hosted_Helper_Refusals_Have_No_Effects
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Helper_Refusals_Have_No_Effects
+   procedure Hosted_Helper_Refusals_Have_No_Effects
      (Item : in out Landin.Testing.Context)
    is
       procedure Check (Source, Message : String; Executable : Boolean);
@@ -2211,12 +2211,12 @@ package body Landin.Tests.Driver_Suite is
             "compiler-owned helper `_landin_host_errno`"
             & " cannot be defined by source", Executable);
       end loop;
-   end R440_Helper_Refusals_Have_No_Effects;
+   end Hosted_Helper_Refusals_Have_No_Effects;
 
-   procedure R440_Hosted_Linkage_Has_No_Effects
+   procedure Hosted_Main_Linkage_Has_No_Effects
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Hosted_Linkage_Has_No_Effects
+   procedure Hosted_Main_Linkage_Has_No_Effects
      (Item : in out Landin.Testing.Context)
    is
       Main : constant String := "public main: () -> (code: i32) =" & LF
@@ -2331,12 +2331,12 @@ package body Landin.Tests.Driver_Suite is
                "another module's native main does not select hosted startup");
          end;
       end;
-   end R440_Hosted_Linkage_Has_No_Effects;
+   end Hosted_Main_Linkage_Has_No_Effects;
 
-   procedure R440_Qualified_Alias_Conversions
+   procedure Qualified_Import_Alias_Conversions
      (Item : in out Landin.Testing.Context);
 
-   procedure R440_Qualified_Alias_Conversions
+   procedure Qualified_Import_Alias_Conversions
      (Item : in out Landin.Testing.Context)
    is
       procedure Check (Source, Code, Message : String);
@@ -2403,12 +2403,12 @@ package body Landin.Tests.Driver_Suite is
         ("use: () -> (result: u8) =" & LF
          & "    result = aliases.hidden(1)" & LF & "end use" & LF,
          "L0202", "hidden");
-   end R440_Qualified_Alias_Conversions;
+   end Qualified_Import_Alias_Conversions;
 
-   procedure R491_Refusals_Have_No_Effects
+   procedure Refused_Emissions_Have_No_Effects
      (Item : in out Landin.Testing.Context);
 
-   procedure R491_Refusals_Have_No_Effects
+   procedure Refused_Emissions_Have_No_Effects
      (Item : in out Landin.Testing.Context)
    is
       procedure Check
@@ -2646,8 +2646,8 @@ package body Landin.Tests.Driver_Suite is
             & "callback := () -> none = break completion end break "
             & "completion end completion end f" & ASCII.LF,
             "L0110", 1, Executable);
-         --  R7.20: a value, a scalar callee or a scalar written where a
-         --  type or a struct belongs is a type error, not a refusal.
+         --  D241: a value, a scalar callee or a scalar written where a type or
+         --  a struct belongs is a type error, not a refusal.
          Check
            ("t: type = i32 f: (x: t, t: i32) -> none = end f" & ASCII.LF,
             "L0301", 1, Executable);
@@ -3138,12 +3138,12 @@ package body Landin.Tests.Driver_Suite is
             & LF & "public i32 is readable (read: read_i32)",
             "L0103", 1, Executable);
       end loop;
-   end R491_Refusals_Have_No_Effects;
+   end Refused_Emissions_Have_No_Effects;
 
-   procedure R491_Artifacts_Preserve_Inputs
+   procedure Artifacts_Preserve_Inputs
      (Item : in out Landin.Testing.Context);
 
-   procedure R491_Artifacts_Preserve_Inputs
+   procedure Artifacts_Preserve_Inputs
      (Item : in out Landin.Testing.Context)
    is
       procedure Check
@@ -3245,7 +3245,7 @@ package body Landin.Tests.Driver_Suite is
              Executable => True, Debug => True, Darwin => True);
       Check ("out", "", "", Executable => True,
              Debug => True, Refused => False, Darwin => True);
-   end R491_Artifacts_Preserve_Inputs;
+   end Artifacts_Preserve_Inputs;
 
    procedure Darwin_Contracts (Item : in out Landin.Testing.Context);
 
@@ -3434,7 +3434,7 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Panic_Contracts;
 
-   procedure R720_Labelled_Block_Refusals
+   procedure Labelled_Block_Refusals
      (Item : in out Landin.Testing.Context);
 
    --  [1180]'s labelled bare block.  Its closer's label and a transfer's
@@ -3442,7 +3442,7 @@ package body Landin.Tests.Driver_Suite is
    --  each program below and no negative fixture can hold these parser
    --  refusals: this case does.  A missing or mismatched closer recovers
    --  exactly as the same labelled loop does.
-   procedure R720_Labelled_Block_Refusals
+   procedure Labelled_Block_Refusals
      (Item : in out Landin.Testing.Context)
    is
       function Report_Of (Source : String) return String;
@@ -3555,13 +3555,13 @@ package body Landin.Tests.Driver_Suite is
          "f: () -> none = outer: loop do break outer end inner end f" & LF
          & "g: () -> none = end g" & LF,
          "a labelled bare block closes with `end <label>`");
-   end R720_Labelled_Block_Refusals;
+   end Labelled_Block_Refusals;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
-        (Into, "driver", "R7.20 labelled block refusals",
-         R720_Labelled_Block_Refusals'Access);
+        (Into, "driver", "labelled block refusals",
+         Labelled_Block_Refusals'Access);
       Landin.Testing.Register
         (Into, "driver", "panic handler contracts", Panic_Contracts'Access);
       Landin.Testing.Register
@@ -3583,20 +3583,20 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "explicit sources keep identity",
          Explicit_Sources_Keep_Identity'Access);
       Landin.Testing.Register
-        (Into, "driver", "R4.91 artifacts preserve inputs",
-         R491_Artifacts_Preserve_Inputs'Access);
+        (Into, "driver", "artifacts preserve inputs",
+         Artifacts_Preserve_Inputs'Access);
       Landin.Testing.Register
-        (Into, "driver", "R4.91 refusals have no effects",
-         R491_Refusals_Have_No_Effects'Access);
+        (Into, "driver", "refused emissions have no effects",
+         Refused_Emissions_Have_No_Effects'Access);
       Landin.Testing.Register
-        (Into, "driver", "R4.40 qualified alias conversions",
-         R440_Qualified_Alias_Conversions'Access);
+        (Into, "driver", "qualified import alias conversions",
+         Qualified_Import_Alias_Conversions'Access);
       Landin.Testing.Register
-        (Into, "driver", "R4.40 helper refusals have no effects",
-         R440_Helper_Refusals_Have_No_Effects'Access);
+        (Into, "driver", "hosted helper refusals have no effects",
+         Hosted_Helper_Refusals_Have_No_Effects'Access);
       Landin.Testing.Register
-        (Into, "driver", "R4.40 hosted linkage has no effects",
-         R440_Hosted_Linkage_Has_No_Effects'Access);
+        (Into, "driver", "hosted main linkage has no effects",
+         Hosted_Main_Linkage_Has_No_Effects'Access);
       Landin.Testing.Register
         (Into, "driver", "fixed options are deterministic",
          Fixed_Options_Are_Deterministic'Access);

@@ -1,4 +1,4 @@
---  R1.40's parser, held to the corpus from both sides.
+--  The recovering parser, held to the corpus from both sides.
 --
 --  `check.py` derives every program under `fixtures/positive` from the
 --  grammar in `spec.md` and refuses every one under `negative`.  This

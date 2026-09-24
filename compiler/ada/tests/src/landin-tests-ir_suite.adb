@@ -1,10 +1,9 @@
 --  What Landin.IR promises about where an item's entities live.
 --
---  Every case here builds a Unit by hand, because nothing in the compiler
---  calls Landin.IR yet: R1.70 landed the representation and the lowering
---  is still to come, so a defect in it can only be found by a test that
---  drives the builder directly.  Two were, and both corrupted a Unit
---  silently in a release build.
+--  Every case here builds a Unit by hand, because the representation landed
+--  before the lowering did, and a defect in the builder is found soonest by a
+--  test that drives it directly.  Two were, and both corrupted a Unit silently
+--  in a release build.
 --
 --  The frontend is run for one reason only: Prepare needs a resolution
 --  table and Add_Item needs a Declaration_Id that table holds.  The
