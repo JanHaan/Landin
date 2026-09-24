@@ -98,7 +98,7 @@ Git calls, rendering and uploads have explicit timeouts.
 
 Before activating this protocol, finish or cancel every older Pages job and
 switch manual publishers to the new wrapper. Older scripts do not participate
-in the lock. R4.91 records activation separately from local protocol tests.
+in the lock.
 
 A render or pre-upload approval failure releases its own lock with an exact
 Git lease. An upload failure or timeout retains it: the client cannot prove

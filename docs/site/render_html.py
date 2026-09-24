@@ -1124,8 +1124,9 @@ figure.panel .listing pre{border:0; padding:1rem 1.1rem; font-size:.8rem}
 FENCE = re.compile(r"^```([\w-]*)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 BULLET = re.compile(r"^[-*]\s+(.*)$")
-#  CommonMark limits ordered markers to nine digits.  R4.20's prose wraps
-#  before 4294967295, which must remain a number in the paragraph, not a list.
+#  CommonMark limits ordered markers to nine digits.  A roadmap paragraph once
+#  wrapped before 4294967295, which must remain a number in the paragraph,
+#  not a list.
 NUMBER = re.compile(r"^([0-9]{1,9})\.\s+(.*)$")
 ROW = re.compile(r"^\|(.*)\|\s*$")
 TABLE_RULE = re.compile(r"^\|[\s:|-]+\|\s*$")
@@ -1752,7 +1753,7 @@ def status_parts(text):
 def roadmap_progress(text, recent_count=3):
     """The completed, active, next-planned or endpoint items around the work.
 
-    R7.70 adds the last of those. A roadmap with nothing left to do still has
+    The endpoint lane came last. A roadmap with nothing left to do still has
     a front page, and it says so; a roadmap with work it cannot start does not
     get to use the same lane, so the endpoint is recognised only when no item
     is planned, active or blocked.

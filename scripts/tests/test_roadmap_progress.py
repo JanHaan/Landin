@@ -35,7 +35,7 @@ Depends on: R4.50
 """
 
 ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
-#  R7.70's endpoint: the same two items, with nothing left to do.  It differs
+#  The endpoint: the same two items, with nothing left to do.  It differs
 #  from the blocked fixture below in exactly one status, which is the whole
 #  point -- "everything is done" and "something is stuck" must not be the same
 #  answer.
@@ -190,22 +190,16 @@ Depends on: none
 class HostedParity(unittest.TestCase):
     def problems(self, *, kinds=("runtime",), targets="linux-x86-64",
                  program="main.ldn", applicability="hosted-now",
-                 static=False, codes="L0301", status="complete",
-                 extra_statuses=None):
+                 static=False, codes="L0301"):
         rows = [(7, {"Construct": "`[0650]`", "Applicability": applicability,
-                     "Owner": "R4.90", "Disposition": "audited"})]
+                     "Disposition": "audited"})]
         fixtures = {kind + "/probe": ("fixture.meta", {
             "program": program, "constructs": "0650", "targets": targets,
             "codes": codes}) for kind in kinds}
         static_rows = [(9, {"Construct": "`[0650]`", "Accepted": "none",
                             "Refused": "`negative/probe`",
                             "Rationale": "a compile-time prohibition"})] if static else []
-        return CHECK.hosted_parity_problems(
-            {"R4.90": status, **(extra_statuses or {})}, rows, static_rows, fixtures)
-
-    def test_later_repairs_do_not_rewrite_prior_acceptance(self):
-        self.assertEqual(self.problems(extra_statuses={"R4.91": "active"}), [])
-        self.assertTrue(self.problems(extra_statuses={"R4.80": "active"}))
+        return CHECK.hosted_parity_problems(rows, static_rows, fixtures)
 
     def test_runtime_and_abi_are_linux_execution_witnesses(self):
         for kind in ("runtime", "abi"):
@@ -224,12 +218,15 @@ class HostedParity(unittest.TestCase):
         self.assertTrue(self.problems(kinds=("runtime",), static=True))
         self.assertTrue(self.problems(kinds=("negative",), static=True, codes=""))
 
-    def test_later_r4_cannot_survive_closure(self):
-        self.assertTrue(self.problems(applicability="later-r4"))
-        self.assertEqual(self.problems(applicability="freestanding"), [])
+    def test_a_freestanding_row_needs_no_linux_witness(self):
+        self.assertEqual(self.problems(kinds=(), applicability="freestanding"),
+                         [])
 
-    def test_active_audit_does_not_claim_closure(self):
-        self.assertEqual(self.problems(kinds=(), status="active"), [])
+    def test_a_hosted_row_with_no_witness_is_reported(self):
+        self.assertTrue(self.problems(kinds=()))
+
+    def test_unreadable_registers_are_reported(self):
+        self.assertTrue(CHECK.hosted_parity_problems(None, [], {}))
 
 
 class QualityWorkloads(unittest.TestCase):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny malformed controls for R7.10's construct inventory.
+"""Tiny malformed controls for the construct inventory.
 
 Each control alters one input the inventory is generated from -- a register
 row, a fixture's target evidence, a refusal or a tour paragraph -- and
@@ -33,9 +33,9 @@ class Inventory(unittest.TestCase):
 
     #  No inventory row names a live owner today, so the rules about one have
     #  nothing real to point at, and the controls that need a live owner
-    #  inject one into the copy they validate.  R7.99 is not a real identity
-    #  and cannot become one: the first roadmap, R0 to R7, is closed and work
-    #  IDs are never reused.
+    #  inject one into the copy they validate.  LIVE is not a real identity
+    #  and cannot become one: the first roadmap is closed and work IDs are
+    #  never reused.
     LIVE = "R7.99"
     LIVE_HEADING = ("\n### R7.99 — A live item, so a rule that needs one can"
                     " be tested\n\nStatus: planned\nDepends on: none\n")
@@ -76,15 +76,15 @@ class Inventory(unittest.TestCase):
                      "unknown targets")
 
     def gapped(self):
-        """[1860] as it stood before R7.40 supplied its Cortex-M verdict.
+        """[1860] as it stood before it had a Cortex-M verdict.
 
-        No row has a gap or a live roadmap owner after R7.40, so the rules
+        No row has a gap or a live roadmap owner any more, so the rules
         about both are kept exercised by rebuilding the row that had them:
         clean as written against `without_cortex`, and refused once the
         owner finishes, goes missing or stops being named.
         """
         row = self.row("1860")
-        return {row: "| `[1860]` | compiled | all | cortex-m | R1.50 | R7.99 |"
+        return {row: "| `[1860]` | compiled | all | cortex-m | R7.99 |"
                      " Hosted compile-time rule audited by R4.90; R7.99 stands"
                      " here for the owner a recorded gap needs. |"}
 
@@ -115,11 +115,6 @@ class Inventory(unittest.TestCase):
             live=True, targets=self.without_cortex),
             "still owned by finished R7.99")
 
-    def test_phase_must_be_finished_implementation(self):
-        row = self.row("0010")
-        self.refused(self.problems({row: row.replace("| R1.20 |", "| R7.99 |")},
-                                   live=True),
-                     "no finished implementing phase")
 
     def test_gaps_follow_the_corpus_both_ways(self):
         def lose(targets):
@@ -146,10 +141,10 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems(targets=run), "executes, so compiled is stale")
 
     def deferred(self):
-        """[0620] as it stood before R7.30 transferred it: the last deferred
+        """[0620] as it stood before it was transferred: the last deferred
         construct, now a synthetic control for the deferral rules."""
         row = self.row("0620")
-        return {row: "| `[0620]` | deferred | none | none | none | R7.99 |"
+        return {row: "| `[0620]` | deferred | none | none | R7.99 |"
                      " The tour keeps it DEFERRED and R7.99 owns the decision. |"}
 
     def test_advisory_deferred_and_transferred_rows_carry_no_evidence(self):
@@ -167,7 +162,7 @@ class Inventory(unittest.TestCase):
                      "[0620] is deferred but fixtures claim it")
 
     def test_deferral_and_transfer_are_the_tour_s_first(self):
-        #  No construct is deferred after R7.30, so a synthetic row keeps the
+        #  No construct is deferred any more, so a synthetic row keeps the
         #  deferral rules exercised: it is clean as written, and refused once
         #  the tour stops saying DEFERRED or no live item owns it.
         self.assertEqual(self.problems(self.deferred(), live=True), [])
@@ -187,7 +182,7 @@ class Inventory(unittest.TestCase):
                                    live=True),
                      "still owned by finished R7.20")
 
-        #  R7.30's transfer is the tour's first: [0620] names its successor.
+        #  [0620]'s transfer is the tour's first: it names its successor.
         def unname(paragraphs):
             paragraphs["0620"] = paragraphs["0620"].replace(
                 "Language evolution", "a later roadmap")
@@ -220,8 +215,9 @@ class Inventory(unittest.TestCase):
                      "[0010] does not explain its boundary refusal")
 
     def test_a_transfer_names_its_successor(self):
-        #  R7.20's transfers: the tour names each successor, and a refusal
-        #  that says it transfers a form needs the row to hand it over.
+        #  The later transfers: the tour names each successor, and a
+        #  refusal that says it transfers a form needs the row to hand it
+        #  over.
         def unmark(paragraphs):
             paragraphs["0150"] = paragraphs["0150"].replace(
                 "Language evolution", "a later roadmap")
@@ -293,19 +289,19 @@ class Inventory(unittest.TestCase):
         self.assertEqual(held["1590"]["cortex-m"], "refused")
         self.assertEqual(held["1570"]["cortex-m"], "executed")
         self.assertEqual(held["1630"]["linux-x86-64"], "compiled")
-        #  R7.40's two new Cortex-M records.  A compile-time fixture that
-        #  selects --target=cortex-m0 carries its verdict there, and R6.60's
-        #  machine probe carries [1610]'s link names, which no fixture claims.
+        #  The two later Cortex-M records.  A compile-time fixture that
+        #  selects --target=cortex-m0 carries its verdict there, and the
+        #  firmware's machine probe carries [1610]'s link names, which no fixture claims.
         self.assertEqual(held["1860"]["cortex-m"], "refused")
         self.assertEqual(held["1730"]["cortex-m"], "compiled")
         self.assertEqual(held["1610"]["cortex-m"], "executed")
 
     def test_a_cortex_claim_must_be_the_run_that_was_made(self):
-        """R7.40's own rule, without which the column is editable prose."""
+        """The column's own rule, without which it is editable prose."""
         self.assertEqual(CHECK.cortex_target_problems(), [])
         records = CHECK.fixture_records()
         #  The two halves of [1860]'s evidence: the hosted fixture selects no
-        #  target, and R7.40's sibling selects the one it names.
+        #  target, and its Cortex-M sibling selects the one it names.
         self.assertTrue(CHECK.selects_cortex_target(
             records["negative/r740-cortex-name-declared-nowhere"][1]))
         self.assertFalse(CHECK.selects_cortex_target(

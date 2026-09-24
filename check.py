@@ -162,9 +162,10 @@ ROADMAP_DEPENDS = re.compile(
 ROADMAP_REFERENCE = re.compile(r"R\d+\.[1-9]\d*")
 ROADMAP_REFERENCE_CANDIDATE = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_.])")
-#  The first roadmap, R0 to R7, is closed and survives in ROADMAP.md only as
-#  an index of its items, so that the citations it left in the tree resolve
-#  until they are removed.  This roadmap's phases start after it.
+#  The first roadmap, its eight phases numbered from zero, is closed and
+#  survives in ROADMAP.md only as an index of its items, so that the
+#  citations it left in the tree resolve until they are removed.  This
+#  roadmap's phases start after it.
 FIRST_ROADMAP_HEADING = "## The first roadmap"
 FIRST_ROADMAP_PHASES = 8
 SUCCESSOR_HEADING = "## Successor families"
@@ -319,7 +320,7 @@ def check(path):
     #  A fence says what its block is; one that says nothing is a fault.
     #  This was documented and never enforced: `sections` filed a bare
     #  fence under "text", and the rules below asked for a kind no
-    #  document produces (R4.21).
+    #  document produces; a review found it.
     in_fence = False
     for n, line in enumerate(all_lines, 1):
         fence = re.match(r"^```(\S*)\s*$", line.strip())
@@ -1068,7 +1069,7 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                 #  The rule asked about itself at the same position with
                 #  nothing consumed: left recursion, which this recogniser
                 #  cannot derive.  Reported, rather than quietly answering
-                #  that the program is underivable (R4.21).
+                #  that the program is underivable.
                 raise LeftRecursion(node[1] if node[0] == "rule" else "?")
             return seen[key]
         seen[key] = None
@@ -1321,7 +1322,7 @@ def check_roadmap(path):
             work_titles[title].append(n)
             #  Tens are the planned spacing; a unit ID is work inserted
             #  between two existing items, and it must have somewhere to
-            #  be inserted: R4.21 needed an R4.20 above it.
+            #  be inserted: an item numbered 21 needs a 20 above it.
             if int(suffix) % 10 and not (
                 int(suffix) > 10
                 and work_id.split(".")[0] + ".%d" % (int(suffix) // 10 * 10)
@@ -1577,16 +1578,17 @@ def check_project_status(full_run):
 
     The site renderer reads its hero status from README.md and its progress
     track from ROADMAP.md, while handoff.md is the first human orientation.
-    R2.40 was marked complete in the roadmap and README but remained active in
-    the handoff, and the roadmap then had no active item for the page to show.
+    One item was marked complete in the roadmap and README but remained active
+    in the handoff, and the roadmap then had no active item for the page to
+    show.
     Keep all three answers mechanically one answer. Between active items, show
     the first dependency-ready planned item in roadmap order rather than claiming its
     implementation is active.
 
-    R7.70 adds the third state a finished roadmap needs. "Nothing is ready
-    because everything is done" and "nothing is ready because something is
-    stuck" are different facts, and a rule that cannot tell them apart is
-    worse than one that refuses both: the endpoint is recognised only when no
+    The endpoint is the third state, the one a finished roadmap needs.
+    "Nothing is ready because everything is done" and "nothing is ready
+    because something is stuck" are different facts, and a rule that cannot
+    tell them apart is worse than one that refuses both: the endpoint is recognised only when no
     item is planned, active or blocked, so a blocked item still refuses.
     """
     if not full_run:
@@ -1910,7 +1912,7 @@ def check_pinned_toolchain(full_run):
     }
     #  Two more places a fetch could diverge: where the archives come from
     #  and which base image the recipe stands on.  Both are held to pins.sh
-    #  alone; TOOLCHAIN.md records compilers, not download sites (R4.21).
+    #  alone; TOOLCHAIN.md records compilers, not download sites.
     pins_only = {
         "RELEASES": re.compile(r"ARG RELEASES=(\S+)"),
         "BASE_IMAGE": re.compile(r"FROM (\S+@sha256:[0-9a-f]+)"),
@@ -1985,7 +1987,8 @@ def check_pinned_toolchain(full_run):
 def check_developer_loops(full_run):
     """Fast feedback must stay separate from the complete build and suite.
 
-    These are small shell transcriptions of the R0.30 and R0.70 dispositions.
+    These are small shell transcriptions of how the harness and the
+    development environments were set up to divide the work.
     The failure mode is quiet: one duplicated command restores minutes of
     repeated work, or an incremental setting leaks into the canonical gate.
     """
@@ -2132,7 +2135,7 @@ def frontend_codes():
                           io.open(full, encoding="utf-8").read(), re.S)
         if not found:
             #  The same fail-closed answer as a missing file: a table that
-            #  moved is not a table with fewer rows (R4.21).
+            #  moved is not a table with fewer rows.
             return set()
         for name in re.findall(r"(?:Rows|Catalogue)\.([A-Za-z0-9_]+)",
                                found.group(0)):
@@ -2148,7 +2151,7 @@ def check_grammar_corpus(full_run):
     This is the check that earns the rest of the grammar machinery: a
     production that cannot derive real source, or a construct the kernel
     should refuse and does not, fails here in a second rather than in a
-    review.  R1.40's parser has to agree with the same corpus, and a
+    review.  The recovering parser has to agree with the same corpus, and a
     disagreement between the two is a defect in one of them.
     """
     if not full_run:
@@ -3358,11 +3361,11 @@ def fixture_profiles():
 def fixture_constructs():
     """Every `constructs:` a fixture names, held to a paragraph.
 
-    R1.90 indexes the corpus by construct, and an index whose keys are not
-    the documents' own keys indexes nothing.  A fixture may name a
-    construct the kernel does not enable yet -- a negative fixture for
-    `while` is about [1140] -- so the only question here is whether the
-    paragraph exists.
+    The construct matrix indexes the corpus by construct, and an index
+    whose keys are not the documents' own keys indexes nothing.  A fixture
+    may name a construct the kernel does not enable yet -- a negative
+    fixture for `while` is about [1140] -- so the only question here is
+    whether the paragraph exists.
     """
     out = []
     known = construct_ids()
@@ -3568,9 +3571,9 @@ def construct_evidence():
     return evidence
 
 
-#  R7.10's inventory vocabulary.  A product target is one the roadmap ends
-#  on; synthetic-32 is the model that preceded Cortex-M and applies to no
-#  construct.  A scope names the targets a construct must be accounted for
+#  The construct inventory's vocabulary.  A product target is one the
+#  roadmap ends on; synthetic-32 is the model that preceded Cortex-M and
+#  applies to no construct.  A scope names the targets a construct must be accounted for
 #  on, and a state says what kind of evidence can account for it.
 PRODUCT_TARGETS = ("linux-x86-64", "macos-arm64", "cortex-m")
 TARGET_SCOPES = {"all": PRODUCT_TARGETS,
@@ -3579,14 +3582,14 @@ TARGET_SCOPES = {"all": PRODUCT_TARGETS,
                  "none": ()}
 INVENTORY_HEADING = "## Construct inventory"
 HOSTED_COMPILE_TIME_HEADING = "## Hosted compile-time evidence"
-INVENTORY_COLUMNS = ("Construct", "State", "Targets", "Gaps", "Phase",
-                     "Owner", "Disposition")
+INVENTORY_COLUMNS = ("Construct", "State", "Targets", "Gaps", "Owner",
+                     "Disposition")
 INVENTORY_STATES = ("executed", "compiled", "deferred", "transferred",
                     "advisory")
 CLAIM_RANK = {"refused": 1, "compiled": 2, "executed": 3}
 #  A transfer out of this roadmap is legitimate only where the tour already
 #  says who owns the transferred part [1480]; the roadmap cannot overrule it.
-#  R7.20 adds the two successors its amended paragraphs name: [0150] and
+#  Two more successors are named by amended paragraphs: [0150] and
 #  [0170] leave u128, i128 and f16 to Language evolution, and [1620] leaves
 #  the atomic wrapper type to the Broader standard library.
 TRANSFER_MARKERS = {"Companion tool and ecosystem": r"companion[ -]tool",
@@ -3680,12 +3683,12 @@ def selects_cortex_target(fields):
 def cortex_target_problems():
     """A compile-time Cortex-M claim has to be the run that was made.
 
-    R7.40 lets a positive or negative fixture carry Cortex-M evidence,
+    A positive or negative fixture may carry Cortex-M evidence,
     because a verdict reached before emission is reached on every host.
     The claim is worth having only while it cannot drift from the run:
     a fixture that names `cortex-m` among its targets must select
-    `--target=cortex-m0`, and one that selects it must say so.  R551-17's
-    rule, that inventory equality is not semantic coverage, is what this
+    `--target=cortex-m0`, and one that selects it must say so.  The rule
+    that inventory equality is not semantic coverage is what this
     keeps: without it the target column could be filled by editing a
     metadata line.
     """
@@ -3711,7 +3714,7 @@ CORTEX_PROBES = "compiler/tests/cortex-m/probes.json"
 
 
 def cortex_probe_records():
-    """R6.60's firmware probes, which run on Cortex-M outside the corpus."""
+    """The firmware probes, which run on Cortex-M outside the corpus."""
     path = os.path.join(ROOT, CORTEX_PROBES)
     if not os.path.exists(path):
         return []
@@ -3721,10 +3724,11 @@ def cortex_probe_records():
 def cortex_probe_problems(titles):
     """A probe may only attribute evidence a runner actually produces.
 
-    R7.10 kept evidence outside fixture metadata in dispositions rather
-    than in the target columns, which left [1610]'s Cortex-M link names
-    with no way to be counted at all.  R7.40 counts them, and pays for it
-    with the rule that makes the record answerable: the probe source and
+    The construct audit kept evidence outside fixture metadata in
+    dispositions rather than in the target columns, which left [1610]'s
+    Cortex-M link names with no way to be counted at all.  The probe
+    records count them, and pay for it with the rule that makes the
+    record answerable: the probe source and
     its runner exist, the runner names the source it is said to run, and
     every construct attributed is one a document defines.  A row nothing
     runs is then not a row that can be written.
@@ -3761,8 +3765,9 @@ def cortex_probe_problems(titles):
     return problems
 
 
-#  Cached because R7.60 reads it once per derivation row as well as once per
-#  construct, and each call rescans every fixture record.  Callers only read
+#  Cached because the prototype derivation register reads it once per
+#  derivation row as well as once per construct, and each call rescans
+#  every fixture record.  Callers only read
 #  the result; `prototype_evidence_records` is what adds the driver row, and
 #  it works from its own copy of `fixture_records`.
 @lru_cache(maxsize=1)
@@ -3779,7 +3784,7 @@ def fixture_target_claims():
     another, so this reads all four.  A claim is still a fixture's claim:
     `executed` beats `compiled` beats `refused`, and none is a measurement.
 
-    R7.40 adds the fourth way a fixture reaches Cortex-M: a compile-time
+    There is a fourth way a fixture reaches Cortex-M: a compile-time
     fixture whose own `args:` select `--target=cortex-m0`, which the
     ordinary recorded runner compiles for that target on every host because
     a verdict reached before emission needs no Cortex toolchain.  That
@@ -3787,8 +3792,8 @@ def fixture_target_claims():
     refuses a compile-time fixture that names the target it does not select,
     or selects the target it does not name.
 
-    R7.60 reads the per-fixture answer this already computed.  The prototype
-    derivation register needs the verdict each product target reached for one
+    Prototype coverage reads the per-fixture answer this already computed.
+    The prototype derivation register needs the verdict each product target reached for one
     named derivation, not the union over a construct, and deriving both from
     one reader is what stops the two registers from disagreeing.  `cortex-m`
     is claimed here even where the fixture does not name it, because the
@@ -3971,7 +3976,7 @@ def inventory_owners(value):
 
 
 def inventory_problems(inputs):
-    """R7.10: no construct row is missing, unowned or unexplained.
+    """No construct row is missing, unowned or unexplained.
 
     The inventory in the registers says what each row is and who owns what
     is left of it; the corpus and the refusal tables say what is true.
@@ -4041,16 +4046,6 @@ def inventory_problems(inputs):
                 problem(line, "[%s] does not say what %s owns"
                         % (one, owner))
 
-        phase = row["Phase"]
-        if state in ("executed", "compiled") or (
-                state == "transferred" and phase != "none"):
-            if statuses.get(phase) != "complete":
-                problem(line, "[%s] has no finished implementing phase: %s"
-                        % (one, phase))
-        elif phase != "none":
-            problem(line, "[%s] is %s and names phase %s"
-                    % (one, state, phase))
-
         claims = inputs["evidence"].get(one, set()) - {"refused by name"}
         held = inputs["targets"].get(one, {})
         if state == "executed":
@@ -4116,7 +4111,7 @@ def inventory_problems(inputs):
     for one in sorted(known - set(seen)):
         problem(1, "construct [%s] has no inventory row" % one)
 
-    #  R4.90's audited compile-time rules are exactly the hosted rows that
+    #  The audited compile-time rules are exactly the hosted rows that
     #  cannot execute; one register is not allowed to disagree with the other.
     static = markdown_table(lines, HOSTED_COMPILE_TIME_HEADING,
                             ("Construct", "Accepted", "Refused", "Rationale"))
@@ -4137,7 +4132,7 @@ def inventory_problems(inputs):
 
 
 def inventory_applicability(rows):
-    """The inventory, in the shape R4.90's parity rule was written against."""
+    """The inventory, as whether each row is implemented on a hosted target."""
     out = []
     for line, row in rows or ():
         scope = TARGET_SCOPES.get(row["Targets"], ())
@@ -4149,23 +4144,23 @@ def inventory_applicability(rows):
                              else "deferred")
         out.append((line, {"Construct": row["Construct"],
                            "Applicability": applicability,
-                           "Owner": row["Phase"],
                            "Disposition": row["Disposition"]}))
     return out
 
 
 def construct_matrix():
-    """R1.90's construct matrix, completed by R7.10's inventory.
+    """The construct matrix, completed by the construct inventory.
 
     Every `[NNNN]` either document defines, against the evidence there is
-    for it.  The first three claims are the distinction R1.80's audit found:
-    a fixture that is *accepted* says the compiler took the program,
-    *emitted* says a backend was handed it, and *executed* says a machine
-    ran it.  The per-target columns say the same thing target by target,
-    from the records that decide where a fixture runs.  The named refusals
-    carry their item and what their note promises.  The state, targets,
-    gaps and owner are ROADMAP.md's; the reason for each is the
-    disposition beside it there, which is where a reader should look.
+    for it.  The first three claims are the distinction an audit of the
+    first Linux x86-64 path found: a fixture that is *accepted* says the
+    compiler took the program, *emitted* says a backend was handed it, and
+    *executed* says a machine ran it.  The per-target columns say the same
+    thing target by target, from the records that decide where a fixture
+    runs.  The named refusals carry what their note promises.  The state,
+    targets, gaps and owner are the inventory's, in the registers; the
+    reason for each is the disposition beside it there, which is where a
+    reader should look.
     """
     titles = construct_titles()
     inputs = inventory_inputs()
@@ -4326,7 +4321,7 @@ def golden_digest(relative):
 
 
 def prototype_row_evidence(name, fields):
-    """R7.60's inputs, outputs and target results for one derivation row.
+    """The inputs, outputs and target results for one derivation row.
 
     The exit clause asks each row for inputs, outputs, target results and a
     trace.  The register already carried the trace (`Findings`, rendered as
@@ -4393,10 +4388,11 @@ def prototype_row_evidence(name, fields):
 def prototype_scope_problems(prototypes, scopes, records):
     """An applicability claim must be reached by one of its own derivations.
 
-    R2.90's scope register and the per-row `targets:` metadata deliberately
-    say different things: a scope row is where the prototype's subject matter
-    belongs, the finer assignment is the fixture's, and neither is the other's
-    union.  Measured at R7.60, the rows reach further than three of the four
+    The prototype scope register and the per-row `targets:` metadata
+    deliberately say different things: a scope row is where the prototype's
+    subject matter belongs, the finer assignment is the fixture's, and
+    neither is the other's union.  Measured when the derivation rows gained
+    their target results, the rows reach further than three of the four
     scope rows claim -- prototype 1's two hosted lifetime and ABI derivatives,
     and prototype 2's and prototype 4's recorded Cortex verdicts -- and that
     is the documented relationship rather than a defect, so neither register
@@ -4438,7 +4434,7 @@ def prototype_scope_problems(prototypes, scopes, records):
 def prototype_result_problems(prototypes, records):
     """A derivation row's three new columns must each be answerable.
 
-    R730-18's editor grammar drifted because no gate ran; a coverage column
+    The editor grammar drifted because no gate ran; a coverage column
     nothing can refuse rots the same way.  So each row is held to having
     inputs, an oracle and at least one product-target verdict drawn from a
     retained record, to not claiming a product target no record places, and
@@ -4526,7 +4522,7 @@ def target_scope_rows():
 
 
 def construct_applicability_rows():
-    """R7.10's inventory, adapted for the rules written before it existed."""
+    """The construct inventory, adapted for the hosted parity rule."""
     rows = markdown_register(REGISTERS, INVENTORY_HEADING, INVENTORY_COLUMNS)
     return None if rows is None else inventory_applicability(rows)
 
@@ -4537,24 +4533,16 @@ def hosted_compile_time_rows():
         ("Construct", "Accepted", "Refused", "Rationale"))
 
 
-def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
-    """R4 closure needs Linux execution, or an explicit static-rule oracle.
+def hosted_parity_problems(applicability, static_rows, fixtures):
+    """A hosted row needs Linux execution, or an explicit static-rule oracle.
 
     Metadata establishes traceability, not semantic sufficiency: reviewers
     must still inspect each assertion. A named refusal or another target's
     runtime program cannot stand in for implemented hosted behavior.
     """
-    if statuses.get("R4.90") != "complete":
-        return []
     out = []
-    # Later repair slices do not rewrite R4.90's historical dependencies.
-    # The phase gate separately owns current closure.
-    for key, status in statuses.items():
-        if (key.startswith("R4.") and int(key.split(".")[1]) < 90
-                and status != "complete"):
-            out.append((ROADMAP, 1, "R4.90 cannot close before " + key))
     if applicability is None or static_rows is None:
-        return out + [(REGISTERS, 1, "R4.90 parity registers cannot be read")]
+        return [(REGISTERS, 1, "the hosted parity registers cannot be read")]
 
     def names(field):
         return {value.strip() for value in field.split(",") if value.strip()}
@@ -4590,12 +4578,7 @@ def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
 
     for line, row in applicability:
         key = row["Construct"]
-        if row["Applicability"] == "later-r4":
-            out.append((REGISTERS, line, "R4.90 leaves later-r4 work: " + key))
-        elif key in hosted:
-            owner = row["Owner"].strip("`")
-            if statuses.get(owner) != "complete":
-                out.append((REGISTERS, line, key + " has unfinished owner " + owner))
+        if key in hosted:
             if key not in exceptions:
                 construct = key.strip("`[]")
                 if not any(witness(name, construct, {"runtime", "abi"})
@@ -4620,7 +4603,7 @@ def prototype_evidence_records():
 
 
 def coverage_dumps():
-    """Generate R2.90's four non-diagnostic reading copies."""
+    """Generate the coverage registers' four non-diagnostic reading copies."""
     guarantees = guarantee_rows()
     conformances = conformance_rows()
     prototypes = prototype_rows()
@@ -4700,7 +4683,7 @@ def coverage_dumps():
 
 
 def check_coverage_registers(full_run):
-    """R2.90's registers are complete, live cross-references.
+    """The coverage registers are complete, live cross-references.
 
     The guarantee inventory closes over what the independent fixture matrix
     says is implemented.  This does not pretend a heading is implementation:
@@ -4721,12 +4704,8 @@ def check_coverage_registers(full_run):
     applicability = construct_applicability_rows()
     where = "spec.md"
 
-    roadmap_path = os.path.join(ROOT, ROADMAP)
-    roadmap_text = (io.open(roadmap_path, encoding="utf-8").read()
-                    if os.path.exists(roadmap_path) else "")
-    statuses = roadmap_statuses(roadmap_text)
     out += hosted_parity_problems(
-        statuses, applicability, hosted_compile_time_rows(), fixtures)
+        applicability, hosted_compile_time_rows(), fixtures)
 
     #  The construct inventory's completeness, owners and evidence are
     #  check_matrix's.
@@ -4960,7 +4939,7 @@ def check_coverage_registers(full_run):
                     out.append((REGISTERS, line,
                                 "%s is not a finding in %s" %
                                 (finding, source)))
-        #  R7.60's exit clause: the same rows also carry inputs, outputs and
+        #  Prototype coverage: the same rows also carry inputs, outputs and
         #  a per-target result, all three derived rather than asserted.
         out += prototype_result_problems(prototypes, fixtures)
         out += prototype_scope_problems(prototypes, scopes, fixtures)
@@ -5016,7 +4995,7 @@ def check_coverage_registers(full_run):
             relative = os.path.relpath(meta, ROOT)
             if not targets:
                 out.append((relative, 1,
-                            "R2.90 requires every fixture to name targets"))
+                            "every fixture must name its targets"))
                 continue
             for target in (one.strip() for one in targets.split(",")):
                 if target not in allowed:
@@ -5791,8 +5770,8 @@ def check_named_files(full_run):
                 if present(target):
                     continue
                 #  A bare name may sit next to the file that mentions it,
-                #  or anywhere in the tree: ROADMAP.md names Ada units by
-                #  their file name and not by their path.
+                #  or anywhere in the tree: a document may name Ada units
+                #  by their file name and not by their path.
                 beside = os.path.relpath(
                     os.path.join(os.path.dirname(path), target), ROOT)
                 if not beside.startswith("..") and present(beside):
@@ -5920,7 +5899,7 @@ def check_register_entries(full_run):
     alternative it was chosen over, and the fixture that pins it.  Review 5
     found 41 entries with a choice and a pin but no alternative in any
     form, and two with evidence under another heading; the register's
-    promise is now held mechanically (R4.21).
+    promise is now held mechanically.
     """
     if not full_run:
         return []
@@ -5952,9 +5931,10 @@ def check_highlight_vocabulary(full_run):
     keyword of the `keyword` production or a scalar of `scalar_name` that
     a highlighter does not know is a word the pages show in the wrong
     face.  The tree-sitter `reserved` list is a transcription of the
-    keyword production and is held to it exactly (R4.21). R4.30's tool
+    keyword production and is held to it exactly.  The toolchain directives'
     namespaces agree with the shared vocabulary and structural grammar;
-    R4.40's C annotations remain structural rather than reserved words.
+    the C boundary's annotations remain structural rather than reserved
+    words.
     """
     if not full_run:
         return []
@@ -6027,8 +6007,8 @@ def check_highlight_vocabulary(full_run):
                         "scalar names the tree-sitter grammar lacks: %s"
                         % " ".join(lost)))
 
-    #  R4.40 adds a type prefix and three contextual annotations without
-    #  reserving `c`, `layout`, `link`, or `symbol`.  Keep the structural
+    #  The C boundary adds a type prefix and three contextual annotations
+    #  without reserving `c`, `layout`, `link`, or `symbol`.  Keep the structural
     #  grammar connected in both directions: merely defining a dead rule
     #  would colour an isolated sample but still omit the source construct.
     def structural_rule(name):
@@ -6138,8 +6118,9 @@ def check_highlighters(full_run):
 def check_binding_generator(full_run):
     """The separate binding generator and its opt-in tests stay discoverable.
 
-    R4.40 keeps header extraction in a Clang-AST tool, while the repository's
-    ordinary Python check must still run on a host without that frontend. Hold
+    The C boundary keeps header extraction in a Clang-AST tool, while the
+    repository's ordinary Python check must still run on a host without that
+    frontend. Hold
     the canonical tool, test, documented explicit invocation and entry points in
     place, and compile their Python source without executing the Clang-backed
     suite.

@@ -441,9 +441,10 @@ class TokenVocabulary(unittest.TestCase):
     """The scanner's reserved words are the grammar's own.
 
     This is a transcription held to its source, not a duplicate waiting to
-    be generated away.  ROADMAP.md's D3 keeps generated tables out of the
-    repository and E3 counts the cases: a third kind of generated source
-    triggers a D3 review, which a successor roadmap owns.  So the rule is
+    be generated away.  The roadmap's retained position against
+    compile-time execution keeps generated tables out of the repository,
+    and its register watches the count: a third kind of generated source
+    reopens that position, which a successor roadmap owns.  So the rule is
     "write it twice and compare", deliberately, and this control is what
     makes the comparison trustworthy.
     """
@@ -660,9 +661,10 @@ class Vocabularies(unittest.TestCase):
 class Transcriptions(unittest.TestCase):
     """The tables the compiler transcribes from the grammar and the tour.
 
-    Written twice and compared, deliberately: ROADMAP.md's D3 keeps
-    generated tables out of the repository, and E3 makes a third kind of
-    generated source the trigger for reopening that. So the comparison is
+    Written twice and compared, deliberately: the roadmap's retained
+    position against compile-time execution keeps generated tables out of
+    the repository, and its register makes a third kind of generated
+    source the trigger for reopening that. So the comparison is
     the design, and these controls are what make it trustworthy.
     """
 

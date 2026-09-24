@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Tiny malformed controls for R7.60's derivation inputs, outputs and results.
+"""Tiny malformed controls for the derivation inputs, outputs and results.
 
-R7.60 gave every prototype derivation row three generated columns.  The
+Every prototype derivation row carries three generated columns.  The
 decision that makes them worth having is that all three are derived from
 committed records rather than asserted beside them, and that decision is only
 true while something refuses a row whose derivation has gone empty, stale or
-unbacked.  R730-18's editor grammar drifted precisely because no gate ran, so
+unbacked.  The editor grammar drifted precisely because no gate ran, so
 each control here alters one input -- a fixture's record, a golden, a target
 record or the driver's oracle -- and requires `prototype_result_problems` to
 name the resulting row.  The unaltered repository must produce none.
@@ -178,8 +178,8 @@ class Derivations(unittest.TestCase):
     def test_a_recorded_cortex_refusal_is_reported_rather_than_dropped(self):
         """The hosted derivatives' Cortex verdict is a result, not a silence.
 
-        R7.60 does not demand a hosted I/O program on Cortex-M, and the
-        corpus records why each complete hosted derivative is refused there.
+        Prototype coverage does not demand a hosted I/O program on Cortex-M,
+        and the corpus records why each complete hosted derivative is refused there.
         Reporting that refusal is what distinguishes a recorded scope
         decision from a row nobody looked at.
         """
