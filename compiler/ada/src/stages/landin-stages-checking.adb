@@ -12602,8 +12602,8 @@ package body Landin.Stages.Checking is
                         Where   => Syn.Where (Of_Tree, Argument),
                         Message => "an explicit static argument is not"
                                    & " enabled for this call",
-                        Note    => "R2.40: ordinary calls have runtime"
-                                   & " parameter positions only",
+                        Note    => "[1300]: only a call with type or fixed"
+                                   & " parameters takes a static argument",
                         Related => Landin.Checking.Signature_Origin
                                      (Types.all, Signature),
                         Because => "this callable signature",
@@ -12693,8 +12693,8 @@ package body Landin.Stages.Checking is
                               Message => "a type-valued static argument"
                                          & " cannot fill this runtime"
                                          & " parameter",
-                              Note    => "R2.40: static roles are not"
-                                         & " runtime values",
+                              Note    => "[1290]: a type or fixed argument"
+                                         & " is not a runtime value",
                               Related => Parameter.Site,
                               Because => "the runtime parameter",
                               Into    => Found);
@@ -28757,10 +28757,11 @@ package body Landin.Stages.Checking is
             declare
                Taken : constant Syn.Node_Id := First_Address (Of_Tree, Value);
             begin
-               --  R4.21: `addr` of a module binding is known to the linker,
-               --  not to the compiler's image, which holds numbers; the
-               --  backend refused it as a defect.  It is a relocation the
-               --  freestanding vector tables of R6.60 will need.
+               --  `addr` of a module binding is known to the linker, not
+               --  to the compiler's image, which holds numbers; the backend
+               --  once refused it as a defect.  It is a data relocation no
+               --  backend emits, and a program that needs one is what the
+               --  roadmap's register waits for.
                if Taken /= Syn.No_Node then
                   Bad.Report
                     (Item    => Bad.Not_Known_At_Compile_Time,
@@ -28768,9 +28769,9 @@ package body Landin.Stages.Checking is
                      Where   => Syn.Where (Of_Tree, Taken),
                      Message => "a module value cannot hold the address of"
                                 & " storage in this compiler",
-                     Note    => "[1940]: a static address is a relocation"
-                                & " the backend does not emit yet; R6.60"
-                                & " owns the vector tables that need one",
+                     Note    => "[1940]: a module value is a number the"
+                                & " compiler knows, and a static address"
+                                & " is a data relocation no backend emits",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Value);
                   return;

@@ -5645,7 +5645,7 @@ instead and never enabled an intrinsic.
 **Chosen:** the vector intrinsics are withdrawn. [0590] already makes fixed
 arrays the vector type, and a second spelling of the same operation is the
 second vector shape [0590] was written to refuse. A `compiler.vector_*`
-reference keeps its L0203, and its note now says R7.20 withdrew it and points
+reference keeps its L0203, and its note now says it is withdrawn and points
 at element-wise operators. The wrapper type is transferred to the Broader
 standard library successor (R551-34), which [1620] now names. Cortex-M0
 refuses every read-modify-write atomic (D227), so a wrapper portable across

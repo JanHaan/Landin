@@ -3,4 +3,4 @@ error[L0203]: unavailable tool reference: compiler.vector_mul
   |
 5 |     b = compiler.vector_mul(a, a)
   |                  ^^^^^^^^^^
-  = note: [0590]/D240: R7.20 withdrew compiler.vector_mul; fixed arrays take element-wise operators
+  = note: [0590]/D240: compiler.vector_mul is withdrawn; fixed arrays take element-wise operators

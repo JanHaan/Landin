@@ -147,20 +147,21 @@ package body Landin.Configuration is
    function Tool_Advice (Namespace, Member : String) return String is
    begin
       if Namespace = "assembler" and then Member = "block" then
-         return "[1630]: assembler.block is enabled by R6.60";
+         return "[1990]: assembler.block is called in a Cortex-M0 routine"
+           & " body";
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "atomic_"
       then
-         return "[1620]/D227: unsupported memory intrinsic compiler."
-           & Member & " (R6.30)";
+         return "[1620]/D227: compiler." & Member
+           & " is not one of the memory operations";
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "vector_"
       then
-         --  D240: fixed arrays are the vector type, so R7.20 withdrew the
-         --  vector intrinsics [1560] once listed rather than duplicate the
-         --  element-wise operators D209 implements.
-         return "[0590]/D240: R7.20 withdrew compiler." & Member
-           & "; fixed arrays take element-wise operators";
+         --  D240: fixed arrays are the vector type, so the vector
+         --  intrinsics [1560] once listed are withdrawn rather than
+         --  duplicate the element-wise operators D209 implements.
+         return "[0590]/D240: compiler." & Member
+           & " is withdrawn; fixed arrays take element-wise operators";
       elsif Namespace = "linker" and then Member in "section" | "entry" then
          return "[1640]/D229: use link(section: ...) or "
            & "--firmware-entry; linker." & Member

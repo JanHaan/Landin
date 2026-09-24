@@ -3,7 +3,7 @@ error[L0203]: unavailable tool reference: compiler.atomic_sub
   |
 3 |     compiler.atomic_sub()
   |              ^^^^^^^^^^
-  = note: [1620]/D227: unsupported memory intrinsic compiler.atomic_sub (R6.30)
+  = note: [1620]/D227: compiler.atomic_sub is not one of the memory operations
 error[L0203]: unavailable tool reference: compiler.assert
   --> ../tests/fixtures/negative/function-tool-refusals/program.ldn:4:14
   |
