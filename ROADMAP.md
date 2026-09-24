@@ -72,7 +72,7 @@ size, and a gate that runs one of the three targets.
 
 ### R8.10 — Remove the first roadmap's citations
 
-Status: planned
+Status: complete
 Depends on: none
 
 About eighteen hundred citations of R0 to R7 items, in about two hundred
@@ -90,6 +90,17 @@ Exit evidence: no file outside `ROADMAP.md` cites a work item or register
 identity of either roadmap beyond the status pointer, `check.py` refuses one, the first roadmap's index
 is deleted from this file, and every changed diagnostic is pinned by its
 recorded report.
+
+Done: about 1,700 lines in some 280 files now say what their citation
+meant. A refusal's second note states the form's standing, a recorded
+boundary, a withdrawal or a transfer, from a table in place of an item (D246
+and [1830]); L0305 and the tool and call notes cite a rule. The 22 goldens
+that record them are re-recorded. The inventory has no Phase column and the
+hosted parity rule no longer reads item statuses. `check_roadmap_citations`
+refuses an item of either roadmap and a record of the two debt ledgers and
+SR, and its controls show it; the inherited letter records collide with
+bytes, decisions and errata and stay with review. Fixture directory names
+are unchanged. The index is gone.
 
 ### R8.20 — Make the frontend scale
 
