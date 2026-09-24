@@ -33,12 +33,17 @@ class Inventory(unittest.TestCase):
 
     #  No inventory row names a live owner today, so the rules about one have
     #  nothing real to point at, and the controls that need a live owner
-    #  inject one into the copy they validate.  LIVE is not a real identity
-    #  and cannot become one: the first roadmap is closed and work IDs are
-    #  never reused.
-    LIVE = "R7.99"
-    LIVE_HEADING = ("\n### R7.99 — A live item, so a rule that needs one can"
-                    " be tested\n\nStatus: planned\nDepends on: none\n")
+    #  inject one into the copy they validate, beside a finished one.
+    #  Neither is a real identity or can become one: the first roadmap is
+    #  closed and work IDs are never reused.  Both are built rather than
+    #  written, because check.py refuses a roadmap identity written anywhere
+    #  but ROADMAP.md.
+    LIVE, FINISHED, MISSING = ("R%d.%d" % (7, n) for n in (99, 97, 98))
+    LIVE_HEADING = ("\n### %s — A live item, so a rule that needs one can"
+                    " be tested\n\nStatus: planned\nDepends on: none\n"
+                    "\n### %s — A finished item, so a rule that needs one"
+                    " can be tested\n\nStatus: complete\nDepends on: none\n"
+                    % (LIVE, FINISHED))
 
     def problems(self, replace=None, live=False, **changes):
         inputs = copy.deepcopy(self.inputs)
@@ -84,9 +89,10 @@ class Inventory(unittest.TestCase):
         owner finishes, goes missing or stops being named.
         """
         row = self.row("1860")
-        return {row: "| `[1860]` | compiled | all | cortex-m | R7.99 |"
-                     " Hosted compile-time rule audited by R4.90; R7.99 stands"
-                     " here for the owner a recorded gap needs. |"}
+        return {row: "| `[1860]` | compiled | all | cortex-m | %s |"
+                     " Hosted compile-time rule; %s stands"
+                     " here for the owner a recorded gap needs. |"
+                     % (self.LIVE, self.LIVE)}
 
     @staticmethod
     def without_cortex(targets):
@@ -96,16 +102,18 @@ class Inventory(unittest.TestCase):
         (row, synthetic), = self.gapped().items()
         self.assertEqual(self.problems(self.gapped(), live=True,
                                        targets=self.without_cortex), [])
-        for owner, fragment in (("R2.20", "still owned by finished R2.20"),
-                                ("R7.98", "names missing owner R7.98"),
-                                ("Somebody", "unknown owner")):
+        for owner, fragment in (
+                (self.FINISHED, "still owned by finished " + self.FINISHED),
+                (self.MISSING, "names missing owner " + self.MISSING),
+                ("Somebody", "unknown owner")):
             self.refused(self.problems(
-                {row: synthetic.replace("| R7.99 |", "| %s |" % owner)},
+                {row: synthetic.replace("| %s |" % self.LIVE,
+                                        "| %s |" % owner)},
                 live=True, targets=self.without_cortex), fragment)
         self.refused(self.problems(
-            {row: synthetic.replace("R7.99 stands", "nobody stands")},
+            {row: synthetic.replace(self.LIVE + " stands", "nobody stands")},
             live=True, targets=self.without_cortex),
-            "[1860] does not say what R7.99 owns")
+            "[1860] does not say what %s owns" % self.LIVE)
 
     def test_a_finished_owner_makes_the_row_stale(self):
         (row, synthetic), = self.gapped().items()
@@ -113,7 +121,7 @@ class Inventory(unittest.TestCase):
         self.refused(self.problems(
             {row: synthetic, heading: heading.replace("planned", "complete")},
             live=True, targets=self.without_cortex),
-            "still owned by finished R7.99")
+            "still owned by finished " + self.LIVE)
 
 
     def test_gaps_follow_the_corpus_both_ways(self):
@@ -129,9 +137,9 @@ class Inventory(unittest.TestCase):
         (row, synthetic), = self.gapped().items()
         self.refused(self.problems(
             {row: synthetic.replace(
-                "| R7.99 | Hosted compile-time rule audited by R4.90; R7.99"
-                " stands here for the owner a recorded gap needs.",
-                "| none | Hosted compile-time rule audited by R4.90.")},
+                "| %s | Hosted compile-time rule; %s stands here for the"
+                " owner a recorded gap needs." % (self.LIVE, self.LIVE),
+                "| none | Hosted compile-time rule.")},
             live=True, targets=self.without_cortex),
             "target gaps and no owning item")
 
@@ -144,8 +152,9 @@ class Inventory(unittest.TestCase):
         """[0620] as it stood before it was transferred: the last deferred
         construct, now a synthetic control for the deferral rules."""
         row = self.row("0620")
-        return {row: "| `[0620]` | deferred | none | none | R7.99 |"
-                     " The tour keeps it DEFERRED and R7.99 owns the decision. |"}
+        return {row: "| `[0620]` | deferred | none | none | %s |"
+                     " The tour keeps it DEFERRED and %s owns the decision. |"
+                     % (self.LIVE, self.LIVE)}
 
     def test_advisory_deferred_and_transferred_rows_carry_no_evidence(self):
         def claim(evidence):
@@ -174,13 +183,17 @@ class Inventory(unittest.TestCase):
                      "deferred but the tour does not say so")
         (row, synthetic), = self.deferred().items()
         self.refused(self.problems({row: synthetic.replace(
-            "| R7.99 | The tour keeps it DEFERRED and R7.99 owns the decision.",
+            "| %s | The tour keeps it DEFERRED and %s owns the decision."
+            % (self.LIVE, self.LIVE),
             "| none | The tour keeps it DEFERRED.")}, live=True),
             "[0620] is deferred with no owning item")
-        self.refused(self.problems({row: synthetic.replace("| R7.99 |", "| R7.20 |")
-                                    .replace("and R7.99 owns", "and R7.20 owns")},
-                                   live=True),
-                     "still owned by finished R7.20")
+        self.refused(self.problems(
+            {row: synthetic.replace("| %s |" % self.LIVE,
+                                    "| %s |" % self.FINISHED)
+             .replace("and %s owns" % self.LIVE,
+                      "and %s owns" % self.FINISHED)},
+            live=True),
+            "still owned by finished " + self.FINISHED)
 
         #  [0620]'s transfer is the tour's first: it names its successor.
         def unname(paragraphs):
@@ -198,7 +211,8 @@ class Inventory(unittest.TestCase):
 
         row = self.row("1470")
         self.refused(self.problems({row: row.replace(
-            "| Companion tool and ecosystem |", "| R7.20 |")}),
+            "| Companion tool and ecosystem |", "| %s |" % self.FINISHED)},
+            live=True),
             "transferred to no successor")
 
     def test_every_refusal_is_explained(self):

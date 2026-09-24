@@ -10,10 +10,9 @@ that pin it and this file together.
 
 The first roadmap, R0 to R7, built the bootstrap compiler from an empty
 repository to a feature-complete pre-v1 slice for Linux x86-64, macOS arm64
-and Cortex-M0, and closed at R7.70. Its full text is in the history, last at
-commit `335b0814`; what it left open is in the register below, and its item
-titles are indexed at the end of this file so that the citations it left in
-the tree still resolve until R8.10 removes them.
+and Cortex-M0, and closed when its last item declared that endpoint. Its full
+text is in the history, last at commit `335b0814`, and what it left open is in
+the register below.
 
 This roadmap takes the compiler from that slice to one that other people can
 use on the machines they have: a frontend that scales and serves an editor,
@@ -27,19 +26,19 @@ or version decision, each of which needs an explicit decision of its own.
 Landin does not assume SemVer.
 
 Work item and register identities stay in this file. Code, diagnostics,
-fixtures, generated files and the other documents never cite a work item,
-save the one status pointer `README.md` and `handoff.md` carry, because an item is finished long before the text that cites it is, and a
-citation that outlives its item is a question nobody can answer. `check.py`
-refuses a citation of this roadmap's items anywhere else. The first roadmap's
-citations are the exception until R8.10 removes them.
+fixtures, generated files and the other documents never cite a work item or
+a register record of either roadmap, save the one status pointer `README.md`
+and `handoff.md` carry, because an item is finished long before the text
+that cites it is, and a citation that outlives its item is a question nobody
+can answer. `check.py` refuses such a citation anywhere else.
 
 ## Mechanics
 
 Phases are `R8`, `R9` and onward, in order, and each ends in one gate. Work
 items are `R8.10`, `R8.20` and so on, spaced in tens, so that work found
-necessary between two items is inserted with a unit identity, as the first
-roadmap's R4.21 sits after R4.20 and before R4.30. Identities are never reused
-or renumbered, including the first roadmap's.
+necessary between two items is inserted with a unit identity: between R8.20
+and R8.30 it is numbered 21. Identities are never reused or renumbered,
+including the first roadmap's.
 Every item has exactly one status line and one dependency line:
 
 ```text
@@ -694,79 +693,3 @@ These D labels are the review's, not `spec.md`'s decisions.
 | D4 | `escaping` and `from` are written, not inferred, to keep checking local and because an allocator is a counterexample to inferred `from` [0790] [0900]. |
 | D5 | Landin's own backends emitting assembly; not LLVM, a dependency larger than the language, and not C, which loses the calling convention, the traps and the debug information [1550]. |
 | D6 | One version of a package name per program: 32 KB of flash, nominal types and one conformance register [1470]. |
-
-## The first roadmap
-
-Every item of R0 to R7, all complete. The text is at commit `335b0814`; this
-index exists so that the citations R8.10 removes resolve until it does, and
-R8.10 deletes it.
-
-| Item | Title |
-| --- | --- |
-| R0.10 | Establish bootstrap repository layout |
-| R0.20 | Pin the canonical Ada toolchain |
-| R0.30 | Establish shared fixtures and custom harness |
-| R0.40 | Establish source and diagnostic foundations |
-| R0.50 | Establish compiler and platform-tool boundaries |
-| R0.60 | Establish tested stage and target seams |
-| R0.70 | Establish development and validation environments |
-| R1.10 | Add the normative kernel grammar |
-| R1.20 | Implement lexical analysis |
-| R1.30 | Establish the diagnostic catalogue |
-| R1.40 | Implement the recovering parser |
-| R1.50 | Collect declarations and resolve names |
-| R1.60 | Check the executable kernel |
-| R1.70 | Implement target-neutral IR and verification |
-| R1.80 | Implement the minimal Linux x86-64 native path |
-| R1.90 | Close the executable-kernel corpus |
-| R2.10 | Establish target-parametric data layout |
-| R2.20 | Implement aggregates, variants and complete value layout |
-| R2.30 | Implement functions, control flow and declared errors |
-| R2.40 | Implement fixed parameters and compile-time substitution |
-| R2.50 | Implement references and local lifetime checks |
-| R2.60 | Implement concepts and conformance collection |
-| R2.70 | Implement the generic evidence schema |
-| R2.80 | Implement `any C` |
-| R2.90 | Establish guarantee and semantic coverage registers |
-| R3.10 | Implement minimum modules and ordered roots |
-| R3.20 | Build the allocator and container pressure case |
-| R3.30 | Implement honest raw storage and `core/mem` |
-| R3.40 | Implement parser-support core modules |
-| R3.50 | Implement the minimum hosted ABI and I/O |
-| R3.60 | Implement diagnostics as runtime dispatch |
-| R3.70 | Complete and run the derived parser program |
-| R3.80 | Ship editor and forge language support |
-| R4.10 | Close the hosted construct matrix |
-| R4.20 | Complete hosted core containers and library slice |
-| R4.21 | Repair review-found soundness and correctness defects |
-| R4.30 | Complete hosted modules and toolchain directives |
-| R4.40 | Implement the narrow complete C ABI and bindings |
-| R4.50 | Implement baseline code generation and specialization |
-| R4.60 | Implement usable Linux source debugging |
-| R4.70 | Complete and run the derived container program |
-| R4.80 | Complete and run the derived hosted application |
-| R4.90 | Close Linux hosted parity |
-| R4.91 | Resolve post-R4 review findings |
-| R5.10 | Establish the native macOS compiler environment |
-| R5.20 | Isolate target contracts |
-| R5.30 | Implement Darwin arm64 lowering |
-| R5.40 | Implement macOS arm64 source debugging |
-| R5.50 | Close hosted target parity |
-| R5.51 | Organize retained debt and repair phase handoffs |
-| R6.10 | Select the Cortex-M execution profile |
-| R6.20 | Instantiate the 32-bit layout and ABI |
-| R6.30 | Define and implement the concurrency memory model |
-| R6.40 | Define and implement packed invalid encodings |
-| R6.50 | Implement the Cortex-M backend |
-| R6.60 | Implement startup, vectors and machine directives |
-| R6.70 | Implement the freestanding Landin core slice |
-| R6.80 | Establish checked-in generated device fixtures |
-| R6.90 | Complete and run the derived driver program |
-| R6.100 | Close freestanding evidence |
-| R7.10 | Audit every normative construct |
-| R7.20 | Close deferred normative behavior |
-| R7.30 | Disposition every inherited item |
-| R7.40 | Close all evidence registers |
-| R7.50 | Prove deterministic baseline toolchain behavior |
-| R7.60 | Run complete derived prototype coverage |
-| R7.70 | Declare the roadmap endpoint |

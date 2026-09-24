@@ -767,18 +767,22 @@ def once(old, new):
     return edit
 
 
-#  This roadmap's own identities are spelt out of parts here, because the
-#  citation rule refuses them anywhere but ROADMAP.md -- this file included.
+#  Roadmap identities are spelt out of parts here, because the citation
+#  rule refuses them anywhere but ROADMAP.md -- this file included.
 FIRST = "R%d.10" % 8
 SECOND = "R%d.20" % 8
+#  One of the first roadmap's items, which the history holds and this
+#  roadmap does not, and two of its debt ledger's records.
+CLOSED = "R%d.%d" % (7, 70)
+MEASURED, GUARDED = ("R%d-%02d" % (551, n) for n in (8, 9))
 
 
 class RoadmapStructure(unittest.TestCase):
     """The checks that hold ROADMAP.md's own shape, and its reach.
 
-    The phases, items and dependencies, the first roadmap's index, the
-    register and its families, the status pointers that mirror the next
-    item, and the rule that keeps the roadmap's identities in the roadmap.
+    The phases, items and dependencies, the register and its families, the
+    status pointers that mirror the next item, and the rule that keeps the
+    roadmap's identities in the roadmap.
     """
 
     def test_the_real_roadmap_passes(self):
@@ -805,29 +809,27 @@ class RoadmapStructure(unittest.TestCase):
         said = roadmap_faults(once("## R9 — ", "## R7 — "))
         self.assertTrue(any("not R8 onward in order" in why for why in said))
 
-    def test_an_index_row_that_is_not_the_first_roadmaps_is_reported(self):
-        said = roadmap_faults(once("| R7.70 |", "| R%d.70 |" % 9))
-        self.assertTrue(any("is not one of its items" in why for why in said))
-
     def test_a_reference_to_nothing_is_reported(self):
         said = roadmap_faults(once("| Guarded cleanups can expand",
-                                   "| R7.99's guarded cleanups can expand"))
-        self.assertTrue(any("R7.99 is referenced and not defined" in why
-                            for why in said))
+                                   "| %s's guarded cleanups can expand"
+                                   % CLOSED))
+        self.assertTrue(any("%s is referenced and not defined" % CLOSED
+                            in why for why in said))
 
     def test_a_record_with_an_unknown_family_is_reported(self):
-        said = roadmap_faults(once("| R551-08 | Scale and self-hosting |",
-                                   "| R551-08 | Somebody else |"))
+        said = roadmap_faults(once("| %s | Scale and self-hosting |"
+                                   % MEASURED,
+                                   "| %s | Somebody else |" % MEASURED))
         self.assertTrue(any("unknown family" in why for why in said))
 
     def test_a_record_registered_twice_is_reported(self):
-        said = roadmap_faults(once("| R551-09 | Competitive",
-                                   "| R551-08 | Competitive"))
+        said = roadmap_faults(once("| %s | Competitive" % GUARDED,
+                                   "| %s | Competitive" % MEASURED))
         self.assertTrue(any("registered twice" in why for why in said))
 
     def test_a_record_scheduled_on_no_item_is_reported(self):
         said = roadmap_faults(once("| scheduled " + SECOND + " |",
-                                   "| scheduled R7.10 |"))
+                                   "| scheduled %s |" % CLOSED))
         self.assertTrue(any("not a work item of this roadmap" in why
                             for why in said))
 
@@ -845,7 +847,7 @@ class RoadmapStructure(unittest.TestCase):
         said = roadmap_faults(once(
             "| A measured cleanup workload with unacceptable growth. |",
             "| — |"))
-        self.assertTrue(any("R551-09 has no activation" in why
+        self.assertTrue(any("%s has no activation" % GUARDED in why
                             for why in said))
 
     def test_a_family_that_owns_nothing_is_reported(self):
@@ -856,15 +858,29 @@ class RoadmapStructure(unittest.TestCase):
                             for why in said))
 
     def test_a_roadmap_identity_cited_elsewhere_is_reported(self):
+        #  An item or record of either roadmap: the first roadmap's are
+        #  closed and in the history, and no more welcome outside it.
+        from check_controls import tree
+        for cited in (FIRST, CLOSED, MEASURED, "SR-%02d" % 3):
+            with self.subTest(cited=cited), \
+                    tree(copied=ROADMAP_INPUTS) as root:
+                target = root / "docs/ir.md"
+                target.write_text(target.read_text()
+                                  + "\nSee %s for the rest.\n" % cited)
+                said = [(where, why) for where, _, why
+                        in checker.check_roadmap_citations(True)]
+                self.assertTrue(any(where == "docs/ir.md" and cited in why
+                                    for where, why in said))
+
+    def test_a_letter_and_a_digit_is_not_a_citation(self):
+        #  The inherited review records are spelled like a byte, a decision
+        #  and an erratum, so the rule leaves them to review.
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
             target = root / "docs/ir.md"
             target.write_text(target.read_text()
-                              + "\nSee %s for the rest.\n" % FIRST)
-            said = [(where, why) for where, _, why
-                    in checker.check_roadmap_citations(True)]
-        self.assertTrue(any(where == "docs/ir.md" and FIRST in why
-                            for where, why in said))
+                              + "\nThe byte C2, D6 and erratum E1.\n")
+            self.assertEqual(checker.check_roadmap_citations(True), [])
 
     def test_the_status_pointer_may_name_the_next_item(self):
         #  The one place outside ROADMAP.md an identity belongs, because

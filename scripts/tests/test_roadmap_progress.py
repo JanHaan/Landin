@@ -22,17 +22,23 @@ CHECK = load_module("landin_check", ROOT / "check.py")
 RENDER = load_module("landin_render", ROOT / "docs/site/render_html.py")
 
 
+#  Synthetic items.  They are built rather than written, because check.py
+#  refuses a roadmap identity written anywhere but ROADMAP.md, and a test
+#  of the rules that read one is no exception.
+FIRST, SECOND, THIRD = ("R%d.%d" % (4, n) for n in (50, 60, 70))
+
+
 BETWEEN_ITEMS = """\
-### R4.50 — Finish the baseline
+### {first} — Finish the baseline
 
 Status: complete
 Depends on: none
 
-### R4.60 — Start source debugging
+### {second} — Start source debugging
 
 Status: planned
-Depends on: R4.50
-"""
+Depends on: {first}
+""".format(first=FIRST, second=SECOND)
 
 ACTIVE_ITEM = BETWEEN_ITEMS.replace("Status: complete", "Status: active", 1)
 #  The endpoint: the same two items, with nothing left to do.  It differs
@@ -59,24 +65,24 @@ class RoadmapProgress(unittest.TestCase):
                 CHECK.ROOT = old_root
 
     def test_between_items_uses_the_ready_planned_pointer(self):
-        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
                   "(planned).**")
         self.assertEqual(self.project_status(BETWEEN_ITEMS, marker), [])
         progress = RENDER.roadmap_progress(BETWEEN_ITEMS)
         self.assertIsNone(progress["current"])
-        self.assertEqual(progress["following"]["key"], "R4.60")
+        self.assertEqual(progress["following"]["key"], SECOND)
         self.assertEqual(progress["following"]["status"], "planned")
 
     def test_active_item_keeps_the_current_pointer(self):
-        marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
+        marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
         self.assertEqual(self.project_status(ACTIVE_ITEM, marker), [])
         progress = RENDER.roadmap_progress(ACTIVE_ITEM)
-        self.assertEqual(progress["current"]["key"], "R4.50")
-        self.assertEqual(progress["following"]["key"], "R4.60")
+        self.assertEqual(progress["current"]["key"], FIRST)
+        self.assertEqual(progress["following"]["key"], SECOND)
 
     def test_multiple_active_status_pointers_are_refused(self):
         two_active = ACTIVE_ITEM.replace("Status: planned", "Status: active", 1)
-        marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
+        marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
         problems = self.project_status(two_active, marker)
         self.assertTrue(any("2 active" in problem[2] for problem in problems))
         with self.assertRaisesRegex(SystemExit, "exactly one active"):
@@ -85,56 +91,56 @@ class RoadmapProgress(unittest.TestCase):
     def test_parallel_ready_items_follow_roadmap_order(self):
         two_ready = BETWEEN_ITEMS + """\
 
-### R4.70 — Start the container program
+### %s — Start the container program
 
 Status: planned
 Depends on: none
-"""
-        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+""" % THIRD
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
                   "(planned).**")
         self.assertEqual(self.project_status(two_ready, marker), [])
         progress = RENDER.roadmap_progress(two_ready)
         self.assertIsNone(progress["current"])
-        self.assertEqual(progress["following"]["key"], "R4.60")
-        wrong = marker.replace("R4.60 — Start source debugging",
-                               "R4.70 — Start the container program")
+        self.assertEqual(progress["following"]["key"], SECOND)
+        wrong = marker.replace(SECOND + " — Start source debugging",
+                               THIRD + " — Start the container program")
         problems = self.project_status(two_ready, wrong)
         self.assertTrue(any("roadmap status pointer" in problem[2]
                             for problem in problems))
 
     def test_the_endpoint_uses_its_own_pointer(self):
-        marker = ("**Roadmap endpoint: R4.60 — Start source debugging"
+        marker = ("**Roadmap endpoint: " + SECOND + " — Start source debugging"
                   " (complete).**")
         self.assertEqual(self.project_status(ENDPOINT, marker), [])
         progress = RENDER.roadmap_progress(ENDPOINT)
         self.assertIsNone(progress["current"])
         self.assertIsNone(progress["following"])
-        self.assertEqual(progress["endpoint"]["key"], "R4.60")
-        self.assertEqual([item["key"] for item in progress["recent"]], ["R4.50"])
+        self.assertEqual(progress["endpoint"]["key"], SECOND)
+        self.assertEqual([item["key"] for item in progress["recent"]], [FIRST])
 
     def test_the_endpoint_pointer_is_refused_before_the_endpoint(self):
-        marker = ("**Roadmap endpoint: R4.60 — Start source debugging"
+        marker = ("**Roadmap endpoint: " + SECOND + " — Start source debugging"
                   " (complete).**")
         problems = self.project_status(BETWEEN_ITEMS, marker)
         self.assertTrue(any("roadmap status pointer is endpoint" in problem[2]
                             for problem in problems))
 
     def test_a_next_item_pointer_is_refused_after_the_endpoint(self):
-        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
                   "(planned).**")
         problems = self.project_status(ENDPOINT, marker)
         self.assertTrue(any("roadmap status pointer is next" in problem[2]
                             for problem in problems))
 
     def test_the_endpoint_names_the_last_item_in_roadmap_order(self):
-        marker = "**Roadmap endpoint: R4.50 — Finish the baseline (complete).**"
+        marker = "**Roadmap endpoint: " + FIRST + " — Finish the baseline (complete).**"
         problems = self.project_status(ENDPOINT, marker)
         self.assertTrue(any("roadmap status pointer" in problem[2]
                             for problem in problems))
 
     def test_unavailable_status_is_refused(self):
         roadmap = BETWEEN_ITEMS.replace("Status: planned", "Status: blocked", 1)
-        marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
+        marker = "**Current roadmap work: " + FIRST + " — Finish the baseline.**"
         problems = self.project_status(roadmap, marker)
         self.assertTrue(any("0 active and 0 dependency-ready" in problem[2]
                             for problem in problems))
@@ -146,7 +152,7 @@ Depends on: none
                          ENDPOINT)
 
     def test_wrong_marker_is_refused(self):
-        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+        marker = ("**Next roadmap item: " + SECOND + " — Start source debugging "
                   "(planned).**")
         problems = self.project_status(ACTIVE_ITEM, marker)
         self.assertTrue(any("roadmap status pointer" in problem[2]
@@ -165,7 +171,7 @@ Depends on: none
             finally:
                 RENDER.SITE = old_site
         self.assertIn("next planned item", index)
-        self.assertIn("R4.60", index)
+        self.assertIn(SECOND, index)
         self.assertNotIn('<div class="roadmap-now">', index)
         self.assertNotIn("roadmap endpoint", index)
 
@@ -182,7 +188,7 @@ Depends on: none
             finally:
                 RENDER.SITE = old_site
         self.assertIn("roadmap endpoint", index)
-        self.assertIn("R4.60", index)
+        self.assertIn(SECOND, index)
         self.assertNotIn("next planned item", index)
         self.assertNotIn('<div class="roadmap-now">', index)
 

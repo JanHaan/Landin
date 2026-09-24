@@ -163,10 +163,7 @@ ROADMAP_REFERENCE = re.compile(r"R\d+\.[1-9]\d*")
 ROADMAP_REFERENCE_CANDIDATE = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+)(?![A-Za-z0-9_.])")
 #  The first roadmap, its eight phases numbered from zero, is closed and
-#  survives in ROADMAP.md only as an index of its items, so that the
-#  citations it left in the tree resolve until they are removed.  This
-#  roadmap's phases start after it.
-FIRST_ROADMAP_HEADING = "## The first roadmap"
+#  survives only in the history.  This roadmap's phases start after it.
 FIRST_ROADMAP_PHASES = 8
 SUCCESSOR_HEADING = "## Successor families"
 REGISTER_HEADING = "## Register"
@@ -175,11 +172,14 @@ REGISTER_COLUMNS = ("Record", "Family", "What stands", "Activation",
 REGISTER_RECORD = re.compile(r"R551-\d\d|R730-\d\d|[A-F]\d|SR-\d\d")
 REGISTER_STATUS = re.compile(
     r"open|limit|watch|scheduled (R\d+\.\d+)|retired: \S.*")
-#  This roadmap's own identities, which may appear nowhere but ROADMAP.md
-#  and the three status pointers that mirror it.  The first roadmap's are
-#  not matched: they are the exception until they are removed.
-NEW_ROADMAP_CITATION = re.compile(
-    r"(?<![A-Za-z0-9_.])(R(?:[89]|[1-9]\d+)\.\d+|SR-\d\d)"
+#  A work item of either roadmap, or a record of the register that is
+#  spelled like no other identifier in the tree: the first roadmap's two
+#  debt ledgers and the records added since.  None may appear anywhere but
+#  ROADMAP.md and the status pointers that mirror it.  The inherited review
+#  records, a letter and a digit, are not matched: `C2` is also a byte, `D6`
+#  a decision and `E1` an erratum, and no rule could tell them apart.
+ROADMAP_CITATION = re.compile(
+    r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d\d)"
     r"(?![A-Za-z0-9_])")
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",
@@ -1258,25 +1258,9 @@ def read_grammar(path):
 
 
 def roadmap_statuses(text):
-    """Every roadmap item's status: this roadmap's and the first one's.
-
-    The first roadmap's items are all complete and appear only in its
-    index; a citation of one resolves there until the citations are gone.
-    """
-    out = dict(re.findall(r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
-                          text, re.M))
-    for item in first_roadmap_index(text):
-        out.setdefault(item, "complete")
-    return out
-
-
-def first_roadmap_index(text):
-    """The first roadmap's item identities, in the order its index lists them."""
-    section = text.split("\n" + FIRST_ROADMAP_HEADING + "\n", 1)
-    if len(section) != 2:
-        return []
-    body = section[1].split("\n## ", 1)[0]
-    return re.findall(r"^\| (R\d+\.\d+) \| [^|]+ \|$", body, re.M)
+    """Every work item's status, read from its heading."""
+    return dict(re.findall(r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
+                           text, re.M))
 
 
 def successor_families(text):
@@ -1336,7 +1320,7 @@ def check_roadmap(path):
             out.append((n, "malformed roadmap work heading"))
 
     #  This roadmap's phases start where the first one's ended and run in
-    #  order without a gap; the first roadmap's are its index, not headings.
+    #  order without a gap.
     expected_phases = ["R%d" % n for n in range(
         FIRST_ROADMAP_PHASES, FIRST_ROADMAP_PHASES + len(actual_phases))]
     if not actual_phases:
@@ -1427,23 +1411,11 @@ def check_roadmap(path):
                             " %s is %s" %
                             (work_id, name, work_statuses[name])))
 
-    #  The first roadmap's index: its own identities only, each once, none
-    #  of them also a live heading.
+    #  References in prose and matrices should be well formed and resolve
+    #  too.  The first roadmap's items are in the history, not here, so a
+    #  reference to one is a reference to nothing this file holds.
     text = "\n".join(lines)
-    index = first_roadmap_index(text)
-    for item in index:
-        if int(item[1:].split(".")[0]) >= FIRST_ROADMAP_PHASES:
-            out.append((1, "%s is in the first roadmap's index and is not"
-                        " one of its items" % item))
-        if item in works:
-            out.append((works[item][0], "%s is both indexed and a work item"
-                        % item))
-    for item, count in collections.Counter(index).items():
-        if count > 1:
-            out.append((1, "%s is indexed twice" % item))
-
-    #  References in prose and matrices should be well formed and resolve too.
-    known = set(works) | set(index)
+    known = set(works)
     for match in ROADMAP_REFERENCE_CANDIDATE.finditer(text):
         work_id = match.group(1)
         line = text.count("\n", 0, match.start()) + 1
@@ -1533,15 +1505,15 @@ def register_problems(text, statuses):
 
 
 def check_roadmap_citations(full_run):
-    """This roadmap's items and records are cited in ROADMAP.md and nowhere else.
+    """Roadmap items and records are cited in ROADMAP.md and nowhere else.
 
-    The first roadmap's identities ended up in about seven hundred places:
+    The first roadmap's identities ended up in some sixteen hundred lines:
     comments, diagnostic text, goldens, the specification.  An item is
     finished long before the text citing it is, and a citation that outlives
-    its item points a reader at nothing.  So the rule starts with the second
-    roadmap: none of its identities may appear outside it.  The one
-    exception is the status pointer README.md and handoff.md carry, which
-    check_project_status holds to the roadmap and the site renders.
+    its item points a reader at nothing.  So no identity of either roadmap
+    may appear outside it.  The one exception is the status pointer
+    README.md and handoff.md carry, which check_project_status holds to the
+    roadmap and the site renders.
     """
     if not full_run:
         return []
@@ -1560,12 +1532,12 @@ def check_roadmap_citations(full_run):
                     text = stream.read()
             except (UnicodeDecodeError, OSError):
                 continue
-            if not NEW_ROADMAP_CITATION.search(text):
+            if not ROADMAP_CITATION.search(text):
                 continue
             for n, line in enumerate(text.splitlines(), 1):
                 if any(pattern.match(line) for pattern in pointers):
                     continue
-                for found in NEW_ROADMAP_CITATION.finditer(line):
+                for found in ROADMAP_CITATION.finditer(line):
                     out.append((relative, n,
                                 "%s is cited outside ROADMAP.md, which is the"
                                 " only place a roadmap identity belongs"
