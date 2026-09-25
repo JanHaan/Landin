@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""How the frontend's time grows with the size of the program it checks.
+"""How the compiler's time grows with the size of the program it checks.
 
 Each family below generates a program at 1,000, 2,000, 4,000, 8,000 and
-16,000 declarations and asks the compiler to check it: scan, parse, resolve,
-type and flow checking, and lowering to verified IR, with nothing emitted.
-The compiler's own `--stage-report` says how much processor time those stages
-took, which leaves out process start, reading the sources and the harness.
-Five runs per input, and the median of them.
+16,000 declarations and asks the compiler to check it and emit its assembly:
+scan, parse, resolve, type and flow checking and lowering to verified IR,
+which is the frontend, and then optimization and the backend, which is
+emission.  The compiler's own `--stage-report` says how much processor time
+each stage took, which leaves out process start, reading the sources and
+the harness.  Five runs per input, and the median of them.
 
 The verdict is a ratio: the median at one size over the median at half that
-size, for every doubling in every family.  A ratio compares two runs on the
+size, for every doubling in every family, taken for the frontend and for
+emission separately so that a cheap stage cannot hide a growing one.  A ratio compares two runs on the
 same machine a few seconds apart, so it does not depend on how fast the
 runner is, and a pass that grows with the square of the program shows up as
 four no matter what the machine is.  A ratio above the limit fails.
@@ -54,10 +56,12 @@ SIZES = (1000, 2000, 4000, 8000, 16000)
 RUNS = 5
 LIMIT = 2.5
 
-#  The stages the ratio is taken over: everything that reads the source,
-#  and nothing that writes a file.
+#  The stages the ratios are taken over: everything that reads the source,
+#  and everything that turns the verified IR into assembly.
 FRONTEND = ("loading", "syntax", "configuration", "resolution",
             "checking", "lowering")
+EMISSION = ("emission",)
+PARTS = (("frontend", FRONTEND), ("emission", EMISSION))
 
 DERIVED = (
     ("derived log filter", "examples/derived_hosted"),
@@ -86,6 +90,24 @@ def functions(size: int) -> dict[str, str]:
                      f"    r = {call}\nend f{index}\n")
     parts.append("public main: () -> (code: i32) =\n"
                  f"    code = f{count - 1}(42)\nend main\n")
+    return {"main.ldn": "\n".join(parts)}
+
+
+def atoms(size: int) -> dict[str, str]:
+    """Functions that each fail with an atom of their own and handle the
+    failure of the one before: four declarations each, the atom, the
+    function, its parameter and its named return."""
+    count = size // 4
+    parts = []
+    for index in range(count):
+        call = (f"    result = f{index - 1}(value) else 0\n" if index
+                else "    result = value\n")
+        parts.append(f"e{index}: atom\n"
+                     f"f{index}: (value: i32) -> (result: i32) ! e{index} =\n"
+                     f"    fail e{index} when value == {index + 100000}\n"
+                     + call + f"end f{index}\n")
+    parts.append("public main: () -> (code: i32) =\n"
+                 f"    code = f{count - 1}(42) else 1\nend main\n")
     return {"main.ldn": "\n".join(parts)}
 
 
@@ -198,6 +220,7 @@ def fields(size: int) -> dict[str, str]:
 
 FAMILIES = (
     ("functions", functions),
+    ("atoms", atoms),
     ("modules", modules),
     ("generics", generics),
     ("constants", constants),
@@ -217,9 +240,11 @@ def default_refine() -> str:
 
 def measure(refine: str, root: str, entry: str, report: str,
             timeout: float) -> dict:
-    """One compilation; the frontend's processor seconds, the peak resident
-    set in KiB and the compilation's sizes, from the compiler's own report."""
-    command = [refine, "--root=" + root, "--stage-report=" + report, entry]
+    """One compilation; the frontend's and emission's processor seconds, the
+    peak resident set in KiB and the compilation's sizes, from the
+    compiler's own report."""
+    command = [refine, "--root=" + root, "--stage-report=" + report,
+               "--emit=asm", "-o", report + ".s", entry]
     started = time.monotonic()
     completed = subprocess.run(command, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, timeout=timeout,
@@ -233,17 +258,17 @@ def measure(refine: str, root: str, entry: str, report: str,
     with open(report, encoding="utf-8") as handle:
         data = json.load(handle)
     stages = {row["stage"]: row for row in data["stages"]}
-    missing = [name for name in FRONTEND if name not in stages]
+    missing = [name for name in FRONTEND + EMISSION if name not in stages]
     if missing:
         raise RuntimeError("the stage report lacks " + ", ".join(missing))
-    return {
-        "seconds": sum(stages[name]["processor_us"]
-                       for name in FRONTEND) / 1e6,
-        "peak_kib": max(row["peak_kib"] for row in data["stages"]),
-        "stages": {name: stages[name]["processor_us"] / 1e6
-                   for name in FRONTEND},
-        "sizes": data["sizes"],
-    }
+    result = {part: sum(stages[name]["processor_us"] for name in names) / 1e6
+              for part, names in PARTS}
+    result.update(
+        peak_kib=max(row["peak_kib"] for row in data["stages"]),
+        stages={name: stages[name]["processor_us"] / 1e6
+                for name in FRONTEND + EMISSION},
+        sizes=data["sizes"])
+    return result
 
 
 def median_of(refine: str, root: str, entry: str, work: str, runs: int,
@@ -251,14 +276,17 @@ def median_of(refine: str, root: str, entry: str, work: str, runs: int,
     samples = [measure(refine, root, entry,
                        os.path.join(work, "stages.json"), timeout)
                for _ in range(runs)]
-    seconds = statistics.median(sample["seconds"] for sample in samples)
-    stages = {name: statistics.median(sample["stages"][name]
-                                      for sample in samples)
-              for name in FRONTEND}
-    return {"seconds": seconds, "stages": stages,
-            "peak_kib": max(sample["peak_kib"] for sample in samples),
-            "sizes": samples[0]["sizes"],
-            "samples": [sample["seconds"] for sample in samples]}
+    result = {part: statistics.median(sample[part] for sample in samples)
+              for part, _ in PARTS}
+    result.update(
+        stages={name: statistics.median(sample["stages"][name]
+                                        for sample in samples)
+                for name in FRONTEND + EMISSION},
+        peak_kib=max(sample["peak_kib"] for sample in samples),
+        sizes=samples[0]["sizes"],
+        samples={part: [sample[part] for sample in samples]
+                 for part, _ in PARTS})
+    return result
 
 
 def write_program(directory: str, files: dict[str, str]) -> None:
@@ -320,18 +348,26 @@ def main(argv: list[str]) -> int:
                     failures.append(f"{name} at {size}: {error}")
                     print(f"  {size:>6}  failed")
                     break
-                ratio = (result["seconds"] / rows[-1]["seconds"]
-                         if rows and rows[-1]["seconds"] > 0 else None)
-                result.update(size=size, ratio=ratio)
+                ratios = {part: (result[part] / rows[-1][part]
+                                 if rows and rows[-1][part] > 0 else None)
+                          for part, _ in PARTS}
+                result.update(size=size, ratios=ratios)
                 rows.append(result)
-                shown = f"{ratio:5.2f}x" if ratio is not None else "      "
-                print(f"  {size:>6}  {result['seconds']:9.3f}s  {shown}"
+                shown = "".join(
+                    f"  {part} {result[part]:8.3f}s "
+                    + (f"{ratios[part]:5.2f}x" if ratios[part] is not None
+                       else "      ")
+                    for part, _ in PARTS)
+                print(f"  {size:>6}{shown}"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB"
                       f"  {result['sizes']['declarations']:>6} declarations")
-                if ratio is not None and ratio > arguments.limit:
-                    failures.append(
-                        f"{name}: {rows[-2]['size']} -> {size} grew"
-                        f" {ratio:.2f}x, more than {arguments.limit}x")
+                for part, _ in PARTS:
+                    ratio = ratios[part]
+                    if ratio is not None and ratio > arguments.limit:
+                        failures.append(
+                            f"{name}: {part} {rows[-2]['size']} -> {size}"
+                            f" grew {ratio:.2f}x, more than"
+                            f" {arguments.limit}x")
             record["families"][name] = rows
 
         if not arguments.no_derived:
@@ -346,7 +382,8 @@ def main(argv: list[str]) -> int:
                     print(f"  {name:<22}  failed")
                     continue
                 record["derived"][name] = result
-                print(f"  {name:<22}  {result['seconds']:9.3f}s"
+                print(f"  {name:<22}  frontend {result['frontend']:8.3f}s"
+                      f"  emission {result['emission']:8.3f}s"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB")
 
     if arguments.json:

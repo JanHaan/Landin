@@ -16,7 +16,7 @@
 #  exact-revision acceptance: no Darwin, no Cortex-M execution, no
 #  debugger, no bindings, no release-mode corpus, no evidence retained. It
 #  builds the compiler on Linux, runs the two things that fail loudly when
-#  the language moves, and holds the frontend to its scaling bound.
+#  the language moves, and holds the compiler to its scaling bound.
 #  ROADMAP.md schedules the rest.
 #
 #  Two jobs, because the first measurement was lopsided: check.py takes a
@@ -31,7 +31,7 @@
 #  `compiler`, because the build is its first real step.
 #
 #  A third job, `scaling`, builds the release compiler and runs the
-#  frontend's scaling benchmark.  It shares nothing with the other two
+#  scaling benchmark.  It shares nothing with the other two
 #  either, and a ratio it measures does not depend on the runner's speed.
 
 name: gate
@@ -94,10 +94,10 @@ jobs:
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=2 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
-  #  The frontend's scaling bound: generated programs of 1,000 to 16,000
-  #  declarations, and the derived programs, checked five times each with
-  #  the release compiler.  A doubling whose median frontend time grows
-  #  more than 2.5 times fails.  A ratio compares two runs on this runner a
+  #  The compiler's scaling bound: generated programs of 1,000 to 16,000
+  #  declarations, and the derived programs, checked and emitted five times
+  #  each with the release compiler.  A doubling whose median frontend or
+  #  emission time grows more than 2.5 times fails.  A ratio compares two runs on this runner a
   #  few seconds apart, so the verdict does not depend on its speed.  Its
   #  own job, because it needs the release build and nothing the corpus
   #  does.
