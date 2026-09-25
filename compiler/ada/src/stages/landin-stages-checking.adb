@@ -112,6 +112,11 @@ package body Landin.Stages.Checking is
       Facts : constant Landin.Targets.Target_Facts := Target (Context);
       Found : Landin.Diagnostics.Diagnostic_List;
 
+      --  The forest is complete before checking starts, so the widest
+      --  struct flow must be able to name a field of is fixed for the run.
+      Widest_Struct : constant Natural :=
+        Landin.Stages.Checking.Flow.Widest_Struct (Context);
+
       --  Keep transport's duplicate policy intact. Only exact diagnostics
       --  produced by different instances of one generic template coalesce.
       type Generic_Report_Key is record
@@ -33196,7 +33201,7 @@ package body Landin.Stages.Checking is
          --  return on each returning and final edge.
          Landin.Stages.Checking.Flow.Check_Function
            (Context, Of_Tree, Node, Runs,
-            Syn.Returns_Of (Of_Tree, Node), Found);
+            Syn.Returns_Of (Of_Tree, Node), Widest_Struct, Found);
          Landin.Stages.Checking.References.Check_Function
            (Context, Of_Tree, Node, Runs, Found, Item.Probe);
 

@@ -45,12 +45,43 @@ package body Landin.Stages.Checking.Flow is
    package Call_Places is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Syn.Node_Id);
 
+   --  Read from the trees rather than from the layouts, because this sizes
+   --  a type and so is elaborated before the pass that lays anything out; a
+   --  struct body is [0750]'s field list either way.
+   function Widest_Struct (Context : in out Compilation) return Natural is
+      Trees : constant not null access Syn.Forest.Table :=
+        Landin.Stages.Trees (Context);
+      Most : Natural := 0;
+   begin
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Syn.Forest.Tree_Of (Trees.all, Nth_Source (Context, Index));
+         begin
+            for Node in Syn.Node_Id'(1)
+                        .. Syn.Node_Id (Syn.Node_Count (Of_Tree.all))
+            loop
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Struct_Body then
+                  Most :=
+                    Natural'Max (Most, Syn.Field_Count (Of_Tree.all, Node));
+               elsif Syn.Kind (Of_Tree.all, Node) = Syn.Return_List then
+                  Most := Natural'Max
+                    (Most, Syn.Slot_Count (Of_Tree.all, Node));
+               end if;
+            end loop;
+         end;
+      end loop;
+
+      return Most;
+   end Widest_Struct;
+
    procedure Check_Function
      (Context       : in out Compilation;
       Of_Tree       : Syn.Tree;
       Function_Node : Syn.Node_Id;
       Body_Node     : Syn.Node_Id;
       Result_Node   : Syn.Node_Id;
+      Widest        : Natural;
       Into          : in out Landin.Diagnostics.Diagnostic_List)
    is
       Spellings : constant not null access Landin.Source.Names.Table :=
@@ -167,56 +198,10 @@ package body Landin.Stages.Checking.Flow is
       --  [1910]: assigned before it is read
       ------------------------------------------------------------
 
-      --  The widest struct the program writes, which is how many field
-      --  bits a row of the set below needs.  Read from the trees rather
-      --  than from the layouts, because this sizes a type and so is
-      --  elaborated before the pass that lays anything out; a struct body
-      --  is [0750]'s field list either way.
-      function Widest_Struct return Natural;
 
-      function Widest_Struct return Natural is
-         Most : Natural := 0;
-      begin
-         for Index in 1 .. Source_Count (Context) loop
-            declare
-               Of_Tree : constant not null access constant Syn.Tree :=
-                 Tree_For (Nth_Source (Context, Index));
-            begin
-               for Node in Syn.Node_Id'(1)
-                           .. Syn.Node_Id (Syn.Node_Count (Of_Tree.all))
-               loop
-                  if Syn.Kind (Of_Tree.all, Node) = Syn.Struct_Body then
-                     Most :=
-                       Natural'Max
-                         (Most, Syn.Field_Count (Of_Tree.all, Node));
-                  elsif Syn.Kind (Of_Tree.all, Node) = Syn.Return_List then
-                     Most := Natural'Max
-                       (Most, Syn.Slot_Count (Of_Tree.all, Node));
-                  end if;
-               end loop;
-            end;
-         end loop;
-
-         return Most;
-      end Widest_Struct;
-
-      --  One Boolean per declaration, copied at a branch and merged after
-      --  it.  A set and not a counter, because [1910] is about paths: a
-      --  name assigned in one arm and not another is not assigned after
-      --  the branch, and nothing but the per-declaration answer says that.
-      --
-      --  D16 makes a field of a struct local its own answer, so a row is
-      --  the name at column zero and its fields at the columns after it.
-      --  A scalar uses column zero alone; a struct never uses it, because
-      --  a value of one is not a thing this kernel can read. D88's nested
-      --  leaves use the sparse parent/child set below rather than flattening
-      --  the nominal child into this top-level row.
-      subtype Tracked is Positive range
-        1 .. Positive'Max (1, Res.Declaration_Count (Meanings.all));
-
-      --  The forest is fixed for this invocation. Reuse this elaborated
-      --  bound throughout flow instead of scanning the trees at each read.
-      subtype Tracked_Field is Natural range 0 .. Widest_Struct;
+      --  The forest is fixed for this invocation, and the caller worked
+      --  out the widest struct in it once.
+      subtype Tracked_Field is Natural range 0 .. Widest;
 
       --  D118's neutral path, on this side of the compiler: the run of
       --  declaration-order field identities from a tracked name down to
@@ -273,7 +258,33 @@ package body Landin.Stages.Checking.Flow is
       function Last (Path : Field_Path) return Tracked_Field
       is (Path (Positive (Path.Length)));
 
-      type Assigned_Fields is array (Tracked, Tracked_Field) of Boolean;
+      --  One fact per declaration and field that holds, copied at a branch
+      --  and merged after it.  A set and not a counter, because [1910] is
+      --  about paths: a name assigned in one arm and not another is not
+      --  assigned after the branch, and nothing but the per-declaration
+      --  answer says that.  A set of what holds rather than a table of
+      --  every declaration in the program, so a copy costs what this
+      --  function has assigned and not the size of the program.
+      --
+      --  D16 makes a field of a struct local its own answer, so a name is
+      --  field zero and its fields the fields after it.  A scalar uses zero
+      --  alone; a struct never uses it, because a value of one is not a
+      --  thing this kernel can read.  D88's nested leaves use the sparse
+      --  parent/child set below rather than flattening the nominal child
+      --  into these facts.
+      type Field_Fact is record
+         Declaration : Res.Declaration_Id;
+         Field       : Tracked_Field;
+      end record;
+
+      function "<" (Left, Right : Field_Fact) return Boolean
+      is (Left.Declaration < Right.Declaration
+          or else
+            (Left.Declaration = Right.Declaration
+             and then Left.Field < Right.Field));
+
+      package Field_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Field_Fact);
 
       --  D121: an element of an array of ordinary structs is assigned a
       --  part at a time, exactly as a local struct is, so a fact names
@@ -336,7 +347,7 @@ package body Landin.Stages.Checking.Flow is
         (Element_Type => Nested_Fact);
 
       type Assigned_Set is record
-         Fields       : Assigned_Fields := [others => [others => False]];
+         Fields       : Field_Sets.Set;
          Elements     : Element_Sets.Set;
          Whole_Arrays : Array_Sets.Set;
          Nested       : Nested_Sets.Set;
@@ -344,17 +355,17 @@ package body Landin.Stages.Checking.Flow is
          --  definite assignment: initialized locals and parameters are live
          --  without appearing in Fields, but a sink makes one exact place
          --  dead until a later assignment revives it.
-         Dead_Fields  : Assigned_Fields := [others => [others => False]];
+         Dead_Fields  : Field_Sets.Set;
          Dead_Elements : Element_Sets.Set;
          Dead_Nested  : Nested_Sets.Set;
       end record;
 
       Nothing_Assigned : constant Assigned_Set :=
-        (Fields        => [others => [others => False]],
+        (Fields        => Field_Sets.Empty_Set,
          Elements      => Element_Sets.Empty_Set,
          Whole_Arrays  => Array_Sets.Empty_Set,
          Nested        => Nested_Sets.Empty_Set,
-         Dead_Fields   => [others => [others => False]],
+         Dead_Fields   => Field_Sets.Empty_Set,
          Dead_Elements => Element_Sets.Empty_Set,
          Dead_Nested   => Nested_Sets.Empty_Set);
 
@@ -583,6 +594,7 @@ package body Landin.Stages.Checking.Flow is
          procedure Forget (Facts : in out Element_Sets.Set);
          procedure Forget (Facts : in out Nested_Sets.Set);
          procedure Forget (Facts : in out Array_Sets.Set);
+         procedure Forget (Facts : in out Field_Sets.Set);
 
          procedure Forget (Facts : in out Element_Sets.Set) is
             Position : Element_Sets.Cursor :=
@@ -609,6 +621,18 @@ package body Landin.Stages.Checking.Flow is
             end loop;
          end Forget;
 
+         procedure Forget (Facts : in out Field_Sets.Set) is
+            Position : Field_Sets.Cursor := Facts.Ceiling ((Id, 0));
+            Previous : Field_Sets.Cursor;
+         begin
+            while Field_Sets.Has_Element (Position) loop
+               exit when Field_Sets.Element (Position).Declaration /= Id;
+               Previous := Position;
+               Field_Sets.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
          procedure Forget (Facts : in out Array_Sets.Set) is
             Position : Array_Sets.Cursor := Facts.Ceiling ((Id, No_Path));
             Previous : Array_Sets.Cursor;
@@ -628,10 +652,8 @@ package body Landin.Stages.Checking.Flow is
          --  A declaration starts a fresh lifetime on every execution. The
          --  loop head may retain facts about its previous instance, but
          --  neither an assignment nor a consumption belongs to this one.
-         for Field in 0 .. Tracked_Field'Last loop
-            State.Fields (Positive (Id), Field) := False;
-            State.Dead_Fields (Positive (Id), Field) := False;
-         end loop;
+         Forget (State.Fields);
+         Forget (State.Dead_Fields);
          Forget (State.Elements);
          Forget (State.Whole_Arrays);
          Forget (State.Nested);
@@ -881,7 +903,7 @@ package body Landin.Stages.Checking.Flow is
                            | Landin.Checking.Aggregate_Field
                            | Landin.Checking.Variant_Field =>
                            Missing :=
-                             not State.Fields (Positive (Id), Each);
+                             not State.Fields.Contains ((Id, Each));
                      end case;
 
                      if Missing then
@@ -904,7 +926,7 @@ package body Landin.Stages.Checking.Flow is
          end if;
 
          if not Is_Tracked (Id)
-           or else State.Fields (Positive (Id), Field)
+           or else State.Fields.Contains ((Id, Field))
            or else (Field = 0
                     and then Landin.Checking.Type_Of (Types.all, Id)
                                = Ty.Fixed_Array
@@ -922,11 +944,16 @@ package body Landin.Stages.Checking.Flow is
          if Id = Res.No_Declaration then
             return False;
          end if;
-         for Field in Tracked_Field loop
-            if State.Dead_Fields (Positive (Id), Field) then
+         declare
+            First : constant Field_Sets.Cursor :=
+              State.Dead_Fields.Ceiling ((Id, 0));
+         begin
+            if Field_Sets.Has_Element (First)
+              and then Field_Sets.Element (First).Declaration = Id
+            then
                return True;
             end if;
-         end loop;
+         end;
          for Fact of State.Dead_Nested loop
             if Fact.Declaration = Id then
                return True;
@@ -1061,13 +1088,13 @@ package body Landin.Stages.Checking.Flow is
          end if;
 
          --  The name itself, which is column zero of the dense table.
-         if State.Fields (Positive (Id), 0) then
+         if State.Fields.Contains ((Id, 0)) then
             return True;
          end if;
 
          for Length in 1 .. Deepest loop
             if Length = 1 then
-               if State.Fields (Positive (Id), Path (1)) then
+               if State.Fields.Contains ((Id, Path (1))) then
                   return True;
                end if;
             else
@@ -1400,9 +1427,9 @@ package body Landin.Stages.Checking.Flow is
               (State.Dead_Elements,
                (Id, Path, Position, Below));
          elsif Path.Is_Empty then
-            State.Dead_Fields (Positive (Id), 0) := True;
+            State.Dead_Fields.Include ((Id, 0));
          elsif Path.Length = 1 then
-            State.Dead_Fields (Positive (Id), Last (Path)) := True;
+            State.Dead_Fields.Include ((Id, Last (Path)));
          else
             Nested_Sets.Include (State.Dead_Nested, (Id, Path));
          end if;
@@ -1427,14 +1454,26 @@ package body Landin.Stages.Checking.Flow is
          --  Assigning a container restores every consumed part it holds.
          --  Assigning a child cannot restore a consumed ancestor.
          if not Is_Element then
+            --  A field is revived when the path assigned is a prefix of it:
+            --  the empty path revives the name and every field, a one-step
+            --  path the one field it names.
             if Path.Is_Empty then
-               State.Dead_Fields (Positive (Id), 0) := False;
+               declare
+                  Position : Field_Sets.Cursor :=
+                    State.Dead_Fields.Ceiling ((Id, 0));
+                  Previous : Field_Sets.Cursor;
+               begin
+                  while Field_Sets.Has_Element (Position)
+                    and then Field_Sets.Element (Position).Declaration = Id
+                  loop
+                     Previous := Position;
+                     Field_Sets.Next (Position);
+                     State.Dead_Fields.Delete (Previous);
+                  end loop;
+               end;
+            elsif Path.Length = 1 and then Path (1) >= 1 then
+               State.Dead_Fields.Exclude ((Id, Path (1)));
             end if;
-            for Field in 1 .. Tracked_Field'Last loop
-               if Prefix (Path, One (Field)) then
-                  State.Dead_Fields (Positive (Id), Field) := False;
-               end if;
-            end loop;
             declare
                Previous : constant Nested_Sets.Set := State.Dead_Nested;
             begin
@@ -1498,14 +1537,28 @@ package body Landin.Stages.Checking.Flow is
             return True;
          end if;
 
-         Dead := State.Dead_Fields (Positive (Id), 0);
-         for Field in 1 .. Tracked_Field'Last loop
-            Dead := Dead or else
-              (State.Dead_Fields (Positive (Id), Field)
-               and then (Prefix (One (Field), Path)
-                         or else (not Is_Element
-                                  and then Prefix (Path, One (Field)))));
-         end loop;
+         Dead := State.Dead_Fields.Contains ((Id, 0));
+         declare
+            Position : Field_Sets.Cursor :=
+              State.Dead_Fields.Ceiling ((Id, 0));
+         begin
+            while Field_Sets.Has_Element (Position)
+              and then Field_Sets.Element (Position).Declaration = Id
+            loop
+               declare
+                  Field : constant Tracked_Field :=
+                    Field_Sets.Element (Position).Field;
+               begin
+                  Dead := Dead or else
+                    (Field >= 1
+                     and then (Prefix (One (Field), Path)
+                               or else (not Is_Element
+                                        and then Prefix
+                                          (Path, One (Field)))));
+               end;
+               Field_Sets.Next (Position);
+            end loop;
+         end;
          for Fact of State.Dead_Nested loop
             Dead := Dead or else
               (Fact.Declaration = Id
@@ -1572,7 +1625,8 @@ package body Landin.Stages.Checking.Flow is
          declare
             Left   : constant Assigned_Set := Into;
             Merged : Assigned_Set :=
-              (Fields       => Left.Fields,
+              (Fields       => Field_Sets.Intersection
+                                 (Left.Fields, Branch.Fields),
                Elements     => Element_Sets.Intersection
                                  (Left.Elements, Branch.Elements),
                Whole_Arrays => Array_Sets.Intersection
@@ -1580,24 +1634,14 @@ package body Landin.Stages.Checking.Flow is
                                   Branch.Whole_Arrays),
                Nested       => Nested_Sets.Intersection
                                  (Left.Nested, Branch.Nested),
-               Dead_Fields  => Left.Dead_Fields,
+               Dead_Fields  => Field_Sets.Union
+                                 (Left.Dead_Fields, Branch.Dead_Fields),
                Dead_Elements => Element_Sets.Union
                                   (Left.Dead_Elements,
                                    Branch.Dead_Elements),
                Dead_Nested  => Nested_Sets.Union
                                   (Left.Dead_Nested, Branch.Dead_Nested));
          begin
-            for Which in Tracked loop
-               for Part in Tracked_Field loop
-                  Merged.Fields (Which, Part) :=
-                    Left.Fields (Which, Part)
-                    and Branch.Fields (Which, Part);
-                  Merged.Dead_Fields (Which, Part) :=
-                    Left.Dead_Fields (Which, Part)
-                    or Branch.Dead_Fields (Which, Part);
-               end loop;
-            end loop;
-
             --  Meet sparse facts using the same containment relation as a
             --  read: a whole-child write on one edge covers a leaf written
             --  on the other, in either branch order.
@@ -1971,7 +2015,7 @@ package body Landin.Stages.Checking.Flow is
                      then
                         return;
                      end if;
-                     Into.Fields (Positive (Id), 0) := True;
+                     Into.Fields.Include ((Id, 0));
 
                      if Landin.Checking.Type_Of (Types.all, Id)
                           = Ty.Fixed_Array
@@ -2002,7 +2046,7 @@ package body Landin.Stages.Checking.Flow is
                                  Array_Sets.Include
                                    (Into.Whole_Arrays, (Id, One (Each)));
                               else
-                                 Into.Fields (Positive (Id), Each) := True;
+                                 Into.Fields.Include ((Id, Each));
                               end if;
                            end if;
                         end loop;
@@ -2247,13 +2291,8 @@ package body Landin.Stages.Checking.Flow is
                         --  Tested contains only head/condition facts; union
                         --  with entry retains assignments from before a
                         --  loop, including its once-evaluated for bounds.
-                        for Which in Tracked loop
-                           for Part in Tracked_Field loop
-                              Tested.Fields (Which, Part) :=
-                                Tested.Fields (Which, Part)
-                                or Entry_State.Fields (Which, Part);
-                           end loop;
-                        end loop;
+                        Field_Sets.Union
+                          (Tested.Fields, Entry_State.Fields);
                         Element_Sets.Union
                           (Tested.Elements, Entry_State.Elements);
                         Array_Sets.Union
@@ -2263,7 +2302,7 @@ package body Landin.Stages.Checking.Flow is
                         --  This is an assignment ceiling, not another CFG
                         --  edge: do not reintroduce a consumed fact that an
                         --  actual exit has restored, or erase a live one.
-                        Tested.Dead_Fields := [others => [others => False]];
+                        Tested.Dead_Fields.Clear;
                         Tested.Dead_Elements.Clear;
                         Tested.Dead_Nested.Clear;
                         Merge (Exit_State, First => False, Branch => Tested);
@@ -3166,10 +3205,9 @@ package body Landin.Stages.Checking.Flow is
                               --  are available only after that case has been
                               --  selected, so they need no separate incoming
                               --  payload facts.
-                              State.Fields
-                                (Positive (Id), Which) := True;
+                              State.Fields.Include ((Id, Which));
                            else
-                              State.Fields (Positive (Id), Which) := True;
+                              State.Fields.Include ((Id, Which));
                            end if;
                         end if;
                      end;
@@ -3200,7 +3238,7 @@ package body Landin.Stages.Checking.Flow is
                         Array_Sets.Include
                           (State.Whole_Arrays, (Id, No_Path));
                      else
-                        State.Fields (Positive (Id), 0) := True;
+                        State.Fields.Include ((Id, 0));
                      end if;
 
                      --  A whole struct copied into a place assigns every
@@ -3223,17 +3261,14 @@ package body Landin.Stages.Checking.Flow is
                               is
                                  when Landin.Checking.Scalar_Field
                                     | Landin.Checking.Reference_Field =>
-                                    State.Fields
-                                      (Positive (Id), Each) := True;
+                                    State.Fields.Include ((Id, Each));
                                  when Landin.Checking.Fixed_Array_Field =>
                                     Array_Sets.Include
                                       (State.Whole_Arrays, (Id, One (Each)));
                                  when Landin.Checking.Aggregate_Field =>
-                                    State.Fields
-                                      (Positive (Id), Each) := True;
+                                    State.Fields.Include ((Id, Each));
                                  when Landin.Checking.Variant_Field =>
-                                    State.Fields
-                                      (Positive (Id), Each) := True;
+                                    State.Fields.Include ((Id, Each));
                               end case;
                            end if;
                         end loop;
