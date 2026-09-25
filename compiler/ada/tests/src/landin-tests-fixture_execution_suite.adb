@@ -1032,17 +1032,20 @@ package body Landin.Tests.Fixture_Execution_Suite is
       declare
          type Piece_Kind is (Runtime_Piece, ABI_Piece);
 
+         --  One piece of work per fixture, its profiles run in order inside
+         --  it.  Every profile runs the same program, and a program may name
+         --  a fixed file -- r480-hosted-text writes and removes one -- so two
+         --  of its profiles on two workers would race on it.  Different
+         --  fixtures still run in parallel.
          type Piece_Record is record
             Index   : Positive;
-            Profile : Positive;
             Kind    : Piece_Kind;
          end record;
 
          type Piece_Array is array (Positive range <>) of Piece_Record;
 
          Work : Piece_Array
-           (1 .. Profile_Run_Count (Found, Runtime)
-                 + Profile_Run_Count (Found, Abi));
+           (1 .. Count_Of (Found, Runtime) + Count_Of (Found, Abi));
          Last : Natural := 0;
 
          procedure Run_One
@@ -1053,13 +1056,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
          is
             Case_Item : constant Fixture := Nth (Found, Piece.Index);
          begin
-            case Piece.Kind is
-               when Runtime_Piece =>
-                  Run_Runtime
-                    (Case_Item, Host, Program, Piece.Profile, Slot);
-               when ABI_Piece =>
-                  Run_ABI (Case_Item, Host, Program, Piece.Profile, Slot);
-            end case;
+            for Profile in 1 .. Profile_Count (Case_Item) loop
+               case Piece.Kind is
+                  when Runtime_Piece =>
+                     Run_Runtime (Case_Item, Host, Program, Profile, Slot);
+                  when ABI_Piece =>
+                     Run_ABI (Case_Item, Host, Program, Profile, Slot);
+               end case;
+            end loop;
          end Run_One;
 
          procedure Run_Each is new Across_Workers
@@ -1067,27 +1071,24 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Element_Array => Piece_Array,
             Perform => Run_One);
       begin
-         --  One piece of work per fixture and profile, in corpus order.
-         --  The counters come from the collection rather than from the
-         --  workers, so they say the same thing at any job count.
+         --  In corpus order.  The counters come from the collection rather
+         --  than from the workers, so they say the same thing at any job
+         --  count.
          for Index in 1 .. Count (Found) loop
             declare
                Case_Item : constant Fixture := Nth (Found, Index);
             begin
                if Class (Case_Item) = Runtime then
                   Runtime_Ran := Runtime_Ran + 1;
-                  for Profile in 1 .. Profile_Count (Case_Item) loop
-                     Last := Last + 1;
-                     Work (Last) := (Index, Profile, Runtime_Piece);
-                     Runtime_Profiles := Runtime_Profiles + 1;
-                  end loop;
+                  Last := Last + 1;
+                  Work (Last) := (Index, Runtime_Piece);
+                  Runtime_Profiles :=
+                    Runtime_Profiles + Profile_Count (Case_Item);
                elsif Class (Case_Item) = Abi then
                   ABI_Ran := ABI_Ran + 1;
-                  for Profile in 1 .. Profile_Count (Case_Item) loop
-                     Last := Last + 1;
-                     Work (Last) := (Index, Profile, ABI_Piece);
-                     ABI_Profiles := ABI_Profiles + 1;
-                  end loop;
+                  Last := Last + 1;
+                  Work (Last) := (Index, ABI_Piece);
+                  ABI_Profiles := ABI_Profiles + Profile_Count (Case_Item);
                end if;
             end;
          end loop;

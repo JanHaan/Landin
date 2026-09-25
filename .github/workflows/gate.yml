@@ -75,7 +75,9 @@ jobs:
       #  one, 1801s at two, 2221s at four, and a timeout at eight. Two is
       #  the width, not four: each work item is itself a chain of
       #  processes, so four workers oversubscribe four vCPUs and the
-      #  heaviest fixture then passes the 600s tool limit.
+      #  heaviest fixture then passes the 600s tool limit.  A work item is
+      #  one fixture with its profiles in order, because a program may
+      #  name a fixed file and two of its profiles would race on it.
       #
       #  The default stays at one job. This is the path CI exercises on
       #  every push, and flipping the default wants mileage rather than one
