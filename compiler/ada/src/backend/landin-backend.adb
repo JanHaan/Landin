@@ -1,8 +1,10 @@
+with Ada.Containers;
 with Landin.Backend.Work_Arrays;
 with Landin.IR.Shape_Measurement;
 
 package body Landin.Backend is
 
+   use type Landin.IR.Declaration_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Shape_Kind;
    use type Landin.Targets.Byte_Count;
@@ -621,5 +623,51 @@ package body Landin.Backend is
 
       return Of_Frame.Values (Positive (Value));
    end Value_Offset;
+
+   function Ranked (Of_Unit : Landin.IR.Unit) return Atom_Codes is
+      Limit : Natural := 0;
+      Result : Atom_Codes;
+      Next : Natural := 0;
+   begin
+      for Set in 1 .. IR.Atom_Set_Count (Of_Unit) loop
+         for Index in 1 .. IR.Atom_Count (Of_Unit, IR.Atom_Set_Id (Set)) loop
+            Limit := Natural'Max
+              (Limit, Natural (IR.Nth_Atom
+                 (Of_Unit, IR.Atom_Set_Id (Set), Index)));
+         end loop;
+      end loop;
+      Result.Codes.Set_Length (Ada.Containers.Count_Type (Limit));
+      for Position in 1 .. Limit loop
+         Result.Codes (Position) := 0;
+      end loop;
+      for Set in 1 .. IR.Atom_Set_Count (Of_Unit) loop
+         for Index in 1 .. IR.Atom_Count (Of_Unit, IR.Atom_Set_Id (Set)) loop
+            Result.Codes (Positive (IR.Nth_Atom
+              (Of_Unit, IR.Atom_Set_Id (Set), Index))) := 1;
+         end loop;
+      end loop;
+      for Position in 1 .. Limit loop
+         if Result.Codes (Position) /= 0 then
+            Next := Next + 1;
+            Result.Codes (Position) := Next;
+         end if;
+      end loop;
+      return Result;
+   end Ranked;
+
+   function Atom_Code
+     (Of_Codes : Atom_Codes; Identity : Landin.IR.Declaration_Id)
+      return Positive
+   is
+   begin
+      if Identity = IR.No_Declaration
+        or else Natural (Identity) > Natural (Of_Codes.Codes.Length)
+        or else Of_Codes.Codes (Positive (Identity)) = 0
+      then
+         raise Compiler_Defect with
+           "an atom instruction names no atom-set member";
+      end if;
+      return Of_Codes.Codes (Positive (Identity));
+   end Atom_Code;
 
 end Landin.Backend;

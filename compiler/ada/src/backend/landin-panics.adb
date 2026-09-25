@@ -1,3 +1,4 @@
+with Landin.Backend;
 with Landin.Checking;
 with Landin.Machine;
 with Landin.Modules;
@@ -250,33 +251,15 @@ package body Landin.Panics is
             & "infallible: (core/panic.panic_kind, u32) -> noreturn");
          return;
       end if;
-      --  The ordinary atom ABI is dense declaration order, excluding zero.
-      --  Count each identity once even when several sets contain it.
+      --  The ordinary atom ABI is dense declaration order, excluding zero;
+      --  Valid has required every reason's atom to be in the handler's set.
       declare
-         Count : Natural := 0;
+         Codes : constant Landin.Backend.Atom_Codes :=
+           Landin.Backend.Ranked (Unit);
       begin
-         for Id in IR.Declaration_Id'(1) .. IR.Declaration_Id
-           (IR.Declaration_Limit (Unit))
-         loop
-            declare
-               Present : Boolean := False;
-            begin
-               for Set in 1 .. IR.Atom_Set_Count (Unit) loop
-                  for Index in 1 .. IR.Atom_Count (Unit, IR.Atom_Set_Id (Set))
-                  loop
-                     Present := Present or else IR.Nth_Atom
-                       (Unit, IR.Atom_Set_Id (Set), Index) = Id;
-                  end loop;
-               end loop;
-               if Present then
-                  Count := Count + 1;
-                  for Reason in Kind loop
-                     if Atoms (Reason) = Id then
-                        Into.Codes (Reason) := Count;
-                     end if;
-                  end loop;
-               end if;
-            end;
+         for Reason in Kind loop
+            Into.Codes (Reason) :=
+              Landin.Backend.Atom_Code (Codes, Atoms (Reason));
          end loop;
       end;
    end Prepare;

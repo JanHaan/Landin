@@ -245,6 +245,19 @@ package Landin.Backend is
       Facts : Landin.Targets.Target_Facts)
      return Landin.Targets.Scalar_Size;
 
+   --  An atom's code: its rank among the declarations some atom set of the
+   --  unit names, in declaration-identity order, counting from one so that
+   --  zero stays the successful half of a failing call's carrier.  Every
+   --  backend and the panic plan spell an atom this way; ranking once per
+   --  unit keeps a use from walking every set of the program again.
+   type Atom_Codes is private;
+
+   function Ranked (Of_Unit : Landin.IR.Unit) return Atom_Codes;
+
+   function Atom_Code
+     (Of_Codes : Atom_Codes; Identity : Landin.IR.Declaration_Id)
+      return Positive;
+
 private
 
    --  Shared checked stack arithmetic. The limit is never exceeded even
@@ -264,6 +277,14 @@ private
 
    package Home_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Boolean);
+
+   package Code_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
+   --  Indexed by declaration identity; zero for one no set names.
+   type Atom_Codes is record
+      Codes : Code_Vectors.Vector;
+   end record;
 
    type Frame is record
       Slots       : Offset_Vectors.Vector;

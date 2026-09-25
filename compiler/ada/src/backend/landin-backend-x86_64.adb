@@ -55,55 +55,6 @@ package body Landin.Backend.X86_64 is
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
 
-   --  A source atom identity is neutral.  Linux x86-64 gives atoms dense,
-   --  nonzero u32 codes in declaration-identity order; zero stays available
-   --  for the successful half of the failing-call carrier.
-   function Atom_Code
-     (Of_Unit : Landin.IR.Unit;
-      Identity : Landin.IR.Declaration_Id) return Positive;
-
-   function Atom_Code
-     (Of_Unit : Landin.IR.Unit;
-      Identity : Landin.IR.Declaration_Id) return Positive
-   is
-      Result : Natural := 0;
-
-      function Is_Atom
-        (Candidate : Landin.IR.Declaration_Id) return Boolean;
-
-      function Is_Atom
-        (Candidate : Landin.IR.Declaration_Id) return Boolean
-      is
-      begin
-         for Set_Index in 1 .. Landin.IR.Atom_Set_Count (Of_Unit) loop
-            declare
-               Set_Id : constant Landin.IR.Atom_Set_Id :=
-                 Landin.IR.Atom_Set_Id (Set_Index);
-            begin
-               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
-                  if Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)
-                    = Candidate
-                  then
-                     return True;
-                  end if;
-               end loop;
-            end;
-         end loop;
-         return False;
-      end Is_Atom;
-   begin
-      for Candidate in Landin.IR.Declaration_Id'(1) .. Identity loop
-         if Is_Atom (Candidate) then
-            Result := Result + 1;
-         end if;
-      end loop;
-      if Result = 0 then
-         raise Landin.Compiler_Defect with
-           "an atom instruction names no atom-set member";
-      end if;
-      return Positive (Result);
-   end Atom_Code;
-
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
 
@@ -381,6 +332,10 @@ package body Landin.Backend.X86_64 is
       Panic : access constant Landin.Panics.Plan := null)
    is
       Out_Text : Unbounded.Unbounded_String;
+      --  Dense nonzero u32 atom codes, in declaration-identity order; zero
+      --  stays available for the successful half of the failing-call
+      --  carrier.
+      Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Optimized : constant Boolean :=
         Options.Optimize /= Landin.Optimization.None;
       Bodies : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
@@ -2287,7 +2242,7 @@ package body Landin.Backend.X86_64 is
                      Next : constant String := Done & "_"
                        & Trimmed (Natural'Image (Index));
                      Code : constant Landin.Packed.Image := Landin.Packed.Image
-                       (Atom_Code (Of_Unit,
+                       (Atom_Code (Atoms_Ranked,
                         Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)));
                      Raw : constant Landin.Packed.Image :=
                        Landin.IR.Nth_Encoding (Of_Unit, Set_Id, Index);
@@ -2386,7 +2341,7 @@ package body Landin.Backend.X86_64 is
                      & Trimmed
                          (Positive'Image
                             (Atom_Code
-                               (Of_Unit,
+                               (Atoms_Ranked,
                                 Landin.IR.Atom_Of
                                   (Of_Unit, Item, Value))))
                      & ", " & Value_Operand (Value));
@@ -4838,7 +4793,7 @@ package body Landin.Backend.X86_64 is
                      for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Atoms)
                      loop
                         Emit ("cmpl $" & Trimmed (Natural'Image (Atom_Code
-                          (Of_Unit, Landin.IR.Nth_Atom
+                          (Atoms_Ranked, Landin.IR.Nth_Atom
                             (Of_Unit, Atoms, Index))))
                           & ", " & Value_Operand (Value));
                         Emit ("je " & Done);
@@ -5222,7 +5177,7 @@ package body Landin.Backend.X86_64 is
                         Held (Natural (Value)) :=
                           Landin.Types.Folded
                             (Atom_Code
-                               (Of_Unit,
+                               (Atoms_Ranked,
                                 Landin.IR.Atom_Of
                                   (Of_Unit, Item, Value)));
 
@@ -5996,7 +5951,7 @@ package body Landin.Backend.X86_64 is
                         elsif Shape.Atoms /= Landin.IR.No_Atom_Set
                         then Trimmed (Positive'Image
                           (Atom_Code
-                             (Of_Unit, Landin.IR.Declaration_Id
+                             (Atoms_Ranked, Landin.IR.Declaration_Id
                                 (if Top then Flat else Image.Value))))
                         else Trimmed
                           (Landin.Types.Folded'Image
