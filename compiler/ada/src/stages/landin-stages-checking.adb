@@ -614,31 +614,11 @@ package body Landin.Stages.Checking is
          return Valid;
       end Construction_Values_Present;
 
-      --  Which declaration a declaring node is.  Resolution publishes the
-      --  other direction, so the few stage-level callers scan the short,
-      --  source-ordered declaration table.
-      function Declaration_At
-        (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
-         return Res.Declaration_Id;
-
+      --  Which declaration a declaring node is.
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
          return Res.Declaration_Id
-      is
-      begin
-         for Id in Res.Declaration_Id'(1)
-                   .. Res.Declaration_Id
-                        (Res.Declaration_Count (Meanings.all))
-         loop
-            if Res.Source_Of (Meanings.all, Id) = Src
-              and then Res.Node_Of (Meanings.all, Id) = Node
-            then
-               return Id;
-            end if;
-         end loop;
-
-         return Res.No_Declaration;
-      end Declaration_At;
+         is (Res.Declaration_At (Meanings.all, Src, Node));
 
       function Generic_Routine_Owner
         (Id : Res.Declaration_Id) return Res.Declaration_Id;
@@ -7849,20 +7829,13 @@ package body Landin.Stages.Checking is
       end Construction_Agrees;
 
       function Is_Local_Binding
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Id : constant Res.Declaration_Id :=
+           Declaration_At (Syn.Source_Of (Of_Tree), Node);
       begin
-         for Id in Res.Declaration_Id'(1)
-                   .. Res.Declaration_Id
-                        (Res.Declaration_Count (Meanings.all))
-         loop
-            if Res.Source_Of (Meanings.all, Id) = Syn.Source_Of (Of_Tree)
-              and then Res.Node_Of (Meanings.all, Id) = Node
-            then
-               return Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding;
-            end if;
-         end loop;
-
-         return False;
+         return Id /= Res.No_Declaration
+           and then Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding;
       end Is_Local_Binding;
 
       function Declared_As_Node
@@ -23657,19 +23630,14 @@ package body Landin.Stages.Checking is
          function Binding_Id (Binding : Syn.Node_Id)
            return Res.Declaration_Id
          is
+            Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Of_Tree), Binding);
          begin
-            for Id in Res.Declaration_Id'(1)
-                      .. Res.Declaration_Id
-                           (Res.Declaration_Count (Meanings.all))
-            loop
-               if Res.Source_Of (Meanings.all, Id) = Syn.Source_Of (Of_Tree)
-                 and then Res.Node_Of (Meanings.all, Id) = Binding
-               then
-                  return Id;
-               end if;
-            end loop;
-            raise Landin.Compiler_Defect with
-              "a match binding the resolver never recorded";
+            if Id = Res.No_Declaration then
+               raise Landin.Compiler_Defect with
+                 "a match binding the resolver never recorded";
+            end if;
+            return Id;
          end Binding_Id;
 
          procedure Refuse_Bindings (Arm : Syn.Node_Id) is

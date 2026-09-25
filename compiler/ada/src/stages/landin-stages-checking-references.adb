@@ -547,17 +547,8 @@ package body Landin.Stages.Checking.References is
       end Join;
 
       function Declaration_At
-        (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id is
-      begin
-         for Id in Origins'Range loop
-            if Res.Source_Of (Meanings.all, Id) = Syn.Source_Of (Tree)
-              and then Res.Node_Of (Meanings.all, Id) = Node
-            then
-               return Id;
-            end if;
-         end loop;
-         return Res.No_Declaration;
-      end Declaration_At;
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id
+        is (Res.Declaration_At (Meanings.all, Syn.Source_Of (Tree), Node));
 
       function Root_Declaration
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id

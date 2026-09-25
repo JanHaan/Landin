@@ -266,6 +266,24 @@ package Landin.Resolution is
      with Pre  => Contains (Of_Table, Id),
           Post => Node_Of'Result /= Landin.Syntax.No_Node;
 
+   --  The other direction: which declaration a declaring node made, or
+   --  No_Declaration for a node that declared nothing.  A node declares at
+   --  most once, so this is the answer a scan of the declarations in order
+   --  would find, read from the node's own slot instead.  A source or node
+   --  this table was not prepared for declared nothing.
+   function Declaration_At
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+     with Pre  => Is_Prepared (Of_Table),
+          Post => Declaration_At'Result = No_Declaration
+                  or else
+                    (Contains (Of_Table, Declaration_At'Result)
+                     and then Source_Of (Of_Table, Declaration_At'Result)
+                                = Source
+                     and then Node_Of (Of_Table, Declaration_At'Result)
+                                = Node);
+
    --  `public` as [1740] wrote it, carried so that module resolution has it
    --  without reading the tree again.  Always False below the program scope:
    --  the parser refused the word on a statement and said so.
@@ -777,6 +795,8 @@ private
       Runs         : Run_Vectors.Vector;
       Tree_Addresses : Tree_Address_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
+      --  One per node, like Bound: the declaration that node made.
+      Declared     : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;
       Applications : Application_Vectors.Vector;
       Return_Sources : Position_Vectors.Vector;

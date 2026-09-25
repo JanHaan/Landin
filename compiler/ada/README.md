@@ -106,7 +106,7 @@ different responsibilities.
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
 | `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
-| `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
+| `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |
 | `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance register, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "The four long rows, in full" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |

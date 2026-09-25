@@ -284,30 +284,24 @@ package body Landin.Stages.Lowering is
          return Syn.No_Node;
       end Construction_Fill;
 
-      --  Which declaration a declaring node is.  A scan, for the reason
-      --  Landin.Stages.Checking gives for its own: Landin.Resolution
-      --  publishes the other direction only, and the list is short.
+      --  Which declaration a declaring node is; lowering meets only nodes
+      --  the resolver recorded.
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
         return Res.Declaration_Id;
 
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
-        return Res.Declaration_Id is
+        return Res.Declaration_Id
+      is
+         Id : constant Res.Declaration_Id :=
+           Res.Declaration_At (Meanings.all, Src, Node);
       begin
-         for Id in Res.Declaration_Id'(1)
-                   .. Res.Declaration_Id
-                        (Res.Declaration_Count (Meanings.all))
-         loop
-            if Res.Source_Of (Meanings.all, Id) = Src
-              and then Res.Node_Of (Meanings.all, Id) = Node
-            then
-               return Id;
-            end if;
-         end loop;
-
-         raise Landin.Compiler_Defect with
-           "a declaring node the resolver never recorded";
+         if Id = Res.No_Declaration then
+            raise Landin.Compiler_Defect with
+              "a declaring node the resolver never recorded";
+         end if;
+         return Id;
       end Declaration_At;
 
       --  Where a declaration's value lives inside the item being filled.

@@ -40,7 +40,6 @@ package body Landin.Stages.Checking.Flow is
    use type Res.Application_Class;
    use type Res.Argument_Role;
    use type Res.Declaration_Sort;
-   use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
 
    package Call_Places is new Ada.Containers.Vectors
@@ -569,27 +568,11 @@ package body Landin.Stages.Checking.Flow is
          State : Assigned_Set;
          Strictly_Above : Boolean := False) return Boolean;
 
-      --  Which declaration a declaring node is.  Landin.Resolution
-      --  publishes the other direction only, so this is a scan: over a
-      --  list that is short, in the order the source decided, and asked
-      --  once per function rather than once per node.
+      --  Which declaration a declaring node is.
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
-        return Res.Declaration_Id is
-      begin
-         for Id in Res.Declaration_Id'(1)
-                   .. Res.Declaration_Id
-                        (Res.Declaration_Count (Meanings.all))
-         loop
-            if Res.Source_Of (Meanings.all, Id) = Src
-              and then Res.Node_Of (Meanings.all, Id) = Node
-            then
-               return Id;
-            end if;
-         end loop;
-
-         return Res.No_Declaration;
-      end Declaration_At;
+        return Res.Declaration_Id
+        is (Res.Declaration_At (Meanings.all, Src, Node));
 
       procedure Reset_Binding
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set)

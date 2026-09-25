@@ -55,6 +55,8 @@ package body Landin.Resolution is
       --  a reference until something says so, which is the third answer
       --  Verdict already gives without storing it.
       Into.Bound.Append (No_Declaration, Ada.Containers.Count_Type (Next));
+      Into.Declared.Append
+        (No_Declaration, Ada.Containers.Count_Type (Next));
       Into.Opened.Append (No_Scope, Ada.Containers.Count_Type (Next));
       Into.Applications.Append
         (Application_Fact'(others => <>),
@@ -331,6 +333,11 @@ package body Landin.Resolution is
                 then Module_Binding else Local_Binding),
             when others                             => Local_Binding);
 
+   function Slot
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Positive;
+
    function Declare_Name
      (Into    : in out Table;
       Sites   : in out Landin.Provenance.Table;
@@ -380,8 +387,34 @@ package body Landin.Resolution is
               or else Inherits_Public));
 
       Into.Index.Insert (Key'(Scope => Inside, Name => Named), Fresh);
+      declare
+         Where : constant Positive := Slot (Into, Of_Tree, Node);
+      begin
+         if Into.Declared.Element (Where) /= No_Declaration then
+            raise Compiler_Defect with "a node declared a second name";
+         end if;
+         Into.Declared.Replace_Element (Where, Fresh);
+      end;
       return Fresh;
    end Declare_Name;
+
+   function Declaration_At
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+   is
+   begin
+      if Source = Landin.Source.No_Source
+        or else Natural (Source) > Source_Count (Of_Table)
+        or else Node = Landin.Syntax.No_Node
+        or else Natural (Node) > Node_Limit (Of_Table, Source)
+      then
+         return No_Declaration;
+      end if;
+      return Of_Table.Declared.Element
+        (Of_Table.Runs.Element (Positive (Source)).First
+         + Natural (Node) - 1);
+   end Declaration_At;
 
    ------------------------------------------------------------------
    --  References
