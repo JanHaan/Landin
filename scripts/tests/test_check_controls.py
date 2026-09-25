@@ -598,8 +598,8 @@ class Artifacts(unittest.TestCase):
 
 LOOPS = ["scripts/build.sh", "scripts/clean.sh", "scripts/debug.sh",
          "scripts/dev-build.sh", "scripts/dev-test.sh",
-         "scripts/linux-loop.sh", "scripts/quality.sh", "scripts/test.sh",
-         "scripts/env.sh"]
+         "scripts/linux-loop.sh", "scripts/quality.sh", "scripts/scaling.sh",
+         "scripts/test.sh", "scripts/env.sh"]
 
 
 class DeveloperLoops(unittest.TestCase):

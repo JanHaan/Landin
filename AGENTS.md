@@ -37,6 +37,10 @@ programs.
 # Run every available mechanical check over the live documents and fixtures
 python3 check.py
 
+# Build the release compiler and hold the frontend to its scaling bound: the
+# median time may grow at most 2.5 times per doubling of the program.
+./scripts/scaling.sh
+
 # Check one specification/prototype file (the narrowest supported test scope)
 python3 check.py prototype-2-parser.md
 
@@ -78,18 +82,21 @@ nix build .#refine-bin
 ```
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. Two jobs that share nothing: `documents` runs
+push and pull request. Three jobs that share nothing: `documents` runs
 `check.py` in about ninety seconds, needing neither the toolchain nor a built
-compiler, and `compiler` builds `refine` with the pinned toolchain and runs
-all 747 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes. Splitting them
-means a typo gets its verdict without waiting for the corpus, and a compile
-error still surfaces about two minutes into `compiler`.
+compiler; `compiler` builds `refine` with the pinned toolchain and runs
+all 747 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes; and
+`scaling` builds the release compiler and runs `scripts/scaling.sh`, which
+fails when the frontend's time grows more than 2.5 times per doubling of the
+program. Splitting them means a typo gets its verdict without waiting for the
+corpus, and a compile error still surfaces about two minutes into `compiler`.
 
 The gate is deliberately small and is **not** the retired acceptance. It is
-Linux only and debug only: no Darwin, no Cortex-M execution, no debugger, no
-bindings, no release mode, and no retained evidence. Green means the compiler
-builds and the corpus passes on one host in one mode — nothing about the
-other two targets. `ROADMAP.md` schedules the fuller gate.
+Linux only, and the corpus runs in debug only: no Darwin, no Cortex-M
+execution, no debugger, no bindings, no release-mode corpus, and no retained
+evidence. Green means the compiler builds, the corpus passes on one host in
+one mode and the frontend scales — nothing about the other two targets.
+`ROADMAP.md` schedules the fuller gate.
 
 Three more workflows run on a push. `determinism.yml` requires every host in
 its matrix to emit the same bytes; it emits and hashes but never assembles,

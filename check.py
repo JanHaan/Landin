@@ -1999,6 +1999,7 @@ def check_developer_loops(full_run):
         ),
         "scripts/quality.sh": ('landin_build_lock mode "$@"',),
         "scripts/debug.sh": ('landin_build_lock mode "$@"',),
+        "scripts/scaling.sh": ('landin_build_lock mode "$@"',),
     }
 
     out = []
