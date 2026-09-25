@@ -50,7 +50,22 @@ package body Landin.IR.Simplification is
          Eligible : array (1 .. Held.Slots.Count) of Boolean;
          Stored : array (1 .. Held.Slots.Count) of Value_Id :=
            [others => No_Value];
+         --  The slots Stored holds a value for, so that forgetting them all
+         --  at a block boundary or a write costs what was remembered rather
+         --  than every slot of the routine.
+         Remembered : array (1 .. Held.Slots.Count) of Positive;
+         Remembered_Count : Natural := 0;
          Last_Block : Block_Id := No_Block;
+
+         procedure Forget_Stores;
+
+         procedure Forget_Stores is
+         begin
+            for Index in 1 .. Remembered_Count loop
+               Stored (Remembered (Index)) := No_Value;
+            end loop;
+            Remembered_Count := 0;
+         end Forget_Stores;
 
          function Code_At (Value : Value_Id) return Instruction
            is (Into.Code (Held.Values.First + Positive (Value)));
@@ -319,7 +334,7 @@ package body Landin.IR.Simplification is
                Code : Instruction := Code_At (Value_Id (V));
             begin
                if Code.In_Block /= Last_Block then
-                  Stored := [others => No_Value];
+                  Forget_Stores;
                   Last_Block := Code.In_Block;
                end if;
                for A in 1 .. Code.Args loop
@@ -354,10 +369,14 @@ package body Landin.IR.Simplification is
                end if;
                if Code.Op = Store and then Eligible (Positive (Code.Slot))
                then
+                  if Stored (Positive (Code.Slot)) = No_Value then
+                     Remembered_Count := Remembered_Count + 1;
+                     Remembered (Remembered_Count) := Positive (Code.Slot);
+                  end if;
                   Stored (Positive (Code.Slot)) :=
                     Into.Operands (Code.First_Arg + 1);
                elsif Effects.Of_Code (Code.Op).Writes then
-                  Stored := [others => No_Value];
+                  Forget_Stores;
                end if;
             end;
          end loop;
