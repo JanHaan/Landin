@@ -1,3 +1,4 @@
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
@@ -54,15 +55,112 @@ package body Landin.Stages.Checking.References is
         Landin.Stages.Meanings (Context);
       Types : constant not null access Landin.Checking.Table :=
         Landin.Stages.Types (Context);
-      Declarations : constant Positive := Positive'Max
-        (1, Res.Declaration_Count (Meanings.all));
       Parameters : constant Positive := Positive'Max
         (1, Syn.Parameter_Count (Of_Tree, Function_Node));
 
+      --  The declarations this function can name, numbered 1 .. N in the
+      --  order of their program identities: its own parameters, returns
+      --  and locals, and every module or imported name its body refers
+      --  to.  Every fact below is about one of these, so a fact carries
+      --  one bit for each rather than one for every declaration in the
+      --  program, and a snapshot copies what this function can see.  Every
+      --  loop over them therefore still visits declarations in identity
+      --  order, and the first one a loop finds is the one it found before.
+      package Local_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Res.Declaration_Id);
+
+      package Local_Sorting is new Local_Vectors.Generic_Sorting;
+
+      package Local_Maps is new Ada.Containers.Ordered_Maps
+        (Key_Type => Res.Declaration_Id, Element_Type => Positive);
+
+      function Collect_Locals return Local_Vectors.Vector;
+
+      function Collect_Locals return Local_Vectors.Vector is
+         Found : Local_Vectors.Vector;
+         Seen : Local_Maps.Map;
+
+         procedure Note (Id : Res.Declaration_Id);
+         procedure Walk (Node : Syn.Node_Id);
+
+         procedure Note (Id : Res.Declaration_Id) is
+         begin
+            if Id /= Res.No_Declaration and then not Seen.Contains (Id) then
+               Seen.Insert (Id, 1);
+               Found.Append (Id);
+            end if;
+         end Note;
+
+         --  Every node of the function, each once: slots name only lower
+         --  nodes of the same tree, and a recovery clause is carried beside
+         --  its call's slots.
+         procedure Walk (Node : Syn.Node_Id) is
+         begin
+            if Node = Syn.No_Node then
+               return;
+            end if;
+            Note (Res.Declaration_At (Meanings.all, Syn.Source_Of (Of_Tree),
+                                      Node));
+            if Syn.Kind (Of_Tree, Node)
+                 in Syn.Name_Reference | Syn.Type_Reference
+                    | Syn.Concept_Reference | Syn.Member_Selection
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+            then
+               Note (Res.Bound_To (Meanings.all, Of_Tree, Node));
+            end if;
+            for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               Walk (Syn.Slot (Of_Tree, Node, Slot));
+            end loop;
+            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+            then
+               Walk (Syn.Recovery_Of (Of_Tree, Node));
+            end if;
+         end Walk;
+      begin
+         Walk (Function_Node);
+         Walk (Body_Node);
+         Local_Sorting.Sort (Found);
+         return Found;
+      end Collect_Locals;
+
+      Locals : constant Local_Vectors.Vector := Collect_Locals;
+
+      Declarations : constant Positive :=
+        Positive'Max (1, Natural (Locals.Length));
+
+      --  A declaration's local number, or zero for one this function cannot
+      --  name.  Built once from Locals, whose order it follows.
+      function Build_Numbers return Local_Maps.Map;
+
+      function Build_Numbers return Local_Maps.Map is
+         Result : Local_Maps.Map;
+      begin
+         for Index in 1 .. Natural (Locals.Length) loop
+            Result.Insert (Locals (Index), Index);
+         end loop;
+         return Result;
+      end Build_Numbers;
+
+      Numbers : constant Local_Maps.Map := Build_Numbers;
+
+      function Local_Of (Id : Res.Declaration_Id) return Natural;
+
+      function Local_Of (Id : Res.Declaration_Id) return Natural is
+         Found : constant Local_Maps.Cursor := Numbers.Find (Id);
+      begin
+         return (if Local_Maps.Has_Element (Found)
+                 then Local_Maps.Element (Found) else 0);
+      end Local_Of;
+
+      --  The declaration a local number stands for.
+      function Global (Local : Positive) return Res.Declaration_Id
+        is (Locals (Local));
+
+      subtype Local_Id is Positive range 1 .. Declarations;
+
       type Parameter_Bits is array (Positive range 1 .. Parameters) of Boolean
         with Pack;
-      type Declaration_Bits is
-        array (Positive range 1 .. Declarations) of Boolean
+      type Declaration_Bits is array (Local_Id) of Boolean
         with Pack;
 
       --  Absence is a value proof, not an origin.  In this finite chain,
@@ -114,8 +212,7 @@ package body Landin.Stages.Checking.References is
       --  aliases. Never reuse an empty-value proof for storage exposed in
       --  this body, or for module state which another call can change.
       Exposed : Declaration_Bits := [others => False];
-      type Origin_Table is
-        array (Res.Declaration_Id range <>) of Origin_Fact;
+      type Origin_Table is array (Local_Id range <>) of Origin_Fact;
       Signature : constant Landin.Checking.Signature_Id :=
         Landin.Checking.Signature_Of
           (Types.all, Of_Tree, Function_Node);
@@ -127,9 +224,7 @@ package body Landin.Stages.Checking.References is
       Sink : not null access Landin.Diagnostics.Diagnostic_List :=
         Into'Unchecked_Access;
 
-      subtype Function_Table is Origin_Table
-        (Res.Declaration_Id'(1)
-         .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all)));
+      subtype Function_Table is Origin_Table (Local_Id);
       type Function_Table_Access is access Function_Table;
 
       procedure Free is new Ada.Unchecked_Deallocation
@@ -194,15 +289,34 @@ package body Landin.Stages.Checking.References is
       --  that backing beneath computed selectors; copied subjects do not.
       Alias_Owner : Alias_Tables.Owner;
       Alias_Storage : Reference_Table renames Alias_Owner.Data.all;
-      Runtime_Alias : array (Origins'Range) of Boolean := [others => False];
-      Pattern_Subject : array (Origins'Range) of Syn.Node_Id :=
+      Runtime_Alias_Of : array (Origins'Range) of Boolean :=
+        [others => False];
+      Pattern_Subject_Of : array (Origins'Range) of Syn.Node_Id :=
         [others => Syn.No_Node];
-      Pattern_Block : array (Origins'Range) of Syn.Node_Id :=
+      Pattern_Block_Of : array (Origins'Range) of Syn.Node_Id :=
         [others => Syn.No_Node];
       Falls_Through : Boolean := True;
-      Parameter_Of : array (Origins'Range) of Natural := [others => 0];
+      Parameter_Of_Local : array (Origins'Range) of Natural :=
+        [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
         [others => False];
+
+      --  The side tables read by a program identity.  A declaration this
+      --  function cannot name has none of these facts, which is what the
+      --  program-sized tables answered for it: nothing wrote its row.
+      function Runtime_Alias (Id : Res.Declaration_Id) return Boolean
+        is (Local_Of (Id) /= 0 and then Runtime_Alias_Of (Local_Of (Id)));
+      function Pattern_Block (Id : Res.Declaration_Id) return Syn.Node_Id
+        is (if Local_Of (Id) = 0 then Syn.No_Node
+            else Pattern_Block_Of (Local_Of (Id)));
+      function Parameter_Of (Id : Res.Declaration_Id) return Natural
+        is (if Local_Of (Id) = 0 then 0
+            else Parameter_Of_Local (Local_Of (Id)));
+      function Is_Exposed (Id : Res.Declaration_Id) return Boolean
+        is (Local_Of (Id) /= 0 and then Exposed (Local_Of (Id)));
+      function Derives
+        (Fact : Reference_Fact; Id : Res.Declaration_Id) return Boolean
+        is (Local_Of (Id) /= 0 and then Fact.Derives (Local_Of (Id)));
 
 
       --  The lexical cleanup stack, kept the way
@@ -514,10 +628,8 @@ package body Landin.Stages.Checking.References is
                Into_Fact.Untracked := False;
             end if;
          end loop;
-         for Id in Into_Fact.Derives'Range loop
-            Into_Fact.Derives (Id) :=
-              Into_Fact.Derives (Id) or Other.Derives (Id);
-         end loop;
+         --  Both are packed, so this joins a machine word at a time.
+         Into_Fact.Derives := Into_Fact.Derives or Other.Derives;
       end Join;
 
       procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
@@ -859,7 +971,7 @@ package body Landin.Stages.Checking.References is
                else Root_Declaration (Tree, Place));
          begin
             if Id /= Res.No_Declaration then
-               Exposed (Positive (Id)) := True;
+               Exposed (Local_Of (Id)) := True;
             end if;
          end Expose;
       begin
@@ -905,28 +1017,33 @@ package body Landin.Stages.Checking.References is
             return Fact.Frame_Witness;
          end if;
          if Fact.Frame then
-            for Id in Origins'Range loop
-               if Fact.Derives (Positive (Id))
-                 and then
-                   (case Res.Sort_Of (Meanings.all, Id) is
-                      when Res.Local_Binding | Res.Named_Return =>
-                        not Runtime_Alias (Id)
-                          or else Alias_Storage (Id).Frame,
-                      when Res.Pattern_Binding => Alias_Storage (Id).Frame,
-                      when Res.Parameter =>
-                        Syn.Convention_Of
-                          (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
-                           Res.Node_Of (Meanings.all, Id))
-                          /= Syn.Inout_Convention,
-                      when others => False)
-               then
-                  return Id;
-               end if;
+            for Local in Origins'Range loop
+               declare
+                  Id : constant Res.Declaration_Id := Global (Local);
+               begin
+                  if Fact.Derives (Local)
+                    and then
+                      (case Res.Sort_Of (Meanings.all, Id) is
+                         when Res.Local_Binding | Res.Named_Return =>
+                           not Runtime_Alias_Of (Local)
+                             or else Alias_Storage (Local).Frame,
+                         when Res.Pattern_Binding =>
+                           Alias_Storage (Local).Frame,
+                         when Res.Parameter =>
+                           Syn.Convention_Of
+                             (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                              Res.Node_Of (Meanings.all, Id))
+                             /= Syn.Inout_Convention,
+                         when others => False)
+                  then
+                     return Id;
+                  end if;
+               end;
             end loop;
          end if;
-         for Id in Origins'Range loop
-            if Fact.Derives (Positive (Id)) then
-               return Id;
+         for Local in Origins'Range loop
+            if Fact.Derives (Local) then
+               return Global (Local);
             end if;
          end loop;
          return Res.No_Declaration;
@@ -1479,20 +1596,19 @@ package body Landin.Stages.Checking.References is
          if Has_Future_Use (Borrower, After) then
             return Borrower;
          end if;
-         Seen (Positive (Borrower)) := True;
+         Seen (Local_Of (Borrower)) := True;
          while Grew loop
             Grew := False;
             for Holder in Origins'Range loop
-               if not Seen (Positive (Holder))
-                 and then Holder /= Except
-                 and then Has_References (Holder)
+               if not Seen (Holder)
+                 and then Global (Holder) /= Except
+                 and then Has_References (Global (Holder))
                then
                   for Held in Origins'Range loop
-                     if Seen (Positive (Held))
-                       and then Origins (Holder).Value.Derives
-                         (Positive (Held))
+                     if Seen (Held)
+                       and then Origins (Holder).Value.Derives (Held)
                      then
-                        Seen (Positive (Holder)) := True;
+                        Seen (Holder) := True;
                         Grew := True;
                         exit;
                      end if;
@@ -1501,10 +1617,10 @@ package body Landin.Stages.Checking.References is
             end loop;
          end loop;
          for Holder in Origins'Range loop
-            if Seen (Positive (Holder))
-              and then Has_Future_Use (Holder, After)
+            if Seen (Holder)
+              and then Has_Future_Use (Global (Holder), After)
             then
-               return Holder;
+               return Global (Holder);
             end if;
          end loop;
          return Res.No_Declaration;
@@ -1517,9 +1633,9 @@ package body Landin.Stages.Checking.References is
       is
          function Same_Path (Left, Right : Syn.Node_Id) return Boolean;
          function Replaces (Subject : Syn.Node_Id) return Boolean;
-         function Replaces_Aliased_Storage (Pattern : Res.Declaration_Id)
+         function Replaces_Aliased_Storage (Pattern : Local_Id)
            return Boolean;
-         function Disjoint_Frame_Storage (Pattern : Res.Declaration_Id)
+         function Disjoint_Frame_Storage (Pattern : Local_Id)
            return Boolean;
          function Known_Index
            (Node : Syn.Node_Id; Value : out Ty.Magnitude) return Boolean;
@@ -1597,20 +1713,20 @@ package body Landin.Stages.Checking.References is
             return False;
          end Replaces;
 
-         function Replaces_Aliased_Storage (Pattern : Res.Declaration_Id)
+         function Replaces_Aliased_Storage (Pattern : Local_Id)
            return Boolean
          is
             Same_Root : Boolean := False;
          begin
             if Root_Declaration (Tree, Place)
-              = Root_Declaration (Tree, Pattern_Subject (Pattern))
+              = Root_Declaration (Tree, Pattern_Subject_Of (Pattern))
             then
                return False;
             end if;
             for Id in Storage.Derives'Range loop
                Same_Root := Same_Root or else
-                 (Storage.Derives (Id) and then Alias_Storage (Pattern)
-                    .Derives (Id));
+                 (Storage.Derives (Id)
+                  and then Alias_Storage (Pattern).Derives (Id));
             end loop;
             if not Same_Root then
                return False;
@@ -1629,7 +1745,7 @@ package body Landin.Stages.Checking.References is
             declare
                Nominal : constant Landin.Checking.Nominal_Type_Id :=
                  Landin.Checking.Nominal_Of (Types.all, Tree, Place);
-               Current : Syn.Node_Id := Pattern_Subject (Pattern);
+               Current : Syn.Node_Id := Pattern_Subject_Of (Pattern);
             begin
                while Current /= Syn.No_Node loop
                   if Nominal /= Landin.Checking.No_Nominal_Type
@@ -1649,7 +1765,7 @@ package body Landin.Stages.Checking.References is
             return False;
          end Replaces_Aliased_Storage;
 
-         function Disjoint_Frame_Storage (Pattern : Res.Declaration_Id)
+         function Disjoint_Frame_Storage (Pattern : Local_Id)
            return Boolean
          is
             Left_Known, Right_Known : Boolean := False;
@@ -1678,7 +1794,7 @@ package body Landin.Stages.Checking.References is
             Left_Descriptor : constant Res.Declaration_Id :=
               Descriptor_Root (Place);
             Right_Descriptor : constant Res.Declaration_Id :=
-              Descriptor_Root (Pattern_Subject (Pattern));
+              Descriptor_Root (Pattern_Subject_Of (Pattern));
          begin
             if not Storage.Frame or else not Alias_Storage (Pattern).Frame
             then
@@ -1688,8 +1804,8 @@ package body Landin.Stages.Checking.References is
             --  storage. Rebinding that descriptor does not identify the old
             --  and new pointees. Both sides still need known backing roots.
             for Id in Storage.Derives'Range loop
-               if Res.Declaration_Id (Id) /= Left_Descriptor
-                 and then Res.Declaration_Id (Id) /= Right_Descriptor
+               if Global (Id) /= Left_Descriptor
+                 and then Global (Id) /= Right_Descriptor
                then
                   Left_Known := Left_Known or Storage.Derives (Id);
                   Right_Known := Right_Known
@@ -1705,20 +1821,21 @@ package body Landin.Stages.Checking.References is
          end Disjoint_Frame_Storage;
          Used : Res.Declaration_Id;
       begin
-         for Pattern in Origins'Range loop
-            if Pattern_Subject (Pattern) /= Syn.No_Node
-              and then not Disjoint_Frame_Storage (Pattern)
-              and then (Replaces (Pattern_Subject (Pattern))
-                        or else Replaces_Aliased_Storage (Pattern))
+         for Pattern_Local in Origins'Range loop
+            if Pattern_Subject_Of (Pattern_Local) /= Syn.No_Node
+              and then not Disjoint_Frame_Storage (Pattern_Local)
+              and then (Replaces (Pattern_Subject_Of (Pattern_Local))
+                        or else Replaces_Aliased_Storage (Pattern_Local))
             then
-               for Borrower in Origins'Range loop
-                  if Borrower = Pattern
-                    or else (Has_References (Borrower)
-                             and then Origins (Borrower).Value.Derives
-                               (Positive (Pattern)))
+               for Borrower_Local in Origins'Range loop
+                  if Borrower_Local = Pattern_Local
+                    or else (Has_References (Global (Borrower_Local))
+                             and then Origins (Borrower_Local).Value.Derives
+                               (Pattern_Local))
                   then
                      Used := Live_Holder
-                       (Borrower, After, Root_Declaration (Tree, Place));
+                       (Global (Borrower_Local), After,
+                        Root_Declaration (Tree, Place));
                      if Used /= Res.No_Declaration then
                         Bad.Report
                           (Item    => Bad.Borrowed_Place,
@@ -1778,14 +1895,15 @@ package body Landin.Stages.Checking.References is
                   --  [0830]: a borrow is a view.  A scalar computed from
                   --  one carries derivation facts for [0790]'s clauses but
                   --  holds no reference into the mutated storage.
-                  for Borrower in Origins'Range loop
-                     if Borrower /= Mutated
-                       and then Has_References (Borrower)
-                       and then Origins (Borrower).Value.Derives
-                         (Positive (Mutated))
+                  for Borrower_Local in Origins'Range loop
+                     if Global (Borrower_Local) /= Mutated
+                       and then Has_References (Global (Borrower_Local))
+                       and then Derives
+                         (Origins (Borrower_Local).Value, Mutated)
                      then
                         Used := Live_Holder
-                          (Borrower, Syn.Where (Tree, Call).Last, Mutated);
+                          (Global (Borrower_Local),
+                           Syn.Where (Tree, Call).Last, Mutated);
                      end if;
                      if Used /= Res.No_Declaration then
                         declare
@@ -1827,12 +1945,12 @@ package body Landin.Stages.Checking.References is
          --  capture their target's storage during the ordinary expression
          --  walk, before evaluating their indexes; no syntax is replayed.
          if Id /= Res.No_Declaration then
-            Result.Derives (Positive (Id)) := True;
+            Result.Derives (Local_Of (Id)) := True;
             case Res.Sort_Of (Meanings.all, Id) is
                when Res.Local_Binding | Res.Named_Return =>
                   if Runtime_Alias (Id) then
-                     Result := Alias_Storage (Id);
-                     Result.Derives (Positive (Id)) := True;
+                     Result := Alias_Storage (Local_Of (Id));
+                     Result.Derives (Local_Of (Id)) := True;
                   else
                      Result.Frame := True;
                      Result.Frame_Witness := Id;
@@ -1861,8 +1979,8 @@ package body Landin.Stages.Checking.References is
                when Res.Pattern_Binding =>
                   --  D85/D121: this is the payload's actual backing place,
                   --  distinct from origins carried by its copied value.
-                  Result := Alias_Storage (Id);
-                  Result.Derives (Positive (Id)) := True;
+                  Result := Alias_Storage (Local_Of (Id));
+                  Result.Derives (Local_Of (Id)) := True;
                when others =>
                   null;
             end case;
@@ -1963,10 +2081,10 @@ package body Landin.Stages.Checking.References is
                      Id : constant Res.Declaration_Id :=
                        Res.Bound_To (Meanings.all, Tree, Node);
                   begin
-                     if Id in Origins'Range then
-                        Result := Origins (Id);
+                     if Local_Of (Id) /= 0 then
+                        Result := Origins (Local_Of (Id));
                         Result.Storage := Named_Storage_Fact (Tree, Node);
-                        if Exposed (Positive (Id))
+                        if Is_Exposed (Id)
                           or else Res.Sort_Of (Meanings.all, Id)
                             = Res.Module_Binding
                         then
@@ -2098,7 +2216,7 @@ package body Landin.Stages.Checking.References is
                     Root_Declaration (Tree, Node);
                begin
                   if Id /= Res.No_Declaration then
-                     Result.Storage.Derives (Positive (Id)) := True;
+                     Result.Storage.Derives (Local_Of (Id)) := True;
                   end if;
                   if Syn.Kind (Tree, Node)
                        in Syn.Member_Selection | Syn.Element_Index
@@ -2108,7 +2226,7 @@ package body Landin.Stages.Checking.References is
                      Result.Value := No_Reference;
                      Result.Results.Clear;
                   elsif Id /= Res.No_Declaration then
-                     Result.Value.Derives (Positive (Id)) := True;
+                     Result.Value.Derives (Local_Of (Id)) := True;
                      if Parameter_Of (Id) > 0
                        and then Syn.Kind (Tree, Node)
                          in Syn.Member_Selection | Syn.Element_Index
@@ -2247,7 +2365,7 @@ package body Landin.Stages.Checking.References is
                                                  else Fact.Value));
                                              if Id /= Res.No_Declaration then
                                                 Part.Derives
-                                                  (Positive (Id)) := True;
+                                                  (Local_Of (Id)) := True;
                                              end if;
                                           end;
                                        end if;
@@ -2384,7 +2502,7 @@ package body Landin.Stages.Checking.References is
                Part : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Result
                    (Types.all, Signature, Position);
-               Fact : constant Reference_Fact := Origins (Id).Value;
+               Fact : constant Reference_Fact := Origins (Local_Of (Id)).Value;
                Expected : Parameter_Bits := [others => False];
                Same : Boolean := True;
             begin
@@ -2431,7 +2549,7 @@ package body Landin.Stages.Checking.References is
                elsif not Fact.Untracked
                  and then not
                    (Fact.Presence = Empty_Optional
-                    and then not Exposed (Positive (Id))
+                    and then not Is_Exposed (Id)
                     and then
                       ((Landin.Checking.Holds (Types.all, Part.Reference)
                         and then Landin.Checking.Is_Optional_Pointer
@@ -2578,8 +2696,8 @@ package body Landin.Stages.Checking.References is
          --  otherwise returning the local would forget the aliased write.
          if Target.Storage.Frame then
             for Stored in Origins'Range loop
-               if Stored /= Id
-                 and then Target.Storage.Derives (Positive (Stored))
+               if Global (Stored) /= Id
+                 and then Target.Storage.Derives (Stored)
                then
                   Join (Origins (Stored).Value, Fact.Value);
                   Origins (Stored).Results.Clear;
@@ -2587,16 +2705,16 @@ package body Landin.Stages.Checking.References is
             end loop;
          end if;
 
-         if Id = Res.No_Declaration or else Id not in Origins'Range then
+         if Id = Res.No_Declaration or else Local_Of (Id) = 0 then
             return;
          end if;
          if Syn.Kind (Tree, Place) = Syn.Name_Reference then
-            Origins (Id) := Fact;
+            Origins (Local_Of (Id)) := Fact;
          elsif not Through_Descriptor then
-            Join (Origins (Id).Value, Fact.Value);
+            Join (Origins (Local_Of (Id)).Value, Fact.Value);
             --  A partial write invalidates positional detail until a whole
             --  replacement establishes it again; the union remains sound.
-            Origins (Id).Results.Clear;
+            Origins (Local_Of (Id)).Results.Clear;
          end if;
       end Assign;
 
@@ -2700,8 +2818,9 @@ package body Landin.Stages.Checking.References is
                      --  The fixed point may retain the previous loop
                      --  iteration's value. It is not in scope while this
                      --  fresh declaration evaluates its initializer.
-                     Origins (Id) := No_Origin;
-                     Origins (Id) := Fact_Of (Tree, Syn.Value_Of (Tree, Node));
+                     Origins (Local_Of (Id)) := No_Origin;
+                     Origins (Local_Of (Id)) :=
+                       Fact_Of (Tree, Syn.Value_Of (Tree, Node));
                   end if;
                end;
 
@@ -2726,9 +2845,9 @@ package body Landin.Stages.Checking.References is
                                   (Tree, Syn.Slot (Tree, Field, Slot));
                            begin
                               if Id /= Res.No_Declaration
-                                and then Id in Origins'Range
+                                and then Local_Of (Id) /= 0
                               then
-                                 Origins (Id) :=
+                                 Origins (Local_Of (Id)) :=
                                    (if not Has_References (Id) then No_Origin
                                     elsif Which > 0
                                     then Nth_Result (Value, Which)
@@ -2873,7 +2992,7 @@ package body Landin.Stages.Checking.References is
                         Origins := Before;
                         Falls_Through := True;
                         if Subject_Id /= Res.No_Declaration
-                          and then not Exposed (Positive (Subject_Id))
+                          and then not Is_Exposed (Subject_Id)
                           and then Res.Sort_Of (Meanings.all, Subject_Id)
                             /= Res.Module_Binding
                           and then Res.Verdict_Of
@@ -2901,7 +3020,7 @@ package body Landin.Stages.Checking.References is
                         then
                            --  This arm reads no reference, even when the
                            --  subject's present sibling has tracked sources.
-                           Origins (Subject_Id) := Empty_Origin;
+                           Origins (Local_Of (Subject_Id)) := Empty_Origin;
                         end if;
                         --  D85/D121: a binding's value keeps subject origins
                         --  only when it can carry references. Its storage
@@ -2917,20 +3036,23 @@ package body Landin.Stages.Checking.References is
                                            (Tree, This, Position));
                            begin
                               if Id /= Res.No_Declaration
-                                and then Id in Origins'Range
+                                and then Local_Of (Id) /= 0
                               then
-                                 Origins (Id) :=
+                                 Origins (Local_Of (Id)) :=
                                    (if Has_References (Id)
                                     then Subject_Value
                                     else No_Origin);
-                                 Origins (Id).Value.Presence := Unknown_Value;
-                                 Alias_Storage (Id) := Subject_Storage;
-                                 Runtime_Alias (Id) := Referenced_Subject;
-                                 Pattern_Subject (Id) :=
+                                 Origins (Local_Of (Id)).Value.Presence
+                                   := Unknown_Value;
+                                 Alias_Storage (Local_Of (Id)) :=
+                                   Subject_Storage;
+                                 Runtime_Alias_Of (Local_Of (Id)) :=
+                                   Referenced_Subject;
+                                 Pattern_Subject_Of (Local_Of (Id)) :=
                                    (if Match_Subject_Is_Copied
                                          (Tree, Subject_Node)
                                     then Syn.No_Node else Subject_Node);
-                                 Pattern_Block (Id) :=
+                                 Pattern_Block_Of (Local_Of (Id)) :=
                                    Syn.Body_Of (Tree, This);
                               end if;
                            end;
@@ -3107,11 +3229,11 @@ package body Landin.Stages.Checking.References is
                         if Syn.Traversal_Upper (Tree, Node) /= Syn.No_Node then
                            Evaluate (Syn.Traversal_Upper (Tree, Node));
                         elsif Element /= Res.No_Declaration
-                          and then Element in Origins'Range
+                          and then Local_Of (Element) /= 0
                         then
                            --  D160 aliases array/slice storage. Text scalars
                            --  and D180's source-free Item results are copies.
-                           Runtime_Alias (Element) :=
+                           Runtime_Alias_Of (Local_Of (Element)) :=
                              Landin.Checking.Traversal_Evidence_Of
                                (Types.all, Tree, Node)
                                  = Landin.Checking.No_Conformance
@@ -3123,7 +3245,7 @@ package body Landin.Stages.Checking.References is
                                        (Types.all, Tree, Source_Node)).View
                                          not in Ty.Text_View));
                            if Runtime_Alias (Element) then
-                              Alias_Storage (Element) :=
+                              Alias_Storage (Local_Of (Element)) :=
                                 (if Source_Kind = Ty.Slice_Value
                                  then Source_Fact.Value
                                  elsif Syn.Kind (Tree, Source_Node)
@@ -3132,7 +3254,7 @@ package body Landin.Stages.Checking.References is
                                  then Source_Fact.Storage
                                  else (Frame => True, others => <>));
                            end if;
-                           Origins (Element) :=
+                           Origins (Local_Of (Element)) :=
                              (if Landin.Checking.Traversal_Evidence_Of
                                 (Types.all, Tree, Node)
                                   = Landin.Checking.No_Conformance
@@ -3356,7 +3478,7 @@ package body Landin.Stages.Checking.References is
                         Id : constant Res.Declaration_Id :=
                           Declaration_At (Of_Tree, Returned);
                      begin
-                        Origins (Id) :=
+                        Origins (Local_Of (Id)) :=
                           (if Syn.Return_Count (Of_Tree, Function_Node) = 1
                            then Value else Nth_Result (Value, Position));
                      end;
@@ -3387,14 +3509,15 @@ package body Landin.Stages.Checking.References is
             Id : constant Res.Declaration_Id := Declaration_At (Of_Tree, Node);
          begin
             if Id /= Res.No_Declaration then
-               Parameter_Of (Id) := Position;
-               Exposed (Positive (Id)) := Exposed (Positive (Id))
+               Parameter_Of_Local (Local_Of (Id)) := Position;
+               Exposed (Local_Of (Id)) := Exposed (Local_Of (Id))
                  or else Syn.Convention_Of (Of_Tree, Node)
                    = Syn.Inout_Convention;
                Parameter_Escapes (Position) := Syn.Is_Escaping (Of_Tree, Node);
                if Has_References (Id) then
-                  Origins (Id).Value.From (Position) := True;
-                  Origins (Id).Value.Derives (Positive (Id)) := True;
+                  Origins (Local_Of (Id)).Value.From (Position) := True;
+                  Origins (Local_Of (Id)).Value.Derives
+                    (Local_Of (Id)) := True;
                end if;
             end if;
          end;
@@ -3407,7 +3530,7 @@ package body Landin.Stages.Checking.References is
             Id : constant Res.Declaration_Id := Declaration_At (Of_Tree, Node);
          begin
             if Id /= Res.No_Declaration then
-               Origins (Id) := No_Origin;
+               Origins (Local_Of (Id)) := No_Origin;
             end if;
          end;
       end loop;
@@ -3442,7 +3565,7 @@ package body Landin.Stages.Checking.References is
                      Id : constant Res.Declaration_Id :=
                        Declaration_At (Of_Tree, Returned);
                   begin
-                     Origins (Id) :=
+                     Origins (Local_Of (Id)) :=
                        (if Count = 1 then Value
                         else Nth_Result (Value, Position));
                   end;
