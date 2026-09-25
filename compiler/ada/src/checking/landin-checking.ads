@@ -57,6 +57,7 @@ with Landin.Machine;
 --  a width is only ever obtained from Landin.Types.Width against the
 --  compilation's own Landin.Targets.Target_Facts.
 
+private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 private with System;
 
@@ -2715,6 +2716,24 @@ private
    package Declaration_Overlay_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Declaration_Overlay);
 
+   --  Where each overlay is in its vector, keyed by the instance that owns
+   --  it and the slot or declaration it is about.  An overlay is appended
+   --  once per key and never removed, so the position is the one a search
+   --  of the vector would find; the map is how it is found without one.
+   --  Iteration order is never read: lookup only.
+   type Overlay_Key is record
+      Instance : Positive;
+      Subject  : Natural;
+   end record;
+
+   function Hash (Key : Overlay_Key) return Ada.Containers.Hash_Type;
+
+   package Overlay_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Overlay_Key,
+      Element_Type    => Positive,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
@@ -2757,6 +2776,8 @@ private
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;
       Node_Overlays : Node_Overlay_Vectors.Vector;
       Declaration_Overlays : Declaration_Overlay_Vectors.Vector;
+      Node_Overlay_Index : Overlay_Maps.Map;
+      Declaration_Overlay_Index : Overlay_Maps.Map;
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;

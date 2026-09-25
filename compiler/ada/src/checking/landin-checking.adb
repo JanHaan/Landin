@@ -1277,21 +1277,27 @@ package body Landin.Checking is
    function Ensure_Declaration_Overlay
      (Into : in out Table; Id : Declaration_Id) return Positive;
 
+   function Hash (Key : Overlay_Key) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+   begin
+      return Ada.Containers.Hash_Type'Mod (Key.Instance) * 16#9E37_79B1#
+        + Ada.Containers.Hash_Type'Mod (Key.Subject);
+   end Hash;
+
    function Node_Overlay_Position
-     (Of_Table : Table; Where : Positive) return Natural is
+     (Of_Table : Table; Where : Positive) return Natural
+   is
+      Found : Overlay_Maps.Cursor;
    begin
       if Of_Table.Current_Routine = No_Routine_Instance then
          return 0;
       end if;
-      for Position in reverse 1 .. Natural (Of_Table.Node_Overlays.Length) loop
-         if Of_Table.Node_Overlays (Position).Instance
-              = Of_Table.Current_Routine
-           and then Of_Table.Node_Overlays (Position).Where = Where
-         then
-            return Position;
-         end if;
-      end loop;
-      return 0;
+      Found := Of_Table.Node_Overlay_Index.Find
+        ((Instance => Routine_Identities.Position
+                        (Of_Table, Of_Table.Current_Routine),
+          Subject  => Where));
+      return (if Overlay_Maps.Has_Element (Found)
+              then Overlay_Maps.Element (Found) else 0);
    end Node_Overlay_Position;
 
    function Ensure_Node_Overlay
@@ -1309,26 +1315,28 @@ package body Landin.Checking is
       Into.Node_Overlays.Append
         (Node_Overlay'(Instance => Into.Current_Routine,
                        Where => Where, others => <>));
+      Into.Node_Overlay_Index.Insert
+        ((Instance => Routine_Identities.Position
+                        (Into, Into.Current_Routine),
+          Subject  => Where),
+         Into.Node_Overlays.Last_Index);
       return Into.Node_Overlays.Last_Index;
    end Ensure_Node_Overlay;
 
    function Declaration_Overlay_Position
-     (Of_Table : Table; Id : Declaration_Id) return Natural is
+     (Of_Table : Table; Id : Declaration_Id) return Natural
+   is
+      Found : Overlay_Maps.Cursor;
    begin
       if Of_Table.Current_Routine = No_Routine_Instance then
          return 0;
       end if;
-      for Position in reverse
-        1 .. Natural (Of_Table.Declaration_Overlays.Length)
-      loop
-         if Of_Table.Declaration_Overlays (Position).Instance
-              = Of_Table.Current_Routine
-           and then Of_Table.Declaration_Overlays (Position).Declared = Id
-         then
-            return Position;
-         end if;
-      end loop;
-      return 0;
+      Found := Of_Table.Declaration_Overlay_Index.Find
+        ((Instance => Routine_Identities.Position
+                        (Of_Table, Of_Table.Current_Routine),
+          Subject  => Natural (Id)));
+      return (if Overlay_Maps.Has_Element (Found)
+              then Overlay_Maps.Element (Found) else 0);
    end Declaration_Overlay_Position;
 
    function Ensure_Declaration_Overlay
@@ -1346,6 +1354,11 @@ package body Landin.Checking is
       Into.Declaration_Overlays.Append
         (Declaration_Overlay'(Instance => Into.Current_Routine,
                               Declared => Id, others => <>));
+      Into.Declaration_Overlay_Index.Insert
+        ((Instance => Routine_Identities.Position
+                        (Into, Into.Current_Routine),
+          Subject  => Natural (Id)),
+         Into.Declaration_Overlays.Last_Index);
       return Into.Declaration_Overlays.Last_Index;
    end Ensure_Declaration_Overlay;
 
