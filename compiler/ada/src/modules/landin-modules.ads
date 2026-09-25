@@ -4,6 +4,7 @@
 --  filesystem which directory an import selects and records that answer;
 --  semantic stages consume identities and never read a path from the host.
 
+private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 private with Ada.Strings.Unbounded;
 
@@ -125,19 +126,23 @@ private
    package Source_Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Module_Id);
 
-   type Import_Record is record
+   --  An import is found by the source and node that wrote it, once per
+   --  import, so the edges are keyed rather than walked.
+   type Import_Key is record
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
       Node   : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
-      Target : Module_Id := No_Module;
    end record;
 
-   package Import_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Import_Record);
+   function Hash (Key : Import_Key) return Ada.Containers.Hash_Type;
+
+   package Import_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type => Import_Key, Element_Type => Module_Id,
+      Hash => Hash, Equivalent_Keys => "=");
 
    type Table is tagged limited record
       Modules : Module_Vectors.Vector;
       Sources : Source_Module_Vectors.Vector;
-      Imports : Import_Vectors.Vector;
+      Imports : Import_Maps.Map;
    end record;
 
 end Landin.Modules;

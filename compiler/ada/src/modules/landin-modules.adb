@@ -94,18 +94,23 @@ package body Landin.Modules is
      (Of_Table : Table; Source : Landin.Source.Source_Id) return Module_Id
      is (Of_Table.Sources.Element (Positive (Source)));
 
+   function Hash (Key : Import_Key) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+   begin
+      return Ada.Containers.Hash_Type (Key.Source) * 16#9E37_79B1#
+        + Ada.Containers.Hash_Type (Key.Node);
+   end Hash;
+
    function Imported_Module
      (Of_Table : Table;
       Source   : Landin.Source.Source_Id;
       Node     : Landin.Syntax.Node_Id) return Module_Id
    is
+      Found : constant Import_Maps.Cursor :=
+        Of_Table.Imports.Find (Import_Key'(Source => Source, Node => Node));
    begin
-      for Item of Of_Table.Imports loop
-         if Item.Source = Source and then Item.Node = Node then
-            return Item.Target;
-         end if;
-      end loop;
-      return No_Module;
+      return (if Import_Maps.Has_Element (Found)
+              then Import_Maps.Element (Found) else No_Module);
    end Imported_Module;
 
    procedure Record_Import
@@ -114,8 +119,8 @@ package body Landin.Modules is
       Node   : Landin.Syntax.Node_Id;
       Target : Module_Id) is
    begin
-      Into.Imports.Append
-        (Import_Record'(Source => Source, Node => Node, Target => Target));
+      Into.Imports.Insert
+        (Import_Key'(Source => Source, Node => Node), Target);
    end Record_Import;
 
 end Landin.Modules;
