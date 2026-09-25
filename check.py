@@ -5064,14 +5064,20 @@ def check_diagnostic_matrix(full_run):
             if evidence == "-":
                 out.append(("compiler/tests/diagnostics.matrix", 1,
                             "%s has no test owner" % row["code"]))
-            if row["code"] not in driver and row["code"] != "L0111" \
+            #  An implementation limit is met only by a program too large to
+            #  keep in the corpus, so its owner is the unit case that
+            #  generates one at and past the limit.
+            limits = {"L0111": "unit/parser-nesting-limit",
+                      "L0325": "unit/checker-size-bounds"}
+            if row["code"] not in driver and row["code"] not in limits \
                     and not re.search(r"(?:^|,)negative/", evidence):
                 out.append(("compiler/tests/diagnostics.matrix", 1,
                             "%s has no negative source fixture" % row["code"]))
-            if row["code"] == "L0111" and "unit/parser-nesting-limit" \
+            if row["code"] in limits and limits[row["code"]] \
                     not in evidence:
                 out.append(("compiler/tests/diagnostics.matrix", 1,
-                            "L0111 has no parser-limit unit owner"))
+                            "%s has no implementation-limit unit owner"
+                            % row["code"]))
         elif emitters != "-":
             out.append(("compiler/tests/diagnostics.matrix", 1,
                         "retired %s still has an emitter" % row["code"]))

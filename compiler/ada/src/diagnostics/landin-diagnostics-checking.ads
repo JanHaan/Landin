@@ -84,7 +84,8 @@ package Landin.Diagnostics.Checking is
       Return_Sources_Disagree,
       Conformance_Collision,
       Unsatisfied_Constraint,
-      Compiler_Conformance_Reserved);
+      Compiler_Conformance_Reserved,
+      Size_Limit_Exceeded);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -130,7 +131,9 @@ package Landin.Diagnostics.Checking is
             when Unsatisfied_Constraint =>
                Catalogue.Unsatisfied_Constraint,
             when Compiler_Conformance_Reserved =>
-               Catalogue.Compiler_Conformance_Reserved);
+               Catalogue.Compiler_Conformance_Reserved,
+            when Size_Limit_Exceeded =>
+               Catalogue.Size_Limit_Exceeded);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

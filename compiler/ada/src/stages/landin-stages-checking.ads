@@ -40,6 +40,16 @@
 
 package Landin.Stages.Checking is
 
+   --  D247: the most declarations one routine may make, counting its
+   --  parameters, returns and every local, and the most fields one struct
+   --  body or variant case may have.  The flow and reference passes size a
+   --  routine's facts by the first and layout sizes a struct by the second;
+   --  a program over either is refused with L0325 before checking starts,
+   --  rather than exhausting the host.  Constants and not literals, so a
+   --  fixture can be written against them.
+   Declaration_Limit : constant := 16_384;
+   Field_Limit       : constant := 16_384;
+
    --  Optional bounded test seam, owned by one checker instance. No CLI or
    --  global failure state; ordinary compilations leave Probe null.
    type Transfer_Point is

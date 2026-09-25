@@ -67,6 +67,7 @@ package body Landin.Tests.Catalogue_Suite is
                       | Rows.Impossible_Operand
                       | Rows.Unsupported_Use
                       | Rows.Not_Known_At_Compile_Time
+                      | Rows.Size_Limit_Exceeded
          then
             Landin.Testing.Check_Equal
               (Item, Rows.Minimum_Secondaries (Name),
@@ -99,7 +100,7 @@ package body Landin.Tests.Catalogue_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Rows.Count, 61, "the catalogue holds sixty-one codes");
+        (Item, Rows.Count, 62, "the catalogue holds sixty-two codes");
    end Rows_Are_Whole;
 
    --  A fault kind maps to exactly one code, and every kind has one.

@@ -1,0 +1,4 @@
+class: unit
+summary: D247 a routine of 16,384 declarations and a struct of 16,384 fields check, and one more of either is refused with L0325 before any other pass
+codes: L0325
+targets: linux-x86-64, macos-arm64, synthetic-32

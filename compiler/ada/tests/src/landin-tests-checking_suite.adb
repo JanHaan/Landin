@@ -154,6 +154,117 @@ package body Landin.Tests.Checking_Suite is
          "the finite alias chain has no diagnostic");
    end Flat_Alias_Chains_Use_Bounded_Stack;
 
+   --  D247: a routine of Declaration_Limit declarations and a struct of
+   --  Field_Limit fields check; one more of either is refused with L0325,
+   --  once per place over the bound, before any other pass runs.
+   procedure Size_Bounds_Refuse_Past_Their_Limit
+     (Item : in out Landin.Testing.Context);
+
+   procedure Size_Bounds_Refuse_Past_Their_Limit
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Stages.Checking;
+
+      --  `code` is the routine's one return, so Count - 1 locals make
+      --  Count declarations.
+      function Routine
+        (Count : Positive; Name : String := "main") return String;
+      function Wide_Struct (Count : Positive) return String;
+      procedure Check
+        (Label : String; Text : String; Refusals : Natural;
+         Line : Positive := 1);
+
+      function Routine
+        (Count : Positive; Name : String := "main") return String
+      is
+         Text : US.Unbounded_String := US.To_Unbounded_String
+           ((if Name = "main" then "public " else "") & Name
+            & ": () -> (code: i32) =" & LF & "    v1: i32 = 0" & LF);
+      begin
+         for Index in 2 .. Count - 1 loop
+            US.Append
+              (Text, "    v" & Image (Index) & ": i32 = v"
+               & Image (Index - 1) & " +% 1" & LF);
+         end loop;
+         US.Append (Text, "    code = 42" & LF & "end " & Name & LF);
+         return US.To_String (Text);
+      end Routine;
+
+      function Wide_Struct (Count : Positive) return String is
+         Text : US.Unbounded_String :=
+           US.To_Unbounded_String ("wide: type = struct" & LF);
+      begin
+         for Index in 1 .. Count loop
+            US.Append (Text, "    f" & Image (Index) & ": u8" & LF);
+         end loop;
+         US.Append
+           (Text, "end wide" & LF
+            & "public main: () -> (code: i32) =" & LF
+            & "    mut value: wide = zeroed" & LF
+            & "    value.f" & Image (Count) & " = 42" & LF
+            & "    code = i32(value.f" & Image (Count) & ")" & LF
+            & "end main" & LF);
+         return US.To_String (Text);
+      end Wide_Struct;
+
+      procedure Check
+        (Label : String; Text : String; Refusals : Natural;
+         Line : Positive := 1)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "bounds.ldn", Text);
+         Ran : Natural;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         pragma Unreferenced (Src);
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Found := Landin.Stages.Report (Work);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, Label & " reaches checking");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), Refusals,
+            Label & ": " & Landin.Stages.Rendered_Report (Work));
+         for Index in 1 .. Landin.Diagnostics.Count (Found) loop
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Found, Index)), "L0325",
+               Label & " is refused by the bound");
+         end loop;
+         if Refusals > 0 then
+            declare
+               First : constant Landin.Diagnostics.Label :=
+                 Landin.Diagnostics.Primary
+                   (Landin.Diagnostics.Get (Found, 1));
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Natural (Landin.Source.Position_Of
+                    (Landin.Stages.Source
+                       (Work, Landin.Diagnostics.Source_Of (First)),
+                     Landin.Diagnostics.Span_Of (First).First).Line),
+                  Line, Label & " is reported where the bound is passed");
+            end;
+         end if;
+      end Check;
+   begin
+      Check ("a routine at the bound",
+             Routine (C.Declaration_Limit), 0);
+      Check ("a routine past the bound",
+             Routine (C.Declaration_Limit + 1), 1);
+      Check ("two routines past the bound",
+             Routine (C.Declaration_Limit + 1)
+             & Routine (C.Declaration_Limit + 1, "other"), 2);
+      Check ("a struct at the bound", Wide_Struct (C.Field_Limit), 0);
+      Check ("a struct past the bound", Wide_Struct (C.Field_Limit + 1), 1,
+             Line => C.Field_Limit + 2);
+   end Size_Bounds_Refuse_Past_Their_Limit;
+
    procedure Loop_Transfer_Failures_Release_Exactly_Once
      (Item : in out Landin.Testing.Context);
 
@@ -13947,6 +14058,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "size bounds refuse past their limit",
+         Size_Bounds_Refuse_Past_Their_Limit'Access);
       Landin.Testing.Register
         (Into, "checking", "nonreturning control and identity",
          Nonreturning_Control_And_Identity'Access);

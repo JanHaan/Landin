@@ -1947,6 +1947,7 @@ runtime/whole-arrays-copy-between-storage | linux-x86-64, macos-arm64
 runtime/wrapping-add-and-subtract-cross-the-boundaries | linux-x86-64, macos-arm64
 runtime/wrapping-multiplication-keeps-low-products | linux-x86-64, macos-arm64
 runtime/written-function-values | linux-x86-64, macos-arm64
+unit/checker-size-bounds | linux-x86-64, macos-arm64, synthetic-32
 unit/diagnostic-ordering | linux-x86-64, macos-arm64, synthetic-32
 unit/evidence-layout | linux-x86-64, synthetic-32
 unit/evidence-verifier | linux-x86-64, synthetic-32

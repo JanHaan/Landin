@@ -13628,6 +13628,54 @@ withheld.
 `negative/import-selected-namespace-unbound` and
 `runtime/import-alias-selected-identities`.
 
+### D247 — A routine and a struct each hold at most 16,384 of what they declare
+
+**The tour said** nothing about size. A program may be as large as its host
+allows, and a routine may declare, and a struct may hold, as many names as it
+writes. The compiler checks a whole program at once, so what one routine or
+one struct costs is paid in one process.
+
+**Chosen:** one routine makes at most 16,384 declarations, counting its
+parameters, named returns and every local and binding in its body, and one
+struct body or variant case has at most 16,384 fields. A program over either
+bound is refused with L0325 before any checking begins: a routine at its
+name, and a struct or case at its first field past the bound, related to the
+body. Every place over a bound is reported, in source order, and nothing else
+is checked, because every later pass is sized by what it refuses. The bounds
+are `Landin.Stages.Checking.Declaration_Limit` and `Field_Limit`. They are
+an implementation limit, like L0111's nesting depth, and not a rule of the
+language: a larger compiler may raise them without changing what any program
+at or under them means.
+
+The numbers are measured, not chosen for their shape. Definite assignment and
+origin tracking keep one fact per declaration the routine can name, and a loop
+or branch copies them, so a routine's storage grows with the square of its
+declarations: at 16,384, with a loop, the release compiler peaks near half a
+gigabyte, and at 65,535 it needs eight. A struct's field shapes are copied
+through layout, lowering and emission; 55,000 fields exhausted an 8 MiB host
+stack. 16,384 of each leaves at least a factor of three below either failure
+on the host that measured them. A program that stays under both checks
+without exhausting that host at any size the frontend's scaling benchmark
+generates.
+
+**A competent reader could have** set no bound and let the host fail. That
+was the behaviour before, and it is not a diagnostic: exit 71 says nothing
+about which routine or struct did it, and on a smaller host it arrives at a
+smaller program. A single bound on the whole program's declarations was
+declined because nothing in the compiler is sized by it any more: checking,
+flow and lowering scale with the program and only a routine's own facts, and
+a struct's own fields, are quadratic or stack-bound. Bounds high enough never
+to matter, 65,535 or 2**20, were declined because a program just under them
+would still exhaust an ordinary host, which is the failure the bound exists to
+replace. Making the storage sparse so that no bound is needed was deferred:
+the reference pass's per-declaration facts are its representation, and
+replacing them is a change to that pass rather than to its bound.
+
+**Pinned by** `unit/checker-size-bounds`, the checking case `size bounds
+refuse past their limit`, which generates a routine and a struct at each bound
+and one past it: a program that meets either is too large to keep in the
+corpus, as L0111's is.
+
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
 The C boundary, the machine directives, the entry point, and the

@@ -746,8 +746,10 @@ limited `out` parameter is passed by reference and `Lex` had not cleared it.
 a code is written. The matrix crosses every row's source/span/label/note
 contract with its emitter and fixture or fake-host test owner. A live code with
 no emitter or owner, a retired code still emitted, and a source diagnostic with
-no negative-program owner are gate failures; L0111's deliberate parser limit
-has its implementation-side unit owner instead.
+no negative-program owner are gate failures; L0111's parser nesting limit and
+L0325's routine and struct size limits have their implementation-side unit
+owners instead, because a program that meets either is too large to keep in the
+corpus.
 
 `python3 check.py --coverage` writes `guarantees.matrix`,
 `conformances.matrix`, `prototypes.matrix` and `targets.matrix`. Their source

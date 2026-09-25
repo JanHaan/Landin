@@ -121,6 +121,11 @@ package Landin.Diagnostics.Catalogue is
       --  D164's raw literal has matching delimiters, UTF-8 source and one
       --  exact indentation prefix.
       Malformed_Raw_Literal,
+      --  D247's storage bounds: a routine or a struct wider than the
+      --  compiler holds.  An implementation limit, like L0111, and the
+      --  checker's because counting what a routine declares needs the
+      --  resolver's scopes.
+      Size_Limit_Exceeded,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -196,6 +201,7 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Float_Literal        => "L0321",
             when Malformed_Character_Literal    => "L0322",
             when Malformed_Raw_Literal          => "L0323",
+            when Size_Limit_Exceeded            => "L0325",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -224,7 +230,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => Error,
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
-               .. Malformed_Raw_Literal => Error,
+               .. Size_Limit_Exceeded => Error,
             when No_Toolchain .. Panic_Contract_Invalid => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
@@ -254,7 +260,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => Live,
             when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
-               .. Malformed_Raw_Literal => Live,
+               .. Size_Limit_Exceeded => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
@@ -384,6 +390,9 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Raw_Literal =>
                "[0280] [1750]: raw content is UTF-8 and every nonblank"
                & " line has the closing delimiter's indentation",
+            when Size_Limit_Exceeded =>
+               "D247: an implementation limit on how many declarations a"
+               & " routine or fields a struct holds",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -434,7 +443,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => True,
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
-               .. Malformed_Raw_Literal => True,
+               .. Size_Limit_Exceeded => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
@@ -467,14 +476,15 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
-               .. Malformed_Raw_Literal =>
+               .. Size_Limit_Exceeded =>
                True,
             when No_Toolchain .. Panic_Contract_Invalid => False);
 
-   --  The admitted secondary-label interval. Every code except L0300 and
-   --  L0306 has one exact count. Those two semantic rules point only at the
-   --  direct defect when it is written there, but a substitution-dependent
-   --  occurrence is primary at the application and may relate the template.
+   --  The admitted secondary-label interval. Every code except L0300,
+   --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306
+   --  point only at the direct defect when it is written there, but a
+   --  substitution-dependent occurrence is primary at the application and
+   --  may relate the template; the others say where below.
    function Minimum_Secondaries (Of_Code : Code_Name) return Natural
      is (case Of_Code is
             when Unterminated_Comment  => 1,
@@ -519,6 +529,10 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Text_Literal | Malformed_Float_Literal
                | Malformed_Character_Literal => 0,
             when Malformed_Raw_Literal => 0,
+            --  A routine over D247's bound is its name alone; a struct or
+            --  case over it points at its first unheld field and relates
+            --  the body that holds it.  Maximum_Secondaries admits both.
+            when Size_Limit_Exceeded   => 0,
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
@@ -536,6 +550,7 @@ package Landin.Diagnostics.Catalogue is
             --  A module value of a range subtype has bounds to point at,
             --  and an erased pair has the site that asked for the image.
             when Not_Known_At_Compile_Time => 1,
+            when Size_Limit_Exceeded => 1,
             when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -576,6 +591,7 @@ package Landin.Diagnostics.Catalogue is
                | Malformed_Text_Literal | Malformed_Float_Literal
                | Malformed_Character_Literal => 1,
             when Malformed_Raw_Literal => 1,
+            when Size_Limit_Exceeded   => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.

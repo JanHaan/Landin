@@ -33915,7 +33915,150 @@ package body Landin.Stages.Checking is
 
       ------------------------------------------------------------
 
+      --  D247's bounds.  Every routine's declarations and every struct
+      --  body's or variant case's fields are counted before anything is
+      --  sized by them; a program over either bound is refused at each
+      --  place it is over, in declaration order, and checks nothing else.
+      procedure Refuse_Oversized;
+
+      procedure Refuse_Oversized is
+         use type Res.Scope_Id;
+         use type Res.Scope_Sort;
+
+         function Scope_Hash (Scope : Res.Scope_Id)
+           return Ada.Containers.Hash_Type
+           is (Ada.Containers.Hash_Type'Mod (Scope));
+
+         package Scope_Counts is new Ada.Containers.Hashed_Maps
+           (Key_Type        => Res.Scope_Id,
+            Element_Type    => Natural,
+            Hash            => Scope_Hash,
+            Equivalent_Keys => Res."=");
+
+         Made : Scope_Counts.Map;
+
+         procedure Refuse_Run
+           (Of_Tree : Syn.Tree; Owner : Syn.Node_Id; Count : Natural;
+            Nth : not null access function (Index : Positive)
+              return Syn.Node_Id;
+            What : String);
+
+         procedure Refuse_Run
+           (Of_Tree : Syn.Tree; Owner : Syn.Node_Id; Count : Natural;
+            Nth : not null access function (Index : Positive)
+              return Syn.Node_Id;
+            What : String) is
+         begin
+            if Count > Field_Limit then
+               Bad.Report
+                 (Item    => Bad.Size_Limit_Exceeded,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Anchor (Of_Tree, Nth (Field_Limit + 1)),
+                  Message => "this " & What & " has" & Natural'Image (Count)
+                    & " fields, and the compiler holds at most"
+                    & Natural'Image (Field_Limit),
+                  Note    => "D247: an implementation limit; nest some of"
+                    & " the fields in a struct of their own",
+                  Related => Syn.Origin (Of_Tree, Owner),
+                  Because => "the " & What,
+                  Into    => Found);
+            end if;
+         end Refuse_Run;
+      begin
+         --  Each declaration counts toward the nearest routine signature
+         --  enclosing its scope.
+         for Id in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            declare
+               Scope : Res.Scope_Id := Res.Scope_Of (Meanings.all, Id);
+            begin
+               while Scope /= Res.No_Scope
+                 and then Res.Sort_Of (Meanings.all, Scope) /= Res.Signature
+               loop
+                  Scope := Res.Enclosing (Meanings.all, Scope);
+               end loop;
+               if Scope /= Res.No_Scope then
+                  if Made.Contains (Scope) then
+                     Made.Replace (Scope, Made (Scope) + 1);
+                  else
+                     Made.Insert (Scope, 1);
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+            begin
+               for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+               loop
+                  case Syn.Kind (Of_Tree.all, Node) is
+                     when Syn.Function_Declaration
+                        | Syn.Anonymous_Function =>
+                        declare
+                           Signature : constant Res.Scope_Id :=
+                             Res.Scope_At
+                               (Meanings.all, Of_Tree.all, Node);
+                        begin
+                           if Signature /= Res.No_Scope
+                             and then Made.Contains (Signature)
+                             and then Made (Signature) > Declaration_Limit
+                           then
+                              Bad.Report
+                                (Item    => Bad.Size_Limit_Exceeded,
+                                 Source  => Syn.Source_Of (Of_Tree.all),
+                                 Where   => Syn.Anchor (Of_Tree.all, Node),
+                                 Message => "this routine declares"
+                                   & Natural'Image (Made (Signature))
+                                   & " names, and the compiler holds at"
+                                   & " most"
+                                   & Natural'Image (Declaration_Limit),
+                                 Note    => "D247: an implementation limit;"
+                                   & " move some of its work into routines"
+                                   & " of their own",
+                                 Into    => Found);
+                           end if;
+                        end;
+                     when Syn.Struct_Body =>
+                        declare
+                           function Nth (Index : Positive)
+                             return Syn.Node_Id
+                             is (Syn.Nth_Field (Of_Tree.all, Node, Index));
+                        begin
+                           Refuse_Run
+                             (Of_Tree.all, Node,
+                              Syn.Field_Count (Of_Tree.all, Node),
+                              Nth'Access, "struct");
+                        end;
+                     when Syn.Variant_Case =>
+                        declare
+                           function Nth (Index : Positive)
+                             return Syn.Node_Id
+                             is (Syn.Nth_Payload_Field
+                                   (Of_Tree.all, Node, Index));
+                        begin
+                           Refuse_Run
+                             (Of_Tree.all, Node,
+                              Syn.Payload_Field_Count (Of_Tree.all, Node),
+                              Nth'Access, "variant case");
+                        end;
+                     when others =>
+                        null;
+                  end case;
+               end loop;
+            end;
+         end loop;
+      end Refuse_Oversized;
+
    begin
+      Refuse_Oversized;
+      if Landin.Diagnostics.Has_Errors (Found) then
+         goto Publish_Diagnostics;
+      end if;
+
       Landin.Checking.Prepare
         (Types.all, Trees.all, Meanings.all, Spellings.all);
 
