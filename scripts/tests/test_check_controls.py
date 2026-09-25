@@ -11,6 +11,7 @@ tree that satisfies it, and shows it speaking on one that does not.  Where
 a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -767,10 +768,49 @@ def once(old, new):
     return edit
 
 
-#  Roadmap identities are spelt out of parts here, because the citation
-#  rule refuses them anywhere but ROADMAP.md -- this file included.
-FIRST = "R%d.10" % 8
-SECOND = "R%d.20" % 8
+def restate(work, old, new):
+    """An edit giving one item's status line another status."""
+    def edit(text):
+        at = text.index("\n### %s — " % work)
+        line = "\nStatus: %s\n" % old
+        assert line in text[at:], (work, old)
+        return text[:at] + text[at:].replace(line, "\nStatus: %s\n" % new, 1)
+    return edit
+
+
+def real_roadmap():
+    """The roadmap these controls break, read rather than transcribed."""
+    return (Path(checker.ROOT) / "ROADMAP.md").read_text(encoding="utf-8")
+
+
+def status_pointer():
+    """README.md's status line, and the item it names."""
+    text = (Path(checker.ROOT) / "README.md").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        for form in (checker.NEXT_ROADMAP_ITEM, checker.CURRENT_ROADMAP_WORK,
+                     checker.ENDPOINT_ROADMAP_ITEM):
+            said = form.match(line)
+            if said:
+                return line, said.group(1).split(" — ", 1)[0]
+    raise AssertionError("README.md carries no roadmap status pointer")
+
+
+#  The items are read from the roadmap rather than named, because finishing
+#  one moves the pointer and retires its records: a control that named them
+#  failed the day the item it named was done.  Reading them also keeps the
+#  identities out of this file, where the citation rule refuses them.
+#  PLANNED is the first planned item, SCHEDULED the first planned item an
+#  open record is scheduled on, and ELSEWHERE a planned item the pointer
+#  does not name.
+POINTER, NAMED = status_pointer()
+UNSTARTED = [work for work, status
+             in checker.roadmap_statuses(real_roadmap()).items()
+             if status == "planned"]
+PLANNED = UNSTARTED[0]
+SCHEDULED = next(work for work in re.findall(r"\| scheduled (R\d+\.\d+) \|",
+                                             real_roadmap())
+                 if work in UNSTARTED)
+ELSEWHERE = next(work for work in UNSTARTED if work != NAMED)
 #  One of the first roadmap's items, which the history holds and this
 #  roadmap does not, and two of its debt ledger's records.
 CLOSED = "R%d.%d" % (7, 70)
@@ -799,10 +839,7 @@ class RoadmapStructure(unittest.TestCase):
                 self.assertEqual(faults(check, copied=ROADMAP_INPUTS), [])
 
     def test_a_status_line_the_roadmap_does_not_carry_is_reported(self):
-        said = roadmap_faults(once("### %s — Remove the first roadmap's"
-                                   " citations\n\nStatus: planned" % FIRST,
-                                   "### %s — Remove the first roadmap's"
-                                   " citations\n\nStatus: invented" % FIRST))
+        said = roadmap_faults(restate(PLANNED, "planned", "invented"))
         self.assertTrue(any("invalid status" in why for why in said))
 
     def test_a_phase_out_of_order_is_reported(self):
@@ -828,19 +865,14 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("registered twice" in why for why in said))
 
     def test_a_record_scheduled_on_no_item_is_reported(self):
-        said = roadmap_faults(once("| scheduled " + SECOND + " |",
+        said = roadmap_faults(once("| scheduled " + SCHEDULED + " |",
                                    "| scheduled %s |" % CLOSED))
         self.assertTrue(any("not a work item of this roadmap" in why
                             for why in said))
 
     def test_a_record_scheduled_on_a_finished_item_is_reported(self):
-        def finish(text):
-            heading = "### %s — " % SECOND
-            at = text.index(heading)
-            return (text[:at] + text[at:].replace(
-                "Status: planned", "Status: complete", 1))
-        said = roadmap_faults(finish)
-        self.assertTrue(any("still scheduled on finished " + SECOND in why
+        said = roadmap_faults(restate(SCHEDULED, "planned", "complete"))
+        self.assertTrue(any("still scheduled on finished " + SCHEDULED in why
                             for why in said))
 
     def test_a_record_without_an_activation_is_reported(self):
@@ -861,7 +893,7 @@ class RoadmapStructure(unittest.TestCase):
         #  An item or record of either roadmap: the first roadmap's are
         #  closed and in the history, and no more welcome outside it.
         from check_controls import tree
-        for cited in (FIRST, CLOSED, MEASURED, "SR-%02d" % 3):
+        for cited in (PLANNED, CLOSED, MEASURED, "SR-%02d" % 3):
             with self.subTest(cited=cited), \
                     tree(copied=ROADMAP_INPUTS) as root:
                 target = root / "docs/ir.md"
@@ -887,8 +919,7 @@ class RoadmapStructure(unittest.TestCase):
         #  check_project_status holds it to the roadmap.
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
-            text = (root / "README.md").read_text()
-            self.assertIn("**Next roadmap item: %s — " % FIRST, text)
+            self.assertIn(POINTER, (root / "README.md").read_text())
             said = checker.check_roadmap_citations(True)
         self.assertEqual(said, [])
 
@@ -896,9 +927,10 @@ class RoadmapStructure(unittest.TestCase):
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:
             target = root / "handoff.md"
-            target.write_text(target.read_text().replace(
-                "**Next roadmap item: %s — " % FIRST,
-                "**Next roadmap item: %s — " % SECOND, 1))
+            text = target.read_text()
+            self.assertIn(POINTER, text)
+            target.write_text(text.replace(
+                POINTER, POINTER.replace(NAMED, ELSEWHERE, 1), 1))
             said = [why for _, _, why in checker.check_project_status(True)]
         self.assertTrue(any("roadmap status pointer" in why for why in said))
 
