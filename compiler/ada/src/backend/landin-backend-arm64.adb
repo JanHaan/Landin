@@ -670,6 +670,9 @@ package body Landin.Backend.Arm64 is
       procedure Allocate_Symbols;
 
       procedure Allocate_Symbols is
+         Allocated : Spelling_Counts;
+         Sources : Spelling_Counts;
+
          function Available
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean;
 
@@ -681,32 +684,42 @@ package body Landin.Backend.Arm64 is
             then
                return False;
             end if;
-            for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-               declare
-                  Other : constant Landin.IR.Item_Id :=
-                    Landin.IR.Item_Id (Position);
-               begin
-                  if Other /= Item
-                    and then
-                      (Unbounded.To_String (Allocated_Symbols (Position))
-                         = Candidate
-                       or else Source_Symbol (Other) = Candidate)
-                  then
-                     return False;
-                  end if;
-               end;
-            end loop;
-            return True;
+            --  Held by an item other than this one: every holder of the
+            --  spelling, less this item's own allocated and source names.
+            return Count (Allocated, Candidate)
+              - (if Unbounded.To_String
+                   (Allocated_Symbols (Positive (Item))) = Candidate
+                 then 1 else 0)
+              + Count (Sources, Candidate)
+              - (if Source_Symbol (Item) = Candidate then 1 else 0) = 0;
          end Available;
+
+         procedure Allocate
+           (Position : Positive; Spelling : Unbounded.Unbounded_String);
+
+         procedure Allocate
+           (Position : Positive; Spelling : Unbounded.Unbounded_String) is
+         begin
+            Remove (Allocated, Unbounded.To_String
+                      (Allocated_Symbols (Position)));
+            Allocated_Symbols (Position) := Spelling;
+            Add (Allocated, Unbounded.To_String (Spelling));
+         end Allocate;
       begin
+         for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            Add (Allocated, Unbounded.To_String
+                   (Allocated_Symbols (Position)));
+            Add (Sources, Source_Symbol (Landin.IR.Item_Id (Position)));
+         end loop;
          for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Position);
             begin
                if Is_Forced (Item) then
-                  Allocated_Symbols (Position) :=
-                    Unbounded.To_Unbounded_String (Source_Symbol (Item));
+                  Allocate
+                    (Position,
+                     Unbounded.To_Unbounded_String (Source_Symbol (Item)));
                end if;
             end;
          end loop;
@@ -721,8 +734,8 @@ package body Landin.Backend.Arm64 is
                if not Is_Forced (Item) then
                   if not Is_C_Item (Item) and then Available (Spelling, Item)
                   then
-                     Allocated_Symbols (Position) :=
-                       Unbounded.To_Unbounded_String (Spelling);
+                     Allocate
+                       (Position, Unbounded.To_Unbounded_String (Spelling));
                   else
                      declare
                         Base : constant String :=
@@ -743,7 +756,7 @@ package body Landin.Backend.Arm64 is
                            Candidate := Unbounded.To_Unbounded_String
                              (Base & "_" & Trimmed (Natural'Image (Attempt)));
                         end loop;
-                        Allocated_Symbols (Position) := Candidate;
+                        Allocate (Position, Candidate);
                      end;
                   end if;
                end if;

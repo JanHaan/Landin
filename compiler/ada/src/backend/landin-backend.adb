@@ -670,4 +670,33 @@ package body Landin.Backend is
       return Of_Codes.Codes (Positive (Identity));
    end Atom_Code;
 
+   procedure Add (Into : in out Spelling_Counts; Spelling : String) is
+      Found : constant Spelling_Maps.Cursor := Into.Held.Find (Spelling);
+   begin
+      if Spelling_Maps.Has_Element (Found) then
+         Into.Held.Replace_Element (Found, Spelling_Maps.Element (Found) + 1);
+      else
+         Into.Held.Insert (Spelling, 1);
+      end if;
+   end Add;
+
+   procedure Remove (Into : in out Spelling_Counts; Spelling : String) is
+      Found : Spelling_Maps.Cursor := Into.Held.Find (Spelling);
+   begin
+      if Spelling_Maps.Element (Found) = 1 then
+         Into.Held.Delete (Found);
+      else
+         Into.Held.Replace_Element (Found, Spelling_Maps.Element (Found) - 1);
+      end if;
+   end Remove;
+
+   function Count
+     (Of_Counts : Spelling_Counts; Spelling : String) return Natural
+   is
+      Found : constant Spelling_Maps.Cursor := Of_Counts.Held.Find (Spelling);
+   begin
+      return (if Spelling_Maps.Has_Element (Found)
+              then Spelling_Maps.Element (Found) else 0);
+   end Count;
+
 end Landin.Backend;

@@ -30,7 +30,9 @@
 --  cell is not an aggregate, and a frame cannot be laid out without an
 --  answer.
 
+private with Ada.Containers.Indefinite_Hashed_Maps;
 private with Ada.Containers.Vectors;
+private with Ada.Strings.Hash;
 
 with Landin.IR;
 with Landin.Targets;
@@ -258,7 +260,29 @@ package Landin.Backend is
      (Of_Codes : Atom_Codes; Identity : Landin.IR.Declaration_Id)
       return Positive;
 
+   --  How many of a unit's items hold each linker spelling.  Symbol
+   --  allocation asks whether a candidate is held by any item but the one
+   --  choosing; counting spellings answers that without walking every
+   --  item for every candidate.  The empty spelling counts like any other.
+   type Spelling_Counts is private;
+
+   procedure Add (Into : in out Spelling_Counts; Spelling : String);
+
+   procedure Remove (Into : in out Spelling_Counts; Spelling : String)
+     with Pre => Count (Into, Spelling) > 0;
+
+   function Count
+     (Of_Counts : Spelling_Counts; Spelling : String) return Natural;
+
 private
+
+   package Spelling_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type => String, Element_Type => Positive,
+      Hash => Ada.Strings.Hash, Equivalent_Keys => "=");
+
+   type Spelling_Counts is record
+      Held : Spelling_Maps.Map;
+   end record;
 
    --  Shared checked stack arithmetic. The limit is never exceeded even
    --  transiently; invalid alignment is not a budget failure.
