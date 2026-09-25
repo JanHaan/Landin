@@ -2,7 +2,14 @@
    already counts: processor time spent in this process and its peak resident
    set. Children are excluded, so a tool the driver runs is not charged to
    the compiler. Nothing here reaches target facts or program output. */
+/* Strict POSIX hides ru_maxrss on Darwin, where it is a BSD field. */
+#ifdef __APPLE__
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE
+#endif
+#else
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include <sys/resource.h>
 
 int landin_resource_usage(long long *cpu_microseconds, long long *peak_kib);
