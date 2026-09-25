@@ -1,4 +1,5 @@
 with Ada.Containers.Ordered_Maps;
+with Ada.Containers.Vectors;
 
 package body Landin.Stages.Folding is
 
@@ -27,6 +28,29 @@ package body Landin.Stages.Folding is
       Value      : out Ty.Folded;
       Known      : out Boolean;
       Overflowed : out Boolean);
+
+   --  Values of final bindings, kept across queries.  Only a value whose
+   --  whole fold read final bindings is entered; Read_Unfinished records,
+   --  for the walk in progress, whether it has read one that is not.
+   Final_Values    : Known_Values.Map;
+   Read_Unfinished : Boolean := False;
+   Global_View     : Boolean := True;
+
+   --  Within one request, the whole outcome of each binding the dependency
+   --  walk proved acyclic, unknown and overflowing ones included.  Such a
+   --  fold meets no cycle and so reports nothing: walking it again would
+   --  only find the same outcome, one nested call per link.
+   type Outcome is record
+      Value      : Ty.Folded := 0;
+      Known      : Boolean := False;
+      Overflowed : Boolean := False;
+      Unfinished : Boolean := False;
+   end record;
+
+   package Outcome_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Res.Declaration_Id, Element_Type => Outcome);
+
+   Outcomes : Outcome_Maps.Map;
 
    --  [0300]'s wrapping arithmetic, [0330]'s bit operators and [0320]'s
    --  shifts answer at the operand type's own width, as two's-complement
@@ -345,9 +369,25 @@ package body Landin.Stages.Folding is
                      Known := True;
                   elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
                   then
-                     if Cache.Contains (Means) then
+                     if Global_View and then Final_Values.Contains (Means)
+                     then
+                        Value := Final_Values.Element (Means);
+                        Known := True;
+                     elsif Cache.Contains (Means) then
+                        --  Not kept, so it read something unfinished.
                         Value := Cache.Element (Means);
                         Known := True;
+                        Read_Unfinished := True;
+                     elsif Outcomes.Contains (Means) then
+                        declare
+                           Found : constant Outcome := Outcomes (Means);
+                        begin
+                           Value := Found.Value;
+                           Known := Found.Known;
+                           Overflowed := Found.Overflowed;
+                           Read_Unfinished :=
+                             Read_Unfinished or else Found.Unfinished;
+                        end;
                      else
                         declare
                            Their_Tree : constant
@@ -357,7 +397,12 @@ package body Landin.Stages.Folding is
                              Res.Node_Of (Meanings.all, Means);
                            Their_Value : constant Syn.Node_Id :=
                              Syn.Value_Of (Their_Tree.all, Theirs);
+                           Outer_Unfinished : constant Boolean :=
+                             Read_Unfinished;
+                           Final : constant Boolean :=
+                             Global_View and then Is_Final (Means);
                         begin
+                           Read_Unfinished := False;
                            if Their_Value = Syn.No_Node then
                               Value := 0;
                               Known := True;
@@ -369,8 +414,15 @@ package body Landin.Stages.Folding is
                            --  Unknown and overflowing folds retain the
                            --  stage's ordinary cycle/diagnostic behavior.
                            if Known and then not Overflowed then
-                              Cache.Include (Means, Value);
+                              if Final and then not Read_Unfinished then
+                                 Final_Values.Include (Means, Value);
+                              else
+                                 Cache.Include (Means, Value);
+                              end if;
                            end if;
+                           Read_Unfinished :=
+                             Outer_Unfinished or else Read_Unfinished
+                             or else not Final;
                         end;
                      end if;
                   end if;
@@ -684,6 +736,181 @@ package body Landin.Stages.Folding is
       end case;
    end Fold;
 
+
+   --  The module bindings a subtree names, deepest first: a chain of
+   --  bindings each named by the one after it would otherwise be folded by
+   --  one nested call per link, and a long enough chain is deeper than any
+   --  host stack.  The walk here holds its own stacks on the heap.
+   package Node_Stacks is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Syn.Node_Id);
+
+   type Visit_State is (On_Path, Acyclic, Cyclic);
+
+   package Visit_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Res.Declaration_Id, Element_Type => Visit_State);
+
+   type Frame is record
+      Means   : Res.Declaration_Id;
+      Pending : Node_Stacks.Vector;
+      Tainted : Boolean := False;
+   end record;
+
+   package Frame_Stacks is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Frame);
+
+   procedure Fold_Dependencies
+     (Cache   : in out Known_Values.Map;
+      Of_Tree : Syn.Tree;
+      Node    : Syn.Node_Id);
+
+   procedure Fold_Dependencies
+     (Cache   : in out Known_Values.Map;
+      Of_Tree : Syn.Tree;
+      Node    : Syn.Node_Id)
+   is
+      Seen : Visit_Maps.Map;
+      Path : Frame_Stacks.Vector;
+
+      --  The initializer of a binding the walk may expand, or No_Node.
+      function Expandable (Means : Res.Declaration_Id) return Syn.Node_Id;
+
+      function Expandable (Means : Res.Declaration_Id) return Syn.Node_Id
+      is
+      begin
+         if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Binding
+           or else Cache.Contains (Means)
+           or else Outcomes.Contains (Means)
+           or else (Global_View and then Final_Values.Contains (Means))
+         then
+            return Syn.No_Node;
+         end if;
+         return Syn.Value_Of
+           (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+            Res.Node_Of (Meanings.all, Means));
+      end Expandable;
+
+      --  Push a subtree's nodes onto a frame's pending run.
+      procedure Push_Subtree
+        (Into : in out Node_Stacks.Vector; Root : Syn.Node_Id);
+
+      procedure Push_Subtree
+        (Into : in out Node_Stacks.Vector; Root : Syn.Node_Id) is
+      begin
+         if Root /= Syn.No_Node then
+            Into.Append (Root);
+         end if;
+      end Push_Subtree;
+
+      Root_Frame : Frame;
+   begin
+      Root_Frame.Means := Res.No_Declaration;
+      Push_Subtree (Root_Frame.Pending, Node);
+      Path.Append (Root_Frame);
+      while not Path.Is_Empty loop
+         declare
+            Top : constant Positive := Path.Last_Index;
+            Tree_Of_Top : constant not null access constant Syn.Tree :=
+              (if Path (Top).Means = Res.No_Declaration
+               then Tree_For (Syn.Source_Of (Of_Tree))
+               else Tree_For (Res.Source_Of (Meanings.all, Path (Top).Means)));
+         begin
+            if Path (Top).Pending.Is_Empty then
+               --  Every name below this binding has been seen.  An acyclic
+               --  one is folded now, with everything it reads already in
+               --  the cache.
+               declare
+                  Done : constant Frame := Path (Top);
+               begin
+                  Path.Delete_Last;
+                  if Done.Means /= Res.No_Declaration then
+                     if Done.Tainted then
+                        Seen.Replace (Done.Means, Cyclic);
+                        Path (Path.Last_Index).Tainted := True;
+                     else
+                        Seen.Replace (Done.Means, Acyclic);
+                        declare
+                           Their_Tree : constant
+                             not null access constant Syn.Tree :=
+                               Tree_For
+                                 (Res.Source_Of (Meanings.all, Done.Means));
+                           Their_Value : constant Syn.Node_Id :=
+                             Syn.Value_Of
+                               (Their_Tree.all,
+                                Res.Node_Of (Meanings.all, Done.Means));
+                           Final : constant Boolean :=
+                             Global_View and then Is_Final (Done.Means);
+                           Value : Ty.Folded;
+                           Known, Overflowed : Boolean;
+                        begin
+                           if Their_Value = Syn.No_Node then
+                              null;
+                           elsif Enter (Done.Means) then
+                              Read_Unfinished := False;
+                              Fold (Cache, Their_Tree.all, Their_Value, 1,
+                                    Value, Known, Overflowed);
+                              Leave (Done.Means);
+                              if Known and then not Overflowed then
+                                 if Final and then not Read_Unfinished then
+                                    Final_Values.Include (Done.Means, Value);
+                                 else
+                                    Cache.Include (Done.Means, Value);
+                                 end if;
+                              else
+                                 Outcomes.Include
+                                   (Done.Means,
+                                    (Value, Known, Overflowed,
+                                     Read_Unfinished or else not Final));
+                              end if;
+                           end if;
+                        end;
+                     end if;
+                  end if;
+               end;
+            else
+               declare
+                  Next : constant Syn.Node_Id :=
+                    Path (Top).Pending.Last_Element;
+               begin
+                  Path (Top).Pending.Delete_Last;
+                  if Syn.Kind (Tree_Of_Top.all, Next) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Tree_Of_Top.all,
+                                             Next) = Res.Bound
+                  then
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Tree_Of_Top.all, Next);
+                        Value_Node : constant Syn.Node_Id :=
+                          Expandable (Means);
+                     begin
+                        if Seen.Contains (Means) then
+                           if Seen (Means) /= Acyclic then
+                              Path (Top).Tainted := True;
+                           end if;
+                        elsif Value_Node /= Syn.No_Node then
+                           Seen.Insert (Means, On_Path);
+                           declare
+                              Child : Frame;
+                           begin
+                              Child.Means := Means;
+                              Push_Subtree (Child.Pending, Value_Node);
+                              Path.Append (Child);
+                           end;
+                        end if;
+                     end;
+                  else
+                     for Slot in 1 .. Syn.Slot_Count (Tree_Of_Top.all, Next)
+                     loop
+                        Push_Subtree
+                          (Path (Top).Pending,
+                           Syn.Slot (Tree_Of_Top.all, Next, Slot));
+                     end loop;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+   end Fold_Dependencies;
+
    procedure Fold
      (Of_Tree    : Syn.Tree;
       Node       : Syn.Node_Id;
@@ -692,10 +919,17 @@ package body Landin.Stages.Folding is
       Known      : out Boolean;
       Overflowed : out Boolean)
    is
-      --  Semantic tables can gain facts between top-level queries. Only
-      --  recursive references within this request share completed values.
+      use type Landin.Checking.Routine_Instance_Id;
+      --  Semantic tables can gain facts between top-level queries, so an
+      --  unfinished binding's value is shared only within this request.
       Cache : Known_Values.Map;
    begin
+      Global_View := Landin.Checking.Current_Routine_View (Types.all)
+        = Landin.Checking.No_Routine_Instance;
+      Read_Unfinished := False;
+      Outcomes.Clear;
+      Fold_Dependencies (Cache, Of_Tree, Node);
+      Read_Unfinished := False;
       Fold (Cache, Of_Tree, Node, Depth, Value, Known, Overflowed);
    end Fold;
 

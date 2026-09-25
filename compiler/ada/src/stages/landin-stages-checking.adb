@@ -30830,6 +30830,15 @@ package body Landin.Stages.Checking is
          Folding (Means) := False;
       end Leave_Fold;
 
+      --  A module binding whose declaration check has finished: its
+      --  initializer has every fact it will have, so its fold is final.
+      Checked_Binding : array (Folding'Range) of Boolean :=
+        [others => False];
+
+      function Final_Fold (Means : Res.Declaration_Id) return Boolean
+        is (Means in Checked_Binding'Range
+            and then Checked_Binding (Means));
+
       package Folder is new Landin.Stages.Folding
         (Types              => Types,
          Meanings           => Meanings,
@@ -30841,7 +30850,8 @@ package body Landin.Stages.Checking is
          Float_Special_Type => Float_Special_Type,
          Float_Special_Bits => Float_Special_Bits_At,
          Enter              => Enter_Fold,
-         Leave              => Leave_Fold);
+         Leave              => Leave_Fold,
+         Is_Final           => Final_Fold);
 
       function Pointer_Is_Known_Zero
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -33862,6 +33872,17 @@ package body Landin.Stages.Checking is
                Check_Module_Fold (Of_Tree, Node);
                Check_Operands (Of_Tree, Syn.Value_Of (Of_Tree, Node),
                                Whole_Fold => True);
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Declaration_At (Syn.Source_Of (Of_Tree), Node);
+               begin
+                  if Id in Checked_Binding'Range
+                    and then Res.Sort_Of (Meanings.all, Id)
+                      = Res.Module_Binding
+                  then
+                     Checked_Binding (Id) := True;
+                  end if;
+               end;
             when Syn.Function_Declaration =>
                if Syn.Generic_Formal_Count (Of_Tree, Node) > 0
                  and then Syn.Never_Returns (Of_Tree, Node)

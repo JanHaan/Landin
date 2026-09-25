@@ -60,11 +60,19 @@ private generic
    with function Enter (Means : Landin.Resolution.Declaration_Id)
      return Boolean;
    with procedure Leave (Means : Landin.Resolution.Declaration_Id);
+
+   --  Whether the stage will add no further fact to this module binding's
+   --  initializer.  Its folded value is then the same for every later
+   --  query, and is worked out once.
+   with function Is_Final (Means : Landin.Resolution.Declaration_Id)
+     return Boolean;
 package Landin.Stages.Folding is
 
-   --  Completed module-binding values are shared only within this query.
-   --  Unknown/overflowed results are not cached, and no fact survives to a
-   --  later query after the stage's semantic tables may have changed.
+   --  Completed module-binding values are shared within this query.  A
+   --  value is shared with later queries only when its binding is final
+   --  and every module binding its fold read was final too, and only in
+   --  the global routine view: no later fact can change it.  Unknown and
+   --  overflowed results are never kept.
    procedure Fold
      (Of_Tree    : Landin.Syntax.Tree;
       Node       : Landin.Syntax.Node_Id;

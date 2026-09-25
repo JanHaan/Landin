@@ -15425,6 +15425,16 @@ package body Landin.Stages.Lowering is
          function Enter_Fold (Means : Res.Declaration_Id) return Boolean;
          procedure Leave_Fold (Means : Res.Declaration_Id);
 
+         --  Lowering shares a module value within one query only.
+         function No_Final_Fold (Means : Res.Declaration_Id) return Boolean;
+
+         function No_Final_Fold (Means : Res.Declaration_Id) return Boolean
+         is
+            pragma Unreferenced (Means);
+         begin
+            return False;
+         end No_Final_Fold;
+
          function Enter_Fold (Means : Res.Declaration_Id) return Boolean is
          begin
             if Means not in Numbered or else Folding (Means) then
@@ -15452,7 +15462,8 @@ package body Landin.Stages.Lowering is
             Float_Special_Type => Float_Special_Type_At,
             Float_Special_Bits => Float_Special_At,
             Enter              => Enter_Fold,
-            Leave              => Leave_Fold);
+            Leave              => Leave_Fold,
+            Is_Final           => No_Final_Fold);
 
          procedure Fold_Constant
            (Of_Tree : Syn.Tree;

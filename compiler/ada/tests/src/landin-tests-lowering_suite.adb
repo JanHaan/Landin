@@ -12913,6 +12913,83 @@ package body Landin.Tests.Lowering_Suite is
               & "value: i32 = one / zero + one / zero", "L0306", 2);
    end Module_Fold_Refusals_Keep_Diagnostics;
 
+   --  A module value named before the chain it reads is checked folds
+   --  that chain without one nested fold per link, and keeps its answer;
+   --  a cycle reached from the far end of a chain is still reported once,
+   --  where the chain comes back to itself.
+   procedure Long_Module_Chains_Fold
+     (Item : in out Landin.Testing.Context);
+
+   procedure Long_Module_Chains_Fold
+     (Item : in out Landin.Testing.Context)
+   is
+      Links : constant := 20_000;
+
+      function Chain (Last : Natural) return String;
+
+      function Chain (Last : Natural) return String is
+         Text : Ada.Strings.Unbounded.Unbounded_String :=
+           Ada.Strings.Unbounded.To_Unbounded_String ("c0: i32 = 0 ");
+      begin
+         for Index in 1 .. Last loop
+            Ada.Strings.Unbounded.Append
+              (Text,
+               "c" & Ada.Strings.Fixed.Trim
+                 (Natural'Image (Index), Ada.Strings.Left)
+               & ": i32 = c" & Ada.Strings.Fixed.Trim
+                 (Natural'Image (Index - 1), Ada.Strings.Left)
+               & " +% 1 ");
+         end loop;
+         return Ada.Strings.Unbounded.To_String (Text);
+      end Chain;
+
+      Far : constant String :=
+        "c" & Ada.Strings.Fixed.Trim (Natural'Image (Links), Ada.Strings.Left);
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower
+           (Work, "image: [2]i32 = [" & Far & ", " & Far & "] "
+            & Chain (Links), Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, "a long chain named first reaches lowering");
+         if not Landin.Stages.Failed (Work) then
+            declare
+               Code : IR.Unit renames Landin.Stages.Code (Work).all;
+               Datum : constant IR.Item_Id := Named_Item (Work, "image");
+            begin
+               Landin.Testing.Check
+                 (Item, Datum /= IR.No_Item
+                  and then IR.Has_Image (Code, Datum)
+                  and then IR.Nth_Image (Code, Datum, IR.Part_Position (1))
+                    = Landin.Types.Folded (Links)
+                  and then IR.Nth_Image (Code, Datum, IR.Part_Position (2))
+                    = Landin.Types.Folded (Links),
+                  "the chain folds to its length at both uses");
+            end;
+         end if;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower
+           (Work, "first: i32 = c200 " & Chain (200)
+            & "d0: i32 = d1 + 1 d1: i32 = d0 + 1 tail: i32 = d0 + c200",
+            Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, "a cycle beside a chain stops before lowering");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 3,
+            "the cycle is reported exactly as the per-query folder did");
+      end;
+   end Long_Module_Chains_Fold;
+
    --  UTF decoding builds both weighted terms through emitting helpers.
    --  In the canonical IR the complete left operand must precede the
    --  right operand; Ada does not promise sibling actual-parameter order.
@@ -13050,6 +13127,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "module fold refusals keep diagnostics",
          Module_Fold_Refusals_Keep_Diagnostics'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "long module chains fold",
+         Long_Module_Chains_Fold'Access);
       Landin.Testing.Register
         (Into, "lowering", "generic pointees materialize on access",
          Generic_Pointees_Materialize_On_Access'Access);
