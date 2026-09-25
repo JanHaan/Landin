@@ -1,3 +1,4 @@
+with Ada.Containers.Generic_Array_Sort;
 with Landin.Targets.Layouts;
 with Landin.Targets.Packed;
 
@@ -29,6 +30,9 @@ package body Landin.Checking is
       begin
          return Positive (Of_Id);
       end Position;
+
+      function Hash (Of_Id : Id) return Ada.Containers.Hash_Type
+        is (Ada.Containers.Hash_Type'Mod (Of_Id));
    end Nominal_Identities;
 
    package body Routine_Identities is
@@ -78,6 +82,9 @@ package body Landin.Checking is
       begin
          return Positive (Of_Id);
       end Position;
+
+      function Hash (Of_Id : Id) return Ada.Containers.Hash_Type
+        is (Ada.Containers.Hash_Type'Mod (Of_Id));
    end Concept_Identities;
 
    function Holds (Of_Table : Table; Id : Concept_Id) return Boolean
@@ -128,6 +135,52 @@ package body Landin.Checking is
    begin
       Into.Current_Routine := Previous;
    end Restore_Routine_View;
+
+   function Overlaid_Nodes
+     (Of_Table : Table;
+      Instance : Routine_Instance_Id;
+      Of_Tree  : Landin.Syntax.Tree) return Node_List
+   is
+      Position : constant Positive :=
+        Routine_Identities.Position (Of_Table, Instance);
+      First : constant Natural := Of_Table.Runs
+        (Positive (Landin.Syntax.Source_Of (Of_Tree))).First;
+      Limit : constant Natural := Landin.Syntax.Node_Count (Of_Tree);
+      Found : Node_List (1 .. 0);
+   begin
+      if Position > Natural (Of_Table.Instance_Overlays.Length) then
+         return Found;
+      end if;
+      declare
+         Made : Overlay_Position_Vectors.Vector renames
+           Of_Table.Instance_Overlays.Constant_Reference (Position);
+         Nodes : Node_List (1 .. Natural (Made.Length));
+         Count : Natural := 0;
+      begin
+         for Overlay of Made loop
+            declare
+               Where : constant Positive :=
+                 Of_Table.Node_Overlays (Overlay).Where;
+            begin
+               if Where > First and then Where - First <= Limit then
+                  Count := Count + 1;
+                  Nodes (Count) := Landin.Syntax.Node_Id (Where - First);
+               end if;
+            end;
+         end loop;
+         declare
+            Result : Node_List := Nodes (1 .. Count);
+            procedure Sort is new Ada.Containers.Generic_Array_Sort
+              (Index_Type   => Positive,
+               Element_Type => Landin.Syntax.Node_Id,
+               Array_Type   => Node_List,
+               "<"          => Landin.Syntax."<");
+         begin
+            Sort (Result);
+            return Result;
+         end;
+      end;
+   end Overlaid_Nodes;
 
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Kind;
@@ -751,6 +804,88 @@ package body Landin.Checking is
         (Members.First + Position).Instance;
    end Conformance_Provider_Instance;
 
+   function Hash (Key : Bucket_Key) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+   begin
+      return Ada.Containers.Hash_Type'Mod (Key.Template) * 16#9E37_79B1#
+        + Key.Digest;
+   end Hash;
+
+   --  Only what Actuals_Agree compares by equality contributes, so tuples
+   --  that agree digest alike.  Atom sets, shapes, signatures and
+   --  references agree structurally and are left to the comparison.
+   function Digest (Actuals : Actual_Tuple) return Ada.Containers.Hash_Type;
+
+   function Digest (Actuals : Actual_Tuple) return Ada.Containers.Hash_Type
+   is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type :=
+        Ada.Containers.Hash_Type'Mod (Actuals.Members.Length);
+
+      procedure Mix (Value : Ada.Containers.Hash_Type);
+
+      procedure Mix (Value : Ada.Containers.Hash_Type) is
+      begin
+         Result := (Result * 31) xor Value;
+      end Mix;
+   begin
+      for Actual of Actuals.Members loop
+         Mix (Actual_Kind'Pos (Actual.Kind));
+         if Actual.Kind = Fixed_Actual_Kind then
+            Mix (Ada.Containers.Hash_Type'Mod (Actual.Value));
+         else
+            Mix (Actual_Type_Form'Pos (Actual.Type_Form));
+            case Actual.Type_Form is
+               when Scalar_Actual_Type =>
+                  Mix (Landin.Types.Scalar_Name'Pos (Actual.Scalar));
+               when Fixed_Array_Actual_Type =>
+                  Mix (Ada.Containers.Hash_Type'Mod (Actual.Length));
+               when Nominal_Actual_Type =>
+                  Mix (Nominal_Identities.Hash (Actual.Nominal));
+               when Any_Actual_Type =>
+                  Mix (Concept_Identities.Hash (Actual.Concept));
+               when Atom_Set_Actual_Type | Function_Actual_Type
+                  | Reference_Actual_Type =>
+                  null;
+            end case;
+         end if;
+      end loop;
+      return Result;
+   end Digest;
+
+   --  The instances whose actuals may agree with these, by position, in
+   --  the order they were made.
+   function Bucket
+     (Of_Map   : Template_Maps.Map;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Overlay_Position_Vectors.Vector
+     is (if Of_Map.Contains ((Template, Digest (Actuals)))
+         then Of_Map.Element ((Template, Digest (Actuals)))
+         else Overlay_Position_Vectors.Empty_Vector);
+
+   procedure Add_To_Bucket
+     (Into     : in out Template_Maps.Map;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple;
+      Position : Positive);
+
+   procedure Add_To_Bucket
+     (Into     : in out Template_Maps.Map;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple;
+      Position : Positive)
+   is
+      Key : constant Bucket_Key := (Template, Digest (Actuals));
+      Found : Template_Maps.Cursor := Into.Find (Key);
+      Inserted : Boolean;
+   begin
+      if not Template_Maps.Has_Element (Found) then
+         Into.Insert
+           (Key, Overlay_Position_Vectors.Empty_Vector, Found, Inserted);
+      end if;
+      Into.Reference (Found).Append (Position);
+   end Add_To_Bucket;
+
    function Intern
      (Into     : in out Table;
       Template : Declaration_Id;
@@ -762,10 +897,9 @@ package body Landin.Checking is
       Actuals  : Actual_Tuple) return Nominal_Type_Id
    is
    begin
-      for Position in 1 .. Natural (Into.Nominal_Templates.Length) loop
-         if Into.Nominal_Templates (Position) = Template
-           and then Into.Nominal_Actual_Runs (Position).Count
-                      = Natural (Actuals.Members.Length)
+      for Position of Bucket (Into.Nominal_Buckets, Template, Actuals) loop
+         if Into.Nominal_Actual_Runs (Position).Count
+              = Natural (Actuals.Members.Length)
          then
             declare
                Members : constant Run := Into.Nominal_Actual_Runs (Position);
@@ -797,6 +931,9 @@ package body Landin.Checking is
             Members.Count := Members.Count + 1;
          end loop;
          Into.Nominal_Templates.Append (Template);
+         Add_To_Bucket
+           (Into.Nominal_Buckets, Template, Actuals,
+            Into.Nominal_Templates.Last_Index);
          Into.Distinct_Bases.Append (Signature_Part'(others => <>));
          Into.Nominal_Spellings.Append (Landin.Source.Names.No_Name);
          Into.Nominal_Actual_Runs.Append (Members);
@@ -888,12 +1025,12 @@ package body Landin.Checking is
            "routine actuals belong to another checking table";
       end if;
 
-      for Position in 1 .. Natural (Into.Routine_Instances.Length) loop
+      for Position of Bucket (Into.Routine_Buckets, Template, Actuals) loop
          declare
             Held : constant Routine_Instance_Record :=
               Into.Routine_Instances (Position);
-            Same : Boolean := Held.Template = Template
-              and then Held.Actuals.Count = Natural (Actuals.Members.Length);
+            Same : Boolean :=
+              Held.Actuals.Count = Natural (Actuals.Members.Length);
          begin
             if Same then
                for Index in 1 .. Held.Actuals.Count loop
@@ -927,6 +1064,9 @@ package body Landin.Checking is
             Made.Actuals.Count := Made.Actuals.Count + 1;
          end loop;
          Into.Routine_Instances.Append (Made);
+         Add_To_Bucket
+           (Into.Routine_Buckets, Template, Actuals,
+            Into.Routine_Instances.Last_Index);
       end;
       return Routine_Identities.Nth
         (Into, Into.Routine_Instances.Last_Index);
@@ -1315,11 +1455,20 @@ package body Landin.Checking is
       Into.Node_Overlays.Append
         (Node_Overlay'(Instance => Into.Current_Routine,
                        Where => Where, others => <>));
-      Into.Node_Overlay_Index.Insert
-        ((Instance => Routine_Identities.Position
-                        (Into, Into.Current_Routine),
-          Subject  => Where),
-         Into.Node_Overlays.Last_Index);
+      declare
+         Instance : constant Positive :=
+           Routine_Identities.Position (Into, Into.Current_Routine);
+      begin
+         Into.Node_Overlay_Index.Insert
+           ((Instance => Instance, Subject => Where),
+            Into.Node_Overlays.Last_Index);
+         while Natural (Into.Instance_Overlays.Length) < Instance loop
+            Into.Instance_Overlays.Append
+              (Overlay_Position_Vectors.Empty_Vector);
+         end loop;
+         Into.Instance_Overlays.Reference (Instance).Append
+           (Into.Node_Overlays.Last_Index);
+      end;
       return Into.Node_Overlays.Last_Index;
    end Ensure_Node_Overlay;
 

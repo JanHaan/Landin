@@ -3,6 +3,7 @@ with Landin.Layouts;
 with Landin.Packed;
 with Landin.Stages.Folding;
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 
 with Landin.Checking;
@@ -14894,10 +14895,66 @@ package body Landin.Stages.Lowering is
              [others => False];
 
          procedure Collect_Any_Evidence (Of_Tree : Syn.Tree);
+         procedure Collect_Any_Evidence
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         --  Each node's parent through its slots, No_Node for a root; one
+         --  run per source, made the first time an instance needs it.
+         package Parent_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Syn.Node_Id,
+            "=" => Syn."=");
+         package Parent_Runs is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Parent_Vectors.Vector,
+            "=" => Parent_Vectors."=");
+         Parents : Parent_Runs.Vector;
+
+         function Parent_Of
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+         function Parent_Of
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+         is
+            Source : constant Positive := Positive (Syn.Source_Of (Of_Tree));
+         begin
+            while Natural (Parents.Length) < Source loop
+               Parents.Append (Parent_Vectors.Empty_Vector);
+            end loop;
+            if Parents (Source).Is_Empty then
+               declare
+                  Made : Parent_Vectors.Vector;
+               begin
+                  Made.Append
+                    (Syn.No_Node,
+                     Ada.Containers.Count_Type (Syn.Last_Node (Of_Tree)));
+                  for Parent in 1 .. Syn.Last_Node (Of_Tree) loop
+                     for Slot in 1 .. Syn.Slot_Count (Of_Tree, Parent) loop
+                        if Syn.Slot (Of_Tree, Parent, Slot) /= Syn.No_Node
+                        then
+                           Made (Positive (Syn.Slot (Of_Tree, Parent, Slot)))
+                             := Parent;
+                        end if;
+                     end loop;
+                  end loop;
+                  Parents (Source) := Made;
+               end;
+            end if;
+            return Parents (Source) (Positive (Node));
+         end Parent_Of;
+
+         package Node_Sets is new Ada.Containers.Ordered_Sets
+           (Element_Type => Syn.Node_Id, "<" => Syn."<");
 
          procedure Collect_Any_Evidence (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+               Collect_Any_Evidence (Of_Tree, Node);
+            end loop;
+         end Collect_Any_Evidence;
+
+         procedure Collect_Any_Evidence
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            begin
                --  Naming or copying an any type does not require an
                --  object-safe table. Only checked constructions and entry
                --  selections carry the exact evidence erased lowering uses.
@@ -14923,7 +14980,7 @@ package body Landin.Stages.Lowering is
                      end if;
                   end;
                end if;
-            end loop;
+            end;
          end Collect_Any_Evidence;
 
          procedure Add_Provider
@@ -15118,9 +15175,27 @@ package body Landin.Stages.Lowering is
                   begin
                      Landin.Checking.Activate_Routine_View
                        (Types.all, Instance, Previous);
-                     Collect_Any_Evidence
-                       (Tree_For
-                          (Res.Source_Of (Meanings.all, Template)).all);
+                     declare
+                        Of_Tree : constant not null access constant Syn.Tree
+                          := Tree_For (Res.Source_Of (Meanings.all, Template));
+                        Visit : Node_Sets.Set;
+                     begin
+                        --  A node the instance holds no fact for answers as
+                        --  the global walk above already found, unless it
+                        --  is a selection whose target the instance types.
+                        for Node of Landin.Checking.Overlaid_Nodes
+                          (Types.all, Instance, Of_Tree.all)
+                        loop
+                           Visit.Include (Node);
+                           if Parent_Of (Of_Tree.all, Node) /= Syn.No_Node
+                           then
+                              Visit.Include (Parent_Of (Of_Tree.all, Node));
+                           end if;
+                        end loop;
+                        for Node of Visit loop
+                           Collect_Any_Evidence (Of_Tree.all, Node);
+                        end loop;
+                     end;
                      Landin.Checking.Restore_Routine_View
                        (Types.all, Previous);
                   exception
@@ -15173,19 +15248,25 @@ package body Landin.Stages.Lowering is
       --  ordinary declarations and anonymous functions; each ready generic
       --  view covers contextual literals whose referent was substituted.
       declare
+         procedure Register_Text (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
          procedure Register_Texts (Of_Tree : Syn.Tree);
+
+         procedure Register_Text (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            if Syn.Kind (Of_Tree, Node)
+                 in Syn.Text_Literal | Syn.Raw_Literal
+              and then Landin.Checking.Type_Of
+                (Types.all, Of_Tree, Node)
+                  in Ty.Pointer_Value | Ty.Slice_Value
+            then
+               Register_Text_Datum (Of_Tree, Node);
+            end if;
+         end Register_Text;
 
          procedure Register_Texts (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
-               if Syn.Kind (Of_Tree, Node)
-                    in Syn.Text_Literal | Syn.Raw_Literal
-                 and then Landin.Checking.Type_Of
-                   (Types.all, Of_Tree, Node)
-                     in Ty.Pointer_Value | Ty.Slice_Value
-               then
-                  Register_Text_Datum (Of_Tree, Node);
-               end if;
+               Register_Text (Of_Tree, Node);
             end loop;
          end Register_Texts;
       begin
@@ -15212,9 +15293,16 @@ package body Landin.Stages.Lowering is
                   begin
                      Landin.Checking.Activate_Routine_View
                        (Types.all, Instance, Previous);
-                     Register_Texts
-                       (Tree_For
-                          (Res.Source_Of (Meanings.all, Template)).all);
+                     declare
+                        Of_Tree : constant not null access constant Syn.Tree
+                          := Tree_For (Res.Source_Of (Meanings.all, Template));
+                     begin
+                        for Node of Landin.Checking.Overlaid_Nodes
+                          (Types.all, Instance, Of_Tree.all)
+                        loop
+                           Register_Text (Of_Tree.all, Node);
+                        end loop;
+                     end;
                      Landin.Checking.Restore_Routine_View
                        (Types.all, Previous);
                   exception

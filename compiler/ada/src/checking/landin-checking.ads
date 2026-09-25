@@ -57,6 +57,7 @@ with Landin.Machine;
 --  a width is only ever obtained from Landin.Types.Width against the
 --  compilation's own Landin.Targets.Target_Facts.
 
+with Ada.Containers;
 private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 private with System;
@@ -101,6 +102,8 @@ package Landin.Checking is
       function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
       function Position (Of_Table : Table; Of_Id : Id) return Positive
         with Pre => Holds (Of_Table, Of_Id);
+      --  Equal for equal identities, None included; a lookup key only.
+      function Hash (Of_Id : Id) return Ada.Containers.Hash_Type;
    private
       type Id is range 0 .. Integer'Last;
       function From_Position (Position : Positive) return Id;
@@ -150,6 +153,8 @@ package Landin.Checking is
       function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
       function Position (Of_Table : Table; Of_Id : Id) return Positive
         with Pre => Holds (Of_Table, Of_Id);
+      --  Equal for equal identities, None included; a lookup key only.
+      function Hash (Of_Id : Id) return Ada.Containers.Hash_Type;
    private
       type Id is range 0 .. Integer'Last;
       function From_Position (Position : Positive) return Id;
@@ -206,6 +211,18 @@ package Landin.Checking is
      with Pre  => Previous = No_Routine_Instance
                   or else Holds (Into, Previous),
           Post => Current_Routine_View (Into) = Previous;
+
+   --  The nodes of one tree where an instance holds a fact of its own, in
+   --  ascending order.  Everywhere else in that tree the instance's view is
+   --  the global one, so a walk that has already visited the global view
+   --  need visit only these under the instance.
+   type Node_List is array (Positive range <>) of Landin.Syntax.Node_Id;
+
+   function Overlaid_Nodes
+     (Of_Table : Table;
+      Instance : Routine_Instance_Id;
+      Of_Tree  : Landin.Syntax.Tree) return Node_List
+     with Pre => Holds (Of_Table, Instance);
 
    --  Where a declaration's type has got to.  Untouched and Settled are
    --  the two states a caller wants; Underway exists because of the module
@@ -2728,6 +2745,30 @@ private
 
    function Hash (Key : Overlay_Key) return Ada.Containers.Hash_Type;
 
+   package Overlay_Position_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Positive);
+
+   package Overlay_Run_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Overlay_Position_Vectors.Vector,
+      "="          => Overlay_Position_Vectors."=");
+
+   --  A template and a digest of an actual tuple: equal for any two tuples
+   --  that agree.
+   type Bucket_Key is record
+      Template : Declaration_Id;
+      Digest   : Ada.Containers.Hash_Type;
+   end record;
+
+   function Hash (Key : Bucket_Key) return Ada.Containers.Hash_Type;
+
+   package Template_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Bucket_Key,
+      Element_Type    => Overlay_Position_Vectors.Vector,
+      Hash            => Hash,
+      Equivalent_Keys => "=",
+      "="             => Overlay_Position_Vectors."=");
+
    package Overlay_Maps is new Ada.Containers.Hashed_Maps
      (Key_Type        => Overlay_Key,
       Element_Type    => Positive,
@@ -2777,6 +2818,14 @@ private
       Node_Overlays : Node_Overlay_Vectors.Vector;
       Declaration_Overlays : Declaration_Overlay_Vectors.Vector;
       Node_Overlay_Index : Overlay_Maps.Map;
+      --  Each template's nominal and routine instances, by position, in
+      --  the order they were interned.  A pointer union's template is
+      --  No_Declaration, which keys its own bucket.
+      Nominal_Buckets : Template_Maps.Map;
+      Routine_Buckets : Template_Maps.Map;
+      --  Each instance's node overlays, by position in Node_Overlays, in
+      --  the order they were made; indexed by the instance's position.
+      Instance_Overlays : Overlay_Run_Vectors.Vector;
       Declaration_Overlay_Index : Overlay_Maps.Map;
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
