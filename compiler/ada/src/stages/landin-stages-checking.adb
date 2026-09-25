@@ -620,55 +620,140 @@ package body Landin.Stages.Checking is
          return Res.Declaration_Id
          is (Res.Declaration_At (Meanings.all, Src, Node));
 
-      function Generic_Routine_Owner
-        (Id : Res.Declaration_Id) return Res.Declaration_Id;
+      --  Which generic routine template a declaration belongs to: the
+      --  template itself, or one of the parameters, returns and locals its
+      --  signature scope encloses.  Resolution is finished and checking
+      --  adds neither declarations nor scopes, so every answer is worked
+      --  out once, from the scope chain, the first time one is asked.
+      --  Where two templates could claim a declaration the lower identity
+      --  wins, which is the order a scan of the declarations would meet
+      --  them in.  Members keeps each template's own declarations in
+      --  identity order, which is the order its instantiation visits them.
+      package Owner_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Res.Declaration_Id);
 
-      function Generic_Routine_Owner
-        (Id : Res.Declaration_Id) return Res.Declaration_Id
-      is
+      Owners : Owner_Vectors.Vector;
+      Next_Member : Owner_Vectors.Vector;
+      First_Member : Owner_Vectors.Vector;
+
+      procedure Settle_Generic_Owners;
+
+      procedure Settle_Generic_Owners is
          use type Res.Scope_Id;
-         Member_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Count : constant Natural := Res.Declaration_Count (Meanings.all);
+         --  The template whose signature opened each scope.
+         Opener : Owner_Vectors.Vector;
+         Last_Member : Owner_Vectors.Vector;
       begin
+         Owners.Append (Res.No_Declaration, Ada.Containers.Count_Type (Count));
+         Next_Member.Append
+           (Res.No_Declaration, Ada.Containers.Count_Type (Count));
+         First_Member.Append
+           (Res.No_Declaration, Ada.Containers.Count_Type (Count));
+         Last_Member.Append
+           (Res.No_Declaration, Ada.Containers.Count_Type (Count));
+         Opener.Append
+           (Res.No_Declaration,
+            Ada.Containers.Count_Type (Res.Scope_Count (Meanings.all)));
+
          for Candidate in Res.Declaration_Id'(1)
-           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+           .. Res.Declaration_Id (Count)
          loop
             if Res.Sort_Of (Meanings.all, Candidate) = Res.Module_Function
-              and then Res.Source_Of (Meanings.all, Candidate)
-                = Res.Source_Of (Meanings.all, Id)
             then
                declare
+                  Member_Tree : constant not null access constant Syn.Tree
+                    := Tree_For (Res.Source_Of (Meanings.all, Candidate));
                   Function_Node : constant Syn.Node_Id :=
                     Res.Node_Of (Meanings.all, Candidate);
                begin
                   if Syn.Generic_Formal_Count
                        (Member_Tree.all, Function_Node) /= 0
                   then
-                     if Id = Candidate then
-                        return Candidate;
-                     end if;
+                     Owners (Positive (Candidate)) := Candidate;
                      declare
                         Signature : constant Res.Scope_Id := Res.Scope_At
                           (Meanings.all, Member_Tree.all, Function_Node);
-                        Scope : Res.Scope_Id :=
-                          Res.Scope_Of (Meanings.all, Id);
                      begin
-                        --  Text containment crosses a no-capture anonymous
-                        --  signature. Only resolved lexical descendants
-                        --  belong to this generic routine's instance facts.
-                        while Scope /= Res.No_Scope loop
-                           if Scope = Signature then
-                              return Candidate;
-                           end if;
-                           Scope := Res.Enclosing (Meanings.all, Scope);
-                        end loop;
+                        if Signature /= Res.No_Scope
+                          and then Opener (Positive (Signature))
+                            = Res.No_Declaration
+                        then
+                           Opener (Positive (Signature)) := Candidate;
+                        end if;
                      end;
                   end if;
                end;
             end if;
          end loop;
-         return Res.No_Declaration;
+
+         for Id in Res.Declaration_Id'(1) .. Res.Declaration_Id (Count) loop
+            declare
+               Best : Res.Declaration_Id := Owners (Positive (Id));
+               Scope : Res.Scope_Id := Res.Scope_Of (Meanings.all, Id);
+            begin
+               while Scope /= Res.No_Scope loop
+                  declare
+                     Candidate : constant Res.Declaration_Id :=
+                       Opener (Positive (Scope));
+                  begin
+                     if Candidate /= Res.No_Declaration
+                       and then Res.Source_Of (Meanings.all, Candidate)
+                         = Res.Source_Of (Meanings.all, Id)
+                       and then (Best = Res.No_Declaration
+                                 or else Candidate < Best)
+                     then
+                        Best := Candidate;
+                     end if;
+                  end;
+                  Scope := Res.Enclosing (Meanings.all, Scope);
+               end loop;
+               Owners (Positive (Id)) := Best;
+               if Best /= Res.No_Declaration then
+                  if First_Member (Positive (Best)) = Res.No_Declaration then
+                     First_Member (Positive (Best)) := Id;
+                  else
+                     Next_Member
+                       (Positive (Last_Member (Positive (Best)))) := Id;
+                  end if;
+                  Last_Member (Positive (Best)) := Id;
+               end if;
+            end;
+         end loop;
+      end Settle_Generic_Owners;
+
+      function Generic_Routine_Owner
+        (Id : Res.Declaration_Id) return Res.Declaration_Id;
+
+      function Generic_Routine_Owner
+        (Id : Res.Declaration_Id) return Res.Declaration_Id is
+      begin
+         if Natural (Owners.Length) /= Res.Declaration_Count (Meanings.all)
+         then
+            Settle_Generic_Owners;
+         end if;
+         return Owners (Positive (Id));
       end Generic_Routine_Owner;
+
+      --  The first declaration a template owns, then each next one, in
+      --  identity order; No_Declaration after the last.
+      function First_Generic_Member
+        (Template : Res.Declaration_Id) return Res.Declaration_Id;
+      function Next_Generic_Member
+        (Id : Res.Declaration_Id) return Res.Declaration_Id;
+
+      function First_Generic_Member
+        (Template : Res.Declaration_Id) return Res.Declaration_Id is
+      begin
+         if Generic_Routine_Owner (Template) = Res.No_Declaration then
+            return Res.No_Declaration;
+         end if;
+         return First_Member (Positive (Template));
+      end First_Generic_Member;
+
+      function Next_Generic_Member
+        (Id : Res.Declaration_Id) return Res.Declaration_Id
+        is (Next_Member (Positive (Id)));
 
       --  How a type is named in a sentence a user reads.  The values that
       --  are not one of [1790]'s scalars are described and not spelled,
@@ -10917,41 +11002,45 @@ package body Landin.Stages.Checking is
                            Ty.Function_Value);
                      end if;
 
-                     for Id in Res.Declaration_Id'(1)
-                       .. Res.Declaration_Id
-                         (Res.Declaration_Count (Meanings.all))
-                     loop
-                        if Id /= Template
-                          and then Generic_Routine_Owner (Id) = Template
-                          and then Res.Sort_Of (Meanings.all, Id)
-                            in Res.Parameter | Res.Named_Return
-                               | Res.Local_Binding
-                        then
-                           declare
-                              Declaring : constant Syn.Node_Id :=
-                                Res.Node_Of (Meanings.all, Id);
-                              Written : constant Syn.Node_Id :=
-                                Syn.Declared_Type
-                                  (Template_Tree.all, Declaring);
-                           begin
-                              if Written /= Syn.No_Node then
-                                 declare
-                                    Descriptor : constant Type_Descriptor :=
-                                      Normalized_Type
-                                        (Template_Tree.all, Written, Bound,
-                                         Syn.Origin (Caller_Tree, Call));
-                                 begin
-                                    if Descriptor.Kind = Ty.Ill_Typed then
-                                       Valid := False;
-                                    else
-                                       Publish_Descriptor
-                                         (Written, Id, Descriptor);
-                                    end if;
-                                 end;
-                              end if;
-                           end;
-                        end if;
-                     end loop;
+                     declare
+                        Id : Res.Declaration_Id :=
+                          First_Generic_Member (Template);
+                     begin
+                        while Id /= Res.No_Declaration loop
+                           if Id /= Template
+                             and then Res.Sort_Of (Meanings.all, Id)
+                               in Res.Parameter | Res.Named_Return
+                                  | Res.Local_Binding
+                           then
+                              declare
+                                 Declaring : constant Syn.Node_Id :=
+                                   Res.Node_Of (Meanings.all, Id);
+                                 Written : constant Syn.Node_Id :=
+                                   Syn.Declared_Type
+                                     (Template_Tree.all, Declaring);
+                              begin
+                                 if Written /= Syn.No_Node then
+                                    declare
+                                       Descriptor : constant Type_Descriptor
+                                         := Normalized_Type
+                                           (Template_Tree.all, Written,
+                                            Bound,
+                                            Syn.Origin (Caller_Tree, Call));
+                                    begin
+                                       if Descriptor.Kind = Ty.Ill_Typed
+                                       then
+                                          Valid := False;
+                                       else
+                                          Publish_Descriptor
+                                            (Written, Id, Descriptor);
+                                       end if;
+                                    end;
+                                 end if;
+                              end;
+                           end if;
+                           Id := Next_Generic_Member (Id);
+                        end loop;
+                     end;
                   end if;
 
                   if Valid
