@@ -3159,8 +3159,17 @@ package body Landin.Stages.Checking.References is
                   --  Each source bit grows once; the presence chain has two
                   --  upward steps.  The frame witness can descend through
                   --  the declarations.  Include every result position.
-                  Pass_Limit : constant Positive := Origins'Length
-                    * Fact_Width * (4 + Parameters + 2 * Declarations) + 2;
+                  --  Worked out wide and held at Natural'Last: the bound
+                  --  only has to exceed every pass a converging loop takes,
+                  --  and it must not overflow on a large function.
+                  Pass_Limit : constant Natural := Natural
+                    (Long_Long_Integer'Min
+                       (Long_Long_Integer (Natural'Last),
+                        Long_Long_Integer (Origins'Length)
+                        * Long_Long_Integer (Fact_Width)
+                        * (4 + Long_Long_Integer (Parameters)
+                           + 2 * Long_Long_Integer (Declarations))
+                        + 2));
 
                   procedure Pass (Reporting : Boolean);
 
