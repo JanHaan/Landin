@@ -1,3 +1,5 @@
+with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Vectors;
 with Landin.Layouts;
 with Landin.Memory;
 with Landin.Packed;
@@ -6368,26 +6370,155 @@ package body Landin.Backend.X86_64 is
       end if;
       Put (Character'Val (9) & ".text");
 
-      for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
-         if Landin.IR.Kind_Of
-           (Of_Unit, Landin.IR.Item_Id (Right)) = Landin.IR.Routine
-           and then not Landin.IR.Is_External
-             (Of_Unit, Landin.IR.Item_Id (Right))
-         then
-            for Left in 1 .. Right - 1 loop
-               if Landin.IR.Kind_Of
-                 (Of_Unit, Landin.IR.Item_Id (Left)) = Landin.IR.Routine
-                 and then not Landin.IR.Is_External
-                   (Of_Unit, Landin.IR.Item_Id (Left))
-                 and then Final_Bodies_Can_Share
-                   (Landin.IR.Item_Id (Left), Landin.IR.Item_Id (Right))
-               then
-                  Shared_With (Right) := Landin.IR.Item_Id (Left);
-                  exit;
+      --  A routine shares with the first earlier routine that can.  Two
+      --  optimized bodies can share only when their canonical streams are
+      --  equal, two reference bodies only when they instantiate one
+      --  template, and either only when their signatures have one ABI, so
+      --  each routine is compared with the earlier routines that agree with
+      --  it on a digest of those, still in item order: the one found is the
+      --  one a comparison with every earlier routine would find.  Nothing
+      --  shares under debugging.
+      if Debug = null then
+         declare
+            use type Ada.Containers.Hash_Type;
+
+            package Position_Vectors is new Ada.Containers.Vectors
+              (Index_Type => Positive, Element_Type => Positive);
+
+            function Same (Key : Ada.Containers.Hash_Type)
+              return Ada.Containers.Hash_Type;
+
+            function Same (Key : Ada.Containers.Hash_Type)
+              return Ada.Containers.Hash_Type is (Key);
+
+            package Bucket_Maps is new Ada.Containers.Hashed_Maps
+              (Key_Type => Ada.Containers.Hash_Type,
+               Element_Type => Position_Vectors.Vector,
+               Hash => Same, Equivalent_Keys => "=",
+               "=" => Position_Vectors."=");
+
+            Buckets : Bucket_Maps.Map;
+
+            --  What Signatures_Have_One_ABI compares, and nothing it may
+            --  let differ: its flags, its counts and each part's carrier
+            --  size, convention and escape, and an aggregate or array
+            --  part's length, element and nominal identity.  Signatures with
+            --  one ABI have one digest.
+            function ABI_Digest (Signature : Landin.IR.Signature_Id)
+              return Ada.Containers.Hash_Type;
+
+            function ABI_Digest (Signature : Landin.IR.Signature_Id)
+              return Ada.Containers.Hash_Type
+            is
+               Result : Ada.Containers.Hash_Type := 0;
+
+               procedure Mix (Value : Natural);
+
+               procedure Mix (Value : Natural) is
+               begin
+                  Result := Result * 31 + Ada.Containers.Hash_Type (Value);
+               end Mix;
+
+               procedure Mix (Part : Landin.IR.Signature_Part);
+
+               procedure Mix (Part : Landin.IR.Signature_Part) is
+               begin
+                  Mix (Landin.IR.Parameter_Convention'Pos (Part.Convention));
+                  Mix (Boolean'Pos (Part.Escaping));
+                  if Part.Kind in Landin.Types.Scalar_Name
+                    and then Part.Kind not in Landin.Types.Float_Name
+                  then
+                     Mix (Landin.Targets.Scalar_Size'Pos
+                       (Landin.Types.Storage_Size
+                          (Landin.Types.Scalar_Name (Part.Kind), Facts)));
+                  else
+                     Mix (100 + Landin.Types.Type_Kind'Pos (Part.Kind));
+                  end if;
+                  if Part.Kind in Landin.Types.Aggregate
+                                | Landin.Types.Fixed_Array
+                  then
+                     Mix (Natural (Part.Length mod 2 ** 30));
+                     Mix (Landin.Types.Scalar_Name'Pos (Part.Element));
+                     Mix (if Part.Nominal = Landin.IR.No_Nominal_Type then 0
+                          else Landin.IR.Nominal_Identities.Position
+                            (Of_Unit, Part.Nominal));
+                  end if;
+               end Mix;
+            begin
+               if Signature = Landin.IR.No_Signature then
+                  return 0;
                end if;
+               Mix (Boolean'Pos
+                 (Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature)));
+               Mix (Boolean'Pos
+                 (Landin.IR.Signature_Has_Erased_Self (Of_Unit, Signature)));
+               Mix (Boolean'Pos
+                 (Landin.IR.Signature_Never_Returns (Of_Unit, Signature)));
+               Mix (Boolean'Pos
+                 (Landin.IR.Signature_Is_Variadic (Of_Unit, Signature)));
+               Mix (Boolean'Pos (Landin.IR.Signature_Errors
+                 (Of_Unit, Signature) = Landin.IR.No_Atom_Set));
+               Mix (Landin.IR.Signature_Parameter_Count (Of_Unit, Signature));
+               Mix (Landin.IR.Signature_Result_Count (Of_Unit, Signature));
+               for Index in 1 .. Landin.IR.Signature_Parameter_Count
+                 (Of_Unit, Signature)
+               loop
+                  Mix (Landin.IR.Nth_Signature_Parameter
+                    (Of_Unit, Signature, Index));
+               end loop;
+               for Index in 1 .. Landin.IR.Signature_Result_Count
+                 (Of_Unit, Signature)
+               loop
+                  Mix (Landin.IR.Nth_Signature_Result
+                    (Of_Unit, Signature, Index));
+               end loop;
+               return Result;
+            end ABI_Digest;
+         begin
+            for Right in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               declare
+                  Item : constant Landin.IR.Item_Id :=
+                    Landin.IR.Item_Id (Right);
+                  Template : constant Landin.IR.Declaration_Id :=
+                    Landin.IR.Generic_Template_Of (Of_Unit, Item);
+               begin
+                  if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+                    and then not Landin.IR.Is_External (Of_Unit, Item)
+                    and then (if Optimized then Shareable (Right)
+                              else Template /= Landin.IR.No_Declaration)
+                  then
+                     declare
+                        Key : constant Ada.Containers.Hash_Type :=
+                          (if Optimized
+                           then Machine.Digest (Streams (Right))
+                           else Ada.Containers.Hash_Type (Template))
+                          * 31 + ABI_Digest
+                            (Landin.IR.Signature_Of (Of_Unit, Item));
+                        Found : constant Bucket_Maps.Cursor :=
+                          Buckets.Find (Key);
+                     begin
+                        if Bucket_Maps.Has_Element (Found) then
+                           for Left of Buckets.Constant_Reference (Found)
+                           loop
+                              if Final_Bodies_Can_Share
+                                (Landin.IR.Item_Id (Left), Item)
+                              then
+                                 Shared_With (Right) :=
+                                   Landin.IR.Item_Id (Left);
+                                 exit;
+                              end if;
+                           end loop;
+                           Buckets.Reference (Found).Append (Right);
+                        else
+                           Buckets.Insert
+                             (Key, Position_Vectors.To_Vector (Right, 1));
+                        end if;
+                     end;
+                  end if;
+               end;
             end loop;
-         end if;
-      end loop;
+         end;
+      end if;
 
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare

@@ -1,6 +1,7 @@
 --  Final selected instruction evidence.  Opcodes and operand tokens retain
 --  widths, exact external relocation spellings and addends.  Only labels
 --  explicitly defined inside a body become canonical local identities.
+with Ada.Containers;
 private with Ada.Containers.Vectors;
 private with Ada.Strings.Unbounded;
 with Landin.Build_Reports;
@@ -19,6 +20,9 @@ package Landin.Backend.X86_64.Machine is
    procedure Define_Label (Into : in out Stream; Name : String);
    procedure Seal (Into : in out Stream);
    function Equivalent (Left, Right : Stream) return Boolean;
+   --  Equivalent sealed bodies have equal digests, so a digest can say
+   --  which bodies are worth comparing; unequal bodies may share one.
+   function Digest (Of_Stream : Stream) return Ada.Containers.Hash_Type;
    function Statistics (Of_Stream : Stream)
      return Landin.Build_Reports.Routine_Statistics;
 

@@ -250,6 +250,22 @@ package body Landin.Backend.X86_64.Machine is
       return Left.Tokens = Right.Tokens;
    end Equivalent;
 
+   function Digest (Of_Stream : Stream) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type := 0;
+   begin
+      if not Of_Stream.Recording or else not Of_Stream.Sealed then
+         raise Landin.Compiler_Defect with "unsealed machine body digest";
+      end if;
+      for Part of Of_Stream.Tokens loop
+         Result := Result * 31
+           + Ada.Containers.Hash_Type (Token_Kind'Pos (Part.Kind));
+         Result := Result * 31 + Ada.Strings.Hash (US.To_String (Part.Text));
+         Result := Result * 31 + Ada.Containers.Hash_Type (Part.Identity);
+      end loop;
+      return Result;
+   end Digest;
+
    function Statistics (Of_Stream : Stream)
      return Landin.Build_Reports.Routine_Statistics is (Of_Stream.Counts);
 
