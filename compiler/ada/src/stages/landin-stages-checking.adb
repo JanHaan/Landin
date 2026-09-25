@@ -4724,37 +4724,56 @@ package body Landin.Stages.Checking is
          function Field_At (Position : Positive) return Syn.Node_Id is
            (if Payload then Syn.Nth_Payload_Field (Of_Tree, Node, Position)
             else Syn.Nth_Field (Of_Tree, Node, Position));
+
+         --  Every earlier field with each name, in declaration order, so a
+         --  repeated name is reported against each earlier holder exactly
+         --  as comparing every pair in order would, without comparing
+         --  every pair.
+         package Holder_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Syn.Node_Id);
+         package Holder_Maps is new Ada.Containers.Hashed_Maps
+           (Key_Type        => Landin.Source.Names.Name_Id,
+            Element_Type    => Holder_Vectors.Vector,
+            Hash            => Landin.Source.Names.Hash,
+            Equivalent_Keys => Landin.Source.Names."=",
+            "="             => Holder_Vectors."=");
+         Holders : Holder_Maps.Map;
       begin
          --  Labels select positions within one structural run.  Separate
          --  payloads and nested structs each have their own label namespace.
-         for Right in 2 .. Count loop
-            for Left in 1 .. Right - 1 loop
-               declare
-                  Earlier : constant Syn.Node_Id := Field_At (Left);
-                  Later : constant Syn.Node_Id := Field_At (Right);
-               begin
-                  if Syn.Name (Of_Tree, Earlier) = Syn.Name (Of_Tree, Later)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Field_Named_Twice,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Anchor (Of_Tree, Later),
-                        Message => (if Template then "this template"
-                                    else "this type") & " declares the same"
-                          & (if Payload then " payload" else " struct")
-                          & " field twice",
-                        Note    => "[0750]: one "
-                          & (if Payload then "payload" else "struct")
-                          & " field name selects one declared position",
-                        Related => Syn.Origin (Of_Tree, Earlier),
-                        Because => "the first "
-                          & (if Payload then "payload field" else "field")
-                          & " with that name",
-                        Into    => Found);
-                     Valid := False;
-                  end if;
-               end;
-            end loop;
+         for Right in 1 .. Count loop
+            declare
+               Later : constant Syn.Node_Id := Field_At (Right);
+               Named : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Later);
+               Position : Holder_Maps.Cursor := Holders.Find (Named);
+               Inserted : Boolean;
+            begin
+               if not Holder_Maps.Has_Element (Position) then
+                  Holders.Insert
+                    (Named, Holder_Vectors.Empty_Vector, Position, Inserted);
+               end if;
+               for Earlier of Holders.Constant_Reference (Position) loop
+                  Bad.Report
+                    (Item    => Bad.Field_Named_Twice,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Anchor (Of_Tree, Later),
+                     Message => (if Template then "this template"
+                                 else "this type") & " declares the same"
+                       & (if Payload then " payload" else " struct")
+                       & " field twice",
+                     Note    => "[0750]: one "
+                       & (if Payload then "payload" else "struct")
+                       & " field name selects one declared position",
+                     Related => Syn.Origin (Of_Tree, Earlier),
+                     Because => "the first "
+                       & (if Payload then "payload field" else "field")
+                       & " with that name",
+                     Into    => Found);
+                  Valid := False;
+               end loop;
+               Holders.Reference (Position).Append (Later);
+            end;
          end loop;
          return Valid;
       end Field_Names_Are_Unique;
@@ -7428,8 +7447,23 @@ package body Landin.Stages.Checking is
          Results : Landin.Checking.Signature_Part_Array
            (1 .. Syn.Return_Count (Of_Tree, Node)) :=
              [others => (others => <>)];
+
+         --  Every `from` source this signature writes, which bounds the
+         --  sources it can record.
+         function Written_Sources return Natural;
+
+         function Written_Sources return Natural is
+            Total : Natural := 0;
+         begin
+            for Index in Results'Range loop
+               Total := Total + Syn.Return_Source_Count
+                 (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Index));
+            end loop;
+            return Total;
+         end Written_Sources;
+
          Sources : Landin.Checking.Return_Source_Array
-           (1 .. Positive'Max (1, Syn.Node_Count (Of_Tree))) :=
+           (1 .. Positive'Max (1, Written_Sources)) :=
              [others => (others => 1)];
          Source_Nodes : array (Sources'Range) of Syn.Node_Id :=
            [others => Syn.No_Node];
