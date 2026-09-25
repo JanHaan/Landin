@@ -57,7 +57,7 @@ jobs:
       - name: check.py
         run: python3 check.py
 
-  #  The compiler and all 746 cases. scripts/test.sh builds first, so this
+  #  The compiler and all 747 cases. scripts/test.sh builds first, so this
   #  is also where a compile error is reported.
   compiler:
     runs-on: ubuntu-24.04

@@ -46,6 +46,7 @@ package body Landin.Tests.Optimization_Driver_Suite is
    procedure Report_Failures (Item : in out Landin.Testing.Context);
    procedure Tool_Completion (Item : in out Landin.Testing.Context);
    procedure Path_Bytes (Item : in out Landin.Testing.Context);
+   procedure Stage_Reports (Item : in out Landin.Testing.Context);
 
    procedure Invalid_Requests (Item : in out Landin.Testing.Context) is
       procedure Refuses (First : String; Second : String := "");
@@ -271,6 +272,178 @@ package body Landin.Tests.Optimization_Driver_Suite is
          "quotes and non-UTF-8 path bytes are represented exactly");
    end Path_Bytes;
 
+   --  A meter that answers a fixed, rising clock, so each stage's row can be
+   --  predicted without a real host.  Sample takes the meter as `in`, so
+   --  the count lives behind a reference the meter holds.
+   type Count is record
+      Calls : Long_Long_Integer := 0;
+   end record;
+
+   type Counting_Meter (Clock : not null access Count) is
+     limited new Landin.Platform.Resource_Meter with null record;
+
+   overriding function Sample (Host : Counting_Meter)
+     return Landin.Platform.Resource_Sample;
+
+   overriding function Sample (Host : Counting_Meter)
+     return Landin.Platform.Resource_Sample is
+   begin
+      Host.Clock.Calls := Host.Clock.Calls + 1;
+      return (Processor_Microseconds => Host.Clock.Calls * 10,
+              Peak_Resident_KiB => 100 + Host.Clock.Calls);
+   end Sample;
+
+   procedure Stage_Reports (Item : in out Landin.Testing.Context) is
+      function Has (Text, Part : String) return Boolean
+        is (Ada.Strings.Fixed.Index (Text, Part) > 0);
+
+      procedure Refused (Name : String; A, B, C : String := "");
+
+      procedure Refused (Name : String; A, B, C : String := "") is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("main.ldn");
+         for Argument of Landin.Platform.Path_List'
+           (Landin.Platform.Arguments (A))
+         loop
+            Args.Append (Argument);
+         end loop;
+         if B /= "" then
+            Args.Append (B);
+         end if;
+         if C /= "" then
+            Args.Append (C);
+         end if;
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse, Name);
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, Name & " writes nothing");
+      end Refused;
+   begin
+      Refused ("an empty stage report path", "--stage-report=");
+      Refused ("a repeated stage report",
+               "--stage-report=a.json", "--stage-report=b.json");
+      Refused ("a stage report beside help", "--stage-report=a.json",
+               "--help");
+      Refused ("a stage report over the assembly",
+               "--stage-report=out.s", "--emit=asm", "-o");
+      Refused ("a stage report over the build report",
+               "--stage-report=r.json", "--build-report=r.json",
+               "--emit=asm");
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("main.ldn");
+         Args.Append ("--stage-report=main.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "a stage report over a source is misuse");
+         Landin.Testing.Check_Equal
+           (Item, Host.Written ("main.ldn"), "",
+            "the source is not overwritten");
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+         Written : US.Unbounded_String;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("main.ldn");
+         Args.Append ("--stage-report=stages.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Written := US.To_Unbounded_String (Host.Written ("stages.json"));
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "checking alone may be measured");
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Written),
+                       "{""format"":""landin-stage-report-1"""),
+            "the report names its format");
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Written),
+                       "{""stage"":""checking"",""processor_us"":0,"
+                       & """peak_kib"":0}"),
+            "a host without a meter measures zero");
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Written),
+                       """sizes"":{""sources"":1,"),
+            "the report carries the compilation's sizes");
+         Landin.Testing.Check
+           (Item, not Has (US.To_String (Written), """emission"""),
+            "no emission row without emission");
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Clock : aliased Count;
+         Meter : Counting_Meter (Clock'Access);
+         Args : Landin.Platform.Path_List := Request;
+         Result : Landin.Driver.Outcome;
+         Written : US.Unbounded_String;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("--stage-report=stages.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools, Meter);
+         Written := US.To_Unbounded_String (Host.Written ("stages.json"));
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0, "an emitting request may be measured");
+         Landin.Testing.Check
+           (Item, Has (US.To_String (Written),
+                       "{""stage"":""loading"",""processor_us"":10,"
+                       & """peak_kib"":102}")
+              and then Has (US.To_String (Written),
+                            "{""stage"":""lowering"",""processor_us"":10,")
+              and then Has (US.To_String (Written),
+                            "{""stage"":""emission"",""processor_us"":10,"),
+            "each row is the meter's difference across one stage");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index (US.To_String (Written),
+                                           """loading""")
+              < Ada.Strings.Fixed.Index (US.To_String (Written),
+                                         """syntax""")
+              and then Ada.Strings.Fixed.Index (US.To_String (Written),
+                                                """lowering""")
+              < Ada.Strings.Fixed.Index (US.To_String (Written),
+                                         """emission"""),
+            "rows are in the order the stages ran");
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", "main: () -> (code: i32) = code = x"
+                        & " end main");
+         Args.Append ("main.ldn");
+         Args.Append ("--stage-report=stages.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a refused program is still refused");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("stages.json"), """resolution""")
+              and then not Has (Host.Written ("stages.json"),
+                                """checking"""),
+            "a refused program is measured up to the stage that refused");
+      end;
+   end Stage_Reports;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -288,5 +461,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Landin.Testing.Register
         (Into, "opt driver", "source path bytes survive JSON",
          Path_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "opt driver", "stage reports measure each stage",
+         Stage_Reports'Access);
    end Register;
 end Landin.Tests.Optimization_Driver_Suite;

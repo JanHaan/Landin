@@ -172,6 +172,16 @@ package Landin.Stages is
    function Run
      (Of_Pipeline : Pipeline; Context : in out Compilation) return Natural;
 
+   --  The same run, telling Watch each stage's name before it starts and
+   --  again after it returns.  The watcher observes and may not change the
+   --  run: it is how a measurement is attributed to a stage without any
+   --  stage knowing it is being measured.
+   function Run
+     (Of_Pipeline : Pipeline;
+      Context     : in out Compilation;
+      Watch       : not null access procedure
+        (Name : String; Finished : Boolean)) return Natural;
+
 private
 
    package Stage_Vectors is new Ada.Containers.Vectors

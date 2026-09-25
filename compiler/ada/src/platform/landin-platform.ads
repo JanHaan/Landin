@@ -133,6 +133,32 @@ package Landin.Platform is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
 
+   ---------------------------------------------------------------------
+   --  Resource measurement
+   --
+   --  What the host has counted for this process so far: processor time,
+   --  user and system together, and the peak resident set.  A measurement
+   --  and never an input: nothing a compilation decides may depend on one,
+   --  because two runs of the same request differ in both.  Tools the
+   --  driver starts are not charged to the compiler.
+   ---------------------------------------------------------------------
+
+   type Resource_Sample is record
+      Processor_Microseconds : Long_Long_Integer := 0;
+      Peak_Resident_KiB      : Long_Long_Integer := 0;
+   end record;
+
+   type Resource_Meter is limited interface;
+
+   function Sample (Host : Resource_Meter) return Resource_Sample
+     is abstract;
+
+   --  A meter that measures nothing, for a host that offers no counters:
+   --  every sample is zero.
+   type Unmetered is limited new Resource_Meter with null record;
+
+   overriding function Sample (Host : Unmetered) return Resource_Sample;
+
    --  Helpers for building an argument list without exposing the container.
    function No_Arguments return Path_List;
    function Arguments (First : String) return Path_List;

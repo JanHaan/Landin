@@ -123,6 +123,8 @@ package body Landin.Driver is
       & "  --debug=NAME        none (default), full (hosted),"
       & " lines (Cortex-M0)" & LF
       & "  --build-report=PATH write deterministic build evidence JSON" & LF
+      & "  --stage-report=PATH write each stage's measured time and memory"
+      & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
@@ -165,6 +167,17 @@ package body Landin.Driver is
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class) return Outcome
    is
+      Nothing : Landin.Platform.Unmetered;
+   begin
+      return Execute (Arguments, Host, Tools, Nothing);
+   end Execute;
+
+   function Execute
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Meter     : Landin.Platform.Resource_Meter'Class) return Outcome
+   is
       Facts    : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
       Inputs   : Landin.Platform.Path_List;
       Roots    : Landin.Platform.Path_List;
@@ -184,6 +197,8 @@ package body Landin.Driver is
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
       Build_Report_Path : Unbounded.Unbounded_String;
+      Stage_Report_Path : Unbounded.Unbounded_String;
+      Stage_Report_Seen : Boolean := False;
       Optimization : Landin.Optimization.Options :=
         Landin.Optimization.Default_Options;
       Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
@@ -286,6 +301,17 @@ package body Landin.Driver is
                Build_Report_Path := Unbounded.To_Unbounded_String
                  (After (Argument, "--build-report="));
 
+            elsif Starts_With (Argument, "--stage-report=") then
+               if Stage_Report_Seen
+                 or else After (Argument, "--stage-report=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Stage_Report_Seen := True;
+               Stage_Report_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--stage-report="));
+
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
 
@@ -362,7 +388,7 @@ package body Landin.Driver is
       --  Compilation controls do not modify informational actions, and a
       --  build report describes an emitted artifact, not a checking request.
       if ((Optimize_Seen or Specialize_Seen or Report_Seen
-           or Debug_Seen or Panic_Map)
+           or Debug_Seen or Panic_Map or Stage_Report_Seen)
           and then (Wants_Usage or Wants_Identity))
         or else ((Report_Seen or Debug_Seen or Firmware_Seen or Panic_Map)
                  and then Emit = Emit_Nothing)
@@ -415,6 +441,116 @@ package body Landin.Driver is
                   Where   => Landin.Source.Empty_Span,
                   Message => Text));
          end Note_Failure;
+
+         --  `--stage-report`: one row per stage, each the processor time
+         --  spent in it and the process's peak resident set when it ended.
+         --  The peak is a high-water mark, so the stage that raised it is
+         --  the one whose row first shows the new value.
+         Stage_Rows : Unbounded.Unbounded_String;
+         Stage_Start : Landin.Platform.Resource_Sample;
+
+         procedure Stage_Began;
+         procedure Stage_Ended (Name : String);
+         procedure Watch_Stage (Name : String; Finished : Boolean);
+         procedure Write_Stage_Report;
+
+         procedure Stage_Began is
+         begin
+            if Stage_Report_Seen then
+               Stage_Start := Meter.Sample;
+            end if;
+         end Stage_Began;
+
+         procedure Stage_Ended (Name : String) is
+            function Image (Value : Long_Long_Integer) return String is
+              (Ada.Strings.Fixed.Trim
+                 (Long_Long_Integer'Image (Value), Ada.Strings.Both));
+            Now : Landin.Platform.Resource_Sample;
+         begin
+            if not Stage_Report_Seen then
+               return;
+            end if;
+            Now := Meter.Sample;
+            if Unbounded.Length (Stage_Rows) > 0 then
+               Unbounded.Append (Stage_Rows, "," & LF);
+            end if;
+            Unbounded.Append
+              (Stage_Rows,
+               "    {""stage"":""" & Name & """,""processor_us"":"
+               & Image (Now.Processor_Microseconds
+                        - Stage_Start.Processor_Microseconds)
+               & ",""peak_kib"":" & Image (Now.Peak_Resident_KiB) & "}");
+         end Stage_Ended;
+
+         procedure Watch_Stage (Name : String; Finished : Boolean) is
+         begin
+            if Finished then
+               Stage_Ended (Name);
+            else
+               Stage_Began;
+            end if;
+         end Watch_Stage;
+
+         --  Written whenever the request was well formed, a refused program
+         --  included: where a refusal's time and storage went is exactly
+         --  what a bound is measured by.  The sizes are the compilation's
+         --  own counts and are the same on every run; the rows are not.
+         procedure Write_Stage_Report is
+            Path : constant String := Unbounded.To_String (Stage_Report_Path);
+            Written : Landin.Platform.Write_Status;
+            Nodes : Natural := 0;
+            function Image (Value : Natural) return String is
+              (Ada.Strings.Fixed.Trim
+                 (Natural'Image (Value), Ada.Strings.Both));
+         begin
+            if not Stage_Report_Seen or else Bad_Use then
+               return;
+            end if;
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               if Host.Paths_Overlap
+                 (Path, Landin.Source.Name
+                    (Landin.Stages.Source
+                       (Context, Landin.Stages.Nth_Source (Context, Index))))
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "stage report collides with source: " & Path);
+                  return;
+               end if;
+            end loop;
+            declare
+               Forest : constant not null access Landin.Syntax.Forest.Table :=
+                 Landin.Stages.Trees (Context);
+            begin
+               for Index in 1 .. Landin.Syntax.Forest.Count (Forest.all) loop
+                  declare
+                     Id : constant Landin.Source.Source_Id :=
+                       Landin.Stages.Nth_Source (Context, Index);
+                  begin
+                     Nodes := Nodes + Landin.Syntax.Node_Count
+                       (Landin.Syntax.Forest.Tree_Of (Forest.all, Id).all);
+                  end;
+               end loop;
+            end;
+            Host.Write_File
+              (Path,
+               "{""format"":""landin-stage-report-1"",""stages"":[" & LF
+               & Unbounded.To_String (Stage_Rows) & LF
+               & "  ],""sizes"":{""sources"":"
+               & Image (Landin.Stages.Source_Count (Context))
+               & ",""nodes"":" & Image (Nodes)
+               & ",""declarations"":" & Image
+                 (Landin.Resolution.Declaration_Count
+                    (Landin.Stages.Meanings (Context).all))
+               & ",""ir_items"":" & Image
+                 (Landin.IR.Item_Count (Landin.Stages.Code (Context).all))
+               & "}}" & LF,
+               Written);
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure (Code_Unwritable, "cannot write: " & Path);
+            end if;
+         end Write_Stage_Report;
 
          procedure Note_No_Entry (For_Firmware : Boolean := False);
 
@@ -1472,6 +1608,27 @@ package body Landin.Driver is
             end if;
          end loop;
 
+         if Stage_Report_Seen
+           and then
+             ((Report_Seen
+               and then Host.Paths_Overlap
+                 (Unbounded.To_String (Stage_Report_Path),
+                  Unbounded.To_String (Build_Report_Path)))
+              or else (Emit /= Emit_Nothing
+                and then Host.Paths_Overlap
+                  (Unbounded.To_String (Stage_Report_Path),
+                   (if Unbounded.Length (Output) > 0
+                    then Unbounded.To_String (Output)
+                    elsif Emit = Emit_Executable then Default_Executable
+                    else Default_Assembly))))
+         then
+            Bad_Use := True;
+            Note_Failure
+              (Code_Unknown_Option,
+               "stage report collides with another output: "
+               & Unbounded.To_String (Stage_Report_Path));
+         end if;
+
          if Natural (Roots.Length) > 0
            and then Natural (Inputs.Length) /= 1
          then
@@ -1496,6 +1653,7 @@ package body Landin.Driver is
             return Result;
          end if;
 
+         Stage_Began;
          if Natural (Roots.Length) > 0 then
             if Natural (Inputs.Length) = 1 then
                Load_Reachable_Program (Inputs.Element (1));
@@ -1544,6 +1702,10 @@ package body Landin.Driver is
             end;
          end if;
 
+         --  A rooted request scans and parses each module as it is found,
+         --  to read its imports, so its syntax is inside this row.
+         Stage_Ended ("loading");
+
          --  Every source that was read is scanned and parsed together, as
          --  one compilation: the language is checked whole, and a stage
          --  that saw one file at a time could not be replaced later by one
@@ -1560,7 +1722,8 @@ package body Landin.Driver is
                Landin.Stages.Append (Line, Names'Access);
                Landin.Stages.Append (Line, Checker'Access);
                Landin.Stages.Append (Line, Lowerer'Access);
-               Ran := Landin.Stages.Run (Line, Context);
+               Ran := Landin.Stages.Run
+                 (Line, Context, Watch_Stage'Access);
 
                --  Each stage runs only when the one before it produced
                --  something worth reading: a stage stops the pipeline on
@@ -1592,9 +1755,12 @@ package body Landin.Driver is
             if Emit /= Emit_Nothing
               and then not Landin.Stages.Failed (Context)
             then
+               Stage_Began;
                Emit_Requested;
+               Stage_Ended ("emission");
             end if;
          end if;
+         Write_Stage_Report;
 
          --  A rejected target is not a selected target, so nothing is
          --  echoed on the failing path.

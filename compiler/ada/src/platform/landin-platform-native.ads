@@ -49,4 +49,11 @@ package Landin.Platform.Native is
       Entries : out Path_List;
       Status  : out List_Status);
 
+   --  The process's own counters, read through the host C adapter
+   --  `landin_resource_usage.c`.  A host that refuses the query raises
+   --  Host_Exhausted, the same outcome as any other lost host resource.
+   type Native_Meter is limited new Resource_Meter with null record;
+
+   overriding function Sample (Host : Native_Meter) return Resource_Sample;
+
 end Landin.Platform.Native;

@@ -296,4 +296,22 @@ package body Landin.Platform.Native is
          Status := Directory_Not_Found;
    end List_Directory;
 
+   overriding function Sample (Host : Native_Meter) return Resource_Sample
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Usage
+        (Processor : out Interfaces.C.long_long;
+         Peak      : out Interfaces.C.long_long) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_resource_usage";
+      Processor, Peak : Interfaces.C.long_long;
+   begin
+      if Usage (Processor, Peak) /= 0 then
+         raise Host_Exhausted with "the host refused its resource counters";
+      end if;
+      return (Processor_Microseconds => Long_Long_Integer (Processor),
+              Peak_Resident_KiB      => Long_Long_Integer (Peak));
+   end Sample;
+
 end Landin.Platform.Native;

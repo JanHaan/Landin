@@ -147,8 +147,8 @@ different responsibilities.
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
-| `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
-| `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
+| `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads | perform an effect, or let a measurement decide anything |
+| `Landin.Platform.Native` | the only filesystem implementation, and the process's own resource counters through its host C adapter | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |
@@ -997,6 +997,15 @@ Native byte reads and writes report expected name, permission/use and device
 failures as ordinary outcomes. Cleanup retains those outcomes without masking
 programming or resource exceptions. A tool capture that cannot be read raises
 `External_Tool_Failed` through the adapter's owned cleanup path.
+`src/platform/landin_resource_usage.c` reads this process's processor time and
+peak resident set with `getrusage`, excluding children, and reports KiB on both
+hosts. The driver reads it through `Landin.Platform.Resource_Meter` only for
+`--stage-report=PATH`, which writes one row per stage (loading, which
+includes a rooted request's scanning and parsing, then each pipeline stage and
+emission) with its processor time and the peak resident set when it ended,
+plus the compilation's deterministic sizes. A refused program is measured up
+to the stage that refused it. No measurement reaches a decision, a diagnostic
+or an artifact; a host without a meter writes zeros.
 `src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
 constants. `Native.Tools` passes the already-open capture descriptors and
 literal argument vector. Merged capture retains one ordered byte stream;

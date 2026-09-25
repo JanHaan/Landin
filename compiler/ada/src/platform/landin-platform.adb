@@ -2,6 +2,12 @@ package body Landin.Platform is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   overriding function Sample (Host : Unmetered) return Resource_Sample is
+      pragma Unreferenced (Host);
+   begin
+      return (others => 0);
+   end Sample;
+
    function No_Arguments return Path_List is
       Empty : Path_List;
    begin

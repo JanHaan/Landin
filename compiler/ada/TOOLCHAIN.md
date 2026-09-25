@@ -106,9 +106,9 @@ Debug mode adds `-O0 -g -gnata -gnatVa -fstack-check`: assertions, contracts
 and validity checks are on while the compiler is being written. Release mode
 uses `-O2 -g -gnatn` and keeps debug information.
 
-The shared library also compiles `src/platform/landin_file_identity.c` and
-`src/platform/landin_tool_process.c` with the pinned toolchain's host C compiler
-and the host's system headers. These small POSIX adapters keep host-specific
+The shared library also compiles `src/platform/landin_file_identity.c`,
+`src/platform/landin_tool_process.c` and `src/platform/landin_resource_usage.c`
+with the pinned toolchain's host C compiler and the host's system headers. These small POSIX adapters keep host-specific
 structures and wait/signal constants out of Ada; they do not inspect Landin
 target layout. Their switches are
 `-std=c11 -Wall -Wextra -Werror -pedantic -fno-common -O2 -g` in both modes:

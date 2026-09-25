@@ -43,6 +43,15 @@ package Landin.Driver is
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class) return Outcome;
 
+   --  The same request, with a meter for `--stage-report=PATH`.  Without
+   --  one, the report is written with every measurement zero, which is what
+   --  a fake host has to offer.
+   function Execute
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Meter     : Landin.Platform.Resource_Meter'Class) return Outcome;
+
    --  Identity without a version.  This roadmap assigns no release
    --  designation, so neither does the executable.
    function Identity return String;
