@@ -253,7 +253,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R8.20 — Make the frontend scale (planned).**
+**Next roadmap item: R8.30 — Run every existing target in the gate (planned).**
 
 ## License
 

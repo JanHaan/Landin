@@ -104,7 +104,7 @@ are unchanged. The index is gone.
 
 ### R8.20 — Make the frontend scale
 
-Status: planned
+Status: complete
 Depends on: none
 
 Measured with the release compiler on one Linux host: a synthetic file of 250,
@@ -124,6 +124,20 @@ the same inputs, and a struct of 20,000 fields, check without exhausting the
 host, with each stage's storage measured and a named refusal past a stated
 bound; and the gate runs the benchmark and fails when a ratio exceeds 2.5,
 which does not depend on the runner's speed.
+
+Done: `scripts/scaling.py` generates eight families from 1,000 to 16,000
+declarations and times the derived programs, each five times, from
+`--stage-report`'s per-stage processor time and peak storage. Emission is
+held to the bound as well as the frontend, because the backend's scans were
+the same records' work. On the host that measured the numbers above, with
+the release compiler, the largest ratio is 2.19, the 2,000-function input
+checks in 0.41 seconds of the 89 it took, and the log filter's frontend
+takes 0.17 of 6.6. D247 refuses a routine of more than 16,384 declarations or a struct
+of more than 16,384 fields with L0325; at that bound a routine with a loop
+peaks at 130 MiB, and the 20,000-field struct is refused rather than
+exhausting the host. Every change kept every verdict, diagnostic and emitted
+byte of the corpus, checked program by program against its parent. The
+`scaling` gate job runs the benchmark.
 
 ### R8.30 — Run every existing target in the gate
 
@@ -636,11 +650,9 @@ with the reason it no longer applies.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
-| R551-06 | Scale and self-hosting | Flow snapshots, declaration-origin matrices, folding and dependency walks and IR scratch arrays have storage and stack costs that grow with input size. | A workload exceeding the recorded envelope, or before a persistent compiler service. | Bounded declaration, field and dependency measurements, owned storage and stated failure behaviour. | scheduled R8.20 |
 | R551-07 | Scale and self-hosting | Final linker placement is not preflighted: Linux RIP-relative reach, Darwin's 2 GiB static-image collision and arm64 branch reach. Merged: R730-05, seventeen shared programs exceed the 32 KiB flash, 16 KiB RAM and 4 KiB stack profile in 72 capacity verdicts. | Before general large-image support, or a workload that needs it. | Bounded reach and layout evidence with the native control and its status-42 oracle retained. R12.10 takes R730-05's larger profiles. | open |
 | R551-08 | Scale and self-hosting | Compact source or IR can still ask for enormous assembler repetition; small compiler output does not bound assembler memory or object size. | Before admitting larger images or generation policies. | A bounded emission policy tested on tiny shapes, with the forbidden giant-fixture boundary kept. | open |
 | R551-09 | Competitive optimization | Guarded cleanups can expand quickly despite correct pop-before-run order. | A measured cleanup workload with unacceptable growth. | Selectors, effects and order preserved, with bounded size compared before and after. | open |
-| R551-10 | Competitive optimization | Atom and symbol allocation and imported-module lookup repeat identity scans; simplification keeps size-dependent scratch work. | A measured lookup or simplification bottleneck, which R8.20's measurements are. | Complete identity keys with time and memory evidence on bounded inputs. | scheduled R8.20 |
 | R551-11 | Competitive optimization | Frame and allocation planning is repeated by preflight, emission and debug output. | Profiling justifies sharing the plans. | One immutable plan owning emission and debug locations, with debugger agreement. | open |
 | R551-12 | Competitive optimization | An indexed increment can keep an extra bounds check, and Darwin stack homes have no register allocation. Merged: R730-04, atomic and barrier lowering is baseline, not competitive. | Measured code-quality pressure. | Single evaluation, traps, addresses, ABI and debugger evidence preserved under measured improvement. | scheduled R16.20 |
 | R551-15 | Scale and self-hosting | Nix provides a development shell and a flake built by hand, not cached derivations or CI. | An explicit decision to revisit Nix CI. | Builders, SDK identity, debugger permissions and cache provenance accounted for. | limit |
@@ -682,13 +694,15 @@ with the reason it no longer applies.
 | E2 | Language evolution | Concept width [1260]: one case each way. | A real library whose concept must widen or split. | [1260] confirmed or amended. | watch |
 | E3 | Language evolution | Two kinds of generated source exist, SVD modules and C bindings; a third starts the review of retained position D3. Generating the compiler's transcription tables from `spec.md` would be a third. | A third kind of generated source. | That review recorded against D3's rationale. | watch |
 | SR-01 | Release readiness | The Cortex-M lane pins `arm-none-eabi-gcc` 14.2.1; the same publisher's `arm-eabi-gcc` 16.1.0 builds a valid image, and moving changes every recorded firmware hash and disassembly. | R12's new cores rebaseline the firmware records anyway. | The toolchain moved with every Cortex-M record rebaselined in one change. | scheduled R12.10 |
-| SR-02 | Scale and self-hosting | The corpus at one worker measured 4,523 s on CI against 3,592 s before the parallelism change; single shared-hardware samples cannot tell variance from a regression. | R8.20's measurements. | Settled by repeated measurement, or made moot by R8.20. | scheduled R8.20 |
 | SR-03 | Language evolution | A module value cannot hold `addr` of storage: [1940]'s known values are numbers, and a static address is a data relocation no backend emits. L0305 refuses it and its note says why; this record is the construct's only owner. | A program needing a static pointer: a vector table it owns, a table of pointers into module storage, or a statically linked structure. | [1940] amended with a register decision, data relocations emitted on every target, and `negative/r491-construction-static-address` turned into executable fixtures. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |
 | R551-21 | Release readiness | The original R1 to R3 acceptance bundles are unrecoverable. | — | — | retired: nothing accepts revisions, and no claim rests on them |
 | R551-23 | Release readiness | Native acceptance evidence had no backup, expiry or attestation. | — | — | retired: nothing produces native evidence now. The Linux and Darwin bundles of the last approval before 0.2.0, `ci/accepted/57d1c76a`, remain on the maintainer's Mac, and on 2026-09-23 their records and source archive matched that tag's hashes; they have no backup, and no claim rests on them. R730-13 stands on its own |
 | R551-24 | Release readiness | Two-domain publication was not atomic. | — | — | retired: `pages.yml` is the one publisher |
+| R551-06 | Scale and self-hosting | Flow snapshots, declaration-origin matrices, folding and dependency walks and IR scratch arrays have storage and stack costs that grow with input size. | — | — | retired: R8.20 bounded a routine's declarations and a struct's fields (D247, L0325), measures every stage's storage, and made the remaining per-routine facts shared between branches |
+| R551-10 | Competitive optimization | Atom and symbol allocation and imported-module lookup repeat identity scans; simplification keeps size-dependent scratch work. | — | — | retired: R8.20 keyed atom codes, linker spellings, machine-body sharing and imported modules, and simplification forgets only what it stored |
+| SR-02 | Scale and self-hosting | The corpus at one worker measured 4,523 s on CI against 3,592 s before the parallelism change; single shared-hardware samples cannot tell variance from a regression. | — | — | retired: three repeated runs on one host put the corpus at one worker at 5,599 to 5,654 seconds before the parallelism change and 5,657 to 5,713 after it, a one per cent cost, and R8.20's tree runs it in 1,400 to 1,436 |
 
 ## Retained positions
 
