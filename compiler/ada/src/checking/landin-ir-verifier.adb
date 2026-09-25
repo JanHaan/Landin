@@ -1884,23 +1884,20 @@ package body Landin.IR.Verifier is
             return Nominal_Metadata_Malformed;
          end if;
 
-         --  Identities are opaque, so find the registry position through
-         --  its public enumeration rather than recovering its representation.
-         --  The scan is bounded by the unit's nominal count in every build.
-         for Position in 1 .. Nominal_Type_Count (Of_Unit) loop
-            if Nth_Nominal_Type (Of_Unit, Position) = Source.Nominal then
-               if Canonical_Nominals (Position).Kind = No_Aggregate_Source
-               then
-                  Canonical_Nominals (Position) := Source;
-               elsif not Sources_Agree
-                 (Canonical_Nominals (Position), Source)
-               then
-                  return Nominal_Shape_Disagrees;
-               end if;
-               return Nothing_Wrong;
+         --  Identities are opaque; the unit says where a held one sits in
+         --  its registry, which is the same position its enumeration gives.
+         declare
+            Position : constant Positive :=
+              Nominal_Identities.Position (Of_Unit, Source.Nominal);
+         begin
+            if Canonical_Nominals (Position).Kind = No_Aggregate_Source then
+               Canonical_Nominals (Position) := Source;
+            elsif not Sources_Agree (Canonical_Nominals (Position), Source)
+            then
+               return Nominal_Shape_Disagrees;
             end if;
-         end loop;
-         return Nominal_Metadata_Malformed;
+            return Nothing_Wrong;
+         end;
       end Register;
 
       function Register_Shape
