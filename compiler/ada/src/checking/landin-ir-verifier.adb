@@ -2528,10 +2528,48 @@ package body Landin.IR.Verifier is
       function Pointer_Provenance (Item : Item_Id) return Fault
       is
          Blocks : constant Natural := Block_Count (Of_Unit, Item);
-         Slots : constant Natural := Slot_Count (Of_Unit, Item);
-         type Slot_State is array (1 .. Slots) of Boolean;
+
+         function Tracked (Slot : Slot_Id) return Boolean
+           is (Slot /= No_Slot
+               and then (Is_Address (Of_Unit, Item, Slot)
+                 or else Pointee_Of (Of_Unit, Item, Slot) /= No_Pointee));
+
+         --  Only a tracked slot's state is ever read, so each block keeps
+         --  a bit for those alone, numbered in slot order; zero is none.
+         type Slot_Numbers is array (1 .. Slot_Count (Of_Unit, Item))
+           of Natural;
+
+         Tracked_Count : Natural := 0;
+
+         function Numbered return Slot_Numbers;
+
+         function Numbered return Slot_Numbers is
+            Result : Slot_Numbers := [others => 0];
+         begin
+            for Slot in Result'Range loop
+               if Tracked (Slot_Id (Slot)) then
+                  Tracked_Count := Tracked_Count + 1;
+                  Result (Slot) := Tracked_Count;
+               end if;
+            end loop;
+            return Result;
+         end Numbered;
+
+         Number : constant Slot_Numbers := Numbered;
+         type Slot_State is array (1 .. Tracked_Count) of Boolean
+           with Pack;
          type Block_State is array (1 .. Blocks) of Slot_State;
          Entry_State : Slot_State := [others => False];
+
+         --  Mark a stored slot; an untracked one has no bit to mark.
+         procedure Store (Into : in out Slot_State; Slot : Slot_Id);
+
+         procedure Store (Into : in out Slot_State; Slot : Slot_Id) is
+         begin
+            if Number (Positive (Slot)) /= 0 then
+               Into (Number (Positive (Slot))) := True;
+            end if;
+         end Store;
          type Block_State_Access is access Block_State;
          procedure Free is new Ada.Unchecked_Deallocation
            (Object => Block_State, Name => Block_State_Access);
@@ -2569,11 +2607,6 @@ package body Landin.IR.Verifier is
                Queued (Block) := True;
             end if;
          end Enqueue;
-
-         function Tracked (Slot : Slot_Id) return Boolean
-           is (Slot /= No_Slot
-               and then (Is_Address (Of_Unit, Item, Slot)
-                 or else Pointee_Of (Of_Unit, Item, Slot) /= No_Pointee));
       begin
          for P in 1 .. Parameter_Count (Of_Unit, Item) loop
             if Tracked (Nth_Parameter (Of_Unit, Item, P))
@@ -2582,7 +2615,7 @@ package body Landin.IR.Verifier is
                return (Kind => Routine_Signature_Disagrees,
                        Item => Item, others => <>);
             end if;
-            Entry_State (Positive (Nth_Parameter (Of_Unit, Item, P))) := True;
+            Store (Entry_State, Nth_Parameter (Of_Unit, Item, P));
          end loop;
          for B in 1 .. Blocks loop
             if not Control_Flow.Is_Reachable (Graph, Block_Id (B)) then
@@ -2621,8 +2654,8 @@ package body Landin.IR.Verifier is
                      V : constant Value_Id := Nth_Value
                        (Of_Unit, Item, Block_Id (B), P);
                   begin
-                     if Op_Of (Of_Unit, Item, V) = Store then
-                        State (Positive (Slot_Of (Of_Unit, Item, V))) := True;
+                     if Op_Of (Of_Unit, Item, V) = Landin.IR.Store then
+                        Store (State, Slot_Of (Of_Unit, Item, V));
                      end if;
                   end;
                end loop;
@@ -2650,7 +2683,8 @@ package body Landin.IR.Verifier is
                           not Holds (Of_Unit, Item, Place.Address)
                           or else not Is_Address
                             (Of_Unit, Item, Place.Address)
-                          or else not State (Positive (Place.Address)),
+                          or else not State
+                            (Number (Positive (Place.Address))),
                         when Frame_Slot =>
                           Holds (Of_Unit, Item, Place.Slot)
                           and then Is_Address (Of_Unit, Item, Place.Slot),
@@ -2673,13 +2707,13 @@ package body Landin.IR.Verifier is
                          | Load_Element | Store_Element | Load_Indirect
                          | Store_Indirect
                          and then Tracked (Code.Slot)
-                         and then not State (Positive (Code.Slot)))
+                         and then not State (Number (Positive (Code.Slot))))
                      then
                         return (Address_Value_Disagrees,
                                 Item, Block_Id (B), V);
                      end if;
-                     if Code.Op = Store then
-                        State (Positive (Code.Slot)) := True;
+                     if Code.Op = Landin.IR.Store then
+                        Store (State, Code.Slot);
                      end if;
                   end;
                end loop;
