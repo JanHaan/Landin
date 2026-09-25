@@ -6,6 +6,7 @@ with Landin.Packed;
 with Landin.Targets.Packed;
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Hashed_Sets;
+with Ada.Containers.Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Finalization;
 with Ada.Strings.Fixed;
@@ -32215,8 +32216,14 @@ package body Landin.Stages.Checking is
          --  for that key; bare templates own none.  Structural function-type
          --  signatures may share the table but never Owns_Body, so they are
          --  descriptors or concrete boundaries rather than guessed routines.
-         type Effect_Matrix is array
-           (Positive range <>, Positive range <>) of Boolean;
+         --
+         --  A row is the set of atoms, or of callee signatures, one
+         --  signature has: ordered, so reading it visits them in ascending
+         --  identity, and sparse, so a row costs what the routine uses and
+         --  not the size of the program.
+         package Member_Sets is new Ada.Containers.Ordered_Sets
+           (Element_Type => Positive);
+         type Effect_Matrix is array (Positive range <>) of Member_Sets.Set;
          type Effect_Matrix_Access is access Effect_Matrix;
          type Flag_Array is array (Positive range <>) of Boolean;
          type Flag_Array_Access is access Flag_Array;
@@ -32322,7 +32329,7 @@ package body Landin.Stages.Checking is
                   Atom : constant Res.Declaration_Id :=
                     Landin.Checking.Nth_Atom (Types.all, Set_Id, Index);
                begin
-                  Into (Row, Positive (Atom)) := True;
+                  Into (Row).Include (Positive (Atom));
                end;
             end loop;
          end Include_Set;
@@ -32350,11 +32357,8 @@ package body Landin.Stages.Checking is
                           and then Recovery_Signatures (Positive (Id))
                                      /= Landin.Checking.No_Signature
                         then
-                           Edges
-                             (Caller,
-                              Positive
-                                (Recovery_Signatures (Positive (Id)))) :=
-                               True;
+                           Edges (Caller).Include
+                             (Positive (Recovery_Signatures (Positive (Id))));
                         elsif Landin.Checking.State_Of (Types.all, Id)
                           = Landin.Checking.Untouched
                           and then Res.Sort_Of (Meanings.all, Id)
@@ -32553,7 +32557,7 @@ package body Landin.Stages.Checking is
                                Effective_Call_Signature (Of_Tree, Call);
                         begin
                            if Signature /= Landin.Checking.No_Signature then
-                              Edges (Caller, Positive (Signature)) := True;
+                              Edges (Caller).Include (Positive (Signature));
                            elsif Needs_Error_Type (Of_Tree, Call) then
                               Open_Body (Caller) := True;
                            end if;
@@ -32713,12 +32717,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         Effects := new Effect_Matrix'
-           [1 .. Signature_Last => [1 .. Declaration_Last => False]];
-         Required := new Effect_Matrix'
-           [1 .. Signature_Last => [1 .. Declaration_Last => False]];
-         Edges := new Effect_Matrix'
-           [1 .. Signature_Last => [1 .. Signature_Last => False]];
+         Effects := new Effect_Matrix (1 .. Signature_Last);
+         Required := new Effect_Matrix (1 .. Signature_Last);
+         Edges := new Effect_Matrix (1 .. Signature_Last);
          Owns_Body := new Flag_Array'[1 .. Signature_Last => False];
          Open_Body := new Flag_Array'[1 .. Signature_Last => False];
          Recovery_Signatures := new Signature_Array'
@@ -32849,44 +32850,39 @@ package body Landin.Stages.Checking is
                  (Types.all, Landin.Checking.Signature_Id (Signature))
                  = Landin.Checking.Inferred
             then
-               for Atom in 1 .. Declaration_Total loop
-                  Effects (Signature, Atom) := Required (Signature, Atom);
-               end loop;
+               Effects (Signature) := Required (Signature);
             end if;
          end loop;
 
          loop
             Changed := False;
             for Caller in 1 .. Signature_Total loop
-               for Callee in 1 .. Signature_Total loop
-                  if Edges (Caller, Callee) then
-                     if Open_Body (Callee)
-                       and then Landin.Checking.Signature_Error_Form
-                         (Types.all, Landin.Checking.Signature_Id (Callee))
-                           = Landin.Checking.Inferred
-                       and then not Open_Body (Caller)
-                     then
-                        Open_Body (Caller) := True;
+               for Callee of Edges (Caller) loop
+                  if Open_Body (Callee)
+                    and then Landin.Checking.Signature_Error_Form
+                      (Types.all, Landin.Checking.Signature_Id (Callee))
+                        = Landin.Checking.Inferred
+                    and then not Open_Body (Caller)
+                  then
+                     Open_Body (Caller) := True;
+                     Changed := True;
+                  end if;
+                  --  A copy, because a routine that calls itself reads the
+                  --  row this sweep adds to; a later sweep sees the rest.
+                  for Atom of Member_Sets.Set'(Effects (Callee)) loop
+                     if not Required (Caller).Contains (Atom) then
+                        Required (Caller).Insert (Atom);
                         Changed := True;
                      end if;
-                     for Atom in 1 .. Declaration_Total loop
-                        if Effects (Callee, Atom) then
-                           if not Required (Caller, Atom) then
-                              Required (Caller, Atom) := True;
-                              Changed := True;
-                           end if;
-                           if Landin.Checking.Signature_Error_Form
-                             (Types.all,
-                              Landin.Checking.Signature_Id (Caller))
-                                = Landin.Checking.Inferred
-                             and then not Effects (Caller, Atom)
-                           then
-                              Effects (Caller, Atom) := True;
-                              Changed := True;
-                           end if;
-                        end if;
-                     end loop;
-                  end if;
+                     if Landin.Checking.Signature_Error_Form
+                       (Types.all, Landin.Checking.Signature_Id (Caller))
+                         = Landin.Checking.Inferred
+                       and then not Effects (Caller).Contains (Atom)
+                     then
+                        Effects (Caller).Insert (Atom);
+                        Changed := True;
+                     end if;
+                  end loop;
                end loop;
             end loop;
             exit when not Changed;
@@ -32901,13 +32897,9 @@ package body Landin.Stages.Checking is
             then
                Progress := True;
                declare
-                  Count : Natural := 0;
+                  Count : constant Natural :=
+                    Natural (Effects (Signature).Length);
                begin
-                  for Atom in 1 .. Declaration_Total loop
-                     if Effects (Signature, Atom) then
-                        Count := Count + 1;
-                     end if;
-                  end loop;
 
                   if Count = 0 then
                      Landin.Checking.Finalize_Inferred_Errors
@@ -32919,11 +32911,9 @@ package body Landin.Stages.Checking is
                         Members : Landin.Checking.Atom_Array (1 .. Count);
                         Next : Natural := 0;
                      begin
-                        for Atom in 1 .. Declaration_Total loop
-                           if Effects (Signature, Atom) then
-                              Next := Next + 1;
-                              Members (Next) := Res.Declaration_Id (Atom);
-                           end if;
+                        for Atom of Effects (Signature) loop
+                           Next := Next + 1;
+                           Members (Next) := Res.Declaration_Id (Atom);
                         end loop;
                         Landin.Checking.Finalize_Inferred_Errors
                           (Types.all,
@@ -33017,10 +33007,8 @@ package body Landin.Stages.Checking is
 
          for Signature in 1 .. Signature_Total loop
             if Owns_Body (Signature) then
-               for Atom in 1 .. Declaration_Total loop
-                  if Required (Signature, Atom)
-                    and then not Effects (Signature, Atom)
-                  then
+               for Atom of Required (Signature) loop
+                  if not Effects (Signature).Contains (Atom) then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Landin.Checking.Signature_Origin
