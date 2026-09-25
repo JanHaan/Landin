@@ -1,3 +1,4 @@
+with Interfaces;
 with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Finalization;
@@ -163,6 +164,43 @@ package body Landin.Stages.Checking.References is
       type Declaration_Bits is array (Local_Id) of Boolean
         with Pack;
 
+      --  The first local at or after From whose bit is set, or 0.  A fact
+      --  names few of the function's locals, so a walk over the ones it
+      --  names skips the unset bits a machine word at a time.
+      function Next_Set
+        (Bits : Declaration_Bits; From : Positive) return Natural;
+
+      function Next_Set
+        (Bits : Declaration_Bits; From : Positive) return Natural
+      is
+         --  A packed array of one-bit components keeps locals 8k+1 .. 8k+8
+         --  in byte k+1, in whichever bit order, so a zero byte holds none
+         --  of them.  Which bit is which local is the representation's
+         --  business: a nonzero byte is searched through the array itself.
+         pragma Compile_Time_Error
+           (Declaration_Bits'Component_Size /= 1,
+            "the bit search reads eight locals to a byte");
+         type Byte_View is array (1 .. (Declarations + 7) / 8)
+           of Interfaces.Unsigned_8;
+         View : constant Byte_View
+           with Import, Address => Bits'Address;
+         use type Interfaces.Unsigned_8;
+         Current : Positive := From;
+      begin
+         while Current <= Bits'Last loop
+            if (Current - 1) mod 8 = 0
+              and then View ((Current - 1) / 8 + 1) = 0
+            then
+               Current := Current + 8;
+            elsif Bits (Current) then
+               return Current;
+            else
+               Current := Current + 1;
+            end if;
+         end loop;
+         return 0;
+      end Next_Set;
+
       --  Absence is a value proof, not an origin.  In this finite chain,
       --  No_Edge is the join identity, Empty_Optional proves absence, and
       --  Empty_Storage covers empty slices and empty reference carriers. The
@@ -212,7 +250,6 @@ package body Landin.Stages.Checking.References is
       --  aliases. Never reuse an empty-value proof for storage exposed in
       --  this body, or for module state which another call can change.
       Exposed : Declaration_Bits := [others => False];
-      type Origin_Table is array (Local_Id range <>) of Origin_Fact;
       Signature : constant Landin.Checking.Signature_Id :=
         Landin.Checking.Signature_Of
           (Types.all, Of_Tree, Function_Node);
@@ -224,79 +261,364 @@ package body Landin.Stages.Checking.References is
       Sink : not null access Landin.Diagnostics.Diagnostic_List :=
         Into'Unchecked_Access;
 
-      subtype Function_Table is Origin_Table (Local_Id);
-      type Function_Table_Access is access Function_Table;
+      procedure Join
+        (Into_Fact : in out Reference_Fact; Other : Reference_Fact);
+
+      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact);
+
+      procedure Join
+        (Into_Fact : in out Reference_Fact; Other : Reference_Fact) is
+      begin
+         Into_Fact.Presence :=
+           Value_Fact'Max (Into_Fact.Presence, Other.Presence);
+         Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
+         if Other.Frame_Witness /= Res.No_Declaration
+           and then (Into_Fact.Frame_Witness = Res.No_Declaration
+             or else Other.Frame_Witness < Into_Fact.Frame_Witness)
+         then
+            Into_Fact.Frame_Witness := Other.Frame_Witness;
+         end if;
+         Into_Fact.External := Into_Fact.External or Other.External;
+         Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
+         Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
+         --  An explicitly untracked alternative cannot erase a tracked
+         --  frame or parameter origin contributed by another alternative.
+         if Into_Fact.Frame then
+            Into_Fact.Untracked := False;
+         end if;
+         for Position in Into_Fact.From'Range loop
+            Into_Fact.From (Position) :=
+              Into_Fact.From (Position) or Other.From (Position);
+            if Into_Fact.From (Position) then
+               Into_Fact.Untracked := False;
+            end if;
+         end loop;
+         --  Both are packed, so this joins a machine word at a time.
+         Into_Fact.Derives := Into_Fact.Derives or Other.Derives;
+      end Join;
+
+      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
+      begin
+         if Into_Fact.Value.Presence = No_Edge then
+            Into_Fact := Other;
+            return;
+         elsif Other.Value.Presence = No_Edge then
+            return;
+         end if;
+         if Into_Fact.Results.Last_Index = Other.Results.Last_Index then
+            for Position in 1 .. Into_Fact.Results.Last_Index loop
+               declare
+                  Part : Reference_Fact := Into_Fact.Results (Position);
+               begin
+                  Join (Part, Other.Results (Position));
+                  Into_Fact.Results.Replace_Element (Position, Part);
+               end;
+            end loop;
+         else
+            --  A value without positional facts is conservatively described
+            --  by its union, not by whichever sibling retained more detail.
+            Into_Fact.Results.Clear;
+         end if;
+         Join (Into_Fact.Value, Other.Value);
+         Join (Into_Fact.Storage, Other.Storage);
+      end Join;
+
+      --  The facts of every local, as a persistent table.  Control flow
+      --  saves, restores and joins whole tables at every branch and loop,
+      --  so a table is a root: saving one keeps the root, a write copies
+      --  the path to its row, and a join or a comparison descends only
+      --  where two tables differ.  A branch therefore costs what it
+      --  changed, not what the function can name.  Nothing is freed until
+      --  the function is done; the arena below owns every node and fact.
+      Fanout : constant := 32;
+      type Slot_Index is range 0 .. Fanout - 1;
+
+      --  A fact never changes once it is in a table.  Unsettled marks one
+      --  that joining with itself would change: Join drops an untracked
+      --  alternative beside a frame or parameter one, so where two tables
+      --  share such a row their join still has to rewrite it.
+      type Stored_Fact is record
+         Fact      : Origin_Fact := No_Origin;
+         Unsettled : Boolean := False;
+      end record;
+      type Fact_Access is access Stored_Fact;
+
+      type Table_Node;
+      type Table_Access is access Table_Node;
+      type Fact_Slots is array (Slot_Index) of Fact_Access;
+      type Node_Slots is array (Slot_Index) of Table_Access;
+
+      --  Unsettled counts the unsettled facts below a node, so a join of
+      --  a shared subtree with itself returns it untouched when it is 0.
+      type Table_Node (Leaf : Boolean) is record
+         Unsettled : Natural := 0;
+         case Leaf is
+            when True =>
+               Facts : Fact_Slots;
+            when False =>
+               Children : Node_Slots;
+         end case;
+      end record;
 
       procedure Free is new Ada.Unchecked_Deallocation
-        (Object => Function_Table, Name => Function_Table_Access);
-
-      --  Recursive control visits retain program-sized snapshots. Keep only
-      --  their owners on the host stack, including on exceptional exits.
-      package Snapshots is
-         type Owner is new Ada.Finalization.Limited_Controlled with record
-            Data : Function_Table_Access := null;
-         end record;
-
-         overriding procedure Finalize (Value : in out Owner);
-         function Empty return Owner;
-         function Saved (Initial : Function_Table) return Owner;
-      end Snapshots;
-
-      package body Snapshots is
-         overriding procedure Finalize (Value : in out Owner) is
-         begin
-            Free (Value.Data);
-         end Finalize;
-
-         function Empty return Owner is
-         begin
-            return Value : Owner do
-               Value.Data := new Function_Table;
-            end return;
-         end Empty;
-
-         function Saved (Initial : Function_Table) return Owner is
-         begin
-            return Value : Owner do
-               Value.Data := new Function_Table'(Initial);
-            end return;
-         end Saved;
-      end Snapshots;
-
-      type Reference_Table is array (Function_Table'Range) of Reference_Fact;
-      type Reference_Table_Access is access Reference_Table;
+        (Object => Stored_Fact, Name => Fact_Access);
       procedure Free is new Ada.Unchecked_Deallocation
-        (Object => Reference_Table, Name => Reference_Table_Access);
+        (Object => Table_Node, Name => Table_Access);
 
-      package Alias_Tables is
+      package Fact_Lists is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Fact_Access);
+      package Node_Lists is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Table_Access);
+
+      --  Every node and fact made for this function, freed when it is done,
+      --  including on exceptional exits.
+      package Arenas is
          type Owner is new Ada.Finalization.Limited_Controlled with record
-            Data : Reference_Table_Access := new Reference_Table;
+            Facts : Fact_Lists.Vector;
+            Nodes : Node_Lists.Vector;
          end record;
          overriding procedure Finalize (Value : in out Owner);
-      end Alias_Tables;
+      end Arenas;
 
-      package body Alias_Tables is
+      package body Arenas is
          overriding procedure Finalize (Value : in out Owner) is
          begin
-            Free (Value.Data);
+            for Item of Value.Facts loop
+               Free (Item);
+            end loop;
+            for Item of Value.Nodes loop
+               Free (Item);
+            end loop;
+            Value.Facts.Clear;
+            Value.Nodes.Clear;
          end Finalize;
-      end Alias_Tables;
+      end Arenas;
 
-      Origin_Owner : constant Snapshots.Owner := Snapshots.Empty;
-      Origins : Function_Table renames Origin_Owner.Data.all;
+      Arena : Arenas.Owner;
+
+      --  How many rows one child of a node at the top covers: the smallest
+      --  power of Fanout whose Fanout multiple holds every local.
+      function Top_Span return Positive;
+
+      function Top_Span return Positive is
+         Span : Positive := 1;
+      begin
+         while Span * Fanout < Declarations loop
+            Span := Span * Fanout;
+         end loop;
+         return Span;
+      end Top_Span;
+
+      Root_Span : constant Positive := Top_Span;
+
+      function Is_Unsettled (Fact : Origin_Fact) return Boolean;
+
+      function Is_Unsettled (Fact : Origin_Fact) return Boolean is
+         Twice : Origin_Fact := Fact;
+      begin
+         Join (Twice, Fact);
+         return Twice /= Fact;
+      end Is_Unsettled;
+
+      function Kept (Fact : Origin_Fact) return Fact_Access;
+
+      function Kept (Fact : Origin_Fact) return Fact_Access is
+         Made : constant Fact_Access :=
+           new Stored_Fact'(Fact => Fact, Unsettled => Is_Unsettled (Fact));
+      begin
+         Arena.Facts.Append (Made);
+         return Made;
+      end Kept;
+
+      function Node (Made : Table_Node) return Table_Access;
+
+      function Node (Made : Table_Node) return Table_Access is
+         Result : constant Table_Access := new Table_Node'(Made);
+      begin
+         Arena.Nodes.Append (Result);
+         return Result;
+      end Node;
+
+      function Count_Of (Fact : Fact_Access) return Natural
+        is (if Fact.Unsettled then 1 else 0);
+
+      --  Every row No_Origin, every level one shared node.
+      function Empty_Table return Table_Access;
+
+      function Empty_Table return Table_Access is
+         Nothing : constant Fact_Access := Kept (No_Origin);
+         Result : Table_Access :=
+           Node ((Leaf => True, Facts => [others => Nothing],
+                  Unsettled => Fanout * Count_Of (Nothing)));
+         Span : Positive := 1;
+      begin
+         while Span < Root_Span loop
+            Result := Node ((Leaf => False, Children => [others => Result],
+                             Unsettled => Fanout * Result.Unsettled));
+            Span := Span * Fanout;
+         end loop;
+         return Result;
+      end Empty_Table;
+
+      function Digit (Local : Local_Id; Span : Positive) return Slot_Index
+        is (Slot_Index (((Local - 1) / Span) mod Fanout));
+
+      function Fact_At (Root : Table_Access; Local : Local_Id)
+        return Fact_Access;
+
+      function Fact_At (Root : Table_Access; Local : Local_Id)
+        return Fact_Access
+      is
+         Current : Table_Access := Root;
+         Span : Positive := Root_Span;
+      begin
+         while not Current.Leaf loop
+            Current := Current.Children (Digit (Local, Span));
+            Span := (if Span > 1 then Span / Fanout else 1);
+         end loop;
+         return Current.Facts (Digit (Local, 1));
+      end Fact_At;
+
+      function With_Fact
+        (Root : Table_Access; Local : Local_Id; Fact : Fact_Access;
+         Span : Positive) return Table_Access;
+
+      function With_Fact
+        (Root : Table_Access; Local : Local_Id; Fact : Fact_Access;
+         Span : Positive) return Table_Access
+      is
+         Copy : Table_Node := Root.all;
+         Which : constant Slot_Index := Digit (Local, Span);
+      begin
+         if Root.Leaf then
+            Copy.Unsettled := Copy.Unsettled
+              - Count_Of (Copy.Facts (Which)) + Count_Of (Fact);
+            Copy.Facts (Which) := Fact;
+         else
+            declare
+               Child : constant Table_Access := With_Fact
+                 (Copy.Children (Which), Local, Fact,
+                  (if Span > 1 then Span / Fanout else 1));
+            begin
+               Copy.Unsettled := Copy.Unsettled
+                 - Copy.Children (Which).Unsettled + Child.Unsettled;
+               Copy.Children (Which) := Child;
+            end;
+         end if;
+         return Node (Copy);
+      end With_Fact;
+
+      --  The join of two tables, row by row, keeping every subtree that
+      --  the join leaves as it was.
+      function Joined (Left, Right : Table_Access) return Table_Access;
+
+      function Joined (Left, Right : Table_Access) return Table_Access is
+         Copy : Table_Node := Left.all;
+         Changed : Boolean := False;
+      begin
+         if Left = Right and then Left.Unsettled = 0 then
+            return Left;
+         end if;
+         Copy.Unsettled := 0;
+         if Left.Leaf then
+            for Which in Slot_Index loop
+               declare
+                  Mine : constant Fact_Access := Left.Facts (Which);
+                  Theirs : constant Fact_Access := Right.Facts (Which);
+               begin
+                  if Mine /= Theirs or else Mine.Unsettled then
+                     declare
+                        Both : Origin_Fact := Mine.Fact;
+                     begin
+                        Join (Both, Theirs.Fact);
+                        if Both /= Mine.Fact then
+                           Changed := True;
+                           Copy.Facts (Which) :=
+                             (if Both = Theirs.Fact then Theirs
+                              else Kept (Both));
+                        end if;
+                     end;
+                  end if;
+                  Copy.Unsettled :=
+                    Copy.Unsettled + Count_Of (Copy.Facts (Which));
+               end;
+            end loop;
+         else
+            for Which in Slot_Index loop
+               Copy.Children (Which) := Joined
+                 (Left.Children (Which), Right.Children (Which));
+               Changed := Changed
+                 or else Copy.Children (Which) /= Left.Children (Which);
+               Copy.Unsettled :=
+                 Copy.Unsettled + Copy.Children (Which).Unsettled;
+            end loop;
+         end if;
+         return (if Changed then Node (Copy) else Left);
+      end Joined;
+
+      function Same_Facts (Left, Right : Table_Access) return Boolean;
+
+      function Same_Facts (Left, Right : Table_Access) return Boolean is
+      begin
+         if Left = Right then
+            return True;
+         elsif Left.Leaf then
+            return (for all Which in Slot_Index =>
+                      Left.Facts (Which) = Right.Facts (Which)
+                      or else Left.Facts (Which).Fact
+                        = Right.Facts (Which).Fact);
+         end if;
+         return (for all Which in Slot_Index =>
+                   Same_Facts (Left.Children (Which),
+                               Right.Children (Which)));
+      end Same_Facts;
+
+      --  Captured backing, kept only for the locals a match or traversal
+      --  binds: a table of one fact per local would be one bit per pair of
+      --  locals before anything was bound.
+      package Alias_Maps is new Ada.Containers.Ordered_Maps
+        (Key_Type => Local_Id, Element_Type => Reference_Fact);
+
+      --  The facts on the edge being analysed.  A saved table is a copy of
+      --  this root, and restoring one assigns it back.
+      Origins : Table_Access := Empty_Table;
+
+      function Origin (Local : Local_Id) return Origin_Fact
+        is (Fact_At (Origins, Local).Fact);
+
+      procedure Set_Origin (Local : Local_Id; Fact : Origin_Fact);
+
+      procedure Set_Origin (Local : Local_Id; Fact : Origin_Fact) is
+      begin
+         if Fact_At (Origins, Local).Fact /= Fact then
+            Origins := With_Fact (Origins, Local, Kept (Fact), Root_Span);
+         end if;
+      end Set_Origin;
       --  Match and collection bindings keep their captured backing apart
       --  from origins carried by the value. Runtime address aliases retain
       --  that backing beneath computed selectors; copied subjects do not.
-      Alias_Owner : Alias_Tables.Owner;
-      Alias_Storage : Reference_Table renames Alias_Owner.Data.all;
-      Runtime_Alias_Of : array (Origins'Range) of Boolean :=
+      Aliases : Alias_Maps.Map;
+
+      --  A local's captured backing; No_Reference for one nothing bound.
+      function Alias_Storage (Local : Local_Id) return Reference_Fact;
+
+      function Alias_Storage (Local : Local_Id) return Reference_Fact is
+         Found : constant Alias_Maps.Cursor := Aliases.Find (Local);
+      begin
+         return (if Alias_Maps.Has_Element (Found)
+                 then Alias_Maps.Element (Found) else No_Reference);
+      end Alias_Storage;
+      Runtime_Alias_Of : array (Local_Id) of Boolean :=
         [others => False];
-      Pattern_Subject_Of : array (Origins'Range) of Syn.Node_Id :=
+      Pattern_Subject_Of : array (Local_Id) of Syn.Node_Id :=
         [others => Syn.No_Node];
-      Pattern_Block_Of : array (Origins'Range) of Syn.Node_Id :=
+      --  The locals a match has given a subject: the payload check visits
+      --  these, in local order, and no others.
+      Has_Pattern_Subject : Declaration_Bits := [others => False];
+      Pattern_Block_Of : array (Local_Id) of Syn.Node_Id :=
         [others => Syn.No_Node];
       Falls_Through : Boolean := True;
-      Parameter_Of_Local : array (Origins'Range) of Natural :=
+      Parameter_Of_Local : array (Local_Id) of Natural :=
         [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
         [others => False];
@@ -337,11 +659,8 @@ package body Landin.Stages.Checking.References is
       --  One loop being analysed.  Its `break` edges are joined into
       --  Exit_State and its `continue` edges into Back_State; the loop
       --  handler joins the latter with the body's fallthrough to form the
-      --  back edge.  A function table grows quadratically with the number of
-      --  declarations because every fact carries declaration-origin bits.
-      --  Allocate the uncommon transfer states only when an edge needs one;
-      --  embedding both in a vector element makes Append copy program-sized
-      --  values on the host stack.
+      --  back edge.  A transfer state is a table root, held only once an
+      --  edge needs one, and the probe counts each hold and release.
       procedure Checkpoint (Point : Transfer_Point);
 
       procedure Checkpoint (Point : Transfer_Point) is
@@ -355,12 +674,14 @@ package body Landin.Stages.Checking.References is
          end if;
       end Checkpoint;
 
+      --  A transfer state holds a table root; the arena owns its nodes, so
+      --  holding and releasing one is bookkeeping the probe still counts.
       package Transfer_States is
          type Owner is new Ada.Finalization.Limited_Controlled with record
-            Data : Function_Table_Access := null;
+            Data : Table_Access := null;
          end record;
          overriding procedure Finalize (Value : in out Owner);
-         procedure Save (Value : in out Owner; Initial : Function_Table);
+         procedure Save (Value : in out Owner; Initial : Table_Access);
          procedure Move (Into : in out Owner; From : in out Owner);
       end Transfer_States;
 
@@ -368,7 +689,7 @@ package body Landin.Stages.Checking.References is
          overriding procedure Finalize (Value : in out Owner) is
          begin
             if Value.Data /= null then
-               Free (Value.Data);
+               Value.Data := null;
                if Probe /= null then
                   Probe.Releases := Probe.Releases + 1;
                   Probe.Live := Probe.Live - 1;
@@ -376,13 +697,13 @@ package body Landin.Stages.Checking.References is
             end if;
          end Finalize;
 
-         procedure Save (Value : in out Owner; Initial : Function_Table) is
+         procedure Save (Value : in out Owner; Initial : Table_Access) is
          begin
             if Value.Data /= null then
                raise Landin.Compiler_Defect with "loop state already owned";
             end if;
             Checkpoint (Allocating);
-            Value.Data := new Function_Table'(Initial);
+            Value.Data := Initial;
             if Probe /= null then
                Probe.Allocations := Probe.Allocations + 1;
                Probe.Live := Probe.Live + 1;
@@ -471,8 +792,9 @@ package body Landin.Stages.Checking.References is
 
       Positions : Position_Frames.Vector;
 
+      --  Join another table into one: the table becomes the rows' join.
       procedure Join_Table
-        (Into_Table : in out Function_Table; Other : Function_Table);
+        (Into_Table : in out Table_Access; Other : Table_Access);
 
       procedure Run_Cleanups
         (Tree    : Syn.Tree;
@@ -584,11 +906,6 @@ package body Landin.Stages.Checking.References is
          Of_Loop      : Syn.Node_Id := Syn.No_Node;
          Labelled     : Boolean := False);
 
-      procedure Join
-        (Into_Fact : in out Reference_Fact; Other : Reference_Fact);
-
-      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact);
-
       function Nth_Result (Fact : Origin_Fact; Position : Positive)
         return Origin_Fact;
 
@@ -600,63 +917,6 @@ package body Landin.Stages.Checking.References is
                       then Fact.Results (Position) else Fact.Value),
             Storage => Fact.Storage, others => <>);
       end Nth_Result;
-
-      procedure Join
-        (Into_Fact : in out Reference_Fact; Other : Reference_Fact) is
-      begin
-         Into_Fact.Presence :=
-           Value_Fact'Max (Into_Fact.Presence, Other.Presence);
-         Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
-         if Other.Frame_Witness /= Res.No_Declaration
-           and then (Into_Fact.Frame_Witness = Res.No_Declaration
-             or else Other.Frame_Witness < Into_Fact.Frame_Witness)
-         then
-            Into_Fact.Frame_Witness := Other.Frame_Witness;
-         end if;
-         Into_Fact.External := Into_Fact.External or Other.External;
-         Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
-         Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
-         --  An explicitly untracked alternative cannot erase a tracked
-         --  frame or parameter origin contributed by another alternative.
-         if Into_Fact.Frame then
-            Into_Fact.Untracked := False;
-         end if;
-         for Position in Into_Fact.From'Range loop
-            Into_Fact.From (Position) :=
-              Into_Fact.From (Position) or Other.From (Position);
-            if Into_Fact.From (Position) then
-               Into_Fact.Untracked := False;
-            end if;
-         end loop;
-         --  Both are packed, so this joins a machine word at a time.
-         Into_Fact.Derives := Into_Fact.Derives or Other.Derives;
-      end Join;
-
-      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
-      begin
-         if Into_Fact.Value.Presence = No_Edge then
-            Into_Fact := Other;
-            return;
-         elsif Other.Value.Presence = No_Edge then
-            return;
-         end if;
-         if Into_Fact.Results.Last_Index = Other.Results.Last_Index then
-            for Position in 1 .. Into_Fact.Results.Last_Index loop
-               declare
-                  Part : Reference_Fact := Into_Fact.Results (Position);
-               begin
-                  Join (Part, Other.Results (Position));
-                  Into_Fact.Results.Replace_Element (Position, Part);
-               end;
-            end loop;
-         else
-            --  A value without positional facts is conservatively described
-            --  by its union, not by whichever sibling retained more detail.
-            Into_Fact.Results.Clear;
-         end if;
-         Join (Into_Fact.Value, Other.Value);
-         Join (Into_Fact.Storage, Other.Storage);
-      end Join;
 
       function Declaration_At
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id
@@ -1017,7 +1277,7 @@ package body Landin.Stages.Checking.References is
             return Fact.Frame_Witness;
          end if;
          if Fact.Frame then
-            for Local in Origins'Range loop
+            for Local in Local_Id loop
                declare
                   Id : constant Res.Declaration_Id := Global (Local);
                begin
@@ -1041,7 +1301,7 @@ package body Landin.Stages.Checking.References is
                end;
             end loop;
          end if;
-         for Local in Origins'Range loop
+         for Local in Local_Id loop
             if Fact.Derives (Local) then
                return Global (Local);
             end if;
@@ -1599,14 +1859,14 @@ package body Landin.Stages.Checking.References is
          Seen (Local_Of (Borrower)) := True;
          while Grew loop
             Grew := False;
-            for Holder in Origins'Range loop
+            for Holder in Local_Id loop
                if not Seen (Holder)
                  and then Global (Holder) /= Except
                  and then Has_References (Global (Holder))
                then
-                  for Held in Origins'Range loop
+                  for Held in Local_Id loop
                      if Seen (Held)
-                       and then Origins (Holder).Value.Derives (Held)
+                       and then Origin (Holder).Value.Derives (Held)
                      then
                         Seen (Holder) := True;
                         Grew := True;
@@ -1616,7 +1876,7 @@ package body Landin.Stages.Checking.References is
                end if;
             end loop;
          end loop;
-         for Holder in Origins'Range loop
+         for Holder in Local_Id loop
             if Seen (Holder)
               and then Has_Future_Use (Global (Holder), After)
             then
@@ -1820,17 +2080,17 @@ package body Landin.Stages.Checking.References is
             return Left_Known and Right_Known;
          end Disjoint_Frame_Storage;
          Used : Res.Declaration_Id;
+         Pattern_Local : Natural := Next_Set (Has_Pattern_Subject, 1);
       begin
-         for Pattern_Local in Origins'Range loop
-            if Pattern_Subject_Of (Pattern_Local) /= Syn.No_Node
-              and then not Disjoint_Frame_Storage (Pattern_Local)
+         while Pattern_Local /= 0 loop
+            if not Disjoint_Frame_Storage (Pattern_Local)
               and then (Replaces (Pattern_Subject_Of (Pattern_Local))
                         or else Replaces_Aliased_Storage (Pattern_Local))
             then
-               for Borrower_Local in Origins'Range loop
+               for Borrower_Local in Local_Id loop
                   if Borrower_Local = Pattern_Local
                     or else (Has_References (Global (Borrower_Local))
-                             and then Origins (Borrower_Local).Value.Derives
+                             and then Origin (Borrower_Local).Value.Derives
                                (Pattern_Local))
                   then
                      Used := Live_Holder
@@ -1857,6 +2117,8 @@ package body Landin.Stages.Checking.References is
                   end if;
                end loop;
             end if;
+            exit when Pattern_Local = Local_Id'Last;
+            Pattern_Local := Next_Set (Has_Pattern_Subject, Pattern_Local + 1);
          end loop;
          return False;
       end Check_Payload_Borrows;
@@ -1895,11 +2157,11 @@ package body Landin.Stages.Checking.References is
                   --  [0830]: a borrow is a view.  A scalar computed from
                   --  one carries derivation facts for [0790]'s clauses but
                   --  holds no reference into the mutated storage.
-                  for Borrower_Local in Origins'Range loop
+                  for Borrower_Local in Local_Id loop
                      if Global (Borrower_Local) /= Mutated
                        and then Has_References (Global (Borrower_Local))
                        and then Derives
-                         (Origins (Borrower_Local).Value, Mutated)
+                         (Origin (Borrower_Local).Value, Mutated)
                      then
                         Used := Live_Holder
                           (Global (Borrower_Local),
@@ -2082,7 +2344,7 @@ package body Landin.Stages.Checking.References is
                        Res.Bound_To (Meanings.all, Tree, Node);
                   begin
                      if Local_Of (Id) /= 0 then
-                        Result := Origins (Local_Of (Id));
+                        Result := Origin (Local_Of (Id));
                         Result.Storage := Named_Storage_Fact (Tree, Node);
                         if Is_Exposed (Id)
                           or else Res.Sort_Of (Meanings.all, Id)
@@ -2124,21 +2386,15 @@ package body Landin.Stages.Checking.References is
                Result := Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
                if Falls_Through and then not Cleanup_Stack.Is_Empty then
                   declare
-                     Continuing : Function_Table_Access :=
-                       new Function_Table'(Origins);
+                     Continuing : constant Table_Access := Origins;
                   begin
                      --  Failure occurs after argument evaluation. Its
                      --  cleanups see those origins, but any writes made
                      --  while unwinding cannot change the success edge.
                      Run_Cleanups
                        (Tree, 1, Landin.Cleanup.Failure_Propagation);
-                     Origins := Continuing.all;
+                     Origins := Continuing;
                      Falls_Through := True;
-                     Free (Continuing);
-                  exception
-                     when others =>
-                        Free (Continuing);
-                        raise;
                   end;
                end if;
                return Result;
@@ -2385,10 +2641,7 @@ package body Landin.Stages.Checking.References is
                         declare
                            Recovery : constant Syn.Node_Id := Syn.Else_Body
                              (Tree, Syn.Recovery_Of (Tree, Node));
-                           Success_Owner : constant Snapshots.Owner :=
-                             Snapshots.Saved (Origins);
-                           Success : Function_Table renames
-                             Success_Owner.Data.all;
+                           Success : constant Table_Access := Origins;
                            Fallback : Origin_Fact;
                            Falls : Boolean := True;
                         begin
@@ -2421,9 +2674,7 @@ package body Landin.Stages.Checking.References is
                Result := Fact_Of (Tree, Syn.Left_Of (Tree, Node));
                if Falls_Through then
                   declare
-                     Skipped_Owner : constant Snapshots.Owner :=
-                       Snapshots.Saved (Origins);
-                     Skipped : Function_Table renames Skipped_Owner.Data.all;
+                     Skipped : constant Table_Access := Origins;
                      Right : constant Origin_Fact :=
                        Fact_Of (Tree, Syn.Right_Of (Tree, Node));
                   begin
@@ -2502,7 +2753,7 @@ package body Landin.Stages.Checking.References is
                Part : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Result
                    (Types.all, Signature, Position);
-               Fact : constant Reference_Fact := Origins (Local_Of (Id)).Value;
+               Fact : constant Reference_Fact := Origin (Local_Of (Id)).Value;
                Expected : Parameter_Bits := [others => False];
                Same : Boolean := True;
             begin
@@ -2695,35 +2946,48 @@ package body Landin.Stages.Checking.References is
          --  A write through that address must update their value facts too;
          --  otherwise returning the local would forget the aliased write.
          if Target.Storage.Frame then
-            for Stored in Origins'Range loop
-               if Global (Stored) /= Id
-                 and then Target.Storage.Derives (Stored)
-               then
-                  Join (Origins (Stored).Value, Fact.Value);
-                  Origins (Stored).Results.Clear;
-               end if;
-            end loop;
+            declare
+               Stored : Natural := Next_Set (Target.Storage.Derives, 1);
+            begin
+               while Stored /= 0 loop
+                  if Global (Stored) /= Id then
+                     declare
+                        Written : Origin_Fact := Origin (Stored);
+                     begin
+                        Join (Written.Value, Fact.Value);
+                        Written.Results.Clear;
+                        Set_Origin (Stored, Written);
+                     end;
+                  end if;
+                  exit when Stored = Local_Id'Last;
+                  Stored := Next_Set (Target.Storage.Derives, Stored + 1);
+               end loop;
+            end;
          end if;
 
          if Id = Res.No_Declaration or else Local_Of (Id) = 0 then
             return;
          end if;
          if Syn.Kind (Tree, Place) = Syn.Name_Reference then
-            Origins (Local_Of (Id)) := Fact;
+            Set_Origin (Local_Of (Id), Fact);
          elsif not Through_Descriptor then
-            Join (Origins (Local_Of (Id)).Value, Fact.Value);
-            --  A partial write invalidates positional detail until a whole
-            --  replacement establishes it again; the union remains sound.
-            Origins (Local_Of (Id)).Results.Clear;
+            declare
+               Written : Origin_Fact := Origin (Local_Of (Id));
+            begin
+               Join (Written.Value, Fact.Value);
+               --  A partial write invalidates positional detail until a
+               --  whole replacement establishes it again; the union
+               --  remains sound.
+               Written.Results.Clear;
+               Set_Origin (Local_Of (Id), Written);
+            end;
          end if;
       end Assign;
 
       procedure Join_Table
-        (Into_Table : in out Function_Table; Other : Function_Table) is
+        (Into_Table : in out Table_Access; Other : Table_Access) is
       begin
-         for Id in Into_Table'Range loop
-            Join (Into_Table (Id), Other (Id));
-         end loop;
+         Into_Table := Joined (Into_Table, Other);
       end Join_Table;
 
       procedure Run_Cleanups
@@ -2818,9 +3082,10 @@ package body Landin.Stages.Checking.References is
                      --  The fixed point may retain the previous loop
                      --  iteration's value. It is not in scope while this
                      --  fresh declaration evaluates its initializer.
-                     Origins (Local_Of (Id)) := No_Origin;
-                     Origins (Local_Of (Id)) :=
-                       Fact_Of (Tree, Syn.Value_Of (Tree, Node));
+                     Set_Origin (Local_Of (Id), No_Origin);
+                     Set_Origin
+                       (Local_Of (Id),
+                        Fact_Of (Tree, Syn.Value_Of (Tree, Node)));
                   end if;
                end;
 
@@ -2847,11 +3112,13 @@ package body Landin.Stages.Checking.References is
                               if Id /= Res.No_Declaration
                                 and then Local_Of (Id) /= 0
                               then
-                                 Origins (Local_Of (Id)) :=
-                                   (if not Has_References (Id) then No_Origin
-                                    elsif Which > 0
-                                    then Nth_Result (Value, Which)
-                                    else Value);
+                                 Set_Origin
+                                   (Local_Of (Id),
+                                    (if not Has_References (Id)
+                                     then No_Origin
+                                     elsif Which > 0
+                                     then Nth_Result (Value, Which)
+                                     else Value));
                               end if;
                            end;
                         end loop;
@@ -2865,11 +3132,8 @@ package body Landin.Stages.Checking.References is
 
             when Syn.If_Statement =>
                declare
-                  Remaining_Owner : constant Snapshots.Owner :=
-                    Snapshots.Saved (Origins);
-                  Remaining : Function_Table renames Remaining_Owner.Data.all;
-                  Merged_Owner : constant Snapshots.Owner := Snapshots.Empty;
-                  Merged : Function_Table renames Merged_Owner.Data.all;
+                  Remaining : Table_Access := Origins;
+                  Merged : Table_Access := Origins;
                   First  : Boolean := True;
                   Can_Test : Boolean := True;
                   Value  : Origin_Fact := No_Value_Edge;
@@ -2970,11 +3234,8 @@ package body Landin.Stages.Checking.References is
                     (if Match_Subject_Is_Copied (Tree, Subject_Node)
                      then (Frame => True, others => <>)
                      else Subject_Value.Storage);
-                  Before_Owner : constant Snapshots.Owner :=
-                    Snapshots.Saved (Origins);
-                  Before : Function_Table renames Before_Owner.Data.all;
-                  Merged_Owner : constant Snapshots.Owner := Snapshots.Empty;
-                  Merged : Function_Table renames Merged_Owner.Data.all;
+                  Before : constant Table_Access := Origins;
+                  Merged : Table_Access := Origins;
                   First  : Boolean := True;
                   Value  : Origin_Fact := No_Value_Edge;
                begin
@@ -3020,7 +3281,7 @@ package body Landin.Stages.Checking.References is
                         then
                            --  This arm reads no reference, even when the
                            --  subject's present sibling has tracked sources.
-                           Origins (Local_Of (Subject_Id)) := Empty_Origin;
+                           Set_Origin (Local_Of (Subject_Id), Empty_Origin);
                         end if;
                         --  D85/D121: a binding's value keeps subject origins
                         --  only when it can carry references. Its storage
@@ -3038,20 +3299,26 @@ package body Landin.Stages.Checking.References is
                               if Id /= Res.No_Declaration
                                 and then Local_Of (Id) /= 0
                               then
-                                 Origins (Local_Of (Id)) :=
-                                   (if Has_References (Id)
-                                    then Subject_Value
-                                    else No_Origin);
-                                 Origins (Local_Of (Id)).Value.Presence
-                                   := Unknown_Value;
-                                 Alias_Storage (Local_Of (Id)) :=
-                                   Subject_Storage;
+                                 declare
+                                    Bound : Origin_Fact :=
+                                      (if Has_References (Id)
+                                       then Subject_Value
+                                       else No_Origin);
+                                 begin
+                                    Bound.Value.Presence := Unknown_Value;
+                                    Set_Origin (Local_Of (Id), Bound);
+                                 end;
+                                 Aliases.Include
+                                   (Local_Of (Id), Subject_Storage);
                                  Runtime_Alias_Of (Local_Of (Id)) :=
                                    Referenced_Subject;
                                  Pattern_Subject_Of (Local_Of (Id)) :=
                                    (if Match_Subject_Is_Copied
                                          (Tree, Subject_Node)
                                     then Syn.No_Node else Subject_Node);
+                                 Has_Pattern_Subject (Local_Of (Id)) :=
+                                   Pattern_Subject_Of (Local_Of (Id))
+                                     /= Syn.No_Node;
                                  Pattern_Block_Of (Local_Of (Id)) :=
                                    Syn.Body_Of (Tree, This);
                               end if;
@@ -3096,9 +3363,9 @@ package body Landin.Stages.Checking.References is
                      Loop_Stack.Delete_Last;
                      if Frame.Exits then
                         if Falls_Through then
-                           Join_Table (Origins, Frame.Exit_State.Data.all);
+                           Join_Table (Origins, Frame.Exit_State.Data);
                         else
-                           Origins := Frame.Exit_State.Data.all;
+                           Origins := Frame.Exit_State.Data;
                         end if;
                         Falls_Through := True;
                         Statement_Value := No_Origin;
@@ -3121,16 +3388,9 @@ package body Landin.Stages.Checking.References is
                     Syn.Kind (Tree, Node) = Syn.While_Statement;
                   Is_For : constant Boolean :=
                     Syn.Kind (Tree, Node) = Syn.For_Statement;
-                  Entry_State_Owner : constant Snapshots.Owner :=
-                    Snapshots.Empty;
-                  Entry_State : Function_Table renames
-                    Entry_State_Owner.Data.all;
-                  Head_Owner : constant Snapshots.Owner := Snapshots.Empty;
-                  Head : Function_Table renames Head_Owner.Data.all;
-                  Exhausted_State_Owner : constant Snapshots.Owner :=
-                    Snapshots.Empty;
-                  Exhausted_State : Function_Table renames
-                    Exhausted_State_Owner.Data.all;
+                  Entry_State : Table_Access := Origins;
+                  Head : Table_Access := Origins;
+                  Exhausted_State : Table_Access := Origins;
                   Can_Exhaust : Boolean := False;
                   Frame : aliased Loop_Frame;
                   Scratch : aliased Landin.Diagnostics.Diagnostic_List;
@@ -3165,7 +3425,7 @@ package body Landin.Stages.Checking.References is
                   Pass_Limit : constant Natural := Natural
                     (Long_Long_Integer'Min
                        (Long_Long_Integer (Natural'Last),
-                        Long_Long_Integer (Origins'Length)
+                        Long_Long_Integer (Declarations)
                         * Long_Long_Integer (Fact_Width)
                         * (4 + Long_Long_Integer (Parameters)
                            + 2 * Long_Long_Integer (Declarations))
@@ -3175,9 +3435,7 @@ package body Landin.Stages.Checking.References is
 
                   procedure Pass (Reporting : Boolean) is
                      Body_Fell : Boolean;
-                     Next_Owner : constant Snapshots.Owner :=
-                       Snapshots.Saved (Entry_State);
-                     Next : Function_Table renames Next_Owner.Data.all;
+                     Next : Table_Access := Entry_State;
                   begin
                      Release (Frame);
                      Sink := (if Reporting
@@ -3213,9 +3471,9 @@ package body Landin.Stages.Checking.References is
                         Join_Table (Next, Origins);
                      end if;
                      if Frame.Continues then
-                        Join_Table (Next, Frame.Back_State.Data.all);
+                        Join_Table (Next, Frame.Back_State.Data);
                      end if;
-                     Converged := Next = Head;
+                     Converged := Same_Facts (Next, Head);
                      Head := Next;
                      Sink := Outer_Sink;
                   end Pass;
@@ -3254,21 +3512,24 @@ package body Landin.Stages.Checking.References is
                                        (Types.all, Tree, Source_Node)).View
                                          not in Ty.Text_View));
                            if Runtime_Alias (Element) then
-                              Alias_Storage (Local_Of (Element)) :=
-                                (if Source_Kind = Ty.Slice_Value
-                                 then Source_Fact.Value
-                                 elsif Syn.Kind (Tree, Source_Node)
-                                   in Syn.Name_Reference | Syn.Member_Selection
-                                      | Syn.Element_Index
-                                 then Source_Fact.Storage
-                                 else (Frame => True, others => <>));
+                              Aliases.Include
+                                (Local_Of (Element),
+                                 (if Source_Kind = Ty.Slice_Value
+                                  then Source_Fact.Value
+                                  elsif Syn.Kind (Tree, Source_Node)
+                                    in Syn.Name_Reference
+                                     | Syn.Member_Selection
+                                     | Syn.Element_Index
+                                  then Source_Fact.Storage
+                                  else (Frame => True, others => <>)));
                            end if;
-                           Origins (Local_Of (Element)) :=
-                             (if Landin.Checking.Traversal_Evidence_Of
-                                (Types.all, Tree, Node)
-                                  = Landin.Checking.No_Conformance
-                               and then Has_References (Element)
-                              then Source_Fact else No_Origin);
+                           Set_Origin
+                             (Local_Of (Element),
+                              (if Landin.Checking.Traversal_Evidence_Of
+                                 (Types.all, Tree, Node)
+                                   = Landin.Checking.No_Conformance
+                                and then Has_References (Element)
+                               then Source_Fact else No_Origin));
                         end if;
                      end;
                   end if;
@@ -3309,8 +3570,8 @@ package body Landin.Stages.Checking.References is
                         if Completion.Exits then
                            if Frame.Exits then
                               Join_Table
-                                (Frame.Exit_State.Data.all,
-                                 Completion.Exit_State.Data.all);
+                                (Frame.Exit_State.Data,
+                                 Completion.Exit_State.Data);
                            else
                               Transfer_States.Move
                                 (Frame.Exit_State, Completion.Exit_State);
@@ -3322,9 +3583,9 @@ package body Landin.Stages.Checking.References is
                   end if;
                   if Frame.Exits then
                      if Falls_Through then
-                        Join_Table (Origins, Frame.Exit_State.Data.all);
+                        Join_Table (Origins, Frame.Exit_State.Data);
                      else
-                        Origins := Frame.Exit_State.Data.all;
+                        Origins := Frame.Exit_State.Data;
                      end if;
                      Falls_Through := True;
                   end if;
@@ -3337,10 +3598,7 @@ package body Landin.Stages.Checking.References is
                Evaluate (Syn.Condition_Of (Tree, Node));
                if Falls_Through then
                   declare
-                     Continuing_Owner : constant Snapshots.Owner :=
-                       Snapshots.Saved (Origins);
-                     Continuing : Function_Table renames
-                       Continuing_Owner.Data.all;
+                     Continuing : constant Table_Access := Origins;
                      Guarded : constant Boolean :=
                        Syn.Condition_Of (Tree, Node) /= Syn.No_Node;
                   begin
@@ -3385,7 +3643,7 @@ package body Landin.Stages.Checking.References is
                                        Join (Frame.Value, Value);
                                        if Frame.Exits then
                                           Join_Table
-                                            (Frame.Exit_State.Data.all,
+                                            (Frame.Exit_State.Data,
                                              Origins);
                                        else
                                           Transfer_States.Save
@@ -3394,7 +3652,7 @@ package body Landin.Stages.Checking.References is
                                        end if;
                                     elsif Frame.Continues then
                                        Join_Table
-                                         (Frame.Back_State.Data.all, Origins);
+                                         (Frame.Back_State.Data, Origins);
                                     else
                                        Transfer_States.Save
                                          (Frame.Back_State, Origins);
@@ -3487,9 +3745,10 @@ package body Landin.Stages.Checking.References is
                         Id : constant Res.Declaration_Id :=
                           Declaration_At (Of_Tree, Returned);
                      begin
-                        Origins (Local_Of (Id)) :=
-                          (if Syn.Return_Count (Of_Tree, Function_Node) = 1
-                           then Value else Nth_Result (Value, Position));
+                        Set_Origin
+                          (Local_Of (Id),
+                           (if Syn.Return_Count (Of_Tree, Function_Node) = 1
+                            then Value else Nth_Result (Value, Position)));
                      end;
                   end loop;
                end if;
@@ -3524,9 +3783,13 @@ package body Landin.Stages.Checking.References is
                    = Syn.Inout_Convention;
                Parameter_Escapes (Position) := Syn.Is_Escaping (Of_Tree, Node);
                if Has_References (Id) then
-                  Origins (Local_Of (Id)).Value.From (Position) := True;
-                  Origins (Local_Of (Id)).Value.Derives
-                    (Local_Of (Id)) := True;
+                  declare
+                     Parameter : Origin_Fact := Origin (Local_Of (Id));
+                  begin
+                     Parameter.Value.From (Position) := True;
+                     Parameter.Value.Derives (Local_Of (Id)) := True;
+                     Set_Origin (Local_Of (Id), Parameter);
+                  end;
                end if;
             end if;
          end;
@@ -3539,7 +3802,7 @@ package body Landin.Stages.Checking.References is
             Id : constant Res.Declaration_Id := Declaration_At (Of_Tree, Node);
          begin
             if Id /= Res.No_Declaration then
-               Origins (Local_Of (Id)) := No_Origin;
+               Set_Origin (Local_Of (Id), No_Origin);
             end if;
          end;
       end loop;
@@ -3574,9 +3837,10 @@ package body Landin.Stages.Checking.References is
                      Id : constant Res.Declaration_Id :=
                        Declaration_At (Of_Tree, Returned);
                   begin
-                     Origins (Local_Of (Id)) :=
-                       (if Count = 1 then Value
-                        else Nth_Result (Value, Position));
+                     Set_Origin
+                       (Local_Of (Id),
+                        (if Count = 1 then Value
+                         else Nth_Result (Value, Position)));
                   end;
                end loop;
                Check_Returns (Of_Tree, Body_Node);
