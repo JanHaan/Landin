@@ -208,6 +208,21 @@ def locals_(size: int) -> dict[str, str]:
             + f"    code = v{size - 1} - v{size - 1} + 42\nend main\n"}
 
 
+def branches(size: int) -> dict[str, str]:
+    """One function holding every declaration as a local, each set by a
+    call and every other one followed by a branch that may reassign it:
+    the facts a local carries are saved and joined at every branch."""
+    body = ["side: (x: i32) -> (r: i32) =\n    r = x\nend side\n\n"
+            "public main: () -> (code: i32) =\n    mut v0: i32 = 0\n"]
+    for index in range(1, size):
+        body.append(f"    mut v{index}: i32 = side(v{index - 1})\n")
+        if index % 2 == 0:
+            body.append(f"    if v{index} == 7 then\n"
+                        f"        v{index} = 8\n    end if\n")
+    body.append(f"    code = v{size - 1} - v{size - 1} + 42\nend main\n")
+    return {"main.ldn": "".join(body)}
+
+
 def fields(size: int) -> dict[str, str]:
     """One struct with every declaration as a field."""
     body = "".join(f"    f{index}: i32\n" for index in range(size))
@@ -225,6 +240,7 @@ FAMILIES = (
     ("generics", generics),
     ("constants", constants),
     ("locals", locals_),
+    ("branches", branches),
     ("fields", fields),
 )
 

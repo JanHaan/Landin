@@ -13647,16 +13647,16 @@ an implementation limit, like L0111's nesting depth, and not a rule of the
 language: a larger compiler may raise them without changing what any program
 at or under them means.
 
-The numbers are measured, not chosen for their shape. Definite assignment and
-origin tracking keep one fact per declaration the routine can name, and a loop
-or branch copies them, so a routine's storage grows with the square of its
-declarations: at 16,384, with a loop, the release compiler peaks near half a
-gigabyte, and at 65,535 it needs eight. A struct's field shapes are copied
-through layout, lowering and emission; 55,000 fields exhausted an 8 MiB host
-stack. 16,384 of each leaves at least a factor of three below either failure
-on the host that measured them. A program that stays under both checks
-without exhausting that host at any size the frontend's scaling benchmark
-generates.
+The numbers are measured, not chosen for their shape. Origin tracking keeps,
+for each declaration the routine can name, a fact with one bit for each of
+them, so a routine's storage still grows with the square of its declarations,
+though a branch or loop now shares every fact it does not change: at 16,384,
+with a loop, the release compiler peaks at 130 MiB, and at 65,535 at 1.3 GiB.
+A struct's field shapes are copied through layout, lowering and emission;
+55,000 fields exhausted an 8 MiB host stack. 16,384 of each leaves a factor of
+three below the struct's failure and ten below a gigabyte for a routine on the
+host that measured them. A program that stays under both checks without
+exhausting that host at any size the scaling benchmark generates.
 
 **A competent reader could have** set no bound and let the host fail. That
 was the behaviour before, and it is not a diagnostic: exit 71 says nothing
@@ -13668,8 +13668,8 @@ a struct's own fields, are quadratic or stack-bound. Bounds high enough never
 to matter, 65,535 or 2**20, were declined because a program just under them
 would still exhaust an ordinary host, which is the failure the bound exists to
 replace. Making the storage sparse so that no bound is needed was deferred:
-the reference pass's per-declaration facts are its representation, and
-replacing them is a change to that pass rather than to its bound.
+the reference pass's per-declaration derivation bits are its representation,
+and replacing them is a change to that pass rather than to its bound.
 
 **Pinned by** `unit/checker-size-bounds`, the checking case `size bounds
 refuse past their limit`, which generates a routine and a struct at each bound
