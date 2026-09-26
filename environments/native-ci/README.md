@@ -4,8 +4,8 @@
 > revision through 0.2.0. Nothing submits it now and no revision is accepted;
 > `scripts/ci/` was removed with it and survives only in the history. Kept
 > because it is the operational record of how those approvals were produced. `.github/workflows/gate.yml`
-> is the smaller gate that replaced it, and [`ROADMAP.md`](../../ROADMAP.md)
-> schedules the rest.
+> replaced it: every target on every push, with no evidence retained and no
+> revision accepted.
 
 `scripts/ci/policy.json` is the
 canonical acceptance job list; `scripts/ci/common.py` independently requires

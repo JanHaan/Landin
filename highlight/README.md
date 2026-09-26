@@ -131,6 +131,9 @@ optional tool here, the pinned tree-sitter CLI is mandatory once it is asked
 for: `--integration` without it exits non-zero rather than reporting a corpus
 pass that did not run. It was made so after the grammar was found to have
 drifted from the enabled kernel unnoticed, 48 of 846 sources failing,
-because the pass could be requested and skipped in the same run. No gate runs
-it yet; that is open work in `ROADMAP.md`. Each editor directory contains the
+because the pass could be requested and skipped in the same run. The gate's
+`editor-grammar` job runs it on every push with the release binary of the
+CLI version `tree-sitter/package.json` names, checked against the sha256 in
+`environments/pins.sh`, and fails if regenerating the parser changes the
+committed one. Each editor directory contains the
 shortest installation path for that editor.

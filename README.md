@@ -219,11 +219,11 @@ explicit environment troubleshooting. What it does today, by capability:
   emulators, each against a generated oracle.
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
-arm64 through 0.2.0; the Linux gate runs the corpus today, and Darwin and
-Cortex-M results come from native runs nothing automates. The recorded
-boundaries stand as measured: the 32 KiB capacity verdicts, the
-lines-and-functions Cortex-M debugging contract, the end-to-end
-evidence-provenance gap and the Darwin shared-region placement limit.
+arm64 through 0.2.0; the gate runs the corpus on all three targets today,
+natively on both hosts and under QEMU and Renode for Cortex-M, with GDB and
+LLDB. The recorded boundaries stand as measured: the 32 KiB capacity
+verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
+shared-region placement limit.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

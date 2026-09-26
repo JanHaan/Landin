@@ -328,10 +328,11 @@ checks real destination identities without substituting the fake filesystem.
 It retains the original collision/refusal and successful-output oracles for
 source and artifact links, absent leaves, actual symlink parents, case rules,
 dangling links and indeterminate identities. `--directory` optionally chooses
-another filesystem for the temporary cases. The native gate runs it with both
-compiler build modes. `python3 scripts/tests/test_build_inventory.py` exercises
+another filesystem for the temporary cases. The gate runs it with both
+compiler build modes on Linux and on macOS. `python3 scripts/tests/test_build_inventory.py` exercises
 the production developer-build inventory decision, including C/header
-addition, removal and renaming, without invoking a builder; it is also gated.
+addition, removal and renaming, without invoking a builder; the gate's
+`scripts` job runs it with every other `scripts/tests` module.
 
 On an unknown filesystem, two absent ASCII names that still differ after
 ASCII case folding are distinct, because no filesystem equates them; the

@@ -15,15 +15,15 @@ what they cost.
 | Mac compiler host | `./scripts/dev-test.sh --host` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | before pushing | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
-| every push and pull request | `.github/workflows/gate.yml` | the documents, the complete corpus on Linux x86-64 in debug mode, and the scaling benchmark with the release compiler |
-| Darwin and LLDB | the suite and `scripts/debug.sh` run by hand on a Mac | nothing automates them, so a Darwin claim needs a Mac run behind it |
+| before pushing a Darwin change | the host suite, `compiler/tests/darwin/check.py --parity` and `scripts/debug.sh --target=darwin-arm64 --parity` on a Mac, LLDB from a terminal session | the change passes where the gate will run it |
+| every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU and Renode lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
-pushing. The gate is a safety net rather than a verdict: it is Linux only and
-runs the corpus in debug only, with no Darwin, no Cortex-M execution, no
-debugger, no bindings and no release-mode corpus, and `ROADMAP.md` schedules
-the rest. Documentation changes still receive the full `check.py`.
+pushing. The gate is a safety net rather than a verdict: it runs every
+target on every push and retains nothing, and green says the tree passed
+there, not that a revision is accepted. Documentation changes still receive
+the full `check.py`.
 
 ## Historical: choosing acceptance scope
 

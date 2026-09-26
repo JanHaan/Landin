@@ -61,19 +61,19 @@ linking, execution and an LLDB stop/resume before building and running
 libraries. See `environments/macos-arm64/README.md` for the commands, expected
 historical Linux runtime-case refusal and bounded resource probes. A Linux container
 cannot supply this evidence, nor emitted Darwin source debugging, nor full
-hosted parity in both compiler modes: all three need a Mac run.
+hosted parity: all three need a Mac, which the gate's `macos-26` jobs are.
 
 ## External source debugger
 
 `scripts/debug.sh` uses GDB and GNU binutils to inspect and run the
 emitted Linux x86-64 executable. They are external validation tools, not
-bootstrap dependencies. The Debian gate and local Linux image install `gdb`
-from their existing package channel; the Linux nix shell takes it from
-`flake.lock`'s package set. The script uses GDB from the configured PATH
-(which can select the GDB bundled in the pinned toolchain), or `LANDIN_GDB`
-when explicitly set, and records that executable's version. The native Linux
-gate runs the sessions with release `refine` for routine debugger risk and both compiler modes at
-milestones, separately from the emitted program's optimization policy.
+bootstrap dependencies. The local Linux image installs `gdb` from its
+package channel, and the Linux nix shell takes it from `flake.lock`'s
+package set. The script uses GDB from the configured PATH (which can select
+the GDB bundled in the pinned toolchain), or `LANDIN_GDB` when explicitly
+set, and records that executable's version. The gate runs the sessions with
+release `refine` and the GDB the pinned GNAT bundles, separately from the
+emitted program's optimization policy.
 
 ### Archives and checksums
 
@@ -161,9 +161,10 @@ export LANDIN_GPRBUILD_HOME=/path/to/gprbuild-26.0.0-1
 ```
 
 On macOS replace the last command with `./scripts/dev-test.sh --host`.
-Every selected case must pass. Run Linux workload/GDB checks on the native
-Linux runner and Darwin workload/LLDB checks natively; the unfiltered Linux
-harness's missing-tool refusal is not a successful current Mac test run.
+Every selected case must pass. Run Linux workload/GDB checks on Linux and
+Darwin workload/LLDB checks natively on a Mac, LLDB from a terminal session;
+the unfiltered Linux harness's missing-tool refusal is not a successful
+current Mac test run.
 
 Every command prints the toolchain identification first, so a captured log
 names its own compiler.
@@ -193,7 +194,7 @@ with LLDB sessions and Mach-O debug artifacts.
 The Cortex-M execution profile separately pins Arm EABI GCC, binutils, GDB,
 QEMU and Renode in `environments/cortex-m/tools.lock.json`. The
 [profile guide](../../environments/cortex-m/README.md) gives exact versions,
-options and native Debian reproduction. They compile only small environment
+options and reproduction on any glibc 2.38 Linux x86-64 host. They compile only small environment
 controls, are not Ada bootstrap dependencies and do not enable a Landin
 Cortex-M backend.
 

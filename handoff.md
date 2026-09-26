@@ -273,8 +273,8 @@ assembly for three targets. What it covers, by capability:
   oracle, and its derivation manifest keeps the evidence traceable to its
   prototype.
 
-The Linux gate runs the corpus; Darwin and Cortex-M results come from native
-runs nothing automates. Every inherited item and later discovery has a
+The gate runs the corpus on all three targets, with GDB and LLDB on the
+hosted ones. Every inherited item and later discovery has a
 terminal disposition, and the transferred ones are owned by the successor
 families the current roadmap's register carries. Feature-complete pre-v1 is a
 claim about coverage and nothing else, and the recorded boundaries stand

@@ -417,8 +417,9 @@ of frame-origin arguments.
 
 ### Regenerating the committed ABI fixture
 
-From the repository root, with `CLANG` naming the desired frontend (the Linux
-gate uses `clang-19`):
+From the repository root, with `CLANG` naming the desired frontend (the
+gate's `bindings` job uses Ubuntu 24.04's `clang-19` at the version
+`environments/pins.sh` names):
 
 ```sh
 CLANG=${CLANG:-clang}

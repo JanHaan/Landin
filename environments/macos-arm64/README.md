@@ -3,8 +3,11 @@
 > **The acceptance half is retired.** `scripts/ci/darwin.py accept` no longer
 > runs; the Darwin evidence it produced stands for the revisions it named. The
 > environment itself -- the pinned tool homes, the Mac `--host` workflow and
-> LLDB -- is current and still how this machine is used.
-> [`ROADMAP.md`](../../ROADMAP.md) schedules macOS arm64 into the gate.
+> LLDB -- is current and still how this machine is used. The gate's
+> `darwin-host`, `darwin-parity` and `lldb` jobs run these lanes on every
+> push, on GitHub's `macos-26` image with Xcode 26.6, whose tools match
+> `policy.json` exactly. LLDB must be started from a terminal session: from
+> a background session it cannot launch the debugged process.
 
 The reproduction sections below preserve the original native environment
 validation, and the exact-revision section describes the retired acceptance.

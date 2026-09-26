@@ -249,7 +249,7 @@ new exhaustion guarantee is introduced.
 platform's assembler and linker. The relation that sentence needs is stated
 here and gated by
 [`compiler/tests/test_determinism.py`](../compiler/tests/test_determinism.py),
-which runs in every suite job of both native policies.
+which the gate runs with both compiler build modes on Linux and on macOS.
 
 Two compilations are *equivalent closures* when they agree on the source
 bytes, the module closure, the target, `--optimize`, `--specialize`,

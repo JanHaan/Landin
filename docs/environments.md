@@ -166,14 +166,16 @@ extraction and generated-adapter tests. The frontend is deliberately separate
 from the pinned GNAT that builds `refine`: Clang supplies an external JSON AST,
 not a product backend. Its package comes from the container's existing Debian
 channel rather than a third download authority. The C boundary work refreshed
-that one base pin from Debian 12 to the official Debian 13 `trixie-20260824` image index so
-the local loop and the native `debian/stable` gate select the same Clang
-19.1.7 frontend and Debian 13 C-header baseline. GNAT and GPRbuild retain their
+that one base pin from Debian 12 to the official Debian 13 `trixie-20260824` image index,
+which gives the local loop Clang 19.1.7. The gate installs Ubuntu 24.04's
+clang-19 at the exact version `environments/pins.sh` names; the binding
+generator's tests pass on both. GNAT and GPRbuild retain their
 existing versions and archive checksums.
 
-GDB comes from that same Debian channel for `scripts/debug.sh`; the Linux
-nix shell provides GDB from its locked package set. The native gate runs the
-script in both compiler build modes. It checks source debugging of emitted
+GDB comes from that same Debian channel for `scripts/debug.sh` in the local
+container, and the Linux nix shell provides GDB from its locked package set.
+The gate runs the script with the release compiler and the GDB the pinned
+GNAT bundles. It checks source debugging of emitted
 programs, which is separate from debugging the Ada compiler itself.
 
 Native GDB cannot read registers through Rosetta's `ptrace` interface:

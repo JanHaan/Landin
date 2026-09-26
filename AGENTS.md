@@ -19,8 +19,9 @@ Darwin — and Cortex-M0 builds firmware with compiler-owned reset, vectors,
 linker script and initialized-data copying, with line and function debugging.
 A small repository-owned `core` library and the complete derived prototypes 2,
 3 and 4 execute through that path. Runtime fixtures execute those binaries,
-and the gate runs all of them on Linux on every push; the other two targets
-have no automated coverage.
+and the gate runs them on all three targets on every push: natively on
+Linux x86-64 and macOS arm64, and on Cortex-M0 under QEMU and Renode, with
+GDB and LLDB sessions on the hosted targets.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
 executable, source and diagnostic foundations, host adapters, target facts,
@@ -83,21 +84,31 @@ nix build .#refine-bin
 ```
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. Three jobs that share nothing: `documents` runs
-`check.py` in about ninety seconds, needing neither the toolchain nor a built
-compiler; `compiler` builds `refine` with the pinned toolchain and runs
-all 747 cases at `LANDIN_TEST_JOBS=2`, in about thirty-seven minutes; and
-`scaling` builds the release compiler and runs `scripts/scaling.sh`, which
-fails when the frontend's or emission's time grows more than 2.5 times per
-doubling of the program. Splitting them means a typo gets its verdict without waiting for the
-corpus, and a compile error still surfaces about two minutes into `compiler`.
+push and pull request. It runs every target the compiler has, in jobs that
+share nothing, and its final `gate` job fails unless every one succeeded:
 
-The gate is deliberately small and is **not** the retired acceptance. It is
-Linux only, and the corpus runs in debug only: no Darwin, no Cortex-M
-execution, no debugger, no bindings, no release-mode corpus, and no retained
-evidence. Green means the compiler builds, the corpus passes on one host in
-one mode and the compiler scales — nothing about the other two targets.
-`ROADMAP.md` schedules the fuller gate.
+| job | runner | runs |
+|---|---|---|
+| `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
+| `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
+| `compiler` | ubuntu-24.04 | the debug compiler's 749 cases at `LANDIN_TEST_JOBS=8`, the determinism closures and native report identity |
+| `release` | ubuntu-24.04 | the same with the release compiler, then object quality and the GDB sessions |
+| `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
+| `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
+| `cortex-m` | ubuntu-24.04 | every QEMU and Renode lane on the locked tools, at `LANDIN_CORTEX_JOBS=4` |
+| `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when the frontend's or emission's time grows more than 2.5 times per doubling |
+| `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism and report identity |
+| `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
+| `lldb` | macos-26 | the LLDB sessions |
+
+A compile error surfaces in the first minutes of every job that builds.
+Measured before the first run, on a four-CPU container and an eight-core
+Mac: the corpus fixtures take about five and a half minutes at eight
+workers, the Cortex-M lanes about fourteen, and Darwin parity about
+thirteen, bounded by macOS vetting each new program on its first launch.
+
+The gate is **not** the retired acceptance: it retains no evidence, and
+green is not a verdict on a revision. It is a safety net over every target.
 
 Three more workflows run on a push. `determinism.yml` requires every host in
 its matrix to emit the same bytes; it emits and hashes but never assembles,
@@ -134,10 +145,12 @@ workers, which is most of what the suite costs. One worker is still the
 default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
 the same verdicts.
 
-Linux runtime and GDB evidence comes from the gate, or from a Linux host you
-run yourself; the dedicated native runner is gone. Darwin runtime and LLDB
-evidence runs natively on the Mac and nothing automates it, so a Darwin claim
-needs a Mac run behind it. The first native Mac run's retained
+Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
+gate, or from a host you run yourself; the dedicated native runner is gone.
+A Darwin change is run on a Mac before it is pushed, and LLDB there must be
+started from a terminal session: a background session such as a remote
+agent's cannot launch a debugged process, however the debugger rights are
+set. The first native Mac run's retained
 expected-refusal transcript, in which the unfiltered harness failed only for
 want of a Linux driver, is historical bootstrap evidence, never a current
 success rule.
