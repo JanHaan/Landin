@@ -96,7 +96,9 @@ class NamedFiles(unittest.TestCase):
 
 PINS = ["environments/linux-amd64/Containerfile",
         "compiler/ada/TOOLCHAIN.md",
-        "environments/pins.sh"]
+        "environments/pins.sh",
+        "highlight/tree-sitter/package.json",
+        "highlight/tree-sitter/package-lock.json"]
 
 
 class PinnedToolchain(unittest.TestCase):
@@ -126,9 +128,34 @@ class PinnedToolchain(unittest.TestCase):
 
     def test_a_missing_record_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_pinned_toolchain,
-                       copied=[PINS[0], PINS[2]])
+                       copied=[PINS[0], *PINS[2:]])
         self.assertTrue(said)
         self.assertIn("needed by a check", said[0])
+
+    def test_the_gate_tools_are_held_to_their_other_records(self):
+        #  One break at a time, and each is named: the grammar's package
+        #  asking for another CLI, its lockfile disagreeing, a Clang or
+        #  CLI checksum the record does not show, and a pin removed.
+        from check_controls import tree
+        for relative, old, new, fragment in (
+                (PINS[3], '"tree-sitter-cli": "0.26.9"', '"tree-sitter-cli": "0.26.8"',
+                 "tree-sitter-cli is not 0.26.9"),
+                (PINS[4], '"version": "0.26.9"', '"version": "0.26.8"',
+                 "the lockfile's tree-sitter-cli is not 0.26.9"),
+                (PINS[2], "~24.04.2", "~24.04.3",
+                 "LANDIN_CLANG_UBUNTU 1:19.1.1-1ubuntu1~24.04.3 is not recorded"),
+                (PINS[2], "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce8",
+                 "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=0ce8",
+                 "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX 0ce8"),
+                (PINS[2], "LANDIN_TREE_SITTER_VERSION=", "LANDIN_TREE_SITTER_RELEASE=",
+                 "LANDIN_TREE_SITTER_VERSION is not pinned")):
+            with self.subTest(fragment=fragment), tree(copied=PINS) as root:
+                path = root / relative
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new, 1))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
 
 
 class SourceLocations(unittest.TestCase):

@@ -1934,6 +1934,8 @@ def check_pinned_toolchain(full_run):
                         "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
                         % (name, value)))
 
+    out += gate_tool_pin_problems(pins, pins_text, record, record_text)
+
     #  A workflow need not install the toolchain itself -- the shared
     #  action and release.yml source pins.sh -- but every one is still a
     #  file where a version could be written by hand, and that half of the
@@ -1953,6 +1955,52 @@ def check_pinned_toolchain(full_run):
                                 "%s names %s literally instead of reading it "
                                 "from environments/pins.sh" % (relative, name)))
 
+    return out
+
+
+GATE_TOOL_PINS = ("LANDIN_CLANG_UBUNTU", "LANDIN_TREE_SITTER_VERSION",
+                  "LANDIN_TREE_SITTER_SHA256_X86_64_LINUX")
+
+
+def gate_tool_pin_problems(pins, pins_text, record, record_text):
+    """The gate's other tools agree with every file that also names them.
+
+    The bindings job's Clang and the editor grammar's CLI are pinned in
+    environments/pins.sh like the compiler.  Each is also written in one more
+    place a reader or a package manager reads -- TOOLCHAIN.md for both, and
+    the grammar's package.json and lockfile for the CLI -- and a pin that
+    agrees with neither is a job that fetches something nobody recorded.
+    """
+    values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
+    out = []
+    for name in GATE_TOOL_PINS:
+        if name not in values:
+            out.append((pins, 1, "%s is not pinned in environments/pins.sh" % name))
+    if out:
+        return out
+    clang = values["LANDIN_CLANG_UBUNTU"]
+    version = values["LANDIN_TREE_SITTER_VERSION"]
+    for name in GATE_TOOL_PINS:
+        if values[name] not in record_text:
+            out.append((record, 1, "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
+                        % (name, values[name])))
+    grammar = os.path.join(ROOT, "highlight/tree-sitter")
+    package = os.path.join(grammar, "package.json")
+    lock = os.path.join(grammar, "package-lock.json")
+    missing = absent([package, lock])
+    if missing:
+        return out + missing
+    declared = json.load(io.open(package, encoding="utf-8"))
+    if declared.get("devDependencies", {}).get("tree-sitter-cli") != version:
+        out.append((package, 1, "tree-sitter-cli is not %s, the version "
+                                "environments/pins.sh names" % version))
+    locked = json.load(io.open(lock, encoding="utf-8")).get("packages", {})
+    if locked.get("node_modules/tree-sitter-cli", {}).get("version") != version:
+        out.append((lock, 1, "the lockfile's tree-sitter-cli is not %s, the "
+                             "version environments/pins.sh names" % version))
+    if not clang.startswith("1:19."):
+        out.append((pins, 1, "LANDIN_CLANG_UBUNTU %s is not a clang-19 package "
+                             "version" % clang))
     return out
 
 

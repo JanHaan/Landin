@@ -20,22 +20,24 @@ compiler; the pin is the compiler version, not the distributor.
 ## External binding-generator frontend
 
 The C binding generator, `bindings/generate.py`, is a separate source tool,
-not part of the Ada bootstrap and not a C or LLVM product backend.  The Linux environments provide
-Clang 19.1.7 as the external C11 header frontend and compiler for its generated
-C adapters.  The selected target is always `x86_64-pc-linux-gnu`; on the
-gate and local container, `clang-19` comes from the existing `debian/stable`
-package channel and `libc6-dev` supplies the matching headers and root
-sysroot.  The versioned package name prevents a moving default Clang major;
-`scripts/ci/policy.json` required `clang-19 --version` and the retired native
-acceptance retained the exact installed revision and binary hash; nothing
-does now.
+not part of the Ada bootstrap and not a C or LLVM product backend.  The
+Linux environments provide a Clang 19 as the external C11 header frontend and
+compiler for its generated C adapters.  The selected target is always
+`x86_64-pc-linux-gnu`.  The gate's bindings job installs Ubuntu 24.04's
+`clang-19` package at exactly `1:19.1.1-1ubuntu1~24.04.2` (Clang 19.1.1),
+the version `environments/pins.sh` names as `LANDIN_CLANG_UBUNTU`, asserts
+the installed version, and takes the headers and root sysroot from the same
+release's `libc6-dev`.  The local container's `debian/stable` channel gives
+19.1.7, and `bindings/test.py` passes on both, the committed fixture's
+byte-for-byte regeneration included; the gate's is the version of record.
+The versioned package name prevents a moving default Clang major.
 
 The Linux nix shell selects `llvmPackages."19".clang`, with `glibc.dev`, from
 the package set fixed by `flake.lock`.  The Darwin shell deliberately gains no
 Linux C frontend or sysroot: Apple headers are not evidence about the selected
 Linux ABI. Use native Linux development slots for that validation.  No independent Clang archive
-is downloaded and no new checksum authority is introduced; each environment
-uses its existing package-set provenance.
+is downloaded; each environment uses its package set's provenance, and the
+gate's is the exact package version above.
 
 ## Native macOS environment
 
@@ -88,6 +90,14 @@ versions from source instead.
 | macOS arm64 | `gprbuild-aarch64-darwin-26.0.0-1.tar.gz` | `6bf7d80c8a9702d851c5b992d7c72a07a9dbf13e8de9947b80927ea2667b6be8` |
 | Linux x86-64 | `gnat-x86_64-linux-16.1.0-1.tar.gz` | `9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703` |
 | Linux x86-64 | `gprbuild-x86_64-linux-26.0.0-1.tar.gz` | `e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b` |
+
+The structural editor grammar's CLI is not a compiler tool, but the gate
+fetches it, so it is pinned the same way: tree-sitter `0.26.9`, the version
+`highlight/tree-sitter/package.json` names, as the release binary below.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `tree-sitter-linux-x64.gz` | `9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb` |
 
 ## Warning and style policy
 

@@ -17,6 +17,17 @@ LANDIN_RELEASES=https://github.com/alire-project/GNAT-FSF-builds/releases/downlo
 #  Nothing else reads it.
 LANDIN_BASE_IMAGE=docker.io/library/debian@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
 
+#  The gate's other tools.  The C binding generator's Clang is Ubuntu 24.04's
+#  clang-19 package at this exact version, installed and asserted by the
+#  bindings job; compiler/ada/TOOLCHAIN.md records it.  The structural editor
+#  grammar's CLI is the release binary tree-sitter publishes for this version,
+#  checked against this sha256 before it replaces the npm package's
+#  unverified download; highlight/tree-sitter/package.json names the same
+#  version.  check.py holds all three to agreeing.
+LANDIN_CLANG_UBUNTU=1:19.1.1-1ubuntu1~24.04.2
+LANDIN_TREE_SITTER_VERSION=0.26.9
+LANDIN_TREE_SITTER_SHA256_X86_64_LINUX=9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb
+
 #  sha256 of each archive, verified before it is unpacked.
 LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703
 LANDIN_GPRBUILD_SHA256_X86_64_LINUX=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b
