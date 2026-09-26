@@ -1,38 +1,24 @@
-#  The minimal gate: does the compiler still build, and does the corpus
-#  still pass?
+#  The gate: every target the compiler has, on every push.
 #
-#  Until this existed nothing verified anything about the compiler on a
-#  push. `determinism.yml` emits assembly and hashes it but never
-#  assembles, links or runs; `pages.yml` publishes; `links.yml` checks
-#  URLs. check.py -- the grammar, the transcription tables, the citations,
-#  the document graph -- ran only when somebody typed it.
+#  Each job runs one lane and shares nothing with the others -- no cache, no
+#  artifact passed between them -- so a job's verdict depends only on its
+#  checkout, and a compile error or a failed lane surfaces in the job that
+#  owns it.  `gate` needs every job and fails unless all of them succeeded,
+#  which is the one check a branch protection rule can require.
 #
-#  That gap mattered most for the work queued behind it. Rewriting spec.md
-#  and tour.md means showing the rewritten documents describe the same
-#  language, and the things that show it are check.py's grammar corpus and
-#  the fixture suite. A safety net nobody runs is not one.
+#  Linux x86-64 runs on ubuntu-24.04, macOS arm64 on macos-26 with Xcode 26.6
+#  -- the only image whose tools match environments/macos-arm64/policy.json
+#  exactly -- and Cortex-M on ubuntu-24.04 under its locked QEMU, Renode and
+#  GDB.  The debug and release compilers each run the whole corpus.
 #
-#  This is deliberately small. It is not the replacement for the retired
-#  exact-revision acceptance: no Darwin, no Cortex-M execution, no
-#  debugger, no bindings, no release-mode corpus, no evidence retained. It
-#  builds the compiler on Linux, runs the two things that fail loudly when
-#  the language moves, and holds the compiler to its scaling bound.
-#  ROADMAP.md schedules the rest.
+#  It is still not the retired exact-revision acceptance: nothing is
+#  retained, and nothing accepts a revision.  It is a safety net that now
+#  covers every target.
 #
-#  Two jobs, because the first measurement was lopsided: check.py takes a
-#  minute and the 743-case corpus takes the rest of the hour. Waiting an
-#  hour for a verdict on a typo is how a gate stops being read.
-#
-#  They share nothing, which is the point. check.py needs neither the
-#  pinned toolchain nor a built compiler -- it reads documents, the grammar
-#  and the transcription tables -- so `documents` installs nothing and
-#  waits for nothing, and the compiler is built exactly once, in the job
-#  that uses it. A compile error still surfaces about two minutes into
-#  `compiler`, because the build is its first real step.
-#
-#  A third job, `scaling`, builds the release compiler and runs the
-#  scaling benchmark.  It shares nothing with the other two
-#  either, and a ratio it measures does not depend on the runner's speed.
+#  Times below were measured on an ubuntu:24.04 container pinned to four CPUs
+#  and on an eight-core Mac, before the first run here; the runners are four
+#  vCPUs on Linux and three cores on macOS, and each job also installs the
+#  pinned toolchain and builds, about three and a half minutes on Linux.
 
 name: gate
 
@@ -46,9 +32,8 @@ permissions:
   contents: read
 
 jobs:
-  #  Documents, grammar and the transcription tables. Nothing to install
-  #  and nothing to build, so this is the fastest verdict available and it
-  #  cannot be held up by the compiler.
+  #  Documents, grammar and the transcription tables.  Nothing to install
+  #  and nothing to build, so this is the fastest verdict available.
   #
   #  The licensed face is not fetched: check_fonts reports its coverage as
   #  not checked rather than failing, and pages.yml refuses to publish
@@ -62,45 +47,192 @@ jobs:
       - name: check.py
         run: python3 check.py
 
-  #  The compiler and all 747 cases. scripts/test.sh builds first, so this
-  #  is also where a compile error is reported.
+  #  The Python suites no other job runs: every scripts/tests module,
+  #  check.py's controls among them, and the determinism, quality and
+  #  debugging controls.  Each check.py control breaks one input and
+  #  requires the check to notice; about five and a half minutes.
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: scripts/tests
+        run: |
+          set -eu
+          for test in scripts/tests/test_*.py; do
+            echo "== $test"
+            python3 "$test"
+          done
+
+      - name: The determinism, quality and debugging controls
+        run: |
+          set -eu
+          python3 compiler/tests/test_determinism_controls.py
+          python3 compiler/tests/quality/test_check.py
+          python3 compiler/tests/debugging/test_check.py
+
+  #  The debug compiler and all 749 cases, then the checks that need a built
+  #  compiler and no corpus.  scripts/test.sh builds first, so this is also
+  #  where a compile error is reported.
   compiler:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the pinned toolchain
         uses: ./.github/actions/pinned-toolchain
 
-      #  The corpus is 2,494 compile-assemble-link-execute cycles over 544
-      #  runtime and ABI fixtures at four or six profiles each, plus 268
-      #  emissions. Two cases hold all of it, and they now run across
-      #  workers. Measured on this runner, one job at a time: 4523s at
-      #  one, 1801s at two, 2221s at four, and a timeout at eight. Two is
-      #  the width, not four: each work item is itself a chain of
-      #  processes, so four workers oversubscribe four vCPUs and the
-      #  heaviest fixture then passes the 600s tool limit.  A work item is
-      #  one fixture with its profiles in order, because a program may
-      #  name a fixed file and two of its profiles would race on it.
-      #
-      #  The default stays at one job. This is the path CI exercises on
-      #  every push, and flipping the default wants mileage rather than one
-      #  good measurement; scripts/parallel-equivalence.sh is the guard.
+      #  Eight workers on four vCPUs, deliberately.  A work item is one
+      #  fixture with its profiles in order, a chain of compile, assemble,
+      #  link and run, so the processes wait on each other and more workers
+      #  than CPUs keeps them busy.  Measured on four CPUs, the fixture suite
+      #  took 323 s at eight, 394 s at four and 389 s at two; the whole
+      #  program about seven minutes.  Many workers is also how a race in
+      #  the harness's reads went unseen, so the width is the point.
       #
       #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
       - name: The fixture corpus
-        run: LANDIN_TEST_JOBS=2 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+
+      #  The linked-image half needs the pinned driver on PATH, as
+      #  scripts/env.sh puts it for the harness.
+      - name: Determinism closures and native report identity
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          refine="$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
+          python3 compiler/tests/test_determinism.py --refine "$refine"
+          python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+
+  #  The same corpus with the release compiler, which is the one people run,
+  #  and the lanes that measure or debug what it emits: object quality and
+  #  the GDB sessions.  Release only, because the debug compiler's checks
+  #  make those five times slower and add no coverage of their own.
+  #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: The fixture corpus
+        run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
+
+      - name: Determinism closures and native report identity
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
+          python3 compiler/tests/test_determinism.py --refine "$refine"
+          python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+
+      - name: Object quality
+        run: ./scripts/quality.sh
+
+      #  The GDB the pinned GNAT bundles, taken from PATH.
+      - name: GDB source debugging
+        run: |
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          ./scripts/debug.sh
+
+  #  The C binding generator against its pinned Clang, including the
+  #  byte-for-byte regeneration of the committed fixture.  47 s.
+  bindings:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned Clang
+        run: |
+          set -eu
+          . ./environments/pins.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            "clang-19=$LANDIN_CLANG_UBUNTU" libc6-dev
+          installed=$(dpkg-query -W -f='${Version}' clang-19)
+          if [ "$installed" != "$LANDIN_CLANG_UBUNTU" ]; then
+            echo "clang-19 is $installed, not $LANDIN_CLANG_UBUNTU" >&2
+            exit 1
+          fi
+          clang-19 --version | head -1
+
+      - name: The binding generator
+        run: CLANG=clang-19 python3 bindings/test.py
+
+  #  The structural editor grammar parses every positive, runtime and ABI
+  #  fixture and all of core, with the pinned CLI.  The npm package's own
+  #  install script would download the binary unverified, so it is not run:
+  #  the release binary is fetched and checked against its pin instead.
+  #  Regenerating the parser must reproduce the committed one.  10 s.
+  editor-grammar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned tree-sitter CLI
+        working-directory: highlight/tree-sitter
+        run: |
+          set -eu
+          . ../../environments/pins.sh
+          npm ci --ignore-scripts --no-audit --no-fund
+          url="https://github.com/tree-sitter/tree-sitter/releases/download"
+          curl -fsSL -o "$RUNNER_TEMP/tree-sitter.gz" \
+            "$url/v$LANDIN_TREE_SITTER_VERSION/tree-sitter-linux-x64.gz"
+          echo "$LANDIN_TREE_SITTER_SHA256_X86_64_LINUX  $RUNNER_TEMP/tree-sitter.gz" \
+            | sha256sum -c -
+          gunzip -c "$RUNNER_TEMP/tree-sitter.gz" > node_modules/tree-sitter-cli/tree-sitter
+          chmod 755 node_modules/tree-sitter-cli/tree-sitter
+          ./node_modules/.bin/tree-sitter --version
+
+      - name: The integration pass
+        run: ./highlight/test.sh --integration
+
+      - name: The committed parser is what the grammar generates
+        run: git diff --exit-code -- highlight/tree-sitter
+
+  #  QEMU, Renode and GDB on the locked tools, with the release compiler.
+  #  Four workers, each with its own shared GDB.  Measured: 836 s.
+  cortex-m:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: Install the locked Cortex-M tools
+        run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
+
+      - name: The probe supervisor's controls
+        run: python3 environments/cortex-m/test.py
+
+      - name: Build refine
+        run: ./scripts/build.sh -j4
+
+      - name: Every Cortex-M lane
+        run: |
+          LANDIN_CORTEX_JOBS=4 python3 environments/cortex-m/run.py \
+            --tools "$RUNNER_TEMP/cortex-m" \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output "$RUNNER_TEMP/cortex-m-evidence"
 
   #  The compiler's scaling bound: generated programs of 1,000 to 16,000
   #  declarations, and the derived programs, checked and emitted five times
   #  each with the release compiler.  A doubling whose median frontend or
-  #  emission time grows more than 2.5 times fails.  A ratio compares two runs on this runner a
-  #  few seconds apart, so the verdict does not depend on its speed.  Its
-  #  own job, because it needs the release build and nothing the corpus
-  #  does.
+  #  emission time grows more than 2.5 times fails.  A ratio compares two
+  #  runs on this runner a few seconds apart, so the verdict does not
+  #  depend on its speed.
   scaling:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -112,3 +244,115 @@ jobs:
 
       - name: The scaling benchmark
         run: ./scripts/scaling.sh
+
+  #  The compiler as a native Darwin host in both modes: every compiler
+  #  case, without the two that execute Linux programs, then the
+  #  determinism closures and native report identity.  Measured on an
+  #  eight-core Mac: the host suite 124 s in debug and 54 s in release.
+  darwin-host:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release]
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: ${{ matrix.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: The compiler host suite
+        run: ./scripts/test.sh --host
+
+      - name: Determinism closures and native report identity
+        run: |
+          set -eu
+          refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
+          python3 compiler/tests/test_determinism.py --refine "$refine"
+          python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+
+  #  The shared hosted corpus executed natively, every source verdict with
+  #  Darwin selected, end-to-end fixtures among them, and the regenerated
+  #  bindings and archives, with the release compiler.
+  #
+  #  Three workers, the runner's cores.  macOS vets each newly linked
+  #  program on its first launch and admits roughly one at a time, so on an
+  #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
+  #  and at eight alike; how this image vets them is measured here.
+  darwin-parity:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: Build refine
+        run: ./scripts/build.sh -j3
+
+      - name: Hosted parity
+        run: |
+          LANDIN_DARWIN_JOBS=3 python3 compiler/tests/darwin/check.py --parity \
+            --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
+            --output "$RUNNER_TEMP/parity"
+
+      - name: Source verdicts
+        run: |
+          python3 compiler/tests/darwin/diagnostics.py \
+            --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
+            --output "$RUNNER_TEMP/diagnostics"
+
+      - name: Bindings and archives
+        run: |
+          python3 compiler/tests/darwin/bindings.py --parity \
+            --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
+            --output "$RUNNER_TEMP/bindings"
+
+  #  The LLDB sessions: the three derived programs at three profiles, the
+  #  panic sessions and the source-debugging contract, with every dSYM,
+  #  DWARF and Mach-O identity check.  Measured on a Mac: 41 s.
+  lldb:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-darwin
+
+      - name: Build refine
+        run: ./scripts/build.sh -j3
+
+      - name: LLDB source debugging
+        run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
+
+  #  The one check a branch rule requires: every job above succeeded.
+  gate:
+    if: always()
+    needs: [documents, scripts, compiler, release, bindings, editor-grammar,
+            cortex-m, scaling, darwin-host, darwin-parity, lldb]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          python3 -c 'import json, os, sys; r = json.loads(os.environ["RESULTS"]); sys.exit(0 if r and all(x == "success" for x in r) else 1)'
