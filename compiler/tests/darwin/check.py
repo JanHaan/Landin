@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Native Darwin lowering/ABI execution, and with --parity the full hosted parity corpus."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -12,6 +13,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -61,10 +63,27 @@ def assembly_contract(text):
     require(count > 0, "no emitted routine frames")
 
 
+def workers():
+    """How many fixtures run at once: LANDIN_DARWIN_JOBS, default 1.
+
+    macOS vets every newly created executable on its first launch, a few
+    tenths of a second each, and admits roughly one at a time; every profile
+    here links a new program, so launches queue there however many workers
+    wait.  Measured on an eight-core Mac, 1,465 s at one worker and 755 s at
+    four and at eight alike.
+    """
+    value = os.environ.get("LANDIN_DARWIN_JOBS", "1")
+    require(value.isdigit() and 1 <= int(value) <= 64, "LANDIN_DARWIN_JOBS must be 1 to 64")
+    return int(value)
+
+
 class Run:
     def __init__(self, directory):
         self.directory = directory
         self.commands = []
+        #  Workers share one command record; appending to it and rewriting
+        #  commands.json are one step, or two workers interleave the file.
+        self.lock = threading.Lock()
 
     def command(self, argv, name, cwd, *, expected=0, timeout=180, merged=False):
         def limits():
@@ -83,11 +102,12 @@ class Run:
                 expired = True
                 stop_session(process.pid)
                 status = process.wait()
-        self.commands.append({"argv": list(map(str, argv)), "cwd": str(cwd),
-                              "status": status, "timeout": expired,
-                              "seconds": time.monotonic() - started,
-                              "stdout": stdout.name, "stderr": stderr.name})
-        (self.directory / "commands.json").write_text(json.dumps(self.commands, indent=2) + "\n")
+        with self.lock:
+            self.commands.append({"argv": list(map(str, argv)), "cwd": str(cwd),
+                                  "status": status, "timeout": expired,
+                                  "seconds": time.monotonic() - started,
+                                  "stdout": stdout.name, "stderr": stderr.name})
+            (self.directory / "commands.json").write_text(json.dumps(self.commands, indent=2) + "\n")
         require(not expired, f"{name}: timeout")
         if expected is not None:
             require(status == expected, f"{name}: status {status}: {stderr.read_text(errors='replace')[:1500]}")
@@ -141,9 +161,11 @@ def main(argv=None):
                                 "c-sources": case.get("c", "")}))
         names = {name for name, _, _ in candidates}
         require(not args.case or set(args.case) <= names, "unknown exact case")
-        for name, base, meta in candidates:
-            if args.case and name not in args.case:
-                continue
+        def fixture(item):
+            #  One fixture's profiles run in order: a program may name a fixed
+            #  file, and two of its own profiles would race on it.
+            name, base, meta = item
+            results, labels = [], []
             profiles = PROFILES["profiles"]
             if args.parity:
                 profiles = [("none", "off"), ("size", "off"), ("size", "auto"), ("speed", "auto")]
@@ -153,7 +175,7 @@ def main(argv=None):
                 if args.profile and optimize != args.profile:
                     continue
                 label = name.replace("/", "-") + "-" + optimize + ("-" + specialize if args.parity else "")
-                print("darwin: " + label, flush=True)
+                labels.append(label)
                 assembly = directory / (label + ".s")
                 object_file = directory / (label + ".o")
                 executable = directory / label
@@ -220,10 +242,20 @@ def main(argv=None):
                     outcome(meta, status, stdout, stderr, expected)
                 if args.parity:
                     require(object_file.is_file(), "linked object was not retained")
-                summary["results"].append({"case": name, "optimize": optimize, "specialize": specialize,
-                                           "status": verdict, "exit": status,
-                                           **({"assembly": hash_file(assembly), "object": hash_file(object_file),
-                                               "executable": hash_file(executable)} if args.parity else {})})
+                results.append({"case": name, "optimize": optimize, "specialize": specialize,
+                                "status": verdict, "exit": status,
+                                **({"assembly": hash_file(assembly), "object": hash_file(object_file),
+                                    "executable": hash_file(executable)} if args.parity else {})})
+            return results, labels
+
+        selected = [c for c in candidates if not args.case or c[0] in args.case]
+        #  Every fixture has its own labelled files; results report in the
+        #  sequential order whatever order the workers finished in.
+        with ThreadPoolExecutor(max_workers=workers()) as pool:
+            for results, labels in pool.map(fixture, selected):
+                for label in labels:
+                    print("darwin: " + label, flush=True)
+                summary["results"] += results
         summary["status"] = "passed"
     finally:
         summary["files"] = {p.name: hash_file(p) for p in sorted(directory.iterdir()) if p.is_file()}
