@@ -3683,6 +3683,37 @@ def cortex_target_problems():
     return problems
 
 
+def unplaced_target_problems():
+    """Every target a fixture names is a verdict some record places.
+
+    `targets:` is a line of metadata, and a line of metadata is not a run.
+    What makes a target column evidence is `fixture_target_claims`, which
+    places each claim from the record a runner reads: the harness for
+    Linux x86-64, Darwin's parity manifest and diagnostics runner for macOS
+    arm64, the Cortex corpus, probes and firmware driver for Cortex-M.  A
+    fixture that names a product target no record places is a claim that
+    only a hand-made run could back, which is how `refine-identity`'s
+    Darwin half stood for a whole roadmap.  Unit fixtures are notes about
+    an Ada case rather than claims about a target, so they are not held
+    here; `synthetic-32` is a model, not a product target.
+    """
+    claims = fixture_target_claims()
+    if claims is None:
+        return []
+    problems = []
+    for name, (path, fields) in sorted(fixture_records().items()):
+        if name.split("/")[0] not in ("runtime", "abi", "positive",
+                                      "negative", "end-to-end"):
+            continue
+        named = {one.strip() for one in fields.get("targets", "").split(",")}
+        for target in sorted((named & set(PRODUCT_TARGETS))
+                             - set(claims.get(name, {}))):
+            problems.append((os.path.relpath(path, ROOT), 0,
+                             "%s claims %s and no record places it"
+                             % (name, target)))
+    return problems
+
+
 CORTEX_PROBES = "compiler/tests/cortex-m/probes.json"
 
 
@@ -3809,13 +3840,18 @@ def fixture_target_claims():
             elif row.get("mode") == "refuse":
                 claim(name, "cortex-m", "refused")
         elif kind in ("positive", "negative", "end-to-end"):
-            verdict = "compiled" if kind == "positive" else "refused"
+            #  An end-to-end fixture's verdict is its recorded status: the
+            #  compiler's own identity exits 0 and is no refusal.
+            refused = kind == "negative" or (
+                kind == "end-to-end" and fields.get("status", "1") != "0")
+            verdict = "refused" if refused else "compiled"
             if "linux-x86-64" in targets:
                 claim(name, "linux-x86-64", verdict)
-            #  Darwin's source verdicts are its positive and negative
-            #  fixtures with a program or arguments; the manifest may
+            #  Darwin's source verdicts are its positive, negative and
+            #  end-to-end fixtures with a program or arguments, which
+            #  compiler/tests/darwin/diagnostics.py runs; the manifest may
             #  make a fixed conditional select differently on arm64.
-            if (kind != "end-to-end" and "macos-arm64" in targets
+            if ("macos-arm64" in targets
                     and (fields.get("program") or fields.get("args"))):
                 status = parity["diagnostics"].get(name, {}).get("status")
                 claim(name, "macos-arm64", verdict if status is None else
@@ -4215,6 +4251,7 @@ def check_matrix(full_run):
     out = inventory_problems(inputs) if inputs is not None else [
         (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
+    out += unplaced_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
     fresh = construct_matrix()

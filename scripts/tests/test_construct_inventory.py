@@ -321,6 +321,26 @@ class Inventory(unittest.TestCase):
         self.assertFalse(CHECK.selects_cortex_target(
             records["negative/name-declared-nowhere"][1]))
 
+    def test_every_named_target_is_placed_by_a_record(self):
+        """A target line with no record behind it is refused, not believed."""
+        self.assertEqual(CHECK.unplaced_target_problems(), [])
+        claims = CHECK.fixture_target_claims()
+        #  The compiler's identity is run on Darwin by the diagnostics
+        #  runner, and exits 0 on both hosts.
+        self.assertEqual(claims["end-to-end/refine-identity"],
+                         {"linux-x86-64": "compiled", "macos-arm64": "compiled"})
+        altered = {name: dict(held) for name, held in claims.items()}
+        del altered["end-to-end/refine-identity"]["macos-arm64"]
+        del altered["runtime/derived-parser"]["linux-x86-64"]
+        with unittest.mock.patch.object(CHECK, "fixture_target_claims",
+                                        return_value=altered):
+            messages = [m for _, _, m in CHECK.unplaced_target_problems()]
+        self.assertIn("end-to-end/refine-identity claims macos-arm64 and no "
+                      "record places it", messages)
+        self.assertIn("runtime/derived-parser claims linux-x86-64 and no "
+                      "record places it", messages)
+        self.assertEqual(len(messages), 2)
+
     def test_a_probe_may_only_attribute_what_a_runner_runs(self):
         titles = CHECK.construct_titles() or ()
         self.assertEqual(CHECK.cortex_probe_problems(titles), [])

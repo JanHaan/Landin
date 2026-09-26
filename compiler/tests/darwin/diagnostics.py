@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Check every applicable shared source verdict with the Darwin target selected."""
+"""Check every applicable shared source verdict with the Darwin target selected.
+
+End-to-end fixtures are verdicts about `refine` itself rather than about a
+program, and they are run here too: a Darwin claim in one is otherwise a
+claim nothing on Darwin checks.
+"""
 import argparse
 import hashlib
 import json
@@ -10,7 +15,7 @@ from check import ROOT, Run, hash_file, require
 
 
 def candidates(root):
-    for cls in ('negative', 'positive'):
+    for cls in ('negative', 'positive', 'end-to-end'):
         for path in sorted((root / 'compiler/tests/fixtures' / cls).glob('*/fixture.meta')):
             meta = dict(line.split(': ', 1) for line in path.read_text().splitlines()
                         if ': ' in line and not line.startswith('#'))
