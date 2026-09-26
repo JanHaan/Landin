@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the pinned Cortex-M tools privately on Debian 13 x86-64 (no sudo)."""
+"""Install the pinned Cortex-M tools privately on Linux x86-64 (no sudo)."""
 import argparse
 import hashlib
 import json
@@ -25,12 +25,20 @@ def inventory(root):
             if p.is_file() and '__pycache__' not in p.parts}
 
 
+#  The lock carries every shared library its tools load except the C and C++
+#  runtimes, which come from the host.  Its newest binary asks for glibc 2.38,
+#  so that is the host it needs, whichever distribution supplies it.
+GLIBC = (2, 38)
+
+
 def supported_host():
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise RuntimeError("embedded probes require native Linux x86-64")
-    release = Path('/etc/os-release').read_text()
-    if 'ID=debian\n' not in release or 'VERSION_ID="13"' not in release:
-        raise RuntimeError("embedded profile requires Debian 13")
+    library, version = platform.libc_ver()
+    parts = version.split('.')[:2]
+    if (library != 'glibc' or not all(part.isdigit() for part in parts)
+            or tuple(map(int, parts)) < GLIBC):
+        raise RuntimeError("embedded profile requires glibc %d.%d or later" % GLIBC)
 
 
 def main():

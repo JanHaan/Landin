@@ -10,7 +10,7 @@ and `core/cpu`/`core/panic` consumers run through that compiler-owned firmware p
 
 | Component | Exact selection |
 |---|---|
-| Probe host | native Linux x86-64, Debian 13; the existing native runner is supported |
+| Probe host | native Linux x86-64 with glibc 2.38 or later and `dpkg-deb`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | Renode 1.17.0 Linux x86-64 portable, build `1.17.0+20260907gitf1dd1b4af`, bundled .NET 8.0.12; `prototype.repl` with Cortex-M0 at 16 MIPS and NVIC |
@@ -19,14 +19,18 @@ and `core/cpu`/`core/panic` consumers run through that compiler-owned firmware p
 | Debugger | `gdb-multiarch` 16.3, Debian `16.3-1`, loopback QEMU remote stub |
 | Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
 
-`tools.lock.json` pins URLs and SHA-256 for every downloaded package, including
-shared-library dependencies and GDB's Python support. The portable Renode
+`tools.lock.json` pins URLs and SHA-256 for every downloaded package: the
+tools, and the whole Debian 13 runtime closure QEMU and GDB load, down to
+the libraries and embedded Python 3.13 a Debian 13 base image would have
+supplied. The portable Renode
 archive SHA-256 is
 `4ba7c68b59e2447f188ef4b4b112fcccd2802582c460beedceb63b84e5605a5f`.
 The installer verifies archives before extraction. Each probe verifies the
 installation inventory and versions before execution, checks it again afterward,
-and retains that inventory. Debian 13 supplies the base libc and Python;
-this is a supported host profile, not a hermetic operating-system image.
+and retains that inventory. The host supplies only the C and C++ runtimes
+and the Python that drives the probes, so any glibc 2.38 host runs the same
+locked binaries; the newest of them asks for exactly that glibc. This is a
+supported host profile, not a hermetic operating-system image.
 
 These C probe flags select base AAPCS soft-float transport and ELF32 EABI.
 The internal Landin transport is selected separately, as the

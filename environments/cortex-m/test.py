@@ -226,6 +226,19 @@ class ProbeFailures(unittest.TestCase):
         from setup import supported_host
         with patch('platform.system', return_value='Darwin'), self.assertRaises(RuntimeError):
             supported_host()
+        # The locked binaries ask for glibc 2.38; an older one, or another C
+        # library, cannot load them, whatever the distribution.
+        for libc in (('glibc', '2.37'), ('glibc', '2.9'), ('musl', '1.2.5'), ('', '')):
+            with patch('platform.system', return_value='Linux'), \
+                    patch('platform.machine', return_value='x86_64'), \
+                    patch('platform.libc_ver', return_value=libc), \
+                    self.assertRaises(RuntimeError):
+                supported_host()
+        for libc in (('glibc', '2.38'), ('glibc', '2.39'), ('glibc', '3.0')):
+            with patch('platform.system', return_value='Linux'), \
+                    patch('platform.machine', return_value='x86_64'), \
+                    patch('platform.libc_ver', return_value=libc):
+                supported_host()
 
     def test_wrong_tool_lock(self):
         with tempfile.TemporaryDirectory() as directory:

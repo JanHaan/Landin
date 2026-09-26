@@ -329,8 +329,10 @@ for the complete coverage and explicit physical-image limitation.
 
 ## Embedded environment probes
 
-Native Debian 13 x86-64 is the host for the pinned QEMU and Renode
-[execution profile](../environments/cortex-m/README.md). The retired native
+Native Linux x86-64 with glibc 2.38 or later is the host for the pinned QEMU
+and Renode [execution profile](../environments/cortex-m/README.md); its lock
+carries the Debian 13 runtime those tools load, and the gate runs it on
+Ubuntu 24.04. The retired native
 Linux acceptance's documents job executed and retained these small C/assembly probes
 from its exact archive. The Mac continues native compiler-host and Darwin
 workload/LLDB validation; it does not run Linux containers for embedded tests.
