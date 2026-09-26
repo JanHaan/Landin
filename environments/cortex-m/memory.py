@@ -53,8 +53,7 @@ def execute(run):
                 except OSError:
                     require(time.monotonic() < deadline, 'memory debugger startup timed out')
                     time.sleep(.02)
-            text = run.command('gdb-memory', [run.bin / 'gdb-multiarch', '-q', '-nx',
-                               '-batch', 'memory.elf', '-x', 'memory.gdb'], timeout=20)
+            text = run.debug('gdb-memory', 'memory.elf', 'memory.gdb', timeout=20)
             oracle(text, 'R630_MEMORY_PASS')
         finally:
             stop(p)

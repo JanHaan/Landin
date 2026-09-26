@@ -41,6 +41,28 @@ def supported_host():
         raise RuntimeError("embedded profile requires glibc %d.%d or later" % GLIBC)
 
 
+def compile_gdb_python(root):
+    """Byte-compile the Python GDB embeds, with GDB's own interpreter.
+
+    The lock ships its standard library as source, and without bytecode every
+    GDB start compiles what it imports: about 200 ms a session where 80 would
+    do, over two thousand sessions.  Compiling once here, rather than letting
+    the first session write it, makes every session start the same way;
+    `inventory` still ignores `__pycache__`, so the record is unchanged.
+    """
+    usr = root / 'root/usr'
+    env = dict(os.environ, LD_LIBRARY_PATH=str(usr / 'lib/x86_64-linux-gnu'))
+    program = ('import compileall, sys; ok = all(compileall.compile_dir(d, quiet=1)'
+               ' for d in sys.argv[1:]); print("compiled" if ok else "failed")')
+    completed = subprocess.run(
+        [usr / 'bin/gdb-multiarch', '-q', '-nx', '-batch', '-ex',
+         'python import sys; sys.argv = %r; exec(%r)'
+         % (['', str(usr / 'lib/python3.13'), str(usr / 'share/gdb/python')], program)],
+        env=env, capture_output=True, text=True, timeout=300)
+    if completed.returncode != 0 or completed.stdout.strip() != 'compiled':
+        raise RuntimeError('compiling GDB\'s Python failed: ' + completed.stdout + completed.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
@@ -64,6 +86,7 @@ def main():
             # Trusted pinned archive; reject escaping members and link targets.
             with tarfile.open(dest) as archive:
                 archive.extractall(root / 'renode', filter='data')
+    compile_gdb_python(root)
     record = {'lock_sha256': sha(HERE / 'tools.lock.json'),
               'files': {area: inventory(root / area) for area in ('root', 'renode')}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')

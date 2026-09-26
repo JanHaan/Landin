@@ -4,6 +4,7 @@
 Retained hosted transport is separate from the compiler-generated M0 execution.
 """
 import argparse
+import atexit
 import hashlib
 import json
 import os
@@ -13,13 +14,71 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 
+from gdb_server import GdbServer
 from setup import DEFAULT, HERE, inventory, sha, supported_host
+
+#  The GDB every session on one thread shares; `Run.debug` starts it.  One
+#  per thread, because a GDB serves one session at a time and the corpus
+#  runs its programs on several workers.
+SERVERS = threading.local()
+
+
+def workers():
+    """How many programs the corpus runs at once: LANDIN_CORTEX_JOBS, default 1."""
+    value = os.environ.get('LANDIN_CORTEX_JOBS', '1')
+    require(value.isdigit() and 1 <= int(value) <= 64, 'LANDIN_CORTEX_JOBS must be 1 to 64')
+    return int(value)
 
 FLAGS = ['-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft', '-mabi=aapcs',
          '-ffreestanding', '-fno-builtin', '-fno-omit-frame-pointer', '-g3',
          '-O1', '-Wall', '-Wextra', '-Werror', '-nostdlib']
+
+
+def gdb_listener():
+    """A loopback listening socket for QEMU's debugger stub, and its QEMU arguments.
+
+    Choosing a free port and letting QEMU bind it later races any other
+    process choosing one in between, which parallel workers do.  QEMU is
+    given this socket already bound and listening, so no other process can
+    take the port.  The caller passes `fd` to Popen's `pass_fds` and closes
+    the socket after QEMU has started.
+    """
+    sock = socket.socket()
+    sock.bind(('127.0.0.1', 0))
+    sock.listen(1)
+    os.set_inheritable(sock.fileno(), True)
+    #  `-gdb tcp:` sets TCP_NODELAY and a plain socket chardev does not;
+    #  without it every small stub reply waits on Nagle, three seconds a
+    #  session.
+    return sock, sock.getsockname()[1], [
+        '-chardev', 'socket,id=gdb,fd=%d,server=on,wait=off,nodelay=on' % sock.fileno(),
+        '-gdb', 'chardev:gdb']
+
+
+PORTS = threading.local()
+PORT_BLOCKS = iter(range(20000, 60000, 500))
+PORT_LOCK = threading.Lock()
+
+
+def renode_gdb_port():
+    """A port for Renode's debugger stub that no concurrent worker also picks.
+
+    Renode's stub binds a port number itself and cannot be handed a socket,
+    so a port chosen by binding and releasing one races any other worker
+    choosing at the same moment.  Each worker thread owns a block of five
+    hundred ports and walks through it; blocks do not overlap.  A port some
+    unrelated process holds still fails loudly: Renode reports it in use.
+    """
+    if not hasattr(PORTS, 'block'):
+        with PORT_LOCK:
+            PORTS.block = next(PORT_BLOCKS)
+        PORTS.next = 0
+    port = PORTS.block + PORTS.next % 500
+    PORTS.next += 1
+    return port
 
 
 def require(condition, message):
@@ -66,6 +125,43 @@ class Run:
         self.env['LD_LIBRARY_PATH'] = str(tools / 'root/usr/lib/x86_64-linux-gnu')
         self.bin = tools / 'root/usr/bin'
         self.renode = tools / 'renode/renode_1.17.0-portable/renode'
+
+    def debug(self, name, elf, script, timeout=20):
+        """One debugger session, recorded like a command.
+
+        The session runs in the process-wide GDB server rather than a GDB of
+        its own; see gdb_server.py.  Its record, log and failure are this
+        run's, exactly as a batch `gdb-multiarch -x SCRIPT ELF` would leave
+        them.
+        """
+        server = getattr(SERVERS, 'server', None)
+        if server is not None and (server.gdb, server.env) != (self.bin / 'gdb-multiarch', self.env):
+            server.stop()
+            server = None
+        if server is None:
+            server = SERVERS.server = GdbServer(self.bin / 'gdb-multiarch', self.env, self.out)
+            atexit.register(server.stop)
+        server.cwd = self.out
+        tick = time.monotonic()
+        record = {'name': name, 'argv': [str(self.bin / 'gdb-multiarch'), '-q', '-nx',
+                                         '-batch', str(elf), '-x', str(script)],
+                  'timeout_seconds': timeout, 'server': True}
+        self.commands.append(record)
+        log = self.out / (name + '.log')
+        try:
+            try:
+                record["exit"] = 0 if server.session(elf, script, log, timeout) else 1
+            except TimeoutError:
+                record['timed_out'] = True
+                raise RuntimeError(name + ' timed out')
+            except OSError as error:
+                record['exit'] = None
+                raise RuntimeError(name + ' lost its debugger: ' + str(error))
+        finally:
+            record['seconds'] = time.monotonic() - tick
+            (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2)+'\n')
+        require(record['exit'] == 0, name + ' failed; inspect retained log')
+        return log.read_text(errors='replace')
 
     def command(self, name, argv, timeout=30):
         tick = time.monotonic()
@@ -149,8 +245,7 @@ class Run:
                     except OSError:
                         require(time.monotonic() < deadline, 'QEMU debugger startup timed out')
                         time.sleep(.02)
-                text = self.command('gdb', [self.bin / 'gdb-multiarch', '-q', '-nx', '-batch',
-                                          'cpu.elf', '-x', 'cpu.gdb'], timeout=20)
+                text = self.debug('gdb', 'cpu.elf', 'cpu.gdb', timeout=20)
                 oracle(text, 'R610_QEMU_PASS')
             finally:
                 stop(p)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Complete derived driver CPU/application/protocol execution, independent oracles."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import shutil
@@ -10,7 +11,7 @@ from backend import image_contract
 from devices import linker_closure
 from firmware import execute
 from packed_native import PROFILES
-from run import Run, require
+from run import Run, require, workers
 from setup import DEFAULT, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
@@ -387,28 +388,34 @@ def execute_suite(parent,refine,profiles=PROFILES,cases=None):
     parent.command('driver-refine-identity',[refine,'--identify'])
     parent.command('driver-source-refusals',[sys.executable,SOURCE/'check_sources.py',
         '--refine',refine,'--output',root/'source-refusals'])
-    for optimize,specialize in profiles:
-        for name in (cases or ['app','protocol','layout']):
-            out=root/(optimize+'-'+specialize)/name;out.mkdir(parents=True)
-            run=Run(out,parent.tools)
-            elf,symbols=build(run,refine,name,optimize,specialize)
-            if name == 'layout':
-                layout_cpu(run,elf,symbols)
-            else:
-                cpu(run,elf,symbols,name)
-                (application if name == "app" else protocol)(run,elf,symbols)
-            config_count=0
-            if name == 'protocol':
-                config_count=configurations(run,elf,symbols)+capacity_boundaries(run,elf,symbols)
-            fresh=out/'fresh';fresh.mkdir()
-            build(Run(fresh,parent.tools),refine,name,optimize,specialize)
-            for suffix in ('','.s','.o','.ld','.map'):
-                require((out/('core.elf'+suffix)).read_bytes() ==
-                        (fresh/('core.elf'+suffix)).read_bytes(),
-                        'nondeterministic driver artifact '+suffix)
-            controls.append({'profile':optimize+'-'+specialize,'kind':name,'status':'passed',
-                             'qemu_sessions':1,'renode_runs':(0 if name == 'layout' else 1+config_count),'artifact_comparisons':5})
-            print('driver: '+optimize+'-'+specialize+'/'+name+' passed',flush=True)
+    def one(item):
+        optimize,specialize,name=item
+        out=root/(optimize+'-'+specialize)/name;out.mkdir(parents=True)
+        run=Run(out,parent.tools)
+        elf,symbols=build(run,refine,name,optimize,specialize)
+        if name == 'layout':
+            layout_cpu(run,elf,symbols)
+        else:
+            cpu(run,elf,symbols,name)
+            (application if name == "app" else protocol)(run,elf,symbols)
+        config_count=0
+        if name == 'protocol':
+            config_count=configurations(run,elf,symbols)+capacity_boundaries(run,elf,symbols)
+        fresh=out/'fresh';fresh.mkdir()
+        build(Run(fresh,parent.tools),refine,name,optimize,specialize)
+        for suffix in ('','.s','.o','.ld','.map'):
+            require((out/('core.elf'+suffix)).read_bytes() ==
+                    (fresh/('core.elf'+suffix)).read_bytes(),
+                    'nondeterministic driver artifact '+suffix)
+        return {'profile':optimize+'-'+specialize,'kind':name,'status':'passed',
+                'qemu_sessions':1,'renode_runs':(0 if name == 'layout' else 1+config_count),'artifact_comparisons':5}
+    work=[(o,s,n) for o,s in profiles for n in (cases or ['app','protocol','layout'])]
+    #  Each profile and case builds in its own directory against its own
+    #  emulators; results report in the sequential order.
+    with ThreadPoolExecutor(max_workers=workers()) as pool:
+        for control in pool.map(one,work):
+            controls.append(control)
+            print('driver: '+control['profile']+'/'+control['kind']+' passed',flush=True)
     require(sha(refine)==compiler_hash,'driver compiler drift')
     record={'status':'passed','compiler_sha256':compiler_hash,'controls':controls,
             'artifacts':{str(p.relative_to(root)):sha(p) for p in sorted(root.rglob('*')) if p.is_file()}}

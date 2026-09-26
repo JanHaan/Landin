@@ -153,8 +153,7 @@ def execute(run):
                 except OSError:
                     require(time.monotonic() < deadline, 'ABI debugger startup timed out')
                     time.sleep(.02)
-            text = run.command('gdb-abi', [run.bin / 'gdb-multiarch', '-q', '-nx', '-batch',
-                                         'abi.elf', '-x', 'abi.gdb'], timeout=20)
+            text = run.debug('gdb-abi', 'abi.elf', 'abi.gdb', timeout=20)
             oracle(text, 'R620_ABI_PASS')
         finally:
             stop(p)

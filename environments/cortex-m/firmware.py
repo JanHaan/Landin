@@ -3,21 +3,18 @@
 import argparse
 import json
 from pathlib import Path
-import socket
 import subprocess
 import time
 
 from backend import image_contract
 from packed_native import PROFILES
 from packed import TRACE
-from run import Run, oracle, require, stop
+from run import Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, inventory, sha, supported_host
 
 
 def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    listener, port, stub = gdb_listener()
     script = run.out / 'firmware.gdb'
     # Poison RAM before execution to distinguish reset initialization from
     # the emulator loader or its power-on memory contents. Reset twice.
@@ -64,26 +61,20 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
         'end', *commands, 'quit', '']))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
-            '-serial', 'none', '-kernel', str(elf), '-S', '-gdb',
-            f'tcp:127.0.0.1:{port}']
+            '-serial', 'none', '-kernel', str(elf), '-S', *stub]
     record = {'name': 'qemu-firmware', 'argv': argv, 'timeout_seconds': 25}
     run.commands.append(record)
     tick = time.monotonic()
     with (run.out / 'qemu.log').open('wb') as log:
-        process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
-                                   stderr=log, start_new_session=True)
+        with listener:
+            process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
+                                       stderr=log, start_new_session=True,
+                                       pass_fds=(listener.fileno(),))
         try:
-            deadline = time.monotonic() + 3
-            while True:
-                require(process.poll() is None, 'QEMU exited before connection')
-                try:
-                    with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                        break
-                except OSError:
-                    require(time.monotonic() < deadline, 'QEMU startup timeout')
-                    time.sleep(.02)
-            text = run.command('gdb-firmware', [run.bin / 'gdb-multiarch', '-q',
-                               '-nx', '-batch', elf, '-x', script], timeout=20)
+            #  The stub's socket is listening before QEMU starts, so GDB's
+            #  connection waits in its backlog rather than racing the start.
+            require(process.poll() is None, 'QEMU exited before connection')
+            text = run.debug('gdb-firmware', elf, script, timeout=20)
             oracle(text, marker)
         finally:
             stop(process)

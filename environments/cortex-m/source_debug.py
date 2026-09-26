@@ -1,14 +1,13 @@
 """Executable Cortex line/function debugger contract, on the Linux host."""
 import json
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import time
 
 from driver import HERE, build
 from firmware import execute
-from run import Run, oracle, remove_renode_lock, require, stop
+from run import Run, oracle, remove_renode_lock, renode_gdb_port, require, stop
 
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from cortex_debug import Image, verify
@@ -55,9 +54,7 @@ def cpu(run, elf):
 def renode(run, elf, commands):
     """Bounded remote session; selection precedes any debugger attachment."""
     checked(run, elf)
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    port = renode_gdb_port()
     script = run.out/'source-debug.resc'
     script.write_text('\n'.join([
         f'include @{HERE}/probes/DriverPeripheral.cs',
@@ -87,8 +84,7 @@ def renode(run, elf, commands):
                     break
                 require(time.monotonic() < deadline, 'Renode GDB startup timeout')
                 time.sleep(.05)
-            text = run.command('gdb-renode-source', [run.bin/'gdb-multiarch', '-q',
-                '-nx', '-batch', elf, '-x', gdb_script], timeout=25)
+            text = run.debug('gdb-renode-source', elf, gdb_script, timeout=25)
             oracle(text, 'R6100_RENODE_SOURCE_PASS')
         finally:
             stop(process)

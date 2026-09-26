@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 
-from run import Run, oracle, remove_renode_lock
+from run import HERE, Run, oracle, remove_renode_lock
 
 
 class ProbeFailures(unittest.TestCase):
@@ -220,6 +221,129 @@ class ProbeFailures(unittest.TestCase):
                 path.write_bytes(altered)
                 with self.assertRaises(RuntimeError):
                     image_contract(path)
+
+    def server_run(self, root):
+        """A Run whose debugger is the stand-in, with a server of its own."""
+        import run as run_module
+        from unittest.mock import patch
+        (root / 'gdb-multiarch').symlink_to(HERE / 'probes/fake_gdb.py')
+        run = Run(root, root)
+        run.bin = root
+        return run, patch.object(run_module, 'SERVERS', threading.local())
+
+    def script(self, root, name, *lines):
+        (root / name).write_text('\n'.join(lines) + '\nquit\n')
+        return name
+
+    def test_a_served_session_cannot_see_the_one_before_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                first = self.script(root, 'first.gdb', 'python', 'left = 1',
+                                    'print("FIRST_PASS")', 'end')
+                second = self.script(root, 'second.gdb', 'python',
+                                     'print("SECOND_PASS" if "left" not in globals() else "LEAKED")',
+                                     'end')
+                self.assertIn('FIRST_PASS', run.debug('gdb-first', 'x.elf', first))
+                text = run.debug('gdb-second', 'x.elf', second)
+                self.assertIn('SECOND_PASS', text)
+                self.assertNotIn('LEAKED', text)
+                run_module.SERVERS.server.stop()
+
+    def test_a_failed_session_fails_alone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                for lines, problem in ((('fail',), 'failed; inspect retained log'),
+                                       (('python', 'assert False, "no"', 'end'),
+                                        'failed; inspect retained log'),
+                                       (('die',), 'lost its debugger'),
+                                       (('sleep 5',), 'timed out')):
+                    name = self.script(root, 'bad.gdb', *lines)
+                    with self.assertRaisesRegex(RuntimeError, problem):
+                        run.debug('gdb-bad', 'x.elf', name, timeout=1)
+                    ok = self.script(root, 'ok.gdb', 'python', 'print("OK_PASS")', 'end')
+                    self.assertIn('OK_PASS', run.debug('gdb-ok', 'x.elf', ok))
+                record = json.loads((root / 'commands.json').read_text())
+                self.assertEqual([r.get('exit') for r in record if r['name'] == 'gdb-bad'][:2], [1, 1])
+                self.assertTrue(any(r.get('timed_out') for r in record))
+                run_module.SERVERS.server.stop()
+
+    def test_concurrent_workers_each_have_their_own_debugger(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import run as run_module
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                def session(index):
+                    out = root / ('w%d' % index)
+                    out.mkdir()
+                    worker = Run(out, root)
+                    worker.bin = root
+                    name = self.script(out, 'w.gdb', 'python',
+                                       'import os, time',
+                                       'assert "mine" not in globals()',
+                                       'mine = %d' % index, 'time.sleep(0.2)',
+                                       'print("PID", os.getpid(), "PASS%d" % mine)', 'end')
+                    text = worker.debug('gdb-w', 'x.elf', name)
+                    self.assertIn('PASS%d' % index, text)
+                    server = run_module.SERVERS.server
+                    return int(text.split('PID ')[1].split()[0]), server
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    results = list(pool.map(session, range(8)))
+                pids = {pid for pid, _ in results}
+                self.assertGreater(len(pids), 1)
+                self.assertLessEqual(len(pids), 4)
+                for server in {id(s): s for _, s in results}.values():
+                    server.stop()
+
+    def test_the_debugger_stub_socket_keeps_nodelay(self):
+        # Without it each reply waits on Nagle and a session costs seconds.
+        from run import gdb_listener
+        listener, port, stub = gdb_listener()
+        with listener:
+            self.assertIn('nodelay=on', stub[1])
+            self.assertIn('fd=%d' % listener.fileno(), stub[1])
+            self.assertEqual(stub[2:], ['-gdb', 'chardev:gdb'])
+            self.assertEqual(listener.getsockname(), ('127.0.0.1', port))
+
+    def test_workers_is_bounded(self):
+        from unittest.mock import patch
+        from run import workers
+        for value in ('0', '65', 'x', ''):
+            with patch.dict('os.environ', {'LANDIN_CORTEX_JOBS': value}), \
+                    self.assertRaises(RuntimeError):
+                workers()
+        with patch.dict('os.environ', {'LANDIN_CORTEX_JOBS': '8'}):
+            self.assertEqual(workers(), 8)
+
+    def test_renode_stub_ports_are_disjoint_per_worker(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from run import renode_gdb_port
+        def ports(_):
+            return {renode_gdb_port() for _ in range(20)}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            chosen = list(pool.map(ports, range(4)))
+        for index, one in enumerate(chosen):
+            for other in chosen[index + 1:]:
+                self.assertFalse(one & other)
+
+    def test_a_served_script_quits_only_at_its_end(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                (root / 'early.gdb').write_text('quit\npython\nprint(1)\nend\n')
+                with self.assertRaisesRegex(RuntimeError, 'quit only at its end'):
+                    run.debug('gdb-early', 'x.elf', 'early.gdb')
+                if getattr(run_module.SERVERS, 'server', None) is not None:
+                    run_module.SERVERS.server.stop()
 
     def test_unsupported_host(self):
         from unittest.mock import patch

@@ -7,12 +7,11 @@ import argparse
 import json
 import re
 from pathlib import Path
-import socket
 import struct
 import subprocess
 import time
 
-from run import FLAGS, Run, oracle, require, stop
+from run import FLAGS, Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, HERE, inventory, sha, supported_host
 
 ROOT = HERE.parent.parent
@@ -31,9 +30,7 @@ def metadata(path):
 
 
 def execute(run, elf, expected, traps, before=()):
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    listener, port, stub = gdb_listener()
     script = run.out / 'backend.gdb'
     script.write_text('\n'.join([
         'set pagination off', 'set confirm off',
@@ -49,8 +46,9 @@ def execute(run, elf, expected, traps, before=()):
             'assert value("*((unsigned int*)&backend_result+1)") == 0',
             'assert value("$sp") == 0x20004000', 'assert value("$r11") == 0',
             'assert [value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100]']),
-         'import json',
-        'words=[value("*(unsigned int*)%d" % a) for a in range(0x20003000,0x20004000,4)]',
+         'import json, struct',
+        #  One 4 KiB read rather than 1,024 one-word round trips to the stub.
+        'words=list(struct.unpack("<1024I", bytes(gdb.selected_inferior().read_memory(0x20003000, 4096))))',
         'assert words[:4] == [0xa55ac33c]*4',
         'assert value("$sp") >= 0x20003000',
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
@@ -58,26 +56,20 @@ def execute(run, elf, expected, traps, before=()):
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', '']))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
-            '-serial', 'none', '-kernel', str(elf), '-S', '-gdb',
-            f'tcp:127.0.0.1:{port}']
+            '-serial', 'none', '-kernel', str(elf), '-S', *stub]
     record = {'name': 'qemu-backend', 'argv': argv, 'timeout_seconds': 25}
     run.commands.append(record)
     tick = time.monotonic()
     with (run.out / 'qemu.log').open('wb') as log:
-        process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
-                                   stderr=log, start_new_session=True)
+        with listener:
+            process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
+                                       stderr=log, start_new_session=True,
+                                       pass_fds=(listener.fileno(),))
         try:
-            deadline = time.monotonic() + 3
-            while True:
-                require(process.poll() is None, 'QEMU exited before connection')
-                try:
-                    with socket.create_connection(('127.0.0.1', port), timeout=.1):
-                        break
-                except OSError:
-                    require(time.monotonic() < deadline, 'QEMU startup timeout')
-                    time.sleep(.02)
-            text = run.command('gdb-backend', [run.bin / 'gdb-multiarch', '-q',
-                               '-nx', '-batch', elf, '-x', script], timeout=20)
+            #  The stub's socket is listening before QEMU starts, so GDB's
+            #  connection waits in its backlog rather than racing the start.
+            require(process.poll() is None, 'QEMU exited before connection')
+            text = run.debug('gdb-backend', elf, script, timeout=20)
             oracle(text, 'R650_GENERATED_QEMU_PASS')
         finally:
             stop(process)

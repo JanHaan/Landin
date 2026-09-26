@@ -1,4 +1,5 @@
 """Mandatory freestanding source-debugging and constrained firmware evidence."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import shutil
@@ -8,7 +9,7 @@ import driver
 import firmware
 import freestanding
 from packed_native import PROFILES
-from run import Run, require
+from run import Run, require, workers
 from setup import sha
 import source_debug
 from cortex_debug import Image, verify
@@ -120,74 +121,89 @@ def execute_suite(parent, refine, profiles=PROFILES):
     parent.command('evidence-refine-identity',[refine,'--identify'])
     import stack_control
     stack_control.run(child(root,'independent-stack'))
-    for optimize,specialize in profiles:
+    def program(item):
+        optimize,specialize,name=item
         profile=optimize+'-'+specialize
-        for name in ('app','protocol','layout'):
-            run=child(root,profile+'/'+name)
-            elf,symbols=driver.build(run,refine,name,optimize,specialize,'lines')
-            baseline=parent.out/'driver'/profile/name/'core.elf'
-            require(Image(elf).loaded_identity() == Image(baseline).loaded_identity(),
-                    'debugging altered firmware load or initialization: '+profile+'/'+name)
-            record=source_debug.checked(run,elf)
-            record['resources']=accounting(elf,symbols)
-            run.command('symbol-extents',[run.bin/'arm-none-eabi-nm','-S','--size-sort',elf])
-            run.command('debug-records',[run.bin/'arm-none-eabi-readelf',
-                        '--debug-dump=info,decodedline,frames',elf])
-            record.update(profile=profile,program=name,
-                baseline_sha256=sha(baseline),load_identity='identical',
-                closure=json.loads((run.out/'closure.json').read_text()),
-                build=json.loads((run.out/'build.json').read_text()))
-            if name=='app':
-                driver.cpu(child(run,'qemu-boot'),elf,symbols,name)
-                source_debug.cpu(child(run,'qemu-source'),elf)
-                source_debug.application(child(run,'renode-source'),elf)
-                selection_controls(child(run,'selection'),elf)
-                record['scenarios']={}
-                for scenario in ('receive','open-failure','transfer-fault','exhaustion'):
-                    lane=child(run,scenario)
-                    shutil.copy(run.out/'disassembly.log',lane.out)
-                    record['scenarios'][scenario]=resources.application(lane,elf,symbols,scenario)
-            elif name=='protocol':
-                driver.cpu(run,elf,symbols,name)
-                driver.protocol(run,elf,symbols)
-            else:
-                driver.layout_cpu(run,elf,symbols)
-                lane=child(run,'helper-resources')
+        run=child(root,profile+'/'+name)
+        elf,symbols=driver.build(run,refine,name,optimize,specialize,'lines')
+        baseline=parent.out/'driver'/profile/name/'core.elf'
+        require(Image(elf).loaded_identity() == Image(baseline).loaded_identity(),
+                'debugging altered firmware load or initialization: '+profile+'/'+name)
+        record=source_debug.checked(run,elf)
+        record['resources']=accounting(elf,symbols)
+        run.command('symbol-extents',[run.bin/'arm-none-eabi-nm','-S','--size-sort',elf])
+        run.command('debug-records',[run.bin/'arm-none-eabi-readelf',
+                    '--debug-dump=info,decodedline,frames',elf])
+        record.update(profile=profile,program=name,
+            baseline_sha256=sha(baseline),load_identity='identical',
+            closure=json.loads((run.out/'closure.json').read_text()),
+            build=json.loads((run.out/'build.json').read_text()))
+        if name=='app':
+            driver.cpu(child(run,'qemu-boot'),elf,symbols,name)
+            source_debug.cpu(child(run,'qemu-source'),elf)
+            source_debug.application(child(run,'renode-source'),elf)
+            selection_controls(child(run,'selection'),elf)
+            record['scenarios']={}
+            for scenario in ('receive','open-failure','transfer-fault','exhaustion'):
+                lane=child(run,scenario)
                 shutil.copy(run.out/'disassembly.log',lane.out)
-                record['helper_resources']=resources.terminated(lane,elf,
-                    {'layout':[4,24,4,48,8,12,16,20,21,22,23]})
-            fresh=child(run,'first-emission')
-            # The debug CU intentionally records its compilation directory.
-            # Repeat in that same directory; relocated builds retain distinct
-            # source identities, while their target load bytes must agree.
-            for suffix in ('','.s','.o','.ld','.map','.sources.json'):
-                shutil.copy(Path(str(elf)+suffix),fresh.out)
-            run.command('compile-again',run.commands[0]['argv'],timeout=60)
-            for suffix in ('','.s','.o','.ld','.map','.sources.json'):
-                require(Path(str(elf)+suffix).read_bytes() ==
-                        (fresh.out/('core.elf'+suffix)).read_bytes(),
-                        'nondeterministic debug firmware '+profile+'/'+name+suffix)
-            (run.out/'evidence.json').write_text(json.dumps(record,indent=2)+'\n')
-            rows.append(dict(profile=profile,program=name,status='passed'))
-            print('evidence: '+profile+'/'+name+' passed',flush=True)
-        for kind in ('pool','vec','noreturn','panic','veneer','irq','machine'):
-            run=child(root,profile+'/controls/'+kind)
-            if kind in ('veneer','irq','machine'):
-                elf=firmware.build(run,refine,(driver.HERE/('probes/firmware-'+kind+'.ldn')).read_text(),
-                                   optimize,specialize,'lines')
-                if kind=='veneer':
-                    source_debug.veneer(run,elf)
-                    lane=child(run,'resources')
-                    shutil.copy(run.out/'disassembly.log',lane.out)
-                    resources.terminated(lane,elf,{'observed':[42],'irq_seen':[1]})
-                else:
-                    source_debug.interrupt(run,elf,kind=='machine')
+                record['scenarios'][scenario]=resources.application(lane,elf,symbols,scenario)
+        elif name=='protocol':
+            driver.cpu(run,elf,symbols,name)
+            driver.protocol(run,elf,symbols)
+        else:
+            driver.layout_cpu(run,elf,symbols)
+            lane=child(run,'helper-resources')
+            shutil.copy(run.out/'disassembly.log',lane.out)
+            record['helper_resources']=resources.terminated(lane,elf,
+                {'layout':[4,24,4,48,8,12,16,20,21,22,23]})
+        fresh=child(run,'first-emission')
+        # The debug CU intentionally records its compilation directory.
+        # Repeat in that same directory; relocated builds retain distinct
+        # source identities, while their target load bytes must agree.
+        for suffix in ('','.s','.o','.ld','.map','.sources.json'):
+            shutil.copy(Path(str(elf)+suffix),fresh.out)
+        run.command('compile-again',run.commands[0]['argv'],timeout=60)
+        for suffix in ('','.s','.o','.ld','.map','.sources.json'):
+            require(Path(str(elf)+suffix).read_bytes() ==
+                    (fresh.out/('core.elf'+suffix)).read_bytes(),
+                    'nondeterministic debug firmware '+profile+'/'+name+suffix)
+        (run.out/'evidence.json').write_text(json.dumps(record,indent=2)+'\n')
+        return dict(profile=profile,program=name,status='passed')
+
+    def control(item):
+        optimize,specialize,kind=item
+        profile=optimize+'-'+specialize
+        run=child(root,profile+'/controls/'+kind)
+        if kind in ('veneer','irq','machine'):
+            elf=firmware.build(run,refine,(driver.HERE/('probes/firmware-'+kind+'.ldn')).read_text(),
+                               optimize,specialize,'lines')
+            if kind=='veneer':
+                source_debug.veneer(run,elf)
+                lane=child(run,'resources')
+                shutil.copy(run.out/'disassembly.log',lane.out)
+                resources.terminated(lane,elf,{'observed':[42],'irq_seen':[1]})
             else:
-                elf=freestanding.build(run,refine,
-                    (driver.HERE/('probes/core-'+kind+'.ldn')).read_text(),
-                    optimize,specialize,'lines')
-                source_debug.library(run,elf,kind)
-            rows.append(dict(profile=profile,control=kind,status='passed'))
+                source_debug.interrupt(run,elf,kind=='machine')
+        else:
+            elf=freestanding.build(run,refine,
+                (driver.HERE/('probes/core-'+kind+'.ldn')).read_text(),
+                optimize,specialize,'lines')
+            source_debug.library(run,elf,kind)
+        return dict(profile=profile,control=kind,status='passed')
+
+    #  Every profile's programs and controls build in their own directories
+    #  against their own emulators; rows report in the sequential order.
+    work=[]
+    for optimize,specialize in profiles:
+        work+=[(program,(optimize,specialize,n)) for n in ('app','protocol','layout')]
+        work+=[(control,(optimize,specialize,k)) for k in
+               ('pool','vec','noreturn','panic','veneer','irq','machine')]
+    with ThreadPoolExecutor(max_workers=workers()) as pool:
+        for row in pool.map(lambda job: job[0](job[1]),work):
+            rows.append(row)
+            if 'program' in row:
+                print('evidence: '+row['profile']+'/'+row['program']+' passed',flush=True)
     require(sha(refine)==compiler_hash,'evidence compiler drift')
     record=dict(status='passed',compiler_sha256=compiler_hash,rows=rows,
         artifacts={str(p.relative_to(root.out)):sha(p)

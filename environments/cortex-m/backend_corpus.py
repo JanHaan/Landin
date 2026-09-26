@@ -5,12 +5,13 @@ fixture runs or does not; physical limits are retained as limits, never as
 successful executions.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import re
 
 from backend import ROOT, COUNTERPARTS, fixture, metadata
-from run import Run, require
+from run import Run, require, workers
 from setup import DEFAULT, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
@@ -100,7 +101,7 @@ def execute(output, tools, refine, selected=(), profiles=()):
     require(set(profiles) <= {'none-off', 'size-off', 'size-auto', 'speed-auto', 'none-all', 'speed-all'},
             'unknown exact corpus profile')
     require(not selected or set(selected) <= set(rows), 'unknown exact corpus case')
-    results = []
+    work = []
     for name, row in rows.items():
         if selected and name not in selected:
             continue
@@ -113,32 +114,43 @@ def execute(output, tools, refine, selected=(), profiles=()):
             modes = [p for p in modes if '-'.join(p) in profiles]
             if selected:
                 require(bool(modes), 'profile is not applicable to the selected fixture')
-        for opt, spec in modes:
-            out = output / (name.replace('/', '--') + '--' + opt + '-' + spec)
-            out.mkdir(parents=True, exist_ok=False)
-            run = Run(out, tools)
-            result = {'fixture': name, 'optimize': opt, 'specialize': spec}
-            try:
-                if row['mode'] == 'restriction':
-                    result.update(verdict='target-restriction', reason=row['reason'],
-                                  witness_sha256=sha(ROOT / row['witness']))
-                elif row['mode'] == 'refuse':
-                    result.update(source_refusal(run, refine, name, row))
-                else:
-                    try:
-                        fixture(run, refine, name, opt, spec)
-                        result['verdict'] = 'executed'
-                    except RuntimeError as error:
-                        result.update(image_limit(run, row, error))
-                result['status'] = 'passed'
-            except Exception as error:
-                result.update(status='failed', error=str(error))
-            result['artifacts'] = {str(p.relative_to(out)): sha(p)
-                                   for p in sorted(out.rglob('*')) if p.is_file()}
-            (out / 'result.json').write_text(json.dumps(result, indent=2)+'\n')
-            results.append(result)
-            print('cortex corpus: ' + name + ' ' + opt + '/' + spec + ' ' +
-                  result.get('verdict', 'FAILED: ' + result.get('error', '')), flush=True)
+        work += [(name, row, opt, spec) for opt, spec in modes]
+
+    def one(item):
+        name, row, opt, spec = item
+        out = output / (name.replace('/', '--') + '--' + opt + '-' + spec)
+        out.mkdir(parents=True, exist_ok=False)
+        run = Run(out, tools)
+        result = {'fixture': name, 'optimize': opt, 'specialize': spec}
+        try:
+            if row['mode'] == 'restriction':
+                result.update(verdict='target-restriction', reason=row['reason'],
+                              witness_sha256=sha(ROOT / row['witness']))
+            elif row['mode'] == 'refuse':
+                result.update(source_refusal(run, refine, name, row))
+            else:
+                try:
+                    fixture(run, refine, name, opt, spec)
+                    result['verdict'] = 'executed'
+                except RuntimeError as error:
+                    result.update(image_limit(run, row, error))
+            result['status'] = 'passed'
+        except Exception as error:
+            result.update(status='failed', error=str(error))
+        result['artifacts'] = {str(p.relative_to(out)): sha(p)
+                               for p in sorted(out.rglob('*')) if p.is_file()}
+        (out / 'result.json').write_text(json.dumps(result, indent=2)+'\n')
+        return result
+
+    #  Each program has its own directory, emulator and debugger session, and
+    #  each worker thread its own GDB; results are reported in inventory
+    #  order whatever order they finished in.
+    with ThreadPoolExecutor(max_workers=workers()) as pool:
+        results = list(pool.map(one, work))
+    for result in results:
+        print('cortex corpus: ' + result['fixture'] + ' ' + result['optimize'] + '/' +
+              result['specialize'] + ' ' +
+              result.get('verdict', 'FAILED: ' + result.get('error', '')), flush=True)
     summary = {'scope': 'development-filtered' if selected or profiles else 'complete-inventory',
                'compiler_sha256': sha(refine), 'results': results}
     (output / 'result.json').write_text(json.dumps(summary, indent=2)+'\n')
