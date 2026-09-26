@@ -294,11 +294,11 @@ class GuideLinks(unittest.TestCase):
 
     def test_unrendered_files_link_to_the_repository(self):
         self.assertEqual(self.target("compiler/ada/README.md", "../../bindings/README.md"),
-                         RENDER.REPO + "/tree/main/item/bindings/README.md")
+                         RENDER.REPO + "/blob/main/bindings/README.md")
         self.assertEqual(self.target("highlight/README.md", "vim/README.md"),
-                         RENDER.REPO + "/tree/main/item/highlight/vim/README.md")
+                         RENDER.REPO + "/blob/main/highlight/vim/README.md")
         self.assertEqual(self.target("README.md", "a%20b.md?q=1#section"),
-                         RENDER.REPO + "/tree/main/item/a%20b.md?q=1#section")
+                         RENDER.REPO + "/blob/main/a%20b.md?q=1#section")
 
     def test_external_and_page_local_links_keep_their_identity(self):
         for href in ("https://example.org/README.md", "mailto:me@example.org",
