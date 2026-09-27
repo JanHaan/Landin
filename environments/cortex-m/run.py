@@ -96,11 +96,24 @@ def stop(process):
             process.wait(timeout=2)
 
 
+#  Renode's MonitorCondition logs this when one of its own threads is woken
+#  and finds its wait condition still true, a note about its scheduler's
+#  wake-ups rather than about the machine: it depends on how the host ran
+#  Renode's threads, and appears in a long script on a busy host with every
+#  assertion holding.  It is the one warning allowed everywhere, and only in
+#  exactly this form.
+SCHEDULER_NOTICE = re.compile(
+    r'^\[\d\d:\d\d:\d\d\.\d+\] \[WARNING\] '
+    r'Thread has been woken up \d+ times, verify your condition$')
+
+
 def oracle(text, marker, stock=False):
     require(text.count(marker) == 1, 'missing/duplicate result marker: ' + marker)
     require(not re.search(r'error|exception|assertion|unhandled read', text, re.I),
             'probe reports an error')
     for line in text.splitlines():
+        if SCHEDULER_NOTICE.match(line.strip()):
+            continue
         if '[WARNING]' in line:
             require(stock and ('Tags: CIRC (0x1)' in line or
                     "Unknown baud rate, couldn't trigger the idle line interrupt" in line),

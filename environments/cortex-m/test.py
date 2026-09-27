@@ -95,6 +95,18 @@ class ProbeFailures(unittest.TestCase):
                 oracle(text, 'PASS')
         oracle('PASS', 'PASS')
 
+    def test_only_the_exact_scheduler_notice_is_allowed(self):
+        notice = ('[06:19:16.1824] [WARNING] Thread has been woken up 2 times, '
+                  'verify your condition')
+        oracle('PASS\n' + notice, 'PASS')
+        for text in (notice.replace('2 times', 'many times'),
+                     notice + ' and more',
+                     notice.replace('[WARNING]', '[ERROR]'),
+                     '[06:19:16.1824] [WARNING] sysbus: Thread has been woken up 2 times',
+                     notice.replace('verify your condition', 'bad model access')):
+            with self.subTest(text=text), self.assertRaises(RuntimeError):
+                oracle('PASS\n' + text, 'PASS')
+
     def command_failure(self, argv, timeout=2):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
