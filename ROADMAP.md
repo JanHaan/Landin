@@ -172,7 +172,10 @@ diagnostics runner runs end-to-end fixtures, and `check.py` refuses a
 fixture whose named target no record places. Every job was first green at
 `6b17c109`, after two runner-only faults were fixed at their cause: a
 process-timeout witness whose deadline a cold interpreter could miss, and a
-Renode scheduler notice the Cortex-M oracle took for a model warning.
+Renode scheduler notice the Cortex-M oracle took for a model warning. The
+completing commit's own gate then found a third: Renode's log thread wrote
+into the middle of a script's result marker on the console they shared, so
+a script's output and Renode's log are now separate files.
 
 ### R8 gate
 
