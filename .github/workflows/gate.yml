@@ -227,6 +227,16 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
 
+      #  A failed lane's logs are the only record of what an emulator or the
+      #  debugger said; without them a failure is a line with no cause.
+      - name: Keep the evidence of a failed lane
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cortex-m-evidence
+          path: ${{ runner.temp }}/cortex-m-evidence
+          retention-days: 14
+
   #  The compiler's scaling bound: generated programs of 1,000 to 16,000
   #  declarations, and the derived programs, checked and emitted five times
   #  each with the release compiler.  A doubling whose median frontend or
