@@ -102,10 +102,12 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 | `lldb` | macos-26 | the LLDB sessions |
 
 A compile error surfaces in the first minutes of every job that builds.
-Measured before the first run, on a four-CPU container and an eight-core
-Mac: the corpus fixtures take about five and a half minutes at eight
-workers, the Cortex-M lanes about fourteen, and Darwin parity about
-thirteen, bounded by macOS vetting each new program on its first launch.
+Measured on the runners, each job including its install and build:
+`documents` about ninety seconds, `editor-grammar` fifteen, `bindings`
+seventy, `scripts` five minutes, `lldb` five, `darwin-host` seven and eight,
+`release` seven, `scaling` eight, `compiler` ten and a half, `darwin-parity`
+ten and a half, and `cortex-m` twenty-six, which sets the gate at about
+twenty-six minutes.
 
 The gate is **not** the retired acceptance: it retains no evidence, and
 green is not a verdict on a revision. It is a safety net over every target.

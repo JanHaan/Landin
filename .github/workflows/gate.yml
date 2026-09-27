@@ -15,10 +15,10 @@
 #  retained, and nothing accepts a revision.  It is a safety net that now
 #  covers every target.
 #
-#  Times below were measured on an ubuntu:24.04 container pinned to four CPUs
-#  and on an eight-core Mac, before the first run here; the runners are four
-#  vCPUs on Linux and three cores on macOS, and each job also installs the
-#  pinned toolchain and builds, about three and a half minutes on Linux.
+#  Whole-job times below were measured on these runners, four vCPUs on Linux
+#  and three cores on macOS, install and build included; lane times inside
+#  them were measured on an ubuntu:24.04 container pinned to four CPUs and on
+#  an eight-core Mac.  cortex-m, twenty-six minutes, sets the gate's length.
 
 name: gate
 
@@ -199,7 +199,8 @@ jobs:
         run: git diff --exit-code -- highlight/tree-sitter
 
   #  QEMU, Renode and GDB on the locked tools, with the release compiler.
-  #  Four workers, each with its own shared GDB.  Measured: 836 s.
+  #  Four workers, each with its own shared GDB: 836 s on a four-CPU
+  #  container, and the whole job twenty-six minutes on the runner.
   cortex-m:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -294,7 +295,8 @@ jobs:
   #  Three workers, the runner's cores.  macOS vets each newly linked
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
-  #  and at eight alike; how this image vets them is measured here.
+  #  and at eight alike.  On this image the whole job takes ten and a half
+  #  minutes.
   darwin-parity:
     runs-on: macos-26
     timeout-minutes: 90
@@ -332,7 +334,7 @@ jobs:
 
   #  The LLDB sessions: the three derived programs at three profiles, the
   #  panic sessions and the source-debugging contract, with every dSYM,
-  #  DWARF and Mach-O identity check.  Measured on a Mac: 41 s.
+  #  DWARF and Mach-O identity check.  41 s on a Mac, five minutes as a job.
   lldb:
     runs-on: macos-26
     timeout-minutes: 60
