@@ -11,11 +11,13 @@ def main():
     child = os.fork()
     if child == 0:
         print("child ready", flush=True)
-        # Even a broken runner leaves only one short, harmless child behind.
-        time.sleep(1)
+        # Past the runner's deadline, so only a child that survived the
+        # timeout can write it.  Even a broken runner leaves only one short,
+        # harmless child behind.
+        time.sleep(4)
         marker.write_text("child survived the timeout\n")
         os._exit(0)
-    time.sleep(2)
+    time.sleep(8)
     os.waitpid(child, 0)
 
 

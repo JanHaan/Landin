@@ -565,8 +565,12 @@ package body Landin.Tests.Platform_Suite is
    end Native_Runs_Report_Status_And_Are_Bounded;
 
    --  Deliberate native-host test: a fake cannot establish that a timeout
-   --  stops a descendant. The witness forks one child; both expire within
-   --  two seconds even if the runner is broken. No compiler is invoked.
+   --  stops a descendant. The witness forks one child that writes a marker
+   --  four seconds in; the deadline is two, which a cold interpreter's start
+   --  and fork meet on any host -- 0.4 did not, once, on a three-core macOS
+   --  runner -- and the marker is looked for well after the child would have
+   --  written it. Both expire within eight seconds even if the runner is
+   --  broken. No compiler is invoked.
    procedure Native_Timeout_Stops_Descendants
      (Item : in out Landin.Testing.Context);
 
@@ -584,7 +588,7 @@ package body Landin.Tests.Platform_Suite is
          Ada.Directories.Delete_File (Marker);
       end if;
       Landin.Platform.Add (Args, Marker);
-      Landin.Platform.Native.Tools.Set_Limit (Runner, 0.4);
+      Landin.Platform.Native.Tools.Set_Limit (Runner, 2.0);
       Runner.Run ("python3", Args, Result);
       Landin.Testing.Check
         (Item, Result.Ended = Landin.Platform.Timed_Out,
@@ -593,7 +597,7 @@ package body Landin.Tests.Platform_Suite is
         (Item, Ada.Strings.Fixed.Index
            (Unbounded.To_String (Result.Output), "child ready") > 0,
          "the child started before the deadline");
-      delay 1.2;
+      delay 3.0;
       Landin.Testing.Check
         (Item, not Ada.Directories.Exists (Marker),
          "the child cannot write after the timeout");
