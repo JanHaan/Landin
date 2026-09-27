@@ -104,7 +104,7 @@ def oracle(text, marker, stock=False):
         if '[WARNING]' in line:
             require(stock and ('Tags: CIRC (0x1)' in line or
                     "Unknown baud rate, couldn't trigger the idle line interrupt" in line),
-                    'unexpected model warning')
+                    'unexpected model warning: ' + line.strip())
 
 
 def remove_renode_lock(output):
