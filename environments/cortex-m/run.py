@@ -101,18 +101,24 @@ def stop(process):
 #  wake-ups rather than about the machine: it depends on how the host ran
 #  Renode's threads, and appears in a long script on a busy host with every
 #  assertion holding.  It is the one warning allowed everywhere, and only in
-#  exactly this form.
+#  exactly this form, which is the form Renode's log file writes.
 SCHEDULER_NOTICE = re.compile(
-    r'^\[\d\d:\d\d:\d\d\.\d+\] \[WARNING\] '
+    r'^\[\d\d:\d\d:\d\d\.\d+\]  \[WARNING\] '
     r'Thread has been woken up \d+ times, verify your condition$')
 
 
-def oracle(text, marker, stock=False):
-    require(text.count(marker) == 1, 'missing/duplicate result marker: ' + marker)
+def oracle(output, marker, stock=False, log=''):
+    """Hold a probe to its result.
+
+    The marker counts only in OUTPUT, the stream the probe itself writes; LOG
+    is everything else its tools said, and is held to the same refusals.
+    """
+    require(output.count(marker) == 1, 'missing/duplicate result marker: ' + marker)
+    text = output + '\n' + log
     require(not re.search(r'error|exception|assertion|unhandled read', text, re.I),
             'probe reports an error')
     for line in text.splitlines():
-        if SCHEDULER_NOTICE.match(line.strip()):
+        if SCHEDULER_NOTICE.match(line):
             continue
         if '[WARNING]' in line:
             require(stock and ('Tags: CIRC (0x1)' in line or
@@ -176,13 +182,13 @@ class Run:
         require(record['exit'] == 0, name + ' failed; inspect retained log')
         return log.read_text(errors='replace')
 
-    def command(self, name, argv, timeout=30):
+    def command(self, name, argv, timeout=30, env=None):
         tick = time.monotonic()
         record = {'name': name, 'argv': list(map(str, argv)), 'timeout_seconds': timeout}
         self.commands.append(record)
         with (self.out / (name + '.log')).open('wb') as log:
             try:
-                p = subprocess.Popen(record['argv'], cwd=self.out, env=self.env,
+                p = subprocess.Popen(record['argv'], cwd=self.out, env=env or self.env,
                                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 try:
                     record['exit'] = p.wait(timeout=timeout)
@@ -197,14 +203,31 @@ class Run:
         return (self.out / (name + '.log')).read_text(errors='replace')
 
     def renode_script(self, name, lines, marker, stock=False, timeout=30):
+        """Run LINES in a batch Renode and hold what it printed to MARKER.
+
+        Renode's logger writes from a thread of its own, so on a shared
+        console its lines land inside the script's.  Each stream here has one
+        writer: the script's output goes to NAME.output (probes/output.py),
+        the log to NAME.renode.log, and the console keeps the monitor's.
+        """
         script = self.out / (name + '.resc')
-        script.write_text('\n'.join(lines + ['quit']) + '\n')
+        output = self.out / (name + '.output')
+        log = self.out / (name + '.renode.log')
+        for path in (output, log):
+            # logFile would keep an old log beside the new one as `.1`.
+            path.unlink(missing_ok=True)
+        script.write_text('\n'.join([f'logFile @{log}', f'include @{HERE}/probes/output.py',
+                                     *lines, 'quit']) + '\n')
         try:
-            text = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
-                                      '--config', self.out / 'renode.config', script], timeout=timeout)
+            console = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
+                                          '--hide-log', '--config', self.out / 'renode.config',
+                                          script], timeout=timeout,
+                                   env=dict(self.env, LANDIN_RENODE_OUTPUT=str(output)))
         finally:
             remove_renode_lock(self.out)
-        oracle(text, marker, stock)
+        def read(path):
+            return path.read_text(errors='replace') if path.exists() else ''
+        oracle(read(output), marker, stock, console + '\n' + read(log))
 
     def build(self, name, extra=()):
         self.command('build-' + name, [self.bin / 'arm-none-eabi-gcc', *FLAGS,

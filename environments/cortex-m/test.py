@@ -96,16 +96,61 @@ class ProbeFailures(unittest.TestCase):
         oracle('PASS', 'PASS')
 
     def test_only_the_exact_scheduler_notice_is_allowed(self):
-        notice = ('[06:19:16.1824] [WARNING] Thread has been woken up 2 times, '
+        notice = ('[06:19:16.1824]  [WARNING] Thread has been woken up 2 times, '
                   'verify your condition')
-        oracle('PASS\n' + notice, 'PASS')
+        oracle('PASS', 'PASS', log=notice)
         for text in (notice.replace('2 times', 'many times'),
                      notice + ' and more',
+                     ' ' + notice,
                      notice.replace('[WARNING]', '[ERROR]'),
-                     '[06:19:16.1824] [WARNING] sysbus: Thread has been woken up 2 times',
+                     '[06:19:16.1824]  [WARNING] sysbus: Thread has been woken up 2 times',
                      notice.replace('verify your condition', 'bad model access')):
             with self.subTest(text=text), self.assertRaises(RuntimeError):
-                oracle('PASS\n' + text, 'PASS')
+                oracle('PASS', 'PASS', log=text)
+
+    def test_the_marker_counts_only_in_the_probe_output(self):
+        # The log may split a marker it did not write, and cannot supply one.
+        split = 'R_P[10:46:56.6514] [INFO] driver: Machine paused.\nASS'
+        oracle('R_PASS\n', 'R_PASS', log=split)
+        for output, log in (('', 'R_PASS'), ('R_PASS\nR_PASS\n', ''),
+                            ('R_PASS\n', '[10:46:56.6514]  [WARNING] sysbus: bad'),
+                            ('R_PASS\n', "There was an error executing command 'include'")):
+            with self.subTest(output=output, log=log), self.assertRaises(RuntimeError):
+                oracle(output, 'R_PASS', log=log)
+
+    def fake_renode(self, root, console, output):
+        # Stands in for Renode: writes CONSOLE to the console and OUTPUT where
+        # probes/output.py would, and records the script it was given.
+        renode = root / 'renode'
+        renode.write_text(f'''#!{sys.executable}
+import os, sys
+open(os.environ["LANDIN_RENODE_OUTPUT"], "w").write({output!r})
+open({str(root / "script.resc")!r} + ".seen", "w").write(open(sys.argv[-1]).read())
+sys.stdout.write({console!r})
+''')
+        renode.chmod(0o755)
+        run = Run(root / 'out', root / 'absent-tools')
+        run.out.mkdir()
+        run.renode = renode
+        return run
+
+    def test_a_script_is_held_to_its_own_output(self):
+        split = 'R_P[10:46:56.6514] [INFO] driver: Machine paused.\nASS\n'
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.fake_renode(Path(directory), split, 'R_PASS\n')
+            run.renode_script('probe', ['python "print(1)"'], 'R_PASS')
+            script = (Path(directory) / 'script.resc.seen').read_text().splitlines()
+            self.assertEqual(script[:2], ['logFile @' + str(run.out / 'probe.renode.log'),
+                                          'include @' + str(HERE / 'probes/output.py')])
+            self.assertEqual(script[-1], 'quit')
+            self.assertIn('--hide-log', run.commands[-1]['argv'])
+        for console, output in (('R_PASS\n', ''), ('', 'R_PASS\nR_PASS\n'),
+                                ('There was an error executing command\n', 'R_PASS\n')):
+            with self.subTest(console=console, output=output), \
+                    tempfile.TemporaryDirectory() as directory:
+                run = self.fake_renode(Path(directory), console, output)
+                with self.assertRaises(RuntimeError):
+                    run.renode_script('probe', [], 'R_PASS')
 
     def command_failure(self, argv, timeout=2):
         with tempfile.TemporaryDirectory() as directory:

@@ -146,6 +146,10 @@ pins/host, subprocess failures, deadline expiration, model errors, unexpected
 warnings and absent assertions all fail. Renode returning zero after a script
 error is insufficient: the runner requires the unique final marker and scans
 its log for failures. The stock control allows only its two known warnings.
+A script's own output and Renode's log are separate files, `NAME.output` and
+`NAME.renode.log`, because Renode logs from a thread of its own and on a
+shared console its lines land inside the script's: the marker counts only in
+the output, and both files, with the console, are scanned for failures.
 
 After Renode exits, the runner removes only its verified empty
 `renode.config.lock` coordination file before inventorying evidence. Native
