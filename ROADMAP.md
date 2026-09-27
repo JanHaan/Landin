@@ -177,11 +177,54 @@ completing commit's own gate then found a third: Renode's log thread wrote
 into the middle of a script's result marker on the console they shared, so
 a script's output and Renode's log are now separate files.
 
+### R8.40 — Move the peripheral models onto QEMU
+
+Status: planned
+Depends on: R8.30
+
+Renode carries every Cortex-M check that needs a peripheral: the derived
+driver's protocol, the device fixtures' access and refusal checks, the
+firmware and backend DMA lanes, the stack observer, one source-debugging
+session, and the hosted lane that drives a device model from x86-64 code over
+a line transport. It is the largest dependency the gate installs, a portable
+build with its own .NET runtime driving four C# models and a stack observer
+in 559 lines; it is absent from the flake; its threads and log have twice
+put text on the console a lane's result was read from; and the Cortex-M job
+that runs it sets the gate's length. Its CPU adds nothing QEMU's does not:
+both descend from QEMU.
+
+Run the models on the QEMU the CPU lane already pins. Its microbit machine
+leaves the model addresses unimplemented, and an Arm watchpoint stops before
+the access, so a harness on QEMU's debugger stub, in Python's standard
+library, stops at every access to a model's window, decodes the Thumb load or
+store there, performs it against a Python model and steps past it; DMA
+writes RAM while the CPU is stopped, and an interrupt is a write to the
+NVIC's pending register. The harness is single-threaded, QEMU's clock runs
+from its instruction count, and a lane stops at a named firmware event
+rather than after an interval. The models keep the contracts the C# models
+state, including refusing an unknown, misdirected or wrongly sized access,
+and the decoder refuses every form that is not a single load or store. The
+hosted lane speaks the same line protocol to a model with no CPU behind it.
+The source-debugging session moves to the QEMU sessions, and R12's boards
+take the claims about a real device. A spike outside the tree ran the
+generated peripheral consumer this way in all six profiles and matched the
+Renode lane's trace oracle exactly.
+
+Exit evidence: every Renode lane passes on the harness with its oracles
+unchanged; the decoder agrees with the pinned disassembler on every load and
+store in every image the lanes build; a refused access, an interrupt never
+delivered and a wrong device reply each fail a named control; the gate's
+Cortex-M job runs the harness in Renode's place; and Renode, its lock
+entries and the C# models are gone from the tree, with every document that
+cites Renode as evidence saying what now carries it.
+
 ### R8 gate
 
 - Nothing outside `ROADMAP.md` cites a work item but the status pointer.
 - The frontend's scaling benchmark holds in the gate.
 - Every target the compiler has runs in the gate on every push.
+- Every Cortex-M peripheral check runs on QEMU in the gate, and Renode is
+  gone.
 
 ## R9 — Inline assembly
 

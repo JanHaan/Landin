@@ -254,7 +254,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R9.10 — Specify assembly with operands (planned).**
+**Next roadmap item: R8.40 — Move the peripheral models onto QEMU (planned).**
 
 ## License
 
