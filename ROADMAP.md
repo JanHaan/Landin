@@ -141,7 +141,7 @@ byte of the corpus, checked program by program against its parent. The
 
 ### R8.30 — Run every existing target in the gate
 
-Status: planned
+Status: complete
 Depends on: none
 
 The gate builds and tests on Linux x86-64 in debug mode and nothing else.
@@ -157,6 +157,22 @@ Exit evidence: `gate.yml` runs each of those on every push, a failure in any
 fails the gate, every end-to-end target claim is a verdict in a record the
 coverage readers read rather than a run, and the documents stop describing
 the gate as Linux and debug only.
+
+Done: `gate.yml` runs twelve jobs on every push and a final one that fails
+unless all succeeded: `check.py`, every `scripts/tests` module with its
+controls, the debug and the release corpus at eight workers with the
+determinism closures and report identity, object quality and GDB, the
+bindings, the editor grammar with a pinned CLI, every Cortex-M lane, the
+scaling benchmark, and on `macos-26` the host suite in both modes, native
+hosted parity and LLDB. Cortex-M runs on any glibc 2.38 host from a lock
+that carries its tools' whole runtime; one GDB per worker and parallel
+programs took it from 2,309 to 836 seconds, and Darwin parity from 1,465 to
+755, where macOS's vetting of each new program bounds it. The Darwin
+diagnostics runner runs end-to-end fixtures, and `check.py` refuses a
+fixture whose named target no record places. Every job was first green at
+`6b17c109`, after two runner-only faults were fixed at their cause: a
+process-timeout witness whose deadline a cold interpreter could miss, and a
+Renode scheduler notice the Cortex-M oracle took for a model warning.
 
 ### R8 gate
 
@@ -676,10 +692,8 @@ with the reason it no longer applies.
 | R730-13 | Release readiness | Source and debug identity selection is matching, not authentication or protection against concurrent replacement. | Before stronger provenance or attestation claims. | An attestation design with verified restore; the seven negative selections stay. | limit |
 | R730-17 | Language evolution | A call returning a plain pointer cannot fill a several-atom pointer union through an atom `else`; D235 keeps it refused. | A program that needs that recovery to widen. | D235 amended with a recovery lowering and evidence on every target. | open |
 | R730-20 | Language evolution | D237 leaves u128, i128 and f16 out. | A program that needs 128-bit arithmetic or binary16 values. | D237's recorded plan on every target. | open |
-| R730-22 | Companion tool and ecosystem | No job runs the structural editor grammar's integration pass. | Before the editor packages are gated artifacts. | The pass in a named job that fails, with a pinned tree-sitter CLI. | scheduled R8.30 |
 | R730-23 | Release readiness | A linked hosted image is not bit-reproducible: the GNU driver writes a random temporary object name, six bytes. | Before a reproducible-distribution claim. | Byte-identical images on both hosted targets, with the assembly-identity check kept. | open |
 | R730-24 | Competitive optimization | Build-report counters are filled differently per backend, so a cross-target comparison from them is unsafe. | Before any cross-target code-quality comparison from the report. | Every declared counter filled on every backend, or the report saying which it does not measure. | scheduled R16.10 |
-| R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence is a run, not a record the coverage readers read. | Before an end-to-end per-target claim is cited. | Every end-to-end target claim backed by a readable record. | scheduled R8.30 |
 | B3 | Scale and self-hosting | Separate compilation: whole-program checking is done; stable interfaces are R551-32's. | As R551-32. | As R551-32. | open |
 | B4 | Companion tool and ecosystem | Package, build and generators beyond the thin pieces the compiler owns; R551-33's. | As R551-33. | As R551-33. | open |
 | B5 | Broader standard library | The standard library beyond the sixteen `core` modules; R551-34's. | As R551-34. | As R551-34. | scheduled R13.20 |
@@ -703,6 +717,8 @@ with the reason it no longer applies.
 | R551-06 | Scale and self-hosting | Flow snapshots, declaration-origin matrices, folding and dependency walks and IR scratch arrays have storage and stack costs that grow with input size. | — | — | retired: R8.20 bounded a routine's declarations and a struct's fields (D247, L0325), measures every stage's storage, and made the remaining per-routine facts shared between branches |
 | R551-10 | Competitive optimization | Atom and symbol allocation and imported-module lookup repeat identity scans; simplification keeps size-dependent scratch work. | — | — | retired: R8.20 keyed atom codes, linker spellings, machine-body sharing and imported modules, and simplification forgets only what it stored |
 | SR-02 | Scale and self-hosting | The corpus at one worker measured 4,523 s on CI against 3,592 s before the parallelism change; single shared-hardware samples cannot tell variance from a regression. | — | — | retired: three repeated runs on one host put the corpus at one worker at 5,599 to 5,654 seconds before the parallelism change and 5,657 to 5,713 after it, a one per cent cost, and R8.20's tree runs it in 1,400 to 1,436 |
+| R730-22 | Companion tool and ecosystem | No job ran the structural editor grammar's integration pass. | — | — | retired: R8.30's `editor-grammar` gate job runs it on every push with the release CLI `environments/pins.sh` pins by sha256, and fails if regenerating the parser changes the committed one |
+| R730-25 | Release readiness | `end-to-end/refine-identity`'s macOS arm64 evidence was a run, not a record the coverage readers read. | — | — | retired: R8.30 runs end-to-end fixtures in Darwin's diagnostics runner, which the gate runs, places their Darwin claims from it, and has `check.py` refuse any fixture whose named product target no record places |
 
 ## Retained positions
 
