@@ -826,7 +826,7 @@ incompatible same-symbol declarations or multiple definitions. Thus an ordinary
 lexer function named `open` cannot interpose on the bridge's call to libc `open`.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
-target and checks their statuses. The Linux gate therefore proves the scalar
+target and checks their statuses. The gate's Linux corpus therefore proves the scalar
 arithmetic and non-loop expression-valued control-flow kernel, early returns,
 lexical deferred and failure-only undo cleanup, declared atom errors and source
 order, register/stack and recursive calls, folded module values, fixed arrays,

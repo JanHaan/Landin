@@ -33,7 +33,7 @@ targets and the microcontrollers people buy.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | eleven complete programs the compiler emits and the Linux gate runs today: a sensor poll that puts concepts, runtime dispatch, a lent arena and declared failures together, seven small algorithms, and correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
+| `examples.md` | eleven complete programs the compiler emits and the gate runs on every push: a sensor poll that puts concepts, runtime dispatch, a lent arena and declared failures together, seven small algorithms, and correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole authority for open work: phases, dependencies, gates, and the register of work waiting for a trigger. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
@@ -85,10 +85,11 @@ mirror, kept in step by a second push URL on the same remote rather than by a
 job.
 
 The exact-revision native acceptance that approved every revision through
-0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it with
-a smaller gate, the document checks and the complete corpus on Linux x86-64 in
-debug mode, and [`ROADMAP.md`](ROADMAP.md) schedules the targets it does not
-run yet. `.github/workflows/determinism.yml` checks that every host emits the
+0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
+every push it runs every target, Linux x86-64 and macOS arm64 natively with GDB
+and LLDB and Cortex-M under QEMU and Renode, both compiler modes, and the
+document, binding and editor-grammar checks, retaining nothing and accepting no
+revision. `.github/workflows/determinism.yml` checks that every host emits the
 same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>;
 neither runs a compiler test.
 `environments/native-ci/README.md` describes the retired arrangement. To

@@ -3,9 +3,8 @@
 Canonical hosting is GitHub; git.sr.ht
 is a mirror. The exact-revision native acceptance described below approved
 every revision through 0.2.0 and no longer runs. `.github/workflows/gate.yml`
-is what runs now, a smaller gate on Linux, and [`ROADMAP.md`](../ROADMAP.md)
-schedules the targets it does not run yet. Historical SourceHut gate results
-below keep their original meaning.
+is what runs now, on every target on every push. Historical SourceHut gate
+results below keep their original meaning.
 
 
 Native Darwin acceptance uses `python3 scripts/ci/darwin.py accept COMMIT`
@@ -14,10 +13,10 @@ Linux bundle with compatible committed scope at approval (`--darwin DARWIN_BUNDL
 execution identities are retained; Linux acceptance alone cannot close the
 Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
 
-Embedded firmware and freestanding library consumers run on the supported
-native Linux host through `environments/cortex-m/run.py`. They retain separate
-QEMU and synthetic Renode evidence in the native export. Mac `--host` checks
-compiler behavior for Cortex; they do not execute embedded workloads.
+Embedded firmware and freestanding library consumers run on Linux x86-64
+through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on every
+push. They keep separate QEMU and synthetic Renode evidence. Mac `--host`
+checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 ## Environments
 
@@ -27,7 +26,7 @@ compiler behavior for Cortex; they do not execute embedded workloads.
 | Apple Container, `linux/amd64` under Rosetta | retained environment troubleshooting, outside the development workflow | available |
 | native Linux x86-64 runner | explicit exact-revision acceptance | retired with the SourceHut gate |
 | builds.sr.ht | retired: the repository submits no build manifest | retired |
-| GitHub Actions | `gate.yml` runs the documents and the complete Linux debug corpus on every push; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
+| GitHub Actions | `gate.yml` runs every target on every push: both compiler modes on Linux x86-64 with GDB, the host suite, parity and LLDB on macOS arm64, and every Cortex-M lane; `determinism.yml`, `links.yml`, `release.yml` and `pages.yml` beside it | working |
 
 The acceptance controller runs the committed `scripts/ci/policy.json` scope
 against one committed archive. Routine promotion runs debug compiler-host
@@ -65,7 +64,7 @@ release hosted coverage for routine changes and full release GDB/LLDB for
 debugger risk. Historical schema 3 remains both-mode milestone evidence.
 
 QEMU full-system x86 is supplemental. It is not the daily loop and it is not
-the Linux gate.
+the gate.
 
 ## Commands
 
@@ -314,7 +313,7 @@ instruction-level and timing-sensitive results from this loop are not
 authority. That distinction is why the roadmap named the native gate before
 there was any code to run in it, and it is why the gate now exists: `refine`
 emits instructions. The original SourceHut gate ran them on their target hardware,
-the native acceptance did so through 0.2.0, and the Linux gate does now.
+the native acceptance did so through 0.2.0, and the gate does now, on every target.
 
 Hosting is canonical GitHub, mirrored to git.sr.ht. GitHub Actions runs the
 gate, publishes the pages and checks host-independent emission; `scripts/ci/`
