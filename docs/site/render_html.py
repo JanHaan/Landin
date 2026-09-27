@@ -933,7 +933,7 @@ GUIDES = [
                "runs where now that the native acceptance is retired."),
     dict(key="cortex-m", src="environments/cortex-m/README.md",
          out="cortex-m.html", nav="Cortex-M execution profile", group="the implementation",
-         blurb="Pinned QEMU CPU probes and a deterministic Renode peripheral lane, "
+         blurb="Pinned QEMU CPU probes and a deterministic synthetic peripheral lane, "
                "with executable evidence and explicit model limits."),
     dict(key="native-ci", src="environments/native-ci/README.md",
          out="native-ci.html", nav="native acceptance, retired",

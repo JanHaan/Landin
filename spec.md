@@ -3699,7 +3699,7 @@ records the withdrawal while its sketch keeps the historical spelling as the
 design record, as the device fixtures already did for `register` and `set`.
 
 The evidence is the executed derivation. The complete derived prototype-1
-driver runs on Cortex-M under QEMU and Renode through the generated RP2040
+driver runs on Cortex-M under QEMU, with its synthetic device model, through the generated RP2040
 modules' accessors and explicit bool image fields; it needed no volatile
 pointer type, no wrapper and no set former, and its derivation maps every
 sketch use to that form. D228 had already made the wrapper's central promise
@@ -6138,8 +6138,8 @@ The choice boundaries and their executable pins are explicit:
 | Fresh zero constructors and raw copies; explicit runtime field extraction | Implicit RMW would add a device read; static array image copying must not bypass validation | `runtime/r640-packed-construction`, `runtime/r640-packed-nested-copy`, `negative/r640-static-array-extraction`, `negative/r640-zero-field` |
 | Arrays snapshot values; fields have no independent byte address | Streaming overlap or exposing an ordinary slice invents a false stride and may corrupt later source elements | `runtime/r640-overlapping-array-copy`, `negative/r640-address`, `negative/r640-inout`, `negative/r640-slice` |
 | Named-value comparison/matching; explicit raw-carrier comparison | Aggregate equality or integer-to-enum casts would confuse image bits with atom identities | `runtime/r640-packed-small-space`, `negative/r640-image-equality`, `negative/r640-enum-integer-conversion` |
-| Explicit one-event image accesses; no synthesized field operations | Hidden reads, split/widened accesses and readback-based one-clears commands violate device contracts | `runtime/r640-register-images`, `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, the Renode literal trace |
-| Required reserved patterns are checked, never repaired silently | Truncating a supplied write or silently inserting ones conceals an invalid command; preserve performs no hidden read | `runtime/r640-reserved-value`, `abi/r640-reserved-trap`, `negative/r640-register-reserved-zero`, `negative/r640-register-reserved-one`, the Renode required-one register |
+| Explicit one-event image accesses; no synthesized field operations | Hidden reads, split/widened accesses and readback-based one-clears commands violate device contracts | `runtime/r640-register-images`, `negative/r640-register-no-read`, `negative/r640-register-no-write`, `negative/r640-register-one-clears-preserve`, the synthetic device's literal trace |
+| Required reserved patterns are checked, never repaired silently | Truncating a supplied write or silently inserting ones conceals an invalid command; preserve performs no hidden read | `runtime/r640-reserved-value`, `abi/r640-reserved-trap`, `negative/r640-register-reserved-zero`, `negative/r640-register-reserved-one`, the synthetic device's required-one register |
 | D187/D227 remain independent of image layout | Field RMW is not an atomic operation, and status decoding cannot make an ordinary DMA slice coherent | `runtime/r640-packed-index-bound`, `runtime/r640-packed-value-fit`, `abi/r640-dma-packed`, `negative/r640-m0-register64` |
 
 **Guarantee classes:** positions, widths, overlap, encoding uniqueness, field
@@ -6157,8 +6157,8 @@ unsigned carriers or pointers use the existing C boundary.
 `runtime/r640-packed-array-copy`, `runtime/r640-packed-static`,
 `runtime/r640-packed-small-space` and `runtime/r640-packed-hole` distinguish
 images, validated extraction, copies, calls and indexed updates. The independent
-`targets/packed image algebra and access plans` case and the retained Renode
-contract define separate image and transaction oracles.
+`targets/packed image algebra and access plans` case and the retained synthetic
+device contract define separate image and transaction oracles.
 
 ### D236 — A range subtype constrains scalar positions only
 
@@ -14160,7 +14160,7 @@ retained immutable slice and even when no Landin call wrote it.
 
 An interrupt notification alone is not DMA completion. Masking interrupts can
 delay the notification while DMA continues writing. The selected synthetic
-Renode model copies a byte before count/status, and is cacheless; its ordered
+device model copies a byte before count/status, and is cacheless; its ordered
 count observation supplies the device premise only for that model. A circular
 counter is not a stable snapshot: the caller must ensure the consumed interval
 cannot be overwritten during the copy, and must prevent/latch overrun rather

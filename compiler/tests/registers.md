@@ -271,7 +271,7 @@ fixture's own record rather than asserted here.
 
 | Fixture | Prototype | Findings | Pressure |
 | --- | --- | --- | --- |
-| `firmware/derived-driver` | P1 | X1, X2, X3, X4, X5, X6, X7, X8, X9 | complete driver/application and explicit declaration/finding adaptations in `compiler/tests/driver/DERIVATION.md`; compiler-owned QEMU reset and independent synthetic Renode protocol execution |
+| `firmware/derived-driver` | P1 | X1, X2, X3, X4, X5, X6, X7, X8, X9 | complete driver/application and explicit declaration/finding adaptations in `compiler/tests/driver/DERIVATION.md`; compiler-owned QEMU reset and independent synthetic device protocol execution |
 | `negative/r630-frame-dma` | P1 | X6, X8 | tracked frame buffer cannot escape through a DMA descriptor |
 | `abi/r630-dma-slice` | P1 | X6, X8 | escaping ordinary slice, serialized external byte writes, completion boundary and ordinary reads/copy |
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |

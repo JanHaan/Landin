@@ -1,15 +1,19 @@
-"""Native compiler-generated image operations against an actual Renode device.
+"""Native compiler-generated image operations against the synthetic device.
 
-The C peer is a blocking line transport, with no register masks or oracle.
-Renode's outer process-group timeout bounds the peer as well as the model.
-This lane runs Linux instructions and is distinct from the M0 C control.
+The C peer is a blocking line transport, with no register masks or oracle:
+each line it writes is one device access, which the encoding model performs
+and answers.  There is no CPU model behind it.  This lane runs Linux
+instructions and is distinct from the M0 C control.
 """
 import argparse
 import json
 from pathlib import Path
+import subprocess
+import time
 
+from models import EncodingPeripheral
 from packed import TRACE
-from run import Run, require
+from run import Run, require, stop
 from setup import DEFAULT, HERE, inventory, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'),
@@ -24,12 +28,10 @@ def execute(run, refine):
                   'source_sha256': sha(HERE / 'probes/packed-native.ldn'),
                   'hole_source_sha256': sha(HERE / 'probes/packed-native-hole.ldn'),
                   'transport_sha256': sha(HERE / 'probes/packed-transport.c'),
-                  'execution': 'native Linux x86-64, Renode bus transport',
+                  'execution': 'native Linux x86-64, line transport to the encoding model',
                   'profiles': PROFILES}
     (run.out / 'packed-native-inputs.json').write_text(
         json.dumps(identities, indent=2, sort_keys=True) + '\n')
-    platform = run.out / 'packed-native.repl'
-    platform.write_text('model: Miscellaneous.EncodingPeripheral @ sysbus 0x40030000\n')
     for optimization, specialization in PROFILES:
         name = 'packed-native-' + optimization + '-' + specialization
         assembly, executable = run.out / (name + '.s'), run.out / name
@@ -40,77 +42,61 @@ def execute(run, refine):
         run.command(name + '-link', ['gcc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                     '-g', '-fno-pie', '-no-pie', assembly,
                     HERE / 'probes/packed-transport.c', '-o', executable])
-        checks = run.out / (name + '.py')
-        checks.write_text('''import clr
-clr.AddReference("System.Diagnostics.Process")
-from System.Diagnostics import Process, ProcessStartInfo
-bus = monitor.Machine.SystemBus
-model = monitor.Machine["sysbus.model"]
-info = ProcessStartInfo()
-info.FileName = ''' + repr(str(executable)) + '''
-info.UseShellExecute = False
-info.RedirectStandardInput = True
-info.RedirectStandardOutput = True
-info.RedirectStandardError = True
-peer = Process.Start(info)
-commands = []
-try:
-    for event in range(17):
-        line = peer.StandardOutput.ReadLine()
-        assert line is not None
-        fields = str(line).split()
-        commands.append(str(line))
-        if fields[0] == "DONE":
-            assert event == 16 and fields == ["DONE", "1600"]
-            break
-        offset = int(fields[1])
-        address = 0x40030000 + offset
-        if fields[0] == "R32":
-            assert len(fields) == 2
-            value = bus.ReadDoubleWord(address)
-        elif fields[0] == "R16":
-            assert len(fields) == 2
-            value = bus.ReadWord(address)
-        elif fields[0] == "W32":
-            assert len(fields) == 3
-            bus.WriteDoubleWord(address, int(fields[2]))
-            value = 1
-        elif fields[0] == "W16":
-            assert len(fields) == 3
-            bus.WriteWord(address, int(fields[2]))
-            value = 1
-        else:
-            raise AssertionError("unknown transport operation")
-        peer.StandardInput.WriteLine(str(value))
-        peer.StandardInput.Flush()
-    else:
-        raise AssertionError("transport event limit")
-    assert peer.WaitForExit(2000)
-    assert peer.ExitCode == 0
-    assert peer.StandardError.ReadToEnd() == ""
-    assert str(model.Trace) == ''' + repr(TRACE) + '''
-    assert model.Normal == 0xa50000d0
-    assert model.Command == 0x51 and model.Pending == 0xf1
-    assert model.Count == 0xffff
-    assert model.Ones == 0xffffff51
-    print("R640_NATIVE_COMMANDS " + ";".join(commands))
-    print("R640_NATIVE_TRACE " + str(model.Trace))
-    print("R640_NATIVE_PASS")
-finally:
-    if not peer.HasExited:
-        peer.Kill()
-        peer.WaitForExit()
-''')
-        run.renode_script(name, [
-            f'include @{HERE}/probes/EncodingPeripheral.cs',
-            'mach create "native-packed-contract"',
-            f'machine LoadPlatformDescription @{platform}',
-            f'include @{checks}',
-        ], 'R640_NATIVE_PASS')
-        hole(run, refine, platform, optimization, specialization)
+        model = EncodingPeripheral()
+        commands, status = transport(run, name, executable, model, 17)
+        require(status == 0, name + ' exited %d' % status)
+        require(commands[-1] == 'DONE 1600', name + ' reported ' + commands[-1])
+        require(model.trace == TRACE, name + ' trace differs: ' + model.trace)
+        require(model.normal == 0xa50000d0 and model.command == 0x51 and model.pending == 0xf1
+                and model.count == 0xffff and model.ones == 0xffffff51, name + ' device images')
+        (run.out / (name + '.trace')).write_text(';'.join(commands) + '\n' + model.trace + '\n')
+        hole(run, refine, optimization, specialization)
 
 
-def hole(run, refine, platform, optimization, specialization):
+def transport(run, name, executable, model, limit):
+    """Serve the peer's line transport against MODEL until it exits.
+
+    Returns the lines it wrote and its exit status.  The peer may write at
+    most LIMIT lines; everything it writes to stderr fails the lane.
+    """
+    record = {'name': name, 'argv': [str(executable)], 'timeout_seconds': 10}
+    run.commands.append(record)
+    tick = time.monotonic()
+    commands = []
+    with (run.out / (name + '.stderr')).open('wb') as errors:
+        peer = subprocess.Popen([str(executable)], cwd=run.out, env=run.env, text=True,
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=errors, start_new_session=True)
+        try:
+            for line in peer.stdout:
+                commands.append(line.rstrip('\n'))
+                require(len(commands) <= limit, name + ': transport event limit')
+                fields = line.split()
+                if fields[0] == 'DONE':
+                    break
+                operation, offset = fields[0], int(fields[1])
+                require(len(fields) == (3 if operation[0] == 'W' else 2) and
+                        operation in ('R32', 'R16', 'W32', 'W16'),
+                        name + ': unknown transport operation ' + line.strip())
+                width = int(operation[1:]) // 8
+                if operation[0] == 'R':
+                    value = model.read(offset, width)
+                else:
+                    model.write(offset, width, int(fields[2]))
+                    value = 1
+                peer.stdin.write('%d\n' % value)
+                peer.stdin.flush()
+            peer.stdin.close()
+            status = peer.wait(timeout=10)
+        finally:
+            stop(peer)
+            record.update(seconds=round(time.monotonic() - tick, 3), exit=peer.returncode)
+            (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2) + '\n')
+    require((run.out / (name + '.stderr')).read_bytes() == b'', name + ' wrote to stderr')
+    return commands, status
+
+
+def hole(run, refine, optimization, specialization):
     name = 'packed-native-hole-' + optimization + '-' + specialization
     assembly, executable = run.out / (name + '.s'), run.out / name
     run.command(name + '-compile', [refine, '--target=linux-x86-64',
@@ -120,44 +106,13 @@ def hole(run, refine, platform, optimization, specialization):
     run.command(name + '-link', ['gcc', '-std=c11', '-Wall', '-Wextra', '-Werror',
                 '-g', '-fno-pie', '-no-pie', assembly,
                 HERE / 'probes/packed-transport.c', '-o', executable])
-    checks = run.out / (name + '.py')
-    checks.write_text('''import clr
-clr.AddReference("System.Diagnostics.Process")
-from System.Diagnostics import Process, ProcessStartInfo
-bus = monitor.Machine.SystemBus
-model = monitor.Machine["sysbus.model"]
-info = ProcessStartInfo()
-info.FileName = ''' + repr(str(executable)) + '''
-info.UseShellExecute = False
-info.RedirectStandardInput = True
-info.RedirectStandardOutput = True
-info.RedirectStandardError = True
-peer = Process.Start(info)
-try:
-    assert str(peer.StandardOutput.ReadLine()) == "R32 4"
-    value = bus.ReadDoubleWord(0x40030004)
-    assert value == 0x9b
-    peer.StandardInput.WriteLine(str(value))
-    peer.StandardInput.Flush()
-    assert peer.StandardOutput.ReadLine() is None
-    assert peer.WaitForExit(2000)
-    print("R640_NATIVE_HOLE_EXIT " + str(peer.ExitCode))
-    assert peer.ExitCode == 132
-    assert peer.StandardError.ReadToEnd() == ""
-    assert str(model.Trace) == "r32:4:0000009b"
-    print("R640_NATIVE_HOLE_TRACE " + str(model.Trace))
-    print("R640_NATIVE_HOLE_PASS")
-finally:
-    if not peer.HasExited:
-        peer.Kill()
-        peer.WaitForExit()
-''')
-    run.renode_script(name, [
-        f'include @{HERE}/probes/EncodingPeripheral.cs',
-        'mach create "native-packed-hole-contract"',
-        f'machine LoadPlatformDescription @{platform}',
-        f'include @{checks}',
-    ], 'R640_NATIVE_HOLE_PASS')
+    model = EncodingPeripheral()
+    commands, status = transport(run, name, executable, model, 1)
+    # The peer traps on the unnamed encoding after its one read (SIGILL).
+    require(commands == ['R32 4'], name + ' wrote ' + repr(commands))
+    require(status == -4, name + ' exited %d, not by SIGILL' % status)
+    require(model.trace == 'r32:4:0000009b', name + ' trace differs: ' + model.trace)
+    (run.out / (name + '.trace')).write_text(model.trace + '\n')
 
 
 def main():
@@ -175,11 +130,11 @@ def main():
         require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'),
                 'tool lock mismatch')
         require(installed['files'] == {area: inventory(args.tools / area)
-                for area in ('root', 'renode')}, 'installed tools changed')
+                for area in installed['files']}, 'installed tools changed')
         (out / 'tools.json').write_text(json.dumps(installed, sort_keys=True) + '\n')
         execute(Run(out, args.tools.resolve()), args.refine)
         require(installed['files'] == {area: inventory(args.tools / area)
-                for area in ('root', 'renode')}, 'tools changed during execution')
+                for area in installed['files']}, 'tools changed during execution')
         require(result['inputs'] == inventory(HERE), 'probe inputs changed')
         result['status'] = 'passed'
     finally:

@@ -191,8 +191,8 @@ with LLDB sessions and Mach-O debug artifacts.
 
 ## External embedded environment tools
 
-The Cortex-M execution profile separately pins Arm EABI GCC, binutils, GDB,
-QEMU and Renode in `environments/cortex-m/tools.lock.json`. The
+The Cortex-M execution profile separately pins Arm EABI GCC, binutils, GDB
+and QEMU in `environments/cortex-m/tools.lock.json`. The
 [profile guide](../../environments/cortex-m/README.md) gives exact versions,
 options and reproduction on any glibc 2.38 Linux x86-64 host. They compile only small environment
 controls, are not Ada bootstrap dependencies and do not enable a Landin

@@ -141,7 +141,7 @@ def execute_suite(parent, refine, profiles=PROFILES):
         if name=='app':
             driver.cpu(child(run,'qemu-boot'),elf,symbols,name)
             source_debug.cpu(child(run,'qemu-source'),elf)
-            source_debug.application(child(run,'renode-source'),elf)
+            source_debug.application(child(run,'relayed-source'),elf)
             selection_controls(child(run,'selection'),elf)
             record['scenarios']={}
             for scenario in ('receive','open-failure','transfer-fault','exhaustion'):

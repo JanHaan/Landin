@@ -7,7 +7,7 @@ import tempfile
 import threading
 import unittest
 
-from run import HERE, Run, oracle, remove_renode_lock
+from run import HERE, Run, oracle
 
 
 class ProbeFailures(unittest.TestCase):
@@ -27,11 +27,11 @@ class ProbeFailures(unittest.TestCase):
             root=Path(directory)
             (root/'installation.json').write_text(json.dumps({
                 'lock_sha256':sha(HERE/'tools.lock.json'),
-                'files':{'root':{},'renode':{}}}))
+                'files':{'root':{}}}))
             stack.enter_context(patch('run.supported_host'))
             stack.enter_context(patch('run.inventory',return_value={}))
             stack.enter_context(patch.object(Run,'command',return_value=
-                '10.0.13 14.2.1 20241119 2.44 16.3 1.17.0+20260907gitf1dd1b4af'))
+                '10.0.13 14.2.1 20241119 2.44 16.3'))
             stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
             stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
             for name, entry in lanes:
@@ -95,63 +95,6 @@ class ProbeFailures(unittest.TestCase):
                 oracle(text, 'PASS')
         oracle('PASS', 'PASS')
 
-    def test_only_the_exact_scheduler_notice_is_allowed(self):
-        notice = ('[06:19:16.1824]  [WARNING] Thread has been woken up 2 times, '
-                  'verify your condition')
-        oracle('PASS', 'PASS', log=notice)
-        for text in (notice.replace('2 times', 'many times'),
-                     notice + ' and more',
-                     ' ' + notice,
-                     notice.replace('[WARNING]', '[ERROR]'),
-                     '[06:19:16.1824]  [WARNING] sysbus: Thread has been woken up 2 times',
-                     notice.replace('verify your condition', 'bad model access')):
-            with self.subTest(text=text), self.assertRaises(RuntimeError):
-                oracle('PASS', 'PASS', log=text)
-
-    def test_the_marker_counts_only_in_the_probe_output(self):
-        # The log may split a marker it did not write, and cannot supply one.
-        split = 'R_P[10:46:56.6514] [INFO] driver: Machine paused.\nASS'
-        oracle('R_PASS\n', 'R_PASS', log=split)
-        for output, log in (('', 'R_PASS'), ('R_PASS\nR_PASS\n', ''),
-                            ('R_PASS\n', '[10:46:56.6514]  [WARNING] sysbus: bad'),
-                            ('R_PASS\n', "There was an error executing command 'include'")):
-            with self.subTest(output=output, log=log), self.assertRaises(RuntimeError):
-                oracle(output, 'R_PASS', log=log)
-
-    def fake_renode(self, root, console, output):
-        # Stands in for Renode: writes CONSOLE to the console and OUTPUT where
-        # probes/output.py would, and records the script it was given.
-        renode = root / 'renode'
-        renode.write_text(f'''#!{sys.executable}
-import os, sys
-open(os.environ["LANDIN_RENODE_OUTPUT"], "w").write({output!r})
-open({str(root / "script.resc")!r} + ".seen", "w").write(open(sys.argv[-1]).read())
-sys.stdout.write({console!r})
-''')
-        renode.chmod(0o755)
-        run = Run(root / 'out', root / 'absent-tools')
-        run.out.mkdir()
-        run.renode = renode
-        return run
-
-    def test_a_script_is_held_to_its_own_output(self):
-        split = 'R_P[10:46:56.6514] [INFO] driver: Machine paused.\nASS\n'
-        with tempfile.TemporaryDirectory() as directory:
-            run = self.fake_renode(Path(directory), split, 'R_PASS\n')
-            run.renode_script('probe', ['python "print(1)"'], 'R_PASS')
-            script = (Path(directory) / 'script.resc.seen').read_text().splitlines()
-            self.assertEqual(script[:2], ['logFile @' + str(run.out / 'probe.renode.log'),
-                                          'include @' + str(HERE / 'probes/output.py')])
-            self.assertEqual(script[-1], 'quit')
-            self.assertIn('--hide-log', run.commands[-1]['argv'])
-        for console, output in (('R_PASS\n', ''), ('', 'R_PASS\nR_PASS\n'),
-                                ('There was an error executing command\n', 'R_PASS\n')):
-            with self.subTest(console=console, output=output), \
-                    tempfile.TemporaryDirectory() as directory:
-                run = self.fake_renode(Path(directory), console, output)
-                with self.assertRaises(RuntimeError):
-                    run.renode_script('probe', [], 'R_PASS')
-
     def command_failure(self, argv, timeout=2):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -171,21 +114,6 @@ sys.stdout.write({console!r})
     def test_timeout(self):
         record = self.command_failure([sys.executable, '-c', 'import time; time.sleep(10)'], .05)
         self.assertTrue(record['timed_out'])
-
-    def test_ephemeral_renode_lock_is_not_evidence(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            lock = root / 'renode.config.lock'
-            lock.touch()
-            remove_renode_lock(root)
-            self.assertFalse(lock.exists())
-            lock.write_text('unexpected bytes')
-            with self.assertRaises(RuntimeError):
-                remove_renode_lock(root)
-            lock.unlink()
-            lock.symlink_to(root / 'absent')
-            with self.assertRaises(RuntimeError):
-                remove_renode_lock(root)
 
     def test_abi_contract_and_synthetic_goldens(self):
         from abi import contract, synthetic_agreement, CONTRACT, GOLDEN
@@ -379,17 +307,6 @@ sys.stdout.write({console!r})
         with patch.dict('os.environ', {'LANDIN_CORTEX_JOBS': '8'}):
             self.assertEqual(workers(), 8)
 
-    def test_renode_stub_ports_are_disjoint_per_worker(self):
-        from concurrent.futures import ThreadPoolExecutor
-        from run import renode_gdb_port
-        def ports(_):
-            return {renode_gdb_port() for _ in range(20)}
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            chosen = list(pool.map(ports, range(4)))
-        for index, one in enumerate(chosen):
-            for other in chosen[index + 1:]:
-                self.assertFalse(one & other)
-
     def test_a_served_script_quits_only_at_its_end(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -401,6 +318,72 @@ sys.stdout.write({console!r})
                     run.debug('gdb-early', 'x.elf', 'early.gdb')
                 if getattr(run_module.SERVERS, 'server', None) is not None:
                     run_module.SERVERS.server.stop()
+
+    def test_decoder_reads_only_single_loads_and_stores(self):
+        from machine import Refused, decode
+        # str r1, [r2, #4]; ldrh r3, [r4, #2]; ldrsb r0, [r1, r2]; strb r5, [r6, r7]
+        self.assertEqual(decode(0x6051), (True, 4, False, 1, 2, None, 4))
+        self.assertEqual(decode(0x8863), (False, 2, False, 3, 4, None, 2))
+        self.assertEqual(decode(0x5688), (False, 1, True, 0, 1, 2, 0))
+        self.assertEqual(decode(0x55f5), (True, 1, False, 5, 6, 7, 0))
+        # PC- and SP-relative loads and stores, LDM, STM, PUSH and POP never
+        # reach a device through the decoder.
+        for half in (0x4a00, 0x9801, 0x9001, 0xc60f, 0xcc0f, 0xb4f0, 0xbdf0, 0xbf30):
+            with self.subTest(half=hex(half)), self.assertRaises(Refused):
+                decode(half)
+
+    def test_models_refuse_what_their_contracts_do_not_name(self):
+        from machine import Refused
+        from models import (DriverPeripheral, EncodingPeripheral, FixturePeripheral,
+                            PrototypePeripheral)
+        cases = [(FixturePeripheral(), [(False, 0x114, 4), (True, 0x218, 4), (False, 0x1008, 2),
+                                        (True, 0x200, 1), (False, 0x204, 4)]),
+                 (PrototypePeripheral(), [(False, 0x6004, 4), (True, 0x6000, 4),
+                                          (False, 0x6068, 4), (False, 0, 2), (True, 0x10, 2)]),
+                 (EncodingPeripheral(), [(False, 8, 4), (True, 4, 4), (False, 0, 2),
+                                         (False, 16, 4), (True, 0, 1)]),
+                 (DriverPeripheral(), [(False, 0x200, 4), (True, 0x328, 4), (False, 4, 2),
+                                       (True, 4, 1)])]
+        for model, accesses in cases:
+            for write, offset, width in accesses:
+                with self.subTest(model=type(model).__name__, offset=offset, width=width), \
+                        self.assertRaises(Refused):
+                    if write:
+                        model.write(offset, width, 0)
+                    else:
+                        model.read(offset, width)
+        for model, (offset, value) in ((FixturePeripheral(), (0x114, 0x40000000)),
+                                       (EncodingPeripheral(), (0, 0)),
+                                       (DriverPeripheral(), (0x224, 0x10000))):
+            with self.subTest(model=type(model).__name__, reserved=offset), \
+                    self.assertRaises(Refused):
+                model.write(offset, 4, value)
+
+    def test_the_decoder_agrees_with_the_disassembler_or_fails(self):
+        from machine import agree
+        listing = (' 2f40:\t6810      \tldr\tr0, [r2, #0]\n'
+                   ' 2f42:\t5688      \tldrsb\tr0, [r1, r2]\n'
+                   ' 2f44:\t4a00      \tldr\tr2, [pc, #0]\n')
+        self.assertEqual(agree(listing), 2)
+        # An objdump line whose operands disagree with its encoding: the
+        # harness would perform a different access than the CPU's.
+        with self.assertRaisesRegex(RuntimeError, 'disagrees'):
+            agree(' 2f40:\t6810      \tldr\tr1, [r2, #0]\n')
+
+    def test_a_driver_descriptor_cannot_change_while_it_drains(self):
+        from machine import Refused
+        from models import DriverPeripheral
+        model = DriverPeripheral()
+        model.machine = type('Bus', (), {'write': lambda self, address, data: None})()
+        model.write(0x1000, 4, 0x40070200)
+        model.write(0x1004, 4, 0x20000100)
+        model.write(0x1008, 4, 8)
+        model.write(0x100c, 4, 0xa84e1)
+        self.assertTrue(model.busy)
+        with self.assertRaises(Refused):
+            model.write(0x1004, 4, 0x20000200)
+        model.feed(1)
+        self.assertEqual((model.remaining, model.events[-1]), (7, 'dma8:0:01'))
 
     def test_unsupported_host(self):
         from unittest.mock import patch

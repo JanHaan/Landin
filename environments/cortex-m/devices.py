@@ -10,6 +10,8 @@ import sys
 from backend import image_contract
 from firmware import execute
 from freestanding import linker_closure
+from machine import Machine, Refused
+from models import FixturePeripheral
 from packed_native import PROFILES
 from run import Run, require, FLAGS
 from setup import DEFAULT, inventory, sha, supported_host
@@ -111,67 +113,97 @@ TAIL = (';w32:1008:00000004;w32:100c:000a8020;w32:1404:00000001;'
         'r32:1400:00000001;r32:1008:00000000;w32:1400:00000001')
 
 
-def peripheral(run, elf):
+def peripheral(run, elf, model=None, name='device'):
     text = run.command('device-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {s[2]: int(s[0], 16) for line in text.splitlines()
                if len(s := line.split()) == 3}
-    def checks(name, assertions):
-        path = run.out / (name+'.py')
-        path.write_text('bus=monitor.Machine.SystemBus\n'
-                        'model=monitor.Machine["sysbus.model"]\n'+assertions+'\n')
-        return 'include @'+str(path)
-    ready = checks('ready', f'''assert bus.ReadDoubleWord({symbols['stage']}) == 1
-assert model.Configuration == 0xa8021 and model.Remaining == 4
-assert model.Output == 16 and model.Transmitted == 0x55 and model.Alarm == 7
-assert model.Transfers == 0
-''')
-    half = checks('half', f'''assert bus.ReadDoubleWord({symbols['notifications']}) == 1
-assert bus.ReadDoubleWord({symbols['completed']}) == 0
-assert bus.ReadDoubleWord({symbols['result']}) == 0
-assert model.Transfers == 2 and model.Remaining == 2
-bus.WriteDoubleWord({symbols['stage']},2)
-''')
-    masked = checks('masked', f'''assert bus.ReadDoubleWord({symbols['stage']}) == 3
-assert bus.ReadDoubleWord({symbols['notifications']}) == 1
-assert bus.ReadDoubleWord({symbols['completed']}) == 0
-assert model.Transfers == 4 and model.Remaining == 0
-assert bus.ReadDoubleWord({symbols['buffer']}) == 0x2d2c2b2a
-bus.WriteDoubleWord({symbols['stage']},4)
-''')
+    stage = symbols['stage']
+    model = model or FixturePeripheral()
+    with Machine(run, elf, name, poll=[stage]) as m:
+        m.map(0x40070000, 0x2000, model)
+        m.trap(symbols['hardfault' if 'hardfault' in symbols else
+                       '_landin_firmware_unhandled'], 'unhandled exception')
+        u32 = m.u32
+        m.until(lambda: u32(stage) == 1)
+        require(model.configuration == 0xa8021 and model.remaining == 4, 'ready: descriptor')
+        require(model.output == 16 and model.transmitted == 0x55 and model.alarm == 7,
+                'ready: device images')
+        require(model.transfers == 0, 'ready: transfers')
+        model.feed(42)
+        model.feed(43)
+        m.settle()
+        require(u32(symbols['notifications']) == 1, 'half: notifications')
+        require(u32(symbols['completed']) == 0 and u32(symbols['result']) == 0, 'half: state')
+        require(model.transfers == 2 and model.remaining == 2, 'half: model')
+        m.write_u32(stage, 2)
+        m.until(lambda: u32(stage) == 3)
+        model.feed(44)
+        model.feed(45)
+        m.settle()
+        require(u32(symbols['notifications']) == 1, 'masked: delivered while masked')
+        require(u32(symbols['completed']) == 0, 'masked: completed while masked')
+        require(model.transfers == 4 and model.remaining == 0, 'masked: model')
+        require(u32(symbols['buffer']) == 0x2d2c2b2a, 'masked: buffer')
+        m.write_u32(stage, 4)
+        m.until(lambda: u32(stage) == 5)
+        m.settle()
+        require(u32(symbols['result']) == 174, 'done: result')
+        require(u32(symbols['notifications']) == 2 and u32(symbols['completed']) == 1,
+                'done: notifications')
+        require(model.pending == 0 and model.configuration == 0xa8020, 'done: model')
     trace = PREFIX + 'w32:1004:'+format(symbols['buffer'], '08x') + TAIL
-    done = checks('done', f'''assert bus.ReadDoubleWord({symbols['stage']}) == 5
-assert bus.ReadDoubleWord({symbols['result']}) == 174
-assert bus.ReadDoubleWord({symbols['notifications']}) == 2
-assert bus.ReadDoubleWord({symbols['completed']}) == 1
-assert model.Pending == 0 and model.Configuration == 0xa8020
-assert str(model.Trace) == {trace!r}
-print("R680_DEVICE_TRACE "+str(model.Trace))
-refused=0
-for action in [lambda: model.ReadDoubleWord(0x114),
-               lambda: model.WriteDoubleWord(0x218,0),
-               lambda: model.ReadWord(0x1008),
-               lambda: model.WriteByte(0x200,1),
-               lambda: model.WriteDoubleWord(0x334,16),
-               lambda: model.ReadDoubleWord(0x204),
-               lambda: model.WriteDoubleWord(0x100c,12)]:
-    try:
-        action()
-    except Exception:
-        refused+=1
-assert refused == 7
-assert str(model.Trace) == {trace!r}
-print("R680_PERIPHERAL_PASS")
-''')
-    run.renode_script('device', [
-        f'include @{HERE}/probes/FixturePeripheral.cs',
-        'mach create "generated-device-fixture"',
-        f'machine LoadPlatformDescription @{HERE}/probes/fixture.repl',
-        f'sysbus LoadELF @{elf}', 'emulation RunFor "0.01"', ready,
-        'sysbus.model Feed 42', 'sysbus.model Feed 43',
-        'emulation RunFor "0.01"', half, 'emulation RunFor "0.01"',
-        'sysbus.model Feed 44', 'sysbus.model Feed 45',
-        'emulation RunFor "0.01"', masked, 'emulation RunFor "0.01"', done],
-        'R680_PERIPHERAL_PASS')
+    require(model.trace == trace, 'device trace differs: ' + model.trace)
+    refused = 0
+    for action in [lambda: model.read(0x114, 4), lambda: model.write(0x218, 4, 0),
+                   lambda: model.read(0x1008, 2), lambda: model.write(0x200, 1, 1),
+                   lambda: model.write(0x334, 4, 16), lambda: model.read(0x204, 4),
+                   lambda: model.write(0x100c, 4, 12)]:
+        try:
+            action()
+        except Refused:
+            refused += 1
+    require(refused == 7 and model.trace == trace, 'model accepted a refused access')
+    (run.out / 'device-trace.txt').write_text(model.trace + '\n')
+
+
+def faults(run, elf):
+    """The harness fails, naming the cause, on each fault it exists to catch.
+
+    The independent C consumer runs three times with one fault injected into
+    its otherwise passing lane: a register the contract refuses, a device
+    whose interrupt line never reaches the NVIC, and a reply one bit wrong.
+    Each must fail the way it says; a lane that passed would mean the
+    harness could not see that fault.
+    """
+    class Refusing(FixturePeripheral):
+        def read(self, offset, width):
+            if offset == 0x218:
+                raise Refused('forbidden read or unknown fixture register')
+            return super().read(offset, width)
+
+    class Silent(FixturePeripheral):
+        LINES = {}
+
+    class Lying(FixturePeripheral):
+        def read(self, offset, width):
+            value = super().read(offset, width)
+            return value ^ 1 if offset == 0x218 else value
+
+    outcomes = {}
+    # An interrupt never delivered leaves the handler's count at zero once
+    # the firmware is idle; a wrong status reply makes it stop configuring.
+    for name, model, expected in (('refused', Refusing, 'forbidden read'),
+                                  ('undelivered', Silent, '^half: notifications$'),
+                                  ('wrong-reply', Lying, '^firmware idle at 0x[0-9a-f]+ before')):
+        try:
+            peripheral(run, elf, model(), 'fault-' + name)
+        except (Refused, RuntimeError) as failure:
+            require(re.search(expected, str(failure)), 'fault %s failed for another reason: %s'
+                    % (name, failure))
+            outcomes[name] = str(failure)
+            continue
+        raise RuntimeError('fault %s passed: the harness cannot see it' % name)
+    (run.out / 'faults.json').write_text(json.dumps(outcomes, indent=2) + '\n')
 
 
 def independent(run):
@@ -185,6 +217,7 @@ def independent(run):
             'independent control unresolved symbols')
     (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
     peripheral(run, elf)
+    faults(run, elf)
 
 
 def refusal_programs():
@@ -227,23 +260,17 @@ def refusal(run, elf, name):
     text = run.command('refusal-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {s[2]: int(s[0], 16) for line in text.splitlines() if len(s := line.split()) == 3}
     trace = {'hole':'r32:4:00000008','reserved':'r32:4:00000800','alignment':''}[name]
-    checks = run.out / 'refusal.py'
-    checks.write_text(f'''bus=monitor.Machine.SystemBus
-model=monitor.Machine["sysbus.model"]
-assert bus.ReadDoubleWord({symbols['entries']}) == 1
-assert bus.ReadDoubleWord({symbols['observed_kind']}) == 3
-assert bus.ReadDoubleWord({symbols['observed_site']}) == {site}
-assert bus.ReadDoubleWord({symbols['later']}) == 0
-assert str(model.Trace) == {trace!r}
-print("R680_REFUSAL_TRACE "+str(model.Trace))
-print("R680_REFUSAL_PASS")
-''')
-    run.renode_script('refusal', [f'include @{HERE}/probes/FixturePeripheral.cs',
-        'mach create "generated-device-refusal"',
-        f'machine LoadPlatformDescription @{HERE}/probes/fixture.repl',
-        f'sysbus LoadELF @{elf}',
-        'sysbus.model SetGPIO '+str(8 if name == 'hole' else 0x800),
-        'emulation RunFor "0.01"', f'include @{checks}'], 'R680_REFUSAL_PASS')
+    model = FixturePeripheral()
+    model.gpio = 8 if name == 'hole' else 0x800
+    with Machine(run, elf, 'refusal') as m:
+        m.map(0x40070000, 0x2000, model)
+        m.settle()
+        require(m.u32(symbols['entries']) == 1, 'refusal: entries')
+        require(m.u32(symbols['observed_kind']) == 3, 'refusal: kind')
+        require(m.u32(symbols['observed_site']) == site, 'refusal: site')
+        require(m.u32(symbols['later']) == 0, 'refusal: continued past the trap')
+    require(model.trace == trace, 'refusal trace differs: ' + model.trace)
+    (run.out / 'refusal-trace.txt').write_text(model.trace + '\n')
 
 
 def execute_suite(parent, refine, profiles=PROFILES, cases=None):

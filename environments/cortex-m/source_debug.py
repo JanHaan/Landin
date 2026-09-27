@@ -1,13 +1,11 @@
 """Executable Cortex line/function debugger contract, on the Linux host."""
 import json
 from pathlib import Path
-import subprocess
 import sys
-import time
 
-from driver import HERE, build
+from driver import HERE, build, machine
 from firmware import execute
-from run import Run, oracle, remove_renode_lock, renode_gdb_port, require, stop
+from run import Run, oracle
 
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from cortex_debug import Image, verify
@@ -51,52 +49,30 @@ def cpu(run, elf):
         'print("R6100_CPU_SOURCE_PASS")', 'end', 'bt'], 'R6100_CPU_SOURCE_PASS')
 
 
-def renode(run, elf, commands):
-    """Bounded remote session; selection precedes any debugger attachment."""
+def relayed(run, elf, commands):
+    """A source session on QEMU, the driver's model behind a relay.
+
+    GDB drives the CPU; the relay serves every model access and runs each
+    `monitor` stimulus against the model while GDB has the CPU stopped.
+    Selection precedes any debugger attachment.
+    """
     checked(run, elf)
-    port = renode_gdb_port()
-    script = run.out/'source-debug.resc'
-    script.write_text('\n'.join([
-        f'include @{HERE}/probes/DriverPeripheral.cs',
-        'mach create "source-debug"',
-        f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-        f'sysbus LoadELF @{elf}', f'machine StartGdbServer {port}', '']) )
-    gdb_script = run.out/'source-debug.gdb'
-    gdb_script.write_text('\n'.join([
-        'set pagination off', 'set confirm off',
-        'directory '+str(elf.parent), f'target remote 127.0.0.1:{port}', *PRELUDE,
-        'monitor start', *commands,
-        'python', 'print("R6100_RENODE_SOURCE_PASS")', 'end', 'quit', '']))
-    argv = [str(run.renode), '--disable-xwt', '--console', '--plain',
-            '--config', str(run.out/'renode.config'), str(script)]
-    record = dict(name='renode-source', argv=argv, timeout_seconds=40)
-    run.commands.append(record)
-    tick = time.monotonic()
-    with (run.out/'renode-source.log').open('wb') as log:
-        process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdin=subprocess.PIPE,
-                                   stdout=log, stderr=log, start_new_session=True)
-        try:
-            deadline = time.monotonic()+15
-            while True:
-                require(process.poll() is None, 'Renode exited before connection')
-                # Do not consume the stub's first connection just to probe its port.
-                if 'GDB server with all CPUs started' in (run.out/'renode-source.log').read_text():
-                    break
-                require(time.monotonic() < deadline, 'Renode GDB startup timeout')
-                time.sleep(.05)
-            text = run.debug('gdb-renode-source', elf, gdb_script, timeout=25)
-            oracle(text, 'R6100_RENODE_SOURCE_PASS')
-        finally:
-            stop(process)
-            if process.stdin:
-                process.stdin.close()
-            remove_renode_lock(run.out)
-            record.update(seconds=time.monotonic()-tick, exit=process.returncode)
-            (run.out/'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
+    names = run.command('relay-symbols', [run.bin/'arm-none-eabi-nm', elf])
+    symbols = {p[2]: int(p[0], 16) for line in names.splitlines() if len(p := line.split()) == 3}
+    m, model = machine(run, elf, symbols, 'source-debug-qemu')
+    with m:
+        port = m.relay({'feed': model.feed, 'tick': model.tick, 'delay_stop': model.delay_stop})
+        script = run.out/'source-debug.gdb'
+        script.write_text('\n'.join([
+            'set pagination off', 'set confirm off', 'set remotetimeout 30',
+            'directory '+str(elf.parent), f'target remote 127.0.0.1:{port}', *PRELUDE,
+            *commands, 'python', 'print("R6100_RELAYED_SOURCE_PASS")', 'end', 'detach', 'quit', '']))
+        text = run.debug('gdb-relayed-source', elf, script, timeout=60)
+        oracle(text, 'R6100_RELAYED_SOURCE_PASS')
 
 
 def application(run, elf):
-    renode(run, elf, [
+    relayed(run, elf, [
         'break source/drivers/uart/uart.ldn:38', 'continue', 'python',
         'frame("open","source/drivers/uart/uart.ldn",38)',
         'chain(["open","start","_landin_firmware_reset"])', 'end',
@@ -106,8 +82,8 @@ def application(run, elf):
         'delete breakpoints', 'break wait_for_interrupt', 'continue', 'python',
         'frame("wait_for_interrupt","source/core/cpu/cpu.ldn")', 'end',
         'delete breakpoints', 'break source/app/main.ldn:30',
-        'monitor sysbus.model Feed 49', 'monitor sysbus.model Feed 65',
-        'monitor sysbus.model Feed 48', 'monitor sysbus.model Tick 1000',
+        'monitor feed 49', 'monitor feed 65',
+        'monitor feed 48', 'monitor tick 1000',
         'continue', 'python',
         'frame("timer_irq","source/app/main.ldn",30)',
         'assert v("$xpsr") & 511 == 17',
@@ -123,8 +99,8 @@ def application(run, elf):
         'delete breakpoints', 'finish', 'python',
         'frame("handle","source/app/main.ldn")', 'end',
         'break wait_for_interrupt','continue','delete breakpoints',
-        'monitor sysbus.model DelayStop 20 -1','monitor sysbus.model Feed 65',
-        'monitor sysbus.model Tick 1000','break source/app/main.ldn:55',
+        'monitor delay_stop 20 -1','monitor feed 65',
+        'monitor tick 1000','break source/app/main.ldn:55',
         'continue','python','frame("halt","source/app/main.ldn",55)',
         'chain(["halt","start","_landin_firmware_reset"])',
         'assert v("*(unsigned*)&app_state") == 3','end','bt'])

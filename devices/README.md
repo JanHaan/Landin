@@ -148,7 +148,7 @@ hidden allocator, hosted reporting storage or mandatory source/provenance data.
 The mandatory [device runner](../environments/cortex-m/devices.py) follows all
 inherited lanes in `run.py`. Five consumers run at the inherited six profiles
 `none/off`, `size/off`, `size/auto`, `speed/auto`, `none/all`, `speed/all`; the new lane records six QEMU sessions, 24 generated
-Renode runs, one independent C/assembly Renode control, seven precise source
+device runs, one independent C/assembly device control, seven precise source
 refusals and 168 fresh-directory ELF/object/assembly/linker/map/source-map
 comparisons. Exact accepted results belonged to the verified native bundle of
 the retired acceptance, not this interface guide.
@@ -156,8 +156,10 @@ the retired acceptance, not this interface guide.
 The QEMU consumer cold-boots compiler-generated reset/vectors/linker output,
 checks initialized data and BSS, immutable flash, RAM-code copying, literal
 addresses/strides/layouts, raw reserved/unnamed bits, encoded updates and nested
-`core/cpu` mask restoration. Stack paint reports only observed writes. Renode
-executes compiler-generated firmware against `FixturePeripheral.cs`, whose
+`core/cpu` mask restoration. Stack paint reports only observed writes. QEMU
+executes compiler-generated firmware against `FixturePeripheral` in
+`environments/cortex-m/models.py`, served at every access by the harness in
+`machine.py`, whose
 literal offsets/masks and independent C consumer do not read generated JSON.
 It checks exact ordered 32-bit traces, FIFO consumption, RO/WO refusals,
 one-clears/zero writes, reserved-bit failures, encoded holes and misalignment.
@@ -175,8 +177,8 @@ and explicit memory boundaries precede ordinary buffer reads. Masking interrupts
 does not stop the second transfer; restoring PRIMASK delivers the pending IRQ.
 There is no circular-buffer consumption, overrun recovery or serial/timer timing
 claim. The independent C/assembly control uses the external environment startup;
-it is not language-startup evidence. Hosted-to-Renode, older backend harnesses
-and abstract models retain their separate inherited meanings.
+it is not language-startup evidence. The hosted line transport, older backend
+harnesses and abstract models retain their separate inherited meanings.
 
 All generated firmware keeps the accepted little-endian ARMv6-M Thumb M0 map:
 32 KiB flash, 16 KiB RAM, 4 KiB reserved stack; no M0+ board substitution, VTOR,
@@ -194,8 +196,7 @@ scripts, ELF/map/assembly/disassembly/relocations, symbols, runtime archive and
 member hashes, traces and assertions. Closure permits only the generated object,
 pinned `thumb/v6-m/nofp/libgcc.a` and applicable linker stubs. Undefined symbols,
 hosted startup/libc/heap dependencies fail. Optional panic maps stay off target;
-JSON provenance is never linked. Existing Renode process/lock cleanup remains
-mandatory. Complete firmware/stack measurement and source debugging belong to
+JSON provenance is never linked. Complete firmware/stack measurement and source debugging belong to
 the freestanding evidence lane, and the driver to its
 [derivation](../compiler/tests/driver/DERIVATION.md). A general SVD generator,
 package acquisition, sandboxed generator orchestration and the broader

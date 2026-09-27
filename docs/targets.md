@@ -161,9 +161,10 @@ and [LLDB scripting](https://lldb.llvm.org/use/tutorials/script-driven-debugging
 
 `refine --target=cortex-m0 --firmware-entry=start --emit=exe --debug=lines`
 adds DWARF 4 line tables, source function identities and ordinary-frame CFI.
-The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane or the
-separate synthetic Renode peripheral lane. Native Linux GDB and Darwin LLDB
-acceptance remain separate.
+The pinned Linux-hosted GDB 16.3 connects to the QEMU microbit CPU lane, or
+through the peripheral harness's relay to the same QEMU with the driver's
+synthetic device behind it. Native Linux GDB and Darwin LLDB acceptance remain
+separate.
 
 `--debug=full` remains refused on Cortex. `lines` advertises no source locals,
 arguments, types, expression evaluation or optimized-value locations. It emits
@@ -213,8 +214,7 @@ source device pointer or reads destructive registers to display a value.
 The decisions use [GNU CFI directives](https://sourceware.org/binutils/docs/as/CFI-directives.html),
 [GDB ARM behavior](https://sourceware.org/gdb/current/onlinedocs/gdb.html/ARM.html),
 [DWARF 4](https://dwarfstd.org/doc/DWARF4.pdf),
-[Arm DWARF32 2025Q4](https://github.com/ARM-software/abi-aa/blob/2025Q4/aadwarf32/aadwarf32.rst)
-and [Renode's GDB interface](https://renode.readthedocs.io/en/latest/debugging/gdb.html),
+and [Arm DWARF32 2025Q4](https://github.com/ARM-software/abi-aa/blob/2025Q4/aadwarf32/aadwarf32.rst),
 consulted on 2026-09-18. The acceptance tool versions remain pinned; no network
 access is needed to repeat these tests.
 
@@ -287,7 +287,7 @@ instruction that followed the build directory fails.
 ## Cortex-M environment boundary
 
 The [execution profile](../environments/cortex-m/README.md) pins QEMU's
-Cortex-M0 micro:bit CPU lane and a synthetic Renode peripheral lane. C/assembly
+Cortex-M0 micro:bit CPU lane and a synthetic peripheral lane on the same QEMU. C/assembly
 probes establish the environment. Layout and ABI planning follow below, then
 compiler-generated M0 execution and compiler-owned firmware startup and linking.
 The original synthetic-32 goldens
@@ -587,6 +587,6 @@ The [driver evidence](../compiler/tests/driver/DERIVATION.md) uses the same
 links NOLOAD BSS with an explicit RAM LMA; initialized data and RAM code retain
 flash load images. This prevents a zero-fill ELF segment inheriting a spurious
 flash address. QEMU checks poisoned reset and vector/frame state; a separately
-named Renode model executes the complete program's GPIO/timer/UART/DMA path.
+named synthetic model executes the complete program's GPIO/timer/UART/DMA path.
 Its finite count and drain acknowledgment are synthetic premises, not RP2040
 or microbit peripheral behavior. No target layout, MMIO width or ABI changes.

@@ -8,8 +8,8 @@
 #
 #  Linux x86-64 runs on ubuntu-24.04, macOS arm64 on macos-26 with Xcode 26.6
 #  -- the only image whose tools match environments/macos-arm64/policy.json
-#  exactly -- and Cortex-M on ubuntu-24.04 under its locked QEMU, Renode and
-#  GDB.  The debug and release compilers each run the whole corpus.
+#  exactly -- and Cortex-M on ubuntu-24.04 under its locked QEMU and GDB.
+#  The debug and release compilers each run the whole corpus.
 #
 #  It is still not the retired exact-revision acceptance: nothing is
 #  retained, and nothing accepts a revision.  It is a safety net that now
@@ -198,7 +198,7 @@ jobs:
       - name: The committed parser is what the grammar generates
         run: git diff --exit-code -- highlight/tree-sitter
 
-  #  QEMU, Renode and GDB on the locked tools, with the release compiler.
+  #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB: 836 s on a four-CPU
   #  container, and the whole job twenty-six minutes on the runner.
   cortex-m:

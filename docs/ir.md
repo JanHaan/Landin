@@ -503,7 +503,8 @@ copies initialized data and RAM code, clears BSS and transfers to the selected
 source entry. Neither module-image lowering nor startup executes user module
 initializers. Target ELF relocations distinguish Thumb code pointers from data
 addresses. The generated firmware probes test these boundaries through actual
-QEMU and Renode execution; source-level Cortex debugging is described below.
+QEMU execution, with synthetic devices on the same QEMU; source-level Cortex
+debugging is described below.
 
 D232's panic plan is compilation metadata beside the verified IR. It validates
 the entry hook before emission and binds byte-position sites to canonical

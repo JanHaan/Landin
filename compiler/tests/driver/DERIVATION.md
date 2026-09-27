@@ -39,10 +39,12 @@ alarm, not wall-clock timing or an RP2040 timer emulator.
 QEMU's accepted **microbit Cortex-M0/ARMv6-M CPU** profile is a separate lane:
 32 KiB flash, 16 KiB RAM, little endian, top 4 KiB reserved for stack. It runs
 the actual linked application's compiler-owned reset to entry and into the
-ordinary call path, with poisoned RAM and a second reset. Renode executes
-that same application's MMIO and interrupt behavior using
-`environments/cortex-m/probes/DriverPeripheral.cs` and `driver.repl`. Neither
-synthetic map is QEMU's Nordic hardware or a faithful RP2040 emulator.
+ordinary call path, with poisoned RAM and a second reset. The same QEMU
+executes that application's MMIO and interrupt behavior against
+`DriverPeripheral` in `environments/cortex-m/models.py`, which the harness in
+`machine.py` serves from QEMU's debugger stub at every access to the model's
+window. Neither synthetic map is QEMU's Nordic hardware or a faithful RP2040
+emulator.
 
 ## Public receive contract
 
@@ -183,9 +185,9 @@ traces, source inputs, compiler identity, tool hashes, commands/timeouts,
 compiler-generated startup/linker scripts, assembly/object/ELF/map,
 disassembly/relocations, closure, fresh-build comparisons and results. QEMU
 asserts cold boot, initialized data, BSS, immutable flash, RAM-code copying,
-vectors, stack/frame entry and a second poisoned reset. Renode asserts the
-actual application plus empty/partial/short/full/wrapped/repeated reads,
-half/full/error hints, coalescing while masked, DMA progress while masked,
+vectors, stack/frame entry and a second poisoned reset. The device lane
+asserts the actual application plus empty/partial/short/full/wrapped/repeated
+reads, half/full/error hints, coalescing while masked, DMA progress while masked,
 multi-wrap overrun, sticky failures, exhaustion, delayed drain, timeout,
 retry, restart and storage reuse. Configuration refusals leave registers and
 publication state unchanged. `check_sources.py` checks precise lifetime and
@@ -197,10 +199,10 @@ receiver aligned to four bytes, a 48-byte two-receiver array, and field offsets
 It executes target `sizeof`, `alignof` and actual field-address differences;
 it is not substituted for the application's link budget.
 
-The C# model consumes no generated declaration or generator metadata. Its
+The Python model consumes no generated declaration or generator metadata. Its
 literal addresses/masks and expected traces are reviewed separately from the
 Landin code. The inherited Cortex-M controls still execute their separate C/asm
-startup, hosted-to-Renode transport, packed-image destructive/RO/WO/reserved/
+startup, hosted line transport, packed-image destructive/RO/WO/reserved/
 encoded checks, source refusals and private helper controls. Those are not
 relabeled as compiler-owned application startup or as this full protocol.
 All six existing optimization/specialization profiles use unchanged protocol
@@ -259,7 +261,8 @@ and [NOLOAD behavior](https://sourceware.org/binutils/docs/ld/Output-Section-Typ
 explain the explicit RAM LMA on compiler-generated BSS: no file payload is
 present, but an ELF zero-fill segment must not inherit the preceding RAM-code
 flash address. The nearly full application exposes this independently in
-Renode; QEMU's poisoned reset verifies that the compiler still clears BSS.
+the device lane; QEMU's poisoned reset verifies that the compiler still
+clears BSS.
 
 Architectural CPU/exception/barrier facts retain **ARMv6-M Architecture
 Reference Manual DDI 0419E**, the pinned Arm ABI/ELF documents and GNU assembler/

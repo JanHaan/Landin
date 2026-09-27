@@ -10,6 +10,8 @@ import sys
 from backend import image_contract
 from devices import linker_closure
 from firmware import execute
+from machine import Machine
+from models import DriverPeripheral
 from packed_native import PROFILES
 from run import Run, require, workers
 from setup import DEFAULT, inventory, sha, supported_host
@@ -124,13 +126,16 @@ def layout_cpu(run,elf,s):
         'print("R690_LAYOUT_PASS")','end'],'R690_LAYOUT_PASS')
 
 
+def machine(run, elf, s, name, poll=()):
+    """The driver image on QEMU with its synthetic device, ending at a fault."""
+    m = Machine(run, elf, name, poll)
+    model = DriverPeripheral()
+    m.map(0x40070000, 0x2000, model)
+    m.trap(s['_landin_firmware_unhandled'], 'unhandled exception')
+    return m, model
+
+
 def application(run,elf,s):
-    def check(name,body):
-        p=run.out/(name+'.py')
-        p.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+body+'\n')
-        return 'include @'+str(p)
-    boot=check('boot', '''for address in range(0x20003000,0x20004000): bus.WriteByte(address,165)
-''')
     trace = ('r32:100c:00000000;r32:4:3000001f;w32:4:30000002;'
         'r32:c:3000001f;w32:c:30000002;w32:224:0000001a;'
         'w32:228:00000003;w32:22c:00000070;w32:248:00000001;'
@@ -145,170 +150,177 @@ def application(run,elf,s):
         'r32:1008:0000fffc;w32:100c:000a8621;'
         'w32:114:00000001;w32:200:00000031;w32:200:00000041;'
         'w32:118:00000001;w32:200:00000030')
-    ready=check('ready',f'''assert bus.ReadDoubleWord({s['app_state']}) == 2
-assert model.IntegerDivisor == 26 and model.FractionDivisor == 3
-assert model.LineControl == 112 and model.DMAControl == 1
-assert model.GPIO0 == 0x30000002 and model.GPIO1 == 0x30000002
-assert model.Remaining == 65535 and model.Busy
-assert model.Alarm == 1000
-assert bus.ReadDoubleWord({s['initialized']}) == 0x690
-assert bus.ReadDoubleWord({s['cleared']}) == 0
-''')
-    early=check('early',f'''assert not model.AlarmPending
-assert bus.ReadDoubleWord({s['handled']}) == 0
-''')
-    done=check('done',f'''assert bus.ReadDoubleWord({s['handled']}) == 3
-assert bus.ReadDoubleWord({s['recoveries']}) == 0
-assert str(model.OutputBytes) == "49,65,48"
-assert model.Output == 0 and model.Remaining == 65532
-assert bus.ReadDoubleWord({s['app_state']}) == 2
-assert str(model.Trace) == {trace!r}
-paint=[bus.ReadByte(a) for a in range(0x20003000,0x20004000)]
-assert paint[:256] == [165]*256
-print("R690_STACK_OBSERVED "+str(4096-next(i for i,b in enumerate(paint) if b != 165)))
-print("R690_APP_TRACE "+str(model.Trace))
-print("R690_APP_INITIAL_PASS")
-''')
-    recovered=check('recovered',f'''assert bus.ReadDoubleWord({s['recoveries']}) == 1
-assert bus.ReadDoubleWord({s['handled']}) == 3
-assert bus.ReadDoubleWord({s['app_state']}) == 2
-assert model.Remaining == 65535 and model.Transfers == 0 and model.Busy
-assert str(model.OutputBytes) == "49,65,48"
-''')
-    terminal=check('terminal',f'''assert bus.ReadDoubleWord({s['handled']}) == 3
-assert bus.ReadDoubleWord({s['recoveries']}) == 1
-assert bus.ReadDoubleWord({s['app_state']}) == 3
-assert model.Busy and model.Remaining == 65534
-assert str(model.OutputBytes) == "49,65,48"
-paint=[bus.ReadByte(a) for a in range(0x20003000,0x20004000)]
-assert paint[:256] == [165]*256
-print("R690_STACK_FINAL "+str(4096-next(i for i,b in enumerate(paint) if b != 165)))
-print("R690_APP_PASS")
-''')
-    overflow=check('overflow','for i in range(300): model.Feed(70)')
-    run.renode_script('application',[
-        f'include @{HERE}/probes/DriverPeripheral.cs','mach create "derived-driver"',
-        f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-        f'sysbus LoadELF @{elf}',boot,'emulation RunFor "0.01"',ready,
-        'sysbus.model Feed 49','sysbus.model Feed 65','sysbus.model Feed 48',
-        'sysbus.model Tick 999',early,'sysbus.model Tick 1','emulation RunFor "0.01"',done,overflow,
-        'emulation RunFor "0.01"',recovered,'sysbus.model DelayStop 20 -1',
-        'sysbus.model Feed 65','sysbus.model Tick 1000',
-        'emulation RunFor "0.01"',terminal],'R690_APP_PASS')
+    m, model = machine(run, elf, s, 'application')
+    with m:
+        u32 = m.u32
+        m.write(0x20003000, bytes([165]) * 4096)
+        m.settle()
+        require(u32(s['app_state']) == 2, 'ready: state')
+        require(model.integer_divisor == 26 and model.fraction_divisor == 3, 'ready: baud')
+        require(model.line_control == 112 and model.dma_control == 1, 'ready: line')
+        require(model.gpio0 == 0x30000002 and model.gpio1 == 0x30000002, 'ready: pins')
+        require(model.remaining == 65535 and model.busy, 'ready: ring')
+        require(model.alarm == 1000, 'ready: alarm')
+        require(u32(s['initialized']) == 0x690 and u32(s['cleared']) == 0, 'ready: data')
+        for value in (49, 65, 48):
+            model.feed(value)
+        model.tick(999)
+        require(not model.alarm_pending, 'early: alarm')
+        require(u32(s['handled']) == 0, 'early: handled')
+        model.tick(1)
+        m.settle()
+        require(u32(s['handled']) == 3 and u32(s['recoveries']) == 0, 'done: handled')
+        require(model.output_text == '49,65,48', 'done: output')
+        require(model.output == 0 and model.remaining == 65532, 'done: model')
+        require(u32(s['app_state']) == 2, 'done: state')
+        require(model.trace == trace, 'application trace differs: ' + model.trace)
+        paint = m.read(0x20003000, 4096)
+        require(paint[:256] == bytes([165]) * 256, 'done: stack guard')
+        observed = 4096 - next(i for i, b in enumerate(paint) if b != 165)
+        for _ in range(300):
+            model.feed(70)
+        m.settle()
+        require(u32(s['recoveries']) == 1 and u32(s['handled']) == 3, 'recovered: counts')
+        require(u32(s['app_state']) == 2, 'recovered: state')
+        require(model.remaining == 65535 and model.transfers == 0 and model.busy,
+                'recovered: ring')
+        require(model.output_text == '49,65,48', 'recovered: output')
+        model.delay_stop(20, -1)
+        model.feed(65)
+        model.tick(1000)
+        m.settle()
+        require(u32(s['handled']) == 3 and u32(s['recoveries']) == 1, 'terminal: counts')
+        require(u32(s['app_state']) == 3, 'terminal: state')
+        require(model.busy and model.remaining == 65534, 'terminal: ring')
+        require(model.output_text == '49,65,48', 'terminal: output')
+        paint = m.read(0x20003000, 4096)
+        require(paint[:256] == bytes([165]) * 256, 'terminal: stack guard')
+        final = 4096 - next(i for i, b in enumerate(paint) if b != 165)
+    (run.out / 'application.json').write_text(json.dumps(
+        dict(trace=trace, stack_observed=observed, stack_final=final), indent=2) + '\n')
 
 
 def protocol(run,elf,s):
-    commands=[f'include @{HERE}/probes/DriverPeripheral.cs',
-        'mach create "driver-protocol"',
-        f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-        f'sysbus LoadELF @{elf}','emulation RunFor "0.01"']
-    serial=0
-    def check(body):
-        nonlocal serial
-        serial+=1
-        p=run.out/('check-%03d.py'%serial)
-        p.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+body+'\n')
-        commands.append('include @'+str(p))
-    def feed(values):
-        check('for value in '+repr(values)+': model.Feed(value)')
-        commands.append('emulation RunFor "0.01"')
-    stage=2
-    def op(code,result=0,outcome=0,data=None,extra='',trace=None):
-        nonlocal stage
-        check('model.ClearTrace()\nbus.WriteDoubleWord(%d,%d)'%(s['command'],code))
-        commands.append('emulation RunFor "0.01"');stage+=1
-        body=f'''assert bus.ReadDoubleWord({s['stage']}) == {stage}
-assert bus.ReadDoubleWord({s['command']}) == 0
-assert bus.ReadDoubleWord({s['result']}) == {result}
-assert bus.ReadDoubleWord({s['outcome']}) == {outcome}
-'''
-        if data is not None:
-            body+='assert [bus.ReadByte(%d+i) for i in range(%d)] == %r\n'%(s['destination'],len(data),data)
-        if trace is not None: body+='assert str(model.Trace) == '+repr(trace)+'\n'
-        body+=extra+'\nprint("R690_STEP_%d "+str(model.Trace))'%stage
-        check(body)
-    def stable(remaining,resume=True):
-        return ('w32:100c:000a84e0;r32:100c:000a84e0;'
-                'r32:100c:000a84e0;r32:1008:%08x'%remaining+
-                (';w32:100c:000a84e1' if resume else ''))
-    check(f'assert bus.ReadDoubleWord({s["stage"]}) == 1\nbus.WriteDoubleWord({s["command"]},1)')
-    commands.append('emulation RunFor "0.01"')
-    check(f'''assert bus.ReadDoubleWord({s['stage']}) == 2
-assert model.Remaining == 32 and model.Configuration == 0xa84e1
-assert model.IntegerDivisor == 26 and model.FractionDivisor == 3
-''')
-    op(1,trace=stable(32))
-    feed([10,11,12])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 0\nbus.WriteDoubleWord({s["limit"]},2)')
-    op(2,2,data=[10,11],trace=stable(29))
-    op(2,1,data=[12],trace=stable(29))
-    op(2,0,trace=stable(29))
-    feed([20])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 1\nassert model.Remaining == 28 and model.Busy and model.Pending == 0')
-    feed([21,22,23,24])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 2\nassert model.Remaining == 24 and model.Busy and model.Pending == 0')
-    feed([25,26,27])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 2\nassert model.Remaining == 21')
-    op(1,8,trace=stable(21))
-    check(f'bus.WriteDoubleWord({s["limit"]},3)')
-    op(2,3,data=[20,21,22],trace=stable(21))
-    check(f'bus.WriteDoubleWord({s["limit"]},256)')
-    op(2,5,data=[23,24,25,26,27],trace=stable(21))
-    op(2,0,trace=stable(21))
-    op(5,trace='')
-    check(f'before=bus.ReadDoubleWord({s["events"]})\nmodel.ClearTrace()')
-    feed(list(range(30,47)))
-    check(f'''assert bus.ReadDoubleWord({s['events']}) == before
-assert model.Remaining == 4 and model.Transfers == 28 and model.Pending == 1
-assert [bus.ReadByte({s['storage']}+i) for i in range(8)] == [43,44,45,46,39,40,41,42]
-''')
-    op(6,extra=f'assert bus.ReadDoubleWord({s["events"]}) == before+1',
-       trace='r32:1400:00000001;w32:1400:00000001')
-    op(2,outcome=6,data=[23,24,25,26,27],trace=stable(4,False),
-       extra=f'assert bus.ReadDoubleWord({s["quiet"]}) == 1\nassert bus.ReadDoubleWord({s["consumed"]}) == 28')
-    op(2,outcome=6,trace=stable(4,False))
-    op(4,extra='assert model.Remaining == 32 and model.Busy')
-    feed([50,51,52,53])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 4\nassert model.Remaining == 28 and model.Busy and model.Pending == 0')
-    feed([54])
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 4\nassert model.Remaining == 27')
-    check('model.DelayStop(2,99)')
-    op(2,6,data=[50,51,52,53,54,99],extra='assert model.Remaining == 26')
-    check('model.DelayStop(0,-1)')
-    op(3,extra=f'assert bus.ReadDoubleWord({s["quiet"]}) == 1 and not model.Busy',
-       trace='w32:100c:000a84e0;r32:100c:000a84e0')
-    op(7,trace='')
-    feed([60])
-    check(f'assert model.Rejected == 1\nassert bus.ReadByte({s["storage"]}) == 165')
-    op(4)
-    op(1,0,trace=stable(32))
-    feed([61])
-    check(f'bus.WriteDoubleWord({s["limit"]},0)')
-    op(2,0,trace=stable(31))
-    check(f'bus.WriteDoubleWord({s["limit"]},256)')
-    op(2,1,data=[61],trace=stable(31))
-    check('model.InjectError()');commands.append('emulation RunFor "0.01"')
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 5\nassert model.Remaining == 31 and not model.Busy and model.Pending == 0')
-    op(2,outcome=7,data=[61],extra='assert not model.Busy')
-    op(4,outcome=7,extra='assert model.Remaining == 31')
-    check('model.Repair()')
-    op(4)
-    for values in ([1,2,3,4,5,6,7,8],[9,10,11,12,13,14,15,16],
-                   [17,18,19,20,21,22,23,24],[25,26,27,28,29,30,31,32]):
-        feed(values)
-        op(2,8,data=values)
-    check(f'assert bus.ReadDoubleWord({s["events"]}) == 9\nassert model.Remaining == 0 and not model.Busy and model.Pending == 0')
-    op(2,outcome=8,extra='assert model.Remaining == 0 and not model.Busy')
-    feed([70]);check('assert model.Rejected == 2')
-    op(4)
-    feed([80]);check('model.DelayStop(20,-1)')
-    op(3,outcome=9,extra=f'assert bus.ReadDoubleWord({s["quiet"]}) == 0 and model.Busy')
-    op(2,outcome=9,data=[25,26,27,28,29,30,31,32])
-    op(3,extra=f'assert bus.ReadDoubleWord({s["quiet"]}) == 1 and not model.Busy')
-    op(7,trace='')
-    check(f'''assert bus.ReadByte({s['storage']}) == 165
-print("R690_PROTOCOL_PASS")''')
-    run.renode_script('protocol',commands,'R690_PROTOCOL_PASS')
+    m, model = machine(run, elf, s, 'protocol', poll=[s['command']])
+    steps = []
+    with m:
+        u32, u8 = m.u32, m.u8
+        def settle():
+            m.settle()
+        def feed(values):
+            for value in values:
+                model.feed(value)
+            settle()
+        stage = [2]
+        def op(code, result=0, outcome=0, data=None, extra=None, trace=None):
+            model.clear_trace()
+            m.write_u32(s['command'], code)
+            settle()
+            stage[0] += 1
+            require(u32(s['stage']) == stage[0], 'step %d: stage %d' % (stage[0], u32(s['stage'])))
+            require(u32(s['command']) == 0, 'step %d: command' % stage[0])
+            require(u32(s['result']) == result,
+                    'step %d: result %d, not %d' % (stage[0], u32(s['result']), result))
+            require(u32(s['outcome']) == outcome,
+                    'step %d: outcome %d, not %d' % (stage[0], u32(s['outcome']), outcome))
+            if data is not None:
+                require(list(m.read(s['destination'], len(data))) == data, 'step %d: data' % stage[0])
+            if trace is not None:
+                require(model.trace == trace, 'step %d: trace %s' % (stage[0], model.trace))
+            if extra is not None:
+                require(extra(), 'step %d: device state' % stage[0])
+            steps.append('R690_STEP_%d %s' % (stage[0], model.trace))
+        def stable(remaining, resume=True):
+            return ('w32:100c:000a84e0;r32:100c:000a84e0;'
+                    'r32:100c:000a84e0;r32:1008:%08x' % remaining +
+                    (';w32:100c:000a84e1' if resume else ''))
+        settle()
+        require(u32(s['stage']) == 1, 'open: waiting')
+        m.write_u32(s['command'], 1)
+        settle()
+        require(u32(s['stage']) == 2, 'open: stage')
+        require(model.remaining == 32 and model.configuration == 0xa84e1, 'open: ring')
+        require(model.integer_divisor == 26 and model.fraction_divisor == 3, 'open: baud')
+        op(1, trace=stable(32))
+        feed([10, 11, 12])
+        require(u32(s['events']) == 0, 'events before limit')
+        m.write_u32(s['limit'], 2)
+        op(2, 2, data=[10, 11], trace=stable(29))
+        op(2, 1, data=[12], trace=stable(29))
+        op(2, 0, trace=stable(29))
+        feed([20])
+        require(u32(s['events']) == 1 and model.remaining == 28 and model.busy
+                and model.pending == 0, 'half event')
+        feed([21, 22, 23, 24])
+        require(u32(s['events']) == 2 and model.remaining == 24 and model.busy
+                and model.pending == 0, 'full event')
+        feed([25, 26, 27])
+        require(u32(s['events']) == 2 and model.remaining == 21, 'coalesced')
+        op(1, 8, trace=stable(21))
+        m.write_u32(s['limit'], 3)
+        op(2, 3, data=[20, 21, 22], trace=stable(21))
+        m.write_u32(s['limit'], 256)
+        op(2, 5, data=[23, 24, 25, 26, 27], trace=stable(21))
+        op(2, 0, trace=stable(21))
+        op(5, trace='')
+        before = u32(s['events'])
+        model.clear_trace()
+        feed(list(range(30, 47)))
+        require(u32(s['events']) == before, 'masked: delivered')
+        require(model.remaining == 4 and model.transfers == 28 and model.pending == 1, 'masked: ring')
+        require(list(m.read(s['storage'], 8)) == [43, 44, 45, 46, 39, 40, 41, 42], 'masked: wrap')
+        op(6, extra=lambda: u32(s['events']) == before + 1,
+           trace='r32:1400:00000001;w32:1400:00000001')
+        op(2, outcome=6, data=[23, 24, 25, 26, 27], trace=stable(4, False),
+           extra=lambda: u32(s['quiet']) == 1 and u32(s['consumed']) == 28)
+        op(2, outcome=6, trace=stable(4, False))
+        op(4, extra=lambda: model.remaining == 32 and model.busy)
+        feed([50, 51, 52, 53])
+        require(u32(s['events']) == 4 and model.remaining == 28 and model.busy
+                and model.pending == 0, 'restart: event')
+        feed([54])
+        require(u32(s['events']) == 4 and model.remaining == 27, 'restart: count')
+        model.delay_stop(2, 99)
+        op(2, 6, data=[50, 51, 52, 53, 54, 99], extra=lambda: model.remaining == 26)
+        model.delay_stop(0, -1)
+        op(3, extra=lambda: u32(s['quiet']) == 1 and not model.busy,
+           trace='w32:100c:000a84e0;r32:100c:000a84e0')
+        op(7, trace='')
+        feed([60])
+        require(model.rejected == 1 and u8(s['storage']) == 165, 'stopped: rejected')
+        op(4)
+        op(1, 0, trace=stable(32))
+        feed([61])
+        m.write_u32(s['limit'], 0)
+        op(2, 0, trace=stable(31))
+        m.write_u32(s['limit'], 256)
+        op(2, 1, data=[61], trace=stable(31))
+        model.inject_error()
+        settle()
+        require(u32(s['events']) == 5 and model.remaining == 31 and not model.busy
+                and model.pending == 0, 'error: event')
+        op(2, outcome=7, data=[61], extra=lambda: not model.busy)
+        op(4, outcome=7, extra=lambda: model.remaining == 31)
+        model.repair()
+        op(4)
+        for values in ([1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16],
+                       [17, 18, 19, 20, 21, 22, 23, 24], [25, 26, 27, 28, 29, 30, 31, 32]):
+            feed(values)
+            op(2, 8, data=values)
+        require(u32(s['events']) == 9 and model.remaining == 0 and not model.busy
+                and model.pending == 0, 'exhausted: ring')
+        op(2, outcome=8, extra=lambda: model.remaining == 0 and not model.busy)
+        feed([70])
+        require(model.rejected == 2, 'exhausted: rejected')
+        op(4)
+        feed([80])
+        model.delay_stop(20, -1)
+        op(3, outcome=9, extra=lambda: u32(s['quiet']) == 0 and model.busy)
+        op(2, outcome=9, data=[25, 26, 27, 28, 29, 30, 31, 32])
+        op(3, extra=lambda: u32(s['quiet']) == 1 and not model.busy)
+        op(7, trace='')
+        require(u8(s['storage']) == 165, 'quiet: storage reused')
+    (run.out / 'protocol-steps.txt').write_text('\n'.join(steps) + '\n')
 
 
 def configurations(run, elf, symbols):
@@ -322,61 +334,57 @@ def configurations(run, elf, symbols):
         ('baud-zero',{'rate':0},2), ('baud-other',{'rate':9600},2),
         ('faulted',{},1), ('busy',{},1)]
     for name, values, outcome in cases:
-        configure = run.out/('config-'+name+'.py')
-        configure.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+
-            ''.join('bus.WriteDoubleWord(%d,%d)\n'%(symbols[key],value) for key,value in values.items())+
-            ('model.InjectError()\n' if name == 'faulted' else
-             'model.WriteDoubleWord(0x1000,0x40070200)\n'
-             'model.WriteDoubleWord(0x1004,%d)\n'%symbols['storage']+
-             'model.WriteDoubleWord(0x1008,8)\n'
-             'model.WriteDoubleWord(0x100c,0xa84e1)\nmodel.ClearTrace()\n'
-             if name == 'busy' else '')+
-            'bus.WriteDoubleWord(%d,1)\n'%symbols['command'])
-        assertion = run.out/('assert-'+name+'.py')
-        assertion.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+
-            'assert bus.ReadDoubleWord(%d) == 99\n'%symbols['stage']+
-            'assert bus.ReadDoubleWord(%d) == %d\n'%(symbols['outcome'],outcome)+
-            ('assert model.Configuration == 0xa84e1 and model.Remaining == 8\n' if name == 'busy'
-             else 'assert model.Configuration == 0 and model.Remaining == 0\n')+
-            'assert model.GPIO0 == 0x3000001f and model.IntegerDivisor == 0\n'+
-            'assert str(model.Trace) == '+repr('r32:100c:20000000' if name == 'faulted' else
-                                            'r32:100c:010a84e1' if name == 'busy' else '')+'\n'+
-            'assert bus.ReadDoubleWord(%d) == 0\n'%symbols['quiet']+
-            'print("R690_CONFIG_PASS")\n')
-        run.renode_script('config-'+name,[f'include @{HERE}/probes/DriverPeripheral.cs',
-            'mach create "configuration"',f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-            f'sysbus LoadELF @{elf}','emulation RunFor "0.01"',f'include @{configure}',
-            'emulation RunFor "0.01"',f'include @{assertion}'],'R690_CONFIG_PASS')
+        m, model = machine(run, elf, symbols, 'config-' + name, poll=[symbols['command']])
+        with m:
+            m.settle()
+            for key, value in values.items():
+                m.write_u32(symbols[key], value)
+            if name == 'faulted':
+                model.inject_error()
+            elif name == 'busy':
+                model.write(0x1000, 4, 0x40070200)
+                model.write(0x1004, 4, symbols['storage'])
+                model.write(0x1008, 4, 8)
+                model.write(0x100c, 4, 0xa84e1)
+                model.clear_trace()
+            m.write_u32(symbols['command'], 1)
+            m.settle()
+            require(m.u32(symbols['stage']) == 99, name + ': stage')
+            require(m.u32(symbols['outcome']) == outcome, name + ': outcome %d'
+                    % m.u32(symbols['outcome']))
+            require((model.configuration, model.remaining) ==
+                    ((0xa84e1, 8) if name == 'busy' else (0, 0)), name + ': ring')
+            require(model.gpio0 == 0x3000001f and model.integer_divisor == 0, name + ': untouched')
+            require(model.trace == ('r32:100c:20000000' if name == 'faulted' else
+                                    'r32:100c:010a84e1' if name == 'busy' else ''),
+                    name + ': trace ' + model.trace)
+            require(m.u32(symbols['quiet']) == 0, name + ': quiet')
     return len(cases)
 
 
 def capacity_boundaries(run, elf, s):
     for capacity, payload, image in ((2,[0,255],0xa8461),(256,[7]*256,0xa8621)):
-        setup=run.out/('boundary-%d.py'%capacity)
-        setup.write_text('bus=monitor.Machine.SystemBus\n'+
-            'bus.WriteDoubleWord(%d,%d)\n'%(s['capacity'],capacity)+
-            'bus.WriteDoubleWord(%d,%d)\n'%(s['budget'],capacity)+
-            'bus.WriteDoubleWord(%d,1)\n'%s['command'])
-        feed=run.out/('boundary-feed-%d.py'%capacity)
-        feed.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+
-            'assert bus.ReadDoubleWord(%d) == 2\n'%s['stage']+
-            'assert model.Configuration == %d and model.Remaining == %d\n'%(image,capacity)+
-            'for value in '+repr(payload)+': model.Feed(value)\n'+
-            'bus.WriteDoubleWord(%d,2)\n'%s['command'])
-        done=run.out/('boundary-done-%d.py'%capacity)
-        done.write_text('bus=monitor.Machine.SystemBus\nmodel=monitor.Machine["sysbus.model"]\n'+
-            'assert bus.ReadDoubleWord(%d) == 3\n'%s['stage']+
-            'assert bus.ReadDoubleWord(%d) == %d\n'%(s['result'],capacity)+
-            'assert bus.ReadDoubleWord(%d) == 0\n'%s['outcome']+
-            'assert [bus.ReadByte(%d+i) for i in range(%d)] == %r\n'%(s['destination'],capacity,payload)+
-            'assert model.Remaining == 0 and not model.Busy\n'+
-            'assert bus.ReadDoubleWord(%d) == 1\n'%s['quiet']+
-            'print("R690_CAPACITY_PASS")\n')
-        run.renode_script('capacity-%d'%capacity,[f'include @{HERE}/probes/DriverPeripheral.cs',
-            'mach create "capacity"',f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-            f'sysbus LoadELF @{elf}','emulation RunFor "0.01"',f'include @{setup}',
-            'emulation RunFor "0.01"',f'include @{feed}',
-            'emulation RunFor "0.01"',f'include @{done}'],'R690_CAPACITY_PASS')
+        m, model = machine(run, elf, s, 'capacity-%d' % capacity, poll=[s['command']])
+        with m:
+            m.settle()
+            m.write_u32(s['capacity'], capacity)
+            m.write_u32(s['budget'], capacity)
+            m.write_u32(s['command'], 1)
+            m.settle()
+            require(m.u32(s['stage']) == 2, 'capacity %d: open' % capacity)
+            require(model.configuration == image and model.remaining == capacity,
+                    'capacity %d: ring' % capacity)
+            for value in payload:
+                model.feed(value)
+            m.write_u32(s['command'], 2)
+            m.settle()
+            require(m.u32(s['stage']) == 3, 'capacity %d: read' % capacity)
+            require(m.u32(s['result']) == capacity and m.u32(s['outcome']) == 0,
+                    'capacity %d: result' % capacity)
+            require(list(m.read(s['destination'], capacity)) == payload,
+                    'capacity %d: data' % capacity)
+            require(model.remaining == 0 and not model.busy, 'capacity %d: drained' % capacity)
+            require(m.u32(s['quiet']) == 1, 'capacity %d: quiet' % capacity)
     return 2
 
 
@@ -408,7 +416,7 @@ def execute_suite(parent,refine,profiles=PROFILES,cases=None):
                     (fresh/('core.elf'+suffix)).read_bytes(),
                     'nondeterministic driver artifact '+suffix)
         return {'profile':optimize+'-'+specialize,'kind':name,'status':'passed',
-                'qemu_sessions':1,'renode_runs':(0 if name == 'layout' else 1+config_count),'artifact_comparisons':5}
+                'qemu_sessions':1,'device_runs':(0 if name == 'layout' else 1+config_count),'artifact_comparisons':5}
     work=[(o,s,n) for o,s in profiles for n in (cases or ['app','protocol','layout'])]
     #  Each profile and case builds in its own directory against its own
     #  emulators; results report in the sequential order.

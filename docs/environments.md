@@ -15,7 +15,7 @@ Darwin item. See [native Mac acceptance](../environments/macos-arm64/README.md).
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
 through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on every
-push. They keep separate QEMU and synthetic Renode evidence. Mac `--host`
+push. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
 checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 ## Environments
@@ -331,14 +331,15 @@ for the complete coverage and explicit physical-image limitation.
 ## Embedded environment probes
 
 Native Linux x86-64 with glibc 2.38 or later is the host for the pinned QEMU
-and Renode [execution profile](../environments/cortex-m/README.md); its lock
+[execution profile](../environments/cortex-m/README.md); its lock
 carries the Debian 13 runtime those tools load, and the gate runs it on
 Ubuntu 24.04. The retired native
 Linux acceptance's documents job executed and retained these small C/assembly probes
 from its exact archive. The Mac continues native compiler-host and Darwin
 workload/LLDB validation; it does not run Linux containers for embedded tests.
-QEMU owns CPU/startup evidence and Renode owns the explicit synthetic
-peripheral lane. Neither is physical hardware fidelity or Landin backend proof.
+QEMU owns CPU/startup evidence, and a repository-owned harness on its debugger
+stub runs the explicit synthetic peripheral lane on the same QEMU. Neither is
+physical hardware fidelity or Landin backend proof.
 
 The mandatory QEMU lane also runs with independently compiled C layouts
 and C/assembly ABI witnesses, compared with the compiler's Cortex-M planner
@@ -354,7 +355,7 @@ DMA maintenance. The containing dual-native archive binds all three evidence
 classes; the memory [probe guide](../environments/cortex-m/README.md) records limits.
 
 Compiler-generated packed image execution runs on both native hosts and
-the Linux/Renode transport lane, including unnamed-encoding traps at all six
+the Linux line-transport lane, including unnamed-encoding traps at all six
 optimization/specialization profiles. Independent M0 C controls and literal
 access traces remain separate from native Landin execution. The mandatory
 documents job builds the archived compiler and exports these new lanes beside
@@ -363,7 +364,7 @@ compiler backend.
 
 The same pinned tool and evidence path carries compiler-generated
 Cortex-M0 execution of the inventoried shared runtime corpus and direct
-Renode packed/byte/ordinary-slice DMA transactions. The external startup and
+synthetic-device packed/byte/ordinary-slice DMA transactions. The external startup and
 linker test harness does not enable Landin firmware entry or vectors. The
 export retains objects, ELF/map/disassembly, literal ABI and device oracles,
 helper identities and bounded image/stack observations; complete measured
@@ -374,7 +375,7 @@ Native GDB/LLDB coverage checks each hosted backend separately.
 The compiler-owned Cortex firmware lane runs only in the existing native
 Linux embedded environment. It extends the same pinned tool inventory and
 acceptance export with generated startup/vector/linker inputs and fresh-image
-comparisons. The external backend harness, hosted Renode transport and
+comparisons. The external backend harness, hosted line transport and
 independent C/assembly probes remain separate evidence. See the
 [firmware execution contract](../environments/cortex-m/README.md#compiler-owned-firmware).
 The Mac remains the native compiler-host/Darwin/LLDB lane; no local Linux
@@ -386,7 +387,7 @@ artifacts; vendor-input and regeneration checks run offline on both hosts.
 The selected vendor is provenance, not a replacement QEMU board.
 
 The complete [derived driver](../compiler/tests/driver/DERIVATION.md) is appended
-to mandatory native Linux embedded execution. Its QEMU boot, separate Renode
+to mandatory native Linux embedded execution. Its QEMU boot, separate synthetic
 protocol model and independent layout control retain their distinct evidence
 roles. Native GDB/LLDB routine risk coverage validated the checking and linker
 repairs it needed.

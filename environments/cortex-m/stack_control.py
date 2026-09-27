@@ -1,6 +1,8 @@
 """Independent C/assembly-startup control for paint gaps and exception frames."""
+import json
+
 from firmware import execute
-from run import HERE
+from run import HERE, require
 
 
 def run(control):
@@ -36,18 +38,22 @@ def run(control):
         'print("R6100_STACK_CONTROL_PASS")','end'],'R6100_STACK_CONTROL_PASS')
     # The independent program also calibrates the observer used for the
     # application: its deepest reservation deliberately writes no bytes.
+    from machine import Machine
     from resources import install
-    check=control.out/'observer-control.py'
-    check.write_text('''snapshot("independent-unwritten-gap")
-assert snapshots[0]["written_bytes"] == 80
-assert snapshots[0]["observed_reserved_bytes"] == 256
-assert snapshots[0]["observations"]["interrupt_ipsr"]["11"] == 0x20004000-40
-assert snapshots[0]["observations"]["interrupt_ipsr"]["16"] == 0x20004000-80
-print("R6100_STACK_OBSERVER_PASS")
-''')
-    control.renode_script('observer-control',[
-        f'include @{HERE}/probes/DriverPeripheral.cs', 'mach create "stack-control"',
-        f'machine LoadPlatformDescription @{HERE}/probes/driver.repl',
-        f'sysbus LoadELF @{elf}', f'include @{HERE}/probes/StackObserver.cs',
-        install(control),'emulation RunFor "0.001"','include @'+str(check)],
-        'R6100_STACK_OBSERVER_PASS')
+    symbols = {p[2]: int(p[0], 16) for line in control.command(
+        'observer-symbols', [control.bin/'arm-none-eabi-nm', elf]).splitlines()
+        if len(p := line.split()) == 3}
+    with Machine(control, elf, 'observer-control') as m:
+        m.trap(symbols['hardfault'], 'hard fault')
+        snapshot = install(control, m)
+        m.settle()
+        require(m.register('pc') == symbols['done'], 'observer control did not finish')
+        row = snapshot('independent-unwritten-gap')
+    require(row['written_bytes'] == 80, 'observer control: written %d' % row['written_bytes'])
+    require(row['observed_reserved_bytes'] == 256,
+            'observer control: observed %d' % row['observed_reserved_bytes'])
+    require(row['observations']['interrupt_ipsr'].get('11') == 0x20004000-40,
+            'observer control: SVC entry SP')
+    require(row['observations']['interrupt_ipsr'].get('16') == 0x20004000-80,
+            'observer control: device IRQ entry SP')
+    (control.out/'observer-control.json').write_text(json.dumps(row, indent=2) + '\n')

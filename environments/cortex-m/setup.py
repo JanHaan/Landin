@@ -8,7 +8,6 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
-import tarfile
 import urllib.request
 
 HERE = Path(__file__).resolve().parent
@@ -80,15 +79,12 @@ def main():
             shutil.copyfileobj(src, out)
         if sha(dest) != item['sha256']:
             raise RuntimeError('archive hash mismatch: ' + item['file'])
-        if item['kind'] == 'deb':
-            subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
-        else:
-            # Trusted pinned archive; reject escaping members and link targets.
-            with tarfile.open(dest) as archive:
-                archive.extractall(root / 'renode', filter='data')
+        if item['kind'] != 'deb':
+            raise RuntimeError('unknown archive kind: ' + item['kind'])
+        subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
     compile_gdb_python(root)
     record = {'lock_sha256': sha(HERE / 'tools.lock.json'),
-              'files': {area: inventory(root / area) for area in ('root', 'renode')}}
+              'files': {area: inventory(root / area) for area in ('root',)}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')
     print('installed pinned Cortex-M environment at', root)
 

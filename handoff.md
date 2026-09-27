@@ -247,7 +247,7 @@ assembly for three targets. What it covers, by capability:
   assembly with explicit effects, within the selected 32 KiB flash, 16 KiB RAM
   and 4 KiB stack reservation. The
   [firmware execution lane](environments/cortex-m/README.md#compiler-owned-firmware)
-  runs it on pinned QEMU and synthetic Renode peripherals beside independent
+  runs it on pinned QEMU with synthetic peripherals beside independent
   C/assembly controls, and thirty RP2040 registers are checked in as generated
   device fixtures.
 - **Code generation.** Deterministic baseline code: target code and the build

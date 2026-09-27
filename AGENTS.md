@@ -20,7 +20,8 @@ linker script and initialized-data copying, with line and function debugging.
 A small repository-owned `core` library and the complete derived prototypes 2,
 3 and 4 execute through that path. Runtime fixtures execute those binaries,
 and the gate runs them on all three targets on every push: natively on
-Linux x86-64 and macOS arm64, and on Cortex-M0 under QEMU and Renode, with
+Linux x86-64 and macOS arm64, and on Cortex-M0 under QEMU, whose synthetic
+devices a repository-owned harness serves through QEMU's debugger stub, with
 GDB and LLDB sessions on the hosted targets.
 
 Under `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine`
@@ -95,7 +96,7 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 | `release` | ubuntu-24.04 | the same with the release compiler, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `cortex-m` | ubuntu-24.04 | every QEMU and Renode lane on the locked tools, at `LANDIN_CORTEX_JOBS=4` |
+| `cortex-m` | ubuntu-24.04 | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
 | `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when the frontend's or emission's time grows more than 2.5 times per doubling |
 | `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism and report identity |
 | `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |

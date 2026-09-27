@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent M0 controls and native Landin/Renode peripheral execution.
+"""Independent M0 controls and native Landin peripheral execution on QEMU.
 
 Retained hosted transport is separate from the compiler-generated M0 execution.
 """
@@ -58,29 +58,6 @@ def gdb_listener():
         '-gdb', 'chardev:gdb']
 
 
-PORTS = threading.local()
-PORT_BLOCKS = iter(range(20000, 60000, 500))
-PORT_LOCK = threading.Lock()
-
-
-def renode_gdb_port():
-    """A port for Renode's debugger stub that no concurrent worker also picks.
-
-    Renode's stub binds a port number itself and cannot be handed a socket,
-    so a port chosen by binding and releasing one races any other worker
-    choosing at the same moment.  Each worker thread owns a block of five
-    hundred ports and walks through it; blocks do not overlap.  A port some
-    unrelated process holds still fails loudly: Renode reports it in use.
-    """
-    if not hasattr(PORTS, 'block'):
-        with PORT_LOCK:
-            PORTS.block = next(PORT_BLOCKS)
-        PORTS.next = 0
-    port = PORTS.block + PORTS.next % 500
-    PORTS.next += 1
-    return port
-
-
 def require(condition, message):
     if not condition:
         raise RuntimeError(message)
@@ -96,44 +73,13 @@ def stop(process):
             process.wait(timeout=2)
 
 
-#  Renode's MonitorCondition logs this when one of its own threads is woken
-#  and finds its wait condition still true, a note about its scheduler's
-#  wake-ups rather than about the machine: it depends on how the host ran
-#  Renode's threads, and appears in a long script on a busy host with every
-#  assertion holding.  It is the one warning allowed everywhere, and only in
-#  exactly this form, which is the form Renode's log file writes.
-SCHEDULER_NOTICE = re.compile(
-    r'^\[\d\d:\d\d:\d\d\.\d+\]  \[WARNING\] '
-    r'Thread has been woken up \d+ times, verify your condition$')
-
-
-def oracle(output, marker, stock=False, log=''):
-    """Hold a probe to its result.
-
-    The marker counts only in OUTPUT, the stream the probe itself writes; LOG
-    is everything else its tools said, and is held to the same refusals.
-    """
+def oracle(output, marker):
+    """Hold a debugger session's output to its result marker and to no error."""
     require(output.count(marker) == 1, 'missing/duplicate result marker: ' + marker)
-    text = output + '\n' + log
-    require(not re.search(r'error|exception|assertion|unhandled read', text, re.I),
+    require(not re.search(r'error|exception|assertion|unhandled read', output, re.I),
             'probe reports an error')
-    for line in text.splitlines():
-        if SCHEDULER_NOTICE.match(line):
-            continue
-        if '[WARNING]' in line:
-            require(stock and ('Tags: CIRC (0x1)' in line or
-                    "Unknown baud rate, couldn't trigger the idle line interrupt" in line),
-                    'unexpected model warning: ' + line.strip())
-
-
-def remove_renode_lock(output):
-    # Renode's process has exited before this is called. This empty runtime
-    # coordination file is not evidence; native export excludes *.lock files.
-    path = output / 'renode.config.lock'
-    if path.exists() or path.is_symlink():
-        require(path.is_file() and not path.is_symlink() and path.stat().st_size == 0,
-                'unexpected Renode lock file')
-        path.unlink()
+    for line in output.splitlines():
+        require('[WARNING]' not in line, 'unexpected warning: ' + line.strip())
 
 
 class Run:
@@ -143,7 +89,6 @@ class Run:
         self.env = dict(os.environ, LC_ALL='C', LANG='C')
         self.env['LD_LIBRARY_PATH'] = str(tools / 'root/usr/lib/x86_64-linux-gnu')
         self.bin = tools / 'root/usr/bin'
-        self.renode = tools / 'renode/renode_1.17.0-portable/renode'
 
     def debug(self, name, elf, script, timeout=20):
         """One debugger session, recorded like a command.
@@ -201,33 +146,6 @@ class Run:
                 (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2)+'\n')
         require(record['exit'] == 0, name + ' failed; inspect retained log')
         return (self.out / (name + '.log')).read_text(errors='replace')
-
-    def renode_script(self, name, lines, marker, stock=False, timeout=30):
-        """Run LINES in a batch Renode and hold what it printed to MARKER.
-
-        Renode's logger writes from a thread of its own, so on a shared
-        console its lines land inside the script's.  Each stream here has one
-        writer: the script's output goes to NAME.output (probes/output.py),
-        the log to NAME.renode.log, and the console keeps the monitor's.
-        """
-        script = self.out / (name + '.resc')
-        output = self.out / (name + '.output')
-        log = self.out / (name + '.renode.log')
-        for path in (output, log):
-            # logFile would keep an old log beside the new one as `.1`.
-            path.unlink(missing_ok=True)
-        script.write_text('\n'.join([f'logFile @{log}', f'include @{HERE}/probes/output.py',
-                                     *lines, 'quit']) + '\n')
-        try:
-            console = self.command(name, [self.renode, '--disable-xwt', '--console', '--plain',
-                                          '--hide-log', '--config', self.out / 'renode.config',
-                                          script], timeout=timeout,
-                                   env=dict(self.env, LANDIN_RENODE_OUTPUT=str(output)))
-        finally:
-            remove_renode_lock(self.out)
-        def read(path):
-            return path.read_text(errors='replace') if path.exists() else ''
-        oracle(read(output), marker, stock, console + '\n' + read(log))
 
     def build(self, name, extra=()):
         self.command('build-' + name, [self.bin / 'arm-none-eabi-gcc', *FLAGS,
@@ -288,50 +206,85 @@ class Run:
         require((self.out / 'uart.log').read_bytes() == b'R610 UART\nR610 UART\n', 'UART output mismatch')
 
     def peripheral(self):
+        """The prototype-1 register/DMA contract under hand-written C."""
+        from machine import Machine, Refused
+        from models import PrototypePeripheral
         symbols = self.build('peripheral')
         stage = symbols['stage']
-        lines = [f'include @{HERE}/probes/PrototypePeripheral.cs', 'mach create "prototype"',
-                 f'machine LoadPlatformDescription @{HERE}/probes/prototype.repl',
-                 f'sysbus LoadELF @{self.out}/peripheral.elf']
-        def run(): lines.append('emulation RunFor "0.001"')
-        def check(expr): lines.append('python "' + expr + '"')
-        def stage_is(n):
-            check(f'assert monitor.Machine.SystemBus.ReadDoubleWord({stage}) == {n}')
-        run(); stage_is(1)
-        lines += ['sysbus.model Feed 88', f'sysbus WriteDoubleWord {stage} 2']
-        run(); stage_is(3)
-        lines += ['sysbus.model Feed 65', 'sysbus.model Feed 66']
-        run(); lines += [f'sysbus WriteDoubleWord {stage} 4']
-        run(); stage_is(5)
-        lines += ['sysbus.model Feed 67', 'sysbus.model Feed 68']
-        run(); lines += [f'sysbus WriteDoubleWord {stage} 6']
-        run(); stage_is(7)
-        lines += ['sysbus.model Feed 69']
-        run(); lines += [f'sysbus WriteDoubleWord {stage} 8']
-        run(); stage_is(9)
-        lines += ['sysbus.model Error']
-        run(); lines += [f'sysbus WriteDoubleWord {stage} 10']
-        run()
-        check(f'assert monitor.Machine.SystemBus.ReadDoubleWord({symbols["result"]}) == 0x610')
-        lines += [f'include @{HERE}/probes/model-checks.py']
-        self.renode_script('peripheral', lines, 'R610_PERIPHERAL_PASS')
-        self.renode_script('stock', ['mach create "stock"',
-                          f'machine LoadPlatformDescription @{HERE}/probes/stock.repl',
-                          f'include @{HERE}/probes/stock.py'], 'R610_STOCK_LIMIT_CONFIRMED', stock=True)
+        model = PrototypePeripheral()
+        with Machine(self, self.out / 'peripheral.elf', 'peripheral', poll=[stage]) as m:
+            m.map(0x40020000, 0x7000, model)
+            m.trap(symbols['fault_done'], 'hard fault')
+            u32 = m.u32
+            def reach(n):
+                m.until(lambda: u32(stage) == n)
+            def settle_then(n):
+                m.settle()
+                m.write_u32(stage, n)
+            reach(1)
+            model.feed(88)
+            m.write_u32(stage, 2)
+            reach(3)
+            model.feed(65)
+            model.feed(66)
+            settle_then(4)
+            reach(5)
+            model.feed(67)
+            model.feed(68)
+            settle_then(6)
+            reach(7)
+            model.feed(69)
+            settle_then(8)
+            reach(9)
+            model.error()
+            settle_then(10)
+            m.settle()
+            require(u32(symbols['result']) == 0x610, 'prototype peripheral result %#x'
+                    % u32(symbols['result']))
+        require(model.transfers == 5 and model.errors == 1, 'prototype transfers and errors')
+        require(not model.level('irq'), 'prototype interrupt left asserted')
+        # Unknown registers and direction or width violations are refusals.
+        for action in [lambda: model.read(0x6004, 4), lambda: model.write(0x6000, 4, 1),
+                       lambda: model.read(0x6068, 4), lambda: model.read(0, 2),
+                       lambda: model.write(0x10, 2, 1), lambda: model.write(0x605c, 4, 65536)]:
+            try:
+                action()
+            except Refused:
+                continue
+            raise RuntimeError('prototype model accepted a refused access')
+        model.reset()
+        require(model.read(0, 4) == 0 and model.read(0x6000, 4) == 0, 'prototype reset')
+        # An invalid destination and an unsupported direction are errors, not writes.
+        model.write(0x605c, 4, 4)
+        model.write(0x6060, 4, 0x40021004)
+        model.write(0x6064, 4, 0x100)
+        model.write(0x6058, 4, 9)
+        model.feed(42)
+        require(model.transfers == 0 and model.errors == 1, 'bad destination accepted')
+        require(model.read(0x6000, 4) == 0x80 and model.level('irq'), 'error status')
+        model.write(0x6004, 4, 0)
+        require(model.read(0x6000, 4) == 0x80, 'zero one-clears cleared')
+        model.write(0x6004, 4, 0x80)
+        require(model.read(0x6000, 4) == 0 and not model.level('irq'), 'one-clears')
+        model.write(0x6064, 4, 0x20000000)
+        model.write(0x6058, 4, 0xc9)
+        model.feed(42)
+        require(model.transfers == 0 and model.errors == 2, 'unsupported direction accepted')
+        model.set_input(0x1234)
+        require(model.read(0x10, 2) == 0x1234, 'halfword input')
 
     def execute(self, refine=None):
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
         require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
-        before = {area: inventory(self.tools / area) for area in ('root', 'renode')}
+        before = {area: inventory(self.tools / area) for area in ('root',)}
         require(before == installed['files'], 'installed tools changed')
         (self.out / 'tools.json').write_text(json.dumps(installed, sort_keys=True)+'\n')
         for name, tool, expected in [
             ('qemu-version', self.bin / 'qemu-system-arm', '10.0.13'),
             ('gcc-version', self.bin / 'arm-none-eabi-gcc', '14.2.1 20241119'),
             ('binutils-version', self.bin / 'arm-none-eabi-as', '2.44'),
-            ('gdb-version', self.bin / 'gdb-multiarch', '16.3'),
-            ('renode-version', self.renode, '1.17.0+20260907gitf1dd1b4af')]:
+            ('gdb-version', self.bin / 'gdb-multiarch', '16.3')]:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
         self.qemu()
         self.peripheral()

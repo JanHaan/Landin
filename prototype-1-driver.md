@@ -597,7 +597,7 @@ to the toolchain — two things [0760] separated on purpose.
 ---
 
 The Cortex-M [execution profile](environments/cortex-m/README.md) retains the
-M0 CPU pressure in QEMU and supplies a separately named synthetic Renode
-peripheral lane for this sketch's register/DMA behavior. It does not identify
+M0 CPU pressure in QEMU and supplies a separately named synthetic
+peripheral lane on the same QEMU for this sketch's register/DMA behavior. It does not identify
 this combined map as a real vendor part or turn these sketches into an
 implemented Landin program.

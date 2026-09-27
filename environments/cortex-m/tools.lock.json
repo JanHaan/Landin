@@ -508,11 +508,5 @@
     "file": "zlib1g_1%3a1.3.dfsg+really1.3.1-1+b1_amd64.deb",
     "sha256": "015be740d6236ad114582dea500c1d907f29e16d6db00566ca32fb68d71ac90d",
     "kind": "deb"
-  },
-  {
-    "url": "https://github.com/renode/renode/releases/download/v1.17.0/renode-1.17.0.linux-portable.tar.gz",
-    "file": "renode-1.17.0.linux-portable.tar.gz",
-    "sha256": "4ba7c68b59e2447f188ef4b4b112fcccd2802582c460beedceb63b84e5605a5f",
-    "kind": "tar"
   }
 ]

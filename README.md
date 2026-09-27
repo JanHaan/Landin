@@ -87,7 +87,7 @@ job.
 The exact-revision native acceptance that approved every revision through
 0.2.0 was retired with SourceHut. `.github/workflows/gate.yml` replaced it: on
 every push it runs every target, Linux x86-64 and macOS arm64 natively with GDB
-and LLDB and Cortex-M under QEMU and Renode, both compiler modes, and the
+and LLDB and Cortex-M under QEMU, both compiler modes, and the
 document, binding and editor-grammar checks, retaining nothing and accepting no
 revision. `.github/workflows/determinism.yml` checks that every host emits the
 same bytes and `.github/workflows/pages.yml` publishes <https://www.701.dev>;
@@ -201,8 +201,9 @@ explicit environment troubleshooting. What it does today, by capability:
   ARMv6-M firmware with compiler-owned reset, data and RAM-code copying, BSS
   clearing, typed interrupt and naked functions, vector references, placement
   and fixed assembly, within a 32 KiB flash, 16 KiB RAM and 4 KiB stack
-  profile, and runs it on the pinned QEMU and Renode
-  [emulators](environments/cortex-m/README.md). Thirty RP2040 registers are
+  profile, and runs it on the pinned QEMU
+  [emulator](environments/cortex-m/README.md), with synthetic devices served
+  through its debugger stub. Thirty RP2040 registers are
   checked in as [generated device fixtures](devices/README.md).
 - **Code generation.** Target code and the build report are byte-identical
   whatever the build directory, environment or order, on all three targets;
@@ -221,7 +222,7 @@ explicit environment troubleshooting. What it does today, by capability:
 
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0; the gate runs the corpus on all three targets today,
-natively on both hosts and under QEMU and Renode for Cortex-M, with GDB and
+natively on both hosts and under QEMU for Cortex-M, with GDB and
 LLDB. The recorded boundaries stand as measured: the 32 KiB capacity
 verdicts, the lines-and-functions Cortex-M debugging contract and the Darwin
 shared-region placement limit.

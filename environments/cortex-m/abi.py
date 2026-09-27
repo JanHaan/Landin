@@ -73,7 +73,7 @@ def synthetic_agreement(rows, text):
 
 def execute(run):
     # Use the existing timeout/session owner and tool inventory. The original CPU
-    # and Renode lanes still run independently before this additional lane.
+    # and peripheral lanes still run independently before this additional lane.
     from run import require, oracle, stop
     rows = contract(CONTRACT.read_text())
     synthetic_agreement(rows, GOLDEN.read_text())

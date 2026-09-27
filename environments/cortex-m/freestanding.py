@@ -340,7 +340,7 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
                         (fresh / ('core.elf'+suffix)).read_bytes(),
                         'nondeterministic freestanding artifact '+suffix)
             controls.append({'profile': profile.name, 'kind': name, 'status': 'passed',
-                             'lane': 'renode' if name == 'dma' else 'qemu',
+                             'lane': 'qemu-device' if name == 'dma' else 'qemu',
                              'artifact_comparisons': len(suffixes)})
             print('freestanding core: '+profile.name+'/'+name+' passed', flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed')

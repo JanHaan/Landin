@@ -9,6 +9,8 @@ import time
 from backend import image_contract
 from packed_native import PROFILES
 from packed import TRACE
+from machine import Machine
+from models import EncodingPeripheral, PrototypePeripheral
 from run import Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, inventory, sha, supported_host
 
@@ -187,57 +189,47 @@ def dma(run, refine, optimize="none", specialize="off"):
 
 
 def dma_execute(run, elf):
-    here = Path(__file__).resolve().parent
     text = run.command('dma-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {parts[2]: int(parts[0],16) for line in text.splitlines()
                if len(parts := line.split()) == 3}
-    def check(name, assertions):
-        path = run.out / (name + '.py')
-        path.write_text('bus = monitor.Machine.SystemBus\n'
-                        'model = monitor.Machine["sysbus.model"]\n' + assertions + '\n')
-        return f'include @{path}'
-    ready = check('ready', f"""assert bus.ReadDoubleWord({symbols['stage']}) == 1
-assert model.Configuration == 0x80000407 and model.Remaining == 4
-assert model.Transfers == 0 and model.Errors == 0
-assert model.CountHalfWrites == 1 and model.CountWordWrites == 0
-""")
-    half = check('half', f"""assert bus.ReadDoubleWord({symbols['notifications']}) == 1
-assert bus.ReadDoubleWord({symbols['completed']}) == 0
-assert bus.ReadDoubleWord({symbols['result']}) == 0
-assert model.Transfers == 2 and model.Remaining == 2
-bus.WriteDoubleWord({symbols['stage']}, 2)
-""")
-    masked = check('masked', f"""assert bus.ReadDoubleWord({symbols['stage']}) == 3
-assert bus.ReadDoubleWord({symbols['notifications']}) == 1
-assert bus.ReadDoubleWord({symbols['completed']}) == 0
-assert model.Transfers == 4 and model.Remaining == 0
-assert bus.ReadDoubleWord({symbols['buffer']}) == 0x2d2c2b2a
-bus.WriteDoubleWord({symbols['stage']}, 4)
-""")
-    done = check('done', f"""assert bus.ReadDoubleWord({symbols['stage']}) == 5
-assert bus.ReadDoubleWord({symbols['result']}) == 174
-assert bus.ReadDoubleWord({symbols['notifications']}) == 2
-assert bus.ReadDoubleWord({symbols['completed']}) == 1
-assert model.Transfers == 4 and model.Errors == 0 and model.Remaining == 0
-assert model.Configuration == 0x80000406
-assert model.CountHalfReads == 1 and model.CountWordReads == 0
-assert model.CountHalfWrites == 1 and model.CountWordWrites == 0
-assert model.Reads == 3 and model.Writes == 7
-print("R660_DMA_TRACE notifications=2;half-read=1;half-write=1;status-read=2;clear-write=2;transfers=4;sum=174")
-print("R660_FIRMWARE_DMA_PASS")
-""")
-    run.renode_script('dma', [
-        f'include @{here}/probes/PrototypePeripheral.cs',
-        'mach create "compiler-firmware-dma"',
-        f'machine LoadPlatformDescription @{here}/probes/prototype.repl',
-        f'sysbus LoadELF @{elf}', 'emulation RunFor "0.01"', ready,
-        'sysbus.model Feed 42', 'sysbus.model Feed 43',
-        'emulation RunFor "0.01"', half,
-        'emulation RunFor "0.01"',
-        'sysbus.model Feed 44', 'sysbus.model Feed 45',
-        'emulation RunFor "0.01"', masked,
-        'emulation RunFor "0.01"', done,
-    ], 'R660_FIRMWARE_DMA_PASS')
+    stage = symbols['stage']
+    model = PrototypePeripheral()
+    with Machine(run, elf, 'dma', poll=[stage]) as m:
+        m.map(0x40020000, 0x7000, model)
+        m.trap(symbols['_landin_firmware_unhandled'], 'unhandled exception')
+        u32 = m.u32
+        m.until(lambda: u32(stage) == 1)
+        require(model.configuration == 0x80000407 and model.remaining == 4, 'ready: descriptor')
+        require(model.transfers == 0 and model.errors == 0, 'ready: transfers')
+        require(model.count_half_writes == 1 and model.count_word_writes == 0, 'ready: count width')
+        model.feed(42)
+        model.feed(43)
+        m.settle()
+        require(u32(symbols['notifications']) == 1, 'half: notifications')
+        require(u32(symbols['completed']) == 0 and u32(symbols['result']) == 0, 'half: state')
+        require(model.transfers == 2 and model.remaining == 2, 'half: model')
+        m.write_u32(stage, 2)
+        m.until(lambda: u32(stage) == 3)
+        model.feed(44)
+        model.feed(45)
+        m.settle()
+        require(u32(symbols['notifications']) == 1, 'masked: delivered while masked')
+        require(u32(symbols['completed']) == 0, 'masked: completed while masked')
+        require(model.transfers == 4 and model.remaining == 0, 'masked: model')
+        require(u32(symbols['buffer']) == 0x2d2c2b2a, 'masked: buffer')
+        m.write_u32(stage, 4)
+        m.until(lambda: u32(stage) == 5)
+        m.settle()
+        require(u32(symbols['result']) == 174, 'done: result')
+        require(u32(symbols['notifications']) == 2 and u32(symbols['completed']) == 1,
+                'done: notifications')
+    require(model.transfers == 4 and model.errors == 0 and model.remaining == 0, 'done: model')
+    require(model.configuration == 0x80000406, 'done: configuration')
+    require(model.count_half_reads == 1 and model.count_word_reads == 0, 'done: count reads')
+    require(model.count_half_writes == 1 and model.count_word_writes == 0, 'done: count writes')
+    require(model.reads == 3 and model.writes == 7, 'done: access counts')
+    (run.out / 'dma-trace.txt').write_text('notifications=2;half-read=1;half-write=1;'
+        'status-read=2;clear-write=2;transfers=4;sum=174\n')
 
 
 def machine(run, refine, optimize="none", specialize="off"):
@@ -419,30 +411,23 @@ end start
     text = run.command('peripheral-symbols', [run.bin / 'arm-none-eabi-nm', elf])
     symbols = {parts[2]: int(parts[0],16) for line in text.splitlines()
                if len(parts := line.split()) == 3}
-    platform = run.out / 'platform.repl'
-    platform.write_text((here / 'probes/prototype.repl').read_text().replace(
-        'PrototypePeripheral @ sysbus 0x40020000\n    IRQ -> nvic@0',
-        'EncodingPeripheral @ sysbus 0x40030000'))
     trace = ('r32:4:0000009b' if kind == 'hole' else
              'r8:18:a5;r8:18:00;w8:19:41;w8:1a:02;r8:1a:f1' if kind == 'byte' else TRACE)
-    checks = run.out / 'checks.py'
-    checks.write_text('bus = monitor.Machine.SystemBus\n'
-                     'model = monitor.Machine["sysbus.model"]\n' + f'''
-assert bus.ReadDoubleWord({symbols['firmware_fault']}) == {3 if kind == 'hole' else 0}
-assert bus.ReadDoubleWord({symbols['firmware_result']}) == {0 if kind == 'hole' else 42 if kind == 'byte' else 0x640}
-assert str(model.Trace) == {trace!r}
-''' + ('''
-assert model.Normal == 0xa50000d0
-assert model.Command == 0x51 and model.Pending == 0xf1
-assert model.Count == 0xffff and model.Ones == 0xffffff51
-''' if kind == 'images' else "assert model.ByteCommand == 0x41 and model.BytePending == 0xf1\n" if kind == 'byte' else '') +
-        'print("R660_FIRMWARE_DEVICE_TRACE " + str(model.Trace))\n'
-        'print("R660_FIRMWARE_DEVICE_PASS")\n')
-    run.renode_script('device', [f'include @{here}/probes/EncodingPeripheral.cs',
-        'mach create "compiler-firmware-image-interrupt"',
-        f'machine LoadPlatformDescription @{platform}',
-        f'sysbus LoadELF @{elf}', 'emulation RunFor "0.1"', f'include @{checks}',
-    ], 'R660_FIRMWARE_DEVICE_PASS')
+    model = EncodingPeripheral()
+    with Machine(run, elf, 'device') as m:
+        m.map(0x40030000, 0x20, model)
+        m.settle()
+        fault, result = m.u32(symbols['firmware_fault']), m.u32(symbols['firmware_result'])
+    require(fault == (3 if kind == 'hole' else 0), 'firmware device fault status')
+    require(result == (0 if kind == 'hole' else 42 if kind == 'byte' else 0x640),
+            'firmware device result')
+    require(model.trace == trace, 'firmware device trace differs: ' + model.trace)
+    if kind == 'images':
+        require(model.normal == 0xa50000d0 and model.command == 0x51 and model.pending == 0xf1
+                and model.count == 0xffff and model.ones == 0xffffff51, 'firmware device images')
+    elif kind == 'byte':
+        require(model.byte_command == 0x41 and model.byte_pending == 0xf1, 'firmware byte images')
+    (run.out / 'device-trace.txt').write_text(model.trace + '\n')
 
 
 def execute_suite(parent, refine, profiles=PROFILES):

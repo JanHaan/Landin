@@ -319,7 +319,7 @@ Cortex source debugging is a separate mandatory embedded lane under
 `environments/cortex-m/evidence.py`, invoked by `run.py` on native Linux.
 It uses `--debug=lines`, source/function/ordinary-frame assertions and fail-closed
 artifact selection, with no advertised variable/type interface. Complete-driver
-Renode execution, QEMU CPU/startup and independent exception/stack controls stay
+device execution, QEMU CPU/startup and independent exception/stack controls stay
 distinct. See the [embedded evidence guide](../../environments/cortex-m/README.md#freestanding-evidence)
 and [target contract](../../docs/targets.md#cortex-source-debugging).
 
@@ -959,10 +959,10 @@ The native debugger source checks the raw carrier and its size; named packed
 bitfield/array display is not claimed.
 
 `packed.py` executes independent M0 C firmware. `packed_native.py` executes
-compiler-generated hosted instructions against Renode through a C bus transport,
-with literal independent image/trace assertions. Both are mandatory in the
-embedded probe/export path, alongside the profile, layout/ABI and memory
-controls. The Cortex-M guide records their results, assumptions and limits.
+compiler-generated hosted instructions against the encoding model through a C
+line transport, with literal independent image/trace assertions. Both are
+mandatory in the embedded probe/export path, alongside the profile, layout/ABI
+and memory controls. The Cortex-M guide records their results, assumptions and limits.
 
 
 `cortex-m/corpus.json` inventories every shared runtime/ABI fixture.
@@ -984,7 +984,7 @@ suite exercises firmware request failures, conventions/conversions, naked body
 restrictions, placement conflicts and unsupported hosted assembly. Actual
 compiler-generated firmware and independent machine controls live in the
 [embedded execution lane](../../environments/cortex-m/README.md#compiler-owned-firmware);
-those QEMU/Renode results are not hosted fixture passes or source-debugging
+those QEMU results are not hosted fixture passes or source-debugging
 acceptance. Existing runtime/ABI fixtures and their Cortex dispositions remain
 unchanged.
 
@@ -1019,6 +1019,6 @@ The complete Cortex driver lives in [`driver/`](driver/DERIVATION.md), outside
 the hosted fixture runner. Its `fixture.json` supplies the explicitly named
 `firmware/derived-driver` prototype-matrix row; `check.py` checks the source/
 mapping paths and mandatory runner connection. Native Linux documents/tooling
-acceptance runs its QEMU and Renode evidence through compiler-owned firmware.
+acceptance runs its QEMU evidence through compiler-owned firmware.
 The shared `runtime/r690-recovery-loop-context` fixture separately checks
 inferred recovery break/continue and cleanup on both hosted targets and Cortex.

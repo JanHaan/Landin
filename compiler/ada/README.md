@@ -1049,11 +1049,11 @@ See [target contracts](../../docs/targets.md#native-source-debugging) for native
 commands, identity matching and the demonstrated debugger presentation limits.
 
 The [Cortex-M environment probes](../../environments/cortex-m/README.md)
-are separate C/assembly controls for QEMU and a synthetic Renode device lane.
+are separate C/assembly controls for QEMU and a synthetic device lane on it.
 `Targets.Cortex_M` and `Backend.Arm32_ABI` supply layout/transport planning,
 with independent executable controls under that environment. The existing
 neutral shape machinery supplies storage. `Backend.Cortex_M` adds assembly
-emission and compiler-generated QEMU/Renode execution. `--target=cortex-m0`
+emission and compiler-generated QEMU execution. `--target=cortex-m0`
 accepts checking, `--emit=asm` and D229 firmware linking with explicit
 `--firmware-entry=NAME`. General C source remains refused. Cortex
 `--debug=lines` enables the explicit [line/function contract](../../docs/targets.md#cortex-source-debugging);
