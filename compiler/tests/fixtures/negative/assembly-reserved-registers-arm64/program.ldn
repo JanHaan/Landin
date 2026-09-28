@@ -1,0 +1,6 @@
+f: (value: u64) -> none =
+    assembler.block("mov x9, {v}", in v: u64 at x18 = value)
+    assembler.block("mov x29, {v}", in v: u64 at general = value)
+    assembler.block("mov x19, {v}", in v: u64 at general = value)
+    assembler.block("fmov d8, {v}", in v: u64 at general = value)
+end f

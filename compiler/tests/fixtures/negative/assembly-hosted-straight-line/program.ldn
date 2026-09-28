@@ -1,0 +1,5 @@
+f: (value: u64) -> none =
+    assembler.block("jmp 1f", in v: u64 at rax = value)
+    assembler.block("again: nop", in v: u64 at rax = value)
+    assembler.block("nop # quiet", in v: u64 at rax = value)
+end f

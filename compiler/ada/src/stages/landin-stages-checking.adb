@@ -1,3 +1,4 @@
+with Landin.Targets.Assembly;
 with Landin.Targets.Firmware;
 with Landin.Machine;
 with Landin.Memory;
@@ -1688,6 +1689,15 @@ package body Landin.Stages.Checking is
       function Composition_Refused
         (Of_Tree : Syn.Tree; Written : Syn.Node_Id; What : String)
          return Boolean;
+
+      --  [1630]: every block with operands, and every hosted block.  Checks
+      --  each operand, its register and the text against the selected
+      --  target's table, and answers the block's value: none, the one
+      --  output's scalar, or the anonymous aggregate of several.  Ill_Typed
+      --  when it reported.
+      function Check_Assembly_Operands
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Naked : Boolean)
+         return Ty.Type_Kind;
 
       --  D189/[0480]: a pointer union is a pointer whose empty case is
       --  zero, so every use that would read its carrier as an address is
@@ -5632,6 +5642,463 @@ package body Landin.Stages.Checking is
          end if;
          return True;
       end Composition_Refused;
+
+      function Check_Assembly_Operands
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Naked : Boolean)
+         return Ty.Type_Kind
+      is
+         package Asm renames Landin.Targets.Assembly;
+         use type Asm.Register_Kind;
+         use type Syn.Operand_Direction;
+         use type Landin.Targets.Bit_Width;
+
+         Count : constant Natural := Syn.Argument_Count (Of_Tree, Node) - 1;
+         Operand_At : array (1 .. Count) of Syn.Node_Id;
+         Spelled_At : array (1 .. Count) of
+           Ada.Strings.Unbounded.Unbounded_String;
+         Kind_At : array (1 .. Count) of Ty.Type_Kind :=
+           [others => Ty.Undecided];
+         Classes : Natural := 0;
+         Outputs : Natural := 0;
+         Faulted : Boolean := False;
+         Text : constant String :=
+           Landin.Configuration.Fixed_Text
+             (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+              Syn.Nth_Argument (Of_Tree, Node, 1));
+
+         procedure Refuse_At
+           (Where : Syn.Node_Id; Message : String; Note : String);
+
+         procedure Refuse_At
+           (Where : Syn.Node_Id; Message : String; Note : String) is
+         begin
+            Faulted := True;
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Where),
+               Message => Message,
+               Note    => Note,
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "this assembly block",
+               Into    => Found);
+         end Refuse_At;
+
+         --  The operand a template or text word names, or zero.
+         function Operand_Named (Name : String) return Natural;
+
+         function Operand_Named (Name : String) return Natural is
+         begin
+            for Index in 1 .. Count loop
+               if Syn.Name (Of_Tree, Operand_At (Index))
+                    /= Landin.Source.Names.No_Name
+                 and then Spelled (Syn.Name (Of_Tree, Operand_At (Index)))
+                   = Name
+               then
+                  return Index;
+               end if;
+            end loop;
+            return 0;
+         end Operand_Named;
+
+         --  Whether a text register word is one this block declared, at
+         --  any width: an operand's fixed register or a discarded output.
+         function Declares_Register (Canonical : String) return Boolean
+           is (for some Index in 1 .. Count =>
+                 Ada.Strings.Unbounded.To_String (Spelled_At (Index))
+                   = Canonical);
+
+         procedure Check_Text;
+
+         --  [1630]: `{name}` names an operand's register, `{{` and `}}` are
+         --  literal braces, and every other register word is one the block
+         --  declared or one every ordinary block overwrites.
+         procedure Check_Text is
+            Position : Natural := Text'First;
+            Used : array (1 .. Count) of Boolean := [others => False];
+            Syntax_Fault : Boolean := False;
+         begin
+            while Position <= Text'Last loop
+               if Text (Position) = '{' then
+                  if Position < Text'Last and then Text (Position + 1) = '{'
+                  then
+                     Position := Position + 2;
+                  else
+                     declare
+                        Close : Natural := Position + 1;
+                     begin
+                        while Close <= Text'Last
+                          and then Text (Close) in 'a' .. 'z' | '0' .. '9'
+                            | '_'
+                        loop
+                           Close := Close + 1;
+                        end loop;
+                        if Close > Text'Last or else Text (Close) /= '}'
+                          or else Close = Position + 1
+                        then
+                           Syntax_Fault := True;
+                           exit;
+                        end if;
+                        declare
+                           Which : constant Natural :=
+                             Operand_Named (Text (Position + 1 .. Close - 1));
+                        begin
+                           if Which = 0 then
+                              Refuse_At
+                                (Syn.Nth_Argument (Of_Tree, Node, 1),
+                                 "the text names `{"
+                                 & Text (Position + 1 .. Close - 1)
+                                 & "}` and no operand is called that",
+                                 "[1630]: `{name}` is replaced by the"
+                                 & " register of the operand of that name");
+                              return;
+                           end if;
+                           Used (Which) := True;
+                        end;
+                        Position := Close + 1;
+                     end;
+                  end if;
+               elsif Text (Position) = '}' then
+                  if Position < Text'Last and then Text (Position + 1) = '}'
+                  then
+                     Position := Position + 2;
+                  else
+                     Syntax_Fault := True;
+                     exit;
+                  end if;
+               elsif Text (Position) in '0' .. '9' then
+                  --  A number is one word, so `0x9` names no `x9`.
+                  while Position <= Text'Last
+                    and then Text (Position) in 'a' .. 'z' | 'A' .. 'Z'
+                      | '0' .. '9' | '_'
+                  loop
+                     Position := Position + 1;
+                  end loop;
+               elsif Text (Position) in 'a' .. 'z' | 'A' .. 'Z' | '_' then
+                  declare
+                     First : constant Natural := Position;
+                  begin
+                     while Position <= Text'Last
+                       and then Text (Position) in 'a' .. 'z' | 'A' .. 'Z'
+                         | '0' .. '9' | '_'
+                     loop
+                        Position := Position + 1;
+                     end loop;
+                     declare
+                        Word : constant String :=
+                          Asm.Lowered (Text (First .. Position - 1));
+                        Canonical : constant String :=
+                          Asm.Canonical (Facts, Word);
+                     begin
+                        if Asm.Names_Reserved (Facts, Word) then
+                           Refuse_At
+                             (Syn.Nth_Argument (Of_Tree, Node, 1),
+                              "the text names `" & Word & "`, a register"
+                              & " no ordinary block may write",
+                              "[1990]: the stack, frame and link registers"
+                              & " and the platform's reserved ones are"
+                              & " never named");
+                           return;
+                        elsif Canonical /= ""
+                          and then not Asm.Overwritten (Facts, Canonical)
+                          and then not Declares_Register (Canonical)
+                        then
+                           Refuse_At
+                             (Syn.Nth_Argument (Of_Tree, Node, 1),
+                              "the text names `" & Word & "`, a register"
+                              & " the routine preserves, and no operand"
+                              & " declares it",
+                              "[1630]: declare it with `out _ at "
+                              & Canonical & "` so the routine saves it");
+                           return;
+                        end if;
+                     end;
+                  end;
+               else
+                  Position := Position + 1;
+               end if;
+            end loop;
+            if Syntax_Fault then
+               Refuse_At
+                 (Syn.Nth_Argument (Of_Tree, Node, 1),
+                  "a brace in assembly text opens `{name}` or is doubled",
+                  "[1630]: `{name}` names an operand; `{{` and `}}` are"
+                  & " literal braces");
+               return;
+            end if;
+            for Index in 1 .. Count loop
+               if Syn.Name (Of_Tree, Operand_At (Index))
+                    /= Landin.Source.Names.No_Name
+                 and then Spelled
+                   (Syn.Name
+                      (Of_Tree,
+                       Syn.Operand_Register (Of_Tree, Operand_At (Index))))
+                     = "general"
+                 and then not Used (Index)
+               then
+                  Refuse_At
+                    (Operand_At (Index),
+                     "the compiler chooses this operand's register and the"
+                     & " text never names it",
+                     "[1630]: write `{"
+                     & Spelled (Syn.Name (Of_Tree, Operand_At (Index)))
+                     & "}` where the chosen register belongs");
+                  return;
+               end if;
+            end loop;
+         end Check_Text;
+      begin
+         for Index in 1 .. Count loop
+            Operand_At (Index) := Syn.Nth_Argument (Of_Tree, Node, Index + 1);
+         end loop;
+
+         if Naked and then Count > 0 then
+            Refuse_At
+              (Operand_At (1),
+               "a naked body's assembly takes no operands",
+               "[1570]: the programmer owns every register of a naked"
+               & " body");
+            return Ty.Ill_Typed;
+         end if;
+
+         for Index in 1 .. Count loop
+            declare
+               Operand : constant Syn.Node_Id := Operand_At (Index);
+               Register : constant Syn.Node_Id :=
+                 Syn.Operand_Register (Of_Tree, Operand);
+               Written : constant Syn.Node_Id :=
+                 Syn.Operand_Type (Of_Tree, Operand);
+               Direction : constant Syn.Operand_Direction :=
+                 Syn.Direction_Of (Of_Tree, Operand);
+               Named : constant String :=
+                 Spelled (Syn.Name (Of_Tree, Register));
+               Class : constant Asm.Register_Kind :=
+                 Asm.Classify (Facts, Named);
+            begin
+               --  The name, when there is one, is unique in the block.
+               if Syn.Name (Of_Tree, Operand) /= Landin.Source.Names.No_Name
+               then
+                  for Earlier in 1 .. Index - 1 loop
+                     if Syn.Name (Of_Tree, Operand_At (Earlier))
+                       = Syn.Name (Of_Tree, Operand)
+                     then
+                        Refuse_At
+                          (Operand,
+                           "this block already has an operand called `"
+                           & Spelled (Syn.Name (Of_Tree, Operand)) & "`",
+                           "[1630]: an operand's name is its template slot"
+                           & " and its result field");
+                     end if;
+                  end loop;
+               end if;
+
+               case Class is
+                  when Asm.Not_A_Register =>
+                     Refuse_At
+                       (Register,
+                        "`" & Named & "` is not a register of "
+                        & Landin.Targets.Name (Facts),
+                        "[1990]: a register is the target's full-width"
+                        & " name, or `general`");
+                  when Asm.Never_Named =>
+                     Refuse_At
+                       (Register,
+                        "`" & Named & "` is a register no operand may name",
+                        "[1990]: the stack, frame and link registers and"
+                        & " the platform's reserved ones are never named");
+                  when Asm.General_Class =>
+                     Classes := Classes + 1;
+                     Spelled_At (Index) :=
+                       Ada.Strings.Unbounded.Null_Unbounded_String;
+                  when Asm.Operand_Register =>
+                     Spelled_At (Index) :=
+                       Ada.Strings.Unbounded.To_Unbounded_String (Named);
+                     for Earlier in 1 .. Index - 1 loop
+                        if Ada.Strings.Unbounded.To_String
+                             (Spelled_At (Earlier)) = Named
+                        then
+                           Refuse_At
+                             (Register,
+                              "`" & Named & "` is already this block's"
+                              & " register for another operand",
+                              "[1630]: each operand has a register of its"
+                              & " own; `inout` passes one value in and out");
+                        end if;
+                     end loop;
+               end case;
+
+               if Class = Asm.General_Class
+                 and then Syn.Name (Of_Tree, Operand)
+                   = Landin.Source.Names.No_Name
+               then
+                  Refuse_At
+                    (Register,
+                     "a discarded output names the register it overwrites",
+                     "[1630]: `out _ at register` declares one register;"
+                     & " `general` chooses one");
+               end if;
+
+               --  [1990]: an operand type is written, never deduced.  A
+               --  type formal would make the register width depend on the
+               --  instance, which no check here could see.
+               if Written /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree, Written) = Syn.Type_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Written)
+                   = Res.Bound
+                 and then Res.Sort_Of
+                   (Meanings.all,
+                    Res.Bound_To (Meanings.all, Of_Tree, Written))
+                     = Res.Type_Parameter
+               then
+                  Refuse_At
+                    (Written,
+                     "an assembly operand's type is written, not a type"
+                     & " formal",
+                     "[1990]: the register an operand needs is known where"
+                     & " the block is written");
+               elsif Written /= Syn.No_Node then
+                  declare
+                     Held : constant Ty.Type_Kind :=
+                       Type_At (Of_Tree, Written);
+                     Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                       (if Held = Ty.Aggregate
+                        then Landin.Checking.Nominal_Of
+                          (Types.all, Of_Tree, Written)
+                        else Landin.Checking.No_Nominal_Type);
+                  begin
+                     if Held = Ty.Ill_Typed then
+                        Faulted := True;
+                     elsif Held in Ty.Float_Name then
+                        Faulted := True;
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Written),
+                           Message => "a float assembly operand is not in"
+                                      & " this version of the language",
+                           Refused => Bad.Float_Operand,
+                           Into    => Found);
+                     elsif Held not in Ty.Integer_Name
+                       or else Nominal /= Landin.Checking.No_Nominal_Type
+                       or else Landin.Checking.Constraint_Of
+                         (Types.all, Of_Tree, Written)
+                           /= Landin.Checking.No_Constraint
+                     then
+                        Refuse_At
+                          (Written,
+                           "an assembly operand is an integer scalar, not "
+                           & (if Held = Ty.Bool then "bool"
+                              elsif Held in Ty.Pointer_Value then "a pointer"
+                              elsif Nominal /= Landin.Checking.No_Nominal_Type
+                                and then Landin.Checking.Is_Distinct
+                                  (Types.all, Nominal)
+                              then "a distinct type"
+                              elsif Held in Ty.Integer_Name
+                              then "a range subtype"
+                              else Shown (Held)),
+                           "[1630]: convert explicitly where the value"
+                           & " crosses: `usize(p)`, `ptr(u)`, `x <> 0`");
+                     elsif Ty.Width (Held, Facts)
+                       > Asm.Register_Width (Facts)
+                     then
+                        Refuse_At
+                          (Written,
+                           Shown (Held) & " is wider than one "
+                           & Landin.Targets.Name (Facts) & " register",
+                           "[1630]: an operand is one register");
+                     else
+                        Kind_At (Index) := Held;
+                     end if;
+                  end;
+               end if;
+
+               if Direction in Syn.Input_Operand | Syn.Inout_Operand
+                 and then Kind_At (Index) in Ty.Integer_Name
+               then
+                  Require
+                    (Of_Tree, Syn.Operand_Input (Of_Tree, Operand),
+                     Kind_At (Index), Syn.Origin (Of_Tree, Written),
+                     "the operand type written here");
+                  if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree,
+                        Syn.Operand_Input (Of_Tree, Operand)) = Ty.Ill_Typed
+                  then
+                     Faulted := True;
+                  end if;
+               elsif Direction in Syn.Input_Operand | Syn.Inout_Operand then
+                  declare
+                     Ignored : constant Ty.Type_Kind := Synthesise
+                       (Of_Tree, Syn.Operand_Input (Of_Tree, Operand));
+                  begin
+                     pragma Unreferenced (Ignored);
+                  end;
+               end if;
+               if Direction /= Syn.Input_Operand
+                 and then Syn.Name (Of_Tree, Operand)
+                   /= Landin.Source.Names.No_Name
+               then
+                  Outputs := Outputs + 1;
+               end if;
+            end;
+         end loop;
+
+         if not Faulted and then Classes > Asm.General_Count (Facts) then
+            Refuse_At
+              (Node,
+               "this block asks `general` for more registers than "
+               & Landin.Targets.Name (Facts) & " has",
+               "[1990]: `general` chooses from"
+               & Natural'Image (Asm.General_Count (Facts)) & " registers");
+         end if;
+
+         if not Faulted then
+            Check_Text;
+         end if;
+
+         if Faulted then
+            return Ty.Ill_Typed;
+         end if;
+
+         if Outputs = 0 then
+            return Ty.No_Value;
+         elsif Outputs = 1 then
+            for Index in 1 .. Count loop
+               if Syn.Direction_Of (Of_Tree, Operand_At (Index))
+                    /= Syn.Input_Operand
+                 and then Syn.Name (Of_Tree, Operand_At (Index))
+                   /= Landin.Source.Names.No_Name
+               then
+                  return Kind_At (Index);
+               end if;
+            end loop;
+         end if;
+
+         declare
+            Results : Landin.Checking.Signature_Part_Array (1 .. Outputs);
+            Filled : Natural := 0;
+         begin
+            for Index in 1 .. Count loop
+               if Syn.Direction_Of (Of_Tree, Operand_At (Index))
+                    /= Syn.Input_Operand
+                 and then Syn.Name (Of_Tree, Operand_At (Index))
+                   /= Landin.Source.Names.No_Name
+               then
+                  Filled := Filled + 1;
+                  Results (Filled) :=
+                    (Kind => Kind_At (Index),
+                     Name => Syn.Name (Of_Tree, Operand_At (Index)),
+                     Site => Syn.Origin (Of_Tree, Operand_At (Index)),
+                     others => <>);
+               end if;
+            end loop;
+            Landin.Checking.Note_Result_Shape
+              (Types.all, Of_Tree, Node,
+               Landin.Checking.Add_Signature
+                 (Types.all, Landin.Checking.No_Signature_Parts, Results,
+                  Syn.Origin (Of_Tree, Node)));
+            return Ty.Aggregate;
+         end;
+      end Check_Assembly_Operands;
 
       --  Measurements can introduce type syntax that was not published
       --  with a parameter or local declaration. Normalize and fold that
@@ -20071,6 +20538,7 @@ package body Landin.Stages.Checking is
                then
                   declare
                      Naked : Boolean := False;
+                     Operands : Boolean := False;
                      Argument : Syn.Node_Id := Syn.No_Node;
                      Fault : Ada.Strings.Unbounded.Unbounded_String;
                   begin
@@ -20094,17 +20562,33 @@ package body Landin.Stages.Checking is
                            end if;
                         end;
                      end loop;
-                     if Landin.Targets.Architecture_Of (Facts)
-                       /= Landin.Targets.Cortex_M0
+                     --  [1630]: named operands are one form on every
+                     --  target with registers; the positional `u32`
+                     --  shorthand names Cortex-M0's r0.
+                     Operands := Syn.Argument_Count (Of_Tree, Node) >= 2
+                       and then Syn.Kind
+                         (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2))
+                           = Syn.Assembly_Operand;
+                     if not Landin.Targets.Assembly.Has_Registers (Facts)
                      then
                         Fault := Ada.Strings.Unbounded.To_Unbounded_String
-                          ("assembler.block is enabled only on Cortex-M0");
+                          ("assembler.block needs a target with registers");
+                     elsif not Operands
+                       and then Syn.Argument_Count (Of_Tree, Node) = 2
+                       and then Landin.Targets.Architecture_Of (Facts)
+                         /= Landin.Targets.Cortex_M0
+                     then
+                        Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                          ("the positional u32 shorthand names Cortex-M0's"
+                           & " r0; write a named operand");
                      elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
                         Fault := Ada.Strings.Unbounded.To_Unbounded_String
                           ("assembler.block cannot declare checked failure");
-                     elsif Syn.Argument_Count (Of_Tree, Node) not in 1 .. 2
-                       or else (Naked and then
-                         Syn.Argument_Count (Of_Tree, Node) /= 1)
+                     elsif Syn.Argument_Count (Of_Tree, Node) = 0
+                       or else (not Operands and then
+                         (Syn.Argument_Count (Of_Tree, Node) > 2
+                          or else (Naked and then
+                            Syn.Argument_Count (Of_Tree, Node) /= 1)))
                      then
                         Fault := Ada.Strings.Unbounded.To_Unbounded_String
                           ("assembly needs fixed text and optionally one u32;"
@@ -20116,15 +20600,28 @@ package body Landin.Stages.Checking is
                         then
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
                              ("assembly text must be a literal");
-                        else
+                        elsif Landin.Targets.Architecture_Of (Facts)
+                          = Landin.Targets.Cortex_M0
+                        then
+                           --  A template slot is always one of r0-r7, so
+                           --  the allowlist reads it as one.
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
                              (Landin.Targets.Firmware.Assembly_Error
-                                (Landin.Configuration.Fixed_Text
+                                (Landin.Targets.Assembly.Filled
+                                   (Landin.Configuration.Fixed_Text
+                                      (Source
+                                         (Context, Syn.Source_Of (Of_Tree)),
+                                       Of_Tree, Argument), "r0"), Naked));
+                        else
+                           Fault := Ada.Strings.Unbounded.To_Unbounded_String
+                             (Landin.Targets.Assembly.Text_Error
+                                (Facts, Landin.Configuration.Fixed_Text
                                    (Source (Context, Syn.Source_Of (Of_Tree)),
-                                    Of_Tree, Argument), Naked));
+                                    Of_Tree, Argument)));
                         end if;
                      end if;
                      if Ada.Strings.Unbounded.Length (Fault) = 0
+                       and then not Operands
                        and then Syn.Argument_Count (Of_Tree, Node) = 2
                      then
                         if Synthesise
@@ -20147,9 +20644,51 @@ package body Landin.Stages.Checking is
                            Because => "this assembly block", Into => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;
-                     return Kept
-                       (if Syn.Argument_Count (Of_Tree, Node) = 2
-                        then Ty.U32 else Ty.No_Value);
+                     declare
+                        Answer : constant Ty.Type_Kind :=
+                          (if Operands
+                             or else Landin.Targets.Architecture_Of (Facts)
+                               /= Landin.Targets.Cortex_M0
+                           then Check_Assembly_Operands
+                             (Of_Tree, Node, Naked)
+                           elsif Syn.Argument_Count (Of_Tree, Node) = 2
+                           then Ty.U32 else Ty.No_Value);
+                     begin
+                        --  [1990]: the last check, so a block that reaches
+                        --  it passed every other one.  Cortex-M0 lowers the
+                        --  operand-free block and the u32 shorthand; no
+                        --  target lowers named operands yet.
+                        if Answer /= Ty.Ill_Typed
+                          and then (Operands
+                            or else Landin.Targets.Architecture_Of (Facts)
+                              /= Landin.Targets.Cortex_M0)
+                        then
+                           Bad.Report
+                             (Item => Bad.Type_Mismatch,
+                              Source => Syn.Source_Of (Of_Tree),
+                              Where => Syn.Where (Of_Tree, Node),
+                              Message =>
+                                (if Operands
+                                 then "this compiler does not lower"
+                                      & " assembly operands yet"
+                                 else "this compiler does not lower"
+                                      & " assembly on "
+                                      & Landin.Targets.Name (Facts)
+                                      & " yet"),
+                              Note => "[1990]: assembly is checked on every"
+                                & " target; only Cortex-M0 lowers it, and"
+                                & " only without named operands",
+                              Related => Syn.Origin (Of_Tree, Node),
+                              Because => "this assembly block",
+                              Into => Found);
+                        end if;
+                        if Answer = Ty.Aggregate then
+                           Landin.Checking.Note
+                             (Types.all, Of_Tree, Node, Answer);
+                           return Answer;
+                        end if;
+                        return Kept (Answer);
+                     end;
                   end;
                end if;
 

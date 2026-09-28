@@ -270,11 +270,12 @@ class Inventory(unittest.TestCase):
                          ("0150", "transferred"),
                          ("0170", "transferred"),
                          ("0660", "boundary"),
-                         ("1350", "boundary")):
+                         ("1350", "boundary"),
+                         ("1630", "transferred")):
             self.assertIn(expected, wording)
         self.assertEqual({how for _, how in wording},
                          {"boundary", "withdrawn", "transferred"})
-        self.assertEqual(len(self.inputs["refusals"]), 19)
+        self.assertEqual(len(self.inputs["refusals"]), 20)
 
     def test_a_standing_the_body_does_not_write_is_unreadable(self):
         #  The table says what a refusal is and the Report body writes the

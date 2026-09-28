@@ -1,0 +1,9 @@
+class: negative
+summary: D248 transfers float operands to Language evolution, and the refusal names that successor
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-float-operand/program.ldn
+codes: L0304
+status: 1
+constructs: 1630, 1830
+targets: cortex-m

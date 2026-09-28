@@ -3607,9 +3607,9 @@ Their calls are builtin, take only fixed arguments, and
 cannot be written by hand.
 The hosted slice enables the compiler facts and assertions above and
 `linker.library` below. Scalar atomics and barriers follow D227. Cortex-M0
-also enables body-only `assembler.block`, declaration placement annotations
-and an explicit firmware-entry request. Hosted targets refuse machine assembly
-and placement. Other tool operations still receive named refusals.
+also enables declaration placement annotations and an explicit firmware-entry
+request, which hosted targets refuse. `assembler.block` is checked on every
+target [1630]. Other tool operations still receive named refusals.
 Where the line runs: something is builtin when the compiler
 has to know it. Atomics are, because opaque assembly in a
 hot loop wrecks the register allocation around it. Masking
@@ -3808,20 +3808,56 @@ before reading them. Interrupt masking alone does not stop DMA.
 
 ### [1630] Inline assembly, for what has no builtin
 
-`assembler.block` takes a fixed quoted or raw text literal in a Cortex-M0
-routine body. With only that argument it returns `none`. An optional second
-positional `u32` argument enters in r0; the final r0 becomes its `u32` result.
-This scalar form is available in ordinary and interrupt bodies. For example,
-the ordinary target module `core/cpu` saves the previous interrupt mask with
-`assembler.block("mrs r0, primask\ncpsid i", zero)`, where `zero` is a `u32`.
-The argument is evaluated once, and discarding the result still executes the
-assembly. Naked bodies retain their single literal and programmer-owned state.
-It is opaque to the compiler: memory knowledge is invalidated
-and memory accesses cannot be reordered across it. It is not itself a hardware
-barrier. An ordinary block can clobber r0–r7 and flags; live compiler values
-have stack homes, while frame, stack, reserved and high registers are excluded.
-Ordinary blocks are straight-line code with no labels or calls. [1990] gives
-the exact instruction, system-register, text and programmer-obligation limits.
+`assembler.block` takes fixed quoted or raw text in a routine body, and after
+it the operands that carry values in and out. An operand names its direction,
+its name, its type and the register it is placed `at`:
+
+```landin
+disable_interrupts: () -> (previous: u32) =
+    previous = assembler.block("mrs {mask}, primask\ncpsid i",
+                               out mask: u32 at general)
+end disable_interrupts
+
+restore_interrupts: (previous: u32) -> none =
+    assembler.block("msr primask, {mask}\nisb sy",
+                    in mask: u32 at general = previous)
+end restore_interrupts
+```
+
+A register is a name the target answers for, never text. `general` asks the
+compiler to choose one, and `{mask}` in the text is where the chosen register
+goes, spelled at the width the operand's type selects. A fixed register is the
+architecture's own full-width name, and the text may use it directly. `in`
+carries a value in, `out` carries one out, and `inout` does both through one
+register. The outputs are the block's value, as a function's named returns are
+its: one is a scalar, several are an anonymous result you destructure.
+
+```landin
+(low, high) := assembler.block("rdtsc", out low: u32 at rax,
+                               out high: u32 at rdx)
+```
+
+An operand is an integer scalar that fits one register. A pointer crosses as
+`usize(p)` and comes back through `ptr(u)`, whose zero check is then written
+where it happens; a flag comes back as `x <> 0`. Inputs are evaluated once,
+left to right, before the block runs.
+
+Every block may overwrite the registers a call may, and the flags. A register
+a call must preserve is declared, as an operand or as a discarded output
+`out _ at rbx`, and that is what makes the routine save it. The frame, stack
+and link registers are never named, so a block cannot break a backtrace, and
+the language reserves no register of its own. Every block is opaque to the
+compiler: memory knowledge is invalidated and memory accesses cannot be
+reordered across it, which is exactly what a critical section wants. It is not
+itself a hardware barrier. An ordinary block is straight-line code with no
+labels or calls. [1990] gives each target's registers, the text rules and the
+programmer's obligations; D248 records the design.
+
+The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
+passes one `u32` in and out of r0, and the text names r0 itself. This compiler
+lowers only that shorthand and the operand-free block, and only on Cortex-M0;
+the operand form is checked on every target and waits for its lowering, which
+`ROADMAP.md` schedules.
 
 `core/cpu.disable_interrupts()` returns the prior PRIMASK value;
 `restore_interrupts(previous)` restores it, so nested critical sections do not

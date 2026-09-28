@@ -1,0 +1,9 @@
+class: negative
+summary: D248 never names arm64's frame, link or platform register or its callee-saved v8-v15, and a callee-saved register the text writes must be declared
+program: program.ldn
+expect: expected.txt
+args: --target=darwin-arm64 ../tests/fixtures/negative/assembly-reserved-registers-arm64/program.ldn
+codes: L0301, L0301, L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: macos-arm64

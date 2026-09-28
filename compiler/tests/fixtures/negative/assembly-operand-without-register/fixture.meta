@@ -1,0 +1,9 @@
+class: negative
+summary: D248's operand is placed at a register or class, and one without `at` is refused by the parser
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/assembly-operand-without-register/program.ldn
+codes: L0103
+status: 1
+constructs: 1630, 1820
+targets: linux-x86-64, macos-arm64, synthetic-32

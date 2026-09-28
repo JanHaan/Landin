@@ -224,6 +224,12 @@ item 1 ROUTINE f result u32 signature 1 params 1 slots 3 blocks 1 values 6
     4 STORE slot 2 <- 3
     5 LOAD u32 slot 2
     6 LEAVE <- 5
+file positive/assembly-operand-forms/program.ldn
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE start result none signature 1 params 0 slots 0 blocks 1 values 1
+  block 1 scope 5 BLOCK length 1
+    1 LEAVE
 file positive/assigned-on-every-path/program.ldn
 unit signatures 1 items 1
 signature 1 (in bool) -> u32

@@ -19,7 +19,7 @@
 #  disposition column explains every row.
 #  201 constructs, 196 with fixture evidence, 5 with none.
 #  States: 191 executed, 5 compiled, 2 transferred, 3 advisory.
-#  7 rows name an open owner; 0 have target gaps.
+#  8 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
 0010 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
@@ -184,7 +184,7 @@
 1600 | tour | accepted emitted executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
 1610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A symbol name the language's identifiers cannot spell
 1620 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics are builtins
-1630 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Inline assembly, for what has no builtin
+1630 | tour | accepted emitted refused | compiled | compiled | executed | transferred | executed | cortex-m | none | Language evolution | Inline assembly, for what has no builtin
 1640 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Kept against section garbage collection, and placed
 1650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Entry point
 1660 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | hosted | none | none | And this is where capabilities come from

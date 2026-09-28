@@ -100,6 +100,26 @@ negative/array-repetition-zero-context | linux-x86-64, macos-arm64
 negative/array-return-unassigned | linux-x86-64, macos-arm64
 negative/array-type-name-is-not-storage | linux-x86-64, macos-arm64
 negative/array-value-not-enabled | linux-x86-64, macos-arm64
+negative/assembly-arm64-not-lowered | macos-arm64
+negative/assembly-discard-names-register | cortex-m
+negative/assembly-float-operand | cortex-m
+negative/assembly-hosted-not-lowered | linux-x86-64
+negative/assembly-hosted-straight-line | linux-x86-64
+negative/assembly-naked-operands | cortex-m
+negative/assembly-operand-types | cortex-m
+negative/assembly-operand-without-register | linux-x86-64, macos-arm64, synthetic-32
+negative/assembly-operands-not-lowered | cortex-m
+negative/assembly-output-with-value | linux-x86-64, macos-arm64, synthetic-32
+negative/assembly-outputs-dropped-by-omission | cortex-m
+negative/assembly-register-is-text | linux-x86-64, macos-arm64, synthetic-32
+negative/assembly-register-not-on-target | cortex-m
+negative/assembly-register-twice | linux-x86-64
+negative/assembly-reserved-registers-arm64 | macos-arm64
+negative/assembly-reserved-registers-cortex | cortex-m
+negative/assembly-reserved-registers-x86-64 | linux-x86-64
+negative/assembly-shorthand-after-operand | linux-x86-64, macos-arm64, synthetic-32
+negative/assembly-shorthand-hosted | linux-x86-64
+negative/assembly-template-names | cortex-m
 negative/assigned-on-one-path-only | linux-x86-64, macos-arm64
 negative/assignment-as-expression | linux-x86-64, macos-arm64
 negative/assignment-to-a-parameter | linux-x86-64, macos-arm64
@@ -1175,6 +1195,7 @@ positive/array-of-structs | linux-x86-64, macos-arm64
 positive/array-type-is-declared | linux-x86-64, macos-arm64
 positive/array-types-alias-and-agree | linux-x86-64, macos-arm64
 positive/array-zeroed-assignment | linux-x86-64, macos-arm64
+positive/assembly-operand-forms | linux-x86-64, macos-arm64, synthetic-32
 positive/assigned-on-every-path | linux-x86-64, macos-arm64
 positive/assignment-to-a-mutable-binding | linux-x86-64, macos-arm64
 positive/associativity-product-left | linux-x86-64, macos-arm64

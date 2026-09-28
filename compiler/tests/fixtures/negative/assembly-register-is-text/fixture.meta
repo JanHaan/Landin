@@ -1,0 +1,9 @@
+class: negative
+summary: D248 names a register with a name, never a string: a register in quotes is refused by the parser
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/assembly-register-is-text/program.ldn
+codes: L0100
+status: 1
+constructs: 1630, 1820
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,10 @@
+error[L0301]: a naked body's assembly takes no operands
+  --> ../tests/fixtures/negative/assembly-naked-operands/program.ldn:2:30
+  |
+2 |     assembler.block("bx lr", out _ at r1)
+  |                              ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-naked-operands/program.ldn:2:5
+  |
+2 |     assembler.block("bx lr", out _ at r1)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1570]: the programmer owns every register of a naked body

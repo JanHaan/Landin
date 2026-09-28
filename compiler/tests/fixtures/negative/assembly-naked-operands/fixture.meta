@@ -1,0 +1,9 @@
+class: negative
+summary: D248 leaves a naked body's single literal block without operands; the programmer owns its registers
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-naked-operands/program.ldn
+codes: L0301
+status: 1
+constructs: 1570, 1630
+targets: cortex-m

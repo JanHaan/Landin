@@ -1,0 +1,16 @@
+count: type = distinct u32
+small: type = u32 range 0 .. 9
+f: (flag: bool, p: ptr u32, n: count, s: small, wide: u64) -> none =
+    assembler.block("movs {v}, #1", in v: bool at general = flag)
+    assembler.block("movs {v}, #1", in v: ptr u32 at general = p)
+    assembler.block("movs {v}, #1", in v: count at general = n)
+    assembler.block("movs {v}, #1", in v: small at general = s)
+    assembler.block("movs {v}, #1", in v: u64 at general = wide)
+end f
+generic: (t: type, value: t) -> none =
+    assembler.block("movs {v}, #1", in v: t at general = value)
+end generic
+use: () -> none =
+    one: u32 = 1
+    generic(t: u32, value: one)
+end use

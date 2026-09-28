@@ -646,6 +646,24 @@ module.exports = grammar({
     labeled_argument: $ => seq(field('name', $._declaration_name), ':', field('value', $.argument_rhs)),
     argument_rhs: $ => choice($._expression, $._type),
 
+    // [1630]'s operands follow a block's text.  The grammar lets any
+    // argument list end in them and refine admits them only on
+    // `assembler.block`: `assembler`, `block`, `out` and `at` all stay
+    // identifiers, and the direction word is what opens an operand.
+    assembly_operand: $ => choice(
+      seq(
+        field('direction', choice('in', 'inout')),
+        field('name', $._declaration_name), ':', field('type', $._type),
+        $.identifier, field('register', $.identifier),
+        '=', field('value', $._expression),
+      ),
+      seq(
+        field('direction', $.identifier),
+        choice(seq(field('name', $._declaration_name), ':', field('type', $._type)), '_'),
+        $.identifier, field('register', $.identifier),
+      ),
+    ),
+
     // A scalar type name heads an expression as a conversion (`u32(n)`)
     // or a named special (`f64.infinity`), so it stands where a name does.
     // Explicit left recursion rather than a repeat: the postfix production
@@ -677,12 +695,16 @@ module.exports = grammar({
       prec(PREC.call, seq(
         field('function', $.indexed_expression), '(', optional($.arguments), ')',
       )),
+
       prec.dynamic(-2, prec.right(PREC.call, seq(
         field('function', $.indexed_expression), '(', optional($.arguments), ')',
         $.recovery_clause,
       ))),
     ),
-    arguments: $ => commaSep1($._expression),
+    arguments: $ => seq(
+      commaSep1($._expression),
+      repeat(seq(',', $.assembly_operand)),
+    ),
     recovery_clause: $ => seq(
       'else',
       choice(

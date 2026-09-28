@@ -1,0 +1,9 @@
+class: negative
+summary: D248 never names Cortex-M0's stack, link or platform registers, as an operand or in ordinary text
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn
+codes: L0301, L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: cortex-m

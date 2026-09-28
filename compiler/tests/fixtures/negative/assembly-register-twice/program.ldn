@@ -1,0 +1,10 @@
+f: (value: u64) -> none =
+    assembler.block("addq {a}, {b}", in a: u64 at rax = value,
+                    in b: u64 at rax = value)
+    assembler.block("nop {a}{b}{c}{d}{e}{g}{h}{i}{j}{k}",
+                    in a: u64 at general = value, in b: u64 at general = value,
+                    in c: u64 at general = value, in d: u64 at general = value,
+                    in e: u64 at general = value, in g: u64 at general = value,
+                    in h: u64 at general = value, in i: u64 at general = value,
+                    in j: u64 at general = value, in k: u64 at general = value)
+end f

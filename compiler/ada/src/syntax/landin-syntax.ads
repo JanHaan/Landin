@@ -288,6 +288,18 @@ package Landin.Syntax is
       --  can expose that same child as expression syntax, type syntax, or
       --  both; no second semantic subtree is inserted into the post-order.
       Call_Argument,
+      --  [1630]'s operand of `assembler.block`.  Its own name is the
+      --  operand's, or No_Name for a discarded output; its three slots are
+      --  the declared type (No_Node for `out _`), the Register_Name and the
+      --  input expression (No_Node for `out`).  Its direction is its own.
+      --  Like Call_Argument this is syntax carried by a call rather than an
+      --  expression, and its name declares nothing any scope can see.
+      Assembly_Operand,
+      --  The register or register class an operand is placed `at`.  A name
+      --  and not a Name_Reference: the selected target's register table
+      --  answers for it, never a lexical scope, so resolution has nothing to
+      --  bind.
+      Register_Name,
       --  Types [1790].  A name, not a closed set: see the header.
       Error_Type,
       Type_Name,
@@ -432,7 +444,8 @@ package Landin.Syntax is
                     | Return_Source | Member_Selection | Field_Value
                     | Import_Segment | Import_Alias_Name
                     | Import_Selected_Name | Option_Declaration
-                    | Call_Argument | Break_Statement | Continue_Statement
+                    | Call_Argument | Assembly_Operand | Register_Name
+                    | Break_Statement | Continue_Statement
                     | Loop_Statement | While_Statement | For_Statement
                     | Bare_Block);
 
@@ -621,6 +634,15 @@ package Landin.Syntax is
      return Parameter_Convention
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Parameter;
+
+   --  [1630]'s three operand directions.  `inout` carries its input into the
+   --  register and its output back out of the same register.
+   type Operand_Direction is (Input_Operand, Output_Operand, Inout_Operand);
+
+   function Direction_Of (Of_Tree : Tree; Id : Node_Id)
+     return Operand_Direction
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Assembly_Operand;
 
    function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
@@ -1315,6 +1337,27 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Call_Argument;
 
+   --  [1630]'s operand parts.  Operand_Type is No_Node for a discarded
+   --  output; Operand_Input is No_Node for `out`.  The register is always
+   --  written in a sound operand; a hole where it belongs is an Error node
+   --  that makes the operand unsound.  The same node's name is the
+   --  operand's, No_Name for `_`.
+   function Operand_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Assembly_Operand;
+
+   function Operand_Register (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Assembly_Operand,
+          Post => Contains (Of_Tree, Operand_Register'Result)
+                  and then
+                    (Kind (Of_Tree, Operand_Register'Result) = Register_Name
+                     or else not Is_Sound (Of_Tree, Id));
+
+   function Operand_Input (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Assembly_Operand;
+
    --  D135's applied alias and its positional type/fixed argument run.
    function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
@@ -1562,6 +1605,7 @@ private
       Shares     : Boolean := False;
       Unchecked  : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;
+      Direction  : Operand_Direction := Input_Operand;
       Fill       : Boolean := False;
       Recovery   : Node_Id := No_Node;
    end record;

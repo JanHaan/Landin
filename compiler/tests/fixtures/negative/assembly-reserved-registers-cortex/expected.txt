@@ -1,0 +1,26 @@
+error[L0301]: `r9` is a register no operand may name
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:2:49
+  |
+2 |     assembler.block("mov r1, {v}", in v: u32 at r9 = value)
+  |                                                 ^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:2:5
+  |
+2 |     assembler.block("mov r1, {v}", in v: u32 at r9 = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
+error[L0301]: `sp` is a register no operand may name
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:3:49
+  |
+3 |     assembler.block("mov r1, {v}", in v: u32 at sp = value)
+  |                                                 ^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:3:5
+  |
+3 |     assembler.block("mov r1, {v}", in v: u32 at sp = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
+error[L0301]: assembly cannot alter frame, stack or reserved registers outside a naked body
+  --> ../tests/fixtures/negative/assembly-reserved-registers-cortex/program.ldn:4:5
+  |
+4 |     assembler.block("mov r11, {v}", in v: u32 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

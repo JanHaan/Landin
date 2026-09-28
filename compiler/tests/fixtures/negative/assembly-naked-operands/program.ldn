@@ -1,0 +1,3 @@
+extern(naked) f: () -> none =
+    assembler.block("bx lr", out _ at r1)
+end f

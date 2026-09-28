@@ -1,0 +1,3 @@
+f: () -> none =
+    assembler.block("mrs {m}, primask", out m: u32 at general)
+end f

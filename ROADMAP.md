@@ -271,7 +271,10 @@ Status: planned
 Depends on: R9.10
 
 Lower the specified form on Cortex-M0, x86-64 and arm64, allocate its operands
-and honour its clobbers, and describe it to the debugger.
+and honour its clobbers, and describe it to the debugger. That removes the
+lowering limit [1990] states, moves D230's shorthand onto the same
+instruction, and lowers operand-free hosted blocks; the fixtures that pin the
+limit become executed ones.
 
 Exit evidence: executed fixtures on all three targets, including one per
 target that the IR verifier refuses, and `core/cpu` written on the new form.
@@ -770,6 +773,7 @@ with the reason it no longer applies.
 | E2 | Language evolution | Concept width [1260]: one case each way. | A real library whose concept must widen or split. | [1260] confirmed or amended. | watch |
 | E3 | Language evolution | Two kinds of generated source exist, SVD modules and C bindings; a third starts the review of retained position D3. Generating the compiler's transcription tables from `spec.md` would be a third. | A third kind of generated source. | That review recorded against D3's rationale. | watch |
 | SR-01 | Release readiness | The Cortex-M lane pins `arm-none-eabi-gcc` 14.2.1; the same publisher's `arm-eabi-gcc` 16.1.0 builds a valid image, and moving changes every recorded firmware hash and disassembly. | R12's new cores rebaseline the firmware records anyway. | The toolchain moved with every Cortex-M record rebaselined in one change. | scheduled R12.10 |
+| SR-04 | Language evolution | D248 keeps assembly operands to integer registers; a float operand is refused by name as transferred here. | A program that needs a float operand, or a target with float registers: R12.30's M4F is the first. | [1630] and D248 amended with the float register class and its clobber set on each target that has one, with executed fixtures. | open |
 | SR-03 | Language evolution | A module value cannot hold `addr` of storage: [1940]'s known values are numbers, and a static address is a data relocation no backend emits. L0305 refuses it and its note says why; this record is the construct's only owner. | A program needing a static pointer: a vector table it owns, a table of pointers into module storage, or a statically linked structure. | [1940] amended with a register decision, data relocations emitted on every target, and `negative/r491-construction-static-address` turned into executable fixtures. | open |
 | R551-13 | Scale and self-hosting | Workload scheduling and artifact reuse for the exact-revision acceptance. | — | — | retired: the acceptance was removed |
 | R551-14 | Scale and self-hosting | Interrupted Darwin acceptance could not resume. | — | — | retired: the acceptance was removed |

@@ -253,6 +253,18 @@ package body Landin.Syntax.Parser is
             Assembler_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "assembler");
 
+            --  [1630]'s operand words.  `block` is the one assembler member
+            --  whose call takes operands, `out` opens an output and `at`
+            --  names its register; all three remain ordinary names.
+            Block_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "block");
+
+            Out_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "out");
+
+            At_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "at");
+
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
@@ -330,6 +342,7 @@ package body Landin.Syntax.Parser is
                Caller    : Boolean := False;
                Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
+               Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node;
                Shares    : Boolean := False) return Node_Id;
@@ -500,7 +513,9 @@ package body Landin.Syntax.Parser is
             function Parse_Call
               (Callee : Node_Id;
                Starts : Landin.Source.Span;
-               Allow_Recovery : Boolean := True) return Node_Id;
+               Allow_Recovery : Boolean := True;
+               Allow_Operands : Boolean := True) return Node_Id;
+            function Parse_Assembly_Operand return Node_Id;
             function Previous return Landin.Source.Span;
 
             ------------------------------------------------------------
@@ -929,6 +944,7 @@ package body Landin.Syntax.Parser is
                Caller    : Boolean := False;
                Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
+               Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node;
                Shares    : Boolean := False) return Node_Id
@@ -982,6 +998,7 @@ package body Landin.Syntax.Parser is
                    Shares     => Shares,
                    Unchecked  => Unchecked,
                    Convention => Convention,
+                   Direction  => Direction,
                    Fill       => Fills,
                    Recovery   => Recovers));
 
@@ -1616,7 +1633,8 @@ package body Landin.Syntax.Parser is
                         Extent => Join (Opened, At_Member),
                         Children => [Base], Named => Member);
                      Called := Parse_Call
-                       (Callee, Opened, Allow_Recovery => False);
+                       (Callee, Opened, Allow_Recovery => False,
+                        Allow_Operands => False);
                      if Kind (Result, Called) = Labeled_Application then
                         Complain
                           (Item => Syn.Token_Expected, Where => Opened,
@@ -4107,8 +4125,7 @@ package body Landin.Syntax.Parser is
                         begin
                            Parts.Append (Of_Type);
                            if Peek = Tok.Identifier
-                             and then Landin.Source.Names.Spelling
-                               (Names, Named_Here) = "at"
+                             and then Named_Here = At_Id
                            then
                               Advance;
                               Parts.Append (Parse_Expression);
@@ -8020,10 +8037,133 @@ package body Landin.Syntax.Parser is
                  (Add (Name_Reference, Name_At, Named => Named), Name_At);
             end Parse_Call;
 
+            --  assembly_operand ::= ("in" | "inout") identifier ":" type
+            --                        "at" identifier "=" expression
+            --                      | "out" identifier ":" type
+            --                        "at" identifier
+            --                      | "out" "_" "at" identifier      [1630]
+            --
+            --  The direction word is what opens one, so a positional
+            --  argument that happens to be a name is never read as an
+            --  operand.  The register is a Register_Name, not a use:
+            --  the target's register table answers for it.
+            function Parse_Assembly_Operand return Node_Id is
+               At_Operand : constant Landin.Source.Span := Here;
+               Direction  : constant Operand_Direction :=
+                 (if Peek = Tok.Kw_In then Input_Operand
+                  elsif Peek = Tok.Kw_Inout then Inout_Operand
+                  else Output_Operand);
+               Named      : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name;
+               At_Name    : Landin.Source.Span := Here;
+               Declared   : Node_Id := No_Node;
+               Register   : Node_Id;
+               Input      : Node_Id := No_Node;
+            begin
+               Advance;
+               if Direction = Output_Operand and then Peek = Tok.Underscore
+               then
+                  At_Name := Here;
+                  Advance;
+               else
+                  At_Name := Parse_Declared_Name (Named);
+                  if Expect
+                       (Wanted  => Tok.Colon,
+                        Message => "an assembly operand declares its type"
+                                   & " with `:`",
+                        Note    => "[1630]: an operand is written"
+                                   & " `in name: type at register = value`",
+                        Related => At_Operand,
+                        Because => "this operand")
+                  then
+                     Declared := Parse_Type (False, At_Name);
+                  else
+                     Declared := Add (Error_Type, Point);
+                  end if;
+               end if;
+
+               if Peek = Tok.Identifier and then Named_Here = At_Id then
+                  Advance;
+                  if Peek = Tok.Identifier then
+                     Register := Add
+                       (Register_Name, Here, Named => Named_Here);
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "an assembly operand names its register"
+                                   & " or register class after `at`",
+                        Note    => "[1630]: a register is a name the"
+                                   & " selected target's table answers"
+                                   & " for, never text");
+                     if Peek not in Tok.Comma | Tok.Right_Paren
+                       | Tok.End_Of_Input
+                     then
+                        Advance;
+                     end if;
+                     Register := Add (Error_Expression, Point);
+                  end if;
+               else
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => After_Previous,
+                     Message => "an assembly operand is placed `at` a"
+                                & " register",
+                     Note    => "[1630]: an operand is written"
+                                & " `in name: type at register = value`",
+                     Related => At_Operand,
+                     Because => "this operand");
+                  Register := Add (Error_Expression, Point);
+               end if;
+
+               if Direction = Output_Operand then
+                  if Peek = Tok.Equal then
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => Here,
+                        Message => "an `out` operand takes no value;"
+                                   & " write `inout` to pass one in",
+                        Note    => "[1630]: an output is the block's"
+                                   & " result, and only `in` and `inout`"
+                                   & " carry a value into the register",
+                        Related => At_Operand,
+                        Because => "this output");
+                     Advance;
+                     Input := Parse_Delimited_Expression;
+                     Register := Add
+                       (Error_Expression, Point, Children => [Input]);
+                     Input := No_Node;
+                  end if;
+               elsif Expect
+                       (Wanted  => Tok.Equal,
+                        Message => "an input operand is given its value"
+                                   & " with `=`",
+                        Note    => "[1630]: an operand is written"
+                                   & " `in name: type at register = value`",
+                        Related => At_Operand,
+                        Because => "this operand")
+               then
+                  Input := Parse_Delimited_Expression;
+               else
+                  Input := Add (Error_Expression, Point);
+               end if;
+
+               return Add
+                 (Of_Kind   => Assembly_Operand,
+                  At_Token  => At_Name,
+                  Extent    => Join (At_Operand, After_Previous),
+                  Children  => [Declared, Register, Input],
+                  Named     => Named,
+                  Direction => Direction);
+            end Parse_Assembly_Operand;
+
             function Parse_Call
               (Callee : Node_Id;
                Starts : Landin.Source.Span;
-               Allow_Recovery : Boolean := True) return Node_Id
+               Allow_Recovery : Boolean := True;
+               Allow_Operands : Boolean := True) return Node_Id
             is
                Recovery         : Node_Id := No_Node;
                Args             : Slot_Vectors.Vector;
@@ -8033,6 +8173,19 @@ package body Landin.Syntax.Parser is
                Fill_Complained  : Boolean := False;
                Direct           : constant Boolean :=
                  Kind (Result, Callee) = Name_Reference;
+               --  [1630]: only `assembler.block` takes operands, and only
+               --  in a body; the module directive keeps its positional
+               --  arguments.  Its callee is a two-name selection, so the
+               --  test is on the syntax the parser just built.
+               Takes_Operands   : constant Boolean :=
+                 Allow_Operands
+                 and then Kind (Result, Callee) = Member_Selection
+                 and then Name (Result, Callee) = Block_Id
+                 and then Kind (Result, Target_Of (Result, Callee))
+                            = Name_Reference
+                 and then Name (Result, Target_Of (Result, Callee))
+                            = Assembler_Id;
+               Operand_Seen     : Boolean := False;
             begin
                if not Expect
                         (Wanted  => Tok.Left_Paren,
@@ -8097,7 +8250,47 @@ package body Landin.Syntax.Parser is
                               Because => "this labelled application");
                            Fill_Complained := True;
                         end if;
-                        if Peek = Tok.Identifier
+                        if Takes_Operands
+                          and then not Args.Is_Empty
+                          and then
+                            (Peek in Tok.Kw_In | Tok.Kw_Inout
+                             or else (Peek = Tok.Identifier
+                                      and then Named_Here = Out_Id
+                                      and then Ahead (1)
+                                        in Tok.Identifier | Tok.Underscore))
+                        then
+                           if not Operand_Seen
+                             and then Natural (Args.Length) > 1
+                           then
+                              Complain
+                                (Item    => Syn.Token_Expected,
+                                 Where   => Here,
+                                 Message => "the positional `u32` shorthand"
+                                            & " and operands do not mix",
+                                 Note    => "[1630]: the shorthand stands"
+                                            & " for `inout value: u32 at r0"
+                                            & " = expression`",
+                                 Related => Starts,
+                                 Because => "this assembly block");
+                           end if;
+                           Operand_Seen := True;
+                           Args.Append (Parse_Assembly_Operand);
+                        elsif Operand_Seen then
+                           --  Operands are the whole of the list after the
+                           --  text.  D230's positional scalar is the
+                           --  shorthand for one, so it cannot follow one.
+                           Complain
+                             (Item    => Syn.Token_Expected,
+                              Where   => Here,
+                              Message => "an assembly operand opens with"
+                                         & " `in`, `out` or `inout`",
+                              Note    => "[1630]: after its text a block"
+                                         & " takes operands, or the one"
+                                         & " positional `u32` shorthand",
+                              Related => Starts,
+                              Because => "this assembly block");
+                           Args.Append (Parse_Delimited_Expression);
+                        elsif Peek = Tok.Identifier
                           and then
                             (Ahead (1) = Tok.Colon
                              or else

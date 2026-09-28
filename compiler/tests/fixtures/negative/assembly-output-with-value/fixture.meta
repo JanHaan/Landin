@@ -1,0 +1,9 @@
+class: negative
+summary: D248's `out` operand carries no value in; `inout` is how one passes a value, and the parser says so
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/assembly-output-with-value/program.ldn
+codes: L0103
+status: 1
+constructs: 1630, 1820
+targets: linux-x86-64, macos-arm64, synthetic-32

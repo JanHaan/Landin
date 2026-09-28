@@ -497,8 +497,14 @@ machine state and receives no frame. Ordinary and interrupt routines retain
 the eight-byte previous-r11/incoming-LR record; an interrupt's incoming LR is
 EXC_RETURN. The hardware frame separately saves volatile registers and flags.
 
+D248's named operands are checked against `Landin.Targets.Assembly`'s
+register tables on every target and do not reach the IR yet: checking refuses
+them at the lowering limit [1990] states, and the IR above is only the
+operand-free block and D230's shorthand.
+
 `Landin.Backend.Firmware` constructs reset and the selected memory script;
-`Landin.Targets.Firmware` owns board limits and assembly eligibility. Startup
+`Landin.Targets.Firmware` owns board limits and Cortex-M0 instruction
+eligibility. Startup
 copies initialized data and RAM code, clears BSS and transfers to the selected
 source entry. Neither module-image lowering nor startup executes user module
 initializers. Target ELF relocations distinguish Thumb code pointers from data

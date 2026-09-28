@@ -1,0 +1,10 @@
+error[L0103]: an assembly operand is placed `at` a register
+  --> ../tests/fixtures/negative/assembly-operand-without-register/program.ldn:2:46
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 = value)
+  |                                              ^
+  --> ../tests/fixtures/negative/assembly-operand-without-register/program.ldn:2:37
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 = value)
+  |                                     ^^ this operand
+  = note: [1630]: an operand is written `in name: type at register = value`

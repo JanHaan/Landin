@@ -1,0 +1,5 @@
+f: (value: u64) -> none =
+    assembler.block("movq {v}, %rax", in v: u64 at rbp = value)
+    assembler.block("movq {v}, %rsp", in v: u64 at general = value)
+    assembler.block("movq {v}, %rbx", in v: u64 at general = value)
+end f

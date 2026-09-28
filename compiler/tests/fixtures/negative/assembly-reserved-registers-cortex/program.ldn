@@ -1,0 +1,5 @@
+f: (value: u32) -> none =
+    assembler.block("mov r1, {v}", in v: u32 at r9 = value)
+    assembler.block("mov r1, {v}", in v: u32 at sp = value)
+    assembler.block("mov r11, {v}", in v: u32 at general = value)
+end f

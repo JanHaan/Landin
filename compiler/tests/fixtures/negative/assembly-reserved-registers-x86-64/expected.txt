@@ -1,0 +1,30 @@
+error[L0301]: `rbp` is a register no operand may name
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:2:52
+  |
+2 |     assembler.block("movq {v}, %rax", in v: u64 at rbp = value)
+  |                                                    ^^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:2:5
+  |
+2 |     assembler.block("movq {v}, %rax", in v: u64 at rbp = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
+error[L0301]: the text names `rsp`, a register no ordinary block may write
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:3:21
+  |
+3 |     assembler.block("movq {v}, %rsp", in v: u64 at general = value)
+  |                     ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:3:5
+  |
+3 |     assembler.block("movq {v}, %rsp", in v: u64 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named
+error[L0301]: the text names `rbx`, a register the routine preserves, and no operand declares it
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:4:21
+  |
+4 |     assembler.block("movq {v}, %rbx", in v: u64 at general = value)
+  |                     ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn:4:5
+  |
+4 |     assembler.block("movq {v}, %rbx", in v: u64 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: declare it with `out _ at rbx` so the routine saves it

@@ -1,0 +1,9 @@
+class: negative
+summary: core/cpu written on D248's named operands passes every check, and only the lowering limit refuses it
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-operands-not-lowered/program.ldn
+codes: L0301, L0301, L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: cortex-m

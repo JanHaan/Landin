@@ -1,0 +1,3 @@
+f: () -> none =
+    assembler.block("movs r1, #1", out _ at general)
+end f

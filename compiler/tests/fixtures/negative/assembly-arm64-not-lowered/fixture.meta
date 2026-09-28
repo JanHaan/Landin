@@ -1,0 +1,9 @@
+class: negative
+summary: D248's operands pass every arm64 check, and only the lowering limit refuses them
+program: program.ldn
+expect: expected.txt
+args: --target=darwin-arm64 ../tests/fixtures/negative/assembly-arm64-not-lowered/program.ldn
+codes: L0301
+status: 1
+constructs: 1630, 1990
+targets: macos-arm64

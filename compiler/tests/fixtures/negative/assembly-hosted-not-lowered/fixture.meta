@@ -1,0 +1,9 @@
+class: negative
+summary: D248's operands pass every x86-64 check, and only the lowering limit refuses them
+program: program.ldn
+expect: expected.txt
+args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-hosted-not-lowered/program.ldn
+codes: L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: linux-x86-64

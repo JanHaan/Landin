@@ -1,0 +1,7 @@
+error[L0304]: a float assembly operand is not in this version of the language
+  --> ../tests/fixtures/negative/assembly-float-operand/program.ldn:2:34
+  |
+2 |     assembler.block("nop", in v: f32 at r1 = value)
+  |                                  ^^^
+  = note: the tour describes it at [1630]
+  = note: this is transferred to Language evolution

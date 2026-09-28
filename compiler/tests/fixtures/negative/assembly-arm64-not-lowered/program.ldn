@@ -1,0 +1,4 @@
+counter: () -> (count: u64) =
+    count = assembler.block("mrs {count}, cntvct_el0",
+                            out count: u64 at general)
+end counter

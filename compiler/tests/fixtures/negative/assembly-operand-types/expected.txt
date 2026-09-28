@@ -1,0 +1,60 @@
+error[L0301]: an assembly operand is an integer scalar, not bool
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:4:43
+  |
+4 |     assembler.block("movs {v}, #1", in v: bool at general = flag)
+  |                                           ^^^^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:4:5
+  |
+4 |     assembler.block("movs {v}, #1", in v: bool at general = flag)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: convert explicitly where the value crosses: `usize(p)`, `ptr(u)`, `x <> 0`
+error[L0301]: an assembly operand is an integer scalar, not a pointer
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:5:43
+  |
+5 |     assembler.block("movs {v}, #1", in v: ptr u32 at general = p)
+  |                                           ^^^^^^^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:5:5
+  |
+5 |     assembler.block("movs {v}, #1", in v: ptr u32 at general = p)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: convert explicitly where the value crosses: `usize(p)`, `ptr(u)`, `x <> 0`
+error[L0301]: an assembly operand is an integer scalar, not a distinct type
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:6:43
+  |
+6 |     assembler.block("movs {v}, #1", in v: count at general = n)
+  |                                           ^^^^^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:6:5
+  |
+6 |     assembler.block("movs {v}, #1", in v: count at general = n)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: convert explicitly where the value crosses: `usize(p)`, `ptr(u)`, `x <> 0`
+error[L0301]: an assembly operand is an integer scalar, not a range subtype
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:7:43
+  |
+7 |     assembler.block("movs {v}, #1", in v: small at general = s)
+  |                                           ^^^^^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:7:5
+  |
+7 |     assembler.block("movs {v}, #1", in v: small at general = s)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: convert explicitly where the value crosses: `usize(p)`, `ptr(u)`, `x <> 0`
+error[L0301]: `u64` is wider than one cortex-m0 register
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:8:43
+  |
+8 |     assembler.block("movs {v}, #1", in v: u64 at general = wide)
+  |                                           ^^^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:8:5
+  |
+8 |     assembler.block("movs {v}, #1", in v: u64 at general = wide)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: an operand is one register
+error[L0301]: an assembly operand's type is written, not a type formal
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:11:43
+   |
+11 |     assembler.block("movs {v}, #1", in v: t at general = value)
+   |                                           ^
+  --> ../tests/fixtures/negative/assembly-operand-types/program.ldn:11:5
+   |
+11 |     assembler.block("movs {v}, #1", in v: t at general = value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the register an operand needs is known where the block is written

@@ -61,6 +61,9 @@ package body Landin.Syntax is
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
             when Field_Value | Call_Argument => 1,
+            --  The declared type, the register and the input expression.
+            when Assembly_Operand         => 3,
+            when Register_Name            => 0,
             when Error_Type | Type_Name | Type_Reference
                | Concept_Reference        => 0,
             --  The applied alias, then its positional argument run.
@@ -201,6 +204,10 @@ package body Landin.Syntax is
    function Convention_Of (Of_Tree : Tree; Id : Node_Id)
      return Parameter_Convention
      is (Element (Of_Tree, Id).Convention);
+
+   function Direction_Of (Of_Tree : Tree; Id : Node_Id)
+     return Operand_Direction
+     is (Element (Of_Tree, Id).Direction);
 
    function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Escaping);
@@ -882,6 +889,15 @@ package body Landin.Syntax is
    begin
       return (if Projects_As_Type (RHS) then RHS else No_Node);
    end Type_Projection;
+
+   function Operand_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Operand_Register (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Operand_Input (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 3));
 
    function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

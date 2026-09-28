@@ -1,0 +1,9 @@
+class: negative
+summary: D248 never names x86-64's stack or frame pointer, and a callee-saved register the text writes must be declared
+program: program.ldn
+expect: expected.txt
+args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-reserved-registers-x86-64/program.ldn
+codes: L0301, L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: linux-x86-64

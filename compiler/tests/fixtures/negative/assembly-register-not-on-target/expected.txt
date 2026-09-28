@@ -1,0 +1,20 @@
+error[L0301]: `rax` is not a register of cortex-m0
+  --> ../tests/fixtures/negative/assembly-register-not-on-target/program.ldn:2:50
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 at rax = value)
+  |                                                  ^^^
+  --> ../tests/fixtures/negative/assembly-register-not-on-target/program.ldn:2:5
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: a register is the target's full-width name, or `general`
+error[L0301]: `r12` is a register no operand may name
+  --> ../tests/fixtures/negative/assembly-register-not-on-target/program.ldn:3:50
+  |
+3 |     assembler.block("movs {v}, #1", in v: u32 at r12 = value)
+  |                                                  ^^^
+  --> ../tests/fixtures/negative/assembly-register-not-on-target/program.ldn:3:5
+  |
+3 |     assembler.block("movs {v}, #1", in v: u32 at r12 = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: the stack, frame and link registers and the platform's reserved ones are never named

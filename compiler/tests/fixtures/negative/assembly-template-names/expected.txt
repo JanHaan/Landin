@@ -1,0 +1,40 @@
+error[L0301]: the text names `{w}` and no operand is called that
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:2:21
+  |
+2 |     assembler.block("movs {w}, #1", in v: u32 at general = value)
+  |                     ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:2:5
+  |
+2 |     assembler.block("movs {w}, #1", in v: u32 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: `{name}` is replaced by the register of the operand of that name
+error[L0301]: a brace in assembly text opens `{name}` or is doubled
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:3:21
+  |
+3 |     assembler.block("movs {v, #1", in v: u32 at general = value)
+  |                     ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:3:5
+  |
+3 |     assembler.block("movs {v, #1", in v: u32 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: `{name}` names an operand; `{{` and `}}` are literal braces
+error[L0301]: the compiler chooses this operand's register and the text never names it
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:4:36
+  |
+4 |     assembler.block("movs r1, #1", in v: u32 at general = value)
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:4:5
+  |
+4 |     assembler.block("movs r1, #1", in v: u32 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: write `{v}` where the chosen register belongs
+error[L0301]: this block already has an operand called `v`
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:6:21
+  |
+6 |                     in v: u32 at r2 = value)
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-template-names/program.ldn:5:5
+  |
+5 |     assembler.block("movs {v}, #1", in v: u32 at r1 = value,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: an operand's name is its template slot and its result field

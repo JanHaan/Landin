@@ -54,8 +54,8 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
-'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn'
-and 'distinct' remain identifier tokens everywhere
+'align', 'section', 'keep', 'vector', 'interrupt', 'naked', 'noreturn',
+'distinct' and 'out' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
 in every position, including ordinary name positions. The `packed_unsigned`
 production names contextual representation widths; it does not expand the
@@ -789,7 +789,11 @@ any_construction ::= "any" "(" expression ")"
 empty_slice ::= "[" "]"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
               | "lenof" "(" array_literal ")"
-arguments   ::= expression ("," expression)*
+arguments   ::= expression ("," expression)* ("," assembly_operand)*
+assembly_operand ::= ("in" | "inout") identifier ":" type
+                     "at" identifier "=" expression
+                   | "out" identifier ":" type "at" identifier
+                   | "out" "_" "at" identifier
 unary       ::= ("-" | "~" | "not")* primary
 product     ::= unary (("*" | "/" | "%" | "*%") unary)*
 sum         ::= product (("+" | "-" | "+%" | "-%") product)*
@@ -1860,36 +1864,91 @@ runs after compiler reset initialization; it does not replace the reset
 loader. This is the explicit exception to [1550]'s frame guarantee. It does
 not permit an ordinary routine to omit its frame.
 
-`assembler.block` takes a quoted or raw fixed text literal in a routine body
-on Cortex-M0. Its one-argument form returns `none`. In an ordinary or interrupt
-body, a second positional argument of type `u32` selects the scalar form:
-the argument is evaluated once before the block, enters in r0, and the final
-r0 is the `u32` result. The fixed text is not a runtime argument. There are no
-other input/output registers, implicit casts, named operands or recovery
-clauses. A naked body retains the one-argument form. D230 records the choice.
-A block is at most 4096 decoded ASCII bytes, using
-LF, horizontal tabs and printable characters. It is a conservative read/write,
-call and trap boundary in IR: memory knowledge is invalidated and memory
-operations cannot be moved across it. This compiler boundary alone issues no
-hardware barrier and establishes neither device completion nor cache
-coherence. D227's external-writer obligations remain.
+`assembler.block` takes a quoted or raw fixed text literal in a routine body,
+optionally followed by operands [1630]. The fixed text is not a runtime
+argument. D248 records the operand form and D230 the positional shorthand.
 
-The accepted spelling is a bounded straight-line subset of ARMv6-M unified
-assembly. Ordinary blocks can clobber r0–r7 and condition flags. Compiler
-values live across them have stack homes and are reloaded; no compiler flags
-remain live across the block. r8–r15, their high-register aliases, SP, LR,
-r9, r11 and stack-selection system registers cannot be named there. Ordinary
-blocks cannot branch, return, define labels, call a routine or change control
-mode. Naked blocks additionally admit labels, branches, BL/BLX/BX, PUSH/POP,
-UDF and the MSP/PSP/CONTROL system registers. CPS changes only PRIMASK; barrier
-operands are `sy` or omitted. BASEPRI, FAULTMASK and later-core system registers
-are refused. Assembler directives, comments, macros and statement separators
-are refused in both forms. Unencodable operands/instructions remain explicit
-assembler failures under the pinned ARMv6-M flags, never a target upgrade.
-The instruction allowlist is an implementation limit, pinned by the machine
-checks. Assembly must not overwrite compiler spill/frame storage, saved
-registers or immutable source storage through an indirect address; arbitrary
-machine text cannot prove that programmer obligation.
+An operand is `in name: type at register = expression`,
+`inout name: type at register = expression`, `out name: type at register`
+or `out _ at register`. Its name is its `{name}` template slot and, for an
+output, its result field; it declares nothing any scope can see, and two
+operands of one block cannot share a name. Its type is an exact enabled
+integer scalar no wider than one register of the target: not bool, a
+pointer, a distinct type, a range subtype or a type formal. A float operand
+is transferred to Language evolution by name (D248). An input is evaluated
+once, in written order, before the block, in the declared type's context;
+a narrower value is zero- or sign-extended to the full register as its type
+says. An output takes the low bits of its register. `inout` passes its input
+in and its output out of one register, and its output has its input's type.
+A block with no named output is `none`; with one, it is that output's
+scalar; with more, it is the anonymous aggregate of [0990] whose fields are
+the named outputs in written order. Binding, assignment, destructuring,
+discard [1020] and D244 treat that value as they treat a call's.
+
+A register is a name the selected target's table answers for, never text:
+
+| | Cortex-M0 | Linux x86-64 | Darwin arm64 |
+| --- | --- | --- | --- |
+| instruction text | ARMv6-M unified | AT&T | Apple arm64 |
+| operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` |
+| `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` |
+| every ordinary block overwrites | `r0`–`r7`, flags | those, `xmm0`–`xmm15`, flags | those, `v0`–`v7`, `v16`–`v31`, flags |
+| saved by the routine when a block names one | none | `rbx`, `r12`–`r15` | `x19`–`x28` |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30`, and `v8`–`v15` at every width |
+
+A fixed register is its full-width name; `general` is the one class and asks
+the compiler to choose a register it does not otherwise name in the block.
+Every register an operand names is distinct from every other, and a block
+cannot ask `general` for more registers than the class has. Every ordinary
+block may overwrite the overwritten row; a register the routine saves must be
+declared, as an operand or as `out _ at register`, which is what makes the
+routine save and restore it. A discarded output names one fixed register.
+The text writes `{name}` where an operand's register belongs, spelled at the
+width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`); `{{` and `}}`
+are literal braces. Every `{name}` must name an operand, every `general`
+operand must be written in the text, and every register the text names at
+any width must be declared or overwritten and never be one no block names.
+Frame pointers, stack pointers, link registers, the platform register and
+Cortex-M0's reserved r9 are therefore never named, and no register is
+reserved by the language beyond them. arm64's `v8`–`v15` are callee-saved and
+no operand can declare a float register, so an ordinary block cannot name
+them until float operands exist. The private failure registers are
+overwritten: a failure outcome is copied out as its call returns and is never
+live across a block.
+
+Every block is a conservative read/write, call and trap boundary in IR, on
+every target: memory knowledge is invalidated and memory operations cannot be
+moved across it, and it runs exactly once each time it is reached, never
+removed, duplicated or merged, in order with other blocks, volatile accesses,
+atomics, barriers and calls. The memory effect is fixed; no block declares a
+narrower one (D248). This compiler boundary alone issues no hardware barrier
+and establishes neither device completion nor cache coherence. D227's
+external-writer obligations remain.
+
+The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
+printable characters. Directives, comments, statement separators and labels
+are refused in an ordinary block, which is straight-line: it cannot branch,
+call, return or change control mode. On Cortex-M0 the accepted spelling is a
+bounded subset of ARMv6-M unified assembly; the instruction allowlist is an
+implementation limit, pinned by the machine checks. Naked blocks additionally
+admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the MSP/PSP/CONTROL
+system registers, and take no operands. CPS changes only PRIMASK; barrier
+operands are `sy` or omitted. BASEPRI, FAULTMASK and later-core system
+registers are refused. On x86-64 and arm64 the checker refuses control
+transfer by mnemonic and leaves which instructions exist to the platform
+assembler. Unencodable operands and instructions remain explicit assembler
+failures under the pinned flags, never a target upgrade. Assembly must not
+overwrite compiler spill or frame storage, saved registers or immutable
+source storage through an indirect address, leave the stack pointer changed,
+or on x86-64 leave the direction flag set; an instruction's implicit register
+effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
+Arbitrary machine text cannot prove those obligations.
+
+A block with named operands passes every check above on every target, and
+then this compiler refuses it: it lowers no named operand on any target yet.
+It lowers assembly only on Cortex-M0, only the operand-free block and the
+positional shorthand, and refuses hosted assembly the same way after checking
+it. The synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
 `link(section: text, align: integer, vector: integer, keep, symbol: text)`.
@@ -1939,9 +1998,9 @@ overlap and the vector address/size; unresolved symbols and relocation or
 encoding failures remain reported tool failures. An 8 MiB static-image
 materialization guard applies before firmware emission, including unreachable
 images, independently of the much smaller physical map and section GC.
-Hosted machine directives, arbitrary section addresses/linker scripts, weak
-symbols, inline hints, arbitrary clobber lists and general tool directives
-remain explicit refusals. No request is silently ignored.
+Hosted placement annotations, arbitrary section addresses/linker scripts,
+weak symbols, inline hints and general tool directives remain explicit
+refusals. No request is silently ignored.
 
 ## THE DECISIONS THIS DOCUMENT TOOK
 
@@ -11802,7 +11861,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
 | `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
 | `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1950, 1960 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers and refuses them at the stated lowering limit; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/r660-hosted-assembly`, `negative/assembly-operands-not-lowered` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -13557,7 +13616,9 @@ driver may provide a different archive search policy. Neither target changes
 the source order or repetition of archive operands.
 Inactive directives add no arguments. D227 enables scalar atomic operations;
 D229 enables Cortex-M0 body assembly, placement annotations and explicit
-firmware requests. Other targets refuse those uses. `assembler.block` is a
+firmware requests, and other targets refuse placement and firmware. D248
+checks assembly on every target with registers and states where this
+compiler lowers it. `assembler.block` is a
 body operation, not a module initializer; Cortex firmware refuses
 `linker.library`. No fourth namespace or general build language is introduced. The
 checked-in device fixtures' vendor provenance and fixture policies are off-target generator inputs/comments, not
@@ -14256,7 +14317,9 @@ The operand's effects complete before assembly begins; the result is saved
 before subsequent Landin evaluation. All ordinary register/frame restrictions
 still apply. This form is available inside an interrupt's ordinary framed
 body, but neither an interrupt signature nor a naked body acquires parameters.
-Other targets refuse both assembly forms at checking.
+D248 makes this form the shorthand for `inout value: u32 at r0 = operand`
+without an operand name, so its text names r0 directly. Hosted targets refuse
+it by name, because r0 is Cortex-M0's; they check the operand form instead.
 
 This permits `core/cpu` to implement PRIMASK save/disable/restore with ordinary
 Landin functions. It does not add a CPU intrinsic namespace, an assembly
@@ -14273,7 +14336,8 @@ or register convention. A new intrinsic namespace would contradict X8's
 ordinary-module boundary. General constraints/clobber lists would add a new
 register-allocation interface when a single low-register carrier suffices.
 Implicit memory-output tricks would bypass the frame/storage restrictions.
-Those alternatives are declined for this slice.
+Those alternatives are declined for this slice; D248 later adds typed operands
+without constraint strings and keeps this form as their shorthand.
 
 **Guarantees and pins:** `positive/r670-scalar-assembly` pins target-fixed
 parsing without enabling hosted assembly. Checking and IR verification reject malformed carrier,
@@ -14408,6 +14472,58 @@ A returning or failing handler would contradict D11 and [1670].
 **Pinned by** `driver/panic handler contracts`, `abi/r670-panic`,
 `core-panic.ldn`, the off-target identity refusal tests, and the inherited
 default-trap fixtures.
+
+### D248 — Assembly operands name their registers
+
+**From** [1560], [1570], [1620], [1630], [1990], D227, D229, D230 and
+prototype 1's X8.
+
+**The tour said** that inline assembly is for what has no builtin [1630], and
+[1990] enabled it on Cortex-M0 alone, with one `u32` through r0 (D230). A
+routine that needs a second value, a register other than r0, or a hosted
+target had nothing to write. GCC's answer, a constraint string per operand
+and a clobber list of register names in quotes, puts a target-specific
+language inside a string literal, which is exactly what a type checker
+cannot see into.
+
+**Chosen:** [1990]'s operand form. An operand has a direction, a name, an
+integer type and a register, and the register is a name the target's table
+answers for or the one class `general`. The block's value is its named
+outputs, as a function's is its named returns. Every ordinary block
+overwrites the target's call-clobbered registers and flags; a callee-saved
+register is declared, which makes the routine save it; frame, stack and link
+registers are never named, and the language reserves no register beyond them.
+Every block keeps the opaque read/write, call and trap boundary on every
+target, so the verified IR sees one instruction with declared register
+effects. D230's form is kept as the shorthand for `inout` at r0.
+
+| Choice | Alternative and reason for declining it | Executable pin |
+| --- | --- | --- |
+| A register is a name in the target's table; `general` is the one class, spelled the same everywhere | GCC's constraint strings (`"=r"`, `"+a"`) and `at "r0"`: a register in text is invisible to the checker and a misspelling is a string mismatch. Register names as argument labels leave no room for a direction or a class, and `inout` would need one label twice | `negative/assembly-register-is-text`, `negative/assembly-register-not-on-target`, `negative/assembly-register-twice` |
+| The type selects the register's width in the text | GCC's width modifiers (`%w0`, `%k0`) are a second language in the template | `positive/assembly-operand-forms` |
+| Outputs are the block's value, bound like a call's named returns | Outputs that write existing places need rules for when the place is evaluated, its permission, definite assignment and aliasing with an input; a value reuses binding, assignment, destructuring, discard and D244 unchanged | `negative/assembly-outputs-dropped-by-omission`, `negative/assembly-operands-not-lowered` |
+| Operands are exact integer scalars one register wide | Pointer operands would convert implicitly across the boundary where X6 says origin ends, and a pointer output would hide `ptr`'s zero trap; `usize(p)` and `ptr(u)` say it where it happens. `bool`, distinct types and range subtypes would each need a check or construction inside the block | `negative/assembly-operand-types` |
+| Float operands are transferred to Language evolution | Cortex-M0 has no float register, the float work assembly would reach is a builtin by [1560]'s rule, and the control registers hold integers; a program that needs one, or a target with float registers, is what brings it back | `negative/assembly-float-operand` |
+| Every block overwrites the call-clobbered set and flags; callee-saved registers are declared with `out _` or as an operand | Clobber-nothing by default (GCC, Rust) makes a forgotten clobber a silent miscompile and buys precision no allocator here uses; a separate clobber list states what `out _` already does | `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64`, `negative/assembly-discard-names-register` |
+| Frame, stack and link registers and the platform's are never named, and the language reserves no other | Letting a block name the frame pointer loses backtraces and the stackful-fibre route [1680]; reserving a register for the language is what the ambient environment cost and lost | `negative/assembly-reserved-registers-cortex`, `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64` |
+| The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `negative/assembly-operands-not-lowered` |
+| Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
+| D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `core/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
+| The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-operands-not-lowered`, `negative/assembly-hosted-not-lowered`, `negative/assembly-arm64-not-lowered`, `negative/r660-hosted-assembly` |
+
+The text rules that were Cortex-M0's are uniform where they can be: size,
+ASCII, lines, no directive, comment, separator or label, and straight-line
+control in an ordinary block. The instruction allowlist stays Cortex-M0's
+implementation limit; on the hosted targets the checker refuses control
+transfer by mnemonic and leaves which instructions exist to the assembler.
+Implicit register effects and indirect writes into compiler storage remain
+programmer obligations that no check can prove.
+
+**Pinned by** `positive/assembly-operand-forms`, the negative fixtures named
+above, `negative/assembly-template-names`, `negative/assembly-naked-operands`,
+`negative/assembly-hosted-straight-line`,
+`negative/assembly-operand-without-register` and
+`negative/assembly-output-with-value`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

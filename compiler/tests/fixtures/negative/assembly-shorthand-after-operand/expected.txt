@@ -1,0 +1,10 @@
+error[L0103]: an assembly operand opens with `in`, `out` or `inout`
+  --> ../tests/fixtures/negative/assembly-shorthand-after-operand/program.ldn:2:62
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 at r1 = value, value)
+  |                                                              ^^^^^
+  --> ../tests/fixtures/negative/assembly-shorthand-after-operand/program.ldn:2:5
+  |
+2 |     assembler.block("movs {v}, #1", in v: u32 at r1 = value, value)
+  |     ^^^^^^^^^ this assembly block
+  = note: [1630]: after its text a block takes operands, or the one positional `u32` shorthand

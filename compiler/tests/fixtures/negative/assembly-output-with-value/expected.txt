@@ -1,0 +1,10 @@
+error[L0103]: an `out` operand takes no value; write `inout` to pass one in
+  --> ../tests/fixtures/negative/assembly-output-with-value/program.ldn:2:58
+  |
+2 |     _ = assembler.block("movs {v}, #1", out v: u32 at r1 = value)
+  |                                                          ^
+  --> ../tests/fixtures/negative/assembly-output-with-value/program.ldn:2:41
+  |
+2 |     _ = assembler.block("movs {v}, #1", out v: u32 at r1 = value)
+  |                                         ^^^ this output
+  = note: [1630]: an output is the block's result, and only `in` and `inout` carry a value into the register
