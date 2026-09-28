@@ -249,7 +249,7 @@ because every tool written after it has to know it exists.
 
 ### R9.10 — Specify assembly with operands
 
-Status: planned
+Status: complete
 Depends on: none
 
 Today `assembler.block` exists on Cortex-M0 only, with one `u32` passed through
@@ -264,6 +264,23 @@ needs.
 
 Exit evidence: [1630] and the grammar amended, the decision recorded with its
 alternative, and positive and negative fixtures the grammar derives.
+
+Done: an operand is `in`, `out` or `inout`, a name, an integer type and a
+register `at` a name the target's table answers for, or the class `general`;
+outputs are the block's value, and the text writes `{name}`. [1630], [1990]'s
+register table and D248 say it, with the rejected alternatives: constraint
+strings, output places, pointer operands, clobber-nothing defaults and a
+declared memory effect. Memory effects are the one departure from this item's
+text: they are fixed rather than declared, because the default is always
+right and nothing here would use a narrower promise. The parser reads
+operands after any call, as the grammar derives them, and the checker holds
+them to every rule on all three targets, refuses them off `assembler.block`,
+and then refuses the block at the lowering limit [1990] states; so
+`negative/assembly-operands-not-lowered`, `core/cpu` on the new form, fails
+only there. `positive/assembly-operand-forms` and 21 negative fixtures pin it,
+four of them refused by the parser and underivable; D230's form stays as the
+shorthand, and float operands are SR-04's. The gate ran every job green at
+`77d89e08`.
 
 ### R9.20 — Implement assembly with operands on every target
 
