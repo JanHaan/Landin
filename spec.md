@@ -1950,11 +1950,10 @@ or on x86-64 leave the direction flag set; an instruction's implicit register
 effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
 Arbitrary machine text cannot prove those obligations.
 
-A block with named operands passes every check above on every target, and
-then this compiler refuses it: it lowers no named operand on any target yet.
-It lowers assembly only on Cortex-M0, only the operand-free block and the
-positional shorthand, and refuses hosted assembly the same way after checking
-it. The synthetic target has no registers and refuses assembly outright.
+This compiler lowers every form of assembly on Cortex-M0, and checks it on
+every target; on the hosted targets a block that passes every check above is
+then refused, because this compiler does not lower hosted assembly yet. The
+synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
 `link(section: text, align: integer, vector: integer, keep, symbol: text)`.
@@ -11867,7 +11866,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
 | `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
 | `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1950, 1960 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers and refuses them at the stated lowering limit; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/r660-hosted-assembly`, `negative/assembly-operands-not-lowered` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers, and the hosted targets refuse assembly at the stated lowering limit; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -14347,8 +14346,8 @@ without constraint strings and keeps this form as their shorthand.
 
 **Guarantees and pins:** `positive/r670-scalar-assembly` pins target-fixed
 parsing without enabling hosted assembly. Checking and IR verification reject malformed carrier,
-ordering, target and naked combinations (`cortex ABI/machine directives` and
-`cortex ABI/scalar assembly IR`). Compiler-generated `core-cpu.ldn` observes
+target and naked combinations (`cortex ABI/machine directives` and
+`cortex ABI/assembly IR`). Compiler-generated `core-cpu.ldn` observes
 nested masks, deferred restoration, actual interrupt execution and the
 interrupted hardware/software state in QEMU. The independently asserted
 peripheral trace in `freestanding.py` uses the same ordinary-slice completion
@@ -14507,16 +14506,16 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | --- | --- | --- |
 | A register is a name in the target's table; `general` is the one class, spelled the same everywhere | GCC's constraint strings (`"=r"`, `"+a"`) and `at "r0"`: a register in text is invisible to the checker and a misspelling is a string mismatch. Register names as argument labels leave no room for a direction or a class, and `inout` would need one label twice | `negative/assembly-register-is-text`, `negative/assembly-register-not-on-target`, `negative/assembly-register-twice` |
 | The type selects the register's width in the text | GCC's width modifiers (`%w0`, `%k0`) are a second language in the template | `positive/assembly-operand-forms` |
-| Outputs are the block's value, bound like a call's named returns | Outputs that write existing places need rules for when the place is evaluated, its permission, definite assignment and aliasing with an input; a value reuses binding, assignment, destructuring, discard and D244 unchanged | `negative/assembly-outputs-dropped-by-omission`, `negative/assembly-operands-not-lowered` |
+| Outputs are the block's value, bound like a call's named returns | Outputs that write existing places need rules for when the place is evaluated, its permission, definite assignment and aliasing with an input; a value reuses binding, assignment, destructuring, discard and D244 unchanged | `negative/assembly-outputs-dropped-by-omission`, `core-cpu.ldn` |
 | Operands are exact integer scalars one register wide | Pointer operands would convert implicitly across the boundary where X6 says origin ends, and a pointer output would hide `ptr`'s zero trap; `usize(p)` and `ptr(u)` say it where it happens. `bool`, distinct types and range subtypes would each need a check or construction inside the block | `negative/assembly-operand-types` |
 | Float operands are transferred to Language evolution | Cortex-M0 has no float register, the float work assembly would reach is a builtin by [1560]'s rule, and the control registers hold integers; a program that needs one, or a target with float registers, is what brings it back | `negative/assembly-float-operand` |
 | Every block overwrites the call-clobbered set and flags; callee-saved registers are declared with `out _` or as an operand | Clobber-nothing by default (GCC, Rust) makes a forgotten clobber a silent miscompile and buys precision no allocator here uses; a separate clobber list states what `out _` already does | `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64`, `negative/assembly-discard-names-register` |
 | Frame, stack and link registers and the platform's are never named, and the language reserves no other | Letting a block name the frame pointer loses backtraces and the stackful-fibre route [1680]; reserving a register for the language is what the ambient environment cost and lost | `negative/assembly-reserved-registers-cortex`, `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64` |
-| The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `negative/assembly-operands-not-lowered` |
+| The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `core-cpu.ldn` |
 | Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
 | `general` counts only the registers the block does not otherwise name | Counting the whole class accepts a block the compiler cannot give registers to, and leaves the failure to emission | `negative/assembly-general-exhausted` |
 | D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `core/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
-| The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-operands-not-lowered`, `negative/assembly-hosted-not-lowered`, `negative/assembly-arm64-not-lowered`, `negative/r660-hosted-assembly` |
+| The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-hosted-not-lowered`, `negative/assembly-arm64-not-lowered`, `negative/r660-hosted-assembly` |
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
 ASCII, lines, no directive, comment, separator or label, and straight-line

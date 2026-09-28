@@ -141,6 +141,9 @@ package Landin.IR.Verifier is
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,
       Call_Failure_Slot_Disagrees,
+      --  [1630]'s blocks.
+      Assembly_Operand_Malformed,
+      Assembly_Register_Refused,
       --  Leaving.
       Leave_Disagrees_With_Item,
       Fail_Disagrees_With_Signature);

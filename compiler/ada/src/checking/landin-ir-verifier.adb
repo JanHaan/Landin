@@ -3,12 +3,12 @@ with Ada.Unchecked_Deallocation;
 
 with Landin.IR.Control_Flow;
 with Landin.Types;
+with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
 
 package body Landin.IR.Verifier is
 
    use type Landin.Machine.Convention;
-   use type Landin.Memory.Operation;
    use type Landin.Targets.Architecture;
 
    use type Landin.Source.Names.Name_Id;
@@ -203,6 +203,12 @@ package body Landin.IR.Verifier is
                "a datum contains a call, and [1940] admits none",
             when Call_Failure_Slot_Disagrees =>
                "a call's failure slot disagrees with its declared errors",
+            when Assembly_Operand_Malformed =>
+               "an assembly block's operands disagree with its inputs,"
+               & " its output slots or [1630]'s forms",
+            when Assembly_Register_Refused =>
+               "an assembly block names a register [1990]'s table refuses"
+               & " on the target",
             when Leave_Disagrees_With_Item =>
                "a leave carries a value the item does not give back",
             when Fail_Disagrees_With_Signature =>
@@ -221,6 +227,7 @@ package body Landin.IR.Verifier is
             when Conversion | Pointer_Address => 1,
             when Range_Check   => 1,
             when Memory_Access => 0,
+            when Assembly      => 0,
             when Load_Indirect => 1,
             when Store_Indirect => 2,
             when Load_Datum    => 0,
@@ -283,6 +290,150 @@ package body Landin.IR.Verifier is
       function Run_Fits (Held : Run; Total : Natural) return Boolean
         is (Held.First <= Total
             and then Held.Count <= Total - Held.First);
+
+      --  [1630]: a block's inputs are its `in` and `inout` operands.
+      function Assembly_Inputs (Item : Item_Id; Value : Value_Id)
+        return Natural;
+
+      function Assembly_Inputs (Item : Item_Id; Value : Value_Id)
+        return Natural
+      is
+         Total : Natural := 0;
+      begin
+         for Index in 1 .. Assembly_Operand_Count (Of_Unit, Item, Value) loop
+            if Nth_Assembly_Operand (Of_Unit, Item, Value, Index).Direction
+              in Input | Both
+            then
+               Total := Total + 1;
+            end if;
+         end loop;
+         return Total;
+      end Assembly_Inputs;
+
+      --  [1630]/[1990]: one block's operands against its inputs, its
+      --  output slots and, when the target is known, the register table.
+      function Assembly_Fault (Item : Item_Id; Value : Value_Id)
+        return Fault_Kind;
+
+      function Assembly_Fault (Item : Item_Id; Value : Value_Id)
+        return Fault_Kind
+      is
+         package Asm renames Landin.Targets.Assembly;
+         use type Asm.Register_Kind;
+         use type Landin.Targets.Bit_Width;
+         Count : constant Natural :=
+           Assembly_Operand_Count (Of_Unit, Item, Value);
+         Inputs : Natural := 0;
+         Classes : Natural := 0;
+
+         function Operand (Index : Positive) return Assembly_Operand
+           is (Nth_Assembly_Operand (Of_Unit, Item, Value, Index));
+      begin
+         if Is_Unchecked (Of_Unit, Item, Value)
+           or else Result_Of (Of_Unit, Item, Value) /= Landin.Types.Not_Typed
+         then
+            return Assembly_Operand_Malformed;
+         end if;
+         for Index in 1 .. Count loop
+            declare
+               This : constant Assembly_Operand := Operand (Index);
+            begin
+               --  A register is written or `general`; a discarded output
+               --  is only a register, and only it has neither a name nor
+               --  a type.  D230's shorthand is the one other nameless
+               --  operand, and it names its register.
+               if This.Width > Register_Spelling_Limit
+                 or else (This.Direction = Discarded
+                   and then (This.Width = 0
+                     or else This.Name /= Landin.Source.Names.No_Name
+                     or else This.Kind /= Landin.Types.Not_Typed
+                     or else This.Output /= No_Slot))
+                 or else (This.Direction /= Discarded
+                   and then (This.Kind not in Landin.Types.Integer_Name
+                     or else (This.Name = Landin.Source.Names.No_Name
+                       and then This.Width = 0)))
+                 or else ((This.Direction in Output | Both)
+                   /= (This.Output /= No_Slot))
+               then
+                  return Assembly_Operand_Malformed;
+               end if;
+               if This.Output /= No_Slot
+                 and then (not Holds (Of_Unit, Item, This.Output)
+                   or else Is_Aggregate (Of_Unit, Item, This.Output)
+                   or else Is_Array (Of_Unit, Item, This.Output)
+                   or else Is_Address (Of_Unit, Item, This.Output)
+                   or else Type_Of (Of_Unit, Item, This.Output) /= This.Kind)
+               then
+                  return Assembly_Operand_Malformed;
+               end if;
+               if This.Direction in Input | Both then
+                  Inputs := Inputs + 1;
+                  if Result_Of
+                       (Of_Unit, Item,
+                        Nth_Operand (Of_Unit, Item, Value, Inputs))
+                     /= This.Kind
+                  then
+                     return Assembly_Operand_Malformed;
+                  end if;
+               end if;
+               for Earlier in 1 .. Index - 1 loop
+                  declare
+                     That : constant Assembly_Operand := Operand (Earlier);
+                  begin
+                     if (This.Name /= Landin.Source.Names.No_Name
+                           and then That.Name = This.Name)
+                       or else (This.Width > 0
+                         and then Register_Of (That) = Register_Of (This))
+                       or else (This.Output /= No_Slot
+                         and then That.Output = This.Output)
+                     then
+                        return Assembly_Operand_Malformed;
+                     end if;
+                  end;
+               end loop;
+               if Check_Image then
+                  if This.Width = 0 then
+                     Classes := Classes + 1;
+                  elsif Asm.Classify (Facts, Register_Of (This))
+                    /= Asm.Operand_Register
+                  then
+                     return Assembly_Register_Refused;
+                  end if;
+                  if This.Direction /= Discarded
+                    and then Landin.Types.Width (This.Kind, Facts)
+                      > Asm.Register_Width (Facts)
+                  then
+                     return Assembly_Register_Refused;
+                  end if;
+               end if;
+            end;
+         end loop;
+         if Check_Image then
+            if not Asm.Has_Registers (Facts) then
+               return Assembly_Register_Refused;
+            end if;
+            --  The registers the text names are the checker's to count:
+            --  this walk has no names table to read the text with.
+            if Classes > 0 then
+               declare
+                  Left : Natural := 0;
+               begin
+                  for Index in 1 .. Asm.General_Count (Facts) loop
+                     if not (for some Other in 1 .. Count =>
+                               Register_Of (Operand (Other))
+                                 = Asm.General_Register (Facts, Index))
+                     then
+                        Left := Left + 1;
+                     end if;
+                  end loop;
+                  if Classes > Left then
+                     return Assembly_Register_Refused;
+                  end if;
+               end;
+            end if;
+         end if;
+         return Nothing_Wrong;
+      end Assembly_Fault;
 
       function Variant_Shape_Of
         (Item          : Item_Id;
@@ -2866,6 +3017,11 @@ package body Landin.IR.Verifier is
            (Code.Variadic_Types, Natural (Of_Unit.Signature_Parts.Length))
          then
             return (Kind => Signature_Runs_Overlap, others => <>);
+         elsif not Run_Fits
+           (Code.Assembly_Run, Natural (Of_Unit.Assembly_Operands.Length))
+           or else (Code.Assembly_Run.Count /= 0 and then Code.Op /= Assembly)
+         then
+            return (Kind => Assembly_Operand_Malformed, others => <>);
          elsif Code.Variadic_Types.Count /= 0 then
             --  The baseline transports promoted scalar actual kinds.  A
             --  descriptor run must not silently enable aggregate transport
@@ -3762,6 +3918,28 @@ package body Landin.IR.Verifier is
          end if;
       end;
 
+      --  [1630]'s operand vector is owned the same way, one block's run
+      --  after the last.
+      declare
+         Seen : Natural := 0;
+      begin
+         for Position in 1 .. Natural (Of_Unit.Code.Length) loop
+            declare
+               What : constant Instruction := Of_Unit.Code (Position);
+            begin
+               if What.Assembly_Run.Count /= 0
+                 and then What.Assembly_Run.First /= Seen
+               then
+                  return (Kind => Assembly_Operand_Malformed, others => <>);
+               end if;
+               Seen := Seen + What.Assembly_Run.Count;
+            end;
+         end loop;
+         if Seen /= Natural (Of_Unit.Assembly_Operands.Length) then
+            return (Kind => Assembly_Operand_Malformed, others => <>);
+         end if;
+      end;
+
       --  D46 shares one target-neutral field shape between aggregate
       --  storage and D45's measurement.  Hold the aggregate run to its
       --  canonical scalar representation before inspecting any item's
@@ -4337,10 +4515,9 @@ package body Landin.IR.Verifier is
                  or else Blocks /= 1 or else Slot_Count (Of_Unit, Id) /= 0
                  or else Length (Of_Unit, Id, 1) /= 2
                  or else Op_Of (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 1))
-                   /= Memory_Access
-                 or else Assembly_Text
-                   (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 1))
-                     = Landin.Source.Names.No_Name
+                   /= Assembly
+                 or else Assembly_Operand_Count
+                   (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 1)) /= 0
                  or else Op_Of (Of_Unit, Id, Nth_Value (Of_Unit, Id, 1, 2))
                    /= Leave
                then
@@ -5438,9 +5615,9 @@ package body Landin.IR.Verifier is
                            return (Kind => Result_Disagrees,
                                    Item => Id, Block => Block, Value => V);
                         end if;
-                        if Assembly_Text (Of_Unit, Id, V)
-                          /= Landin.Source.Names.No_Name
-                          and then Op /= Memory_Access
+                        if (Assembly_Text (Of_Unit, Id, V)
+                              /= Landin.Source.Names.No_Name)
+                          /= (Op = Assembly)
                         then
                            return (Kind => Result_Disagrees,
                                    Item => Id, Block => Block, Value => V);
@@ -6370,12 +6547,10 @@ package body Landin.IR.Verifier is
                            Expect : constant Natural :=
                              (case Op is
                                  when Memory_Access =>
-                                   (if Assembly_Text (Of_Unit, Id, V)
-                                      /= Landin.Source.Names.No_Name
-                                      and then Result_Of (Of_Unit, Id, V)
-                                        = Landin.Types.U32
-                                    then 1 else Landin.Memory.Operands
-                                      (Memory_Operation (Of_Unit, Id, V))),
+                                   Landin.Memory.Operands
+                                     (Memory_Operation (Of_Unit, Id, V)),
+                                 when Assembly =>
+                                   Assembly_Inputs (Id, V),
                                  when Call =>
                                     Signature_Carrier_Count
                                       (Call_Signature (Of_Unit, Id, V)),
@@ -6849,19 +7024,6 @@ package body Landin.IR.Verifier is
                                  S : constant Landin.Types.Scalar_Name :=
                                    Memory_Scalar (Of_Unit, Id, V);
                               begin
-                                 if Assembly_Text (Of_Unit, Id, V)
-                                   /= Landin.Source.Names.No_Name
-                                   and then
-                                     (M /= Landin.Memory.Compiler_Barrier
-                                     or else (Operand_Count
-                                       (Of_Unit, Id, V) = 1
-                                       and then S /= Landin.Types.U32)
-                                     or else (Check_Image and then
-                                       Landin.Targets.Architecture_Of (Facts)
-                                         /= Landin.Targets.Cortex_M0))
-                                 then
-                                    return (Result_Disagrees, Id, Block, V);
-                                 end if;
                                  if not Landin.Memory.Legal
                                    (M, Memory_Order (Of_Unit, Id, V),
                                     Memory_Order (Of_Unit, Id, V, True))
@@ -6874,12 +7036,7 @@ package body Landin.IR.Verifier is
                                        (Facts, M, Landin.Types.Storage_Size
                                          (S, Facts)))
                                    or else Result_Of (Of_Unit, Id, V) /=
-                                     (if Assembly_Text (Of_Unit, Id, V)
-                                        /= Landin.Source.Names.No_Name
-                                        and then Operand_Count
-                                          (Of_Unit, Id, V) = 1
-                                      then Landin.Types.U32
-                                      elsif Landin.Memory.Returns_Value (M)
+                                     (if Landin.Memory.Returns_Value (M)
                                       then S else Landin.Types.Not_Typed)
                                  then
                                     return (Result_Disagrees, Id, Block, V);
@@ -6889,16 +7046,23 @@ package body Landin.IR.Verifier is
                                  loop
                                     if Result_Of (Of_Unit, Id,
                                       Nth_Operand (Of_Unit, Id, V, I)) /=
-                                        (if Assembly_Text (Of_Unit, Id, V)
-                                           /= Landin.Source.Names.No_Name
-                                         then Landin.Types.U32
-                                         elsif I = 1 then Landin.Types.Usize
+                                        (if I = 1 then Landin.Types.Usize
                                          else S)
                                     then
                                        return
                                          (Result_Disagrees, Id, Block, V);
                                     end if;
                                  end loop;
+                              end;
+
+                           when Assembly =>
+                              declare
+                                 Found : constant Fault_Kind :=
+                                   Assembly_Fault (Id, V);
+                              begin
+                                 if Found /= Nothing_Wrong then
+                                    return (Found, Id, Block, V);
+                                 end if;
                               end;
 
                            when Load_Indirect | Store_Indirect =>

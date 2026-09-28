@@ -4,6 +4,7 @@ package body Landin.IR.Rewriting is
    procedure Compact (Into : in out Unit; Keep : Keep_Array) is
       Code : Code_Vectors.Vector;
       Args : Value_Ref_Vectors.Vector;
+      Assembled : Assembly_Operand_Vectors.Vector;
       Blocks : Block_Vectors.Vector;
       Items : Item_Vectors.Vector := Into.Items;
    begin
@@ -66,6 +67,14 @@ package body Landin.IR.Rewriting is
                            Args.Append (After);
                         end;
                      end loop;
+                     Now.Assembly_Run :=
+                       (First => Natural (Assembled.Length),
+                        Count => Was.Assembly_Run.Count);
+                     for A in 1 .. Was.Assembly_Run.Count loop
+                        Assembled.Append
+                          (Into.Assembly_Operands
+                             (Was.Assembly_Run.First + A));
+                     end loop;
                      if Was.Op in Jump | Branch then
                         Now.Target := Block_Map (Positive (Was.Target));
                         if Was.Op = Branch then
@@ -94,6 +103,7 @@ package body Landin.IR.Rewriting is
       Into.Items.Move (Items);
       Into.Code.Move (Code);
       Into.Operands.Move (Args);
+      Into.Assembly_Operands.Move (Assembled);
       Into.Blocks.Move (Blocks);
    end Compact;
 end Landin.IR.Rewriting;

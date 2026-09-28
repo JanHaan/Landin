@@ -3,7 +3,7 @@ summary: A block with outputs hands a value back, so D244 wants it bound or disc
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-outputs-dropped-by-omission/program.ldn
-codes: L0301, L0301
+codes: L0301
 status: 1
 constructs: 1020, 1630
 targets: cortex-m

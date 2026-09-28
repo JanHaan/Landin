@@ -327,6 +327,18 @@ package body Landin.IR.Simplification is
                then
                   Eligible (Positive (Code.Slot)) := False;
                end if;
+               --  [1630]: a block writes its output slots itself, so no
+               --  store before it may stand in for a load after it.
+               for A in 1 .. Code.Assembly_Run.Count loop
+                  declare
+                     Output : constant Slot_Id := Into.Assembly_Operands
+                       (Code.Assembly_Run.First + A).Output;
+                  begin
+                     if Output /= No_Slot then
+                        Eligible (Positive (Output)) := False;
+                     end if;
+                  end;
+               end loop;
             end;
          end loop;
          for V in Alias'Range loop

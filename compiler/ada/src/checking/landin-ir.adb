@@ -4016,28 +4016,58 @@ package body Landin.IR is
                          Element_Shape => Element,
                          others => <>)));
 
+   function Operand_At
+     (Direction : Assembly_Direction;
+      Name      : Landin.Source.Names.Name_Id;
+      Register  : String;
+      Kind      : Landin.Types.Type_Kind;
+      Output    : Slot_Id := No_Slot) return Assembly_Operand
+   is
+      Made : Assembly_Operand :=
+        (Direction => Direction, Name => Name, Width => Register'Length,
+         Kind => Kind, Output => Output, others => <>);
+   begin
+      Made.Register (1 .. Register'Length) := Register;
+      return Made;
+   end Operand_At;
+
    function Emit_Assembly
      (Into : in out Unit; Item : Item_Id;
       Text : Landin.Source.Names.Name_Id;
-      Site : Landin.Provenance.Origin;
-      Operand : Value_Id := No_Value) return Value_Id
+      Operands : Assembly_Operand_Array;
+      Inputs : Value_Id_Array;
+      Site : Landin.Provenance.Origin) return Value_Id
    is
       Made : Instruction :=
-        (Op => Memory_Access, Memory_Op => Landin.Memory.Compiler_Barrier,
-         Assembly_Name => Text, Site => Site, others => <>);
+        (Op => Assembly, Assembly_Name => Text, Site => Site,
+         others => <>);
    begin
       if Text = Landin.Source.Names.No_Name then
          raise Compiler_Defect with "empty assembly identity";
       end if;
-      if Operand /= No_Value then
-         Made.Result := Landin.Types.U32;
-         Made.Memory_Type := Landin.Types.U32;
-         Made.First_Arg := Natural (Into.Operands.Length);
-         Made.Args := 1;
-         Into.Operands.Append (Operand);
-      end if;
+      Made.Assembly_Run :=
+        (First => Natural (Into.Assembly_Operands.Length),
+         Count => Operands'Length);
+      for Operand of Operands loop
+         Into.Assembly_Operands.Append (Operand);
+      end loop;
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := Inputs'Length;
+      for Input of Inputs loop
+         Into.Operands.Append (Input);
+      end loop;
       return Append (Into, Item, Made);
    end Emit_Assembly;
+
+   function Assembly_Operand_Count
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Assembly_Run.Count);
+
+   function Nth_Assembly_Operand
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Index : Positive)
+      return Assembly_Operand
+     is (Of_Unit.Assembly_Operands
+           (Held (Of_Unit, Item, Value).Assembly_Run.First + Index));
 
    function Assembly_Text
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)

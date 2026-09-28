@@ -324,6 +324,12 @@ package Landin.IR is
       --  descriptor; only the direct form also names a routine item.
       Call,
       Indirect_Call,
+      --  [1630]'s block: fixed text and its operands, each bound to a
+      --  register or to `general`.  Its inputs are its operand run in
+      --  written order; each output is written to a scalar frame slot, so
+      --  the instruction itself defines nothing.  It is one instruction
+      --  with the fixed effects of a call, which is what keeps it in place.
+      Assembly,
       --  The terminators.  Leave is [1810]'s `return`, which "carries no
       --  value" in the source because the named return is a place
       --  [0930]; here it carries what that place held, because what a
@@ -357,7 +363,7 @@ package Landin.IR is
      is (Of_Code in Store | Store_Indirect | Store_Datum | Store_Field
                     | Store_Element | Copy_Array | Copy_Variant | Clear_Array
                     | Fill_Array | Select_Variant | Store_Variant_Field
-                    | Terminator_Kind);
+                    | Assembly | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -3183,14 +3189,64 @@ package Landin.IR is
 
    type Value_Id_Array is array (Positive range <>) of Value_Id;
 
+   --  [1630]'s operand directions.  A discarded output is `out _ at r`:
+   --  it names a register the routine must save and carries nothing.
+   type Assembly_Direction is (Input, Output, Both, Discarded);
+
+   --  A register is the target's canonical full-width name -- `rax`,
+   --  `x9`, `r3` -- because the verifier holds it to the target's table
+   --  and has no names table to spell an interned one.  An empty one is
+   --  `general`, which a backend chooses.  None is longer than three.
+   Register_Spelling_Limit : constant := 8;
+
+   type Assembly_Operand is record
+      Direction : Assembly_Direction := Input;
+      --  The `{name}` slot, or No_Name for a discarded output and for
+      --  D230's shorthand, whose text names r0 itself.
+      Name      : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      Register  : String (1 .. Register_Spelling_Limit) := [others => ' '];
+      Width     : Natural := 0;
+      Kind      : Landin.Types.Type_Kind := Landin.Types.Not_Typed;
+      --  The scalar frame slot an output writes; No_Slot otherwise.
+      Output    : Slot_Id := No_Slot;
+   end record;
+
+   type Assembly_Operand_Array is
+     array (Positive range <>) of Assembly_Operand;
+
+   function Operand_At
+     (Direction : Assembly_Direction;
+      Name      : Landin.Source.Names.Name_Id;
+      Register  : String;
+      Kind      : Landin.Types.Type_Kind;
+      Output    : Slot_Id := No_Slot) return Assembly_Operand
+     with Pre => Register'Length <= Register_Spelling_Limit;
+
+   function Register_Of (Operand : Assembly_Operand) return String
+     is (Operand.Register (1 .. Operand.Width));
+
+   --  Inputs are the Input and Both entries' values, in written order.
    function Emit_Assembly
      (Into : in out Unit; Item : Item_Id;
       Text : Landin.Source.Names.Name_Id;
-      Site : Landin.Provenance.Origin;
-      Operand : Value_Id := No_Value) return Value_Id;
+      Operands : Assembly_Operand_Array;
+      Inputs : Value_Id_Array;
+      Site : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Assembly'Result, Assembly);
    function Assembly_Text
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Landin.Source.Names.Name_Id;
+   function Assembly_Operand_Count
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value);
+   function Nth_Assembly_Operand
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Index : Positive)
+      return Assembly_Operand
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Index <= Assembly_Operand_Count
+                   (Of_Unit, Item, Value);
 
    function Emit_Memory
      (Into : in out Unit; Item : Item_Id; Op : Landin.Memory.Operation;
@@ -3907,6 +3963,8 @@ private
       In_Block    : Block_Id                  := No_Block;
       First_Arg   : Natural                   := 0;
       Variadic_Types : Run;
+      --  [1630]: a block's operands, laid end to end in Assembly_Operands.
+      Assembly_Run : Run;
       Args        : Natural                   := 0;
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
@@ -4178,6 +4236,9 @@ private
    package Source_Alias_Vectors is new Ada.Containers.Vectors
      (Positive, Stored_Source_Alias);
 
+   package Assembly_Operand_Vectors is new Ada.Containers.Vectors
+     (Positive, Assembly_Operand);
+
    type Unit is tagged limited record
       Caller_Sources : Caller_Source_Vectors.Vector;
       Ready      : Boolean := False;
@@ -4199,6 +4260,7 @@ private
       Encodings  : Encoding_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
+      Assembly_Operands : Assembly_Operand_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
       Evidence   : Evidence_Vectors.Vector;
       Evidence_Entries : Evidence_Entry_Vectors.Vector;

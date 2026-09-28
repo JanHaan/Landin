@@ -37,6 +37,8 @@ private with Ada.Strings.Hash;
 with Landin.IR;
 with Landin.Targets;
 with Landin.Layouts;
+with Landin.Source.Names;
+with Landin.Targets.Assembly;
 with Landin.Targets.Layouts;
 with Landin.Types;
 
@@ -273,6 +275,27 @@ package Landin.Backend is
 
    function Count
      (Of_Counts : Spelling_Counts; Spelling : String) return Natural;
+
+   --  [1630]: one block's operands with every `general` register chosen,
+   --  each at the width its type selects.  Every backend emits the same
+   --  choice, so the text a target assembles is a function of the IR and
+   --  the target alone.
+   function Assembly_Registers
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Names   : Landin.Source.Names.Table;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Assembly.Operand_Register_Array;
+
+   --  The block's text as the target's assembler reads it, one element
+   --  per line, with every `{name}` filled.
+   function Assembly_Text
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Names   : Landin.Source.Names.Table;
+      Facts   : Landin.Targets.Target_Facts) return String;
 
 private
 

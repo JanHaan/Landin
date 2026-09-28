@@ -3,17 +3,17 @@
 compiler.assert(compiler.arch == cortex_m0)
 
 public disable_interrupts: () -> (previous: u32) =
-    zero: u32 = 0
-    previous = assembler.block("mrs r0, primask\ncpsid i", zero)
+    previous = assembler.block("mrs {mask}, primask\ncpsid i",
+                               out mask: u32 at general)
 end disable_interrupts
 
 public restore_interrupts: (previous: u32) -> none =
-    _ = assembler.block("msr primask, r0\nisb sy", previous)
+    assembler.block("msr primask, {mask}\nisb sy",
+                    in mask: u32 at general = previous)
 end restore_interrupts
 
 public interrupt_mask: () -> (current: u32) =
-    zero: u32 = 0
-    current = assembler.block("mrs r0, primask", zero)
+    current = assembler.block("mrs {mask}, primask", out mask: u32 at general)
 end interrupt_mask
 
 --  Architectural completion before sleep does not acknowledge a device.

@@ -9,10 +9,10 @@ For an introduction to the intermediate representation and the reasons for
 its structure, read [the IR guide](../../docs/ir.md). It is a maintained,
 non-authoritative account derived from the implementation and its tests.
 
-D230's Cortex-only scalar `assembler.block` has one explicit u32 operand/result
-through r0, with the same conservative effects and ordinary register/frame
-restrictions as result-free assembly. `core/cpu` uses this ordinary source
-surface; [the core guide](../../core/README.md) records its public interfaces.
+Every `assembler.block` form, D248's named operands, D230's Cortex-only u32
+shorthand through r0 and the operand-free block, is one IR instruction with
+the same conservative effects and ordinary register/frame restrictions.
+`core/cpu` uses `general` operands; [the core guide](../../core/README.md) records its public interfaces.
 The compiler-host Cortex tests verify source/IR restrictions and the native
 Linux freestanding lane executes the generated firmware. D231/D232 implement
 nonreturning control and selected panic handlers on all three backends.
@@ -152,7 +152,7 @@ different responsibilities.
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |
-| `Landin.Targets.Assembly` | each target's operand register table, the `general` class, the registers an ordinary block overwrites and those never named, and hosted assembly text admission | decide an operand's type, choose a register or read the host's registers |
+| `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, and hosted assembly text admission | decide an operand's type or read the host's registers |
 | `Landin.Targets.Packed` | packed image storage measurement and width-specific transaction eligibility from target facts | enable source syntax, select instructions or claim a Cortex emitter |
 | `Landin.Targets.Layouts` | target-byte placement of complete source-indexed field units under explicit layout policy | expand array elements into planner entries or decide C subset eligibility |
 | `Landin.Targets.Capabilities` | implemented C signature/record/varargs capabilities, object and debug formats, logical-to-object symbol prefixes, backend availability and toolchain triplets | infer capability from width, invoke a tool, or canonicalise a triplet |

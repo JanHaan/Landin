@@ -1797,6 +1797,9 @@ package body Landin.Backend.Arm64 is
             end Index_Address;
          begin
             case Op is
+               when Landin.IR.Assembly =>
+                  raise Compiler_Defect with
+                    "hosted assembly reached emission before its lowering";
                when Landin.IR.Number =>
                   declare
                      Bits : constant Landin.Targets.Bit_Width :=
@@ -3280,7 +3283,7 @@ package body Landin.Backend.Arm64 is
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call
-                        | Landin.IR.Memory_Access
+                        | Landin.IR.Memory_Access | Landin.IR.Assembly
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address

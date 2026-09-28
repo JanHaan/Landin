@@ -28,6 +28,26 @@ package body Landin.IR.Dump is
          elsif Item = Landin.Types.Fixed_Array then "array"
          else "");
 
+   --  [1630]'s text on one line: a newline is `\n`, and a quote or a
+   --  backslash is escaped so the line reads back as one string.
+   function Quoted (Item : String) return String;
+
+   function Quoted (Item : String) return String is
+      Result : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String ("""");
+   begin
+      for C of Item loop
+         case C is
+            when '"' => Unbounded.Append (Result, "\""");
+            when '\' => Unbounded.Append (Result, "\\");
+            when ASCII.LF => Unbounded.Append (Result, "\n");
+            when ASCII.HT => Unbounded.Append (Result, "\t");
+            when others => Unbounded.Append (Result, C);
+         end case;
+      end loop;
+      return Unbounded.To_String (Result) & """";
+   end Quoted;
+
    function Text
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
@@ -539,6 +559,50 @@ package body Landin.IR.Dump is
                  & Landin.Memory.Ordering'Image
                    (Memory_Order (Of_Unit, Item, Value, True))
                  & Operands (Item, Value);
+
+            when Assembly =>
+               declare
+                  Text : Unbounded.Unbounded_String :=
+                    Unbounded.To_Unbounded_String
+                      (Lead & " text "
+                       & Quoted (Landin.Source.Names.Spelling
+                           (Names, Assembly_Text (Of_Unit, Item, Value))));
+               begin
+                  for Index in 1 .. Assembly_Operand_Count
+                    (Of_Unit, Item, Value)
+                  loop
+                     declare
+                        Operand : constant Assembly_Operand :=
+                          Nth_Assembly_Operand
+                            (Of_Unit, Item, Value, Index);
+                     begin
+                        Unbounded.Append
+                          (Text, (if Index = 1 then " (" else ", ")
+                           & (case Operand.Direction is
+                                 when Input => "in",
+                                 when Output => "out",
+                                 when Both => "inout",
+                                 when Discarded => "out")
+                           & " "
+                           & (if Operand.Name = Landin.Source.Names.No_Name
+                              then "_"
+                              else Landin.Source.Names.Spelling
+                                (Names, Operand.Name))
+                           & (if Operand.Direction = Discarded then ""
+                              else " " & Shown (Operand.Kind))
+                           & " at "
+                           & (if Operand.Width = 0 then "general"
+                              else Register_Of (Operand))
+                           & (if Operand.Output = No_Slot then ""
+                              else " slot " & Trimmed
+                                (Slot_Id'Image (Operand.Output))));
+                     end;
+                  end loop;
+                  if Assembly_Operand_Count (Of_Unit, Item, Value) > 0 then
+                     Unbounded.Append (Text, ")");
+                  end if;
+                  return Unbounded.To_String (Text) & Operands (Item, Value);
+               end;
 
             when Load_Indirect | Store_Indirect =>
                declare

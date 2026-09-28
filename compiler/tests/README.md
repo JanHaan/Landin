@@ -989,8 +989,10 @@ acceptance. Existing runtime/ABI fixtures and their Cortex dispositions remain
 unchanged.
 
 D230's `positive/r670-scalar-assembly` pins the target-fixed syntax without
-enabling hosted assembly. `cortex ABI/scalar assembly IR` independently corrupts carrier,
-ordering, operation and target metadata. The machine-directive cases check
+enabling hosted assembly. `cortex ABI/assembly IR` lowers the shorthand and
+the named form to one instruction and independently corrupts an input, an
+output slot, a register and a width, including a register Cortex-M0's table
+never answers for. The machine-directive cases check
 source operands, registers, arity, naked restrictions and hosted refusals.
 The [freestanding library lane](../../environments/cortex-m/README.md#freestanding-library-consumers)
 executes CPU, allocation, pool, vector and ordinary-slice DMA consumers through

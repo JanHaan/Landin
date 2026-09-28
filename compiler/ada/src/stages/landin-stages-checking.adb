@@ -6082,6 +6082,17 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
+         --  Lowering reads each operand's written type off its node.
+         for Index in 1 .. Count loop
+            if Kind_At (Index) in Ty.Integer_Name
+              and then Landin.Checking.Type_Of
+                (Types.all, Of_Tree, Operand_At (Index)) = Ty.Undecided
+            then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Operand_At (Index), Kind_At (Index));
+            end if;
+         end loop;
+
          if Outputs = 0 then
             return Ty.No_Value;
          elsif Outputs = 1 then
@@ -20708,27 +20719,20 @@ package body Landin.Stages.Checking is
                            then Ty.U32 else Ty.No_Value);
                      begin
                         --  [1990]: the last check, so a block that reaches
-                        --  it passed every other one.  Cortex-M0 lowers the
-                        --  operand-free block and the u32 shorthand; no
-                        --  target lowers named operands yet.
+                        --  it passed every other one.  Cortex-M0 lowers
+                        --  every form; the hosted targets lower none yet.
                         if Answer /= Ty.Ill_Typed
-                          and then (Operands
-                            or else Landin.Targets.Architecture_Of (Facts)
-                              /= Landin.Targets.Cortex_M0)
+                          and then Landin.Targets.Architecture_Of (Facts)
+                            /= Landin.Targets.Cortex_M0
                         then
                            Bad.Report
                              (Item => Bad.Type_Mismatch,
                               Source => Syn.Source_Of (Of_Tree),
                               Where => Syn.Where (Of_Tree, Node),
-                              Message =>
-                                (if Operands
-                                 then "this compiler does not lower"
-                                      & " assembly operands yet"
-                                 else "this compiler does not lower"
-                                      & " hosted assembly yet"),
+                              Message => "this compiler does not lower"
+                                & " hosted assembly yet",
                               Note => "[1990]: assembly is checked on every"
-                                & " target; only Cortex-M0 lowers it, and"
-                                & " only without named operands",
+                                & " target; only Cortex-M0 lowers it",
                               Related => Syn.Origin (Of_Tree, Node),
                               Because => "this assembly block",
                               Into => Found);

@@ -233,6 +233,13 @@ package Landin.IR.Testing_Support is
       Op : Landin.Memory.Operation; Scalar : Landin.Types.Scalar_Name;
       Success, Failure : Landin.Memory.Ordering);
 
+   --  [1630]: one operand of a block, rewritten in place.
+   procedure Overwrite_Assembly_Operand
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Index : Positive; Operand : Assembly_Operand)
+     with Pre => Holds (Into, Item, Value)
+                 and then Index <= Assembly_Operand_Count (Into, Item, Value);
+
    procedure Overwrite_Value_Type
      (Into : in out Unit; Item : Item_Id; Value : Value_Id;
       Result : Landin.Types.Type_Kind)

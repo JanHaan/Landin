@@ -2277,6 +2277,9 @@ package body Landin.Backend.X86_64 is
             end Packed_Atom;
          begin
             case Op is
+               when Landin.IR.Assembly =>
+                  raise Compiler_Defect with
+                    "hosted assembly reached emission before its lowering";
                when Landin.IR.Number =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
@@ -5553,7 +5556,7 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call
-                        | Landin.IR.Memory_Access
+                        | Landin.IR.Memory_Access | Landin.IR.Assembly
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address

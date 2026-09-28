@@ -1,4 +1,5 @@
 with Ada.Containers;
+with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
 with Landin.IR.Shape_Measurement;
 
@@ -698,5 +699,50 @@ package body Landin.Backend is
       return (if Spelling_Maps.Has_Element (Found)
               then Spelling_Maps.Element (Found) else 0);
    end Count;
+
+   function Assembly_Registers
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Names   : Landin.Source.Names.Table;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Assembly.Operand_Register_Array
+   is
+      use type Landin.Source.Names.Name_Id;
+      Result : Landin.Targets.Assembly.Operand_Register_Array
+        (1 .. Landin.IR.Assembly_Operand_Count (Of_Unit, Item, Value));
+   begin
+      for Index in Result'Range loop
+         declare
+            Operand : constant Landin.IR.Assembly_Operand :=
+              Landin.IR.Nth_Assembly_Operand (Of_Unit, Item, Value, Index);
+         begin
+            Result (Index) :=
+              (Name => Ada.Strings.Unbounded.To_Unbounded_String
+                 (if Operand.Name = Landin.Source.Names.No_Name then ""
+                  else Landin.Source.Names.Spelling (Names, Operand.Name)),
+               Register => Ada.Strings.Unbounded.To_Unbounded_String
+                 (Landin.IR.Register_Of (Operand)),
+               Bits => (if Operand.Kind in Landin.Types.Integer_Name
+                        then Landin.Types.Width (Operand.Kind, Facts)
+                        else Landin.Targets.Assembly.Register_Width (Facts)));
+         end;
+      end loop;
+      Landin.Targets.Assembly.Choose
+        (Facts, Landin.Source.Names.Spelling
+           (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)), Result);
+      return Result;
+   end Assembly_Registers;
+
+   function Assembly_Text
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Names   : Landin.Source.Names.Table;
+      Facts   : Landin.Targets.Target_Facts) return String
+     is (Landin.Targets.Assembly.Substituted
+           (Facts, Landin.Source.Names.Spelling
+              (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)),
+            Assembly_Registers (Of_Unit, Item, Value, Names, Facts)));
 
 end Landin.Backend;

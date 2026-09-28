@@ -4585,6 +4585,141 @@ package body Landin.Stages.Lowering is
       --  [1920]: a call
       ------------------------------------------------------------
 
+      --  [1630]: every operand form, D230's shorthand and the
+      --  operand-free block are one instruction.  Inputs are evaluated in
+      --  written order and each is kept in a slot before the next, since
+      --  a later one may branch; each output is written to a scalar slot
+      --  of its own and read back after the block.  One output is the
+      --  block's value; several fill the anonymous result the checker
+      --  shaped, in written order.
+      function Lower_Assembly
+        (Of_Tree           : Syn.Tree;
+         Node              : Syn.Node_Id;
+         Scope             : Res.Scope_Id;
+         Destination       : IR.Slot_Id;
+         Destination_Field : Natural;
+         Destination_Steps : IR.Path_Step_Array) return IR.Value_Id;
+
+      function Lower_Assembly
+        (Of_Tree           : Syn.Tree;
+         Node              : Syn.Node_Id;
+         Scope             : Res.Scope_Id;
+         Destination       : IR.Slot_Id;
+         Destination_Field : Natural;
+         Destination_Steps : IR.Path_Step_Array) return IR.Value_Id
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Count : constant Natural := Syn.Argument_Count (Of_Tree, Node) - 1;
+         Shorthand : constant Boolean :=
+           Count = 1 and then Syn.Kind
+             (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2))
+               /= Syn.Assembly_Operand;
+         Operands : IR.Assembly_Operand_Array (1 .. Count);
+         Saved : array (1 .. Count) of IR.Slot_Id := [others => IR.No_Slot];
+         Inputs : Natural := 0;
+         Outputs : Natural := 0;
+         --  A block with no output stands for itself, as a statement
+         --  call's instruction does; its value is never read.
+         Result : IR.Value_Id := IR.No_Value;
+         use type IR.Assembly_Direction;
+      begin
+         for Index in 1 .. Count loop
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Index + 1);
+               Direction : constant IR.Assembly_Direction :=
+                 (if Shorthand then IR.Both
+                  else (case Syn.Direction_Of (Of_Tree, Argument) is
+                     when Syn.Input_Operand => IR.Input,
+                     when Syn.Inout_Operand => IR.Both,
+                     when Syn.Output_Operand =>
+                       (if Syn.Name (Of_Tree, Argument)
+                          = Landin.Source.Names.No_Name
+                        then IR.Discarded else IR.Output)));
+               Kind : constant Ty.Type_Kind :=
+                 (if Shorthand then Ty.U32
+                  elsif Direction = IR.Discarded then Ty.Not_Typed
+                  else Type_At (Of_Tree, Argument));
+               Register : constant String :=
+                 (if Shorthand then "r0"
+                  else Landin.Source.Names.Spelling
+                    (Spellings.all, Syn.Name
+                       (Of_Tree, Syn.Operand_Register (Of_Tree, Argument))));
+               Input : constant Syn.Node_Id :=
+                 (if Shorthand then Argument
+                  elsif Direction in IR.Input | IR.Both
+                  then Syn.Operand_Input (Of_Tree, Argument)
+                  else Syn.No_Node);
+            begin
+               if Input /= Syn.No_Node then
+                  declare
+                     Value : constant IR.Value_Id :=
+                       Lower_Expression (Of_Tree, Input, Scope);
+                  begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     Saved (Index) := IR.Add_Slot
+                       (Unit.all, Filling, Kind, Res.No_Declaration, Site);
+                     IR.Emit_Store
+                       (Unit.all, Filling, Saved (Index), Value, Site);
+                  end;
+               end if;
+               Operands (Index) := IR.Operand_At
+                 (Direction,
+                  (if Shorthand then Landin.Source.Names.No_Name
+                   else Syn.Name (Of_Tree, Argument)),
+                  (if Register = "general" then "" else Register),
+                  Kind,
+                  (if Direction in IR.Output | IR.Both
+                   then IR.Add_Slot
+                     (Unit.all, Filling, Kind, Res.No_Declaration, Site)
+                   else IR.No_Slot));
+            end;
+         end loop;
+         declare
+            Given : IR.Value_Id_Array (1 .. Count);
+         begin
+            for Index in 1 .. Count loop
+               if Saved (Index) /= IR.No_Slot then
+                  Inputs := Inputs + 1;
+                  Given (Inputs) :=
+                    IR.Emit_Load (Unit.all, Filling, Saved (Index), Site);
+               end if;
+            end loop;
+            Result := IR.Emit_Assembly
+              (Unit.all, Filling, Landin.Source.Names.Intern
+                 (Spellings.all, Landin.Configuration.Fixed_Text
+                    (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+                     Syn.Nth_Argument (Of_Tree, Node, 1))),
+               Operands, Given (1 .. Inputs), Site);
+         end;
+         for Index in 1 .. Count loop
+            if Operands (Index).Output /= IR.No_Slot then
+               Outputs := Outputs + 1;
+               Result := IR.Emit_Load
+                 (Unit.all, Filling, Operands (Index).Output, Site);
+               if Type_At (Of_Tree, Node) = Ty.Aggregate then
+                  --  An anonymous result is always bound whole into a
+                  --  temporary of its own, as a call's is.
+                  if Destination = IR.No_Slot
+                    or else Destination_Field /= 0
+                    or else Destination_Steps'Length /= 0
+                  then
+                     raise Landin.Compiler_Defect with
+                       "an assembly block's outputs have no whole"
+                       & " destination";
+                  end if;
+                  IR.Emit_Store_Slot_Field
+                    (Unit.all, Filling, Destination,
+                     IR.Part_Position (Outputs), Result, Site);
+               end if;
+            end if;
+         end loop;
+         return (if Type_At (Of_Tree, Node) = Ty.Aggregate then IR.No_Value
+                 else Result);
+      end Lower_Assembly;
+
       function Lower_Call
         (Of_Tree          : Syn.Tree;
          Node             : Syn.Node_Id;
@@ -4738,22 +4873,9 @@ package body Landin.Stages.Lowering is
          if Landin.Configuration.Assembly_Call
            (Spellings.all, Of_Tree, Node)
          then
-            declare
-               Operand : constant IR.Value_Id :=
-                 (if Syn.Argument_Count (Of_Tree, Node) = 2
-                  then Lower_Expression
-                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 2), Scope)
-                  else IR.No_Value);
-            begin
-               if Current = IR.No_Block then
-                  return IR.No_Value;
-               end if;
-               return IR.Emit_Assembly
-                 (Unit.all, Filling, Landin.Source.Names.Intern
-                    (Spellings.all, Landin.Configuration.Fixed_Text
-                       (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
-                        Syn.Nth_Argument (Of_Tree, Node, 1))), Site, Operand);
-            end;
+            return Lower_Assembly
+              (Of_Tree, Node, Scope, Destination, Destination_Field,
+               Destination_Steps);
          end if;
          declare
             use type Landin.Memory.Operation;

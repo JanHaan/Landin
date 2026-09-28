@@ -36,6 +36,36 @@ transport: (item: type, value: u32) -> (result: u32) =
     result = assembler.block("adds r0, #7\nmovs r1, #99\nmovs r4, #88", value)
 end transport
 
+--  [1630]'s named operands: several outputs destructured, a block that
+--  holds every low register, general passing over a register the text
+--  writes, and a signed byte extended to the whole register on the way in.
+split: (value: u32) -> (low: u32, high: u32) =
+    (l, h) := assembler.block("lsrs {h}, {v}, #16\nuxth {l}, {v}",
+                              out l: u32 at general, out h: u32 at general,
+                              in v: u32 at general = value)
+    low = l
+    high = h
+end split
+
+every_register: (base: u32) -> (total: u32) =
+    (a, b, c, d, e, f, g, h) := assembler.block(
+        "adds r1, r0, #1\nadds r2, r0, #2\nadds r3, r0, #3\nadds r4, r0, #4\nadds r5, r0, #5\nadds r6, r0, #6\nadds r7, r0, #7",
+        inout a: u32 at r0 = base, out b: u32 at r1, out c: u32 at r2,
+        out d: u32 at r3, out e: u32 at r4, out f: u32 at r5,
+        out g: u32 at r6, out h: u32 at r7)
+    total = a + b + c + d + e + f + g + h
+end every_register
+
+avoided: (value: u32) -> (result: u32) =
+    result = assembler.block("movs r0, #0\nmovs r1, #0\nadds {r}, {r}, #1",
+                             inout r: u32 at general = value)
+end avoided
+
+widened: (value: i8) -> (result: i32) =
+    result = assembler.block("mov {r}, {v}", out r: i32 at general,
+                             in v: i8 at general = value)
+end widened
+
 temporary_mask: (early: bool) -> (masked: u32) =
     previous := cpu.disable_interrupts()
     defer cpu.restore_interrupts(previous)
@@ -71,6 +101,11 @@ start: () -> none =
     return when skip_assembly(true) <> 41
     return when discarded <> 73 or evaluations <> 1
     return when value <> 35
+    (low, high) := split(0x12345678)
+    return when low <> 0x5678 or high <> 0x1234
+    return when every_register(10) <> 108
+    return when avoided(41) <> 42
+    return when widened(-3) <> -3
 
     saved := cpu.disable_interrupts()
     enable: ptr mut u32 = ptr(0xe000e100)

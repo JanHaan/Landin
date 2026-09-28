@@ -483,14 +483,21 @@ immutable-image flag. Placement marks roots/address exposure before optimization
 the generated kept vector image supplies linker relocations to its handlers.
 A convention alone is not a retention root.
 
-Fixed `assembler.block` text lowers to a memory-access compiler boundary with
-an interned payload. D230's scalar form adds one u32 operand and a u32 result;
-verification checks that carrier independently of the memory operation's
-compiler-barrier tag. The target loads r0 immediately before the text and
-saves it immediately afterward. No new implicit register dependency enters IR.
-Its existing full memory/call/trap effects invalidate
-memory knowledge and preserve ordering through optimization and specialization.
-It is not a hardware barrier. Cortex emission reads live values from their
+Every `assembler.block` lowers to one `Assembly` instruction: its interned
+text and one entry per operand, each a direction, a name, the written integer
+type, a register — the target's canonical full-width name, or empty for
+`general` — and, for an output, the scalar frame slot it writes. Inputs are
+the instruction's operands in written order, evaluated and kept in slots
+before it; it defines no value, and lowering reads each output slot back
+after it, filling a multi-output block's anonymous result field by field.
+D230's shorthand is one `inout` entry at r0 with no name, and an operand-free
+or naked block has no entries. The verifier holds entries to their inputs and
+slots, names and registers to being distinct, and, given target facts, every
+register to the target's table and every type to one register's width;
+`cortex ABI/assembly IR` corrupts each. Its fixed read, write, call and trap
+effects invalidate memory knowledge and preserve ordering through
+optimization and specialization, and simplification never forwards a store
+across it into an output slot. It is not a hardware barrier. Cortex emission reads live values from their
 compiler stack homes after ordinary low-register-clobbering text; ordinary
 text cannot name SP, LR, r9, r11 or other high registers. Naked text owns all
 machine state and receives no frame. Ordinary and interrupt routines retain
@@ -498,9 +505,11 @@ the eight-byte previous-r11/incoming-LR record; an interrupt's incoming LR is
 EXC_RETURN. The hardware frame separately saves volatile registers and flags.
 
 D248's named operands are checked against `Landin.Targets.Assembly`'s
-register tables on every target and do not reach the IR yet: checking refuses
-them at the lowering limit [1990] states, and the IR above is only the
-operand-free block and D230's shorthand.
+register tables on every target. A backend chooses each `general` register
+through the same table, in its written order, passing over every register the
+block holds or its text names, and fills `{name}` at the operand's width.
+Cortex-M0 emits every form; the hosted targets refuse assembly at the lowering
+limit [1990] states.
 
 `Landin.Backend.Firmware` constructs reset and the selected memory script;
 `Landin.Targets.Firmware` owns board limits and Cortex-M0 instruction

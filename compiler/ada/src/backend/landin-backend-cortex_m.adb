@@ -262,6 +262,9 @@ package body Landin.Backend.Cortex_M is
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
       function High (Register : String) return String;
+      procedure Frame_Address_Through
+        (Offset : Landin.Targets.Byte_Count; Register : String);
+      procedure Emit_Verbatim (Text : String);
 
 
 
@@ -344,6 +347,40 @@ package body Landin.Backend.Cortex_M is
             Emit ("subs " & Register & ", " & Register & ", r7");
          end if;
       end Frame_Address;
+
+      --  A frame address formed in Register alone, which assembly needs
+      --  when every other low register holds an operand.
+      procedure Frame_Address_Through
+        (Offset : Landin.Targets.Byte_Count; Register : String) is
+      begin
+         if Offset <= 255 then
+            Emit ("mov " & Register & ", r11");
+            Emit ("subs " & Register & ", #" & Trimmed (Offset'Image));
+         else
+            Immediate (Register, Pattern (Offset));
+            Emit ("rsbs " & Register & ", " & Register & ", #0");
+            Emit ("add " & Register & ", r11");
+         end if;
+      end Frame_Address_Through;
+
+      --  [1630]'s text, one instruction a line as written.
+      procedure Emit_Verbatim (Text : String) is
+         Start : Natural := Text'First;
+      begin
+         for Index in Text'First .. Text'Last + 1 loop
+            if Index > Text'Last or else Text (Index) = LF then
+               declare
+                  Line : constant String :=
+                    Trimmed (Text (Start .. Index - 1));
+               begin
+                  if Line'Length > 0 then
+                     Emit (Line);
+                  end if;
+               end;
+               Start := Index + 1;
+            end if;
+         end loop;
+      end Emit_Verbatim;
 
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String) is
@@ -1423,6 +1460,111 @@ package body Landin.Backend.Cortex_M is
             return Landin.Targets.Byte_Count
            is (Landin.Backend.Path_Offset (Of_Unit, Shape, Path, Facts));
 
+         --  [1630] on ARMv6-M.  Each input is loaded through its own
+         --  register, so loading needs no other; the text runs; each output
+         --  is stored through a low register no output still waiting
+         --  holds.  Only a block whose outputs hold all of r0-r7 finds none
+         --  for its first, which then waits in r12 -- a register no block
+         --  names and every block may overwrite -- and is stored last.  The
+         --  literal pool the text may have used is flushed behind a branch.
+         procedure Assembly_Block (Value : Landin.IR.Value_Id);
+
+         procedure Assembly_Block (Value : Landin.IR.Value_Id) is
+            Chosen : constant Landin.Targets.Assembly.Operand_Register_Array :=
+              Landin.Backend.Assembly_Registers
+                (Of_Unit, Item, Value, Names, Facts);
+            After_Block : constant String := Fresh;
+            Inputs : Natural := 0;
+            Waiting : array (0 .. 7) of Boolean := [others => False];
+            Aside : Natural := 0;
+
+            function Operand (Index : Positive)
+              return Landin.IR.Assembly_Operand
+              is (Landin.IR.Nth_Assembly_Operand
+                    (Of_Unit, Item, Value, Index));
+
+            function Register (Index : Positive) return String
+              is (Ada.Strings.Unbounded.To_String (Chosen (Index).Register));
+
+            function Number (Index : Positive) return Natural
+              is (Natural'Value
+                    (Register (Index) (Register (Index)'First + 1
+                       .. Register (Index)'Last)));
+
+            function Free return String;
+
+            function Free return String is
+            begin
+               for Candidate in reverse Waiting'Range loop
+                  if not Waiting (Candidate) then
+                     return "r" & Trimmed (Natural'Image (Candidate));
+                  end if;
+               end loop;
+               raise Compiler_Defect with "no low register is free";
+            end Free;
+
+            procedure Store (Index : Positive; From : String);
+
+            procedure Store (Index : Positive; From : String) is
+               Base : constant String := Free;
+            begin
+               Frame_Address_Through
+                 (Slot_Offset (Layout, Operand (Index).Output), Base);
+               Memory (True, Size_Of (Operand (Index).Kind, Facts),
+                       From, Base);
+            end Store;
+         begin
+            for Index in Chosen'Range loop
+               if Operand (Index).Direction
+                 in Landin.IR.Input | Landin.IR.Both
+               then
+                  Inputs := Inputs + 1;
+                  Frame_Address_Through
+                    (Value_Offset (Layout, Landin.IR.Nth_Operand
+                       (Of_Unit, Item, Value, Inputs)), Register (Index));
+                  Memory (False, Size_Of (Operand (Index).Kind, Facts),
+                          Register (Index), Register (Index));
+                  Extend (Register (Index), Operand (Index).Kind);
+               end if;
+               if Operand (Index).Output /= Landin.IR.No_Slot then
+                  Waiting (Number (Index)) := True;
+               end if;
+            end loop;
+            Emit_Verbatim (Landin.Backend.Assembly_Text
+              (Of_Unit, Item, Value, Names, Facts));
+            if (for all Held of Waiting => Held) then
+               for Index in Chosen'Range loop
+                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                     Aside := Index;
+                     Emit ("mov r12, " & Register (Index));
+                     Waiting (Number (Index)) := False;
+                     exit;
+                  end if;
+               end loop;
+            end if;
+            for Index in Chosen'Range loop
+               if Operand (Index).Output /= Landin.IR.No_Slot
+                 and then Index /= Aside
+               then
+                  Store (Index, Register (Index));
+                  Waiting (Number (Index)) := False;
+               end if;
+            end loop;
+            if Aside /= 0 then
+               declare
+                  Held : constant String := Free;
+               begin
+                  Waiting (Natural'Value (Held (Held'First + 1 .. Held'Last)))
+                    := True;
+                  Emit ("mov " & Held & ", r12");
+                  Store (Aside, Held);
+               end;
+            end if;
+            Emit ("b " & After_Block);
+            Emit (".ltorg");
+            Put (After_Block & ":");
+         end Assembly_Block;
+
          procedure Instruction (Value : Landin.IR.Value_Id);
 
          procedure Instruction (Value : Landin.IR.Value_Id) is
@@ -1625,6 +1767,8 @@ package body Landin.Backend.Cortex_M is
             end Index_Address;
          begin
             case Op is
+               when Landin.IR.Assembly =>
+                  Assembly_Block (Value);
                when Landin.IR.Range_Check =>
                   declare
                      Signed : constant Boolean :=
@@ -2669,32 +2813,7 @@ package body Landin.Backend.Cortex_M is
                   begin
                      if Landin.Memory.Operands (M) = 0 then
                         case M is
-                           when Compiler_Barrier =>
-                              if Landin.IR.Assembly_Text (Of_Unit, Item, Value)
-                                /= Landin.Source.Names.No_Name
-                              then
-                                 declare
-                                    After_Block : constant String := Fresh;
-                                 begin
-                                    if Landin.IR.Operand_Count
-                                      (Of_Unit, Item, Value) = 1
-                                    then
-                                       Load_Value (Landin.IR.Nth_Operand
-                                         (Of_Unit, Item, Value, 1));
-                                    end if;
-                                    Put (Landin.Source.Names.Spelling
-                                      (Names, Landin.IR.Assembly_Text
-                                         (Of_Unit, Item, Value)));
-                                    if Landin.IR.Operand_Count
-                                      (Of_Unit, Item, Value) = 1
-                                    then
-                                       Store_Value (Value);
-                                    end if;
-                                    Emit ("b " & After_Block);
-                                    Emit (".ltorg");
-                                    Put (After_Block & ":");
-                                 end;
-                              end if;
+                           when Compiler_Barrier => null;
                            when Completion_Barrier => Emit ("dsb sy");
                            when others => Emit ("dmb sy");
                         end case;
@@ -2803,7 +2922,7 @@ package body Landin.Backend.Cortex_M is
                     Landin.IR.Nth_Value (Of_Unit, Item, 1, Position);
                begin
                   if Landin.IR.Op_Of (Of_Unit, Item, Value)
-                    = Landin.IR.Memory_Access
+                    = Landin.IR.Assembly
                   then
                      Put (Landin.Source.Names.Spelling
                        (Names, Landin.IR.Assembly_Text
@@ -3417,7 +3536,7 @@ package body Landin.Backend.Cortex_M is
                         | Landin.IR.Evidence_Address
                         | Landin.IR.Evidence_Function
                         | Landin.IR.Evidence_Self | Landin.IR.Call
-                        | Landin.IR.Memory_Access
+                        | Landin.IR.Memory_Access | Landin.IR.Assembly
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address

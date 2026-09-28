@@ -472,6 +472,17 @@ package body Landin.Backend.Debug_Locations is
                   Exclude (State, Place.First, Place.First + Place.Count);
                   return;
                end if;
+            when Assembly =>
+               --  [1630]: a block writes each output slot as a store does.
+               for Index in 1 .. Assembly_Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  if Nth_Assembly_Operand
+                       (Of_Unit, Item, Value, Index).Output = Slot
+                  then
+                     Place := Root_Selection;
+                  end if;
+               end loop;
             when others => null;
          end case;
          Mark (State, Place);

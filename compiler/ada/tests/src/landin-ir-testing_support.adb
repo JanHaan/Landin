@@ -360,6 +360,17 @@ package body Landin.IR.Testing_Support is
       Into.Code (Position).Failure_Order := Failure;
    end Overwrite_Memory;
 
+   procedure Overwrite_Assembly_Operand
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Index : Positive; Operand : Assembly_Operand)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+   begin
+      Into.Assembly_Operands.Replace_Element
+        (Into.Code (Position).Assembly_Run.First + Index, Operand);
+   end Overwrite_Assembly_Operand;
+
    procedure Overwrite_Value_Type
      (Into : in out Unit; Item : Item_Id; Value : Value_Id;
       Result : Landin.Types.Type_Kind)

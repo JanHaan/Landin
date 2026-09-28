@@ -9,7 +9,7 @@ with Landin.IR.Dump;
 with Landin.IR.Verifier;
 with Landin.IR.Testing_Support;
 with Landin.Machine;
-with Landin.Memory;
+with Landin.Source.Names;
 with Landin.Platform.Native;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -940,11 +940,16 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Assembly_IR (Item : in out Landin.Testing.Context);
 
+   --  [1630]'s one instruction, from D230's shorthand and from the named
+   --  form, and the verifier's refusal of each way it can be malformed.
+   --  Mode 8 is the per-target evidence: a register [1990]'s Cortex-M0
+   --  table never answers for.
    procedure Assembly_IR (Item : in out Landin.Testing.Context) is
       use type IR.Verifier.Fault_Kind;
-      use type Ty.Type_Kind;
+      use type IR.Slot_Id;
+      use type IR.Assembly_Direction;
    begin
-      for Mode in 1 .. 6 loop
+      for Mode in 1 .. 9 loop
          declare
             Work : Landin.Stages.Compilation :=
               Landin.Stages.Create (T.Cortex_M);
@@ -953,7 +958,12 @@ package body Landin.Tests.Cortex_Suite is
               Landin.Stages.Add_Source
                 (Work, "assembly.ldn", "f: (x: u32) -> (r: u32) = "
                  & "flag: bool = true _ = flag "
-                 & "r = assembler.block(""adds r0, #7"", x) end f");
+                 & (if Mode <= 4
+                    then "r = assembler.block(""adds r0, #7"", x)"
+                    else "r = assembler.block(""adds {o}, {i}, #7"","
+                         & " out o: u32 at general,"
+                         & " in i: u32 at r1 = x)")
+                 & " end f");
             pragma Unreferenced (Written);
          begin
             Landin.Stages.Append (Order, Frontend'Access);
@@ -963,7 +973,7 @@ package body Landin.Tests.Cortex_Suite is
             Landin.Stages.Append (Order, Lowerer'Access);
             Landin.Testing.Check_Equal
               (Item, Landin.Stages.Run (Order, Work), 5,
-               "scalar assembly reaches verified IR");
+               "assembly reaches verified IR");
             declare
                Code : constant not null access IR.Unit :=
                  Landin.Stages.Code (Work);
@@ -971,8 +981,7 @@ package body Landin.Tests.Cortex_Suite is
                Boolean_Value : IR.Value_Id := IR.No_Value;
             begin
                for V in 1 .. IR.Value_Count (Code.all, 1) loop
-                  if IR.Op_Of (Code.all, 1, IR.Value_Id (V))
-                    = IR.Memory_Access
+                  if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly
                   then
                      Assembly_Value := IR.Value_Id (V);
                   elsif IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Truth
@@ -981,38 +990,95 @@ package body Landin.Tests.Cortex_Suite is
                   end if;
                end loop;
                Landin.Testing.Check
-                 (Item, IR.Result_Of (Code.all, 1, Assembly_Value) = Ty.U32,
-                  "assembly produces the declared scalar carrier");
-               case Mode is
-                  when 1 =>
-                     IR.Testing_Support.Overwrite_Value_Type
-                       (Code.all, 1, Assembly_Value, Ty.U16);
-                  when 2 =>
-                     IR.Testing_Support.Overwrite_Operand
-                       (Code.all, 1, Assembly_Value, 1, Boolean_Value);
-                  when 3 =>
-                     IR.Testing_Support.Overwrite_Memory
-                       (Code.all, 1, Assembly_Value,
-                        Landin.Memory.Compiler_Barrier, Ty.U32,
-                        Landin.Memory.Seq_Cst, Landin.Memory.No_Ordering);
-                  when 4 =>
-                     IR.Testing_Support.Overwrite_Memory
-                       (Code.all, 1, Assembly_Value,
-                        Landin.Memory.Volatile_Load, Ty.U32,
-                        Landin.Memory.No_Ordering, Landin.Memory.No_Ordering);
-                  when 6 =>
-                     IR.Testing_Support.Overwrite_Memory
-                       (Code.all, 1, Assembly_Value,
-                        Landin.Memory.Compiler_Barrier, Ty.U16,
-                        Landin.Memory.No_Ordering, Landin.Memory.No_Ordering);
-                  when others => null;
-               end case;
-               Landin.Testing.Check
-                 (Item, IR.Verifier.Check
-                    (Code.all, (if Mode = 5 then T.Darwin_Arm64
-                                else T.Cortex_M)).Kind
-                      /= IR.Verifier.Nothing_Wrong,
-                  "malformed scalar assembly refuses before selection");
+                 (Item, IR.Verifier.Check (Code.all, T.Cortex_M).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  "the block verifies as lowered");
+               declare
+                  First : constant IR.Assembly_Operand :=
+                    IR.Nth_Assembly_Operand (Code.all, 1, Assembly_Value, 1);
+                  Other_Slot : constant IR.Slot_Id :=
+                    (if First.Output = 1 then 2 else 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, (if Mode <= 4
+                            then IR.Register_Of (First) = "r0"
+                              and then First.Direction = IR.Both
+                            else IR.Register_Of (First) = ""
+                              and then First.Direction = IR.Output),
+                     "the operand is what the source wrote");
+                  case Mode is
+                     when 1 =>
+                        --  An input of another type than the operand's.
+                        IR.Testing_Support.Overwrite_Operand
+                          (Code.all, 1, Assembly_Value, 1, Boolean_Value);
+                     when 2 =>
+                        --  An output written to a slot of another type.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Both, First.Name, "r0", Ty.U16,
+                              First.Output));
+                     when 3 =>
+                        --  The shorthand on a target that has no r0.
+                        null;
+                     when 4 =>
+                        --  An output that writes no slot.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Both, First.Name, "r0", Ty.U32));
+                     when 5 =>
+                        --  `general` asked of a discarded output.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Discarded, Landin.Source.Names.No_Name, "",
+                              Ty.Not_Typed));
+                     when 6 =>
+                        --  Two operands on one register.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name, "r1", Ty.U32,
+                              First.Output));
+                     when 7 =>
+                        --  An output slot that is not the routine's.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name, "", Ty.U32,
+                              IR.Slot_Id (IR.Slot_Count (Code.all, 1) + 1)));
+                     when 8 =>
+                        --  A register Cortex-M0's table never answers for.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name, "r8", Ty.U32,
+                              First.Output));
+                     when others =>
+                        --  A wider operand than one Cortex-M0 register.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name, "", Ty.U64,
+                              Other_Slot));
+                  end case;
+               end;
+               declare
+                  Found : constant IR.Verifier.Fault_Kind :=
+                    IR.Verifier.Check
+                      (Code.all, (if Mode = 3 then T.Linux_X86_64
+                                  else T.Cortex_M)).Kind;
+               begin
+                  Landin.Testing.Check
+                    (Item, Found /= IR.Verifier.Nothing_Wrong,
+                     "malformed assembly refuses before selection");
+                  if Mode in 3 | 8 then
+                     Landin.Testing.Check
+                       (Item, Found = IR.Verifier.Assembly_Register_Refused,
+                        "the register table refuses it");
+                  end if;
+               end;
             end;
          end;
       end loop;
@@ -1023,7 +1089,7 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
-        (Into, "cortex ABI", "scalar assembly IR", Assembly_IR'Access);
+        (Into, "cortex ABI", "assembly IR", Assembly_IR'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register
