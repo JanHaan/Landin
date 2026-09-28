@@ -33290,6 +33290,57 @@ file negative/assembly-operands-not-lowered/program.ldn tokens 136
   748 749 )
   750 753 end
   754 763 transport
+file negative/assembly-operands-on-another-call/program.ldn tokens 50
+  0 6 record
+  6 7 :
+  8 9 (
+  9 14 first
+  14 15 :
+  16 19 u32
+  19 20 ,
+  21 27 second
+  27 28 :
+  29 32 u32
+  32 33 )
+  34 36 ->
+  37 41 none
+  42 43 =
+  44 47 end
+  48 54 record
+  55 56 f
+  56 57 :
+  58 59 (
+  59 64 value
+  64 65 :
+  66 69 u32
+  69 70 )
+  71 73 ->
+  74 78 none
+  79 80 =
+  85 91 record
+  91 92 (
+  92 93 1
+  93 94 ,
+  95 97 in
+  98 99 x
+  99 100 :
+  101 104 u32
+  105 107 at
+  108 110 r0
+  111 112 =
+  113 118 value
+  118 119 )
+  124 130 record
+  130 131 (
+  131 132 1
+  132 133 ,
+  134 137 out
+  138 139 _
+  140 142 at
+  143 145 r1
+  145 146 )
+  147 150 end
+  151 152 f
 file negative/assembly-output-with-value/program.ldn tokens 29
   0 1 f
   1 2 :

@@ -109,6 +109,7 @@ negative/assembly-naked-operands | cortex-m
 negative/assembly-operand-types | cortex-m
 negative/assembly-operand-without-register | linux-x86-64, macos-arm64, synthetic-32
 negative/assembly-operands-not-lowered | cortex-m
+negative/assembly-operands-on-another-call | cortex-m
 negative/assembly-output-with-value | linux-x86-64, macos-arm64, synthetic-32
 negative/assembly-outputs-dropped-by-omission | cortex-m
 negative/assembly-register-is-text | linux-x86-64, macos-arm64, synthetic-32

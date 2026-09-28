@@ -2950,11 +2950,11 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "arguments",
+          "type": "_expression",
           "named": true
         }
       ]

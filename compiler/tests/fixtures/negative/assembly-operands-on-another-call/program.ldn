@@ -1,0 +1,5 @@
+record: (first: u32, second: u32) -> none = end record
+f: (value: u32) -> none =
+    record(1, in x: u32 at r0 = value)
+    record(1, out _ at r1)
+end f

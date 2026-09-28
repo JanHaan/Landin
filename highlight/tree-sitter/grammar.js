@@ -140,7 +140,8 @@ module.exports = grammar({
 
     tool_directive: $ => seq(
       field('module', choice('compiler', 'assembler', 'linker')),
-      '.', field('member', $.identifier), '(', optional($.arguments), ')',
+      '.', field('member', $.identifier), '(',
+      optional(commaSep1($._expression)), ')',
     ),
 
     public_declaration: $ => seq(
@@ -647,9 +648,10 @@ module.exports = grammar({
     argument_rhs: $ => choice($._expression, $._type),
 
     // [1630]'s operands follow a block's text.  The grammar lets any
-    // argument list end in them and refine admits them only on
-    // `assembler.block`: `assembler`, `block`, `out` and `at` all stay
-    // identifiers, and the direction word is what opens an operand.
+    // call's argument list end in them, as spec.md's does, and refine's
+    // checker admits them only on `assembler.block`: `assembler`, `block`,
+    // `out` and `at` all stay identifiers, and the direction word is what
+    // opens an operand.  A module directive takes expressions only.
     assembly_operand: $ => choice(
       seq(
         field('direction', choice('in', 'inout')),

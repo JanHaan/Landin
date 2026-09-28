@@ -778,9 +778,24 @@ package body Landin.Stages.Resolution is
                   end if;
                end;
                for Argument in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-                  Resolve
-                    (Of_Tree,
-                     Syn.Nth_Argument (Of_Tree, Node, Argument), Inside);
+                  declare
+                     Written : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, Argument);
+                  begin
+                     --  [1630]'s operand on another callee is the checker's
+                     --  to refuse; its type and input still resolve here.
+                     if Syn.Kind (Of_Tree, Written) = Syn.Assembly_Operand
+                     then
+                        Resolve
+                          (Of_Tree, Syn.Operand_Type (Of_Tree, Written),
+                           Inside);
+                        Resolve
+                          (Of_Tree, Syn.Operand_Input (Of_Tree, Written),
+                           Inside);
+                     else
+                        Resolve (Of_Tree, Written, Inside);
+                     end if;
+                  end;
                end loop;
 
                if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then

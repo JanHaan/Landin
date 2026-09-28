@@ -20533,6 +20533,36 @@ package body Landin.Stages.Checking is
                      end loop;
                   end if;
                end;
+               --  [1820] derives operands after any call's arguments and
+               --  [1630] gives them to one callee.  Every other call that
+               --  carries one is refused here, before its callee is asked
+               --  what the arguments mean.
+               if not Landin.Configuration.Assembly_Call
+                 (Spellings.all, Of_Tree, Node)
+               then
+                  for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                     if Syn.Kind
+                          (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index))
+                        = Syn.Assembly_Operand
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where
+                             (Of_Tree,
+                              Syn.Nth_Argument (Of_Tree, Node, Index)),
+                           Message => "only assembler.block takes assembly"
+                                      & " operands",
+                           Note    => "[1630]: an operand places a value in a"
+                                      & " register, which only an assembly"
+                                      & " block has",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this call",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                  end loop;
+               end if;
                if Landin.Configuration.Assembly_Call
                  (Spellings.all, Of_Tree, Node)
                then

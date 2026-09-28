@@ -1,0 +1,9 @@
+class: negative
+summary: The grammar derives D248's operands after any call's arguments, and the checker refuses them on every callee but assembler.block
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn
+codes: L0301, L0301
+status: 1
+constructs: 1630, 1820
+targets: cortex-m

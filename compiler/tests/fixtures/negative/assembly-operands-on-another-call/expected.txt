@@ -1,0 +1,20 @@
+error[L0301]: only assembler.block takes assembly operands
+  --> ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn:3:15
+  |
+3 |     record(1, in x: u32 at r0 = value)
+  |               ^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn:3:5
+  |
+3 |     record(1, in x: u32 at r0 = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this call
+  = note: [1630]: an operand places a value in a register, which only an assembly block has
+error[L0301]: only assembler.block takes assembly operands
+  --> ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn:4:15
+  |
+4 |     record(1, out _ at r1)
+  |               ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn:4:5
+  |
+4 |     record(1, out _ at r1)
+  |     ^^^^^^^^^^^^^^^^^^^^^^ this call
+  = note: [1630]: an operand places a value in a register, which only an assembly block has

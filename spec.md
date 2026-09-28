@@ -90,7 +90,8 @@ declaration ::= "public"? (atom_declaration | binding | function
                 | option_declaration
                 | tool_directive
 option_declaration ::= "option" identifier ":" type "=" expression
-tool_directive ::= tool_namespace "." identifier "(" arguments? ")"
+tool_directive ::= tool_namespace "." identifier
+                   "(" (expression ("," expression)*)? ")"
 tool_namespace ::= "compiler" | "assembler" | "linker"
 fixed_conditional ::= "fixed" "if" expression "then" declaration*
                       ("elsif" expression "then" declaration*)*
@@ -1867,6 +1868,10 @@ not permit an ordinary routine to omit its frame.
 `assembler.block` takes a quoted or raw fixed text literal in a routine body,
 optionally followed by operands [1630]. The fixed text is not a runtime
 argument. D248 records the operand form and D230 the positional shorthand.
+[1820]'s `arguments` derive operands after any call's positional arguments,
+because which callee a name denotes is not the grammar's to say; the checker
+refuses them on every call but `assembler.block`. A module tool directive
+takes expressions only.
 
 An operand is `in name: type at register = expression`,
 `inout name: type at register = expression`, `out name: type at register`
@@ -14520,7 +14525,8 @@ Implicit register effects and indirect writes into compiler storage remain
 programmer obligations that no check can prove.
 
 **Pinned by** `positive/assembly-operand-forms`, the negative fixtures named
-above, `negative/assembly-template-names`, `negative/assembly-naked-operands`,
+above, `negative/assembly-operands-on-another-call`,
+`negative/assembly-template-names`, `negative/assembly-naked-operands`,
 `negative/assembly-hosted-straight-line`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.

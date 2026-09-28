@@ -8173,13 +8173,13 @@ package body Landin.Syntax.Parser is
                Fill_Complained  : Boolean := False;
                Direct           : constant Boolean :=
                  Kind (Result, Callee) = Name_Reference;
-               --  [1630]: only `assembler.block` takes operands, and only
-               --  in a body; the module directive keeps its positional
-               --  arguments.  Its callee is a two-name selection, so the
-               --  test is on the syntax the parser just built.
-               Takes_Operands   : constant Boolean :=
-                 Allow_Operands
-                 and then Kind (Result, Callee) = Member_Selection
+               --  [1820]'s `arguments` may end in [1630]'s operands on any
+               --  call, as the grammar derives them; which callee takes them
+               --  is the checker's question, because only `assembler.block`
+               --  does and a name's meaning is not the parser's.  The module
+               --  directive keeps its positional arguments.
+               Is_Assembly      : constant Boolean :=
+                 Kind (Result, Callee) = Member_Selection
                  and then Name (Result, Callee) = Block_Id
                  and then Kind (Result, Target_Of (Result, Callee))
                             = Name_Reference
@@ -8250,8 +8250,9 @@ package body Landin.Syntax.Parser is
                               Because => "this labelled application");
                            Fill_Complained := True;
                         end if;
-                        if Takes_Operands
+                        if Allow_Operands
                           and then not Args.Is_Empty
+                          and then not Named_Seen
                           and then
                             (Peek in Tok.Kw_In | Tok.Kw_Inout
                              or else (Peek = Tok.Identifier
@@ -8259,7 +8260,8 @@ package body Landin.Syntax.Parser is
                                       and then Ahead (1)
                                         in Tok.Identifier | Tok.Underscore))
                         then
-                           if not Operand_Seen
+                           if Is_Assembly
+                             and then not Operand_Seen
                              and then Natural (Args.Length) > 1
                            then
                               Complain
