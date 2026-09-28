@@ -141,8 +141,11 @@ module.exports = grammar({
     tool_directive: $ => seq(
       field('module', choice('compiler', 'assembler', 'linker')),
       '.', field('member', $.identifier), '(',
-      optional(commaSep1($._expression)), ')',
+      optional(alias($.directive_arguments, $.arguments)), ')',
     ),
+    // A directive's arguments are expressions only; the node keeps the name
+    // an ordinary call's list has, so a query reads both alike.
+    directive_arguments: $ => commaSep1($._expression),
 
     public_declaration: $ => seq(
       optional('public'),
