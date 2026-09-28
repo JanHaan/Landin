@@ -299,7 +299,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Current roadmap work: R9.20 — Implement assembly with operands on every target.**
+**Next roadmap item: R10.10 — Reclaim a compilation's memory (planned).**
 
 ---
 

@@ -284,7 +284,7 @@ shorthand, and float operands are SR-04's. The gate ran every job green at
 
 ### R9.20 — Implement assembly with operands on every target
 
-Status: active
+Status: complete
 Depends on: R9.10
 
 Lower the specified form on Cortex-M0, x86-64 and arm64, allocate its operands
@@ -295,6 +295,22 @@ limit become executed ones.
 
 Exit evidence: executed fixtures on all three targets, including one per
 target that the IR verifier refuses, and `core/cpu` written on the new form.
+
+Done: every `assembler.block` form, named operands, D230's shorthand and the
+operand-free block, is one `Assembly` IR instruction whose entries carry each
+operand's direction, name, type, register and output slot, and every target
+emits it: Cortex-M0 and arm64 load inputs through their own registers and
+set one output aside when every register holds one, and x86-64 keeps
+declared registers out of allocation and saves them. The lowering limit is
+gone. Five runtime `assembly-*` fixtures execute on Linux, natively on macOS
+arm64 and under QEMU at every profile; the verifier refuses r8, rbp and x18
+in `cortex ABI/assembly IR` and the two backend cases; `core/cpu` runs on
+`general` operands; the GDB and LLDB sessions stop on a block's line, read
+its output and unwind the register it declares, and the Cortex source lane
+steps over `core/cpu`'s block. The checker now refuses Apple's `%%` separator
+and counts `general` against the registers a block names. The Mac was
+unreachable, so Darwin execution and LLDB are the gate's: every job green on
+`05069afb`.
 
 ### R9 gate
 

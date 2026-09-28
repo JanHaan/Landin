@@ -255,7 +255,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Current roadmap work: R9.20 — Implement assembly with operands on every target.**
+**Next roadmap item: R10.10 — Reclaim a compilation's memory (planned).**
 
 ## License
 
