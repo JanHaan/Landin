@@ -8,6 +8,8 @@
 --  full-width spellings -- `r3`, `rdx`, `x9` -- and `general` is the one
 --  class, spelled the same on every target.
 
+with Ada.Strings.Unbounded;
+
 package Landin.Targets.Assembly is
 
    --  What one written register name is on a target.
@@ -73,6 +75,40 @@ package Landin.Targets.Assembly is
    --  The text with every `{name}` slot replaced by Register and every
    --  doubled brace by one, which is what an instruction checker reads.
    function Filled (Text : String; Register : String) return String;
+
+   --  An operand register as the target's assembler spells it at an
+   --  integer width of Bits: `%eax` or `%rax`, `w9` or `x9`, `r3`.
+   function Spelled
+     (Facts : Target_Facts; Register : String; Bits : Bit_Width)
+      return String
+     with Pre => Classify (Facts, Register) = Operand_Register
+                 and then Bits <= Register_Width (Facts);
+
+   --  One operand of a block as emission sees it: its template name,
+   --  its register once chosen, and the width its type selects.  A
+   --  `general` operand's register is empty until Choose fills it.
+   type Operand_Register_Choice is record
+      Name     : Ada.Strings.Unbounded.Unbounded_String;
+      Register : Ada.Strings.Unbounded.Unbounded_String;
+      Bits     : Bit_Width := 32;
+   end record;
+
+   type Operand_Register_Array is
+     array (Positive range <>) of Operand_Register_Choice;
+
+   --  [1630]'s `general`: each empty register, in written order, becomes
+   --  the first register of the class that no operand holds and the text
+   --  does not name.  The checker has already refused a block the class
+   --  cannot serve.
+   procedure Choose
+     (Facts : Target_Facts; Text : String;
+      Operands : in out Operand_Register_Array);
+
+   --  The text with every `{name}` replaced by that operand's register at
+   --  its width, and every doubled brace by one.
+   function Substituted
+     (Facts : Target_Facts; Text : String;
+      Operands : Operand_Register_Array) return String;
 
    --  [1990]'s uniform text rules on a hosted target, or the empty string:
    --  at most 4096 ASCII bytes in LF lines, instructions and no directive,

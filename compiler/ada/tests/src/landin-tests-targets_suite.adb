@@ -10,6 +10,7 @@ with Landin.Backend.Toolchain;
 with Landin.IR;
 with Landin.Platform.Native;
 with Landin.Targets;
+with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
 with Landin.Types;
 with Landin.Packed;
@@ -1178,6 +1179,110 @@ package body Landin.Tests.Targets_Suite is
       end;
    end Packed_Images;
 
+   procedure Assembly_Registers
+     (Item : in out Landin.Testing.Context);
+
+   --  [1630]: `{name}` is the register at the width its type selects, and
+   --  `general` takes the first register of the class that the block does
+   --  not otherwise name, in the class's written order.
+   procedure Assembly_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      package Asm renames Landin.Targets.Assembly;
+      use Ada.Strings.Unbounded;
+
+      function Operand (Name, Register : String; Bits : Bit_Width)
+        return Asm.Operand_Register_Choice
+        is (Name => To_Unbounded_String (Name),
+            Register => To_Unbounded_String (Register), Bits => Bits);
+   begin
+      for Case_Of in 1 .. 12 loop
+         declare
+            X86 : constant Target_Facts := Linux_X86_64;
+            Arm : constant Target_Facts := Darwin_Arm64;
+            M0 : constant Target_Facts := Cortex_M;
+            Expected : constant String :=
+              (case Case_Of is
+                  when 1 => "%al", when 2 => "%ax", when 3 => "%eax",
+                  when 4 => "%rax", when 5 => "%sil", when 6 => "%esi",
+                  when 7 => "%r9b", when 8 => "%r9w", when 9 => "%r9d",
+                  when 10 => "w17", when 11 => "x28", when others => "r7");
+            Actual : constant String :=
+              (case Case_Of is
+                  when 1 => Asm.Spelled (X86, "rax", 8),
+                  when 2 => Asm.Spelled (X86, "rax", 16),
+                  when 3 => Asm.Spelled (X86, "rax", 32),
+                  when 4 => Asm.Spelled (X86, "rax", 64),
+                  when 5 => Asm.Spelled (X86, "rsi", 8),
+                  when 6 => Asm.Spelled (X86, "rsi", 32),
+                  when 7 => Asm.Spelled (X86, "r9", 8),
+                  when 8 => Asm.Spelled (X86, "r9", 16),
+                  when 9 => Asm.Spelled (X86, "r9", 32),
+                  when 10 => Asm.Spelled (Arm, "x17", 16),
+                  when 11 => Asm.Spelled (Arm, "x28", 64),
+                  when others => Asm.Spelled (M0, "r7", 8));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Actual, Expected, "register spelled at its width");
+         end;
+      end loop;
+
+      declare
+         Text : constant String := "movs r1, #0 ; {a} {b} {{c}}";
+         Block : Asm.Operand_Register_Array :=
+           [Operand ("a", "", 32), Operand ("fixed", "r0", 32),
+            Operand ("b", "", 16)];
+      begin
+         Asm.Choose (Cortex_M, Text, Block);
+         Landin.Testing.Check_Equal
+           (Item, To_String (Block (1).Register), "r2",
+            "general passes over a fixed register and one the text names");
+         Landin.Testing.Check_Equal
+           (Item, To_String (Block (3).Register), "r3",
+            "general passes over one it already chose");
+         Landin.Testing.Check_Equal
+           (Item, Asm.Substituted (Cortex_M, Text, Block),
+            "movs r1, #0 ; r2 r3 {c}",
+            "slots take their registers and doubled braces become one");
+      end;
+
+      declare
+         Text : constant String := "cpuid {v} %ecx";
+         Block : Asm.Operand_Register_Array :=
+           [Operand ("a", "rax", 32), Operand ("v", "", 64)];
+      begin
+         Asm.Choose (Linux_X86_64, Text, Block);
+         Landin.Testing.Check_Equal
+           (Item, Asm.Substituted (Linux_X86_64, Text, Block),
+            "cpuid %rdx %ecx", "x86-64 general skips rax and rcx");
+      end;
+
+      declare
+         Text : constant String := "add {r}, {r}, #0x9, lsl w0";
+         Block : Asm.Operand_Register_Array := [Operand ("r", "", 32)];
+      begin
+         Asm.Choose (Darwin_Arm64, Text, Block);
+         Landin.Testing.Check_Equal
+           (Item, Asm.Substituted (Darwin_Arm64, Text, Block),
+            "add w1, w1, #0x9, lsl w0",
+            "arm64 general skips a register named at another width, and a"
+            & " number is no register");
+      end;
+
+      Landin.Testing.Check
+        (Item, Asm.General_Register (Linux_X86_64, 6) = "r8"
+                 and then Asm.General_Register (Linux_X86_64, 9) = "r11"
+                 and then Asm.General_Register (Darwin_Arm64, 18) = "x17"
+                 and then Asm.General_Register (Cortex_M, 8) = "r7",
+         "general's class in its table order");
+      for Index in 1 .. Asm.General_Count (Linux_X86_64) loop
+         Landin.Testing.Check
+           (Item, Asm.In_General_Class
+              (Linux_X86_64, Asm.General_Register (Linux_X86_64, Index)),
+            "every register general chooses is in the class");
+      end loop;
+   end Assembly_Registers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1219,6 +1324,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "Darwin stack and variadic transport",
          Darwin_Transport'Access);
+      Landin.Testing.Register
+        (Into, "targets", "assembly registers are spelled and chosen",
+         Assembly_Registers'Access);
    end Register;
 
 end Landin.Tests.Targets_Suite;

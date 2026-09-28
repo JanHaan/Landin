@@ -1,6 +1,5 @@
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 package body Landin.Targets.Assembly is
 
@@ -276,6 +275,133 @@ package body Landin.Targets.Assembly is
       end loop;
       return Ada.Strings.Unbounded.To_String (Result);
    end Filled;
+
+   function Spelled
+     (Facts : Target_Facts; Register : String; Bits : Bit_Width)
+      return String is
+   begin
+      case Architecture_Of (Facts) is
+         when Cortex_M0 =>
+            return Register;
+         when Arm64 =>
+            return (if Bits > 32 then Register
+                    else "w" & Register (Register'First + 1 .. Register'Last));
+         when X86_64 =>
+            if Register in "rax" | "rbx" | "rcx" | "rdx" then
+               declare
+                  Letter : constant Character :=
+                    Register (Register'First + 1);
+               begin
+                  return "%" & (case Bits is
+                     when 1 .. 8 => Letter & "l",
+                     when 9 .. 16 => Letter & "x",
+                     when 17 .. 32 => "e" & Letter & "x",
+                     when others => Register);
+               end;
+            elsif Register in "rsi" | "rdi" then
+               declare
+                  Pair : constant String :=
+                    Register (Register'First + 1 .. Register'Last);
+               begin
+                  return "%" & (case Bits is
+                     when 1 .. 8 => Pair & "l",
+                     when 9 .. 16 => Pair,
+                     when 17 .. 32 => "e" & Pair,
+                     when others => Register);
+               end;
+            else
+               return "%" & Register & (case Bits is
+                  when 1 .. 8 => "b",
+                  when 9 .. 16 => "w",
+                  when 17 .. 32 => "d",
+                  when others => "");
+            end if;
+         when Synthetic_32_Architecture =>
+            raise Program_Error with "the synthetic model has no registers";
+      end case;
+   end Spelled;
+
+   procedure Choose
+     (Facts : Target_Facts; Text : String;
+      Operands : in out Operand_Register_Array)
+   is
+      use type Ada.Strings.Unbounded.Unbounded_String;
+
+      function Held (Register : String) return Boolean
+        is (for some Operand of Operands => Operand.Register = Register);
+   begin
+      for Operand of Operands loop
+         if Ada.Strings.Unbounded.Length (Operand.Register) = 0 then
+            for Index in 1 .. General_Count (Facts) loop
+               declare
+                  Register : constant String :=
+                    General_Register (Facts, Index);
+               begin
+                  if not Held (Register)
+                    and then not Text_Names (Facts, Text, Register)
+                  then
+                     Operand.Register :=
+                       Ada.Strings.Unbounded.To_Unbounded_String (Register);
+                     exit;
+                  end if;
+               end;
+            end loop;
+            if Ada.Strings.Unbounded.Length (Operand.Register) = 0 then
+               raise Program_Error with
+                 "an assembly block asked general for too many registers";
+            end if;
+         end if;
+      end loop;
+   end Choose;
+
+   function Substituted
+     (Facts : Target_Facts; Text : String;
+      Operands : Operand_Register_Array) return String
+   is
+      Result : Ada.Strings.Unbounded.Unbounded_String;
+      Position : Natural := Text'First;
+   begin
+      while Position <= Text'Last loop
+         if Text (Position) in '{' | '}'
+           and then Position < Text'Last
+           and then Text (Position + 1) = Text (Position)
+         then
+            Ada.Strings.Unbounded.Append (Result, Text (Position));
+            Position := Position + 2;
+         elsif Text (Position) = '{' then
+            declare
+               Close : Natural := Position + 1;
+               Found : Boolean := False;
+            begin
+               while Close <= Text'Last and then Text (Close) /= '}' loop
+                  Close := Close + 1;
+               end loop;
+               for Operand of Operands loop
+                  if Ada.Strings.Unbounded.To_String (Operand.Name)
+                    = Text (Position + 1 .. Close - 1)
+                  then
+                     Ada.Strings.Unbounded.Append
+                       (Result, Spelled
+                          (Facts,
+                           Ada.Strings.Unbounded.To_String (Operand.Register),
+                           Operand.Bits));
+                     Found := True;
+                     exit;
+                  end if;
+               end loop;
+               if not Found then
+                  raise Program_Error with
+                    "an assembly slot names no operand";
+               end if;
+               Position := Close + 1;
+            end;
+         else
+            Ada.Strings.Unbounded.Append (Result, Text (Position));
+            Position := Position + 1;
+         end if;
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Result);
+   end Substituted;
 
    function Text_Error (Facts : Target_Facts; Text : String) return String is
       Start : Integer := Text'First;
