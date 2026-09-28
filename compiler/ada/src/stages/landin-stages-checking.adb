@@ -20702,9 +20702,7 @@ package body Landin.Stages.Checking is
                                  then "this compiler does not lower"
                                       & " assembly operands yet"
                                  else "this compiler does not lower"
-                                      & " assembly on "
-                                      & Landin.Targets.Name (Facts)
-                                      & " yet"),
+                                      & " hosted assembly yet"),
                               Note => "[1990]: assembly is checked on every"
                                 & " target; only Cortex-M0 lowers it, and"
                                 & " only without named operands",
