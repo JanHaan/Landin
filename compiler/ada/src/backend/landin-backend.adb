@@ -501,11 +501,34 @@ package body Landin.Backend is
       return Built;
    end Laid_Out;
 
+   function Reference_Frame
+     (Of_Unit : IR.Unit;
+      Item    : IR.Item_Id;
+      Facts   : Targets.Target_Facts;
+      Maximum : Targets.Byte_Count;
+      Saves   : Natural) return Frame;
+
    function Laid_Out
      (Of_Unit : IR.Unit;
       Item    : IR.Item_Id;
       Facts   : Targets.Target_Facts;
       Maximum : Targets.Byte_Count := Targets.Byte_Count'Last) return Frame
+     is (Reference_Frame (Of_Unit, Item, Facts, Maximum, 0));
+
+   function Laid_Out
+     (Of_Unit : IR.Unit;
+      Item    : IR.Item_Id;
+      Facts   : Targets.Target_Facts;
+      Maximum : Targets.Byte_Count;
+      Saves   : Positive) return Frame
+     is (Reference_Frame (Of_Unit, Item, Facts, Maximum, Saves));
+
+   function Reference_Frame
+     (Of_Unit : IR.Unit;
+      Item    : IR.Item_Id;
+      Facts   : Targets.Target_Facts;
+      Maximum : Targets.Byte_Count;
+      Saves   : Natural) return Frame
    is
       package Mask_Buffers is new Work_Arrays (Boolean, Home_Mask, True);
       package Value_Buffers is new Work_Arrays
@@ -542,8 +565,8 @@ package body Landin.Backend is
       end loop;
       return Laid_Out
         (Of_Unit, Item, Facts, Slots, Values, Spills (1 .. Count),
-         Layout.Field_Extent_Array'(1 .. 0 => <>), Maximum);
-   end Laid_Out;
+         Layout.Field_Extent_Array'(1 .. Saves => (8, 8)), Maximum);
+   end Reference_Frame;
 
    ------------------------------------------------------------------
    --  Reading one back

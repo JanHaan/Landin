@@ -127,7 +127,7 @@ and a source breakpoint on it stops before any of them. Each output is an
 ordinary local from the next line on. A callee-saved register the block
 declares is saved with the others and described by the same CFI, so the
 caller's frame shows its own value; the GDB session asserts `rbx` there on
-every profile.
+every profile, and the LLDB session `x19`.
 
 ### Exact identity and optional deployment
 
@@ -468,6 +468,18 @@ only rbx and r12-r15, and none a block of the routine declares: that register
 is marked saved instead, so the prologue stores it with a `.cfi_offset` and
 every epilogue restores it. No value therefore lives in a register a block
 names or overwrites, which is what lets inputs and outputs move directly.
+
+## arm64 assembly implementation
+
+`Backend.Arm64` keeps every value in a frame home, so a block needs no
+allocator: each input is loaded through its own register, which addresses its
+home first, and extended to the whole register (`sxtb`, `sxth`, `sxtw`); the
+text is emitted as written; and each output is stored through a register no
+waiting output holds. A block whose outputs hold all of x0-x17 moves its first
+aside into d16, which every block may overwrite and none may name, and stores
+it last. A declared x19-x28 gets a frame home: the prologue stores it after
+reserving the frame, with a `.cfi_offset` from the CFA at x29+16, and every
+epilogue restores it before the frame record.
 
 ## Cortex-M0 assembly implementation
 

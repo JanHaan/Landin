@@ -154,6 +154,21 @@ def run(debugger, config_path):
         record('union atom case code', value(f, 'union_atom.atom') > 0, True)
         values(f, 'unions', {'union_atom.ptr': 0, 'union_pointer.atom': 0,
                              'union_pointer.ptr.*': 41})
+        # [1630]: the block's own line, its output a local on the next, and
+        # the x19 it declares given back to the caller through the CFI.
+        f = continued('assembly-block', 'debug_assembly')
+        caller_x19 = f.FindRegister('x19').GetValueAsUnsigned()
+        record('assembly caller x19 distinct', caller_x19 != 0x5a5a5a5a5a, True)
+        process.GetSelectedThread().StepOver()
+        f = frame('assembly-ready', 'debug_assembly')
+        record('assembly.sum', f.FindVariable('assembly_sum').GetValueAsUnsigned(),
+               0x5a5a5a5a5f)
+        record('assembly.block_x19', f.FindRegister('x19').GetValueAsUnsigned(),
+               0x5a5a5a5a5a)
+        caller = process.GetSelectedThread().GetFrameAtIndex(1)
+        record('assembly.caller', caller.GetFunctionName(), 'main')
+        record('assembly.unwound_x19', caller.FindRegister('x19').GetValueAsUnsigned(),
+               caller_x19)
         process.Continue()
         record('inferior exited', process.GetState(), lldb.eStateExited)
         record('inferior status', process.GetExitStatus(), 42)

@@ -20718,25 +20718,6 @@ package body Landin.Stages.Checking is
                            elsif Syn.Argument_Count (Of_Tree, Node) = 2
                            then Ty.U32 else Ty.No_Value);
                      begin
-                        --  [1990]: the last check, so a block that reaches
-                        --  it passed every other one.  Cortex-M0 and x86-64
-                        --  lower every form; arm64 lowers none yet.
-                        if Answer /= Ty.Ill_Typed
-                          and then Landin.Targets.Architecture_Of (Facts)
-                            = Landin.Targets.Arm64
-                        then
-                           Bad.Report
-                             (Item => Bad.Type_Mismatch,
-                              Source => Syn.Source_Of (Of_Tree),
-                              Where => Syn.Where (Of_Tree, Node),
-                              Message => "this compiler does not lower"
-                                & " hosted assembly yet",
-                              Note => "[1990]: assembly is checked on every"
-                                & " target; arm64 does not lower it yet",
-                              Related => Syn.Origin (Of_Tree, Node),
-                              Because => "this assembly block",
-                              Into => Found);
-                        end if;
                         if Answer = Ty.Aggregate then
                            Landin.Checking.Note
                              (Types.all, Of_Tree, Node, Answer);

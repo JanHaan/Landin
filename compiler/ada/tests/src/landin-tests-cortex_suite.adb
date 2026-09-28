@@ -871,12 +871,13 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
-                  (if Case_Number in 1 | 38 | 45
+                  --  26: a hosted operand-free block lowers like any other.
+                  (if Case_Number in 1 | 26 | 38 | 45
                    then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number not in 1 | 38 | 45 then
+               if Case_Number not in 1 | 26 | 38 | 45 then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");

@@ -62,6 +62,16 @@ package Landin.Backend is
         Landin.Targets.Byte_Count'Last) return Frame
      with Pre => Landin.IR.Holds (Of_Unit, Item);
 
+   --  The same reference frame with Saves eight-byte homes after it, for
+   --  callee-saved registers a routine saves itself.
+   function Laid_Out
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count;
+      Saves   : Positive) return Frame
+     with Pre => Landin.IR.Holds (Of_Unit, Item);
+
    --  Indexes are source slot/value positions, starting at one.  False
    --  slots and zero value assignments reserve no storage.  Positive value
    --  assignments select an explicit spill home; disjoint live intervals

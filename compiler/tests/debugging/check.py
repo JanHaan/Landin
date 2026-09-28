@@ -1183,8 +1183,15 @@ SOURCE_LINES = {
     "aliases-ready": source_line(MAIN_SOURCE, "aliases_ready: i32 ="),
     "loop-element": source_line(MAIN_SOURCE, "loop_sum += loop_element"),
     "unions-ready": source_line(MAIN_SOURCE, "union_ready: i32 = 1"),
+    #  The x86-64 arm's; darwin.py takes the arm64 arm's, the second.
     "assembly-block": source_line(MAIN_SOURCE, "assembly_sum: u64 = assembler.block("),
     "assembly-ready": source_line(MAIN_SOURCE, "assembly_ready: i32 = 1"),
+}
+ARM64_ASSEMBLY_LINES = {
+    "assembly-block": source_line(
+        MAIN_SOURCE, "assembly_sum: u64 = assembler.block(", occurrence=1),
+    "assembly-ready": source_line(
+        MAIN_SOURCE, "assembly_ready: i32 = 1", occurrence=1),
 }
 GENERIC_NEXT_LINES = tuple(
     source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4)

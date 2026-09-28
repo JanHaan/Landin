@@ -104,7 +104,8 @@ def main():
         assert 'CFA=W29+16' in unwind or 'CFA=reg29+16' in unwind, unwind
         run(key + '-load-commands', [tools['otool']['path'], '-l', executable])
         config = {'executable': str(executable), 'source': str(linux.MAIN_SOURCE),
-                  'cwd': str(ROOT), 'lines': linux.SOURCE_LINES,
+                  'cwd': str(ROOT),
+                  'lines': {**linux.SOURCE_LINES, **linux.ARM64_ASSEMBLY_LINES},
                   'caller_line': linux.CALLER_LINE, 'caller_column': linux.CALLER_COLUMN,
                   'result': str(output / (key + '-session.json'))}
         config_path = output / (key + '-session-config.json')
@@ -113,7 +114,8 @@ def main():
         script.write_text('command script import ' + json.dumps(str(HERE / 'lldb_session.py')) + '\n'
                           + 'script lldb_session.run(lldb.debugger, ' + repr(str(config_path)) + ')\nquit\n')
         transcript = run(key + '-lldb', [tools['lldb']['path'], '--no-lldbinit', '-b', '-s', script])
-        assert 'LANDIN LLDB ACCEPTANCE PASSED' in transcript
+        #  The transcript is the only record of which check failed.
+        assert 'LANDIN LLDB ACCEPTANCE PASSED' in transcript, transcript[-6000:]
         session = json.loads(Path(config['result']).read_text())
         assert session['status'] == 'passed'
         stripped = output / (key + '-stripped')

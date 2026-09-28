@@ -508,8 +508,7 @@ D248's named operands are checked against `Landin.Targets.Assembly`'s
 register tables on every target. A backend chooses each `general` register
 through the same table, in its written order, passing over every register the
 block holds or its text names, and fills `{name}` at the operand's width.
-Cortex-M0 and x86-64 emit every form; arm64 refuses assembly at the lowering
-limit [1990] states. x86-64's allocator hands out only rbx and r12-r15, and
+All three backends emit every form. x86-64's allocator hands out only rbx and r12-r15, and
 never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.
 

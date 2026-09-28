@@ -100,7 +100,6 @@ negative/array-repetition-zero-context | linux-x86-64, macos-arm64
 negative/array-return-unassigned | linux-x86-64, macos-arm64
 negative/array-type-name-is-not-storage | linux-x86-64, macos-arm64
 negative/array-value-not-enabled | linux-x86-64, macos-arm64
-negative/assembly-arm64-not-lowered | macos-arm64
 negative/assembly-arm64-statement-separator | macos-arm64
 negative/assembly-discard-names-register | cortex-m
 negative/assembly-float-operand | cortex-m

@@ -37,11 +37,6 @@
     }
   },
   "diagnostics": {
-    "positive/assembly-operand-forms": {
-      "reason": "The unchanged source selects its arm64 arm on arm64, and arm64 refuses assembly at the stated lowering limit.",
-      "status": "1",
-      "codes": "L0301,L0301"
-    },
     "negative/fixed-conditional-active-duplicate": {
       "reason": "The unchanged source explicitly selects different declarations or assertions with compiler.arch on arm64.",
       "status": "0",

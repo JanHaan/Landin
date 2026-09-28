@@ -103,6 +103,75 @@ package body Landin.Backend.Arm64 is
          then Landin.Types.Width (Landin.Types.Integer_Name (Kind), Facts)
          else 8);
 
+   --  [1630]: which of x19-x28 some block of the routine declares.  Each
+   --  is saved in a frame home by the prologue and restored by every
+   --  epilogue, which is what declaring one means.
+   type Saved_Set is array (19 .. 28) of Boolean;
+
+   function Declared
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set;
+
+   function Declared
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set
+   is
+      Result : Saved_Set := [others => False];
+   begin
+      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly then
+               for Which in 1 .. Landin.IR.Assembly_Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  for Number in Result'Range loop
+                     if Landin.IR.Register_Of
+                          (Landin.IR.Nth_Assembly_Operand
+                             (Of_Unit, Item, Value, Which))
+                        = "x" & Trimmed (Natural'Image (Number))
+                     then
+                        Result (Number) := True;
+                     end if;
+                  end loop;
+               end loop;
+            end if;
+         end;
+      end loop;
+      return Result;
+   end Declared;
+
+   function Save_Count (Saves : Saved_Set) return Natural;
+
+   function Save_Count (Saves : Saved_Set) return Natural is
+      Count : Natural := 0;
+   begin
+      for Held of Saves loop
+         if Held then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Save_Count;
+
+   --  The reference frame with one eight-byte home per declared register.
+   function Routine_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Frame;
+
+   function Routine_Frame
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Frame
+   is
+      Saves : constant Natural := Save_Count (Declared (Of_Unit, Item));
+   begin
+      if Saves = 0 then
+         return Laid_Out (Of_Unit, Item, Facts, Maximum);
+      end if;
+      return Laid_Out (Of_Unit, Item, Facts, Maximum, Saves);
+   end Routine_Frame;
+
    function Debug_Plan
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
@@ -115,7 +184,7 @@ package body Landin.Backend.Arm64 is
    is
       pragma Unreferenced (Options);
    begin
-      return Laid_Out (Of_Unit, Item, Facts, 16#7fff_ffff#);
+      return Routine_Frame (Of_Unit, Item, Facts, 16#7fff_ffff#);
    end Debug_Plan;
 
    function Debug_Frame
@@ -167,7 +236,7 @@ package body Landin.Backend.Arm64 is
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Laid_Out (Of_Unit, Item, Facts, Limit);
+      Layout := Routine_Frame (Of_Unit, Item, Facts, Limit);
       if Extent (Layout) > Limit then
          return False;
       end if;
@@ -878,8 +947,9 @@ package body Landin.Backend.Arm64 is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
-         Layout : constant Frame := Laid_Out
+         Layout : constant Frame := Routine_Frame
            (Of_Unit, Item, Facts, 16#7fff_ffff#);
+         Saves : constant Saved_Set := Declared (Of_Unit, Item);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
@@ -1033,6 +1103,40 @@ package body Landin.Backend.Arm64 is
             Emit ("b.ne " & Trap);
          end Check_Fit;
 
+         --  The declared registers' homes, in register order.
+         function Save_Home
+           (Number : Natural) return Landin.Targets.Byte_Count;
+
+         function Save_Home
+           (Number : Natural) return Landin.Targets.Byte_Count
+         is
+            Index : Natural := 0;
+         begin
+            for Which in Saves'First .. Number loop
+               if Saves (Which) then
+                  Index := Index + 1;
+               end if;
+            end loop;
+            return Save_Offset (Layout, Index);
+         end Save_Home;
+
+         procedure Restore_Saves;
+
+         procedure Restore_Saves is
+         begin
+            for Number in Saves'Range loop
+               if Saves (Number) then
+                  Frame_Address (Save_Home (Number));
+                  Emit ("ldr x" & Trimmed (Natural'Image (Number))
+                        & ", [x15]");
+                  if Debug /= null then
+                     Emit (".cfi_restore w"
+                           & Trimmed (Natural'Image (Number)));
+                  end if;
+               end if;
+            end loop;
+         end Restore_Saves;
+
          procedure Epilogue is
          begin
             if Debug /= null then
@@ -1040,6 +1144,7 @@ package body Landin.Backend.Arm64 is
                  Natural (Current_Value)) & ":");
                Emit (".cfi_remember_state");
             end if;
+            Restore_Saves;
             Emit ("mov sp, x29");
             Emit ("ldp x29, x30, [sp], #16");
             if Debug /= null then
@@ -1693,6 +1798,122 @@ package body Landin.Backend.Arm64 is
             end if;
          end C_Result;
 
+         --  [1630] on arm64.  Every value lives in a frame home, so each
+         --  input is loaded through its own register -- which addresses its
+         --  home first -- and extended to the whole register as its type
+         --  says; the text runs as written; and each output is stored
+         --  through a register no output still waiting holds.  Only a block
+         --  whose outputs hold all of x0-x17 finds none for its first, which
+         --  then waits in d16, a register every block overwrites and none
+         --  may name, and is stored last.
+         procedure Assembly_Block (Value : Landin.IR.Value_Id);
+
+         procedure Assembly_Block (Value : Landin.IR.Value_Id) is
+            Chosen : constant Landin.Targets.Assembly.Operand_Register_Array
+              := Landin.Backend.Assembly_Registers
+                   (Of_Unit, Item, Value, Names, Facts);
+            Text : constant String := Landin.Backend.Assembly_Text
+              (Of_Unit, Item, Value, Names, Facts);
+            Inputs : Natural := 0;
+            Start : Natural := Text'First;
+            Waiting : array (0 .. 28) of Boolean := [others => False];
+            Aside : Natural := 0;
+
+            function Operand (Index : Positive)
+              return Landin.IR.Assembly_Operand
+              is (Landin.IR.Nth_Assembly_Operand
+                    (Of_Unit, Item, Value, Index));
+
+            function Register (Index : Positive) return String
+              is (Unbounded.To_String (Chosen (Index).Register));
+
+            function Number (Index : Positive) return Natural
+              is (Natural'Value
+                    (Register (Index) (Register (Index)'First + 1
+                       .. Register (Index)'Last)));
+
+            function Free return String;
+
+            function Free return String is
+            begin
+               for Candidate in reverse 0 .. 17 loop
+                  if not Waiting (Candidate) then
+                     return "x" & Trimmed (Natural'Image (Candidate));
+                  end if;
+               end loop;
+               raise Compiler_Defect with "no scratch register is free";
+            end Free;
+
+            procedure Store (Index : Positive; From : String);
+
+            procedure Store (Index : Positive; From : String) is
+               Base : constant String := Free;
+            begin
+               Frame_Address (Slot_Offset (Layout, Operand (Index).Output),
+                              Base);
+               Memory (True, Size_Of (Operand (Index).Kind, Facts),
+                       From, Base);
+            end Store;
+         begin
+            for Index in Chosen'Range loop
+               if Operand (Index).Direction
+                 in Landin.IR.Input | Landin.IR.Both
+               then
+                  Inputs := Inputs + 1;
+                  Frame_Address
+                    (Value_Offset (Layout, Landin.IR.Nth_Operand
+                       (Of_Unit, Item, Value, Inputs)), Register (Index));
+                  Memory (False, Size_Of (Operand (Index).Kind, Facts),
+                          Register (Index), Register (Index));
+                  Extend (Register (Index), Operand (Index).Kind);
+               end if;
+               if Operand (Index).Output /= Landin.IR.No_Slot then
+                  Waiting (Number (Index)) := True;
+               end if;
+            end loop;
+            for Index in Text'First .. Text'Last + 1 loop
+               if Index > Text'Last or else Text (Index) = LF then
+                  declare
+                     Line : constant String :=
+                       Trimmed (Text (Start .. Index - 1));
+                  begin
+                     if Line'Length > 0 then
+                        Put (Character'Val (9) & Line);
+                     end if;
+                  end;
+                  Start := Index + 1;
+               end if;
+            end loop;
+            if (for all Held of Waiting (0 .. 17) => Held) then
+               for Index in Chosen'Range loop
+                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                     Aside := Index;
+                     Emit ("fmov d16, " & Register (Index));
+                     Waiting (Number (Index)) := False;
+                     exit;
+                  end if;
+               end loop;
+            end if;
+            for Index in Chosen'Range loop
+               if Operand (Index).Output /= Landin.IR.No_Slot
+                 and then Index /= Aside
+               then
+                  Store (Index, Register (Index));
+                  Waiting (Number (Index)) := False;
+               end if;
+            end loop;
+            if Aside /= 0 then
+               declare
+                  Held : constant String := Free;
+               begin
+                  Waiting (Natural'Value (Held (Held'First + 1 .. Held'Last)))
+                    := True;
+                  Emit ("fmov " & Held & ", d16");
+                  Store (Aside, Held);
+               end;
+            end if;
+         end Assembly_Block;
+
          procedure Instruction (Value : Landin.IR.Value_Id);
 
          procedure Instruction (Value : Landin.IR.Value_Id) is
@@ -1798,8 +2019,7 @@ package body Landin.Backend.Arm64 is
          begin
             case Op is
                when Landin.IR.Assembly =>
-                  raise Compiler_Defect with
-                    "hosted assembly reached emission before its lowering";
+                  Assembly_Block (Value);
                when Landin.IR.Number =>
                   declare
                      Bits : constant Landin.Targets.Bit_Width :=
@@ -2714,6 +2934,18 @@ package body Landin.Backend.Arm64 is
             Emit ("bl " & Bridge_Symbol (Initialize_Arguments));
          end if;
          Reserve (Extent (Layout));
+         for Number in Saves'Range loop
+            if Saves (Number) then
+               Frame_Address (Save_Home (Number));
+               Emit ("str x" & Trimmed (Natural'Image (Number)) & ", [x15]");
+               if Debug /= null then
+                  --  The CFA is x29 + 16 and the home sits below x29.
+                  Emit (".cfi_offset w" & Trimmed (Natural'Image (Number))
+                        & ", -" & Trimmed (Landin.Targets.Byte_Count'Image
+                          (Save_Home (Number) + 16)));
+               end if;
+            end if;
+         end loop;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
             declare

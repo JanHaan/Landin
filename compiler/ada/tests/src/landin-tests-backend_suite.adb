@@ -6827,8 +6827,80 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end Assembly_Blocks_Keep_Their_Registers;
 
+   --  [1630] on arm64: a declared x19 saved in its frame home and restored
+   --  with CFI, the text filled at each operand's width, and the verifier's
+   --  refusal of x18, the platform register no block may name.
+   procedure Arm64_Assembly_Saves_What_It_Declares
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Assembly_Saves_What_It_Declares
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran  : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work,
+         "f: (v: i16, w: u64) -> (r: u64) =" & LF
+         & "    r = assembler.block(""sxth x19, {x}\nadd {r}, {r}, x19""," & LF
+         & "        inout r: u64 at general = w," & LF
+         & "        in x: i16 at general = v, out _ at x19)" & LF
+         & "end f" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         function Count (Part : String) return Natural
+           is (Ada.Strings.Fixed.Count (Text, Part));
+      begin
+         Landin.Testing.Check
+           (Item, Count (HT & "sxth x19, w1" & LF
+                         & HT & "add x0, x0, x19" & LF) = 1,
+            "the text is filled at each operand's width");
+         Landin.Testing.Check
+           (Item, Count ("str x19, [x15]") = 1
+              and then Count ("ldr x19, [x15]") = 1,
+            "x19 is saved once and restored by the one epilogue");
+      end;
+      declare
+         Code : constant not null access IR.Unit :=
+           Landin.Stages.Code (Work);
+         Block : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+               Block := IR.Value_Id (V);
+            end if;
+         end loop;
+         IR.Testing_Support.Overwrite_Assembly_Operand
+           (Code.all, 1, Block, 3,
+            IR.Operand_At
+              (IR.Discarded, Landin.Source.Names.No_Name, "x18",
+               Landin.Types.Not_Typed));
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check
+              (Code.all, Landin.Targets.Darwin_Arm64).Kind
+                = IR.Verifier.Assembly_Register_Refused,
+            "the verifier refuses x18, which arm64 never names");
+      end;
+   end Arm64_Assembly_Saves_What_It_Declares;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "arm64 assembly saves what it declares",
+         Arm64_Assembly_Saves_What_It_Declares'Access);
       Landin.Testing.Register
         (Into, "backend", "assembly blocks keep their registers",
          Assembly_Blocks_Keep_Their_Registers'Access);
