@@ -179,7 +179,7 @@ a script's output and Renode's log are now separate files.
 
 ### R8.40 — Move the peripheral models onto QEMU
 
-Status: planned
+Status: complete
 Depends on: R8.30
 
 Renode carries every Cortex-M check that needs a peripheral: the derived
@@ -217,6 +217,22 @@ delivered and a wrong device reply each fail a named control; the gate's
 Cortex-M job runs the harness in Renode's place; and Renode, its lock
 entries and the C# models are gone from the tree, with every document that
 cites Renode as evidence saying what now carries it.
+
+Done: `environments/cortex-m/machine.py` serves the Python models in
+`models.py` from the pinned QEMU's debugger stub, single-threaded, and runs
+the firmware until it is idle rather than for an interval. Against a Renode
+run of the same tree on one host, all six profiles gave identical device,
+prototype, packed, transport and driver traces, the same 33 protocol steps,
+2,068 executed corpus cases and the same stack observations. The hosted lane
+is a Python line transport, the Renode source session runs through the
+harness's relay to GDB, and the stack observer samples at debugger
+breakpoints, except in the four-million-sample exhaustion scenario, which
+paint measures. The stock STM32 control tested Renode's own models and went
+with it. Every harness session holds the decoder to `objdump` over its
+image, and a refused access, an undelivered interrupt and a wrong reply each
+fail by name. The gate's `cortex-m` job runs it: its lanes took 612 seconds
+against 1,281 with Renode, and the job 15.5 minutes against 26.7, at
+`4465ffcd`.
 
 ### R8 gate
 

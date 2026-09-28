@@ -107,8 +107,8 @@ Measured on the runners, each job including its install and build:
 `documents` about ninety seconds, `editor-grammar` fifteen, `bindings`
 seventy, `scripts` five minutes, `lldb` five, `darwin-host` seven and eight,
 `release` seven, `scaling` eight, `compiler` ten and a half, `darwin-parity`
-ten and a half, and `cortex-m` twenty-six, which sets the gate at about
-twenty-six minutes.
+ten and a half, and `cortex-m` fifteen and a half, which sets the gate at
+about sixteen minutes.
 
 The gate is **not** the retired acceptance: it retains no evidence, and
 green is not a verdict on a revision. It is a safety net over every target.

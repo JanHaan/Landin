@@ -18,7 +18,8 @@
 #  Whole-job times below were measured on these runners, four vCPUs on Linux
 #  and three cores on macOS, install and build included; lane times inside
 #  them were measured on an ubuntu:24.04 container pinned to four CPUs and on
-#  an eight-core Mac.  cortex-m, twenty-six minutes, sets the gate's length.
+#  an eight-core Mac, except cortex-m's, measured on its runner.  cortex-m,
+#  fifteen and a half minutes, sets the gate's length.
 
 name: gate
 
@@ -199,8 +200,8 @@ jobs:
         run: git diff --exit-code -- highlight/tree-sitter
 
   #  QEMU and GDB on the locked tools, with the release compiler.
-  #  Four workers, each with its own shared GDB: 836 s on a four-CPU
-  #  container, and the whole job twenty-six minutes on the runner.
+  #  Four workers, each with its own shared GDB: 612 s on the runner, and the
+  #  whole job fifteen and a half minutes.
   cortex-m:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
