@@ -118,6 +118,18 @@ def library(run, elf, kind):
             'delete breakpoints', 'break _landin_firmware_returned', 'continue',
             'python', 'assert v("*(unsigned*)&observed") == 42',
             'assert v("$sp") == 0x20004000', 'end']
+    elif kind == 'cpu':
+        # [1630]: `core/cpu` on `general` operands.  The block has its own
+        # line, PRIMASK changes across it, and its output is the next line's.
+        commands = ['break source/core/cpu/cpu.ldn:6', 'continue', 'python',
+            'frame("disable_interrupts","source/core/cpu/cpu.ldn",6)',
+            'chain(["disable_interrupts","start","_landin_firmware_reset"])',
+            'assert v("$primask") == 0', 'end', 'next', 'python',
+            'frame("disable_interrupts","source/core/cpu/cpu.ldn")',
+            'assert gdb.newest_frame().find_sal().line != 6',
+            'assert v("$primask") == 1', 'end', 'bt',
+            'delete breakpoints', 'break _landin_firmware_returned', 'continue',
+            'python', 'assert v("*(unsigned*)&observed") == 0x670', 'end']
     elif kind == 'noreturn':
         commands = ['break *start', 'continue', 'delete breakpoints',
             'set *(unsigned*)&mode = 1', 'break invoke', 'continue', 'python',

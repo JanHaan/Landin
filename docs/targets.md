@@ -187,7 +187,9 @@ callee saves and changing CFA through prologue/epilogue. Interrupt and naked
 routine CFI explicitly makes LR undefined: ordinary unwinding stops there.
 EXC_RETURN is never an ordinary return PC. Hardware exception entry, alignment
 padding, nested exception records and restoration have independent executable
-controls. Naked assembly has a source function/declaration boundary, not
+controls. An ordinary block has its source line, and the `core/cpu` source session
+stops on `disable_interrupts`' block with PRIMASK clear and steps past it to
+find it set. Naked assembly has a source function/declaration boundary, not
 line-by-line locations inside its assembly string or an inferred stack frame.
 Linker veneers have no Landin source line. Use an explicit callee breakpoint
 when source stepping across a veneer skips the callee; call stacks in the

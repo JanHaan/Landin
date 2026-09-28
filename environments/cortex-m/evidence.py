@@ -198,7 +198,7 @@ def execute_suite(parent, refine, profiles=PROFILES):
     for optimize,specialize in profiles:
         work+=[(program,(optimize,specialize,n)) for n in ('app','protocol','layout')]
         work+=[(control,(optimize,specialize,k)) for k in
-               ('pool','vec','noreturn','panic','veneer','irq','machine')]
+               ('pool','vec','cpu','noreturn','panic','veneer','irq','machine')]
     with ThreadPoolExecutor(max_workers=workers()) as pool:
         for row in pool.map(lambda job: job[0](job[1]),work):
             rows.append(row)
