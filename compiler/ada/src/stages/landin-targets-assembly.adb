@@ -90,6 +90,36 @@ package body Landin.Targets.Assembly is
             when Arm64 => 18,
             when Synthetic_32_Architecture => 0);
 
+   function General_Register (Facts : Target_Facts; Index : Positive)
+     return String
+   is
+      Image : constant String := Natural'Image (Index - 1);
+      Number : constant String := Image (Image'First + 1 .. Image'Last);
+   begin
+      case Architecture_Of (Facts) is
+         when Cortex_M0 =>
+            return "r" & Number;
+         when X86_64 =>
+            case Index is
+               when 1 => return "rax";
+               when 2 => return "rcx";
+               when 3 => return "rdx";
+               when 4 => return "rsi";
+               when 5 => return "rdi";
+               when others =>
+                  declare
+                     Wide : constant String := Natural'Image (Index + 2);
+                  begin
+                     return "r" & Wide (Wide'First + 1 .. Wide'Last);
+                  end;
+            end case;
+         when Arm64 =>
+            return "x" & Number;
+         when Synthetic_32_Architecture =>
+            raise Program_Error with "the synthetic model has no registers";
+      end case;
+   end General_Register;
+
    function Register_Width (Facts : Target_Facts) return Bit_Width
      is (case Architecture_Of (Facts) is
             when Cortex_M0 | Synthetic_32_Architecture => 32,
@@ -174,6 +204,50 @@ package body Landin.Targets.Assembly is
    function Lowered (Word : String) return String
      is (Ada.Characters.Handling.To_Lower (Word));
 
+   function Text_Names
+     (Facts : Target_Facts; Text : String; Register : String)
+      return Boolean
+   is
+      Position : Natural := Text'First;
+   begin
+      while Position <= Text'Last loop
+         if Text (Position) in '{' | '}'
+           and then Position < Text'Last
+           and then Text (Position + 1) = Text (Position)
+         then
+            Position := Position + 2;
+         elsif Text (Position) = '{' then
+            while Position <= Text'Last and then Text (Position) /= '}' loop
+               Position := Position + 1;
+            end loop;
+            Position := Position + 1;
+         elsif Text (Position) in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9'
+           | '_'
+         then
+            declare
+               First : constant Natural := Position;
+            begin
+               while Position <= Text'Last
+                 and then Text (Position) in 'a' .. 'z' | 'A' .. 'Z'
+                   | '0' .. '9' | '_'
+               loop
+                  Position := Position + 1;
+               end loop;
+               if Text (First) not in '0' .. '9'
+                 and then Canonical
+                   (Facts, Lowered (Text (First .. Position - 1)))
+                     = Register
+               then
+                  return True;
+               end if;
+            end;
+         else
+            Position := Position + 1;
+         end if;
+      end loop;
+      return False;
+   end Text_Names;
+
    function Filled (Text : String; Register : String) return String is
       Result : Ada.Strings.Unbounded.Unbounded_String;
       Position : Natural := Text'First;
@@ -224,6 +298,9 @@ package body Landin.Targets.Assembly is
            or else Ada.Strings.Fixed.Index (Clean, "//") /= 0
            or else (Architecture_Of (Facts) = X86_64
                     and then Ada.Strings.Fixed.Index (Clean, "#") /= 0)
+           --  Apple's arm64 assembler separates statements with `%%`.
+           or else (Architecture_Of (Facts) = Arm64
+                    and then Ada.Strings.Fixed.Index (Clean, "%%") /= 0)
          then
             return "assembly directives, comments and statement separators"
               & " refuse";

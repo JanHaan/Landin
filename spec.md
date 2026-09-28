@@ -1904,7 +1904,8 @@ A register is a name the selected target's table answers for, never text:
 A fixed register is its full-width name; `general` is the one class and asks
 the compiler to choose a register it does not otherwise name in the block.
 Every register an operand names is distinct from every other, and a block
-cannot ask `general` for more registers than the class has. Every ordinary
+cannot ask `general` for more registers than the class has left once its fixed
+registers and every register its text names are set aside. Every ordinary
 block may overwrite the overwritten row; a register the routine saves must be
 declared, as an operand or as `out _ at register`, which is what makes the
 routine save and restore it. A discarded output names one fixed register.
@@ -14513,6 +14514,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | Frame, stack and link registers and the platform's are never named, and the language reserves no other | Letting a block name the frame pointer loses backtraces and the stackful-fibre route [1680]; reserving a register for the language is what the ambient environment cost and lost | `negative/assembly-reserved-registers-cortex`, `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64` |
 | The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `negative/assembly-operands-not-lowered` |
 | Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
+| `general` counts only the registers the block does not otherwise name | Counting the whole class accepts a block the compiler cannot give registers to, and leaves the failure to emission | `negative/assembly-general-exhausted` |
 | D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `core/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
 | The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-operands-not-lowered`, `negative/assembly-hosted-not-lowered`, `negative/assembly-arm64-not-lowered`, `negative/r660-hosted-assembly` |
 
@@ -14528,6 +14530,7 @@ programmer obligations that no check can prove.
 above, `negative/assembly-operands-on-another-call`,
 `negative/assembly-template-names`, `negative/assembly-naked-operands`,
 `negative/assembly-hosted-straight-line`,
+`negative/assembly-arm64-statement-separator`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.
 

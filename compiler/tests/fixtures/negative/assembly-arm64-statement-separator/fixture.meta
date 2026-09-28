@@ -1,0 +1,9 @@
+class: negative
+summary: Apple's arm64 assembler separates statements with %%, which an ordinary block refuses as it refuses a semicolon
+program: program.ldn
+expect: expected.txt
+args: --target=darwin-arm64 ../tests/fixtures/negative/assembly-arm64-statement-separator/program.ldn
+codes: L0301
+status: 1
+constructs: 1630, 1990
+targets: macos-arm64

@@ -1,0 +1,6 @@
+error[L0301]: assembly directives, comments and statement separators refuse
+  --> ../tests/fixtures/negative/assembly-arm64-statement-separator/program.ldn:2:5
+  |
+2 |     assembler.block("nop %% b somewhere")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

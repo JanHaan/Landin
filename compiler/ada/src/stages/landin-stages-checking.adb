@@ -6042,17 +6042,40 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
-         if not Faulted and then Classes > Asm.General_Count (Facts) then
-            Refuse_At
-              (Node,
-               "this block asks `general` for more registers than "
-               & Landin.Targets.Name (Facts) & " has",
-               "[1990]: `general` chooses from"
-               & Natural'Image (Asm.General_Count (Facts)) & " registers");
-         end if;
-
          if not Faulted then
             Check_Text;
+         end if;
+
+         --  [1990]: `general` chooses a register the block does not
+         --  otherwise name, so its fixed registers and every register its
+         --  text names are not the class's to give.
+         if not Faulted and then Classes > 0 then
+            declare
+               Left : Natural := 0;
+            begin
+               for Index in 1 .. Asm.General_Count (Facts) loop
+                  declare
+                     Register : constant String :=
+                       Asm.General_Register (Facts, Index);
+                  begin
+                     if not Declares_Register (Register)
+                       and then not Asm.Text_Names (Facts, Text, Register)
+                     then
+                        Left := Left + 1;
+                     end if;
+                  end;
+               end loop;
+               if Classes > Left then
+                  Refuse_At
+                    (Node,
+                     "this block asks `general` for"
+                     & Natural'Image (Classes) & " registers, and "
+                     & Landin.Targets.Name (Facts) & " has"
+                     & Natural'Image (Left) & " left for it",
+                     "[1990]: `general` chooses from the registers the"
+                     & " block does not otherwise name");
+               end if;
+            end;
          end if;
 
          if Faulted then

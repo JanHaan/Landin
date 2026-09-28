@@ -38,6 +38,11 @@ package Landin.Targets.Assembly is
    --  How many registers `general` chooses from.
    function General_Count (Facts : Target_Facts) return Natural;
 
+   --  The registers `general` chooses from, in the order it chooses them.
+   function General_Register (Facts : Target_Facts; Index : Positive)
+     return String
+     with Pre => Index <= General_Count (Facts);
+
    --  The widest integer an operand register holds, in bits.
    function Register_Width (Facts : Target_Facts) return Bit_Width;
 
@@ -54,6 +59,13 @@ package Landin.Targets.Assembly is
    --  at any of its widths.
    function Names_Reserved (Facts : Target_Facts; Word : String)
      return Boolean;
+
+   --  Whether a text names Register, a canonical operand register, at any
+   --  width outside its `{name}` slots.  A number is one word, so `0x9`
+   --  names no `x9`.
+   function Text_Names
+     (Facts : Target_Facts; Text : String; Register : String)
+      return Boolean;
 
    --  A text word as the tables spell it, so `RAX` and `rax` are one.
    function Lowered (Word : String) return String;

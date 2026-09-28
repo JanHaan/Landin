@@ -1,0 +1,15 @@
+count: (value: u32) -> none =
+    assembler.block("adds {a}, {b}\nadds {c}, {d}\nadds {e}, {g}\nadds {h}, {i}",
+                    in a: u32 at general = value, in b: u32 at general = value,
+                    in c: u32 at general = value, in d: u32 at general = value,
+                    in e: u32 at general = value, in g: u32 at general = value,
+                    in h: u32 at general = value, in i: u32 at general = value,
+                    in j: u32 at r0 = value)
+end count
+named: (value: u32) -> none =
+    assembler.block("movs r1, #0\nadds {a}, {b}\nadds {c}, {d}\nadds {e}, {g}\nadds {h}, {i}",
+                    in a: u32 at general = value, in b: u32 at general = value,
+                    in c: u32 at general = value, in d: u32 at general = value,
+                    in e: u32 at general = value, in g: u32 at general = value,
+                    in h: u32 at general = value, in i: u32 at general = value)
+end named

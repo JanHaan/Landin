@@ -284,7 +284,7 @@ shorthand, and float operands are SR-04's. The gate ran every job green at
 
 ### R9.20 — Implement assembly with operands on every target
 
-Status: planned
+Status: active
 Depends on: R9.10
 
 Lower the specified form on Cortex-M0, x86-64 and arm64, allocate its operands
