@@ -1,0 +1,9 @@
+class: negative
+summary: The synthetic target has no registers, so D248 refuses every assembly block on it before any other check
+program: program.ldn
+expect: expected.txt
+args: --target=synthetic-32 ../tests/fixtures/negative/assembly-synthetic-target/program.ldn
+codes: L0301
+status: 1
+constructs: 1630, 1990
+targets: synthetic-32

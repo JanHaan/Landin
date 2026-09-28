@@ -105,7 +105,6 @@ negative/assembly-arm64-statement-separator | macos-arm64
 negative/assembly-discard-names-register | cortex-m
 negative/assembly-float-operand | cortex-m
 negative/assembly-general-exhausted | cortex-m
-negative/assembly-hosted-not-lowered | linux-x86-64
 negative/assembly-hosted-straight-line | linux-x86-64
 negative/assembly-naked-operands | cortex-m
 negative/assembly-operand-types | cortex-m
@@ -121,6 +120,7 @@ negative/assembly-reserved-registers-cortex | cortex-m
 negative/assembly-reserved-registers-x86-64 | linux-x86-64
 negative/assembly-shorthand-after-operand | linux-x86-64, macos-arm64, synthetic-32
 negative/assembly-shorthand-hosted | linux-x86-64
+negative/assembly-synthetic-target | synthetic-32
 negative/assembly-template-names | cortex-m
 negative/assigned-on-one-path-only | linux-x86-64, macos-arm64
 negative/assignment-as-expression | linux-x86-64, macos-arm64
@@ -936,7 +936,6 @@ negative/r640-static-array-extraction | linux-x86-64, macos-arm64
 negative/r640-width | linux-x86-64, macos-arm64
 negative/r640-zero-array | linux-x86-64, macos-arm64
 negative/r640-zero-field | linux-x86-64, macos-arm64
-negative/r660-hosted-assembly | linux-x86-64, macos-arm64, synthetic-32
 negative/r660-materialization | cortex-m
 negative/r670-noreturn-fallthrough | linux-x86-64, macos-arm64, synthetic-32
 negative/r670-panic-handler | linux-x86-64, macos-arm64, synthetic-32
@@ -1483,6 +1482,11 @@ runtime/array-of-structs | linux-x86-64, macos-arm64
 runtime/array-repetition-evaluates-once | linux-x86-64, macos-arm64
 runtime/array-returns-cross-calls | linux-x86-64, macos-arm64
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64, macos-arm64
+runtime/assembly-every-general-register | linux-x86-64, macos-arm64
+runtime/assembly-memory-boundary | linux-x86-64, macos-arm64
+runtime/assembly-operand-free | linux-x86-64, macos-arm64
+runtime/assembly-operands | linux-x86-64, macos-arm64
+runtime/assembly-saved-registers | linux-x86-64, macos-arm64
 runtime/atom-values-cross-the-abi | linux-x86-64, macos-arm64
 runtime/benchmark-game-fannkuch-redux | linux-x86-64, macos-arm64
 runtime/benchmark-game-fasta | linux-x86-64, macos-arm64

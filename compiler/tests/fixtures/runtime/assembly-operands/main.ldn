@@ -1,0 +1,100 @@
+--  [1630]'s operand forms on the target that runs them: every direction,
+--  fixed and `general` registers, each width with its extension, one
+--  output, several destructured by name and a discarded one.
+fixed if compiler.arch == x86_64 then
+    sum: (a: u64, b: u32) -> (r: u64) =
+        r = assembler.block("addq {b}, {a}", inout a: u64 at general = a,
+                            in b: u64 at general = u64(b))
+    end sum
+    widen: (small: i8, half: i16, word: u32) -> (a: i64, h: i64, w: u64) =
+        --  A narrower input fills its whole register, so the full-width
+        --  names read back what its type says.
+        (s, t, u) := assembler.block(
+            "movq %rsi, {s}\nmovq %rdi, {t}\nmovq %r8, {u}",
+            out s: i64 at general, out t: i64 at general,
+            out u: u64 at general, in x: i8 at rsi = small,
+            in y: i16 at rdi = half, in z: u32 at r8 = word)
+        a = s
+        h = t
+        w = u
+    end widen
+    narrow: (value: u64) -> (low: u8, word: u16) =
+        (b, w) := assembler.block("movq {v}, %rax\nmovq {v}, %rdx",
+                                  in v: u64 at rcx = value,
+                                  out b: u8 at rax, out w: u16 at rdx)
+        low = b
+        word = w
+    end narrow
+    kept: (value: u64) -> (r: u64) =
+        r = assembler.block("movq {v}, %rbx\nleaq 1(%rbx), {r}",
+                            in v: u64 at general = value,
+                            out r: u64 at general, out _ at rbx)
+    end kept
+elsif compiler.arch == arm64 then
+    sum: (a: u64, b: u32) -> (r: u64) =
+        r = assembler.block("add {a}, {a}, {b}", inout a: u64 at general = a,
+                            in b: u64 at general = u64(b))
+    end sum
+    widen: (small: i8, half: i16, word: u32) -> (a: i64, h: i64, w: u64) =
+        (s, t, u) := assembler.block(
+            "mov {s}, x10\nmov {t}, x11\nmov {u}, x12",
+            out s: i64 at general, out t: i64 at general,
+            out u: u64 at general, in x: i8 at x10 = small,
+            in y: i16 at x11 = half, in z: u32 at x12 = word)
+        a = s
+        h = t
+        w = u
+    end widen
+    narrow: (value: u64) -> (low: u8, word: u16) =
+        (b, w) := assembler.block("mov x0, {v}\nmov x1, {v}",
+                                  in v: u64 at x9 = value,
+                                  out b: u8 at x0, out w: u16 at x1)
+        low = b
+        word = w
+    end narrow
+    kept: (value: u64) -> (r: u64) =
+        r = assembler.block("mov x19, {v}\nadd {r}, x19, #1",
+                            in v: u64 at general = value,
+                            out r: u64 at general, out _ at x19)
+    end kept
+else
+    sum: (a: u64, b: u32) -> (r: u64) =
+        r = a + u64(b)
+    end sum
+    widen: (small: i8, half: i16, word: u32) -> (a: i64, h: i64, w: u64) =
+        (s, t) := assembler.block("mov {s}, {x}\nmov {t}, {y}",
+                                  out s: i32 at general,
+                                  out t: i32 at general,
+                                  in x: i8 at general = small,
+                                  in y: i16 at general = half)
+        a = i64(s)
+        h = i64(t)
+        w = u64(word)
+    end widen
+    narrow: (value: u64) -> (low: u8, word: u16) =
+        (b, w) := assembler.block("mov r0, {v}\nmov r1, {v}",
+                                  in v: u32 at r2 = u32(value & 0xffffffff),
+                                  out b: u8 at r0, out w: u16 at r1)
+        low = b
+        word = w
+    end narrow
+    kept: (value: u64) -> (r: u64) =
+        r = u64(assembler.block("mov r4, {v}\nadds {r}, r4, #1",
+                                in v: u32 at general = u32(value),
+                                out r: u32 at general, out _ at r4))
+    end kept
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    return when sum(40, 2) <> 42
+    code = 2
+    (a, h, w) := widen(-3, -300, 0xffffffff)
+    return when a <> -3 or h <> -300 or w <> 0xffffffff
+    code = 3
+    (low, word) := narrow(0x12345)
+    return when low <> 0x45 or word <> 0x2345
+    code = 4
+    return when kept(41) <> 42
+    code = 42
+end main

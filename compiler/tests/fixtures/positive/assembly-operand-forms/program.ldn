@@ -1,7 +1,7 @@
---  [1630]'s operand forms on each target, in arms no target selects: a
---  positive fixture is emitted, and no target lowers named operands yet.
---  The grammar derives every arm and the parser reads it.
-fixed if false then
+--  [1630]'s operand forms, each in the arm of the target whose registers
+--  it names.  A positive fixture is emitted for Linux x86-64, so its arm
+--  is lowered and recorded; the grammar derives every arm.
+fixed if compiler.arch == cortex_m0 then
     mask: () -> (previous: u32) =
         previous = assembler.block("mrs {mask}, primask\ncpsid i",
                                    out mask: u32 at general)
@@ -13,22 +13,25 @@ fixed if false then
     add_seven: (value: u32) -> (sum: u32) =
         sum = assembler.block("adds r0, #7", inout sum: u32 at r0 = value)
     end add_seven
+elsif compiler.arch == x86_64 then
     ticks: () -> (count: u64) =
         (low, high) := assembler.block("rdtsc", out low: u32 at rax,
                                        out high: u32 at rdx)
         count = u64(high) << 32 | u64(low)
     end ticks
-    identify: (leaf: u32) -> (b: u32) =
+    identify: (leaf: u32) -> (vendor: u32) =
         (a, b, c, d) := assembler.block("cpuid", inout a: u32 at rax = leaf,
                                         out b: u32 at rbx,
                                         inout c: u32 at rcx = 0,
                                         out d: u32 at rdx)
         _ = a + c + d
+        vendor = b
     end identify
     clobbers: (value: u64) -> none =
         assembler.block("movq {value}, %rbx", in value: u64 at general = value,
                         out _ at rbx)
     end clobbers
+else
     counter: () -> (count: u64) =
         count = assembler.block("mrs {count}, cntvct_el0",
                                 out count: u64 at general)

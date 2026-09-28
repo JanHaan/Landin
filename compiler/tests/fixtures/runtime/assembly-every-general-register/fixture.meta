@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D248's general supplies every register of its class to one block, and every output reaches its field
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

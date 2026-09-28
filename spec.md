@@ -1950,10 +1950,10 @@ or on x86-64 leave the direction flag set; an instruction's implicit register
 effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
 Arbitrary machine text cannot prove those obligations.
 
-This compiler lowers every form of assembly on Cortex-M0, and checks it on
-every target; on the hosted targets a block that passes every check above is
-then refused, because this compiler does not lower hosted assembly yet. The
-synthetic target has no registers and refuses assembly outright.
+This compiler lowers every form of assembly on Cortex-M0 and Linux x86-64,
+and checks it on every target; on Darwin arm64 a block that passes every check
+above is then refused, because this compiler does not lower arm64 assembly
+yet. The synthetic target has no registers and refuses assembly outright.
 
 Placement is a declaration annotation:
 `link(section: text, align: integer, vector: integer, keep, symbol: text)`.
@@ -11866,7 +11866,7 @@ classified failure boundary before the repository gate can pass.
 | `functions.nonreturning` | static | 0890, 0940, 1000, 1100, 1240, 1290, 1370, 1930, 1960 | D231 separates infallible nonreturning signatures from none, rejects reachable return/fallthrough and preserves termination through generic/evidence calls and applicable cleanup | `positive/r491-noreturn-signatures`, `negative/r670-noreturn-fallthrough`, `abi/r670-noreturn` |
 | `panic.contract` | static | 0890, 1670 | D232 selects only a canonical public ordinary nonreturning entry-module hook; L0506 rejects malformed declarations and unrepresentable u32 site spaces | `negative/r670-panic-handler`, `abi/r670-panic` |
 | `panic.dispatch` | trap | 0300, 0470, 0570, 0890, 1100, 1670, 1950, 1960 | D232 dispatches kind/site at the failed operation, forbids later computation and cleanup, and terminates reentry; the default needs no reporting storage | `abi/r670-panic`, `environments/cortex-m/freestanding.py` selected/default/interrupt controls |
-| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers, and the hosted targets refuse assembly at the stated lowering limit; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/r660-hosted-assembly` |
+| `firmware.surface` | static | 0760, 1000, 1460, 1500, 1550, 1560, 1570, 1630, 1640, 1650, 1990 | D229/D230 check target, machine signatures, placement, fixed assembly and scalar transport; D248 checks named operands against each target's registers, and arm64 refuses assembly at the stated lowering limit; L0505 bounds static image materialization before section GC | `positive/r660-machine-directives`, `positive/r670-scalar-assembly`, `positive/assembly-operand-forms`, `negative/r660-materialization`, `negative/assembly-synthetic-target`, `negative/assembly-arm64-not-lowered` |
 | `firmware.return` | trap | 1550, 1570, 1650, 1990 | D232 dispatches entry return as unreachable/site zero; D229 naked fallthrough retains its undefined-instruction guard and separate hardware-fault obligations | `positive/r660-machine-directives`, `environments/cortex-m/firmware.py` boot and naked-fallthrough controls |
 | `firmware.assembly-obligations` | outside | 1550, 1560, 1570, 1630, 1990 | non-guarantee: fixed text is not a proof of device completion or correct naked stack/register/control-flow behavior; the programmer owns naked machine state | `positive/r660-machine-directives` |
 | `packed.extraction` | trap | 0630, 0730, 1120 | Unnamed field encodings trap before producing a named value, including under unchecked; an image copy does not extract fields | `runtime/r640-packed-hole`, `runtime/r640-packed-small-space` |
@@ -14515,7 +14515,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | Every output gets a register distinct from every input unless it is `inout` | Rust's `lateout` shares an input's register with an output; it saves a register and asks the programmer to know when an input is dead | `negative/assembly-register-twice` |
 | `general` counts only the registers the block does not otherwise name | Counting the whole class accepts a block the compiler cannot give registers to, and leaves the failure to emission | `negative/assembly-general-exhausted` |
 | D230's `(text, u32)` form is the shorthand for `inout` at r0, Cortex-M0 only | Withdrawing it leaves two spellings through a transition and `core/cpu` unwritable until lowering exists; giving it a hosted meaning would invent a register convention | `negative/assembly-shorthand-hosted`, `negative/assembly-shorthand-after-operand`, `positive/r670-scalar-assembly` |
-| The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-hosted-not-lowered`, `negative/assembly-arm64-not-lowered`, `negative/r660-hosted-assembly` |
+| The operand form is checked on every target and refused by one stated lowering limit | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | `negative/assembly-arm64-not-lowered`, `negative/assembly-synthetic-target` |
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
 ASCII, lines, no directive, comment, separator or label, and straight-line
@@ -14529,7 +14529,8 @@ programmer obligations that no check can prove.
 above, `negative/assembly-operands-on-another-call`,
 `negative/assembly-template-names`, `negative/assembly-naked-operands`,
 `negative/assembly-hosted-straight-line`,
-`negative/assembly-arm64-statement-separator`,
+`negative/assembly-arm64-statement-separator`, the runtime `assembly-*`
+fixtures, `backend/assembly blocks keep their registers`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.
 

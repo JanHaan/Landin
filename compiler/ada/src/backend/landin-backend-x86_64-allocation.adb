@@ -75,6 +75,47 @@ package body Landin.Backend.X86_64.Allocation is
       raise Landin.Compiler_Defect with "an unsaved register has no save home";
    end Save_Index;
 
+   --  [1630]: the callee-saved registers some block of the routine
+   --  declares.  None of them holds a value anywhere in the routine, and
+   --  each is saved and restored by it, which is what declaring one means.
+   function Declared
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id)
+      return Register_Set;
+
+   function Declared
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id)
+      return Register_Set
+   is
+      Result : Register_Set := [others => False];
+   begin
+      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly then
+               for Which in 1 .. Landin.IR.Assembly_Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  declare
+                     Named : constant String := Landin.IR.Register_Of
+                       (Landin.IR.Nth_Assembly_Operand
+                          (Of_Unit, Item, Value, Which));
+                  begin
+                     for Register in Saved_Register loop
+                        if Named = Name (Register, Landin.Targets.Byte_8)
+                          (2 .. Name (Register, Landin.Targets.Byte_8)'Last)
+                        then
+                           Result (Register) := True;
+                        end if;
+                     end loop;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+      return Result;
+   end Declared;
+
    function Make
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;
@@ -89,6 +130,7 @@ package body Landin.Backend.X86_64.Allocation is
         (Location'(others => <>), Ada.Containers.Count_Type (Slot_Count));
       Result.Value := Location_Vectors.To_Vector
         (Location'(others => <>), Ada.Containers.Count_Type (Value_Count));
+      Result.Used := Declared (Of_Unit, Item);
       if Options.Optimize = Landin.Optimization.None then
          --  No liveness, promotion or reuse scratch belongs to reference
          --  emission.  Every scalar retains its individual instruction home.
@@ -139,7 +181,7 @@ package body Landin.Backend.X86_64.Allocation is
          First_Block : Blocks renames Block_Data.Data.all;
          Across_Blocks : Home_Mask renames Across_Data.Data.all;
          Eligible : Home_Mask renames Eligible_Data.Data.all;
-         Permanent : Register_Set := [others => False];
+         Permanent : Register_Set := Result.Used;
          Busy_Until : array (Saved_Register) of Natural := [others => 0];
          --  Release buckets make spill reuse linear in instruction count,
          --  without scanning all previous homes at every definition.
@@ -352,6 +394,10 @@ package body Landin.Backend.X86_64.Allocation is
                declare
                   Best : Natural := 0;
                begin
+                  --  A declared register is the block's, not a slot's.
+                  if Permanent (Register) then
+                     goto Next_Register;
+                  end if;
                   for Index in 1 .. Slot_Count loop
                      if Eligible (Index) and then Across_Blocks (Index)
                        and then Uses (Index) >= 3
@@ -369,6 +415,7 @@ package body Landin.Backend.X86_64.Allocation is
                      Result.Used (Register) := True;
                   end if;
                end;
+               <<Next_Register>>
             end loop;
          end if;
          for Position in 1 .. Value_Count loop
@@ -435,7 +482,9 @@ package body Landin.Backend.X86_64.Allocation is
         Landin.Targets.Byte_Count'Last) return Frame
    is
    begin
-      if Options.Optimize = Landin.Optimization.None then
+      if Options.Optimize = Landin.Optimization.None
+        and then Save_Count (Of_Plan) = 0
+      then
          return Laid_Out (Of_Unit, Item, Facts, Maximum);
       end if;
       declare

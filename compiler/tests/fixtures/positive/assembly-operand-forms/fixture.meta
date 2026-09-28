@@ -1,5 +1,5 @@
 class: positive
-summary: [1630]'s operands on Cortex-M0, x86-64 and arm64 derive and parse in arms no target selects
+summary: [1630]'s operands on Cortex-M0, x86-64 and arm64 derive in each target's arm, and the selected arm lowers
 program: program.ldn
 constructs: 1630, 1820
 targets: linux-x86-64, macos-arm64, synthetic-32

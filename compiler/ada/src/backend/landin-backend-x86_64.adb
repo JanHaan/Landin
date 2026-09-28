@@ -373,6 +373,17 @@ package body Landin.Backend.X86_64 is
       end Put;
 
       procedure Emit (Instruction : String);
+      procedure Emit_Verbatim (Instruction : String);
+
+      --  An instruction no selection may rewrite, which [1630]'s text and
+      --  the moves around it are: the assembler reads what was written.
+      procedure Emit_Verbatim (Instruction : String) is
+      begin
+         if Capturing /= Landin.IR.No_Item then
+            Machine.Instruction (Streams (Positive (Capturing)), Instruction);
+         end if;
+         Put (Character'Val (9) & Instruction);
+      end Emit_Verbatim;
 
       procedure Emit (Instruction : String) is
          Selected : constant String :=
@@ -2202,6 +2213,98 @@ package body Landin.Backend.X86_64 is
 
          procedure Emit_Instruction (Value : Landin.IR.Value_Id);
 
+         procedure Emit_Assembly (Value : Landin.IR.Value_Id);
+
+         --  [1630] on x86-64.  No value lives in a register a block
+         --  declares or overwrites -- the allocator hands out only the
+         --  callee-saved five and keeps a declared one out -- so each input
+         --  is loaded straight into its register, extended to the whole
+         --  register as its type says, and each output is stored from its
+         --  register into its slot, which is always a frame cell.  The text
+         --  is recorded as written: no selection rewrites it.
+         procedure Emit_Assembly (Value : Landin.IR.Value_Id) is
+            package Asm renames Landin.Targets.Assembly;
+            Chosen : constant Asm.Operand_Register_Array :=
+              Landin.Backend.Assembly_Registers
+                (Of_Unit, Item, Value, Names, Facts);
+            Text : constant String := Landin.Backend.Assembly_Text
+              (Of_Unit, Item, Value, Names, Facts);
+            Inputs : Natural := 0;
+            Start : Natural := Text'First;
+
+            function Operand (Index : Positive)
+              return Landin.IR.Assembly_Operand
+              is (Landin.IR.Nth_Assembly_Operand
+                    (Of_Unit, Item, Value, Index));
+
+            function Register (Index : Positive; Bits : Positive)
+              return String
+              is (Asm.Spelled
+                    (Facts, Unbounded.To_String (Chosen (Index).Register),
+                     Landin.Targets.Bit_Width (Bits)));
+         begin
+            for Index in Chosen'Range loop
+               if Operand (Index).Direction
+                 in Landin.IR.Input | Landin.IR.Both
+               then
+                  Inputs := Inputs + 1;
+                  declare
+                     Kind : constant Landin.Types.Type_Kind :=
+                       Operand (Index).Kind;
+                     Held : constant Held_Size := Size_Of (Kind, Facts);
+                     From : constant String := Value_Operand
+                       (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Inputs));
+                  begin
+                     case Held is
+                        when Landin.Targets.Byte_8 =>
+                           Emit_Verbatim
+                             ("movq " & From & ", " & Register (Index, 64));
+                        when Landin.Targets.Byte_4 =>
+                           Emit_Verbatim
+                             ((if Landin.Types.Is_Signed (Kind)
+                               then "movslq " & From & ", "
+                                    & Register (Index, 64)
+                               else "movl " & From & ", "
+                                    & Register (Index, 32)));
+                        when others =>
+                           Emit_Verbatim
+                             ((if Landin.Types.Is_Signed (Kind)
+                               then "movs" else "movz")
+                              & Suffix (Held) & "q " & From & ", "
+                              & Register (Index, 64));
+                     end case;
+                  end;
+               end if;
+            end loop;
+            for Index in Text'First .. Text'Last + 1 loop
+               if Index > Text'Last or else Text (Index) = LF then
+                  declare
+                     Line : constant String :=
+                       Trimmed (Text (Start .. Index - 1));
+                  begin
+                     if Line'Length > 0 then
+                        Emit_Verbatim (Line);
+                     end if;
+                  end;
+                  Start := Index + 1;
+               end if;
+            end loop;
+            for Index in Chosen'Range loop
+               if Operand (Index).Output /= Landin.IR.No_Slot then
+                  declare
+                     Held : constant Held_Size :=
+                       Size_Of (Operand (Index).Kind, Facts);
+                  begin
+                     Emit_Verbatim
+                       ("mov" & Suffix (Held) & " "
+                        & Register
+                            (Index, Landin.Targets.Bytes (Held) * 8)
+                        & ", " & Slot_Cell (Operand (Index).Output));
+                  end;
+               end if;
+            end loop;
+         end Emit_Assembly;
+
          procedure Emit_Instruction (Value : Landin.IR.Value_Id) is
             Op : constant Landin.IR.Opcode :=
               Landin.IR.Op_Of (Of_Unit, Item, Value);
@@ -2278,8 +2381,7 @@ package body Landin.Backend.X86_64 is
          begin
             case Op is
                when Landin.IR.Assembly =>
-                  raise Compiler_Defect with
-                    "hosted assembly reached emission before its lowering";
+                  Emit_Assembly (Value);
                when Landin.IR.Number =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);

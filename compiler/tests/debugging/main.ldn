@@ -190,3 +190,28 @@ debug_unions: (union_param: ptr mut i32) -> (result: i32) =
         _: result = 3
     end match
 end debug_unions
+
+--  [1630]: a block has a line of its own, its output is an ordinary local
+--  after it, and the callee-saved register it declares is saved with CFI,
+--  so the caller's frame shows it unchanged.
+fixed if compiler.arch == x86_64 then
+    debug_assembly: (assembly_input: u64) -> (result: i32) =
+        assembly_sum: u64 = assembler.block(
+            "movq {v}, %rbx\nleaq 5(%rbx), {r}",
+            in v: u64 at general = assembly_input,
+            out r: u64 at general, out _ at rbx)
+        assembly_ready: i32 = 1
+        result = if assembly_sum == 0x5a5a5a5a5f and assembly_ready == 1 then 42
+                 else 1 end if
+    end debug_assembly
+else
+    debug_assembly: (assembly_input: u64) -> (result: i32) =
+        assembly_sum: u64 = assembler.block(
+            "mov x19, {v}\nadd {r}, x19, #5",
+            in v: u64 at general = assembly_input,
+            out r: u64 at general, out _ at x19)
+        assembly_ready: i32 = 1
+        result = if assembly_sum == 0x5a5a5a5a5f and assembly_ready == 1 then 42
+                 else 1 end if
+    end debug_assembly
+end if

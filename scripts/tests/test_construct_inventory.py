@@ -303,7 +303,7 @@ class Inventory(unittest.TestCase):
         self.assertEqual(held["1590"]["macos-arm64"], "executed")
         self.assertEqual(held["1590"]["cortex-m"], "refused")
         self.assertEqual(held["1570"]["cortex-m"], "executed")
-        self.assertEqual(held["1630"]["linux-x86-64"], "compiled")
+        self.assertEqual(held["1630"]["linux-x86-64"], "executed")
         #  The two later Cortex-M records.  A compile-time fixture that
         #  selects --target=cortex-m0 carries its verdict there, and the
         #  firmware's machine probe carries [1610]'s link names, which no fixture claims.

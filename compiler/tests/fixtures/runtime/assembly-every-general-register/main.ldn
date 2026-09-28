@@ -1,0 +1,53 @@
+--  [1630]: a block may ask `general` for every register of the class, and
+--  each output reaches its own result field.
+fixed if compiler.arch == x86_64 then
+    spread: (base: u64) -> (total: u64) =
+        (a, b, c, d, e, f, g, h, i) := assembler.block(
+            "leaq 1({a}), {b}\nleaq 2({a}), {c}\nleaq 3({a}), {d}\nleaq 4({a}), {e}\nleaq 5({a}), {f}\nleaq 6({a}), {g}\nleaq 7({a}), {h}\nleaq 8({a}), {i}",
+            inout a: u64 at general = base, out b: u64 at general,
+            out c: u64 at general, out d: u64 at general,
+            out e: u64 at general, out f: u64 at general,
+            out g: u64 at general, out h: u64 at general,
+            out i: u64 at general)
+        total = a + b + c + d + e + f + g + h + i
+    end spread
+    public main: () -> (code: i32) =
+        --  9 * 10 + 36
+        code = if spread(10) == 126 then 42 else 1 end if
+    end main
+elsif compiler.arch == arm64 then
+    spread: (base: u64) -> (total: u64) =
+        (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r) :=
+            assembler.block(
+                "add {b}, {a}, #1\nadd {c}, {a}, #2\nadd {d}, {a}, #3\nadd {e}, {a}, #4\nadd {f}, {a}, #5\nadd {g}, {a}, #6\nadd {h}, {a}, #7\nadd {i}, {a}, #8\nadd {j}, {a}, #9\nadd {k}, {a}, #10\nadd {l}, {a}, #11\nadd {m}, {a}, #12\nadd {n}, {a}, #13\nadd {o}, {a}, #14\nadd {p}, {a}, #15\nadd {q}, {a}, #16\nadd {r}, {a}, #17",
+                inout a: u64 at general = base, out b: u64 at general,
+                out c: u64 at general, out d: u64 at general,
+                out e: u64 at general, out f: u64 at general,
+                out g: u64 at general, out h: u64 at general,
+                out i: u64 at general, out j: u64 at general,
+                out k: u64 at general, out l: u64 at general,
+                out m: u64 at general, out n: u64 at general,
+                out o: u64 at general, out p: u64 at general,
+                out q: u64 at general, out r: u64 at general)
+        total = a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p
+          + q + r
+    end spread
+    public main: () -> (code: i32) =
+        --  18 * 10 + 153
+        code = if spread(10) == 333 then 42 else 1 end if
+    end main
+else
+    spread: (base: u32) -> (total: u32) =
+        (a, b, c, d, e, f, g, h) := assembler.block(
+            "adds {b}, {a}, #1\nadds {c}, {a}, #2\nadds {d}, {a}, #3\nadds {e}, {a}, #4\nadds {f}, {a}, #5\nadds {g}, {a}, #6\nadds {h}, {a}, #7",
+            inout a: u32 at general = base, out b: u32 at general,
+            out c: u32 at general, out d: u32 at general,
+            out e: u32 at general, out f: u32 at general,
+            out g: u32 at general, out h: u32 at general)
+        total = a + b + c + d + e + f + g + h
+    end spread
+    public main: () -> (code: i32) =
+        --  8 * 10 + 28
+        code = if spread(10) == 108 then 42 else 1 end if
+    end main
+end if

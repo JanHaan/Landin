@@ -20719,11 +20719,11 @@ package body Landin.Stages.Checking is
                            then Ty.U32 else Ty.No_Value);
                      begin
                         --  [1990]: the last check, so a block that reaches
-                        --  it passed every other one.  Cortex-M0 lowers
-                        --  every form; the hosted targets lower none yet.
+                        --  it passed every other one.  Cortex-M0 and x86-64
+                        --  lower every form; arm64 lowers none yet.
                         if Answer /= Ty.Ill_Typed
                           and then Landin.Targets.Architecture_Of (Facts)
-                            /= Landin.Targets.Cortex_M0
+                            = Landin.Targets.Arm64
                         then
                            Bad.Report
                              (Item => Bad.Type_Mismatch,
@@ -20732,7 +20732,7 @@ package body Landin.Stages.Checking is
                               Message => "this compiler does not lower"
                                 & " hosted assembly yet",
                               Note => "[1990]: assembly is checked on every"
-                                & " target; only Cortex-M0 lowers it",
+                                & " target; arm64 does not lower it yet",
                               Related => Syn.Origin (Of_Tree, Node),
                               Because => "this assembly block",
                               Into => Found);

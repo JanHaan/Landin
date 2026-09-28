@@ -3855,7 +3855,7 @@ programmer's obligations; D248 records the design.
 
 The earlier Cortex-M0 form stays as a shorthand: `assembler.block(text, value)`
 passes one `u32` in and out of r0, and the text names r0 itself. This compiler
-lowers every form on Cortex-M0; the hosted targets check it and wait for its
+lowers every form on Cortex-M0 and x86-64; arm64 checks it and waits for its
 lowering, which `ROADMAP.md` schedules.
 
 `core/cpu.disable_interrupts()` returns the prior PRIMASK value;

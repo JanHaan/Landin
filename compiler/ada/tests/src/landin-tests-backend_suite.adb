@@ -25,6 +25,8 @@ with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.X86_64;
 with Landin.IR;
+with Landin.IR.Testing_Support;
+with Landin.IR.Verifier;
 with Landin.Optimization;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -6740,8 +6742,96 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Darwin_Wide_Parts_Keep_Target_Offsets;
 
+   --  [1630] on x86-64: the text as written with `{name}` filled, each
+   --  input extended into its register before it and each output stored
+   --  after it; a declared callee-saved register saved and restored with
+   --  its CFI, never handed to a value at any level; and the verifier's
+   --  refusal of a register [1990]'s table never answers for.
+   procedure Assembly_Blocks_Keep_Their_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Blocks_Keep_Their_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      use type Landin.Optimization.Objective;
+      Source : constant String :=
+        "f: (v: i8, w: u64) -> (r: u64) =" & LF
+        & "    a: u64 = w + 1" & LF
+        & "    b: u64 = w + 2" & LF
+        & "    c: u64 = w + 3" & LF
+        & "    r = assembler.block(""movsbq {x}, %rbx\naddq %rbx, {r}""," & LF
+        & "        inout r: u64 at general = w, in x: i8 at general = v," & LF
+        & "        out _ at rbx) + a + b + c" & LF
+        & "end f" & LF;
+   begin
+      for Level in Landin.Optimization.Objective loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Ran  : Natural;
+         begin
+            Lower (Work, Source, Ran);
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+            declare
+               Text : constant String := Landin.Backend.X86_64.Text
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all,
+                  Landin.Stages.Target (Work),
+                  (Optimize => Level, Specialize => Landin.Optimization.Off));
+               function Has (Part : String) return Boolean
+                 is (Ada.Strings.Fixed.Index (Text, Part) > 0);
+               function Count (Part : String) return Natural
+                 is (Ada.Strings.Fixed.Count (Text, Part));
+            begin
+               Landin.Testing.Check
+                 (Item, Has (", %rcx" & LF
+                             & HT & "movsbq %cl, %rbx" & LF
+                             & HT & "addq %rbx, %rax" & LF),
+                  "the inputs are extended into the chosen registers and"
+                  & " the text is filled at each operand's width");
+               Landin.Testing.Check
+                 (Item, Count ("movq %rbx, ") = 1
+                    and then Count ("), %rbx" & LF) = 1
+                    and then Count ("%rbx") = 4,
+                  "rbx is saved and restored once, appears in the text,"
+                  & " and holds no value of the routine");
+            end;
+            if Level = Landin.Optimization.None then
+               declare
+                  Code : constant not null access IR.Unit :=
+                    Landin.Stages.Code (Work);
+                  Block : IR.Value_Id := IR.No_Value;
+               begin
+                  for V in 1 .. IR.Value_Count (Code.all, 1) loop
+                     if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly
+                     then
+                        Block := IR.Value_Id (V);
+                     end if;
+                  end loop;
+                  IR.Testing_Support.Overwrite_Assembly_Operand
+                    (Code.all, 1, Block, 3,
+                     IR.Operand_At
+                       (IR.Discarded, Landin.Source.Names.No_Name, "rbp",
+                        Landin.Types.Not_Typed));
+                  Landin.Testing.Check
+                    (Item, IR.Verifier.Check
+                       (Code.all, Landin.Targets.Linux_X86_64).Kind
+                         = IR.Verifier.Assembly_Register_Refused,
+                     "the verifier refuses rbp, which x86-64 never names");
+               end;
+            end if;
+         end;
+      end loop;
+   end Assembly_Blocks_Keep_Their_Registers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "assembly blocks keep their registers",
+         Assembly_Blocks_Keep_Their_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

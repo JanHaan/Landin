@@ -252,6 +252,21 @@
     "runtime/array-zeroed-assignment-clears-storage": {
       "mode": "execute"
     },
+    "runtime/assembly-every-general-register": {
+      "mode": "execute"
+    },
+    "runtime/assembly-memory-boundary": {
+      "mode": "execute"
+    },
+    "runtime/assembly-operand-free": {
+      "mode": "execute"
+    },
+    "runtime/assembly-operands": {
+      "mode": "execute"
+    },
+    "runtime/assembly-saved-registers": {
+      "mode": "execute"
+    },
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },

@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D248 keeps every block a full memory boundary that runs each time it is reached, after its inputs in written order
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

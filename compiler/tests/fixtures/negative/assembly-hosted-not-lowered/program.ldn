@@ -1,9 +1,0 @@
-ticks: () -> (count: u64) =
-    (low, high) := assembler.block("rdtsc", out low: u32 at rax,
-                                   out high: u32 at rdx)
-    count = u64(high) << 32 | u64(low)
-end ticks
-saved: (value: u64) -> none =
-    assembler.block("movq {value}, %rbx", in value: u64 at general = value,
-                    out _ at rbx)
-end saved

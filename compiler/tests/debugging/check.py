@@ -380,6 +380,21 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
         ("pointer_code", "union_pointer.atom"),
         ("pointee", "*union_pointer.ptr"),
     ))
+    #  [1630]: the block's own line, its output a local after it, and the
+    #  callee-saved rbx it declares restored for the caller through CFI.
+    lines.extend(["delete breakpoints",
+                  f"tbreak {source_name}:{source_lines['assembly-block']}",
+                  "continue"])
+    emit_section(lines, "assembly-block-line", ["frame", "info line"])
+    #  Before the block rbx is still the caller's; the block overwrites it,
+    #  and only the routine's save can give the caller back its own.
+    emit_values(lines, "assembly", (("caller_rbx", "$rbx"),))
+    lines.append("next")
+    emit_section(lines, "assembly-ready-line", ["frame", "info line"])
+    emit_values(lines, "assembly", (("sum", "assembly_sum"),
+                                    ("block_rbx", "$rbx")))
+    lines.append("up")
+    emit_values(lines, "assembly", (("unwound_rbx", "$rbx"),))
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
@@ -716,6 +731,18 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                 "debug_aliases")
     expect_line(transcript, "unions-ready-line", source_lines["unions-ready"],
                 "debug_unions")
+    expect_line(transcript, "assembly-block-line",
+                source_lines["assembly-block"], "debug_assembly")
+    expect_line(transcript, "assembly-ready-line",
+                source_lines["assembly-ready"], "debug_assembly")
+    expect_value(transcript, "assembly.sum", 0x5a5a5a5a5f)
+    expect_value(transcript, "assembly.block_rbx", 0x5a5a5a5a5a)
+    caller_rbx = re.search(r"^LANDIN-VALUE assembly\.caller_rbx=(-?\d+)$",
+                           transcript, re.M)
+    require(caller_rbx is not None
+            and int(caller_rbx.group(1)) != 0x5a5a5a5a5a,
+            "the caller's rbx cannot be told from the block's")
+    expect_value(transcript, "assembly.unwound_rbx", int(caller_rbx.group(1)))
     for section_name, source_text in (
             ("outer-source", "inner_result: i32 = debug_inner("),
             ("inner-source", "step_local: i32 = scalar_local"),
@@ -1156,6 +1183,8 @@ SOURCE_LINES = {
     "aliases-ready": source_line(MAIN_SOURCE, "aliases_ready: i32 ="),
     "loop-element": source_line(MAIN_SOURCE, "loop_sum += loop_element"),
     "unions-ready": source_line(MAIN_SOURCE, "union_ready: i32 = 1"),
+    "assembly-block": source_line(MAIN_SOURCE, "assembly_sum: u64 = assembler.block("),
+    "assembly-ready": source_line(MAIN_SOURCE, "assembly_ready: i32 = 1"),
 }
 GENERIC_NEXT_LINES = tuple(
     source_line(MAIN_SOURCE, "break", occurrence=index) for index in range(4)

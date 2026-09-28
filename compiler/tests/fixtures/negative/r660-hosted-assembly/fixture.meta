@@ -1,9 +1,0 @@
-class: negative
-summary: D248 checks assembly on hosted targets, and only its lowering limit refuses it before emission
-program: program.ldn
-expect: expected.txt
-args: ../tests/fixtures/negative/r660-hosted-assembly/program.ldn
-codes: L0301
-status: 1
-constructs: 1630, 1990
-targets: linux-x86-64, macos-arm64, synthetic-32

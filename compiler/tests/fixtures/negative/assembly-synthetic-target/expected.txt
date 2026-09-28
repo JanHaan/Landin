@@ -1,0 +1,6 @@
+error[L0301]: assembler.block needs a target with registers
+  --> ../tests/fixtures/negative/assembly-synthetic-target/program.ldn:1:17
+  |
+1 | f: () -> none = assembler.block("nop") end f
+  |                 ^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

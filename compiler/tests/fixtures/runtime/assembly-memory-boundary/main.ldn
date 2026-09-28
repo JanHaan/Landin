@@ -1,0 +1,65 @@
+--  [1630]'s fixed memory effect and evaluation order: a block that writes
+--  memory through an address invalidates what the compiler knew, two
+--  identical blocks both run, inputs are evaluated once and left to right,
+--  and an early return inside an input skips the block.
+mut counter: u32 = 0
+mut trace: u32 = 0
+
+step: (digit: u32) -> (value: u32) =
+    trace = trace * 10 + digit
+    value = digit
+end step
+
+fixed if compiler.arch == x86_64 then
+    bump: (at: usize) -> none =
+        assembler.block("addl $1, ({p})", in p: usize at general = at)
+    end bump
+    pair: (a: u32, b: u32) -> (r: u32) =
+        r = assembler.block("movl {x}, {r}\naddl {y}, {r}",
+                            out r: u32 at general,
+                            in x: u32 at general = a,
+                            in y: u32 at general = b)
+    end pair
+elsif compiler.arch == arm64 then
+    bump: (at: usize) -> none =
+        assembler.block("ldr w9, [{p}]\nadd w9, w9, #1\nstr w9, [{p}]",
+                        in p: usize at general = at)
+    end bump
+    pair: (a: u32, b: u32) -> (r: u32) =
+        r = assembler.block("add {r}, {x}, {y}", out r: u32 at general,
+                            in x: u32 at general = a,
+                            in y: u32 at general = b)
+    end pair
+else
+    bump: (at: usize) -> none =
+        assembler.block("ldr r3, [{p}]\nadds r3, r3, #1\nstr r3, [{p}]",
+                        in p: usize at general = at)
+    end bump
+    pair: (a: u32, b: u32) -> (r: u32) =
+        r = assembler.block("adds {r}, {x}, {y}", out r: u32 at general,
+                            in x: u32 at general = a,
+                            in y: u32 at general = b)
+    end pair
+end if
+
+skipped: (early: bool) -> (result: u32) =
+    result = 1
+    result = pair(begin
+        return when early
+        step(4)
+    end, 0)
+end skipped
+
+public main: () -> (code: i32) =
+    code = 1
+    counter = 40
+    bump(usize(addr counter))
+    bump(usize(addr counter))
+    return when counter <> 42
+    code = 2
+    return when pair(step(1), step(2)) <> 3 or trace <> 12
+    code = 3
+    return when skipped(true) <> 1 or trace <> 12
+    return when skipped(false) <> 4 or trace <> 124
+    code = 42
+end main

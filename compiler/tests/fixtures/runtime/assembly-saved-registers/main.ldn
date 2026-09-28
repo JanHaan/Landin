@@ -1,0 +1,43 @@
+--  [1630]: a block that declares the registers a call must preserve makes
+--  its routine save them, so a caller holding many live values across the
+--  call still has them afterwards, at every optimisation level.
+fixed if compiler.arch == x86_64 then
+    clobber: (seed: u64) -> (r: u64) =
+        r = assembler.block(
+            "movq {s}, %rbx\nmovq {s}, %r12\nmovq {s}, %r13\nmovq {s}, %r14\nmovq {s}, %r15\nleaq 1(%r15), {r}",
+            in s: u64 at general = seed, out r: u64 at general,
+            out _ at rbx, out _ at r12, out _ at r13, out _ at r14,
+            out _ at r15)
+    end clobber
+elsif compiler.arch == arm64 then
+    clobber: (seed: u64) -> (r: u64) =
+        r = assembler.block(
+            "mov x19, {s}\nmov x20, {s}\nmov x21, {s}\nmov x22, {s}\nmov x23, {s}\nmov x24, {s}\nmov x25, {s}\nmov x26, {s}\nmov x27, {s}\nmov x28, {s}\nadd {r}, x28, #1",
+            in s: u64 at general = seed, out r: u64 at general,
+            out _ at x19, out _ at x20, out _ at x21, out _ at x22,
+            out _ at x23, out _ at x24, out _ at x25, out _ at x26,
+            out _ at x27, out _ at x28)
+    end clobber
+else
+    clobber: (seed: u64) -> (r: u64) =
+        r = u64(assembler.block(
+            "mov r4, {s}\nmov r5, {s}\nmov r6, {s}\nmov r7, {s}\nadds {r}, r7, #1",
+            in s: u32 at r0 = u32(seed), out r: u32 at r1,
+            out _ at r4, out _ at r5, out _ at r6, out _ at r7))
+    end clobber
+end if
+
+public main: () -> (code: i32) =
+    a: u64 = 1
+    b: u64 = 2
+    c: u64 = 3
+    d: u64 = 4
+    e: u64 = 5
+    f: u64 = 6
+    mut total: u64 = 0
+    for round in 0..3 do
+        total = total + clobber(u64(round) * 1000) + a + b + c + d + e + f
+    end for
+    --  (1 + 1001 + 2001 + 3001) + 4 * 21 = 6088
+    code = if total == 6088 then 42 else 1 end if
+end main

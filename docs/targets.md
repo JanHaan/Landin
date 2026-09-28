@@ -121,6 +121,14 @@ or unavailable variables have no valid location, and ranges end before frame
 restoration. The complete parser, containers and hosted application run in the
 native LLDB matrix, using the existing Linux source/value oracles.
 
+An assembly block has the line its source gives it: the instruction's line
+entry covers the loads of its inputs, the text and the stores of its outputs,
+and a source breakpoint on it stops before any of them. Each output is an
+ordinary local from the next line on. A callee-saved register the block
+declares is saved with the others and described by the same CFI, so the
+caller's frame shows its own value; the GDB session asserts `rbx` there on
+every profile.
+
 ### Exact identity and optional deployment
 
 The map's `build_id` is the full SHA-256 digest of the compiler assembly and
@@ -448,6 +456,18 @@ an unnamed pattern. The [probe guide](../environments/cortex-m/README.md)
 distinguishes compiler-generated hosted peripheral execution, independent M0
 C controls, and abstract model assertions.
 
+
+## x86-64 assembly implementation
+
+`Backend.X86_64` emits a block's text as written, one instruction a line and
+outside selection, so no rewrite reaches it; body sharing still compares it.
+Each input is moved into its register at its type's width, zero- or
+sign-extended to the whole register (`movz`/`movs`, `movl`, `movslq`), and
+each output is stored from its register into its slot. The allocator hands out
+only rbx and r12-r15, and none a block of the routine declares: that register
+is marked saved instead, so the prologue stores it with a `.cfi_offset` and
+every epilogue restores it. No value therefore lives in a register a block
+names or overwrites, which is what lets inputs and outputs move directly.
 
 ## Cortex-M0 assembly implementation
 
