@@ -51,6 +51,15 @@ package body Landin.Tokens.Lexer is
                    Assignment => Plain_Assignment));
       end Emit;
 
+      --  A piece of space, which the parser never reads.
+      procedure Keep (Kind : Space_Kind; First, Stop : Natural);
+
+      procedure Keep (Kind : Space_Kind; First, Stop : Natural) is
+      begin
+         Into.Spaces.Append
+           (Space'(Kind => Kind, Where => Span (First, Stop)));
+      end Keep;
+
       procedure Complain
         (Kind   : Fault_Kind;
          First  : Natural;
@@ -604,6 +613,10 @@ package body Landin.Tokens.Lexer is
                   end if;
                end loop;
 
+               --  One never closed is still one piece, to the end of the
+               --  file, so the bytes after its opener are kept too.
+               Keep (Block_Comment, First, Position - 1);
+
                if Depth > 0 then
                   --  The opener and the end of the file are the two places
                   --  a reader looks.
@@ -616,8 +629,8 @@ package body Landin.Tokens.Lexer is
             return;
          end if;
 
-         --  A doc comment attaches to what follows [0030], so its span is
-         --  kept even though it produces no token.
+         --  The line end is not the comment's: it is a piece of its own,
+         --  whatever precedes it.
          declare
             Doc : constant Boolean := Ahead ("---");
          begin
@@ -627,9 +640,8 @@ package body Landin.Tokens.Lexer is
                Advance;
             end loop;
 
-            if Doc then
-               Into.Docs.Append (Span (First, Position - 1));
-            end if;
+            Keep ((if Doc then Doc_Comment else Line_Comment),
+                  First, Position - 1);
          end;
       end Scan_Comment;
 
@@ -639,17 +651,39 @@ package body Landin.Tokens.Lexer is
       --  file's tokens appended to the last file's.
       Into.Items.Clear;
       Into.Faults.Clear;
-      Into.Docs.Clear;
+      Into.Spaces.Clear;
       Into.Source := Landin.Source.Id (From);
 
       while Position <= Last loop
          declare
             Here : constant Character := Text (Position);
          begin
-            if Here = ' ' or else Here = Tab or else Here = LF
-              or else Here = CR
-            then
-               Position := Position + 1;
+            if Here = ' ' or else Here = Tab then
+               declare
+                  First : constant Natural := Position;
+               begin
+                  while Position <= Last
+                    and then (Text (Position) = ' '
+                              or else Text (Position) = Tab)
+                  loop
+                     Position := Position + 1;
+                  end loop;
+                  Keep (Blanks, First, Position - 1);
+               end;
+
+            --  [1750]'s three line ends, CR LF being one and not two.
+            elsif Here = LF or else Here = CR then
+               declare
+                  First : constant Natural := Position;
+               begin
+                  Position := Position + 1;
+                  if Here = CR and then Position <= Last
+                    and then Text (Position) = LF
+                  then
+                     Position := Position + 1;
+                  end if;
+                  Keep (Line_End, First, Position - 1);
+               end;
 
             elsif Ahead ("--") then
                Scan_Comment;

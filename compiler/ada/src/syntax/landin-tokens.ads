@@ -7,6 +7,13 @@
 --  one literal per reserved word, one per sign. A hand-written parser then
 --  branches on a value whose coverage the Ada compiler checks.
 --
+--  The language discards space, and the stream keeps it anyway, beside the
+--  tokens rather than among them.  A formatter has to put every comment
+--  back and an editor has to know where a line ends, and neither can ask
+--  the parser, which never reads a piece of space and so cannot be changed
+--  by one.  Every byte of a file is then in exactly one token or one piece,
+--  which is what lets the file be written out again from the stream.
+--
 --  One band is not the kernel's, and is a token on purpose.
 --  Malformed_Kind is a run of bytes no rule spells at all: a
 --  parser that recovers needs something standing in the hole, because a hole
@@ -275,14 +282,52 @@ package Landin.Tokens is
      return Fault
      with Pre => Index <= Fault_Count (Of_Stream);
 
-   --  A comment is space and produces no token [1750], so a doc comment
-   --  cannot be one. Its span is kept anyway, because [0030] attaches it to
-   --  the declaration that follows and only the parser knows what that is.
-   function Doc_Comment_Count (Of_Stream : Token_Stream) return Natural;
+   ------------------------------------------------------------------
+   --  Space
+   ------------------------------------------------------------------
 
-   function Nth_Doc_Comment (Of_Stream : Token_Stream; Index : Positive)
-     return Landin.Source.Span
-     with Pre => Index <= Doc_Comment_Count (Of_Stream);
+   --  The four forms [1750] calls space, with [1780]'s three comments told
+   --  apart.  A run of blanks is spaces and tabs only, and as long as it
+   --  can be.  A line end is one of [1750]'s three, and its bytes say
+   --  which.  A line or doc comment stops before its line end.  A block
+   --  comment runs to its own `)--` and keeps the line ends inside it; one
+   --  never closed runs to the end of the file, with the fault beside it,
+   --  as a malformed token has one.  A doc comment is a kind rather than a
+   --  table of its own, because [0030] attaches it to what follows, and
+   --  what follows is found by reading the pieces in order.
+   type Space_Kind is
+     (Blanks, Line_End, Line_Comment, Doc_Comment, Block_Comment);
+
+   type Space is private;
+
+   function Kind (Item : Space) return Space_Kind;
+
+   --  Never empty, and never inside a token.
+   function Where (Item : Space) return Landin.Source.Span;
+
+   --  The pieces in byte order: each starts where a token or another piece
+   --  ended.
+   function Space_Count (Of_Stream : Token_Stream) return Natural;
+
+   function Nth_Space (Of_Stream : Token_Stream; Index : Positive)
+     return Space
+     with Pre => Index <= Space_Count (Of_Stream);
+
+   --  Which pieces, by position, and none when Last < First.
+   type Space_Range is record
+      First : Positive := 1;
+      Last  : Natural  := 0;
+   end record;
+
+   --  The pieces between token At_Index - 1 and token At_Index, or before
+   --  the first token.  Every piece leads exactly one token, and those
+   --  that lead End_Of_Input are the tail of the file.  No token records
+   --  its pieces: they are found by offset, so there is no second copy of
+   --  where they are to disagree with the first.
+   function Leading (Of_Stream : Token_Stream; At_Index : Token_Index)
+     return Space_Range
+     with Pre  => At_Index <= Count (Of_Stream),
+          Post => Leading'Result.Last <= Space_Count (Of_Stream);
 
 private
 
@@ -294,6 +339,11 @@ private
       Base    : Integer_Base := Decimal;
       Digit_Run : Landin.Source.Span := Landin.Source.Empty_Span;
       Assignment : Assignment_Operator := Plain_Assignment;
+   end record;
+
+   type Space is record
+      Kind  : Space_Kind := Blanks;
+      Where : Landin.Source.Span := Landin.Source.Empty_Span;
    end record;
 
    type Fault is record
@@ -309,16 +359,14 @@ private
    package Fault_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Fault);
 
-   package Span_Vectors is new Ada.Containers.Vectors
-     (Index_Type   => Positive,
-      Element_Type => Landin.Source.Span,
-      "="          => Landin.Source."=");
+   package Space_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Space);
 
    type Token_Stream is limited record
       Source  : Landin.Source.Source_Id := Landin.Source.No_Source;
       Items   : Token_Vectors.Vector;
       Faults  : Fault_Vectors.Vector;
-      Docs    : Span_Vectors.Vector;
+      Spaces  : Space_Vectors.Vector;
    end record;
 
 end Landin.Tokens;

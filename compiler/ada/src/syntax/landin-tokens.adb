@@ -125,10 +125,55 @@ package body Landin.Tokens is
    function Nth_Fault (Of_Stream : Token_Stream; Index : Positive)
      return Fault is (Of_Stream.Faults.Element (Index));
 
-   function Doc_Comment_Count (Of_Stream : Token_Stream) return Natural
-     is (Natural (Of_Stream.Docs.Length));
+   function Kind (Item : Space) return Space_Kind is (Item.Kind);
 
-   function Nth_Doc_Comment (Of_Stream : Token_Stream; Index : Positive)
-     return Landin.Source.Span is (Of_Stream.Docs.Element (Index));
+   function Where (Item : Space) return Landin.Source.Span is (Item.Where);
+
+   function Space_Count (Of_Stream : Token_Stream) return Natural
+     is (Natural (Of_Stream.Spaces.Length));
+
+   function Nth_Space (Of_Stream : Token_Stream; Index : Positive)
+     return Space is (Of_Stream.Spaces.Element (Index));
+
+   function Leading (Of_Stream : Token_Stream; At_Index : Token_Index)
+     return Space_Range
+   is
+      use type Landin.Source.Byte_Offset;
+
+      --  How many pieces end at or before Offset.  The pieces are in byte
+      --  order and never overlap, so their ends ascend and this is a
+      --  binary search.
+      function Ending_By (Offset : Landin.Source.Byte_Offset) return Natural;
+
+      function Ending_By (Offset : Landin.Source.Byte_Offset) return Natural
+      is
+         Low  : Natural := 0;
+         High : Natural := Space_Count (Of_Stream);
+      begin
+         --  Pieces 1 .. Low end by Offset; High + 1 .. Count do not.
+         while Low < High loop
+            declare
+               Middle : constant Positive := Low + (High - Low + 1) / 2;
+            begin
+               if Of_Stream.Spaces.Element (Middle).Where.Last <= Offset then
+                  Low := Middle;
+               else
+                  High := Middle - 1;
+               end if;
+            end;
+         end loop;
+         return Low;
+      end Ending_By;
+
+      --  Only End_Of_Input is empty, and it is last, so the token before
+      --  this one ends after every piece that leads it and before every
+      --  piece that follows it.
+      After : constant Natural :=
+        (if At_Index = 1 then 0
+         else Ending_By (Where (Of_Stream, At_Index - 1).Last));
+   begin
+      return (First => After + 1,
+              Last  => Ending_By (Where (Of_Stream, At_Index).First));
+   end Leading;
 
 end Landin.Tokens;

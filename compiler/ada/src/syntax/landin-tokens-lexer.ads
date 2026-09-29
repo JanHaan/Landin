@@ -8,6 +8,10 @@
 --  that says so, with a fault beside it, and the scan continues at the next
 --  byte: an ill-formed program is data [0950], and a parser that recovers
 --  needs a stream to recover in.
+--
+--  Nor does it drop a byte.  What is not a token is a piece of space, kept
+--  beside the tokens, so the scan decides once what every byte is and a
+--  reader that wants the layout back does not scan the file again.
 
 with Landin.Source;
 with Landin.Source.Names;
@@ -15,8 +19,9 @@ with Landin.Source.Names;
 package Landin.Tokens.Lexer is
 
    --  Reads one snapshot into a stream, interning identifiers into Names.
-   --  The stream always ends in End_Of_Input, and every span in it lies
-   --  inside From.
+   --  The stream always ends in End_Of_Input, every span in it lies inside
+   --  From, and every byte of From is in exactly one token or one piece of
+   --  space.
    procedure Lex
      (From   : Landin.Source.Snapshot;
       Names  : in out Landin.Source.Names.Table;

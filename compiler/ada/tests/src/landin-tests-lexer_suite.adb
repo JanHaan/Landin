@@ -15,6 +15,7 @@ with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Testing.Layout;
 with Landin.Tokens.Lexer;
 with Landin.Tokens.Text;
 with Landin.Tokens;
@@ -29,6 +30,7 @@ package body Landin.Tests.Lexer_Suite is
    use type Landin.Tokens.Integer_Base;
    use type Landin.Tokens.Token_Index;
    use type Landin.Tokens.Fault_Kind;
+   use type Landin.Tokens.Space_Kind;
    use type Landin.Tokens.Text.Code_Unit;
    use type Landin.Tokens.Text.Problem;
 
@@ -164,8 +166,12 @@ package body Landin.Tests.Lexer_Suite is
          Doc : Landin.Tokens.Token_Stream;
       begin
          Lex_Text ("--- a doc" & LF & "a: u32 = 1", Sources, Names, Doc);
-         Landin.Testing.Check_Equal
-           (Item, Landin.Tokens.Doc_Comment_Count (Doc), 1,
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Space_Count (Doc) >= 1
+            and then Landin.Tokens.Kind (Landin.Tokens.Nth_Space (Doc, 1))
+                     = Landin.Tokens.Doc_Comment
+            and then Landin.Tokens.Where
+                       (Landin.Tokens.Nth_Space (Doc, 1)).Last = 9,
             "a doc comment keeps its span for [0030] to attach later");
          Landin.Testing.Check_Equal
            (Item, Landin.Tokens.Fault_Count (Doc), 0,
@@ -218,6 +224,9 @@ package body Landin.Tests.Lexer_Suite is
          Landin.Testing.Check_Equal
            (Item, Natural (Landin.Tokens.Count (Stream)), Tokens,
             Label & " retains the surrounding token count");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Testing.Layout.Problem (Text, Stream), "",
+            Label & " keeps every byte of the comment");
          Landin.Testing.Check
            (Item, Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Identifier
             and then (if Tokens = 3 then
@@ -913,6 +922,159 @@ package body Landin.Tests.Lexer_Suite is
    end Uppercase_Faults_Keep_Byte_Boundaries;
 
    ------------------------------------------------------------------
+   --  Space, kept
+   ------------------------------------------------------------------
+
+   --  [1750] and [1780] piece by piece: what each form of space is kept
+   --  as, and that the tokens and the pieces are the whole file however it
+   --  ends, even when it ends inside something.
+   procedure Space_Is_Kept (Item : in out Landin.Testing.Context);
+
+   procedure Space_Is_Kept (Item : in out Landin.Testing.Context) is
+      Tab : constant Character := Character'Val (9);
+      CR  : constant Character := Character'Val (13);
+      FF  : constant Character := Character'Val (12);
+
+      function B (Value : Natural) return Character is
+        (Character'Val (Value));
+
+      --  Lexes Text, requires it back, and returns its pieces' kinds as
+      --  one letter each: b, n, l, d and c.
+      function Kinds (Label, Text : String) return String;
+
+      function Kinds (Label, Text : String) return String is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Letters : Unbounded.Unbounded_String;
+      begin
+         Lex_Text (Text, Sources, Names, Stream);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Testing.Layout.Problem (Text, Stream), "",
+            Label & " is reproduced from its tokens and its space");
+         for Index in 1 .. Landin.Tokens.Space_Count (Stream) loop
+            Unbounded.Append
+              (Letters,
+               (case Landin.Tokens.Kind
+                       (Landin.Tokens.Nth_Space (Stream, Index)) is
+                   when Landin.Tokens.Blanks        => 'b',
+                   when Landin.Tokens.Line_End      => 'n',
+                   when Landin.Tokens.Line_Comment  => 'l',
+                   when Landin.Tokens.Doc_Comment   => 'd',
+                   when Landin.Tokens.Block_Comment => 'c'));
+         end loop;
+         return Unbounded.To_String (Letters);
+      end Kinds;
+
+      procedure Expect (Label, Text, Pieces : String);
+
+      procedure Expect (Label, Text, Pieces : String) is
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Kinds (Label, Text), Pieces, Label & " keeps its pieces");
+      end Expect;
+   begin
+      Expect ("an empty file", "", "");
+      Expect ("a file of only space", " " & Tab & " " & LF & LF, "bnn");
+      Expect ("a run of spaces and tabs", "a " & Tab & " b", "b");
+      Expect ("LF", "a" & LF & "b", "n");
+      Expect ("CR LF, which is one line end", "a" & CR & LF & "b", "n");
+      Expect ("a lone CR", "a" & CR & "b", "n");
+      Expect ("CR then CR LF", "a" & CR & CR & LF & "b", "nn");
+      Expect ("LF then CR", "a" & LF & CR & "b", "nn");
+      Expect ("a CR that ends the file", "a" & CR, "n");
+      Expect ("no final line end", "a b", "b");
+      Expect ("trailing blanks", "a  " & LF & "  ", "bnb");
+      Expect ("a line comment and its line end",
+              "a -- note" & CR & LF & "b", "bln");
+      Expect ("a doc comment and its line end", "--- doc" & LF & "a", "dn");
+      Expect ("a comment of two dashes only", "a --" & LF, "bln");
+      Expect ("a block comment on one line", "a --( x )-- b", "bcb");
+      Expect ("a nested block comment across lines",
+              "a --( x" & LF & " --( y )-- " & CR & ")-- b", "bcb");
+      Expect ("a block comment closed by a longer run",
+              "a --( x )--- b", "bcb");
+      Expect ("the end of the file inside a line comment",
+              "a -- note", "bl");
+      Expect ("the end of the file inside a doc comment",
+              "a --- doc", "bd");
+      Expect ("the end of the file inside a nested block comment",
+              "a --( x --( y )-- z" & LF, "bc");
+      Expect ("invalid UTF-8 inside a line comment",
+              "a -- " & B (16#E9#) & LF & "b", "bln");
+      Expect ("invalid UTF-8 inside a block comment",
+              "a --(" & B (16#C3#) & ")-- b", "bcb");
+
+      --  None of these is space: each is a token no rule spells, and the
+      --  pieces are only what surrounds it.
+      Expect ("a byte-order mark",
+              B (16#EF#) & B (16#BB#) & B (16#BF#) & "a" & LF, "n");
+      Expect ("a form feed", "a" & LF & FF & LF & "b", "nn");
+      Expect ("a NUL byte", "a " & B (0) & " b", "bb");
+      Expect ("invalid UTF-8 in a name", "caf" & B (16#E9#) & LF, "n");
+      Expect ("an unclosed text literal", """open" & LF & "b", "n");
+      Expect ("an unclosed raw literal",
+              "a """"""" & LF & "never closed" & LF, "b");
+
+      --  Which token each piece leads.
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Text    : constant String :=
+           "  --- doc" & LF & "a --( x )-- b" & LF & "-- tail";
+      begin
+         Lex_Text (Text, Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Leading (Stream, 1).First = 1
+            and then Landin.Tokens.Leading (Stream, 1).Last = 3,
+            "the first token is led by the space before it");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Leading (Stream, 2).First = 4
+            and then Landin.Tokens.Leading (Stream, 2).Last = 6,
+            "a token is led by the space since the token before it");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Stream, 3) = Landin.Tokens.End_Of_Input
+            and then Landin.Tokens.Leading (Stream, 3).First = 7
+            and then Landin.Tokens.Leading (Stream, 3).Last = 8,
+            "and the end of input is led by the tail of the file");
+      end;
+
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("a+b", Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Space_Count (Stream) = 0
+            and then Landin.Tokens.Leading (Stream, 2).Last
+                     < Landin.Tokens.Leading (Stream, 2).First
+            and then Landin.Tokens.Leading (Stream, 4).Last
+                     < Landin.Tokens.Leading (Stream, 4).First,
+            "tokens that touch are led by nothing");
+      end;
+
+      --  The check itself has to refuse a stream that is not the file, or
+      --  every use of it above proves nothing.
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("a -- b" & LF, Sources, Names, Stream);
+         Landin.Testing.Check
+           (Item, Landin.Testing.Layout.Problem ("a -- b" & LF & LF, Stream)
+                  /= ""
+            and then Landin.Testing.Layout.Problem ("a    b" & LF, Stream)
+                     /= ""
+            and then Landin.Testing.Layout.Problem ("ab-- b" & LF, Stream)
+                     /= "",
+            "a stream is not taken for a file it was not read from");
+      end;
+   end Space_Is_Kept;
+
+   ------------------------------------------------------------------
    --  The agreement
    ------------------------------------------------------------------
 
@@ -1123,6 +1285,8 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "unterminated literals are faults",
          Unterminated_Literals_Are_Faults'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "space is kept", Space_Is_Kept'Access);
       Landin.Testing.Register
         (Into, "lexer", "agrees with the corpus",
          Agrees_With_The_Corpus'Access);
