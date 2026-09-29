@@ -118,6 +118,9 @@ package body Landin.Syntax is
    function Source_Of (Of_Tree : Tree) return Landin.Source.Source_Id
      is (Of_Tree.Source);
 
+   function Identity (Of_Tree : Tree) return Landin.Serials.Serial
+     is (Of_Tree.Serial);
+
    function Node_Count (Of_Tree : Tree) return Natural
      is (Natural (Of_Tree.Items.Length));
 

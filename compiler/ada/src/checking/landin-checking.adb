@@ -187,7 +187,7 @@ package body Landin.Checking is
    use type Landin.Syntax.Parameter_Convention;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Magnitude;
-   use type System.Address;
+   use type Landin.Serials.Serial;
 
    ------------------------------------------------------------------
    --  Nominal instance keys
@@ -217,7 +217,7 @@ package body Landin.Checking is
    function Atom_Set_Type_Actual
      (Of_Table : Table; Atoms : Atom_Set_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Atom_Set_Actual_Type,
-         Owner => Of_Table'Address, Atoms => Atoms, others => <>);
+         Owner => Of_Table.Serial, Atoms => Atoms, others => <>);
 
    function Fixed_Array_Type_Actual
      (Length  : Element_Count;
@@ -230,7 +230,7 @@ package body Landin.Checking is
       Length   : Element_Count;
       Element  : Nominal_Type_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Fixed_Array_Actual_Type,
-         Owner => Of_Table'Address, Length => Length, Nominal => Element,
+         Owner => Of_Table.Serial, Length => Length, Nominal => Element,
          others => <>);
 
    function Fixed_Array_Type_Actual
@@ -249,7 +249,7 @@ package body Landin.Checking is
          return Fixed_Array_Type_Actual (Of_Table, Length, Element.Nominal);
       end if;
       return (Kind => Type_Actual_Kind, Type_Form => Fixed_Array_Actual_Type,
-              Owner => Of_Table'Address, Length => Length,
+              Owner => Of_Table.Serial, Length => Length,
               Element_Shape => Element, others => <>);
    end Fixed_Array_Type_Actual;
 
@@ -279,22 +279,22 @@ package body Landin.Checking is
    function Nominal_Type_Actual
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Nominal_Actual_Type,
-         Owner => Of_Table'Address, Nominal => Nominal, others => <>);
+         Owner => Of_Table.Serial, Nominal => Nominal, others => <>);
 
    function Function_Type_Actual
      (Of_Table : Table; Signature : Signature_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Function_Actual_Type,
-         Owner => Of_Table'Address, Signature => Signature, others => <>);
+         Owner => Of_Table.Serial, Signature => Signature, others => <>);
 
    function Reference_Type_Actual
      (Of_Table : Table; Reference : Reference_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Reference_Actual_Type,
-         Owner => Of_Table'Address, Reference => Reference, others => <>);
+         Owner => Of_Table.Serial, Reference => Reference, others => <>);
 
    function Any_Type_Actual
      (Of_Table : Table; Concept : Concept_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Any_Actual_Type,
-         Owner => Of_Table'Address, Concept => Concept, others => <>);
+         Owner => Of_Table.Serial, Concept => Concept, others => <>);
 
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key
      is (Kind => Fixed_Actual_Kind, Value => Value, others => <>);
@@ -431,32 +431,32 @@ package body Landin.Checking is
          when Scalar_Actual_Type =>
             return True;
          when Atom_Set_Actual_Type =>
-            return Key.Owner = Of_Table'Address
+            return Key.Owner = Of_Table.Serial
               and then Holds (Of_Table, Key.Atoms);
          when Fixed_Array_Actual_Type =>
             if Key.Element_Shape.Kind /= Scalar_Field
               or else Key.Element_Shape.Signature /= No_Signature
               or else Key.Element_Shape.Atoms /= No_Atom_Set
             then
-               return Key.Owner = Of_Table'Address
+               return Key.Owner = Of_Table.Serial
                  and then Holds (Of_Table, Key.Element_Shape);
             end if;
             return Key.Nominal = No_Nominal_Type
-              or else (Key.Owner = Of_Table'Address
+              or else (Key.Owner = Of_Table.Serial
                        and then Holds (Of_Table, Key.Nominal));
          when Nominal_Actual_Type =>
-            return Key.Owner = Of_Table'Address
+            return Key.Owner = Of_Table.Serial
               and then Holds (Of_Table, Key.Nominal);
          when Function_Actual_Type =>
-            return Key.Owner = Of_Table'Address
+            return Key.Owner = Of_Table.Serial
               and then Holds (Of_Table, Key.Signature)
               and then Signature_Error_Form (Of_Table, Key.Signature)
                            /= Inferred;
          when Reference_Actual_Type =>
-            return Key.Owner = Of_Table'Address
+            return Key.Owner = Of_Table.Serial
               and then Holds (Of_Table, Key.Reference);
          when Any_Actual_Type =>
-            return Key.Owner = Of_Table'Address
+            return Key.Owner = Of_Table.Serial
               and then Holds (Of_Table, Key.Concept);
       end case;
    end Holds;
@@ -1214,8 +1214,10 @@ package body Landin.Checking is
      is (Landin.Syntax.Source_Of (Of_Tree) /= Landin.Source.No_Source
          and then Natural (Landin.Syntax.Source_Of (Of_Tree))
            <= Source_Count (Of_Table)
-         and then Of_Table.Tree_Addresses
-           (Positive (Landin.Syntax.Source_Of (Of_Tree))) = Of_Tree'Address
+         and then Landin.Serials."="
+           (Of_Table.Tree_Serials
+              (Positive (Landin.Syntax.Source_Of (Of_Tree))),
+            Landin.Syntax.Identity (Of_Tree))
          and then Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
            = Landin.Syntax.Node_Count (Of_Tree));
 
@@ -1236,7 +1238,7 @@ package body Landin.Checking is
             Into.Runs.Append
               (Run'(First => Natural (Into.Node_Types.Length),
                     Count => Held));
-            Into.Tree_Addresses.Append (Of_Tree.all'Address);
+            Into.Tree_Serials.Append (Landin.Syntax.Identity (Of_Tree.all));
 
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);

@@ -54,6 +54,7 @@ private with Ada.Containers.Vectors;
 
 with Landin.Layouts;
 with Landin.Provenance;
+with Landin.Serials;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Tokens;
@@ -467,6 +468,10 @@ package Landin.Syntax is
    type Tree (<>) is limited private;
 
    function Source_Of (Of_Tree : Tree) return Landin.Source.Source_Id;
+
+   --  Which parse made this tree, never the same for two in one process.
+   --  A side table records it to say which tree it was sized for.
+   function Identity (Of_Tree : Tree) return Landin.Serials.Serial;
 
    --  How many nodes there are, which is the size a side table needs.
    function Node_Count (Of_Tree : Tree) return Natural;
@@ -1622,6 +1627,7 @@ private
 
    type Tree is limited record
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Serial : Landin.Serials.Serial := Landin.Serials.Next;
       Items  : Node_Vectors.Vector;
       Links  : Slot_Vectors.Vector;
    end record;

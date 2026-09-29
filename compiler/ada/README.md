@@ -90,6 +90,7 @@ different responsibilities.
 | `Landin.Memory` | D227 memory operation identities and ordering legality | select instructions, infer aliases or choose a target |
 | `Landin.Layouts` | source representation policy names | place fields or derive target widths |
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
+| `Landin.Serials` | process-unique identities for trees and checking tables, so a stale key or tree is refused rather than matched by a reused address | reach output, numbering or iteration order |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
@@ -273,8 +274,11 @@ function value retains its signature; numeric folding still excludes it.
 Resolution and checking tables retain the identity of each immutable forest
 tree when prepared. `Covers` checks that exact object as well as its source
 number and node count; an equally sized tree from another compilation is not
-interchangeable. Host addresses serve only this internal equality check, never
-source numbering, target layout, output or iteration order.
+interchangeable. The identity is a `Landin.Serials` serial, not a host
+address: a freed compilation's tree or table may be followed by another at
+the same address, and a serial is never issued twice in one process. Serials
+serve only this internal equality check and the owner of a checking key,
+never source numbering, target layout, output or iteration order.
 Generic instance ownership follows the resolver's lexical scopes. A nested
 no-capture anonymous signature begins from file scope, so its declarations
 remain independent of the enclosing generic routine's instance overlays.

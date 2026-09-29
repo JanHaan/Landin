@@ -60,11 +60,11 @@ with Landin.Machine;
 with Ada.Containers;
 private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
-private with System;
 
 with Landin.Layouts;
 with Landin.Packed;
 with Landin.Provenance;
+with Landin.Serials;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
@@ -2434,11 +2434,11 @@ private
    package Run_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Run);
 
-   --  Immutable trees are limited heap objects owned by the forest. Their
-   --  addresses identify ownership only, never lookup order or target data.
-   package Tree_Address_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => System.Address,
-      "=" => System."=");
+   --  Which tree each run was sized for.  A serial identifies ownership
+   --  only, never lookup order or target data.
+   package Tree_Serial_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Landin.Serials.Serial,
+      "=" => Landin.Serials."=");
 
    package Link_Name_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive,
@@ -2481,7 +2481,7 @@ private
       Element_Shape : Field_Shape := (others => <>);
       Kind      : Actual_Kind := Type_Actual_Kind;
       Type_Form : Actual_Type_Form := Scalar_Actual_Type;
-      Owner     : System.Address := System.Null_Address;
+      Owner     : Landin.Serials.Serial := Landin.Serials.No_Serial;
       Scalar    : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Atoms     : Atom_Set_Id := No_Atom_Set;
       Length    : Element_Count := 0;
@@ -2776,6 +2776,8 @@ private
       Equivalent_Keys => "=");
 
    type Table is tagged limited record
+      --  Which table a key was made by; see Landin.Serials.
+      Serial       : Landin.Serials.Serial := Landin.Serials.Next;
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
       --  Which checker-owned nominal instance an Aggregate node has.  Empty
@@ -2799,7 +2801,7 @@ private
       Node_Shapes  : Shape_Vectors.Vector;
       Shapes       : Shape_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
-      Tree_Addresses : Tree_Address_Vectors.Vector;
+      Tree_Serials : Tree_Serial_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Link_Names   : Link_Name_Vectors.Vector;
       Declaration_Nominals : Nominal_Id_Vectors.Vector;

@@ -1,7 +1,5 @@
 package body Landin.Resolution is
 
-   use type System.Address;
-
    ------------------------------------------------------------------
    --  Sizing
    ------------------------------------------------------------------
@@ -24,8 +22,10 @@ package body Landin.Resolution is
      is (Landin.Syntax.Source_Of (Of_Tree) /= Landin.Source.No_Source
          and then Natural (Landin.Syntax.Source_Of (Of_Tree))
            <= Source_Count (Of_Table)
-         and then Of_Table.Tree_Addresses
-           (Positive (Landin.Syntax.Source_Of (Of_Tree))) = Of_Tree'Address
+         and then Landin.Serials."="
+           (Of_Table.Tree_Serials
+              (Positive (Landin.Syntax.Source_Of (Of_Tree))),
+            Landin.Syntax.Identity (Of_Tree))
          and then Node_Limit (Of_Table, Landin.Syntax.Source_Of (Of_Tree))
            = Landin.Syntax.Node_Count (Of_Tree));
 
@@ -45,8 +45,9 @@ package body Landin.Resolution is
                 (Landin.Syntax.Forest.Tree_Of (Trees, Id).all);
          begin
             Into.Runs.Append (Run'(First => Next + 1, Count => Size));
-            Into.Tree_Addresses.Append
-              (Landin.Syntax.Forest.Tree_Of (Trees, Id).all'Address);
+            Into.Tree_Serials.Append
+              (Landin.Syntax.Identity
+                 (Landin.Syntax.Forest.Tree_Of (Trees, Id).all));
             Next := Next + Size;
          end;
       end loop;
