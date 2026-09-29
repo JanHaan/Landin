@@ -290,7 +290,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
    begin
       Host.Clock.Calls := Host.Clock.Calls + 1;
       return (Processor_Microseconds => Host.Clock.Calls * 10,
-              Peak_Resident_KiB => 100 + Host.Clock.Calls);
+              Peak_Resident_KiB => 100 + Host.Clock.Calls,
+              Allocated_Bytes => 0);
    end Sample;
 
    procedure Stage_Reports (Item : in out Landin.Testing.Context) is

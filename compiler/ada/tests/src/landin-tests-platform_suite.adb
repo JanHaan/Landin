@@ -4,6 +4,7 @@ with Ada.Environment_Variables;
 with Ada.Streams.Stream_IO;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Ada.Unchecked_Deallocation;
 with Interfaces.C;
 
 with Landin.Platform.Native;
@@ -1025,6 +1026,40 @@ package body Landin.Tests.Platform_Suite is
          "and it is read whole, from its own start");
    end Native_Reads_Share_An_Open_File;
 
+   --  Deliberately uses the real host: whether the allocator's count
+   --  follows an allocation down again is a fact about the host's
+   --  allocator, and it is the measure the repeated-compilation case rests
+   --  on.  A megabyte, so neither a small-block cache nor the counter's own
+   --  granularity can hide it.
+   procedure Native_Allocation_Is_Counted
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Allocation_Is_Counted
+     (Item : in out Landin.Testing.Context)
+   is
+      type Block is array (1 .. 1_048_576) of Character;
+      type Block_Access is access Block;
+      procedure Free is new Ada.Unchecked_Deallocation (Block, Block_Access);
+      Meter : Landin.Platform.Native.Native_Meter;
+      Before : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
+      Held : Block_Access := new Block'(others => 'x');
+      During : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
+   begin
+      Free (Held);
+      declare
+         After : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
+      begin
+         Landin.Testing.Check
+           (Item, Before > 0, "the host counts allocated bytes");
+         Landin.Testing.Check
+           (Item, During - Before >= Block'Size / 8,
+            "a held megabyte is counted");
+         Landin.Testing.Check
+           (Item, During - After >= Block'Size / 8,
+            "and it is no longer counted once freed");
+      end;
+   end Native_Allocation_Is_Counted;
+
    --  Deliberately uses the real host: inode and symbolic-link identity
    --  cannot be established by the fake's declared overlap pairs.
    procedure Native_Path_Identity (Item : in out Landin.Testing.Context);
@@ -1228,6 +1263,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native reads share an open file",
          Native_Reads_Share_An_Open_File'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native allocation is counted",
+         Native_Allocation_Is_Counted'Access);
    end Register;
 
 end Landin.Tests.Platform_Suite;

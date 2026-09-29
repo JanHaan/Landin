@@ -141,11 +141,18 @@ package Landin.Platform is
    --  and never an input: nothing a compilation decides may depend on one,
    --  because two runs of the same request differ in both.  Tools the
    --  driver starts are not charged to the compiler.
+   --
+   --  Allocated_Bytes is what the allocator holds for the process right
+   --  now.  The peak only rises, so it cannot say whether a finished
+   --  compilation gave its storage back; this falls when storage is freed,
+   --  which is the question a process that checks one program after
+   --  another has to be able to ask.
    ---------------------------------------------------------------------
 
    type Resource_Sample is record
       Processor_Microseconds : Long_Long_Integer := 0;
       Peak_Resident_KiB      : Long_Long_Integer := 0;
+      Allocated_Bytes        : Long_Long_Integer := 0;
    end record;
 
    type Resource_Meter is limited interface;

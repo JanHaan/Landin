@@ -305,13 +305,17 @@ package body Landin.Platform.Native is
          Peak      : out Interfaces.C.long_long) return Interfaces.C.int
         with Import, Convention => C,
              External_Name => "landin_resource_usage";
+      function Allocated return Interfaces.C.long_long
+        with Import, Convention => C,
+             External_Name => "landin_allocated_bytes";
       Processor, Peak : Interfaces.C.long_long;
    begin
       if Usage (Processor, Peak) /= 0 then
          raise Host_Exhausted with "the host refused its resource counters";
       end if;
       return (Processor_Microseconds => Long_Long_Integer (Processor),
-              Peak_Resident_KiB      => Long_Long_Integer (Peak));
+              Peak_Resident_KiB      => Long_Long_Integer (Peak),
+              Allocated_Bytes        => Long_Long_Integer (Allocated));
    end Sample;
 
 end Landin.Platform.Native;
