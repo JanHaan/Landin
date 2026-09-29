@@ -2,6 +2,6 @@ lookalike: type = struct
     offset: usize
 end lookalike
 
-bad: (source: utf8, cursor: lookalike) -> (result: []u8 from source) =
+bad: (source: utf8, cursor: lookalike) -> (result: u32) =
     result = source[cursor]
 end bad

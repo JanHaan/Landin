@@ -1,4 +1,7 @@
+bytes: type = []u8
+
 bad: (source: utf8) -> none =
-    mut view: utf8 = source[0..<lenof source]
-    view[0][0] = 0
+    view: utf8 = source[0..<lenof source]
+    mut raw: bytes = bytes(view)
+    raw[0] = 0
 end bad

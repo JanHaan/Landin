@@ -44,12 +44,11 @@ exhaust: (provider: type is mem.allocator, inout inner: provider)
             return
         end
         text: utf8 = tree.name(saved)
-        first: []u8 = text[0]
         leaves: u32 = tree.count_leaves(value, tree.id(u32(at))) else (problem)
             _ = problem
             return
         end
-        return when lenof text <> 4 or first[0] <> 107 or leaves <> 1
+        return when lenof text <> 4 or text[0] <> 'k' or leaves <> 1
         inc at
     end while
     tree.release(value, state)

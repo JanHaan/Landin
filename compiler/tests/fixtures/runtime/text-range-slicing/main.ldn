@@ -1,3 +1,5 @@
+bytes: type = []u8
+
 mut order: u32 = 0
 
 mark_source: () -> (value: usize) =
@@ -34,9 +36,9 @@ public main: () -> (code: i32) =
     wide_inclusive: utf16 = wide[1..1]
     empty_wide: utf16 = wide[4..<4]
 
-    snowman_bytes: []u8 = snowman[0]
-    emoji_bytes: []u8 = emoji[0]
-    ordered_bytes: []u8 = ordered[0]
+    snowman_bytes: bytes = bytes(snowman)
+    emoji_bytes: bytes = bytes(emoji)
+    ordered_bytes: bytes = bytes(ordered)
 
     if order == 123
       and lenof snowman == 3 and lenof snowman_bytes == 3
@@ -44,6 +46,7 @@ public main: () -> (code: i32) =
       and lenof emoji == 4 and lenof emoji_bytes == 4
       and emoji_bytes[0] == 240 and emoji_bytes[3] == 128
       and lenof ordered == 3 and ordered_bytes[1] == 152
+      and snowman[0] == '\u{2603}' and emoji[0] == '\u{1f600}'
       and lenof empty_narrow == 0
       and lenof wide_emoji == 2 and lenof wide_inclusive == 2
       and lenof empty_wide == 0

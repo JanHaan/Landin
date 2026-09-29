@@ -841,7 +841,7 @@ tree_append_retry: () -> (ok: bool) =
             end
         end
         name: utf8 = tree.name(selected)
-        first_byte: []u8 = name[0]
+        first: u32 = name[0]
         leaves: u32 = tree.count_leaves(value, tree.id(u32(at)))
             else (problem)
                 _ = problem
@@ -849,7 +849,7 @@ tree_append_retry: () -> (ok: bool) =
                 0
             end
         if u32(tree.node_id(u32(at))) <> u32(at)
-          or lenof name <> 4 or first_byte[0] <> 108 or leaves <> 1
+          or lenof name <> 4 or first <> 'l' or leaves <> 1
         then
             retained = false
         end if
@@ -869,14 +869,14 @@ tree_append_retry: () -> (ok: bool) =
         return
     end
     root_name: utf8 = tree.name(root_node)
-    root_first: []u8 = root_name[0]
+    root_first: u32 = root_name[0]
     total: u32 = tree.count_leaves(value, root) else (problem)
         _ = problem
         tree.release(value, state)
         return
     end
     appended: bool = u32(root) == 8 and tree.length(value) == 9
-                     and lenof root_name == 6 and root_first[0] == 98
+                     and lenof root_name == 6 and root_first == 'b'
                      and total == 8
                      and failing.attempts(state) == 5
                      and failing.delegated(state) == 2

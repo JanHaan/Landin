@@ -82984,40 +82984,52 @@ file negative/text-slice-needs-usize-bounds/program.ldn tokens 31
   104 105 ]
   106 109 end
   110 113 bad
-file negative/text-slice-result-is-read-only/program.ldn tokens 33
-  0 3 bad
-  3 4 :
-  5 6 (
-  6 12 source
-  12 13 :
-  14 18 utf8
-  18 19 )
-  20 22 ->
-  23 27 none
-  28 29 =
-  34 37 mut
-  38 42 view
-  42 43 :
-  44 48 utf8
-  49 50 =
-  51 57 source
-  57 58 [
-  58 59 0
-  59 62 ..<
-  62 67 lenof
-  68 74 source
-  74 75 ]
-  80 84 view
-  84 85 [
-  85 86 0
-  86 87 ]
-  87 88 [
-  88 89 0
-  89 90 ]
-  91 92 =
-  93 94 0
-  95 98 end
-  99 102 bad
+file negative/text-slice-result-is-read-only/program.ldn tokens 45
+  0 5 bytes
+  5 6 :
+  7 11 type
+  12 13 =
+  14 15 [
+  15 16 ]
+  16 18 u8
+  20 23 bad
+  23 24 :
+  25 26 (
+  26 32 source
+  32 33 :
+  34 38 utf8
+  38 39 )
+  40 42 ->
+  43 47 none
+  48 49 =
+  54 58 view
+  58 59 :
+  60 64 utf8
+  65 66 =
+  67 73 source
+  73 74 [
+  74 75 0
+  75 78 ..<
+  78 83 lenof
+  84 90 source
+  90 91 ]
+  96 99 mut
+  100 103 raw
+  103 104 :
+  105 110 bytes
+  111 112 =
+  113 118 bytes
+  118 119 (
+  119 123 view
+  123 124 )
+  129 132 raw
+  132 133 [
+  133 134 0
+  134 135 ]
+  136 137 =
+  138 139 0
+  140 143 end
+  144 147 bad
 file negative/text-slice-result-keeps-identity/program.ldn tokens 29
   0 3 bad
   3 4 :
@@ -83742,7 +83754,7 @@ file negative/usize-is-not-u64/program.ldn tokens 25
   48 49 b
   50 53 end
   54 55 f
-file negative/utf16-indexing-is-not-utf8-indexing/program.ldn tokens 26
+file negative/utf16-indexing-is-not-utf8-indexing/program.ldn tokens 22
   0 3 bad
   3 4 :
   5 6 (
@@ -83754,22 +83766,18 @@ file negative/utf16-indexing-is-not-utf8-indexing/program.ldn tokens 26
   24 25 (
   25 31 result
   31 32 :
-  33 34 [
-  34 35 ]
-  35 37 u8
-  38 42 from
-  43 49 source
-  49 50 )
+  33 36 u32
+  36 37 )
+  38 39 =
+  44 50 result
   51 52 =
-  57 63 result
-  64 65 =
-  66 72 source
-  72 73 [
-  73 74 0
-  74 75 ]
-  76 79 end
-  80 83 bad
-file negative/utf8-index-needs-u32-or-position/program.ldn tokens 30
+  53 59 source
+  59 60 [
+  60 61 0
+  61 62 ]
+  63 66 end
+  67 70 bad
+file negative/utf8-index-needs-u32-or-position/program.ldn tokens 26
   0 3 bad
   3 4 :
   5 6 (
@@ -83785,22 +83793,18 @@ file negative/utf8-index-needs-u32-or-position/program.ldn tokens 30
   37 38 (
   38 44 result
   44 45 :
-  46 47 [
-  47 48 ]
-  48 50 u8
-  51 55 from
-  56 62 source
-  62 63 )
+  46 49 u32
+  49 50 )
+  51 52 =
+  57 63 result
   64 65 =
-  70 76 result
-  77 78 =
-  79 85 source
-  85 86 [
-  86 91 index
-  91 92 ]
-  93 96 end
-  97 100 bad
-file negative/utf8-index-position-identity-is-exact/program.ldn tokens 40
+  66 72 source
+  72 73 [
+  73 78 index
+  78 79 ]
+  80 83 end
+  84 87 bad
+file negative/utf8-index-position-identity-is-exact/program.ldn tokens 36
   0 9 lookalike
   9 10 :
   11 15 type
@@ -83826,44 +83830,18 @@ file negative/utf8-index-position-identity-is-exact/program.ldn tokens 40
   100 101 (
   101 107 result
   107 108 :
-  109 110 [
-  110 111 ]
-  111 113 u8
-  114 118 from
-  119 125 source
-  125 126 )
+  109 112 u32
+  112 113 )
+  114 115 =
+  120 126 result
   127 128 =
-  133 139 result
-  140 141 =
-  142 148 source
-  148 149 [
-  149 155 cursor
-  155 156 ]
-  157 160 end
-  161 164 bad
-file negative/utf8-index-result-is-read-only/program.ldn tokens 21
-  0 3 bad
-  3 4 :
-  5 6 (
-  6 12 source
-  12 13 :
-  14 18 utf8
-  18 19 )
-  20 22 ->
-  23 27 none
-  28 29 =
-  34 40 source
-  40 41 [
-  41 42 0
-  42 43 ]
-  43 44 [
-  44 45 0
-  45 46 ]
-  47 48 =
-  49 51 65
-  52 55 end
-  56 59 bad
-file negative/utf8-index-result-keeps-origin/program.ldn tokens 28
+  129 135 source
+  135 136 [
+  136 142 cursor
+  142 143 ]
+  144 147 end
+  148 151 bad
+file negative/utf8-index-result-has-no-address/program.ldn tokens 26
   0 3 bad
   3 4 :
   5 6 (
@@ -83876,22 +83854,45 @@ file negative/utf8-index-result-keeps-origin/program.ldn tokens 28
   27 30 u32
   30 31 )
   32 34 ->
-  35 36 (
-  36 42 result
+  35 39 none
+  40 41 =
+  46 53 pointer
+  54 56 :=
+  57 61 addr
+  62 68 source
+  68 69 [
+  69 74 index
+  74 75 ]
+  80 81 _
+  82 83 =
+  84 91 pointer
+  92 95 end
+  96 99 bad
+file negative/utf8-index-result-is-not-a-place/program.ldn tokens 24
+  0 3 bad
+  3 4 :
+  5 6 (
+  6 12 source
+  12 13 :
+  14 18 utf8
+  18 19 )
+  20 22 ->
+  23 27 none
+  28 29 =
+  34 37 mut
+  38 42 copy
   42 43 :
-  44 45 [
-  45 46 ]
-  46 48 u8
-  48 49 )
-  50 51 =
-  56 62 result
-  63 64 =
-  65 71 source
-  71 72 [
-  72 77 index
-  77 78 ]
-  79 82 end
-  83 86 bad
+  44 48 utf8
+  49 50 =
+  51 57 source
+  62 66 copy
+  66 67 [
+  67 68 0
+  68 69 ]
+  70 71 =
+  72 74 65
+  75 78 end
+  79 82 bad
 file negative/variant-case-does-not-belong/program.ldn tokens 70
   0 4 left
   4 5 :

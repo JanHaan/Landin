@@ -5,6 +5,6 @@ public main: () -> (code: i32) =
     mut dummy: [1]u8 = [0]
     zero := text.first(dummy[0..<1])
     end_position := text.next(zero)
-    invalid: []u8 = source[end_position]
-    code = i32(invalid[0])
+    invalid: u32 = source[end_position]
+    code = i32(invalid)
 end main

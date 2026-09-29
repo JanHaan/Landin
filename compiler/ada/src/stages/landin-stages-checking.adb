@@ -1776,6 +1776,32 @@ package body Landin.Stages.Checking is
       function Is_Text_Position
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  D249: an index whose source is a utf8 view decodes a scalar value
+      --  and is not storage, so neither `addr` nor a write can reach it.
+      --  Ask only after the source is typed; this answers from the note.
+      function Is_Utf8_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Utf8_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Element_Index then
+            return False;
+         end if;
+         declare
+            From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+            Reference : constant Landin.Checking.Reference_Id :=
+              (if Landin.Checking.Type_Of (Types.all, Of_Tree, From)
+                    = Ty.Slice_Value
+               then Landin.Checking.Reference_Of (Types.all, Of_Tree, From)
+               else Landin.Checking.No_Reference);
+         begin
+            return Reference /= Landin.Checking.No_Reference
+              and then Landin.Checking.Descriptor_Of
+                (Types.all, Reference).View = Ty.Utf8_View;
+         end;
+      end Is_Utf8_Index;
+
       function Text_Reference
         (View : Ty.Text_View) return Landin.Checking.Reference_Id
         is (Landin.Checking.Text_Reference_Of (Types.all, View));
@@ -19950,20 +19976,12 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
 
-                     declare
-                        Result : constant Landin.Checking.Reference_Id :=
-                          Landin.Checking.Add_Reference
-                            (Types.all,
-                             (Kind     => Ty.Slice_Value,
-                              View     => Ty.Ordinary_View,
-                              Mutable  => False,
-                              Referent => Ty.U8,
-                              others   => <>));
-                     begin
-                        Landin.Checking.Note_Reference
-                          (Types.all, Of_Tree, Node, Result);
-                        return Kept (Ty.Slice_Value);
-                     end;
+                     --  D249: either operation decodes the selected scalar
+                     --  into a u32 value, the type [0250]'s character
+                     --  literal and D184's traversal Item already have.  It
+                     --  is a value, not a place: nothing stores it, so it
+                     --  carries no reference, permission or origin.
+                     return Kept (Ty.U32);
                   end if;
 
                   --  [0520]/[0570]: fixed arrays and slices are indexable.
@@ -21651,6 +21669,21 @@ package body Landin.Stages.Checking is
                            then Ty.Fixed_Array
                            else Selected_From (Of_Tree, Place));
 
+                  if Is_Utf8_Index (Of_Tree, Place) then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Place),
+                        Message => "a utf8 index decodes a codepoint value,"
+                                   & " which has no address",
+                        Note    => "[0610]: take the address of a byte in"
+                                   & " the text's []u8 view instead",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "the address operation",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   if Packed_Place (Of_Tree, Place) then
                      Bad.Report
                        (Item => Bad.Type_Mismatch,
@@ -21973,6 +22006,35 @@ package body Landin.Stages.Checking is
               Reference_Access_Of (Of_Tree, Node);
          begin
             if Through /= Landin.Checking.No_Reference then
+               --  D249: the walk above typed every step, so a decoded
+               --  codepoint anywhere in the chain is known.  It is a value,
+               --  and nothing reached through it is storage either.
+               declare
+                  Step : Syn.Node_Id := Node;
+               begin
+                  while Syn.Kind (Of_Tree, Step)
+                          in Syn.Member_Selection | Syn.Element_Index
+                  loop
+                     if Is_Utf8_Index (Of_Tree, Step) then
+                        Bad.Report
+                          (Item    => Bad.Immutable_Target,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Step),
+                           Message => "a utf8 index decodes a codepoint"
+                                      & " value, which is not a place",
+                           Note    => "[0610]: indexing reads a scalar;"
+                                      & " utf8 text is never written in"
+                                      & " place",
+                           Related => Syn.Origin
+                             (Of_Tree, Syn.Target_Of (Of_Tree, Step)),
+                           Because => "the utf8 value indexed here",
+                           Into    => Found);
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return;
+                     end if;
+                     Step := Syn.Target_Of (Of_Tree, Step);
+                  end loop;
+               end;
                if not Landin.Checking.Descriptor_Of
                  (Types.all, Through).Mutable
                then

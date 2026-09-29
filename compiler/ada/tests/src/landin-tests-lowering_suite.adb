@@ -9189,6 +9189,8 @@ package body Landin.Tests.Lowering_Suite is
    procedure Utf8_Indexes_Stay_Expressions_In_Recursive_Storage
      (Item : in out Landin.Testing.Context);
 
+   --  D249's decoded scalar fills a struct field and an array element as
+   --  any u32 expression does, rather than being stored as a place.
    procedure Utf8_Indexes_Stay_Expressions_In_Recursive_Storage
      (Item : in out Landin.Testing.Context)
    is
@@ -9198,16 +9200,14 @@ package body Landin.Tests.Lowering_Suite is
    begin
       Lower
         (Work,
-         "part: type = struct" & LF & "    bytes: []u8" & LF
+         "part: type = struct" & LF & "    scalar: u32" & LF
          & "    rows: [2][2]u16" & LF & "end part" & LF
-         & "index: (text: utf8, position: u32) -> (result: usize) =" & LF
-         & "    values: [1]part = [part(bytes: text[position]," & LF
+         & "index: (text: utf8, position: u32) -> (result: u32) =" & LF
+         & "    values: [1]part = [part(scalar: text[position]," & LF
          & "        rows: [[1, 2], [3, 4]])]" & LF
-         & "    slices: [1][]u8 = [text[position]]" & LF
-         & "    first_view: []u8 = values[0].bytes" & LF
-         & "    second_view: []u8 = slices[0]" & LF
-         & "    first: usize = lenof first_view" & LF
-         & "    second: usize = lenof second_view" & LF
+         & "    scalars: [1]u32 = [text[position]]" & LF
+         & "    first: u32 = values[0].scalar" & LF
+         & "    second: u32 = scalars[0]" & LF
          & "    result = first + second" & LF
          & "end index" & LF,
          Ran);
@@ -9231,10 +9231,13 @@ package body Landin.Tests.Lowering_Suite is
                   null;
             end case;
          end loop;
+         --  D249: each index decodes its scalar from the text's bytes,
+         --  so both reach memory, and neither is a slice to copy.
          Landin.Testing.Check
-           (Item, Loads >= 2 and then Copies >= 2
+           (Item, Loads >= 2 and then Copies = 0
             and then IR.Value_Count (Unit, Index) < 2_000,
-            "UTF8 decoding yields slice values, not recursive stored indexes");
+            "UTF8 decoding yields scalar values, not recursive stored"
+            & " indexes");
          Check_Terminators (Item, Unit, "UTF8 contextual indexes");
       end;
    end Utf8_Indexes_Stay_Expressions_In_Recursive_Storage;

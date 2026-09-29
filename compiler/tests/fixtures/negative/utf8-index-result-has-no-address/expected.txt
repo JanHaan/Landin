@@ -1,0 +1,10 @@
+error[L0301]: a utf8 index decodes a codepoint value, which has no address
+  --> ../tests/fixtures/negative/utf8-index-result-has-no-address/program.ldn:2:21
+  |
+2 |     pointer := addr source[index]
+  |                     ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/utf8-index-result-has-no-address/program.ldn:2:16
+  |
+2 |     pointer := addr source[index]
+  |                ^^^^^^^^^^^^^^^^^^ the address operation
+  = note: [0610]: take the address of a byte in the text's []u8 view instead

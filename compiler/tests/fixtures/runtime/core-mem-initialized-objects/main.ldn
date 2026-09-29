@@ -81,18 +81,9 @@ public main: () -> (code: i32) =
     end
     text_ok: bool = begin
         saved := filter_object.val.needle
-        c0: []u8 = saved[0]
-        c1: []u8 = saved[1]
-        c2: []u8 = saved[2]
-        c3: []u8 = saved[3]
-        c4: []u8 = saved[4]
-        c5: []u8 = saved[5]
-        lenof saved == 6 and lenof c0 == 1 and c0[0] == 110
-          and lenof c1 == 1 and c1[0] == 101
-          and lenof c2 == 1 and c2[0] == 101
-          and lenof c3 == 1 and c3[0] == 100
-          and lenof c4 == 1 and c4[0] == 108
-          and lenof c5 == 1 and c5[0] == 101
+        lenof saved == 6 and saved[0] == 'n' and saved[1] == 'e'
+          and saved[2] == 'e' and saved[3] == 'd' and saved[4] == 'l'
+          and saved[5] == 'e'
     end
     scalar_ok: bool = scalar.val == 29
     object_ok: bool = begin

@@ -55,8 +55,7 @@ exercise: (provider: type is mem.allocator, inout backing: provider)
             return
         end
         text: utf8 = tree.name(selected)
-        byte: []u8 = text[0]
-        return when lenof text <> 8 or byte[0] <> 114
+        return when lenof text <> 8 or text[0] <> 'r'
         inc at
     end while
     failing.permit(state, one)

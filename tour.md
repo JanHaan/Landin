@@ -982,16 +982,31 @@ Traversal declares no atom error. Use `core/text.from_c` when invalid encoding
 needs a recoverable `invalid_text` result.
 [0610] supplies indexing separately.
 
-### [0610] Indexing utf8 by an integer yields the bytes of one
+### [0610] Indexing utf8 by an integer yields the codepoint there
 
-Indexing utf8 by a `u32` yields a read-only `[]u8` containing the bytes of one
-codepoint and is a linear scan by codepoint ordinal. Indexing by the opaque
-`core/text.position` byte offset returns the same source-derived view in O(1).
-The position must be in bounds and at a codepoint boundary. An ordinal outside
-the text, or a position at the end or on a continuation byte, traps. Both
-conformances exist; the argument type decides without an implicit integer
-conversion. Converting the complete `utf8` to its ordinary byte view does not
-inherit this codepoint-index operation; it has the ordinary slice operations.
+Indexing utf8 by a `u32` yields that codepoint as a `u32`, the type a
+character literal [0250] and a traversal of the text [1320] already give it,
+and is a linear scan by codepoint ordinal. Indexing by the opaque
+`core/text.position` byte offset decodes the codepoint beginning there in
+O(1). The position must be in bounds and at a codepoint boundary. An ordinal
+outside the text, or a position at the end or on a continuation byte, traps.
+Both conformances exist; the argument type decides without an implicit
+integer conversion.
+
+```landin
+word: utf8 = "\u{e9}t\u{e9}"
+last := word[2]               -- 233, the u32 of é, found by scanning
+same := last == '\u{e9}'      -- true
+bytes: utf8 = word[3..3]      -- é again, at byte 3: two bytes, no copy
+
+```
+
+The codepoint is decoded, so it is a value and not a place: `addr word[2]`
+and `word[2] = 'e'` are errors. Its bytes are a one-codepoint range of
+[0600], whose bounds count bytes rather than codepoints and whose result is
+still `utf8`. Converting the complete `utf8` to its ordinary byte view does
+not inherit this codepoint-index operation; it has the ordinary slice
+operations.
 
 ### [0620] DEFERRED to a later version, kept here as a design record
 
@@ -2763,8 +2778,8 @@ indexable: type = concept (t: type, idx: type, item_type: type)
     get: (s: t, i: idx) -> (item: item_type)
 end indexable
 
-utf8 is indexable (idx: u32,      item_type: []u8, get: utf8_nth)
-utf8 is indexable (idx: position, item_type: []u8, get: utf8_at_pos)
+utf8 is indexable (idx: u32,      item_type: u32, get: utf8_nth)
+utf8 is indexable (idx: position, item_type: u32, get: utf8_at_pos)
 
 ```
 

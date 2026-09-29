@@ -1,0 +1,4 @@
+bad: (source: utf8) -> none =
+    mut copy: utf8 = source
+    copy[0] = 65
+end bad

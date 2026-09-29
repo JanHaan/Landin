@@ -82,7 +82,7 @@
 0580 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An empty slice still has a base
 0590 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fixed arrays are the vector type
 0600 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Text types are distinct views
-0610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the bytes of one
+0610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the codepoint there
 0620 | tour | - | - | - | - | - | transferred | none | none | Language evolution | DEFERRED to a later version, kept here as a design record
 0630 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
 0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms

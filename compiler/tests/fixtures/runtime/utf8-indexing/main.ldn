@@ -1,45 +1,48 @@
 import core/text
 
-nth: (source: utf8, index: u32) -> (result: []u8 from source) =
+nth: (source: utf8, index: u32) -> (result: u32) =
     result = source[index]
 end nth
 
-at: (source: utf8, cursor: text.position)
-    -> (result: []u8 from source) =
+at: (source: utf8, cursor: text.position) -> (result: u32) =
     result = source[cursor]
 end at
 
+--  A, the two bytes of U+00E9 and the three of U+2603 come first.
 position_of_emoji: () -> (result: text.position) =
     mut dummy: [1]u8 = [0]
-    zero := text.first(dummy[0..<1])
-    first := text.next(zero)
-    result = text.next(text.next(text.next(first)))
+    mut cursor := text.first(dummy[0..<1])
+    mut step: u32 = 0
+    while step < 6 do
+        text.advance(cursor)
+        inc step
+    end while
+    result = cursor
 end position_of_emoji
 
 public main: () -> (code: i32) =
-    source: utf8 = "A\u{2603}\u{1f600}Z"
-    a: []u8 = source[0]
-    snowman: []u8 = nth(source, 1)
-    emoji: []u8 = source[2]
-    z: []u8 = source[3]
+    source: utf8 = "A\u{e9}\u{2603}\u{1f600}Z"
     mut dummy: [1]u8 = [0]
     zero := text.first(dummy[0..<1])
-    snowman_at: []u8 = at(source, text.next(zero))
-    emoji_at: []u8 = source[position_of_emoji()]
+    snowman_at: u32 = at(source, text.next(text.next(text.next(zero))))
+    emoji_at: u32 = at(source, position_of_emoji())
+    snowman: []u8 = text.bytes(source[3..3])
 
-    mut bytes: [2]u8 = [10, 20]
-    ordinary: []u8 = bytes[0..<2]
+    --  Each ordinal agrees with the scalar traversal decodes there.
+    mut ordinal: u32 = 0
+    mut agree := true
+    for scalar in source do
+        agree = agree and scalar == nth(source, ordinal)
+        inc ordinal
+    end for
 
-    if lenof a == 1 and a[0] == 65
-      and lenof snowman == 3
-      and snowman[0] == 226 and snowman[1] == 152 and snowman[2] == 131
-      and lenof emoji == 4
-      and emoji[0] == 240 and emoji[1] == 159
-      and emoji[2] == 152 and emoji[3] == 128
-      and lenof z == 1 and z[0] == 90
-      and lenof snowman_at == 3 and snowman_at[2] == 131
-      and lenof emoji_at == 4 and emoji_at[3] == 128
-      and ordinary[0] == 10 and ordinary[1] == 20
+    if source[0] == 'A' and nth(source, 1) == '\u{e9}'
+      and nth(source, 2) == '\u{2603}' and nth(source, 3) == '\u{1f600}'
+      and nth(source, 4) == 'Z'
+      and at(source, zero) == 'A'
+      and snowman_at == 9731 and emoji_at == 128512
+      and lenof snowman == 3 and snowman[0] == 226 and snowman[2] == 131
+      and agree and ordinal == 5
     then
         code = 42
     else

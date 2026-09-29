@@ -59,8 +59,7 @@ public main: () -> (code: i32) =
             return
         end
         text: utf8 = tree.name(selected)
-        bytes: []u8 = text[0]
-        lenof text == 1 and bytes[0] == 98
+        lenof text == 1 and text[0] == 'b'
     end then
         return
     end if

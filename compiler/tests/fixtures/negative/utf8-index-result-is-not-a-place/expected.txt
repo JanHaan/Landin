@@ -1,0 +1,10 @@
+error[L0303]: a utf8 index decodes a codepoint value, which is not a place
+  --> ../tests/fixtures/negative/utf8-index-result-is-not-a-place/program.ldn:3:5
+  |
+3 |     copy[0] = 65
+  |     ^^^^^^^
+  --> ../tests/fixtures/negative/utf8-index-result-is-not-a-place/program.ldn:3:5
+  |
+3 |     copy[0] = 65
+  |     ^^^^ the utf8 value indexed here
+  = note: [0610]: indexing reads a scalar; utf8 text is never written in place
