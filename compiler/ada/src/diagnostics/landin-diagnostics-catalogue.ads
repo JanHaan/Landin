@@ -13,6 +13,10 @@
 --  bytes live in a fixture's golden; what a code requires of every one of
 --  its occurrences lives here.
 --
+--  A fix is data as well: whether an occurrence may carry one is a column,
+--  like how many notes it requires, and the fix's own message is written
+--  where it is built, in Landin.Diagnostics.Fixes, for the reason above.
+--
 --  A code is a name, not an address. The bands below record where a code was
 --  born, not which stage owns it: `L0010` began in lexical refusal and is
 --  now raised only by the parser. A retired code keeps its row, so its
@@ -598,6 +602,18 @@ package Landin.Diagnostics.Catalogue is
             when No_Toolchain          => 1,
             when others                => 0);
 
+   --  Whether an occurrence may carry a fix, which the text renders as a
+   --  `help` line and an editor offers as an action.  Must_Fix is a code
+   --  whose every occurrence has one; No_Fix is a code a stage may not
+   --  attach one to, because nothing it could rewrite is known to be what
+   --  the program meant.  Landin.Stages.Report holds every diagnostic to
+   --  this row as it joins a compilation's report.
+   type Fix_Admission is (No_Fix, May_Fix, Must_Fix);
+
+   function Fixes (Of_Code : Code_Name) return Fix_Admission
+     is (case Of_Code is
+            when others => No_Fix);
+
    function Count return Natural
      is (Code_Name'Pos (Code_Name'Last) - Code_Name'Pos (Code_Name'First) + 1);
 
@@ -605,5 +621,11 @@ package Landin.Diagnostics.Catalogue is
    --  number. Raises Compiler_Defect on a code no row holds, because a code
    --  outside the catalogue is the defect this package exists to prevent.
    function Named (Text : Code_String) return Code_Name;
+
+   --  Whether some row holds the code.  A stage test may report a code of
+   --  its own invention to exercise transport; nothing in `src/` can,
+   --  because check.py refuses a code written outside this file.
+   function Holds (Text : Code_String) return Boolean
+     is (for some Candidate in Code_Name => Code (Candidate) = Text);
 
 end Landin.Diagnostics.Catalogue;

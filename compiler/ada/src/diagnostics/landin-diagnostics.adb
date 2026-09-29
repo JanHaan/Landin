@@ -69,6 +69,105 @@ package body Landin.Diagnostics is
    function Nth_Note (Item : Diagnostic; Index : Positive) return String
      is (Item.Notes.Element (Index));
 
+   function Make_Edit
+     (Source      : Landin.Source.Source_Id;
+      Where       : Landin.Source.Span;
+      Replacement : String) return Edit
+   is
+     (Source => Source,
+      Where  => Where,
+      Text   => ASU.To_Unbounded_String (Replacement));
+
+   function Source_Of (Item : Edit) return Landin.Source.Source_Id
+     is (Item.Source);
+
+   function Span_Of (Item : Edit) return Landin.Source.Span
+     is (Item.Where);
+
+   function Replacement (Item : Edit) return String
+     is (ASU.To_String (Item.Text));
+
+   function Make_Fix
+     (Kind    : Repair;
+      Level   : Applicability;
+      Message : String) return Fix
+   is
+     (Kind  => Kind,
+      Level => Level,
+      Text  => ASU.To_Unbounded_String (Message),
+      Edits => Edit_Vectors.Empty_Vector);
+
+   --  Kept in order as they arrive, so an editor and a test apply the
+   --  same sequence whatever order the stage found the places in.  An
+   --  insertion at the very offset another edit starts at is ordered
+   --  before it: it touches that edit and does not overlap it.
+   procedure Add_Edit (Item : in out Fix; Extra : Edit) is
+      Before : Natural := 0;
+   begin
+      if Extra.Source = Landin.Source.No_Source then
+         raise Compiler_Defect with "an edit names no source";
+      end if;
+
+      for Index in 1 .. Natural (Item.Edits.Length) loop
+         declare
+            Held : constant Edit := Item.Edits.Element (Index);
+         begin
+            if Held.Source = Extra.Source
+              and then Held.Where.First < Extra.Where.Last
+              and then Extra.Where.First < Held.Where.Last
+            then
+               raise Compiler_Defect with "two edits of one fix overlap";
+            end if;
+
+            if Held.Source = Extra.Source
+              and then Landin.Source.Length (Held.Where) = 0
+              and then Landin.Source.Length (Extra.Where) = 0
+              and then Held.Where.First = Extra.Where.First
+            then
+               raise Compiler_Defect
+                 with "two insertions of one fix at one offset";
+            end if;
+
+            if Held.Source < Extra.Source
+              or else (Held.Source = Extra.Source
+                       and then (Held.Where.First < Extra.Where.First
+                                 or else (Held.Where.First
+                                            = Extra.Where.First
+                                          and then Landin.Source.Length
+                                            (Held.Where) = 0)))
+            then
+               Before := Index;
+            end if;
+         end;
+      end loop;
+
+      Item.Edits.Insert (Before + 1, Extra);
+   end Add_Edit;
+
+   function Kind (Item : Fix) return Repair is (Item.Kind);
+
+   function Level (Item : Fix) return Applicability is (Item.Level);
+
+   function Message (Item : Fix) return String
+     is (ASU.To_String (Item.Text));
+
+   function Edit_Count (Item : Fix) return Natural
+     is (Natural (Item.Edits.Length));
+
+   function Nth_Edit (Item : Fix; Index : Positive) return Edit
+     is (Item.Edits.Element (Index));
+
+   procedure Add_Fix (Item : in out Diagnostic; Extra : Fix) is
+   begin
+      Item.Fixes.Append (Extra);
+   end Add_Fix;
+
+   function Fix_Count (Item : Diagnostic) return Natural
+     is (Natural (Item.Fixes.Length));
+
+   function Nth_Fix (Item : Diagnostic; Index : Positive) return Fix
+     is (Item.Fixes.Element (Index));
+
    procedure Append (List : in out Diagnostic_List; Item : Diagnostic) is
    begin
       List.Items.Append (Item);

@@ -6,6 +6,8 @@ with Landin.Source.Sets;
 package body Landin.Tests.Diagnostics_Suite is
 
    use Landin.Diagnostics;
+   use type Landin.Source.Source_Id;
+   use type Landin.Source.Span;
 
    LF : constant Character := Character'Val (10);
 
@@ -828,8 +830,122 @@ package body Landin.Tests.Diagnostics_Suite is
       Check (Raw, (4, 5), 5, 11, 1, Display, Related => True);
    end Escaped_Bytes_Keep_Carets_Aligned;
 
+   --  A fix keeps its edits in source and byte order whatever order they
+   --  were added in, admits two that touch, and refuses two that overlap:
+   --  an editor applies a workspace edit's changes to one text, and two
+   --  changes to one byte have no order it could apply them in.
+   procedure Fixes_Keep_Their_Edits_In_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixes_Keep_Their_Edits_In_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      One : constant Landin.Source.Source_Id := 1;
+      Two : constant Landin.Source.Source_Id := 2;
+      Made : Fix := Make_Fix (Repair'Last, Exact, "did you mean `b`?");
+
+      function Refused (Extra : Edit) return Boolean;
+
+      function Refused (Extra : Edit) return Boolean is
+         Copy : Fix := Made;
+      begin
+         Add_Edit (Copy, Extra);
+         return False;
+      exception
+         when Landin.Compiler_Defect =>
+            return True;
+      end Refused;
+   begin
+      Add_Edit (Made, Make_Edit (Two, (1, 2), "x"));
+      Add_Edit (Made, Make_Edit (One, (4, 6), "yy"));
+      Add_Edit (Made, Make_Edit (One, (0, 1), ""));
+      Add_Edit (Made, Make_Edit (One, (4, 4), "z"));
+      Add_Edit (Made, Make_Edit (One, (1, 4), "w"));
+
+      Landin.Testing.Check_Equal
+        (Item, Edit_Count (Made), 5, "every edit is kept");
+      Landin.Testing.Check
+        (Item,
+         Span_Of (Nth_Edit (Made, 1)) = (0, 1)
+           and then Span_Of (Nth_Edit (Made, 2)) = (1, 4)
+           and then Span_Of (Nth_Edit (Made, 3)) = (4, 4)
+           and then Span_Of (Nth_Edit (Made, 4)) = (4, 6)
+           and then Source_Of (Nth_Edit (Made, 5)) = Two,
+         "edits are in source order, then byte order, an insertion before"
+         & " the replacement it touches");
+      Landin.Testing.Check_Equal
+        (Item, Replacement (Nth_Edit (Made, 3)), "z",
+         "an insertion keeps its bytes");
+      Landin.Testing.Check
+        (Item, Refused (Make_Edit (One, (5, 7), "")),
+         "an edit overlapping another is refused");
+      Landin.Testing.Check
+        (Item, Refused (Make_Edit (One, (4, 4), "again")),
+         "two insertions at one offset are refused");
+      Landin.Testing.Check
+        (Item, Refused (Make_Edit (Landin.Source.No_Source, (0, 0), "")),
+         "an edit names a source");
+      Landin.Testing.Check
+        (Item, not Refused (Make_Edit (Two, (5, 5), "")),
+         "another source's bytes are not this one's");
+      Landin.Testing.Check
+        (Item, Level (Made) = Exact and then Message (Made)
+                 = "did you mean `b`?",
+         "a fix keeps its applicability and message");
+   end Fixes_Keep_Their_Edits_In_Order;
+
+   --  A fix is one help line after the notes, in the order the fixes were
+   --  added, and adds nothing to a report without one.
+   procedure Fixes_Render_As_Help
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixes_Render_As_Help
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Id : constant Landin.Source.Source_Id :=
+        Sources.Add ("f.ldn", "x = vlaue" & LF);
+      Report : Diagnostic :=
+        Make ("L0150", Error, Id, (4, 9), "unknown");
+      Plain : constant String :=
+        "error[L0150]: unknown" & LF
+        & "  --> f.ldn:1:5" & LF
+        & "  |" & LF
+        & "1 | x = vlaue" & LF
+        & "  |     ^^^^^" & LF
+        & "  = note: a note" & LF;
+      First  : Fix := Make_Fix (Respell, Likely, "did you mean `value`?");
+      Second : Fix := Make_Fix (Respell, Likely, "did you mean `vague`?");
+   begin
+      Add_Note (Report, "a note");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Report, Sources), Plain,
+         "a report without a fix renders as it did");
+
+      Add_Edit (First, Make_Edit (Id, (4, 9), "value"));
+      Add_Edit (Second, Make_Edit (Id, (4, 9), "vague"));
+      Add_Fix (Report, First);
+      Add_Fix (Report, Second);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Report, Sources),
+         Plain
+         & "  = help: did you mean `value`?" & LF
+         & "  = help: did you mean `vague`?" & LF,
+         "each fix is one help line, after the notes, in order");
+      Landin.Testing.Check
+        (Item, Fix_Count (Report) = 2
+           and then Message (Nth_Fix (Report, 1)) = "did you mean `value`?",
+         "the first fix added is the first kept");
+   end Fixes_Render_As_Help;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "fixes keep their edits in order",
+         Fixes_Keep_Their_Edits_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics", "fixes render as help",
+         Fixes_Render_As_Help'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "escaped bytes keep carets aligned",
          Escaped_Bytes_Keep_Carets_Aligned'Access);

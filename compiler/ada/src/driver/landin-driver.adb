@@ -15,7 +15,6 @@ with Landin.IR.Simplification;
 with Landin.IR.Specialization;
 with Landin.Optimization;
 with Landin.Panics;
-with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Resolution;
@@ -424,6 +423,24 @@ package body Landin.Driver is
            Landin.Stages.Create (Facts);
          Panic : aliased Landin.Panics.Plan;
          Panic_Problem : Unbounded.Unbounded_String;
+
+         procedure Keep_Report;
+
+         --  The report as data beside its rendering, sorted as it was
+         --  rendered, and every source's name so a Source_Id means a path.
+         procedure Keep_Report is
+         begin
+            Result.Found :=
+              Landin.Diagnostics.Sorted (Landin.Stages.Report (Context));
+            for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+               Result.Named.Append
+                 (Landin.Source.Name
+                    (Landin.Stages.Source
+                       (Context,
+                        Landin.Stages.Nth_Source (Context, Index))
+                       .Element.all));
+            end loop;
+         end Keep_Report;
 
          procedure Note_Failure
            (Code : Landin.Diagnostics.Code_String; Text : String);
@@ -1645,6 +1662,7 @@ package body Landin.Driver is
             if Bad_Use or else Landin.Stages.Failed (Context) then
                Result.Report := Unbounded.To_Unbounded_String
                  (Landin.Stages.Rendered_Report (Context));
+               Keep_Report;
                Result.Status :=
                  (if Bad_Use then Status_Misuse else Status_Reported);
             else
@@ -1780,6 +1798,7 @@ package body Landin.Driver is
          Result.Report :=
            Unbounded.To_Unbounded_String
              (Landin.Stages.Rendered_Report (Context));
+         Keep_Report;
 
          if Bad_Use then
             Result.Status := Status_Misuse;

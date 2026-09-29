@@ -3,6 +3,7 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
@@ -3557,8 +3558,51 @@ package body Landin.Tests.Driver_Suite is
          "a labelled bare block closes with `end <label>`");
    end Labelled_Block_Refusals;
 
+   --  The report is handed back as data as well as text, in the order it
+   --  was rendered, with the path each source was read from: what a client
+   --  applying a fix needs, without reading the rendering back.
+   procedure Reports_Are_Returned_As_Data
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reports_Are_Returned_As_Data
+     (Item : in out Landin.Testing.Context)
+   is
+      Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("a.ldn", "f: () -> none =" & LF & "end f" & LF);
+      Host.Add_File ("b.ldn", "g: () -> (r: u32) = r = nope end g" & LF);
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Both ("a.ldn", "b.ldn"), Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "the unknown name is refused");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Result.Named.Length), 2, "both sources are named");
+         Landin.Testing.Check
+           (Item, Result.Named.Element (1) = "a.ldn"
+                  and then Result.Named.Element (2) = "b.ldn",
+            "a source's identity is its position in Named");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Result.Found), 1,
+            "the report holds the one diagnostic");
+         Landin.Testing.Check
+           (Item,
+            Landin.Diagnostics.Count (Result.Found) = 1
+            and then Natural (Landin.Diagnostics.Source_Of
+              (Landin.Diagnostics.Primary
+                 (Landin.Diagnostics.Get (Result.Found, 1)))) = 2,
+            "the diagnostic points at the second source");
+      end;
+   end Reports_Are_Returned_As_Data;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "reports are returned as data",
+         Reports_Are_Returned_As_Data'Access);
       Landin.Testing.Register
         (Into, "driver", "labelled block refusals",
          Labelled_Block_Refusals'Access);

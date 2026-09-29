@@ -265,6 +265,16 @@ package body Landin.Diagnostics.Text is
          Append (Buffer, Nth_Note (Item, Index));
          Append (Buffer, LF & "");
       end loop;
+
+      --  A fix is read by a person as one line saying what it would do;
+      --  its edits are for a tool, which takes them from the structured
+      --  report rather than from this text.
+      for Index in 1 .. Fix_Count (Item) loop
+         exit when Buffer.Full;
+         Append (Buffer, "  = help: ");
+         Append (Buffer, Message (Nth_Fix (Item, Index)));
+         Append (Buffer, LF & "");
+      end loop;
    end Render_Item;
 
    function Render

@@ -1,3 +1,4 @@
+with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
 
 package body Landin.Stages is
@@ -89,10 +90,92 @@ package body Landin.Stages is
      return not null access Landin.IR.Unit
      is (Context.Lowered'Access);
 
+   --  A fix is checked where it joins the report and not where it is built,
+   --  because only here are the sources it edits in hand: every edit must
+   --  lie inside the snapshot the compilation read and begin and end
+   --  between two characters, so an editor applying it can never split a
+   --  UTF-8 sequence.  And the catalogue row says whether the code may carry
+   --  one at all.
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)
    is
+      package Rows renames Landin.Diagnostics.Catalogue;
+
+      use type Landin.Source.Byte_Offset;
+      use type Rows.Fix_Admission;
+
+      Code : constant Landin.Diagnostics.Code_String :=
+        Landin.Diagnostics.Code (Item);
+      Admits : constant Rows.Fix_Admission :=
+        (if Rows.Holds (Code) then Rows.Fixes (Rows.Named (Code))
+         else Rows.May_Fix);
+      Fixed  : constant Natural := Landin.Diagnostics.Fix_Count (Item);
+
+      function Between_Characters
+        (Snap : Landin.Source.Snapshot; Offset : Landin.Source.Byte_Offset)
+         return Boolean;
+
+      function Between_Characters
+        (Snap : Landin.Source.Snapshot; Offset : Landin.Source.Byte_Offset)
+         return Boolean
+      is
+      begin
+         if Offset = Landin.Source.Length (Snap) then
+            return True;
+         end if;
+
+         declare
+            Byte : constant String :=
+              Landin.Source.Slice (Snap, (Offset, Offset + 1));
+         begin
+            return Character'Pos (Byte (Byte'First)) not in 128 .. 191;
+         end;
+      end Between_Characters;
    begin
+      if Admits = Rows.No_Fix and then Fixed > 0 then
+         raise Compiler_Defect with Code & " may not carry a fix";
+      elsif Admits = Rows.Must_Fix and then Fixed = 0 then
+         raise Compiler_Defect with Code & " must carry a fix";
+      end if;
+
+      for Index in 1 .. Fixed loop
+         declare
+            One : constant Landin.Diagnostics.Fix :=
+              Landin.Diagnostics.Nth_Fix (Item, Index);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Edit_Count (One) loop
+               declare
+                  Change : constant Landin.Diagnostics.Edit :=
+                    Landin.Diagnostics.Nth_Edit (One, Position);
+                  Where : constant Landin.Source.Span :=
+                    Landin.Diagnostics.Span_Of (Change);
+               begin
+                  if not Context.Held.Contains
+                           (Landin.Diagnostics.Source_Of (Change))
+                  then
+                     raise Compiler_Defect
+                       with Code & " edits a source this compilation"
+                            & " does not hold";
+                  end if;
+
+                  declare
+                     Snap : Landin.Source.Snapshot renames Context.Held.Get
+                       (Landin.Diagnostics.Source_Of (Change)).Element.all;
+                  begin
+                     if not Landin.Source.Is_Valid (Snap, Where)
+                       or else not Between_Characters (Snap, Where.First)
+                       or else not Between_Characters (Snap, Where.Last)
+                     then
+                        raise Compiler_Defect
+                          with Code & " edits bytes that are not whole"
+                               & " characters of its source";
+                     end if;
+                  end;
+               end;
+            end loop;
+         end;
+      end loop;
+
       Context.Reports.Append (Item);
    end Report;
 

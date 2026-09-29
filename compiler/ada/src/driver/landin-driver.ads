@@ -14,6 +14,7 @@
 
 with Ada.Strings.Unbounded;
 
+with Landin.Diagnostics;
 with Landin.Platform;
 
 package Landin.Driver is
@@ -30,10 +31,17 @@ package Landin.Driver is
    --  This is Sysexits' EX_SOFTWARE, distinct from a source refusal.
    Status_Defect    : constant := 70;
 
+   --  Report is the rendering a person reads.  Found is the same report as
+   --  data, in the order it was rendered, and Named is the path each source
+   --  it points at was read from, indexed by Source_Id: a client that
+   --  applies a fix, or hands one to an editor, needs both, and must not
+   --  be made to read them back out of the text.
    type Outcome is record
       Status : Natural := Status_Success;
       Output : Ada.Strings.Unbounded.Unbounded_String;
       Report : Ada.Strings.Unbounded.Unbounded_String;
+      Found  : Landin.Diagnostics.Diagnostic_List;
+      Named  : Landin.Platform.Path_List;
    end record;
 
    --  Host and Tools are the only ways this reaches a disk or a process,

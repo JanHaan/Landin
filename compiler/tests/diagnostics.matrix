@@ -4,7 +4,7 @@
 # code state source primary labels notes emitters evidence
 L0001  Retired  true  empty-ok    0..0 1     -                                   test:landin-tests-diagnostics_suite.adb
 L0002  Live     false empty-ok    0..0 0     landin-driver.adb                   negative/driver-unknown-option,test:landin-tests-diagnostics_suite.adb,test:landin-tests-driver_suite.adb
-L0003  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
+L0003  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb,test:landin-tests-stages_suite.adb
 L0004  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0005  Live     false empty-ok    0..0 0     landin-driver.adb                   test:landin-tests-driver_suite.adb
 L0006  Live     true  nonempty    0..0 1     landin-driver.adb                   negative/module-not-found,test:landin-tests-driver_suite.adb

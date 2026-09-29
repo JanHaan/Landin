@@ -3075,6 +3075,7 @@ def catalogue_rows():
     minimum = column("Minimum_Secondaries")
     maximum = column("Maximum_Secondaries")
     notes = column("Required_Notes")
+    fixes = column("Fixes")
 
     rows = []
     for name in order:
@@ -3088,7 +3089,8 @@ def catalogue_rows():
             nonempty=read(nonempty, name, "?"),
             minimum=read(minimum, name, "?"),
             maximum=read(maximum, name, "?"),
-            notes=read(notes, name, "?")))
+            notes=read(notes, name, "?"),
+            fixes=read(fixes, name, "?")))
     return rows
 
 
