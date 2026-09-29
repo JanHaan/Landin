@@ -61,6 +61,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Tokens.Spacing;
 
 package Landin.Stages is
 
@@ -128,6 +129,12 @@ package Landin.Stages is
    --  One tree per source, kept for the whole compilation.
    function Trees (Context : aliased in out Compilation)
      return not null access Landin.Syntax.Forest.Table;
+
+   --  The space and comments of every source, which the trees do not
+   --  hold: what a formatter puts back and an editor asks about.  Nothing
+   --  that decides what a program means reads it.
+   function Spacing (Context : aliased in out Compilation)
+     return not null access Landin.Tokens.Spacing.Table;
 
    --  What every name in those trees means.
    function Meanings (Context : aliased in out Compilation)
@@ -221,6 +228,7 @@ private
       Grouped : aliased Landin.Modules.Table;
       Written : aliased Landin.Provenance.Table;
       Parsed  : aliased Landin.Syntax.Forest.Table;
+      Spaced  : aliased Landin.Tokens.Spacing.Table;
       Meant   : aliased Landin.Resolution.Table;
       Active  : aliased Landin.Configuration.Table;
       Typed   : aliased Landin.Checking.Table;

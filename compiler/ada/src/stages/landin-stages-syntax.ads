@@ -8,11 +8,13 @@
 --  stopping at the first.
 --
 --  It keeps nothing of its own.  The tree of each source goes into the
---  compilation's forest and the identities it interned are the
---  compilation's too, because both outlive this Run: the stage that
---  resolves names runs after it returns, and a Name_Id in a tree names a
---  spelling in one table.  The stage object holds nothing at all, which is
---  what lets one library-level instance serve every compilation.
+--  compilation's forest, its space and comments beside it, and the
+--  identities it interned are the compilation's too, because all three
+--  outlive this Run: the stage that resolves names runs after it returns,
+--  a Name_Id in a tree names a spelling in one table, and a formatter reads
+--  the space after every stage has finished.  The stage object holds
+--  nothing at all, which is what lets one library-level instance serve
+--  every compilation.
 
 package Landin.Stages.Syntax is
 

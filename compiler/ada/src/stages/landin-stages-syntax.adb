@@ -2,6 +2,7 @@ with Landin.Diagnostics.Lexical;
 with Landin.Source;
 with Landin.Syntax.Forest;
 with Landin.Tokens.Lexer;
+with Landin.Tokens.Spacing;
 
 package body Landin.Stages.Syntax is
 
@@ -31,6 +32,8 @@ package body Landin.Stages.Syntax is
         Identities (Context);
       Trees : constant not null access Landin.Syntax.Forest.Table :=
         Landin.Stages.Trees (Context);
+      Spaces : constant not null access Landin.Tokens.Spacing.Table :=
+        Landin.Stages.Spacing (Context);
    begin
       --  The driver's loader may append sources before semantic stages run.
       --  A forest is append-only, so each loader pass parses only the newly
@@ -53,6 +56,11 @@ package body Landin.Stages.Syntax is
             --  which is the order the forest numbers them by.
             Landin.Syntax.Forest.Add
               (Trees.all, Stream, Names.all, Found);
+
+            --  The stream ends with this iteration, and its space is kept
+            --  beside the tree under the same identity.  The parse has
+            --  already run, so nothing it decided can depend on this.
+            Landin.Tokens.Spacing.Add (Spaces.all, Stream);
 
             --  Recovery may retain error nodes, but it must explain them.
             --  Keep this invariant in release builds too: an undiagnosed

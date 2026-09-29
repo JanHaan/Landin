@@ -69,6 +69,10 @@ package body Landin.Stages is
      return not null access Landin.Syntax.Forest.Table
      is (Context.Parsed'Access);
 
+   function Spacing (Context : aliased in out Compilation)
+     return not null access Landin.Tokens.Spacing.Table
+     is (Context.Spaced'Access);
+
    function Meanings (Context : aliased in out Compilation)
      return not null access Landin.Resolution.Table
      is (Context.Meant'Access);

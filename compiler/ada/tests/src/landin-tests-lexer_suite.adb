@@ -15,7 +15,11 @@ with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Stages.Syntax;
+with Landin.Stages;
+with Landin.Targets;
 with Landin.Testing.Layout;
+with Landin.Tokens.Spacing;
 with Landin.Tokens.Lexer;
 with Landin.Tokens.Text;
 with Landin.Tokens;
@@ -31,6 +35,7 @@ package body Landin.Tests.Lexer_Suite is
    use type Landin.Tokens.Integer_Base;
    use type Landin.Tokens.Token_Index;
    use type Landin.Tokens.Fault_Kind;
+   use type Landin.Tokens.Space;
    use type Landin.Tokens.Space_Kind;
    use type Landin.Tokens.Text.Code_Unit;
    use type Landin.Tokens.Text.Problem;
@@ -39,6 +44,8 @@ package body Landin.Tests.Lexer_Suite is
 
    --  Relative to compiler/ada, which is where the harness runs.
    Corpus : constant String := "../tests";
+
+   Frontend : aliased Landin.Stages.Syntax.Instance;
 
    ------------------------------------------------------------------
    --  Lexing a string, without a filesystem
@@ -1209,6 +1216,104 @@ package body Landin.Tests.Lexer_Suite is
       end loop;
    end Every_Source_Is_Reproduced;
 
+   --  The stream ends with the syntax stage's loop, and what it kept has to
+   --  be in the compilation afterwards, source by source, under the
+   --  identity the forest uses: the same pieces, in the same order, and
+   --  found by extent.  In-memory sources; no host.
+   procedure A_Compilation_Keeps_Its_Space
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Compilation_Keeps_Its_Space
+     (Item : in out Landin.Testing.Context)
+   is
+      CR : constant Character := Character'Val (13);
+
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Texts : constant array (1 .. 3) of Unbounded.Unbounded_String :=
+        [Unbounded.To_Unbounded_String
+           ("--- the answer" & LF & "answer: u32 = 42 -- kept" & LF),
+         Unbounded.To_Unbounded_String
+           ("--( a block" & CR & LF & "comment )--" & CR & LF
+            & "other: u8 = 1"),
+         Unbounded.To_Unbounded_String ("")];
+      Ids : array (Texts'Range) of Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      for Index in Texts'Range loop
+         Ids (Index) := Landin.Stages.Add_Source
+           (Work, "space" & Index'Image (2 .. 2) & ".ldn",
+            Unbounded.To_String (Texts (Index)));
+      end loop;
+      Landin.Stages.Append (Order, Frontend'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 1 and then not Landin.Stages.Failed (Work),
+         "the sources scan and parse cleanly");
+
+      declare
+         Kept : constant not null access Landin.Tokens.Spacing.Table :=
+           Landin.Stages.Spacing (Work);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Kept.Count, Texts'Length,
+            "one row of space per source");
+
+         for Index in Texts'Range loop
+            declare
+               Text    : constant String :=
+                 Unbounded.To_String (Texts (Index));
+               Sources : Landin.Source.Sets.Source_Set;
+               Names   : Landin.Source.Names.Table;
+               Stream  : Landin.Tokens.Token_Stream;
+               Same    : Boolean;
+            begin
+               Lex_Text (Text, Sources, Names, Stream);
+               Same := Kept.Space_Count (Ids (Index))
+                 = Landin.Tokens.Space_Count (Stream);
+               if Same then
+                  for Piece in 1 .. Landin.Tokens.Space_Count (Stream) loop
+                     if Kept.Nth_Space (Ids (Index), Piece)
+                       /= Landin.Tokens.Nth_Space (Stream, Piece)
+                     then
+                        Same := False;
+                     end if;
+                  end loop;
+               end if;
+               Landin.Testing.Check
+                 (Item, Same,
+                  "source" & Index'Image
+                  & " keeps the pieces its stream had");
+            end;
+         end loop;
+
+         --  Found by extent: everything in the first source's first line,
+         --  which is its doc comment, and nothing that starts before an
+         --  extent or ends after it.
+         declare
+            Doc : constant Landin.Tokens.Space_Range :=
+              Kept.Within (Ids (1), (First => 0, Last => 14));
+            Declaration : constant Landin.Tokens.Space_Range :=
+              Kept.Within (Ids (1), (First => 15, Last => 31));
+            Straddling : constant Landin.Tokens.Space_Range :=
+              Kept.Within (Ids (1), (First => 5, Last => 20));
+         begin
+            Landin.Testing.Check
+              (Item, Doc.First = 1 and then Doc.Last = 1
+               and then Landin.Tokens.Kind (Kept.Nth_Space (Ids (1), 1))
+                        = Landin.Tokens.Doc_Comment,
+               "the doc comment is the one piece in its own extent");
+            Landin.Testing.Check
+              (Item, Declaration.First = 3 and then Declaration.Last = 5,
+               "a declaration's extent holds the blanks between its tokens");
+            Landin.Testing.Check
+              (Item, Straddling.First = 2 and then Straddling.Last = 2,
+               "and a piece is within an extent only if wholly inside it");
+         end;
+      end;
+   end A_Compilation_Keeps_Its_Space;
+
    ------------------------------------------------------------------
    --  The agreement
    ------------------------------------------------------------------
@@ -1422,6 +1527,9 @@ package body Landin.Tests.Lexer_Suite is
          Unterminated_Literals_Are_Faults'Access);
       Landin.Testing.Register
         (Into, "lexer", "space is kept", Space_Is_Kept'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "a compilation keeps its space",
+         A_Compilation_Keeps_Its_Space'Access);
       Landin.Testing.Register
         (Into, "lexer", "every source is reproduced",
          Every_Source_Is_Reproduced'Access);
