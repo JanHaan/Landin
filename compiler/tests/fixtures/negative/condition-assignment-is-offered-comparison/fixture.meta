@@ -1,0 +1,7 @@
+class: negative
+summary: [0390] refuses `=` inside an expression, and offers the comparison `==` a condition could have meant
+program: program.ldn
+codes: L0105
+fixed: program.fixed
+constructs: 0350, 0390, 1150
+targets: linux-x86-64, macos-arm64, synthetic-32

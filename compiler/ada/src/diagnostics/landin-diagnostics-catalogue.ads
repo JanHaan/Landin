@@ -623,6 +623,12 @@ package Landin.Diagnostics.Catalogue is
             when Type_Mismatch => May_Fix,
             --  A keyword that was required and a name near it written.
             when Token_Expected => May_Fix,
+            --  [1800]'s closing name, which can only be the declared one.
+            when End_Name_Mismatch => May_Fix,
+            --  [1900]'s written binding, offered `mut`.
+            when Immutable_Target => May_Fix,
+            --  [0390]'s `=` inside an expression, offered `==`.
+            when Assignment_In_Expression => May_Fix,
             when others => No_Fix);
 
    function Count return Natural

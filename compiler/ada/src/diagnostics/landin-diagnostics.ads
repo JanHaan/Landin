@@ -101,7 +101,10 @@ package Landin.Diagnostics is
    --  Landin.Diagnostics.Fixes, which writes its message, so a kind is
    --  also a thing a fixture can be required to have applied.
    type Repair is
-     (Respell);        --  the written name becomes one that is declared
+     (Respell,         --  the written name becomes one that is declared
+      Name_End,        --  `end` names what it closes
+      Mark_Mutable,    --  a binding that is written is declared `mut`
+      Compare);        --  `=` in an expression becomes `==`
 
    type Fix is private;
 

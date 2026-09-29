@@ -14,6 +14,40 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Respell;
 
+   function Name_End
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Declared : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Name_End, Exact, "close it with `end " & Declared & "`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, Declared));
+      return Result;
+   end Name_End;
+
+   function Mark_Mutable
+     (Source : Landin.Source.Source_Id;
+      Before : Landin.Source.Byte_Offset;
+      Name   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Mark_Mutable, Likely, "declare `" & Name & "` with `mut`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, (Before, Before), "mut "));
+      return Result;
+   end Mark_Mutable;
+
+   function Compare
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Fix
+   is
+      Result : Fix := Make_Fix (Compare, Likely, "compare with `==`");
+   begin
+      Add_Edit (Result, Make_Edit (Source, Where, "=="));
+      return Result;
+   end Compare;
+
    function Respellings
      (Source  : Landin.Source.Source_Id;
       Where   : Landin.Source.Span;

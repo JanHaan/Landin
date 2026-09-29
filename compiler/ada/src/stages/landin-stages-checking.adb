@@ -22117,6 +22117,63 @@ package body Landin.Stages.Checking is
       --  [1900]: of the four kinds of name the kernel has, two may be
       --  written and two may not.  Stepping says the place is an `inc` or a
       --  `dec`, which [0400] makes an addition and so wants a number too.
+      --  [1900]: a binding written and declared without `mut` may have
+      --  been meant to be mutable, and [1790] spells that as `mut` before
+      --  its name.  Offered only for an ordinary binding of one name whose
+      --  declaration begins with that name: `public`, a link attribute or
+      --  a shared declaration puts the word somewhere this does not
+      --  guess, a traversal element's storage is not the binding's to
+      --  change, and a parameter's convention is another rule.
+      function Mutable_Declaration
+        (Means : Res.Declaration_Id;
+         Sort  : Res.Declaration_Sort) return Landin.Diagnostics.Fix_List;
+
+      function Mutable_Declaration
+        (Means : Res.Declaration_Id;
+         Sort  : Res.Declaration_Sort) return Landin.Diagnostics.Fix_List
+      is
+         Their_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Means));
+         Their_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Means);
+      begin
+         if Sort not in Res.Local_Binding | Res.Module_Binding
+           or else Syn.Kind (Their_Tree.all, Their_Node) /= Syn.Binding
+           or else Is_Traversal_Element (Means)
+           or else Syn.Shares_Declared_Type (Their_Tree.all, Their_Node)
+           or else Syn.Where (Their_Tree.all, Their_Node).First
+                     /= Syn.Anchor (Their_Tree.all, Their_Node).First
+         then
+            return Landin.Diagnostics.No_Fixes;
+         end if;
+
+         --  The first name of a shared declaration [0100] is not marked as
+         --  sharing; the name after it is, and it follows it in its scope.
+         --  `mut` would make both mutable, which is a change to a name
+         --  nobody wrote to, so a shared declaration is not offered one.
+         declare
+            Next : constant Res.Declaration_Id := Means + 1;
+         begin
+            if Res.Contains (Meanings.all, Next)
+              and then Res.Source_Of (Meanings.all, Next)
+                         = Res.Source_Of (Meanings.all, Means)
+              and then Syn.Kind
+                (Their_Tree.all, Res.Node_Of (Meanings.all, Next))
+                  = Syn.Binding
+              and then Syn.Shares_Declared_Type
+                (Their_Tree.all, Res.Node_Of (Meanings.all, Next))
+              and then Res."=" (Res.Scope_Of (Meanings.all, Next),
+                                Res.Scope_Of (Meanings.all, Means))
+            then
+               return Landin.Diagnostics.No_Fixes;
+            end if;
+         end;
+         return [1 => Landin.Diagnostics.Fixes.Mark_Mutable
+                   (Syn.Source_Of (Their_Tree.all),
+                    Syn.Anchor (Their_Tree.all, Their_Node).First,
+                    Spelled (Syn.Name (Their_Tree.all, Their_Node)))];
+      end Mutable_Declaration;
+
       procedure Check_Place
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -22346,6 +22403,7 @@ package body Landin.Stages.Checking is
                                 Where  => Syn.Anchor
                                             (Their_Tree.all, Their_Node)),
                   Because => "declared here",
+                  Fixes   => Mutable_Declaration (Means, Sort),
                   Into    => Found);
                Landin.Checking.Refuse (Types.all, Of_Tree, Base);
 

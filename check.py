@@ -2124,6 +2124,13 @@ def token_dump():
     return "\n".join(lines) + "\n"
 
 
+#  Parser codes whose rule the grammar cannot state, so a program refused
+#  for nothing else is one the grammar derives: the name after `end` must be
+#  the name declared [1800] [1795] [1230] [0680], and a context-free grammar
+#  writes that as any identifier.
+UNSTATED_BY_GRAMMAR = {"L0109"}
+
+
 def fixed_results(meta):
     """The files a fixture's `fixed:` names as results of its fixes."""
     named = re.search(r"^fixed: (.+)$",
@@ -2248,6 +2255,11 @@ def check_grammar_corpus(full_run):
             #  that exactly as it derives a positive fixture.  Reading it
             #  out of `codes:` rather than a second key leaves the two
             #  nothing to disagree about.
+            #
+            #  The parser also keeps one rule the grammar cannot state:
+            #  `"end" identifier?` derives any name, and [1800] says it must
+            #  be the declared one.  A program refused only for that is
+            #  derivable, and is held to deriving.
             must_derive = default_derive
             meta = os.path.join(case, "fixture.meta")
             if kind == "negative" and frontend and os.path.exists(meta):
@@ -2255,8 +2267,13 @@ def check_grammar_corpus(full_run):
                     r"^codes: (.+)$",
                     io.open(meta, encoding="utf-8").read(), re.M)
                 if named:
-                    first = named.group(1).split(",", 1)[0].strip()
+                    codes = [one.strip()
+                             for one in named.group(1).split(",")]
+                    first = codes[0]
                     if first and first not in frontend:
+                        must_derive = True
+                    elif codes and all(one in UNSTATED_BY_GRAMMAR
+                                       for one in codes):
                         must_derive = True
 
             #  A fix's result is a program that compiles clean, so it

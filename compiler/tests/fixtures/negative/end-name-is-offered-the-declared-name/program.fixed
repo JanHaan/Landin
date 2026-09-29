@@ -1,0 +1,20 @@
+--  `end` may repeat the name of what it closes and may name nothing else
+--  [1795] [0680] [1230] [1800].  The grammar writes any identifier there,
+--  so this derives, and the parser alone refuses each wrong name.
+point: type = struct
+    x: i32
+end point
+
+shape: type = concept (t: type)
+    area: (item: t) -> (result: u32)
+end shape
+
+f: () -> none =
+end f
+
+choice: type = struct
+    kind: variant
+        empty |
+        some: (value: i32)
+    end kind
+end choice

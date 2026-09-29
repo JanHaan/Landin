@@ -166,6 +166,7 @@ negative/compound-assignment-immutable | linux-x86-64, macos-arm64
 negative/compound-assignment-unassigned | linux-x86-64, macos-arm64
 negative/compound-assignment-zero-divisor | linux-x86-64, macos-arm64
 negative/concept-composition-cycle | linux-x86-64, macos-arm64, synthetic-32
+negative/condition-assignment-is-offered-comparison | linux-x86-64, macos-arm64, synthetic-32
 negative/condition-declaration-body-shadowing | linux-x86-64, macos-arm64
 negative/condition-declaration-not-bool | linux-x86-64, macos-arm64
 negative/condition-declaration-out-of-scope | linux-x86-64, macos-arm64
@@ -257,6 +258,7 @@ negative/driver-unknown-option | linux-x86-64, macos-arm64
 negative/duplicate-in-a-body | linux-x86-64, macos-arm64
 negative/duplicate-in-a-module | linux-x86-64, macos-arm64
 negative/duplicate-parameter | linux-x86-64, macos-arm64
+negative/end-name-is-offered-the-declared-name | linux-x86-64, macos-arm64, synthetic-32
 negative/erased-typed-call-unhandled | linux-x86-64, macos-arm64
 negative/error-set-needs-an-atom | linux-x86-64, synthetic-32
 negative/escaping-argument-frame-origin | linux-x86-64, macos-arm64
@@ -1192,6 +1194,7 @@ negative/variant-struct-argument-unassigned | linux-x86-64, macos-arm64
 negative/variant-struct-payload-mismatch | linux-x86-64, synthetic-32
 negative/variant-whole-copy-source-unassigned | linux-x86-64, macos-arm64
 negative/wide-integer-not-enabled | linux-x86-64, macos-arm64
+negative/written-binding-is-offered-mut | linux-x86-64, macos-arm64, synthetic-32
 negative/written-function-signature-mismatch | linux-x86-64, macos-arm64
 positive/alias-conversion | linux-x86-64, macos-arm64
 positive/any-slice-dispatch | linux-x86-64, macos-arm64, synthetic-32

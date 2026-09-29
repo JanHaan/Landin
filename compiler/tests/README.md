@@ -470,7 +470,10 @@ whether the grammar must derive its program. The frontend refuses what the
 grammar cannot derive, so a fixture whose first code the scan or the parse can
 raise must not derive; a later stage refuses source that parsed, so a fixture
 whose first code belongs to one of those must derive exactly as a positive
-fixture does. `check.py` reads which codes the frontend raises out of
+fixture does. One parser rule is not the grammar's: `end` may repeat only the
+name it closes, which a context-free `"end" identifier?` cannot say, so a
+fixture refused for nothing but `L0109` is derivable and must derive.
+`check.py` reads which codes the frontend raises out of
 `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
 of the number, because the catalogue's own header forbids reading a stage off a
 code — `L0010` began in lexical refusal and is now raised only by the parser.

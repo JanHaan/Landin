@@ -21,6 +21,32 @@ package Landin.Diagnostics.Fixes is
       Spelling : String) return Fix
      with Pre => Landin.Source.Length (Where) > 0;
 
+   --  The name after `end` at Where becomes Declared, the name of what it
+   --  closes.  Exact: the grammar says what the name must be, and a
+   --  closing name has no meaning of its own to change.
+   function Name_End
+     (Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Declared : String) return Fix
+     with Pre => Landin.Source.Length (Where) > 0;
+
+   --  `mut` inserted at Before, where the binding's declaration begins,
+   --  so a binding that is written may be.  Likely: the write may be the
+   --  mistake rather than the declaration.
+   function Mark_Mutable
+     (Source : Landin.Source.Source_Id;
+      Before : Landin.Source.Byte_Offset;
+      Name   : String) return Fix;
+
+   --  The `=` at Where, written inside an expression, becomes `==`.
+   --  Likely: [0390] says an expression never assigns, so the one thing a
+   --  `=` there can mean is a comparison, but the author may instead
+   --  have meant the assignment as a statement of its own.
+   function Compare
+     (Source : Landin.Source.Source_Id;
+      Where  : Landin.Source.Span) return Fix
+     with Pre => Landin.Source.Length (Where) = 1;
+
    --  One Respell per name the ranking kept, nearest first; none when it
    --  kept none.
    function Respellings

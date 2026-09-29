@@ -1,0 +1,9 @@
+sign: (value: i32) -> (result: i32) =
+    if value == 0 then
+        result = 0
+    elsif value < 0 then
+        result = -1
+    else
+        result = 1
+    end if
+end sign

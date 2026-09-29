@@ -35480,6 +35480,46 @@ file negative/concept-composition-cycle/main.ldn tokens 28
   85 89 left
   90 93 end
   94 99 right
+file negative/condition-assignment-is-offered-comparison/program.ldn tokens 39
+  0 4 sign
+  4 5 :
+  6 7 (
+  7 12 value
+  12 13 :
+  14 17 i32
+  17 18 )
+  19 21 ->
+  22 23 (
+  23 29 result
+  29 30 :
+  31 34 i32
+  34 35 )
+  36 37 =
+  42 44 if
+  45 50 value
+  51 52 =
+  53 54 0
+  55 59 then
+  68 74 result
+  75 76 =
+  77 78 0
+  83 88 elsif
+  89 94 value
+  95 96 <
+  97 98 0
+  99 103 then
+  112 118 result
+  119 120 =
+  121 122 -
+  122 123 1
+  128 132 else
+  141 147 result
+  148 149 =
+  150 151 1
+  156 159 end
+  160 162 if
+  163 166 end
+  167 171 sign
 file negative/condition-declaration-body-shadowing/program.ldn tokens 23
   0 1 f
   1 2 :
@@ -41059,6 +41099,72 @@ file negative/duplicate-parameter/program.ldn tokens 17
   34 40 return
   41 44 end
   45 46 f
+file negative/end-name-is-offered-the-declared-name/program.ldn tokens 65
+  266 271 point
+  271 272 :
+  273 277 type
+  278 279 =
+  280 286 struct
+  291 292 x
+  292 293 :
+  294 297 i32
+  298 301 end
+  302 307 piont
+  309 314 shape
+  314 315 :
+  316 320 type
+  321 322 =
+  323 330 concept
+  331 332 (
+  332 333 t
+  333 334 :
+  335 339 type
+  339 340 )
+  345 349 area
+  349 350 :
+  351 352 (
+  352 356 item
+  356 357 :
+  358 359 t
+  359 360 )
+  361 363 ->
+  364 365 (
+  365 371 result
+  371 372 :
+  373 376 u32
+  376 377 )
+  378 381 end
+  382 387 shpae
+  389 390 f
+  390 391 :
+  392 393 (
+  393 394 )
+  395 397 ->
+  398 402 none
+  403 404 =
+  405 408 end
+  409 410 g
+  412 418 choice
+  418 419 :
+  420 424 type
+  425 426 =
+  427 433 struct
+  438 442 kind
+  442 443 :
+  444 451 variant
+  460 465 empty
+  466 467 |
+  476 480 some
+  480 481 :
+  482 483 (
+  483 488 value
+  488 489 :
+  490 493 i32
+  493 494 )
+  499 502 end
+  503 507 knid
+  508 511 end
+  512 518 choice
 file negative/erased-typed-call-unhandled/main.ldn tokens 209
   0 11 unavailable
   11 12 :
@@ -86840,6 +86946,51 @@ file negative/wide-integer-not-enabled/program.ldn tokens 5
   6 10 u128
   11 12 =
   13 14 1
+file negative/written-binding-is-offered-mut/program.ldn tokens 44
+  0 5 limit
+  5 6 :
+  7 10 u32
+  11 12 =
+  13 14 3
+  16 24 count_to
+  24 25 :
+  26 27 (
+  27 33 target
+  33 34 :
+  35 38 u32
+  38 39 )
+  40 42 ->
+  43 44 (
+  44 51 reached
+  51 52 :
+  53 56 u32
+  56 57 )
+  58 59 =
+  64 68 seen
+  68 69 :
+  70 73 u32
+  74 75 =
+  76 77 0
+  82 87 while
+  88 92 seen
+  93 94 <
+  95 101 target
+  102 104 do
+  113 117 seen
+  118 119 =
+  120 124 seen
+  125 126 +
+  127 128 1
+  133 136 end
+  137 142 while
+  147 152 limit
+  153 154 =
+  155 159 seen
+  164 171 reached
+  172 173 =
+  174 179 limit
+  180 183 end
+  184 192 count_to
 file negative/written-function-signature-mismatch/program.ldn tokens 54
   0 5 unary
   5 6 :

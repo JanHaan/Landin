@@ -1,0 +1,7 @@
+class: negative
+summary: [1900] refuses a write to a binding declared without `mut`, and a local or module binding of one name is offered `mut`
+program: program.ldn
+codes: L0303, L0303
+fixed: program.fixed
+constructs: 0040, 0060, 1790, 1900
+targets: linux-x86-64, macos-arm64, synthetic-32

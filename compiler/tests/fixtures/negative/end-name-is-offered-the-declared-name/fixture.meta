@@ -1,0 +1,7 @@
+class: negative
+summary: [1795] [0680] [1230] [1800] let `end` name only what it closes, and a closing name that names anything else is exactly replaced by the declared one
+program: program.ldn
+codes: L0109, L0109, L0109, L0109
+fixed: program.fixed
+constructs: 0680, 1230, 1795, 1800
+targets: linux-x86-64, macos-arm64, synthetic-32

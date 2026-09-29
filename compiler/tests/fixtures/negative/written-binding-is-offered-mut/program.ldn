@@ -1,0 +1,10 @@
+limit: u32 = 3
+
+count_to: (target: u32) -> (reached: u32) =
+    seen: u32 = 0
+    while seen < target do
+        seen = seen + 1
+    end while
+    limit = seen
+    reached = limit
+end count_to

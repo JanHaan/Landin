@@ -446,6 +446,23 @@ class GrammarCorpus(unittest.TestCase):
             said = [why for _, _, why in checker.check_grammar_corpus(True)]
         self.assertTrue(said)
 
+    def test_an_end_name_mismatch_alone_must_derive(self):
+        #  The grammar writes `"end" identifier?`, so a program whose only
+        #  fault is the name after `end` derives, and a fixture claiming
+        #  otherwise is wrong about the grammar.
+        from check_controls import tree
+        with tree(copied=GRAMMAR) as root:
+            case = root / "compiler/tests/fixtures/negative/invented-end"
+            case.mkdir(parents=True)
+            (case / "program.ldn").write_text("f: () -> none =\nend f g\n")
+            (case / "fixture.meta").write_text(
+                "class: negative\nsummary: invented\nprogram: program.ldn\n"
+                "codes: L0109\n")
+            said = [why for where, _, why
+                    in checker.check_grammar_corpus(True)
+                    if "invented-end" in where]
+        self.assertTrue(said)
+
     def test_a_fixed_result_the_grammar_cannot_derive_is_reported(self):
         #  A fix's result compiles clean, so it derives even when the
         #  program it was made from was refused by the parser.

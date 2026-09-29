@@ -1114,6 +1114,18 @@ package body Landin.Syntax.Parser is
             --  written instead: `thne` for `then`.  [1760] makes a keyword
             --  a word no name can be, so the name is the misspelling and
             --  the keyword the only thing the position could have meant.
+            --  [1800]'s closing name, when `end` names something other
+            --  than what it closes: only the declared name can stand there.
+            function End_Named
+              (Declared : Landin.Source.Names.Name_Id)
+               return Landin.Diagnostics.Fix_List
+              is (if Declared = Landin.Source.Names.No_Name
+                  then Landin.Diagnostics.No_Fixes
+                  else [1 => Landin.Diagnostics.Fixes.Name_End
+                          (Origin_Of, Here,
+                           Landin.Source.Names.Spelling
+                             (Names, Declared))]);
+
             function Keyword_Near
               (Wanted : Tok.Token_Kind) return Landin.Diagnostics.Fix_List;
 
@@ -3649,7 +3661,8 @@ package body Landin.Syntax.Parser is
                            Note    => "[1230]: `end` may repeat the concept"
                                       & " name",
                            Related => At_Concept,
-                           Because => "opened here");
+                           Because => "opened here",
+                           Fixes   => End_Named (Named));
                      end if;
                      Advance;
                   end if;
@@ -4060,7 +4073,8 @@ package body Landin.Syntax.Parser is
                               Note    => "[0680]: `end` repeats the part's"
                                          & " name",
                               Related => At_Part,
-                              Because => "the variant part named here");
+                              Because => "the variant part named here",
+                              Fixes   => End_Named (Part_Name));
                         end if;
                         Last_At := Here;
                         Advance;
@@ -4261,7 +4275,8 @@ package body Landin.Syntax.Parser is
                            Note    => "[1795]: `end` may repeat the struct's"
                                       & " name, and must name no other",
                            Related => At_Name,
-                           Because => "declared here");
+                           Because => "declared here",
+                           Fixes   => End_Named (Named));
                      end if;
                      Advance;
                   end if;
@@ -5399,7 +5414,8 @@ package body Landin.Syntax.Parser is
                                       & " function's name, and must name"
                                       & " no other",
                            Related => At_Name,
-                           Because => "declared here");
+                           Because => "declared here",
+                           Fixes   => End_Named (Named));
                      end if;
 
                      Advance;
@@ -7223,7 +7239,12 @@ package body Landin.Syntax.Parser is
                         Message => "assignment is a statement, never an"
                                    & " expression",
                         Note    => "[0390]: `==` compares; an assignment"
-                                   & " stands on its own");
+                                   & " stands on its own",
+                        Fixes   =>
+                          (if Peek = Tok.Equal
+                           then [1 => Landin.Diagnostics.Fixes.Compare
+                                   (Origin_Of, At_Op)]
+                           else Landin.Diagnostics.No_Fixes));
                      Advance;
                      Right := Parse_Expression;
                      Left := Add
