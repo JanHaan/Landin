@@ -1,0 +1,4 @@
+class: unit
+summary: a fix is taken from a pinned report, and a unit fixture pins none
+targets: linux-x86-64
+fixed: fixed.ldn

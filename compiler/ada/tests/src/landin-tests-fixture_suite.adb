@@ -975,11 +975,13 @@ package body Landin.Tests.Fixture_Suite is
       Reports ("not-a-pair", "is not `key: value`");
       Reports ("unknown-target", "unknown target: vax-11-780");
       Reports ("stray.txt", "fixture entry is not a directory");
+      Reports ("fixed-without-codes",
+               "fixed belongs only to a negative fixture");
 
       --  Exact, so a new fault cannot be added to the tree without being
       --  named here, and an old one cannot vanish.
       Landin.Testing.Check_Equal
-        (Item, Problem_Count (Found), 8,
+        (Item, Problem_Count (Found), 9,
          "the documented malformed cases are the reported ones");
    end Repository_Malformed_Cases_Are_Refused;
 

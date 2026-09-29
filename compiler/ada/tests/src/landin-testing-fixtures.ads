@@ -91,6 +91,14 @@ package Landin.Testing.Fixtures is
    --  nonempty program as their compile-only corpus file.
    function Module_Root (Item : Fixture) return String;
 
+   --  What the fixture's sources become once the first fix of every
+   --  diagnostic in its report is applied, which must then compile clean.
+   --  Comma separated.  A bare name is the program's result; `a -> b`
+   --  names the result of another source the fixes edit, relative to the
+   --  fixture directory as `with` is.  Only a negative fixture that names
+   --  codes has a report to take fixes from.
+   function Fixed (Item : Fixture) return String;
+
    --  Append the source-selection arguments for this fixture to a refine
    --  invocation.  A rooted fixture contributes `--root=<directory>/<root>`
    --  followed by its directory entry module.  Otherwise its program and each
@@ -183,6 +191,7 @@ private
       Made_Of   : Ada.Strings.Unbounded.Unbounded_String;
       Beside    : Ada.Strings.Unbounded.Unbounded_String;
       Root      : Ada.Strings.Unbounded.Unbounded_String;
+      Fixed     : Ada.Strings.Unbounded.Unbounded_String;
       C_Files   : Ada.Strings.Unbounded.Unbounded_String;
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;

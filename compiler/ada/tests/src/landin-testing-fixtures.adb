@@ -107,6 +107,9 @@ package body Landin.Testing.Fixtures is
    function Module_Root (Item : Fixture) return String
      is (Unbounded.To_String (Item.Root));
 
+   function Fixed (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Fixed));
+
    function Trimmed (Text : String) return String;
 
    procedure Append_Module_Arguments
@@ -366,6 +369,7 @@ package body Landin.Testing.Fixtures is
       Seen_Constructs : Boolean := False;
       Seen_With    : Boolean := False;
       Seen_Root    : Boolean := False;
+      Seen_Fixed   : Boolean := False;
       Seen_C_Sources : Boolean := False;
       Seen_C_Args  : Boolean := False;
       Seen_Stream  : Boolean := False;
@@ -628,6 +632,19 @@ package body Landin.Testing.Fixtures is
                   Item.Root := Unbounded.To_Unbounded_String (Value);
                end if;
 
+            elsif Key = "fixed" then
+               if Seen_Fixed then
+                  Complain ("duplicate key: fixed");
+                  return;
+               end if;
+               Seen_Fixed := True;
+
+               if Value'Length = 0 then
+                  Complain ("fixed names no file");
+               else
+                  Item.Fixed := Unbounded.To_Unbounded_String (Value);
+               end if;
+
             elsif Key = "c-sources" then
                if Seen_C_Sources then
                   Complain ("duplicate key: c-sources");
@@ -814,6 +831,7 @@ package body Landin.Testing.Fixtures is
                Made_Of => Unbounded.Null_Unbounded_String,
                Beside  => Unbounded.Null_Unbounded_String,
                Root    => Unbounded.Null_Unbounded_String,
+               Fixed   => Unbounded.Null_Unbounded_String,
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
@@ -960,6 +978,18 @@ package body Landin.Testing.Fixtures is
       if Seen_Root and then Seen_With then
          Complain ("a rooted fixture discovers its module files"
                    & " instead of naming them with `with`");
+      end if;
+
+      --  A fix is taken from a report, so only a fixture whose report is
+      --  pinned has one to apply.
+      if Seen_Fixed
+        and then (not Seen_Class
+                  or else Item.Class /= Negative_Program
+                  or else not Seen_Codes
+                  or else not Seen_Program)
+      then
+         Complain ("fixed belongs only to a negative fixture with a program"
+                   & " and codes");
       end if;
 
       if Seen_Program and then not Seen_Constructs then

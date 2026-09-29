@@ -14,5 +14,6 @@ no fixture in it is accepted.
 | `unit/not-a-pair` | a line that is not `key: value` |
 | `unit/unknown-target` | `targets:` names a target the harness does not know |
 | `unit/stray.txt` | a plain file where a fixture directory belongs |
+| `unit/fixed-without-codes` | `fixed:` on a fixture with no pinned report to take a fix from |
 
 Nothing here is a Landin program, and nothing here is expected to pass.

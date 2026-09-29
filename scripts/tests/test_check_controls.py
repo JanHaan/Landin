@@ -446,6 +446,23 @@ class GrammarCorpus(unittest.TestCase):
             said = [why for _, _, why in checker.check_grammar_corpus(True)]
         self.assertTrue(said)
 
+    def test_a_fixed_result_the_grammar_cannot_derive_is_reported(self):
+        #  A fix's result compiles clean, so it derives even when the
+        #  program it was made from was refused by the parser.
+        from check_controls import tree
+        with tree(copied=GRAMMAR) as root:
+            case = root / "compiler/tests/fixtures/negative/invented-fix"
+            case.mkdir(parents=True)
+            (case / "program.ldn").write_text("f: () -> none =\nend g\n")
+            (case / "fixed.ldn").write_text("%%% not Landin %%%\n")
+            (case / "fixture.meta").write_text(
+                "class: negative\nsummary: invented\nprogram: program.ldn\n"
+                "codes: L0109\nfixed: fixed.ldn\n")
+            said = [why for where, _, why
+                    in checker.check_grammar_corpus(True)
+                    if where.endswith("invented-fix/fixed.ldn")]
+        self.assertTrue(said)
+
     def test_a_grammar_rule_nothing_reaches_is_reported(self):
         #  Every rule must be defined and reachable: an unreachable
         #  production is grammar nobody can be held to.
@@ -728,6 +745,37 @@ class Transcriptions(unittest.TestCase):
         said = reasons(checker.check_precedence_table,
                        copied=["spec.md", "tour.md"])
         self.assertTrue(said)
+
+    def test_a_code_that_admits_a_fix_needs_a_fixture_applying_one(self):
+        from check_controls import tree
+        inputs = ["compiler/tests/diagnostics.matrix", "compiler/ada/src",
+                  "compiler/ada/tests", "compiler/tests/fixtures",
+                  "spec.md", "tour.md"]
+        with tree(copied=inputs) as root:
+            table = root / ("compiler/ada/src/diagnostics"
+                            "/landin-diagnostics-catalogue.ads")
+            text = table.read_text()
+            marker = "function Fixes (Of_Code : Code_Name) return Fix_Admission"
+            head, _, rest = text.partition(marker)
+            rest = rest.replace("is (case Of_Code is",
+                                "is (case Of_Code is\n"
+                                "            when Unknown_Bytes => May_Fix,",
+                                1)
+            table.write_text(head + marker + rest)
+            said = [why for _, _, why in checker.check_diagnostic_matrix(True)]
+        self.assertIn("L0012 admits a fix and no fixture applies one", said)
+
+    def test_a_fixture_naming_a_missing_fix_result_is_reported(self):
+        from check_controls import tree
+        with tree(copied=["compiler/tests/fixtures"]) as root:
+            case = root / "compiler/tests/fixtures/negative/invented-fix"
+            case.mkdir(parents=True)
+            (case / "program.ldn").write_text("x\n")
+            (case / "fixture.meta").write_text(
+                "class: negative\nsummary: invented\nprogram: program.ldn\n"
+                "codes: L0110\nfixed: absent.ldn\n")
+            said = [why for _, _, why in checker.fixture_sources()]
+        self.assertIn("`fixed` names absent.ldn, which is not here", said)
 
     def test_a_missing_diagnostic_matrix_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_diagnostic_matrix,

@@ -463,6 +463,7 @@ emits assembly text.
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
 | `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
 | `targets` | yes | comma-separated targets the fixture applies to |
+| `fixed` | no | for a negative with a program and codes: what its sources become once every diagnostic's first fix is applied; a bare name is the program's result and `source -> result` another source's |
 
 `codes` also says which stage refused the fixture, and that is what decides
 whether the grammar must derive its program. The frontend refuses what the
@@ -499,6 +500,19 @@ pointing at nothing would compile one file while claiming to have compiled
 two. Every `.ldn` in a fixture directory is held to the grammar already, so
 the extra files are derived like any other. C companions never belong in
 `with`; an ABI fixture names them only with `c-sources`.
+
+`fixed` is how a fix is held to being one. The `fixes` suite compiles the
+fixture as the parser suite does, requires its report to carry the ordered
+`codes` and every diagnostic in it to offer a fix, applies the first fix of
+each, and compares every edited source with the result the fixture records.
+A source the fixes edit and the fixture records no result for is a fault. The
+edited sources are then compiled again and must be accepted with an empty
+report. A one-file or `with` fixture runs on a fake filesystem holding its
+sources; a rooted one reads its module closure from the repository, as its
+negative case does, with only the edited sources replaced. `check.py` holds
+every file `fixed` names to being there and every result to the grammar,
+however the original was refused, and the diagnostic matrix holds every code
+whose catalogue row admits a fix to at least one fixture that applies one.
 
 `root` is the directory-module counterpart for a positive, negative, runtime or
 ABI program. It is relative to the fixture directory; when present, the
