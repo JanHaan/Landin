@@ -40,6 +40,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -80,14 +81,17 @@ def text_digest(data):
 def without_additions(report):
     """A report with its help lines and warning blocks taken out.
 
-    A diagnostic's block begins with a line that is not indented; a
-    warning's runs until the next such line.  Help lines are always
-    indented, one per fix, after the notes.
+    A diagnostic's block begins with its level and code, `error[`,
+    `warning[` or `note[`, at the start of a line; a warning's runs until
+    the next such line.  Not every other line is indented: a snippet's
+    gutter holds its line number, which reaches the first column once the
+    number is as wide as the gutter.  Help lines are indented, one per
+    fix, after the notes.
     """
     kept = []
     in_warning = False
     for line in report.splitlines(keepends=True):
-        if not line.startswith(b" "):
+        if re.match(rb"(?:error|warning|note)\[L\d{4}\]: ", line):
             in_warning = line.startswith(b"warning[")
         if in_warning or line.startswith(b"  = help: "):
             continue
