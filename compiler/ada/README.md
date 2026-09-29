@@ -930,7 +930,9 @@ corpus and compares each token with what `check.py`'s independent tokeniser
 produced, parses every one and requires the same verdict `check.py` reached,
 parses every truncation of every one, mutates every corpus program by byte
 insertion, deletion and replacement, and parses fixed-seed raw byte streams.
-Each must yield a tree whose invariants hold rather than a crash.
+Each must yield a tree whose invariants hold rather than a crash, and each
+stream must give its input back byte for byte from its tokens and its space,
+as every `.ldn` file in the repository must, faulty ones included.
 
 `Landin.Syntax` is a flat table, not a pointer structure: a `Node_Id` is a
 dense integer, so resolved names, checked types and IR values each go in an

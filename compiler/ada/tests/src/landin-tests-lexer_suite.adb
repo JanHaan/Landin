@@ -24,6 +24,7 @@ package body Landin.Tests.Lexer_Suite is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
    use type Landin.Source.Byte_Offset;
    use type Landin.Tokens.Token_Kind;
@@ -1074,6 +1075,140 @@ package body Landin.Tests.Lexer_Suite is
       end;
    end Space_Is_Kept;
 
+   --  Every Landin source in the repository, read as bytes and written back
+   --  from its tokens and its space.  Deliberate real-host exception: the
+   --  files on disk are what is under test, faulty ones included, since the
+   --  scan never fails and every byte of a refused file is still a token or
+   --  a piece.  The build tree holds copies the suites wrote and is not
+   --  walked, and neither is anything whose name starts with a dot.
+   procedure Every_Source_Is_Reproduced
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Source_Is_Reproduced
+     (Item : in out Landin.Testing.Context)
+   is
+      Host     : Landin.Platform.Native.Native_Filesystem;
+      Root     : constant String := "../..";
+      Build    : constant String := Root & "/compiler/ada/build";
+      Files    : Natural := 0;
+      Faulty   : Natural := 0;
+      Pieces   : Natural := 0;
+      Unclosed : Natural := 0;
+
+      --  Files whose shape the corpus holds once or twice, named so that
+      --  deleting one fails here instead of shrinking what this proves.
+      Named : constant Landin.Platform.Path_List :=
+        ["/positive/line-ends-mixed/program.ldn",
+         "/positive/line-ends-lone-cr/program.ldn",
+         "/positive/line-ends-crlf/program.ldn",
+         "/positive/no-final-line-end/program.ldn",
+         "/positive/comment-forms/program.ldn",
+         "/positive/space-forms/program.ldn",
+         "/negative/latin1-byte-in-name/program.ldn",
+         "/negative/unclosed-block-comment/program.ldn"];
+      Seen : array (1 .. Natural (Named.Length)) of Boolean :=
+        [others => False];
+
+      function Ends_With (Text, Suffix : String) return Boolean
+        is (Text'Length >= Suffix'Length
+            and then Text (Text'Last - Suffix'Length + 1 .. Text'Last)
+                     = Suffix);
+
+      procedure Walk (Directory : String);
+
+      procedure Walk (Directory : String) is
+         Entries : Landin.Platform.Path_List;
+         Status  : Landin.Platform.List_Status;
+      begin
+         Host.List_Directory (Directory, Entries, Status);
+         if Status /= Landin.Platform.List_Ok then
+            Landin.Testing.Fail (Item, Directory & " cannot be listed");
+            return;
+         end if;
+
+         for Name of Entries loop
+            declare
+               Path : constant String := Directory & "/" & Name;
+            begin
+               if Name'Length = 0 or else Name (Name'First) = '.'
+                 or else Path = Build
+               then
+                  null;
+               elsif Host.Is_Directory (Path) then
+                  Walk (Path);
+               elsif Ends_With (Name, ".ldn") then
+                  declare
+                     Content : Unbounded.Unbounded_String;
+                     Read    : Landin.Platform.Read_Status;
+                  begin
+                     Host.Read_File (Path, Content, Read);
+                     if Read /= Landin.Platform.Read_Ok then
+                        Landin.Testing.Fail (Item, Path & " is unreadable");
+                     else
+                        declare
+                           Text    : constant String :=
+                             Unbounded.To_String (Content);
+                           Sources : Landin.Source.Sets.Source_Set;
+                           Names   : Landin.Source.Names.Table;
+                           Stream  : Landin.Tokens.Token_Stream;
+                           Problem : Unbounded.Unbounded_String;
+                        begin
+                           Lex_Text (Text, Sources, Names, Stream);
+                           Problem := Unbounded.To_Unbounded_String
+                             (Landin.Testing.Layout.Problem (Text, Stream));
+                           if Unbounded.Length (Problem) > 0 then
+                              Landin.Testing.Fail
+                                (Item, Path & ": "
+                                 & Unbounded.To_String (Problem));
+                           end if;
+
+                           Files := Files + 1;
+                           Pieces := Pieces
+                             + Landin.Tokens.Space_Count (Stream);
+                           if Landin.Tokens.Fault_Count (Stream) > 0 then
+                              Faulty := Faulty + 1;
+                           end if;
+                           for Index in 1 .. Landin.Tokens.Fault_Count
+                                               (Stream)
+                           loop
+                              if Landin.Tokens.Kind
+                                   (Landin.Tokens.Nth_Fault (Stream, Index))
+                                 = Landin.Tokens.Unterminated_Block_Comment
+                              then
+                                 Unclosed := Unclosed + 1;
+                              end if;
+                           end loop;
+                           for Index in Seen'Range loop
+                              if Ends_With (Path, Named (Index)) then
+                                 Seen (Index) := True;
+                              end if;
+                           end loop;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end Walk;
+   begin
+      Walk (Root);
+
+      Landin.Testing.Check
+        (Item, Files >= 2_000,
+         "every Landin source in the repository was read, and"
+         & Files'Image & " were");
+      Landin.Testing.Check
+        (Item, Faulty > 0 and then Unclosed > 0,
+         "sources that fail to scan are among them");
+      Landin.Testing.Check
+        (Item, Pieces > Files,
+         "and the space they hold was kept");
+      for Index in Seen'Range loop
+         Landin.Testing.Check
+           (Item, Seen (Index), Named (Index) & " was among them");
+      end loop;
+   end Every_Source_Is_Reproduced;
+
    ------------------------------------------------------------------
    --  The agreement
    ------------------------------------------------------------------
@@ -1287,6 +1422,9 @@ package body Landin.Tests.Lexer_Suite is
          Unterminated_Literals_Are_Faults'Access);
       Landin.Testing.Register
         (Into, "lexer", "space is kept", Space_Is_Kept'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "every source is reproduced",
+         Every_Source_Is_Reproduced'Access);
       Landin.Testing.Register
         (Into, "lexer", "agrees with the corpus",
          Agrees_With_The_Corpus'Access);

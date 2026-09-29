@@ -15,6 +15,7 @@ with Landin.Syntax.Parser;
 with Landin.Syntax.Dump;
 with Landin.Syntax;
 with Landin.Testing.Fixtures;
+with Landin.Testing.Layout;
 with Landin.Tokens.Lexer;
 with Landin.Tokens;
 
@@ -58,6 +59,11 @@ package body Landin.Tests.Parser_Suite is
    --  nodes the parse built; and whether every node kept the two
    --  invariants the table is built on.  A Tree is limited and cannot be
    --  handed back, so the walk happens here.
+   --
+   --  It also requires the stream to give the program back byte for byte,
+   --  so every corpus program, every truncation of one and every mutant
+   --  below is held to that too, and a stream that fails it fails the case
+   --  it was read for with what went wrong.
    procedure Read_And_Parse
      (Text  : String;
       Codes : out Unbounded.Unbounded_String;
@@ -83,6 +89,7 @@ package body Landin.Tests.Parser_Suite is
       Held  := True;
 
       Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Testing.Layout.Require (Text, Stream);
       Landin.Diagnostics.Lexical.Report (Stream, Found);
 
       declare
