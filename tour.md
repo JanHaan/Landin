@@ -7,16 +7,20 @@ you are being an idiot.
 Named after Peter Landin, who coined the term "syntactic sugar" and
 wrote "The Next 700 Programming Languages". This one is the 701st.
 
-Version 0.2.1 — the specification arranged by subject, under a
-second implementation roadmap. 0.1.0 was the first version of the
-specification proper, arrived at over seventeen pre-release revisions,
-four prototype programs and two outside reviews; 0.2.0 sealed the
-first implementation roadmap that followed, over which a working compiler
-was built and the specification was held to what that compiler could
-be made to do. 0.2.1 adds the rules an outside review of that work
-found unwritten or wrong — D243 to D245 in `spec.md`, and where Darwin
-puts a small composite on the stack [1975] — and the compiler follows
-them. That history is kept in a separate archive; the part of it with
+Version 0.2.2 — assembly with operands on every target. 0.1.0 was
+the first version of the specification proper, arrived at over
+seventeen pre-release revisions, four prototype programs and two
+outside reviews; 0.2.0 sealed the first implementation roadmap that
+followed, over which a working compiler was built and the
+specification was held to what that compiler could be made to do.
+0.2.1 arranged the specification by subject under a second roadmap and
+added the rules an outside review of that work found unwritten or
+wrong — D243 to D245 in `spec.md`, and where Darwin puts a small
+composite on the stack [1975]. 0.2.2 gives [1630]'s assembly typed
+operands bound to registers, D248, and lowers it on Cortex-M0, x86-64
+and arm64; a refusal by name says what the form is, D246; and a
+routine or struct holds at most a stated number of what it declares,
+D247. That history is kept in a separate archive; the part of it with
 lasting value is at the end of this file, under WHAT WAS TRIED AND
 DROPPED.
 
