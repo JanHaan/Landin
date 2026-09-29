@@ -66,6 +66,14 @@ package Landin.Driver is
 
    function Usage return String;
 
+   --  `refine explain [CODE ...]`: every code's rule with no operand, or
+   --  each named code's explanation in the order named.  A subcommand and
+   --  not an option, because it reads no source and compiles nothing: the
+   --  first argument, spelled exactly, selects it, so a source must be
+   --  named with a path to be called `explain`.  Only the host's arguments
+   --  reach it; it reads and writes no file.
+   Explain_Command : constant String := "explain";
+
    --  What `--emit=exe` writes beside its output, and reads back as the
    --  assembler's input.  Named here because a test asserts the path and a
    --  reader should not have to infer it from a concatenation.

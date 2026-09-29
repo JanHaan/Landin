@@ -914,6 +914,12 @@ GUIDES = [
          nav="the derived driver", group="the implementation",
          blurb="Prototype 1's executable application, public DMA contract, "
                "device adaptations and independent execution evidence."),
+    dict(key="diagnostics", src="docs/diagnostics.md",
+         out="diagnostics.html",
+         nav="what each diagnostic means", group="the implementation",
+         blurb="Every diagnostic code: the rule it enforces, the paragraph "
+               "that states it, and what to change. What `refine explain` "
+               "prints."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "
@@ -1487,8 +1493,8 @@ NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "documents"]),
     ("the prototypes", ["p1", "p2", "p3", "p4"]),
     ("the project", ["readme", "roadmap", "handoff"]),
-    ("the compiler", ["compiler", "ir", "targets", "core", "toolchain",
-                      "editors"]),
+    ("the compiler", ["compiler", "ir", "diagnostics", "targets", "core",
+                      "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),

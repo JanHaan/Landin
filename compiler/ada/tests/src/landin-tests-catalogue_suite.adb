@@ -5,12 +5,16 @@
 --  These cases do the first; the golden is the last one.
 
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Lexical;
 with Landin.Diagnostics.Text;
 with Landin.Diagnostics;
+with Landin.Driver;
+with Landin.Platform;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
+with Landin.Testing.Fakes;
 with Landin.Tokens.Lexer;
 with Landin.Tokens;
 
@@ -302,8 +306,68 @@ package body Landin.Tests.Catalogue_Suite is
       Check ("12 z", Accepted => True);
    end Integer_Guidance_Covers_Missing_Digits;
 
+   --  Every code is explained, and every example an explanation shows is
+   --  a program whose report begins with that code.  The example is run on
+   --  a fake filesystem holding only itself, as a one-file negative is.
+   procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context);
+
+   procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context)
+   is
+      Examples : Natural := 0;
+   begin
+      for Name in Rows.Code_Name loop
+         declare
+            Said : constant String :=
+              Landin.Diagnostics.Explanations.Explanation (Name);
+            Example : constant String :=
+              Landin.Diagnostics.Explanations.Example (Name);
+         begin
+            Landin.Testing.Check
+              (Item, Said'Length > 20,
+               Rows.Code (Name) & " says what its rule is");
+            Landin.Testing.Check
+              (Item,
+               (Rows.State (Name) = Rows.Retired)
+               = (Said'Length >= 8
+                  and then Said (Said'First .. Said'First + 7) = "Retired."),
+               Rows.Code (Name) & " says it is retired exactly when it is");
+
+            if Example /= "" then
+               Examples := Examples + 1;
+               declare
+                  Host  : Landin.Testing.Fakes.Fake_Filesystem;
+                  Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                  Given : Landin.Platform.Path_List;
+               begin
+                  Host.Add_File ("example.ldn", Example);
+                  Given.Append ("example.ldn");
+                  declare
+                     Ran : constant Landin.Driver.Outcome :=
+                       Landin.Driver.Execute (Given, Host, Tools);
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Diagnostics.Count (Ran.Found) > 0
+                        and then Landin.Diagnostics.Code
+                          (Landin.Diagnostics.Get (Ran.Found, 1))
+                            = Rows.Code (Name),
+                        Rows.Code (Name) & "'s example is refused with it");
+                  end;
+               end;
+            end if;
+         end;
+      end loop;
+
+      Landin.Testing.Check
+        (Item, Examples >= 40,
+         "most codes a short program provokes show one");
+   end Every_Code_Is_Explained;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "catalogue", "every code is explained",
+         Every_Code_Is_Explained'Access);
       Landin.Testing.Register
         (Into, "catalogue", "integer guidance covers missing digits",
          Integer_Guidance_Covers_Missing_Digits'Access);

@@ -277,7 +277,7 @@ package Landin.Diagnostics.Catalogue is
             when No_Frontend           =>
                "a source was read and no frontend is wired to the driver",
             when Unknown_Option        =>
-               "an option the driver does not define",
+               "an option or argument the driver does not define",
             when Unreadable_Source     =>
                "a source that is missing or cannot be read",
             when Unknown_Target        =>

@@ -3598,8 +3598,68 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Reports_Are_Returned_As_Data;
 
+   --  `refine explain` is a subcommand: the first argument spelled
+   --  exactly.  It reads no source, so a fake host with nothing in it is
+   --  all it needs, and an unknown code is misuse with L0002.
+   procedure Explain_Is_A_Subcommand
+     (Item : in out Landin.Testing.Context);
+
+   procedure Explain_Is_A_Subcommand
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Index : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Arguments_Of ("explain"), Host, Tools);
+      One : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Both ("explain", "L0201"), Host, Tools);
+      Unknown : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Both ("explain", "L9999"), Host, Tools);
+      Named_Source : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Arguments_Of ("./explain"), Host, Tools);
+      Listed : constant String := Unbounded.To_String (Index.Output);
+      Said   : constant String := Unbounded.To_String (One.Output);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Index.Status, Landin.Driver.Status_Success,
+         "the index is an answer");
+      Landin.Testing.Check
+        (Item, Contains (Listed, "L0001  retired")
+               and then Contains (Listed, "L0506  error"),
+         "the index names every code with its standing");
+      Landin.Testing.Check_Equal
+        (Item, Occurrences (Listed, "" & LF), 62,
+         "one line per catalogue row");
+      Landin.Testing.Check_Equal
+        (Item, One.Status, Landin.Driver.Status_Success,
+         "an explanation is an answer");
+      Landin.Testing.Check
+        (Item, Contains (Said, "[1860]")
+               and then Contains (Said, "For example:")
+               and then Contains (Said, "    state := nowhere(value: 1)"),
+         "an explanation cites its rule and shows its example");
+      Landin.Testing.Check
+        (Item, Unbounded.Length (One.Report) = 0,
+         "an explanation reports nothing");
+      Landin.Testing.Check_Equal
+        (Item, Unknown.Status, Landin.Driver.Status_Misuse,
+         "an unknown code is misuse");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Unknown.Report), "L0002")
+               and then Contains
+                 (Unbounded.To_String (Unknown.Report), "L9999"),
+         "and is reported as an argument the driver does not define");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Named_Source.Report),
+                         "source not found: ./explain"),
+         "a source called explain is named by a path");
+   end Explain_Is_A_Subcommand;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "explain is a subcommand",
+         Explain_Is_A_Subcommand'Access);
       Landin.Testing.Register
         (Into, "driver", "reports are returned as data",
          Reports_Are_Returned_As_Data'Access);

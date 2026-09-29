@@ -794,6 +794,34 @@ class Transcriptions(unittest.TestCase):
             said = [why for _, _, why in checker.fixture_sources()]
         self.assertIn("`fixed` names absent.fixed, which is not here", said)
 
+    def test_every_code_is_explained_and_retirement_is_said(self):
+        from check_controls import tree
+        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        with tree(copied=inputs) as root:
+            self.assertEqual(checker.check_explanations(True), [])
+            page = root / "docs/diagnostics.md"
+            text = page.read_text()
+            text = text.replace("### L0003\n", "### L0999\n", 1)
+            text = text.replace("Retired. An internal call", "An internal call",
+                                1)
+            page.write_text(text)
+            said = [why for _, _, why in checker.check_explanations(True)]
+        self.assertIn("L0003 is not explained", said)
+        self.assertIn("L0999 is explained and no catalogue row holds it",
+                      said)
+        self.assertIn("retired L0503 must begin `Retired.`", said)
+
+    def test_an_explanation_the_compiler_does_not_carry_is_stale(self):
+        from check_controls import tree
+        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        with tree(copied=inputs) as root:
+            page = root / "docs/diagnostics.md"
+            page.write_text(page.read_text().replace(
+                "A source named on the command line",
+                "A source named in the arguments", 1))
+            said = [why for _, _, why in checker.check_explanations(True)]
+        self.assertTrue(any("stale" in why for why in said))
+
     def test_a_missing_diagnostic_matrix_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_diagnostic_matrix,
                        copied=["compiler/ada/src", "compiler/ada/tests",

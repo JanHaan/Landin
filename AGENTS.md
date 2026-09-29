@@ -261,8 +261,11 @@ the project. Keep it current when the representation, verification boundary
 or optimization pipeline changes. It is derived from implementation and
 tests, never an authority for semantics, implementation decisions or work.
 `docs/targets.md` does the same for the C and link-name package boundaries,
-and `examples.md` holds the complete programs the runtime suite executes.
-All three are derived documents and none of them decides anything.
+`docs/diagnostics.md` explains every diagnostic code and is the text
+`refine explain` prints, generated into the compiler by
+`python3 check.py --catalogue`, and `examples.md` holds the complete programs
+the runtime suite executes. All four are derived documents and none of them
+decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 

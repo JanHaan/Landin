@@ -16,15 +16,18 @@ with Landin.IR.Specialization;
 with Landin.Optimization;
 with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Resolution;
+with Landin.Diagnostics.Text;
 with Landin.IR;
 with Landin.Modules;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
+with Landin.Source.Sets;
 with Landin.Source_Maps;
 with Landin.Stages;
 with Landin.Stages.Checking;
@@ -112,6 +115,7 @@ package body Landin.Driver is
 
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
+      & "       refine explain [CODE ...]" & LF
       & LF
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
@@ -146,11 +150,125 @@ package body Landin.Driver is
       & Landin.Backend.Entry_Point.Required_Shape & "." & LF
       & "Cortex --emit=exe requires --firmware-entry=NAME." & LF
       & LF
+      & "A warning does not change the exit status; an error makes it 1."
+      & LF
+      & "`refine explain` lists every diagnostic code and its rule;"
+      & LF
+      & "`refine explain L0201` says what that code means and how to fix"
+      & LF
+      & "it." & LF
+      & LF
       & "The toolchain is found by the target's GNU triplet, so"
       & LF
       & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc unless --toolchain"
       & LF
       & "names another." & LF);
+
+   ---------------------------------------------------------------------
+   --  Explain
+   --
+   --  A request with no compilation in it.  The report it may make is a
+   --  driver report with no source, rendered as every other one is.
+   ---------------------------------------------------------------------
+
+   function Explain (Arguments : Landin.Platform.Path_List) return Outcome;
+
+   function Explain (Arguments : Landin.Platform.Path_List) return Outcome
+   is
+      use type Rows.Disposition;
+      use type Landin.Diagnostics.Severity;
+
+      Result : Outcome;
+      Text   : Unbounded.Unbounded_String;
+      Found  : Landin.Diagnostics.Diagnostic_List;
+
+      procedure Refuse (Message : String);
+
+      procedure Refuse (Message : String) is
+      begin
+         Found.Append
+           (Landin.Diagnostics.Make
+              (Code    => Code_Unknown_Option,
+               Level   => Landin.Diagnostics.Error,
+               Source  => Landin.Source.No_Source,
+               Where   => Landin.Source.Empty_Span,
+               Message => Message));
+      end Refuse;
+
+      function Row_Line (Name : Rows.Code_Name) return String
+        is (Rows.Code (Name)
+            & (if Rows.State (Name) = Rows.Retired then "  retired  "
+               else "  " & Landin.Diagnostics.Text.Image (Rows.Level (Name))
+                    & (if Rows.Level (Name) = Landin.Diagnostics.Error
+                       then "    " else "  "))
+            & Rows.Rule (Name) & LF);
+   begin
+      if Natural (Arguments.Length) = 1 then
+         for Name in Rows.Code_Name loop
+            Unbounded.Append (Text, Row_Line (Name));
+         end loop;
+      end if;
+
+      for Index in 2 .. Natural (Arguments.Length) loop
+         declare
+            Asked : constant String := Arguments.Element (Index);
+         begin
+            if not Landin.Diagnostics.Is_Valid_Code (Asked)
+              or else not Rows.Holds (Asked)
+            then
+               Refuse ((if Asked'Length > 0 and then Asked (Asked'First) = '-'
+                        then "explain takes no option: "
+                        else "no catalogue row holds the code: ")
+                       & Asked);
+            else
+               declare
+                  Name : constant Rows.Code_Name := Rows.Named (Asked);
+                  Example : constant String :=
+                    Landin.Diagnostics.Explanations.Example (Name);
+               begin
+                  if Unbounded.Length (Text) > 0 then
+                     Unbounded.Append (Text, LF & "");
+                  end if;
+                  Unbounded.Append (Text, Row_Line (Name) & LF);
+                  Unbounded.Append
+                    (Text,
+                     Landin.Diagnostics.Explanations.Explanation (Name)
+                     & LF);
+                  if Example /= "" then
+                     Unbounded.Append (Text, LF & "For example:" & LF & LF);
+                     declare
+                        Start : Positive := Example'First;
+                     begin
+                        for At_Byte in Example'Range loop
+                           if Example (At_Byte) = LF then
+                              Unbounded.Append
+                                (Text,
+                                 (if At_Byte > Start then "    " else "")
+                                 & Example (Start .. At_Byte));
+                              Start := At_Byte + 1;
+                           end if;
+                        end loop;
+                     end;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      if Landin.Diagnostics.Count (Found) > 0 then
+         Result.Status := Status_Misuse;
+         Result.Found := Found;
+         declare
+            None : Landin.Source.Sets.Source_Set;
+         begin
+            Result.Report := Unbounded.To_Unbounded_String
+              (Landin.Diagnostics.Text.Render (Found, None));
+         end;
+      else
+         Result.Output := Text;
+      end if;
+      return Result;
+   end Explain;
 
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
@@ -213,6 +331,10 @@ package body Landin.Driver is
          Result.Status := Status_Misuse;
          Result.Output := Unbounded.To_Unbounded_String (Usage);
          return Result;
+      end if;
+
+      if Arguments.Element (1) = Explain_Command then
+         return Explain (Arguments);
       end if;
 
       --  Argument classification first, so that a request is fully known

@@ -5,7 +5,7 @@
 #
 #  code   state    rule
 L0001  Retired  a source was read and no frontend is wired to the driver
-L0002  Live     an option the driver does not define
+L0002  Live     an option or argument the driver does not define
 L0003  Live     a source that is missing or cannot be read
 L0004  Live     a target no description names
 L0005  Live     an output file that cannot be written
