@@ -5,3 +5,4 @@ constructs: 0080, 0190, 0410, 0520, 0560, 0580, 0670, 0680, 0690, 0710, 1150, 12
 program: main.ldn
 status: 42
 targets: linux-x86-64, macos-arm64
+codes: L0326, L0326

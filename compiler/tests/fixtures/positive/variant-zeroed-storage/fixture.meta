@@ -3,3 +3,4 @@ summary: D75 gives variant-bearing structs distinct module and local storage wit
 constructs: 0080, 0190, 0540, 0670, 0680, 0690, 0750, 1740, 1790, 1795, 1810, 1900
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0326

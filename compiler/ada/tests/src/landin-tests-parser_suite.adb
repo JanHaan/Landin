@@ -1526,10 +1526,14 @@ package body Landin.Tests.Parser_Suite is
 
       function Codes_In (Text : String) return String is
          Found : Unbounded.Unbounded_String;
-         Mark  : constant String := "error[";
-      begin
-         for Start in Text'Range loop
+
+         procedure Take (Start : Positive; Mark : String);
+
+         procedure Take (Start : Positive; Mark : String) is
+         begin
             if Start + Mark'Length + 5 <= Text'Last
+              and then (Start = Text'First
+                        or else Text (Start - 1) = ASCII.LF)
               and then Text (Start .. Start + Mark'Length - 1) = Mark
               and then Text (Start + Mark'Length + 5) = ']'
             then
@@ -1542,6 +1546,12 @@ package body Landin.Tests.Parser_Suite is
                   Text (Start + Mark'Length
                         .. Start + Mark'Length + 4));
             end if;
+         end Take;
+      begin
+         --  Errors and warnings alike, in the order the report has them.
+         for Start in Text'Range loop
+            Take (Start, "error[");
+            Take (Start, "warning[");
          end loop;
 
          return Unbounded.To_String (Found);
@@ -1597,11 +1607,13 @@ package body Landin.Tests.Parser_Suite is
                               Fixtures.Name (Fixture)
                               & ": the report carries the codes the"
                               & " fixture names");
+                           --  A negative whose report is only warnings is
+                           --  a program the compiler accepts and says
+                           --  something about, and its status says so.
                            Landin.Testing.Check_Equal
-                             (Item, Ran.Status,
-                              Landin.Driver.Status_Reported,
+                             (Item, Ran.Status, Fixtures.Status (Fixture),
                               Fixtures.Name (Fixture)
-                              & ": a rejected program exits reported");
+                              & ": the program exits as its fixture says");
                         end Check_Outcome;
                      begin
                         if Fixtures.Module_Root (Fixture) = "" then

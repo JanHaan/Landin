@@ -35,9 +35,11 @@ package Landin.Testing.Fixtures is
    function Targets (Item : Fixture) return String;
 
    --  The diagnostic codes the report must carry, comma separated, in the
-   --  order the report carries them.  An ordered list and not a set: two
-   --  refused constructs in one file are two reports, and a regression
-   --  that doubles a count is invisible to a set.
+   --  order the report carries them, errors and warnings alike.  An ordered
+   --  list and not a set: two refused constructs in one file are two
+   --  reports, and a regression that doubles a count is invisible to a
+   --  set.  A fixture whose program is accepted may name warnings only,
+   --  and without the key its report must be empty.
    function Codes   (Item : Fixture) return String;
 
    --  Canonicalize the token boundaries in a comma-separated code list.  This

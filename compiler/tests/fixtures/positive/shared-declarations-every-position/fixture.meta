@@ -3,3 +3,4 @@ summary: shared names are accepted for module and local bindings, block, inline 
 constructs: 0100, 0670, 0680, 0790, 0900, 1040, 1790, 1795, 1800
 program: main.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0326

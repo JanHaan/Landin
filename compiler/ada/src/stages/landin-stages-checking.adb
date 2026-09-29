@@ -31,6 +31,7 @@ with Landin.Stages.Folding;
 with Landin.Stages.Checking.References;
 with Landin.Syntax.Forest;
 with Landin.Syntax;
+with Landin.Tokens.Spacing;
 with Landin.Tokens.Text;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
@@ -1406,6 +1407,37 @@ package body Landin.Stages.Checking is
         (Index_Type => Positive, Element_Type => Traversal_Element_Entry);
 
       Traversal_Elements : Traversal_Element_Vectors.Vector;
+
+      --  D251: the local bindings whose `mut` something needed.  A binding
+      --  is recorded where [1900] asks whether it may be written and the
+      --  answer rests on its `mut`: an assignment, a step or an `inout`
+      --  argument through Check_Place, and a mutable view of it through
+      --  Place_Is_Mutable -- an `addr`, a slice or a traversal.  Keyed by
+      --  declaration and never iterated; the warning walks the trees.
+      function Hash_Declaration (Id : Res.Declaration_Id)
+        return Ada.Containers.Hash_Type
+        is (Ada.Containers.Hash_Type (Id));
+
+      package Declaration_Sets is new Ada.Containers.Hashed_Sets
+        (Element_Type        => Res.Declaration_Id,
+         Hash                => Hash_Declaration,
+         Equivalent_Elements => Landin.Provenance."=");
+
+      Mutability_Needed : Declaration_Sets.Set;
+
+      --  The extents of the routine bodies this stage checked.  A generic
+      --  routine's body is checked once per instance and never as its
+      --  template, so an uninstantiated one had no write checked and D251
+      --  asks nothing about its locals: silence where nothing is known.
+      type Checked_Extent is record
+         Source : Landin.Source.Source_Id;
+         Where  : Landin.Source.Span;
+      end record;
+
+      package Checked_Extent_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Checked_Extent);
+
+      Checked_Bodies : Checked_Extent_Vectors.Vector;
 
       type Discovered_Match is record
          Source : Landin.Source.Source_Id;
@@ -18831,8 +18863,11 @@ package body Landin.Stages.Checking is
                when Res.Pattern_Binding =>
                   return Syn.Is_Mutable (Their_Tree.all, Their_Node);
                when Res.Module_Binding | Res.Local_Binding =>
-                  return Syn.Is_Mutable (Their_Tree.all, Their_Node)
-                    or else Traversal_Element_Is_Writable (Means);
+                  if Syn.Is_Mutable (Their_Tree.all, Their_Node) then
+                     Mutability_Needed.Include (Means);
+                     return True;
+                  end if;
+                  return Traversal_Element_Is_Writable (Means);
                when others =>
                   return False;
             end case;
@@ -22365,6 +22400,13 @@ package body Landin.Stages.Checking is
                   when Res.Module_Binding | Res.Local_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node)
                        or else Traversal_Element_Is_Writable (Means));
+
+            if Writable
+              and then Sort in Res.Module_Binding | Res.Local_Binding
+              and then Syn.Is_Mutable (Their_Tree.all, Their_Node)
+            then
+               Mutability_Needed.Include (Means);
+            end if;
 
             if not Writable then
                Bad.Report
@@ -34016,6 +34058,12 @@ package body Landin.Stages.Checking is
             else Syn.Origin
               (Of_Tree, Syn.Returns_Of (Of_Tree, Node)));
       begin
+         if Runs /= Syn.No_Node then
+            Checked_Bodies.Append
+              (Checked_Extent'(Source => Syn.Source_Of (Of_Tree),
+                               Where  => Syn.Where (Of_Tree, Runs)));
+         end if;
+
          --  The signature first records identity-only parts so recursive
          --  function types do not form by-value edges.  Parameters and
          --  results become ABI carriers only with this routine body, so now
@@ -35461,6 +35509,140 @@ package body Landin.Stages.Checking is
                end if;
             end;
          end loop;
+      end if;
+
+      --  D251: a local declared `mut` that nothing needed to be.  Only on
+      --  a program this stage accepted, because a refusal can leave a write
+      --  unchecked and the warning would then say something false; and only
+      --  where the repair is exact -- the declaration begins with `mut`,
+      --  and between it and the name lie blanks and nothing else, so the
+      --  edit never touches a comment or a line end.  A shared declaration
+      --  is one `mut` for every name [0100], so it is warned about only
+      --  when none of its names needed it.  Module bindings are not asked:
+      --  a module value can be written from outside the program, by a
+      --  linked C routine or a debugger, which is the reason to declare it.
+      if not Landin.Diagnostics.Has_Errors (Found) then
+         declare
+            Spaced : constant not null access Landin.Tokens.Spacing.Table :=
+              Landin.Stages.Spacing (Context);
+         begin
+            for Index in 1 .. Source_Count (Context) loop
+               declare
+                  Id : constant Landin.Source.Source_Id :=
+                    Nth_Source (Context, Index);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Id);
+                  Text : Landin.Source.Snapshot renames
+                    Landin.Stages.Source (Context, Id).Element.all;
+                  Node : Syn.Node_Id := 1;
+               begin
+                  while Node <= Syn.Last_Node (Of_Tree.all) loop
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          (if Syn.Kind (Of_Tree.all, Node) = Syn.Binding
+                           then Res.Declaration_At (Meanings.all, Id, Node)
+                           else Res.No_Declaration);
+                        Group_End : Syn.Node_Id := Node;
+                        Needed : Boolean;
+                     begin
+                        if Means /= Res.No_Declaration
+                          and then Res.Sort_Of (Meanings.all, Means)
+                                     = Res.Local_Binding
+                          and then Syn.Is_Mutable (Of_Tree.all, Node)
+                          and then not Syn.Shares_Declared_Type
+                                         (Of_Tree.all, Node)
+                          and then Landin.Configuration.Is_Active
+                            (Configurations (Context).all, Id, Node)
+                          and then not Is_Traversal_Element (Means)
+                          and then
+                            (for some Checked of Checked_Bodies =>
+                               Checked.Source = Id
+                               and then Landin.Source.Contains
+                                 (Checked.Where,
+                                  Syn.Where (Of_Tree.all, Node)))
+                        then
+                           --  The names that share this declaration follow
+                           --  it as consecutive declarations.
+                           Needed := Mutability_Needed.Contains (Means);
+                           declare
+                              Next : Res.Declaration_Id := Means + 1;
+                           begin
+                              while Res.Contains (Meanings.all, Next)
+                                and then Res.Source_Of (Meanings.all, Next)
+                                           = Id
+                                and then Syn.Kind
+                                  (Of_Tree.all,
+                                   Res.Node_Of (Meanings.all, Next))
+                                    = Syn.Binding
+                                and then Syn.Shares_Declared_Type
+                                  (Of_Tree.all,
+                                   Res.Node_Of (Meanings.all, Next))
+                              loop
+                                 Needed := Needed
+                                   or else Mutability_Needed.Contains (Next);
+                                 Group_End := Res.Node_Of (Meanings.all, Next);
+                                 Next := Next + 1;
+                              end loop;
+                           end;
+
+                           declare
+                              Written : constant Landin.Source.Span :=
+                                Syn.Where (Of_Tree.all, Node);
+                              Named : constant Landin.Source.Span :=
+                                Syn.Anchor (Of_Tree.all, Node);
+                              Word : constant Landin.Source.Span :=
+                                (Written.First, Written.First + 3);
+                              Blanks : constant Landin.Source.Span :=
+                                (Word.Last, Named.First);
+                              Between : constant Landin.Tokens.Space_Range :=
+                                Landin.Tokens.Spacing.Within
+                                  (Spaced.all, Id, Blanks);
+                              Only_Blanks : constant Boolean :=
+                                Between.Last = Between.First
+                                and then Landin.Tokens."="
+                                  (Landin.Tokens.Kind
+                                     (Landin.Tokens.Spacing.Nth_Space
+                                        (Spaced.all, Id, Between.First)),
+                                   Landin.Tokens.Blanks)
+                                and then Landin.Tokens.Where
+                                  (Landin.Tokens.Spacing.Nth_Space
+                                     (Spaced.all, Id, Between.First))
+                                    = Blanks;
+                           begin
+                              if not Needed
+                                and then Named.First > Word.Last
+                                and then Landin.Source.Slice (Text, Word)
+                                           = "mut"
+                                and then Only_Blanks
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Mutable_Never_Written,
+                                    Source  => Id,
+                                    Where   => Word,
+                                    Message => "`"
+                                      & Spelled
+                                          (Syn.Name (Of_Tree.all, Node))
+                                      & "` is declared `mut` and nothing"
+                                      & " writes it",
+                                    Note    => "D251: a warning, and the"
+                                      & " program is accepted; without"
+                                      & " `mut` it means the same",
+                                    Fixes   =>
+                                      [1 => Landin.Diagnostics.Fixes
+                                              .Unmark_Mutable
+                                         (Id, Word, Blanks,
+                                          Spelled
+                                            (Syn.Name (Of_Tree.all, Node)))],
+                                    Into    => Found);
+                              end if;
+                           end;
+                        end if;
+                        Node := Group_End + 1;
+                     end;
+                  end loop;
+               end;
+            end loop;
+         end;
       end if;
 
       <<Publish_Diagnostics>>

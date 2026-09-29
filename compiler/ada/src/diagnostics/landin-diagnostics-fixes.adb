@@ -38,6 +38,20 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Mark_Mutable;
 
+   function Unmark_Mutable
+     (Source : Landin.Source.Source_Id;
+      Word   : Landin.Source.Span;
+      Blanks : Landin.Source.Span;
+      Name   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Unmark_Mutable, Exact, "declare `" & Name & "` without `mut`");
+   begin
+      Add_Edit
+        (Result, Make_Edit (Source, (Word.First, Blanks.Last), ""));
+      return Result;
+   end Unmark_Mutable;
+
    function Compare
      (Source : Landin.Source.Source_Id;
       Where  : Landin.Source.Span) return Fix

@@ -561,6 +561,23 @@ A compile-time assertion is false [1510].
 An implementation limit, not a rule of the language: a routine declares, or a
 struct holds, more than the compiler admits (D247). Split it.
 
+### L0326
+
+A warning, and the program is accepted: a local binding is declared `mut` and
+nothing writes it, steps it, passes it `inout` or takes a mutable view of it.
+Without `mut` it means the same, so the diagnostic offers removing the word
+as an exact fix. The language permits the `mut`; the warning is the compiler's
+judgement and not a rule (D251). A shared declaration is warned about only
+when none of its names is written, and a module binding never is, since a
+linked routine or a debugger may write it.
+
+```landin
+count_up: () -> (total: u32) =
+    mut step: u32 = 2
+    total = step + 1
+end count_up
+```
+
 ## The backend and its toolchain
 
 ### L0500

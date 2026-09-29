@@ -460,7 +460,7 @@ emits assembly text.
 | `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
-| `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
+| `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order, errors and warnings alike; on a positive, runtime or ABI fixture, the warnings its accepted program reports |
 | `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
 | `targets` | yes | comma-separated targets the fixture applies to |
 | `fixed` | no | for a negative with a program and codes: what its sources become once the first fix of every diagnostic that offers one is applied; a bare name is the program's result and `source -> result` another source's |
@@ -477,6 +477,14 @@ fixture refused for nothing but `L0109` is derivable and must derive.
 `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
 of the number, because the catalogue's own header forbids reading a stage off a
 code — `L0010` began in lexical refusal and is now raised only by the parser.
+
+A warning is pinned exactly as an error is. An accepted program's report is
+held to its `codes`: a positive fixture's emission, and a runtime or ABI
+fixture's compilation, must report exactly those codes in that order, and
+without the key must report nothing, so a warning nobody pinned fails there.
+A negative fixture whose report is only warnings says `status: 0`, since a
+warning never refuses a program; `negative/mut-never-written` is the one that
+does.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,

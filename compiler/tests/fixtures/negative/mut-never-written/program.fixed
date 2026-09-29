@@ -1,0 +1,25 @@
+--  D251: `mut` that nothing needed is a warning with its exact repair.  The
+--  program is accepted.  `total` is written, `cursor` is stepped and `seen`
+--  is passed `inout`, so each needs its `mut`; `step` and `limit` are only
+--  read, and `left, right` share one `mut` that neither name needs.  A
+--  module binding keeps its `mut`: something outside may write it.
+mut shared: u32 = 0
+
+record: (inout into: u32) -> none =
+    inc into
+end record
+
+count_to: (target: u32) -> (reached: u32) =
+    mut total: u32 = 0
+    mut cursor: u32 = 0
+    mut seen: u32 = 0
+    step: u32 = 1
+    limit: u32 = target
+    left, right: u32 = 2
+    while cursor < limit do
+        total += step
+        inc cursor
+        record(seen)
+    end while
+    reached = total + seen + left + right + shared
+end count_to

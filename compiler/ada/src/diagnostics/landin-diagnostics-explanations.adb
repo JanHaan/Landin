@@ -235,6 +235,16 @@ package body Landin.Diagnostics.Explanations is
                "An implementation limit, not a rule of the language: a r"
                & "outine declares, or a struct holds, more than the compil"
                & "er admits (D247). Split it.",
+            when Catalogue.Mutable_Never_Written =>
+               "A warning, and the program is accepted: a local binding "
+               & "is declared `mut` and nothing writes it, steps it, passe"
+               & "s it `inout` or takes a mutable view of it. Without `mut"
+               & "` it means the same, so the diagnostic offers removing t"
+               & "he word as an exact fix. The language permits the `mut`;"
+               & " the warning is the compiler's judgement and not a rule "
+               & "(D251). A shared declaration is warned about only when n"
+               & "one of its names is written, and a module binding never "
+               & "is, since a linked routine or a debugger may write it.",
             when Catalogue.No_Toolchain =>
                "No assembler and linker for the selected target were fou"
                & "nd on this host [1550]. The note names the program looke"
@@ -558,6 +568,15 @@ package body Landin.Diagnostics.Explanations is
                & LF,
             when Catalogue.Size_Limit_Exceeded =>
                "",
+            when Catalogue.Mutable_Never_Written =>
+               "count_up: () -> (total: u32) ="
+               & LF
+               & "    mut step: u32 = 2"
+               & LF
+               & "    total = step + 1"
+               & LF
+               & "end count_up"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>

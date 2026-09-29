@@ -535,6 +535,7 @@ negative/module-values-name-each-other | linux-x86-64, macos-arm64
 negative/multiple-result-function-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/multiple-return-name-duplicate | linux-x86-64, macos-arm64, synthetic-32
 negative/multiple-return-unassigned | linux-x86-64, macos-arm64, synthetic-32
+negative/mut-never-written | linux-x86-64, macos-arm64, synthetic-32
 negative/name-after-the-branch-closes | linux-x86-64, macos-arm64
 negative/name-declared-nowhere | linux-x86-64, macos-arm64
 negative/name-from-another-arm | linux-x86-64, macos-arm64

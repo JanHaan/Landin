@@ -38,6 +38,18 @@ package Landin.Diagnostics.Fixes is
       Before : Landin.Source.Byte_Offset;
       Name   : String) return Fix;
 
+   --  `mut` at Word, and the blanks after it up to the name, removed.
+   --  Exact: nothing writes the binding, so without `mut` the program
+   --  means what it meant (D251).  Word and Blanks are adjacent, and
+   --  Blanks never holds a comment or a line end.
+   function Unmark_Mutable
+     (Source : Landin.Source.Source_Id;
+      Word   : Landin.Source.Span;
+      Blanks : Landin.Source.Span;
+      Name   : String) return Fix
+     with Pre => Landin.Source.Length (Word) = 3
+                 and then Blanks.First = Word.Last;
+
    --  The `=` at Where, written inside an expression, becomes `==`.
    --  Likely: [0390] says an expression never assigns, so the one thing a
    --  `=` there can mean is a comparison, but the author may instead

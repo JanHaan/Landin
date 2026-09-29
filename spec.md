@@ -2260,6 +2260,49 @@ enables it stays `ROADMAP.md`'s to say.
 `negative/cortex-refused-type-named`, whose recorded reports carry the notes,
 and the parser case `shared declarations have a named refusal`.
 
+### D251 — A warning is the compiler's, never the language's
+
+**The discrepancy:** [1850] says a rule that permits something does not also
+warn about it, and nothing in the language defines a warning. The catalogue has
+had a warning severity since the first slice and no code used it. A lint is a
+judgement the language does not make; the risk of one is a second opinion that
+disagrees with the rules, or a verdict that depends on it.
+
+**Chosen:** a warning is a catalogued code at warning level, raised by the
+compiler and never by a rule of the language. It never refuses a program: the
+exit status stays 0, and an accepted program is emitted exactly as it would be
+without it. A warning is admitted only where the compiler can say, from facts a
+rule already decided, that something written was not needed, and only with the
+exact fix that removes it and leaves the program's meaning unchanged; the
+catalogue requires every occurrence to carry that fix. Shadowing is never
+warned about, as [1850] says. There is no way to silence a warning, because
+the answer to one is its fix; the first warning that needs silencing brings
+the mechanism and records here where it lives.
+
+The first warning is L0326: a local binding declared `mut` [0060] that no
+assignment, step, `inout` argument or mutable view needed, found where the
+checker's own [1900] check answers from that `mut`. Its fix removes `mut` and
+the blanks after it, never a comment or a line end, and is offered only where
+those bytes are all that separate the word from the name. A shared
+declaration [0100] is warned about only when none of its names needed `mut`,
+because one word serves them all. A module binding is never warned about,
+because a linked routine or a debugger may write it. The warning runs only on
+a program the checker accepted and only in a routine body it checked, so an
+uninstantiated generic says nothing.
+
+**The alternatives:** no lints at all, which [1850] reads as. That leaves the
+compiler unable to say what it knows about a program it accepts, and pushes
+the judgement into a second tool whose rules drift from the checker's. Unused
+imports were declined as a first lint: an import adds its module to the
+program and its conformances to the one register [1280], so removing one can
+change what the program means. Unused immutable locals were declined because
+the only way to quiet one is a discard [1930], which is a judgement about
+wasted work the language chose not to make.
+
+**Pinned by** `negative/mut-never-written`, which applies the fix and compiles
+the result clean, and the `codes:` of every accepted fixture whose program
+warns.
+
 ## DECISIONS: NUMBERS AND LITERALS
 
 How a literal is written, what it means, and which scalar types the

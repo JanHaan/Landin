@@ -16,6 +16,15 @@
 --  A fix is data as well: whether an occurrence may carry one is a column,
 --  like how many notes it requires, and the fix's own message is written
 --  where it is built, in Landin.Diagnostics.Fixes, for the reason above.
+--  What a code means to a person is written in `docs/diagnostics.md`, and
+--  `refine explain` prints it from Landin.Diagnostics.Explanations, which is
+--  generated from that page; a code without a section does not compile.
+--
+--  A warning is a row at warning level, and D251 is what admits one: the
+--  compiler's judgement and never the language's, raised only on a program
+--  it accepts, and only with the exact fix that settles it, so its row is
+--  Must_Fix.  Its number is in the band of the stage that found it, like
+--  every other code; nothing about a number says it is a warning.
 --
 --  A code is a name, not an address. The bands below record where a code was
 --  born, not which stage owns it: `L0010` began in lexical refusal and is
@@ -130,6 +139,12 @@ package Landin.Diagnostics.Catalogue is
       --  checker's because counting what a routine declares needs the
       --  resolver's scopes.
       Size_Limit_Exceeded,
+      --  The first warning: a judgement the language does not make and the
+      --  compiler does, with the repair that settles it (D251).  It is the
+      --  checker's because the checker is what knows whether `mut` was
+      --  needed, and a band records where a code was born, so no band of
+      --  its own says that a number is a warning.
+      Mutable_Never_Written,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -206,6 +221,7 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Character_Literal    => "L0322",
             when Malformed_Raw_Literal          => "L0323",
             when Size_Limit_Exceeded            => "L0325",
+            when Mutable_Never_Written          => "L0326",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -235,6 +251,8 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Size_Limit_Exceeded => Error,
+            --  A warning never refuses a program; see Fixes below.
+            when Mutable_Never_Written => Warning,
             when No_Toolchain .. Panic_Contract_Invalid => Error);
 
    --  Argument_Not_In_A_Register was retired by the internal scalar
@@ -264,7 +282,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => Live,
             when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
-               .. Size_Limit_Exceeded => Live,
+               .. Mutable_Never_Written => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
@@ -397,6 +415,8 @@ package Landin.Diagnostics.Catalogue is
             when Size_Limit_Exceeded =>
                "D247: an implementation limit on how many declarations a"
                & " routine or fields a struct holds",
+            when Mutable_Never_Written =>
+               "D251: a local declared `mut` that nothing writes",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -447,7 +467,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => True,
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
-               .. Size_Limit_Exceeded => True,
+               .. Mutable_Never_Written => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
@@ -480,7 +500,7 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
-               .. Size_Limit_Exceeded =>
+               .. Mutable_Never_Written =>
                True,
             when No_Toolchain .. Panic_Contract_Invalid => False);
 
@@ -596,6 +616,9 @@ package Landin.Diagnostics.Catalogue is
                | Malformed_Character_Literal => 1,
             when Malformed_Raw_Literal => 1,
             when Size_Limit_Exceeded   => 1,
+            --  D251: the judgement is the compiler's and not the language's,
+            --  and the note says so.
+            when Mutable_Never_Written => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.
@@ -629,6 +652,9 @@ package Landin.Diagnostics.Catalogue is
             when Immutable_Target => May_Fix,
             --  [0390]'s `=` inside an expression, offered `==`.
             when Assignment_In_Expression => May_Fix,
+            --  D251 admits a warning only with the exact repair that
+            --  settles it, so every occurrence carries one.
+            when Mutable_Never_Written => Must_Fix,
             when others => No_Fix);
 
    function Count return Natural

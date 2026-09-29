@@ -1,0 +1,8 @@
+class: negative
+summary: D251 warns about a local `mut` nothing writes, steps, passes `inout` or views mutably, offers its exact removal, and accepts the program
+program: program.ldn
+codes: L0326, L0326, L0326
+status: 0
+fixed: program.fixed
+constructs: 0060, 0100, 1900
+targets: linux-x86-64, macos-arm64, synthetic-32

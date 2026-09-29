@@ -151,7 +151,7 @@ different responsibilities.
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
-| `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
+| `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
 | `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads | perform an effect, or let a measurement decide anything |
 | `Landin.Platform.Native` | the only filesystem implementation, and the process's own resource counters through its host C adapter | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
@@ -171,7 +171,7 @@ different responsibilities.
 | `Landin.Stages.Checking.Flow` | definite assignment, including D156/D157's conservative post-loop assignment boundary and D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
-| `Landin.Driver` | argument and `--emit` classification, the private ordered-root graph discovery of modules through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
+| `Landin.Driver` | argument and `--emit` classification, the `explain` subcommand, the private ordered-root graph discovery of modules through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |
@@ -533,6 +533,23 @@ limit does not remove diagnostics, related labels or notes from the structured
 report. Small explicit budgets let tests cover the same boundary without large
 sources. The source layer exposes a terminator-free line span so rendering
 never needs to copy an entire long line merely to select its excerpt.
+
+A diagnostic may carry fixes: each an ordered set of edits, spans of one or
+several sources and the bytes that replace them, with a kind, an
+applicability and the sentence rendered as its `help` line. A fix is exact
+when the rule decides the replacement and applying it keeps the program's
+meaning, and likely when it guesses at what was meant, such as a declared name
+near a misspelling. The catalogue's `Fixes` column says which codes may carry
+one and which must, and `Landin.Stages.Report` holds every edit to whole
+characters of a source the compilation read. `Landin.Driver.Outcome` hands the
+sorted report back as data beside its rendering, with each source's path, so
+a client applying a fix, or sending one to an editor, never reads the text
+back. The compiler builds fixes and never applies one; the test program does,
+in its `fixes` suite.
+
+A warning is a catalogued code at warning level (D251). It never refuses a
+program, so the exit status and everything emitted are what they would be
+without it, and every occurrence carries the exact fix that settles it.
 
 Generic checking coalesces identical complete diagnostics from different instances
 of one template. Instance-view transitions attribute each newly collected

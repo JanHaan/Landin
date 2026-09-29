@@ -5,3 +5,4 @@ program: main.ldn
 status: 42
 constructs: 0520, 0800, 0830, 0860, 1320
 targets: linux-x86-64, macos-arm64
+codes: L0326

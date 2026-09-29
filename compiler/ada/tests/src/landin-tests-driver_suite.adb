@@ -3628,7 +3628,7 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0506  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 62,
+        (Item, Occurrences (Listed, "" & LF), 63,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,

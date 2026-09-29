@@ -479,7 +479,11 @@ package body Landin.Tests.Checking_Suite is
             Landin.Testing.Check
               (Item, Landin.Stages.Failed (Work) /= Accepted
                  and then
-                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                   --  A warning is not a verdict (D251), so only errors
+                   --  are counted.
+                   (if Accepted
+                    then Landin.Diagnostics.Count_Of
+                      (Reports, Landin.Diagnostics.Error) = 0
                     else Landin.Diagnostics.Count (Reports) = 1
                       and then Landin.Diagnostics.Code
                         (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
@@ -750,7 +754,11 @@ package body Landin.Tests.Checking_Suite is
             Landin.Testing.Check
               (Item, Landin.Stages.Failed (Work) /= Accepted
                  and then
-                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                   --  A warning is not a verdict (D251), so only errors
+                   --  are counted.
+                   (if Accepted
+                    then Landin.Diagnostics.Count_Of
+                      (Reports, Landin.Diagnostics.Error) = 0
                     else Landin.Diagnostics.Count (Reports) = 1
                       and then Landin.Diagnostics.Code
                         (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
@@ -8585,13 +8593,20 @@ package body Landin.Tests.Checking_Suite is
               Landin.Stages.Report (Work);
             Got : US.Unbounded_String;
          begin
+            --  Errors only: a warning is not an assignment verdict (D251).
             for Position in 1 .. Landin.Diagnostics.Count (Reports) loop
-               if Position > 1 then
-                  US.Append (Got, " ");
+               if Landin.Diagnostics."="
+                    (Landin.Diagnostics.Level
+                       (Landin.Diagnostics.Get (Reports, Position)),
+                     Landin.Diagnostics.Error)
+               then
+                  if US.Length (Got) > 0 then
+                     US.Append (Got, " ");
+                  end if;
+                  US.Append
+                    (Got, Landin.Diagnostics.Code
+                       (Landin.Diagnostics.Get (Reports, Position)));
                end if;
-               US.Append
-                 (Got, Landin.Diagnostics.Code
-                    (Landin.Diagnostics.Get (Reports, Position)));
             end loop;
             Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
             Landin.Testing.Check
@@ -10772,9 +10787,11 @@ package body Landin.Tests.Checking_Suite is
       declare
          Reports : constant D.Diagnostic_List := Landin.Stages.Report (Work);
       begin
+         --  Errors only: a warning is not the verdict pinned here (D251).
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) = (Expected /= "")
-              and then D.Count (Reports) = (if Expected = "" then 0 else 1),
+              and then D.Count_Of (Reports, D.Error)
+                = (if Expected = "" then 0 else 1),
             "the source has exactly the expected diagnostic count: " & Text);
          if Expected /= "" and then D.Count (Reports) = 1 then
             declare

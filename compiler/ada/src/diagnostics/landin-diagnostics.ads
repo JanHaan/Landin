@@ -104,6 +104,7 @@ package Landin.Diagnostics is
      (Respell,         --  the written name becomes one that is declared
       Name_End,        --  `end` names what it closes
       Mark_Mutable,    --  a binding that is written is declared `mut`
+      Unmark_Mutable,  --  a binding nothing writes loses its `mut`
       Compare);        --  `=` in an expression becomes `==`
 
    type Fix is private;

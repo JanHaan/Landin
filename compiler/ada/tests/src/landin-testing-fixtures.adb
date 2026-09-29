@@ -534,9 +534,11 @@ package body Landin.Testing.Fixtures is
                      Ok := False;
                   end if;
 
-                  if Expected not in Unit | Negative_Program then
-                     Complain ("codes belong only to a negative or unit"
-                               & " fixture");
+                  if Expected not in Unit | Negative_Program
+                                     | Positive_Program | Runtime | Abi
+                  then
+                     Complain ("codes belong only to a fixture that"
+                               & " compiles a program, or a unit note");
                   elsif Ok then
                      Item.Codes := Unbounded.To_Unbounded_String (Value);
                   else

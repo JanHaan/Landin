@@ -85,7 +85,8 @@ package Landin.Diagnostics.Checking is
       Conformance_Collision,
       Unsatisfied_Constraint,
       Compiler_Conformance_Reserved,
-      Size_Limit_Exceeded);
+      Size_Limit_Exceeded,
+      Mutable_Never_Written);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -133,7 +134,9 @@ package Landin.Diagnostics.Checking is
             when Compiler_Conformance_Reserved =>
                Catalogue.Compiler_Conformance_Reserved,
             when Size_Limit_Exceeded =>
-               Catalogue.Size_Limit_Exceeded);
+               Catalogue.Size_Limit_Exceeded,
+            when Mutable_Never_Written =>
+               Catalogue.Mutable_Never_Written);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

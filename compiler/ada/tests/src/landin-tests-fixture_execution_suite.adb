@@ -296,25 +296,37 @@ package body Landin.Tests.Fixture_Execution_Suite is
          "cleanup reaching exit cannot satisfy a no-unwind trap fixture");
    end A_Timeout_Cannot_Satisfy_A_Trap;
 
+   Error_Mark   : aliased constant String := "error[";
+   Warning_Mark : aliased constant String := "warning[";
+   Levels : constant array (1 .. 2) of access constant String :=
+     [Error_Mark'Access, Warning_Mark'Access];
+
    function Codes_In (Text : String) return String;
 
    function Codes_In (Text : String) return String is
       Found : Unbounded.Unbounded_String;
-      Mark  : constant String := "error[";
+
+      --  A diagnostic begins a line with its level and its code; a warning
+      --  is pinned exactly as an error is, in the order the report has it.
+      function Code_At (Start : Positive; Mark : String) return Boolean
+        is (Start + Mark'Length + 5 <= Text'Last
+            and then (Start = Text'First
+                      or else Text (Start - 1) = ASCII.LF)
+            and then Text (Start .. Start + Mark'Length - 1) = Mark
+            and then Text (Start + Mark'Length + 5) = ']');
    begin
       for Start in Text'Range loop
-         if Start + Mark'Length + 5 <= Text'Last
-           and then Text (Start .. Start + Mark'Length - 1) = Mark
-           and then Text (Start + Mark'Length + 5) = ']'
-         then
-            if Unbounded.Length (Found) > 0 then
-               Unbounded.Append (Found, ", ");
-            end if;
+         for Mark of Levels loop
+            if Code_At (Start, Mark.all) then
+               if Unbounded.Length (Found) > 0 then
+                  Unbounded.Append (Found, ", ");
+               end if;
 
-            Unbounded.Append
-              (Found,
-               Text (Start + Mark'Length .. Start + Mark'Length + 4));
-         end if;
+               Unbounded.Append
+                 (Found,
+                  Text (Start + Mark'Length .. Start + Mark'Length + 4));
+            end if;
+         end loop;
       end loop;
 
       return Unbounded.To_String (Found);
@@ -345,6 +357,26 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Label & ": the report carries its pinned codes");
       end if;
    end Check_Compiler_Outcome;
+
+   --  An accepted program may warn, and each warning is pinned: its
+   --  `codes:` says which, in order, and without the key it says none.  A
+   --  warning nobody pinned is a change nobody saw.
+   procedure Check_Accepted_Report
+     (Case_Item : Fixture;
+      Label     : String;
+      Report    : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Check_Accepted_Report
+     (Case_Item : Fixture;
+      Label     : String;
+      Report    : String;
+      Item      : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Codes_In (Report), Normalized_Codes (Codes (Case_Item)),
+         Label & ": an accepted program reports what it pins");
+   end Check_Accepted_Report;
 
    --  All recorded and compiled-program oracles use the same capture
    --  selection and stderr obligation. The runner seam permits fake checks.
@@ -447,6 +479,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Item    : in out Landin.Testing.Context;
       Ready   : out Boolean);
 
+   --  The same, handing back what the producer said, which for refine is
+   --  its report.
+   procedure Produce_Output
+     (Host    : Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program, Label, Path : String;
+      Args    : Landin.Platform.Path_List;
+      Item    : in out Landin.Testing.Context;
+      Ready   : out Boolean;
+      Said    : out Unbounded.Unbounded_String);
+
    procedure Produce_Output
      (Host    : Landin.Platform.Filesystem'Class;
       Runner  : Landin.Platform.Tool_Runner'Class;
@@ -455,10 +498,26 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Item    : in out Landin.Testing.Context;
       Ready   : out Boolean)
    is
+      Ignored : Unbounded.Unbounded_String;
+   begin
+      Produce_Output
+        (Host, Runner, Program, Label, Path, Args, Item, Ready, Ignored);
+   end Produce_Output;
+
+   procedure Produce_Output
+     (Host    : Landin.Platform.Filesystem'Class;
+      Runner  : Landin.Platform.Tool_Runner'Class;
+      Program, Label, Path : String;
+      Args    : Landin.Platform.Path_List;
+      Item    : in out Landin.Testing.Context;
+      Ready   : out Boolean;
+      Said    : out Unbounded.Unbounded_String)
+   is
       Removed : Landin.Platform.Remove_Status;
       Outcome : Landin.Platform.Tool_Result;
    begin
       Ready := False;
+      Said := Unbounded.Null_Unbounded_String;
       Host.Remove_File (Path, Removed);
       if Removed = Landin.Platform.Not_Removable or else Host.Exists (Path)
       then
@@ -468,6 +527,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
 
       Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+      Said := Outcome.Output;
       if Outcome.Ended /= Landin.Platform.Exited then
          Landin.Testing.Fail
            (Item, Label & ": producer was stopped before completing output"
@@ -506,6 +566,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
         Output_Directory & "positive-" & Name (Case_Item) & ".s";
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Ready   : Boolean;
+      Said    : Unbounded.Unbounded_String;
       Args    : Landin.Platform.Path_List;
    begin
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
@@ -514,10 +575,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, Written);
 
       Produce_Output
-        (Host, Runner, Program, Label, Written, Args, Item, Ready);
+        (Host, Runner, Program, Label, Written, Args, Item, Ready, Said);
       if Ready then
          Landin.Testing.Check
            (Item, True, Label & ": this attempt produced fresh assembly");
+         Check_Accepted_Report
+           (Case_Item, Label, Unbounded.To_String (Said), Item);
       end if;
    end Emit_Positive;
 
@@ -785,6 +848,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Runtime_Arguments : Landin.Platform.Path_List;
       Expected : Unbounded.Unbounded_String;
       Read     : Landin.Platform.Read_Status;
+      Said     : Unbounded.Unbounded_String;
    begin
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
 
@@ -793,8 +857,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
 
-      Produce_Output (Host, Runner, Program, Label, Built, Args, Item, Ready);
+      Produce_Output
+        (Host, Runner, Program, Label, Built, Args, Item, Ready, Said);
       if Ready then
+         Check_Accepted_Report
+           (Case_Item, Label, Unbounded.To_String (Said), Item);
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
@@ -875,6 +942,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
         Landin.Backend.Toolchain.Driver_For (Facts, "");
       Runner    : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Ready     : Boolean;
+      Said      : Unbounded.Unbounded_String;
       Outcome   : Landin.Platform.Tool_Result;
       Refine_Arguments : Landin.Platform.Path_List;
       Driver_Arguments : Landin.Platform.Path_List;
@@ -894,10 +962,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       Produce_Output
         (Host, Runner, Program, Label & " assembly", Assembly,
-         Refine_Arguments, Item, Ready);
+         Refine_Arguments, Item, Ready, Said);
       if not Ready then
          return;
       end if;
+      Check_Accepted_Report
+        (Case_Item, Label, Unbounded.To_String (Said), Item);
 
       Landin.Platform.Add (Driver_Arguments, Assembly);
       declare
