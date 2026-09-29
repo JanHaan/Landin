@@ -269,7 +269,8 @@ package body Landin.Tests.Debugging_Suite is
       Code : constant access constant IR.Unit := Landin.Stages.Code (Work);
       Meanings : constant access constant Landin.Resolution.Table :=
         Landin.Stages.Meanings (Work);
-      Info : Landin.Debugging.Information (Landin.Stages.Trees (Work));
+      Info : Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
       Offset : constant Landin.Source.Byte_Offset :=
         Landin.Source.Byte_Offset
           (Ada.Strings.Fixed.Index (Text, At_Text) - 1);
@@ -575,7 +576,8 @@ package body Landin.Tests.Debugging_Suite is
          end if;
          declare
             Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-            Info : Landin.Debugging.Information (Landin.Stages.Trees (Work));
+            Info : Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
             Routine, Datum : IR.Item_Id := IR.No_Item;
             Slot : IR.Slot_Id := IR.No_Slot;
 
@@ -708,7 +710,8 @@ package body Landin.Tests.Debugging_Suite is
          end if;
          declare
             Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-            Info : Landin.Debugging.Information (Landin.Stages.Trees (Work));
+            Info : Landin.Debugging.Information
+        (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
             Routine : IR.Item_Id := IR.No_Item;
             Slot : IR.Slot_Id := IR.No_Slot;
             Terminals : Natural := 0;

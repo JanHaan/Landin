@@ -137,7 +137,7 @@ package body Landin.Diagnostics.Text is
       end if;
 
       declare
-         Snap : constant Snapshot := Sources.Get (Source_Of (Item));
+         Snap : Snapshot renames Sources.Get (Source_Of (Item)).Element.all;
          Where : constant Span := Span_Of (Item);
          Start : constant Position := Position_Of (Snap, Where.First);
          Line : constant Span := Line_Text_Span (Snap, Start.Line);

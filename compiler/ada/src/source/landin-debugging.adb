@@ -3,6 +3,10 @@ package body Landin.Debugging is
    use type Landin.Source.Source_Id;
    use type Landin.Provenance.Declaration_Id;
 
+   function Info_Holds
+     (Info : Information; Id : Landin.Source.Source_Id) return Boolean
+     is (Info.Sources.Contains (Id));
+
    procedure Append
      (Into : in out Information; Snapshot : Landin.Source.Snapshot)
    is
@@ -11,22 +15,23 @@ package body Landin.Debugging is
         /= Landin.Source.Source_Id (Count (Into) + 1)
       then
          raise Compiler_Defect with "debug source identities are not dense";
+      elsif not Info_Holds (Into, Landin.Source.Id (Snapshot)) then
+         raise Compiler_Defect with "debug source is not the compilation's";
       end if;
-      Into.Snapshots.Append (Snapshot);
+      Into.Described := Into.Described + 1;
    end Append;
 
-   function Count (Info : Information) return Natural is
-     (Natural (Info.Snapshots.Length));
+   function Count (Info : Information) return Natural is (Info.Described);
 
    function Source
-     (Info : Information; Id : Landin.Source.Source_Id)
-      return Landin.Source.Snapshot
+     (Info : aliased Information; Id : Landin.Source.Source_Id)
+      return Landin.Source.Snapshot_Reference
    is
    begin
       if Id = Landin.Source.No_Source or else Natural (Id) > Count (Info) then
          raise Compiler_Defect with "unknown debug source identity";
       end if;
-      return Info.Snapshots (Positive (Id));
+      return Info.Sources.Get (Id);
    end Source;
 
    procedure Set_Directory (Into : in out Information; Path : String) is

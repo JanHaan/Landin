@@ -202,7 +202,7 @@ package body Landin.Stages.Folding is
       case Syn.Kind (Of_Tree, Node) is
          when Syn.Integer_Literal =>
             declare
-               Snap : constant Landin.Source.Snapshot :=
+               Snap : Landin.Source.Snapshot renames
                  Snapshot_Of (Syn.Source_Of (Of_Tree));
                Text : constant String :=
                  Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Node));
@@ -222,7 +222,7 @@ package body Landin.Stages.Folding is
          when Syn.Float_Literal =>
             if Held in Ty.Float_Name then
                declare
-                  Snap : constant Landin.Source.Snapshot :=
+                  Snap : Landin.Source.Snapshot renames
                     Snapshot_Of (Syn.Source_Of (Of_Tree));
                   Text : constant String :=
                     Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));

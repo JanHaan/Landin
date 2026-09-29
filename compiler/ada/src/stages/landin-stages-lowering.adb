@@ -125,10 +125,12 @@ package body Landin.Stages.Lowering is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+      --  The one view every helper below takes; see Landin.Stages.Run.
+      Context : Compilation renames Compilation (Whole);
 
       Meanings : constant not null access Res.Table :=
         Landin.Stages.Meanings (Context);
@@ -587,7 +589,7 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Tokens.Text.Code_Unit_Array
       is
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Lexeme : constant String :=
            Landin.Source.Slice (Snap, Syn.Where (Of_Tree, Node));
@@ -654,7 +656,7 @@ package body Landin.Stages.Lowering is
       function Character_Magnitude
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
       is
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Lexeme : constant String :=
            Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
@@ -1687,7 +1689,7 @@ package body Landin.Stages.Lowering is
            (if Syn.Kind (Of_Tree, Written) = Syn.Negation
             then Syn.Operand_Of (Of_Tree, Written)
             else Written);
-         Snap  : constant Landin.Source.Snapshot :=
+         Snap  : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Text  : constant String :=
            Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Where));
@@ -15624,7 +15626,8 @@ package body Landin.Stages.Lowering is
          --  that comes back to its own binding is declined here without a
          --  word: the checker has already reported it.
          function Snapshot_For
-           (Id : Landin.Source.Source_Id) return Landin.Source.Snapshot
+           (Id : Landin.Source.Source_Id)
+            return Landin.Source.Snapshot_Reference
            is (Landin.Stages.Source (Context, Id));
 
          function Float_Special_Type_At

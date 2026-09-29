@@ -96,9 +96,11 @@ package body Landin.Stages.Checking is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
+      --  The one view every helper below takes; see Landin.Stages.Run.
+      Context : Compilation renames Compilation (Whole);
 
       Spellings : constant not null access Landin.Source.Names.Table :=
         Identities (Context);
@@ -2338,7 +2340,7 @@ package body Landin.Stages.Checking is
          Known := False;
          if Syn.Kind (Of_Tree, Written) = Syn.Integer_Literal then
             declare
-               Snap : constant Landin.Source.Snapshot :=
+               Snap : Landin.Source.Snapshot renames
                  Source (Context, Syn.Source_Of (Of_Tree));
                Text : constant String := Landin.Source.Slice
                  (Snap, Syn.Digit_Span (Of_Tree, Written));
@@ -2507,7 +2509,7 @@ package body Landin.Stages.Checking is
 
          if Of_Kind = Syn.Integer_Literal then
             declare
-               Snap : constant Landin.Source.Snapshot :=
+               Snap : Landin.Source.Snapshot renames
                  Source (Context, Syn.Source_Of (Of_Tree));
                Text : constant String := Landin.Source.Slice
                  (Snap, Syn.Digit_Span (Of_Tree, Written));
@@ -10187,7 +10189,7 @@ package body Landin.Stages.Checking is
 
             if Kind = Syn.Integer_Literal then
                declare
-                  Snap : constant Landin.Source.Snapshot :=
+                  Snap : Landin.Source.Snapshot renames
                     Source (Context, Syn.Source_Of (Pattern_Tree));
                   Text : constant String := Landin.Source.Slice
                     (Snap, Syn.Digit_Span (Pattern_Tree, Pattern));
@@ -11936,7 +11938,7 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name;
          Negated : Boolean)
       is
-         Snap  : constant Landin.Source.Snapshot :=
+         Snap  : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Text  : constant String :=
            Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Node));
@@ -11986,7 +11988,7 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Wanted  : Ty.Scalar_Name)
       is
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Text : constant String :=
            Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
@@ -12196,7 +12198,7 @@ package body Landin.Stages.Checking is
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
       is
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Lexeme : constant String :=
            Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
@@ -18337,7 +18339,7 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            Snap : constant Landin.Source.Snapshot :=
+            Snap : Landin.Source.Snapshot renames
               Source (Context, Syn.Source_Of (Of_Tree));
             Text : constant String :=
               Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Literal));
@@ -21339,7 +21341,7 @@ package body Landin.Stages.Checking is
                                    = Syn.Negation
                                  then Syn.Operand_Of (Of_Tree, Value)
                                  else Value);
-                              Snap : constant Landin.Source.Snapshot :=
+                              Snap : Landin.Source.Snapshot renames
                                 Source
                                   (Context, Syn.Source_Of (Of_Tree));
                               Text : constant String :=
@@ -24203,7 +24205,7 @@ package body Landin.Stages.Checking is
 
          if Count /= Syn.No_Node then
             declare
-               Snap : constant Landin.Source.Snapshot :=
+               Snap : Landin.Source.Snapshot renames
                  Source (Context, Syn.Source_Of (Of_Tree));
                Text : constant String :=
                  Landin.Source.Slice
@@ -27755,7 +27757,7 @@ package body Landin.Stages.Checking is
       is
          Descriptor : constant Landin.Checking.Reference_Descriptor :=
            Landin.Checking.Descriptor_Of (Types.all, Reference);
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Of_Tree));
          Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
          Lexeme : constant String := Landin.Source.Slice (Snap, Where);
@@ -29720,7 +29722,7 @@ package body Landin.Stages.Checking is
                  Syn.Repetition_Count (Of_Tree, Value);
                Repeated : constant Syn.Node_Id :=
                  Syn.Repeated_Element (Of_Tree, Value);
-               Snap : constant Landin.Source.Snapshot :=
+               Snap : Landin.Source.Snapshot renames
                  Source (Context, Syn.Source_Of (Of_Tree));
                Text : constant String :=
                  Landin.Source.Slice
@@ -31362,7 +31364,8 @@ package body Landin.Stages.Checking is
       --  a module value is worked out from itself, which [1940] says names
       --  nothing at all; the walk itself lives in Landin.Stages.Folding.
       function Snapshot_For
-        (Id : Landin.Source.Source_Id) return Landin.Source.Snapshot
+        (Id : Landin.Source.Source_Id)
+         return Landin.Source.Snapshot_Reference
         is (Source (Context, Id));
 
       function Float_Special_Bits_At
@@ -32044,7 +32047,7 @@ package body Landin.Stages.Checking is
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Integer_Literal =>
                declare
-                  Snap : constant Landin.Source.Snapshot :=
+                  Snap : Landin.Source.Snapshot renames
                     Source (Context, Syn.Source_Of (Of_Tree));
                   Text : constant String :=
                     Landin.Source.Slice

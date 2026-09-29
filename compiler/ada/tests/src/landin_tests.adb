@@ -31,6 +31,7 @@ with Landin.Tests.Harness_Suite;
 with Landin.Tests.IR_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
+with Landin.Tests.Memory_Suite;
 with Landin.Tests.Optimization_Driver_Suite;
 with Landin.Tests.Optimization_Foundations_Suite;
 with Landin.Tests.Parser_Suite;
@@ -94,6 +95,7 @@ procedure Landin_Tests is
       "ir opt           ",
       "lexer            ",
       "lowering         ",
+      "memory           ",
       "opt driver       ",
       "opt foundations  ",
       "parser           ",
@@ -292,6 +294,7 @@ begin
    Landin.Tests.IR_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Lowering_Suite.Register (Cases);
+   Landin.Tests.Memory_Suite.Register (Cases);
    Landin.Tests.Optimization_Driver_Suite.Register (Cases);
    Landin.Tests.Optimization_Foundations_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);

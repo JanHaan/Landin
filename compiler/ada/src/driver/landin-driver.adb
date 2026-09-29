@@ -1311,7 +1311,8 @@ package body Landin.Driver is
             declare
                Emitted : Unbounded.Unbounded_String;
                Debug : aliased Landin.Debugging.Information
-                 (Landin.Stages.Trees (Context));
+                 (Landin.Stages.Trees (Context),
+                  Landin.Stages.Sources (Context));
             begin
                if Debug_Enabled then
                   Landin.Debugging.Set_Directory

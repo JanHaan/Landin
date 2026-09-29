@@ -32,7 +32,7 @@ package body Landin.Source_Maps is
               (if All_Sources or Panic /= null
                then Landin.Stages.Nth_Source (Context, Index)
                else Landin.IR.Caller_Source (Unit, Index));
-            Snap : constant Landin.Source.Snapshot :=
+            Snap : Landin.Source.Snapshot renames
               Landin.Stages.Source (Context, Id);
          begin
             if Index > 1 then

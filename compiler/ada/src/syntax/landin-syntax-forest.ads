@@ -3,11 +3,12 @@
 --  The first parser dropped every tree as soon as it was parsed and recorded
 --  why: a vector of a limited type is not a thing Ada has, so the answer had
 --  to be a decision rather than a guess.  This is the decision, and it is the
---  one Landin.Source already made one level down.  The trees are on the heap,
---  one per source, and none is freed while the process lives: a compilation
---  owns its trees for as long as it exists, the process is short, and a
---  compiler that frees a tree while a diagnostic still points into it has
---  traded a leak for a dangling span.
+--  one Landin.Source.Sets made one level down.  The trees are on the heap,
+--  one per source, and the forest frees them when it is finalized, which is
+--  when the compilation that holds it ends.  Nothing can point into a tree
+--  past that: Tree_Of takes the forest as an aliased parameter, so the
+--  reference it returns cannot be kept anywhere that outlives the forest,
+--  and a diagnostic holds a span and a source number rather than a tree.
 --
 --  Why an allocator and not a container.  A Tree is limited with unknown
 --  discriminants, so it has no assignment, no default shape and no
@@ -32,6 +33,7 @@
 --  node.
 
 private with Ada.Containers.Vectors;
+private with Ada.Finalization;
 
 with Landin.Diagnostics;
 with Landin.Source;
@@ -66,22 +68,28 @@ package Landin.Syntax.Forest is
                   and then Contains (Into, Landin.Tokens.Source_Of (From));
 
    --  The tree a source was parsed into, by reference and read only.
-   function Tree_Of (Of_Forest : Table; Id : Landin.Source.Source_Id)
+   function Tree_Of (Of_Forest : aliased Table; Id : Landin.Source.Source_Id)
      return not null access constant Tree
      with Pre  => Contains (Of_Forest, Id),
           Post => Source_Of (Tree_Of'Result.all) = Id;
 
 private
 
-   --  Never freed; see the header.  The access type is not visible, so
-   --  nothing outside can hold a tree past the forest that owns it.
+   --  Freed with the forest; see the header.  The access type is not
+   --  visible, so nothing outside can hold a tree past the forest.
    type Tree_Access is access Tree;
 
    package Tree_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Tree_Access);
 
-   type Table is tagged limited record
+   type Held is new Ada.Finalization.Limited_Controlled with record
       Items : Tree_Vectors.Vector;
+   end record;
+
+   overriding procedure Finalize (Owned : in out Held);
+
+   type Table is tagged limited record
+      Owned : Held;
    end record;
 
 end Landin.Syntax.Forest;

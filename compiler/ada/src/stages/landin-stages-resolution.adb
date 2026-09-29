@@ -36,10 +36,12 @@ package body Landin.Stages.Resolution is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+      --  The one view every helper below takes; see Landin.Stages.Run.
+      Context : Compilation renames Compilation (Whole);
 
       Spellings : constant not null access Landin.Source.Names.Table :=
         Identities (Context);

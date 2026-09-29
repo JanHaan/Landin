@@ -37,10 +37,12 @@ package body Landin.Stages.Configuration is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+      --  The one view every helper below takes; see Landin.Stages.Run.
+      Context : Compilation renames Compilation (Whole);
 
       Trees : constant not null access Landin.Syntax.Forest.Table :=
         Landin.Stages.Trees (Context);

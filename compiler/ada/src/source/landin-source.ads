@@ -9,7 +9,13 @@
 --  The text and the line map live on the heap.  A source file is not a
 --  stack-sized thing: holding a megabyte of it in an automatic object is
 --  how a compiler dies on a generated file instead of compiling it.
+--
+--  A snapshot owns them, and frees them when it is finalized.  That is
+--  why it is limited: a copy would share bytes its original could free
+--  from under it, so there are no copies, and a snapshot is reached by a
+--  Snapshot_Reference that cannot outlive the object that holds it.
 
+private with Ada.Finalization;
 private with Ada.Strings.Unbounded;
 
 package Landin.Source is
@@ -53,7 +59,14 @@ package Landin.Source is
    --  An immutable snapshot.  A default-initialised one is empty and
    --  carries No_Source, so a Snapshot component can never be a dangling
    --  half-built thing.
-   type Snapshot is private;
+   type Snapshot is limited private;
+
+   --  How a snapshot held elsewhere is handed out: read only, and usable
+   --  wherever a Snapshot is expected.  Its discriminant's accessibility
+   --  is that of the call, so it cannot be kept past the holder.
+   type Snapshot_Reference
+     (Element : not null access constant Snapshot) is limited null record
+     with Implicit_Dereference => Element;
 
    function Create
      (Id : Source_Id; Name : String; Text : String) return Snapshot
@@ -119,16 +132,24 @@ private
    Empty_Text : aliased constant String := "";
    Empty_Map  : aliased constant Offset_Array := [Line_Number'(1) => 0];
 
-   --  Both designated objects are constant, so copying a Snapshot shares
-   --  bytes that nobody can change.  A compilation owns its snapshots for
-   --  its whole life and the process is short, so nothing here is freed;
-   --  that is a decision, recorded in compiler/ada/README.md, not an
-   --  oversight.
-   type Snapshot is record
+   --  What a snapshot allocated, which it frees when it is finalized.
+   --  Null for the empty default, whose views are the constants above.
+   type Storage is new Ada.Finalization.Limited_Controlled with record
+      Text : Mutable_Text    := null;
+      Map  : Mutable_Offsets := null;
+   end record;
+
+   overriding procedure Finalize (Owned : in out Storage);
+
+   --  Both designated objects are constant, so every reader sees bytes
+   --  that nobody can change, and they live exactly as long as the
+   --  snapshot does.
+   type Snapshot is limited record
       Id          : Source_Id      := No_Source;
       Name        : ASU.Unbounded_String;
       Bytes       : Text_Access    := Empty_Text'Access;
       Line_Starts : Offsets_Access := Empty_Map'Access;
+      Owned       : Storage;
    end record;
 
 end Landin.Source;

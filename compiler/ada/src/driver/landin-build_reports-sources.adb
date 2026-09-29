@@ -27,7 +27,7 @@ package body Landin.Build_Reports.Sources is
          declare
             Id : constant Landin.Source.Source_Id :=
               Landin.Stages.Nth_Source (Context, Index);
-            Snapshot : constant Landin.Source.Snapshot :=
+            Snapshot : Landin.Source.Snapshot renames
               Landin.Stages.Source (Context, Id);
          begin
             if Index > 1 then

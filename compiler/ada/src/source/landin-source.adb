@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Ada.Unchecked_Deallocation;
 
 package body Landin.Source is
 
@@ -24,16 +25,26 @@ package body Landin.Source is
    --  diagnostic never points at the wrong line.
    ---------------------------------------------------------------------
 
-   function Rebased (Text : String) return Text_Access;
+   function Rebased (Text : String) return Mutable_Text;
 
    --  Allocated first and filled in place: a rebasing copy on the stack
    --  made any source larger than the host stack a Storage_Error.
-   function Rebased (Text : String) return Text_Access is
+   function Rebased (Text : String) return Mutable_Text is
       Copy : constant Mutable_Text := new String (1 .. Text'Length);
    begin
       Copy.all := Text;
-      return Text_Access (Copy);
+      return Copy;
    end Rebased;
+
+   procedure Free is new Ada.Unchecked_Deallocation (String, Mutable_Text);
+   procedure Free is new Ada.Unchecked_Deallocation
+     (Offset_Array, Mutable_Offsets);
+
+   overriding procedure Finalize (Owned : in out Storage) is
+   begin
+      Free (Owned.Text);
+      Free (Owned.Map);
+   end Finalize;
 
    function Create
      (Id : Source_Id; Name : String; Text : String) return Snapshot
@@ -59,22 +70,26 @@ package body Landin.Source is
          Index := Index + 1;
       end loop;
 
-      declare
-         Count : constant Line_Number := Line_Number (Starts.Length);
-         Map   : constant Mutable_Offsets := new Offset_Array (1 .. Count);
-      begin
-         for Line in 1 .. Count loop
-            Map (Line) := Starts.Element (Positive (Line));
-         end loop;
-
-         return
-           (Id          => Id,
-            Name        => ASU.To_Unbounded_String (Name),
+      return Result : Snapshot do
+         declare
+            Count : constant Line_Number := Line_Number (Starts.Length);
+         begin
+            --  Owned first, so a failure between the two allocations
+            --  still frees the one that was made.
+            Result.Owned.Map := new Offset_Array (1 .. Count);
+            for Line in 1 .. Count loop
+               Result.Owned.Map (Line) := Starts.Element (Positive (Line));
+            end loop;
             --  Copied to a 1-based string: Slice and Line_Text index from
             --  one, and a caller's slice keeps its own lower bound.
-            Bytes       => Rebased (Text),
-            Line_Starts => Offsets_Access (Map));
-      end;
+            Result.Owned.Text := Rebased (Text);
+
+            Result.Id          := Id;
+            Result.Name        := ASU.To_Unbounded_String (Name);
+            Result.Bytes       := Text_Access (Result.Owned.Text);
+            Result.Line_Starts := Offsets_Access (Result.Owned.Map);
+         end;
+      end return;
    end Create;
 
    function Id (Item : Snapshot) return Source_Id is (Item.Id);

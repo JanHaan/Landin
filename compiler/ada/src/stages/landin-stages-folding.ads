@@ -31,7 +31,8 @@ private generic
    Facts    : Landin.Targets.Target_Facts;
 
    with function Snapshot_Of
-     (Source : Landin.Source.Source_Id) return Landin.Source.Snapshot;
+     (Source : Landin.Source.Source_Id)
+      return Landin.Source.Snapshot_Reference;
    with function Tree_For
      (Source : Landin.Source.Source_Id)
       return not null access constant Landin.Syntax.Tree;

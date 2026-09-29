@@ -17,7 +17,7 @@ package body Landin.Tests.Stages_Suite is
 
    overriding procedure Run
      (Item    : Counting_Stage;
-      Context : in out Landin.Stages.Compilation;
+      Context : in out Landin.Stages.Compilation'Class;
       Outcome : out Landin.Stages.Stage_Outcome);
 
    overriding function Name (Item : Counting_Stage) return String is
@@ -28,7 +28,7 @@ package body Landin.Tests.Stages_Suite is
 
    overriding procedure Run
      (Item    : Counting_Stage;
-      Context : in out Landin.Stages.Compilation;
+      Context : in out Landin.Stages.Compilation'Class;
       Outcome : out Landin.Stages.Stage_Outcome)
    is
       pragma Unreferenced (Item);
@@ -45,7 +45,7 @@ package body Landin.Tests.Stages_Suite is
 
    overriding procedure Run
      (Item    : Refusing_Stage;
-      Context : in out Landin.Stages.Compilation;
+      Context : in out Landin.Stages.Compilation'Class;
       Outcome : out Landin.Stages.Stage_Outcome);
 
    overriding function Name (Item : Refusing_Stage) return String is
@@ -56,7 +56,7 @@ package body Landin.Tests.Stages_Suite is
 
    overriding procedure Run
      (Item    : Refusing_Stage;
-      Context : in out Landin.Stages.Compilation;
+      Context : in out Landin.Stages.Compilation'Class;
       Outcome : out Landin.Stages.Stage_Outcome)
    is
       pragma Unreferenced (Item);

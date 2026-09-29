@@ -8,7 +8,7 @@ package Landin.Stages.Configuration is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome);
 
 end Landin.Stages.Configuration;

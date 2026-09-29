@@ -180,7 +180,7 @@ package body Landin.Stages.Checking.Flow is
          Negated : constant Boolean := Syn.Kind (Tree, Node) = Syn.Negation;
          Literal : constant Syn.Node_Id :=
            (if Negated then Syn.Operand_Of (Tree, Node) else Node);
-         Snap : constant Landin.Source.Snapshot :=
+         Snap : Landin.Source.Snapshot renames
            Source (Context, Syn.Source_Of (Tree));
          Overflowed : Boolean;
       begin

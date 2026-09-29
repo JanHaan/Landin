@@ -7,16 +7,8 @@ package body Landin.Stages is
    is
    begin
       return Result : Compilation do
-         Result.Facts   := For_Target;
-         Result.Named   := new Landin.Source.Names.Table;
-         Result.Grouped := new Landin.Modules.Table;
-         Landin.Modules.Initialize (Result.Grouped.all);
-         Result.Written := new Landin.Provenance.Table;
-         Result.Parsed  := new Landin.Syntax.Forest.Table;
-         Result.Meant   := new Landin.Resolution.Table;
-         Result.Active  := new Landin.Configuration.Table;
-         Result.Typed   := new Landin.Checking.Table;
-         Result.Lowered := new Landin.IR.Unit;
+         Result.Facts := For_Target;
+         Landin.Modules.Initialize (Result.Grouped);
       end return;
    end Create;
 
@@ -39,54 +31,59 @@ package body Landin.Stages is
       Text    : String) return Landin.Source.Source_Id
    is
       Added : constant Landin.Source.Source_Id :=
-        Context.Sources.Add (Name, Text);
+        Context.Held.Add (Name, Text);
    begin
-      Landin.Modules.Attach_Source (Context.Grouped.all, Added, Module);
+      Landin.Modules.Attach_Source (Context.Grouped, Added, Module);
       return Added;
    end Add_Source;
 
    function Source_Count (Context : Compilation) return Natural
-     is (Context.Sources.Count);
+     is (Context.Held.Count);
 
-   function Source (Context : Compilation; Id : Landin.Source.Source_Id)
-     return Landin.Source.Snapshot
-     is (Context.Sources.Get (Id));
+   function Source
+     (Context : aliased Compilation; Id : Landin.Source.Source_Id)
+      return Landin.Source.Snapshot_Reference
+     is (Context.Held.Get (Id));
+
+   function Sources (Context : aliased Compilation)
+     return not null access constant Landin.Source.Sets.Source_Set
+     is (Context.Held'Access);
 
    function Nth_Source (Context : Compilation; Index : Positive)
      return Landin.Source.Source_Id
-     is (Context.Sources.Nth (Index));
+     is (Context.Held.Nth (Index));
 
-   function Identities (Context : in out Compilation)
+   function Identities (Context : aliased in out Compilation)
      return not null access Landin.Source.Names.Table
-     is (Context.Named);
+     is (Context.Named'Access);
 
-   function Modules (Context : in out Compilation)
+   function Modules (Context : aliased in out Compilation)
      return not null access Landin.Modules.Table
-     is (Context.Grouped);
+     is (Context.Grouped'Access);
 
-   function Sites (Context : in out Compilation)
+   function Sites (Context : aliased in out Compilation)
      return not null access Landin.Provenance.Table
-     is (Context.Written);
+     is (Context.Written'Access);
 
-   function Trees (Context : in out Compilation)
+   function Trees (Context : aliased in out Compilation)
      return not null access Landin.Syntax.Forest.Table
-     is (Context.Parsed);
+     is (Context.Parsed'Access);
 
-   function Meanings (Context : in out Compilation)
+   function Meanings (Context : aliased in out Compilation)
      return not null access Landin.Resolution.Table
-     is (Context.Meant);
+     is (Context.Meant'Access);
 
-   function Configurations (Context : in out Compilation)
+   function Configurations (Context : aliased in out Compilation)
      return not null access Landin.Configuration.Table
-     is (Context.Active);
+     is (Context.Active'Access);
 
-   function Types (Context : in out Compilation)
+   function Types (Context : aliased in out Compilation)
      return not null access Landin.Checking.Table
-     is (Context.Typed);
+     is (Context.Typed'Access);
 
-   function Code (Context : in out Compilation)
+   function Code (Context : aliased in out Compilation)
      return not null access Landin.IR.Unit
-     is (Context.Lowered);
+     is (Context.Lowered'Access);
 
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)
@@ -103,7 +100,7 @@ package body Landin.Stages is
      is (Context.Reports.Has_Errors);
 
    function Rendered_Report (Context : Compilation) return String
-     is (Landin.Diagnostics.Text.Render (Context.Reports, Context.Sources));
+     is (Landin.Diagnostics.Text.Render (Context.Reports, Context.Held));
 
    procedure Append
      (Into : in out Pipeline; Item : not null Stage_Reference) is

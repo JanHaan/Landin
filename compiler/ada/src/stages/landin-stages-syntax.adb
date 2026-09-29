@@ -13,10 +13,12 @@ package body Landin.Stages.Syntax is
 
    overriding procedure Run
      (Item    : Instance;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+      --  The one view every helper below takes; see Landin.Stages.Run.
+      Context : Compilation renames Compilation (Whole);
 
       --  Both of these belong to the compilation and not to this Run.  The
       --  identities because a Name_Id in a tree names a spelling in one
@@ -39,7 +41,7 @@ package body Landin.Stages.Syntax is
          declare
             Id : constant Landin.Source.Source_Id :=
               Nth_Source (Context, Index);
-            Snapshot : constant Landin.Source.Snapshot :=
+            Snapshot : Landin.Source.Snapshot renames
               Source (Context, Id);
             Stream : Landin.Tokens.Token_Stream;
             Found  : Landin.Diagnostics.Diagnostic_List;

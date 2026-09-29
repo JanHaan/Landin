@@ -93,7 +93,7 @@ different responsibilities.
 | `Landin.Serials` | process-unique identities for trees and checking tables, so a stale key or tree is refused rather than matched by a reused address | reach output, numbering or iteration order |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
-| `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
+| `Landin.Source` storage | heap-allocated text and line maps, owned and freed by their snapshot, which is limited and handed out by reference | put a source file in an automatic object, or copy a snapshot |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |
 | `Landin.Provenance` | origins and the declaration side table | know what a declaration means |
 | `Landin.Debugging` | optional source snapshots, source result labels and compilation-directory context, with access to immutable declaration syntax | copy represented types/layouts, read the host or encode a debugger file format |
@@ -105,7 +105,7 @@ different responsibilities.
 | `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
 | `Landin.Syntax.Parser` | the parse, including contextual separation of a final `try` expression from a `try` statement followed by more body items, D185's initialized condition-binding form D186's contextual caller parameter and D187's two-token contextual `unchecked` region, D233's one declaration node per shared name, contextual-name bindings and assignments selected by their punctuation before control-word dispatch, and the only construction of a tree | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
-| `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
+| `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and freed with the forest | hand out a tree that can be copied, written to or kept past the forest |
 | `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
 | `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
@@ -427,13 +427,16 @@ Compiler-local labels are separate. `Landin.Hosted` supplies the exact helper
 names to both checking and emission; each backend owns its libc dependencies
 and physical signatures. See [target contracts](../../docs/targets.md).
 
-A snapshot's bytes and line map are allocated once and not freed. A
-compilation owns its sources for as long as it exists, the process is short,
-and a compiler that frees source text while a diagnostic still points into it
-has traded a leak for a dangling span. That is a decision, not an oversight;
-when the roadmap needs a longer-lived process it will be revisited there. Name
-resolution extends it to the trees for the same reason, and to the four tables
-a compilation now owns.
+A compilation owns everything its stages build and frees it when it ends.
+The tables are aliased components of `Landin.Stages.Compilation`, the forest
+frees its trees and the source set its snapshots, and each snapshot frees its
+bytes and line map. A reference to any of them comes from an accessor whose
+parameter is aliased, so it cannot be converted to anything that outlives the
+compilation: a dangling tree or span is refused where it would be written, not
+found afterwards. This used to be a decision the other way, that nothing was
+freed because the process was short; a process that checks on every edit is
+not, and `memory` holds a repeated check of the derived log filter to leaving
+nothing behind.
 
 Frame and C argument-stack planning accept an explicit byte budget and check
 addition and alignment before exceeding it. Only `Stack_Limit_Exceeded` becomes
@@ -940,8 +943,8 @@ postconditions. A construct the parser could not read becomes an error node of
 the band it needed — one per band, so a case over a band still covers the
 hole — and `Is_Sound` propagates upward so that one syntax mistake does not
 become a cascade of type errors about a hole. Trees live in the compilation's
-`Landin.Syntax.Forest`, one per source and none freed, which is name
-resolution's answer to where they live: a tree cannot be an element of a
+`Landin.Syntax.Forest`, one per source and freed with the compilation, which
+is name resolution's answer to where they live: a tree cannot be an element of a
 container, because it is limited with unknown discriminants, and an
 initialised allocator whose value is the parse is the one form Ada gives for
 building one where it will outlive the call.

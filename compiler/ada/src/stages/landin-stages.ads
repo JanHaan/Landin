@@ -31,9 +31,21 @@
 --  The four are reached and not copied, because each is limited and each
 --  means nothing away from the compilation that issued its numbers: a
 --  Name_Id names a spelling in one table, a Declaration_Id a row in one
---  site table, a Node_Id a node in one tree.  They are allocated once by
---  Create and never freed, which is the decision Landin.Source already
---  recorded for a snapshot's bytes and for the same reason.
+--  site table, a Node_Id a node in one tree.
+--
+--  They are components of the compilation, not allocations of their own,
+--  so they end when it does and a process can check one program after
+--  another without keeping any of them.  A batch compiler never needed
+--  that; a server that checks on every edit does.  What stops a reference
+--  outliving the tables is the accessors' aliased parameter: its
+--  accessibility is the caller's object, so converting the reference to
+--  a library-level access type is refused where it is written.  That is
+--  also why Compilation is tagged -- every parameter of a tagged type is
+--  aliased, so a caller passing one along needs no keyword -- and why a
+--  stage's Run takes Compilation'Class, since a primitive may dispatch on
+--  one tagged type only.  The numbers themselves need no guard: an
+--  identity is an integer, not an address, and it means something only
+--  through an accessor on a live compilation.
 
 with Ada.Containers.Vectors;
 
@@ -52,7 +64,7 @@ with Landin.Targets;
 
 package Landin.Stages is
 
-   type Compilation (<>) is limited private;
+   type Compilation (<>) is tagged limited private;
 
    function Create (For_Target : Landin.Targets.Target_Facts)
      return Compilation;
@@ -71,8 +83,15 @@ package Landin.Stages is
 
    function Source_Count (Context : Compilation) return Natural;
 
-   function Source (Context : Compilation; Id : Landin.Source.Source_Id)
-     return Landin.Source.Snapshot;
+   --  By reference, and only for as long as the compilation lives.
+   function Source
+     (Context : aliased Compilation; Id : Landin.Source.Source_Id)
+      return Landin.Source.Snapshot_Reference;
+
+   --  The whole set, read only, for a reader that describes every source
+   --  and must not outlive them: the debugging information.
+   function Sources (Context : aliased Compilation)
+     return not null access constant Landin.Source.Sets.Source_Set;
 
    --  Identity of the N'th source in the order it was added, so a stage
    --  reads every source once, deterministically, without being handed the
@@ -93,40 +112,40 @@ package Landin.Stages is
    --  per compilation and not one per stage: the scan interns before any
    --  tree exists, every tree then holds numbers rather than bytes, and a
    --  number outlives the stage that issued it.
-   function Identities (Context : in out Compilation)
+   function Identities (Context : aliased in out Compilation)
      return not null access Landin.Source.Names.Table;
 
    --  The reached source/module topology.  The driver records host choices;
    --  semantic stages consume this table without consulting the host.
-   function Modules (Context : in out Compilation)
+   function Modules (Context : aliased in out Compilation)
      return not null access Landin.Modules.Table;
 
    --  Where each declared thing is written.  Name resolution is its first
    --  writer.
-   function Sites (Context : in out Compilation)
+   function Sites (Context : aliased in out Compilation)
      return not null access Landin.Provenance.Table;
 
    --  One tree per source, kept for the whole compilation.
-   function Trees (Context : in out Compilation)
+   function Trees (Context : aliased in out Compilation)
      return not null access Landin.Syntax.Forest.Table;
 
    --  What every name in those trees means.
-   function Meanings (Context : in out Compilation)
+   function Meanings (Context : aliased in out Compilation)
      return not null access Landin.Resolution.Table;
 
    --  D139's immutable active declaration view, built after syntax and
    --  target selection and read by every semantic traversal.
-   function Configurations (Context : in out Compilation)
+   function Configurations (Context : aliased in out Compilation)
      return not null access Landin.Configuration.Table;
 
    --  What type every node and every declaration has.
-   function Types (Context : in out Compilation)
+   function Types (Context : aliased in out Compilation)
      return not null access Landin.Checking.Table;
 
    --  The target-neutral instructions the frontend was checking towards.
    --  The last representation this package gains: the backend emits from it
    --  and keeps nothing here.
-   function Code (Context : in out Compilation)
+   function Code (Context : aliased in out Compilation)
      return not null access Landin.IR.Unit;
 
    procedure Report
@@ -154,7 +173,7 @@ package Landin.Stages is
 
    procedure Run
      (Item    : Stage;
-      Context : in out Compilation;
+      Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome) is abstract;
 
    type Stage_Reference is access constant Stage'Class;
@@ -191,28 +210,21 @@ private
       Items : Stage_Vectors.Vector;
    end record;
 
-   --  Allocated by Create, never freed; see the header.
-   type Names_Access      is access Landin.Source.Names.Table;
-   type Modules_Access    is access Landin.Modules.Table;
-   type Sites_Access      is access Landin.Provenance.Table;
-   type Forest_Access     is access Landin.Syntax.Forest.Table;
-   type Resolution_Access is access Landin.Resolution.Table;
-   type Configuration_Access is access Landin.Configuration.Table;
-   type Checking_Access   is access Landin.Checking.Table;
-   type Code_Access       is access Landin.IR.Unit;
-
-   type Compilation is limited record
+   --  Components, not allocations: they are freed with the compilation,
+   --  and each is aliased so an accessor can hand out a reference that
+   --  the aliased formal keeps from outliving it; see the header.
+   type Compilation is tagged limited record
       Facts   : Landin.Targets.Target_Facts;
-      Sources : Landin.Source.Sets.Source_Set;
+      Held    : aliased Landin.Source.Sets.Source_Set;
       Reports : Landin.Diagnostics.Diagnostic_List;
-      Named   : Names_Access      := null;
-      Grouped : Modules_Access    := null;
-      Written : Sites_Access      := null;
-      Parsed  : Forest_Access     := null;
-      Meant   : Resolution_Access := null;
-      Active  : Configuration_Access := null;
-      Typed   : Checking_Access   := null;
-      Lowered : Code_Access       := null;
+      Named   : aliased Landin.Source.Names.Table;
+      Grouped : aliased Landin.Modules.Table;
+      Written : aliased Landin.Provenance.Table;
+      Parsed  : aliased Landin.Syntax.Forest.Table;
+      Meant   : aliased Landin.Resolution.Table;
+      Active  : aliased Landin.Configuration.Table;
+      Typed   : aliased Landin.Checking.Table;
+      Lowered : aliased Landin.IR.Unit;
    end record;
 
 end Landin.Stages;

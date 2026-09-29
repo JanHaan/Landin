@@ -4,8 +4,13 @@
 --  iterated in insertion order.  Nothing here reads a file: acquiring bytes
 --  is a host concern and belongs to Landin.Platform, so a test can build a
 --  whole compilation out of literals.
+--
+--  The set owns its snapshots and frees them with itself.  Get hands one
+--  out by reference, from an aliased set, so a reader cannot keep it past
+--  the set that holds it.
 
-with Ada.Containers.Vectors;
+private with Ada.Containers.Vectors;
+private with Ada.Finalization;
 
 package Landin.Source.Sets is
 
@@ -23,7 +28,8 @@ package Landin.Source.Sets is
 
    function Contains (Set : Source_Set; Id : Source_Id) return Boolean;
 
-   function Get (Set : Source_Set; Id : Source_Id) return Snapshot
+   function Get (Set : aliased Source_Set; Id : Source_Id)
+     return Snapshot_Reference
      with Pre => Contains (Set, Id);
 
    --  Identity of the N'th snapshot in insertion order, so rendering and
@@ -33,11 +39,19 @@ package Landin.Source.Sets is
 
 private
 
+   type Snapshot_Access is access Snapshot;
+
    package Snapshot_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Snapshot);
+     (Index_Type => Positive, Element_Type => Snapshot_Access);
+
+   type Held is new Ada.Finalization.Limited_Controlled with record
+      Items : Snapshot_Vectors.Vector;
+   end record;
+
+   overriding procedure Finalize (Owned : in out Held);
 
    type Source_Set is tagged limited record
-      Items : Snapshot_Vectors.Vector;
+      Owned : Held;
    end record;
 
 end Landin.Source.Sets;
