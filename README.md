@@ -255,7 +255,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R10.10 — Reclaim a compilation's memory (planned).**
+**Next roadmap item: R10.20 — Keep comments and layout (planned).**
 
 ## License
 

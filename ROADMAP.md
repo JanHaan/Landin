@@ -325,7 +325,7 @@ after `refine` and the test program.
 
 ### R10.10 — Reclaim a compilation's memory
 
-Status: planned
+Status: complete
 Depends on: R8.20
 
 Sources, trees and every stage table are allocated for the life of the
@@ -335,6 +335,25 @@ it as one.
 
 Exit evidence: a test that checks the same program many times in one process
 with memory that stays flat, and a driver that behaves identically.
+
+Done: the stage tables are aliased components of a tagged `Compilation`, the
+forest frees its trees and the source set its snapshots, which are limited
+and handed out by reference; every accessor takes an aliased parameter, so a
+reference that could outlive its compilation is refused where it is written.
+Checking and resolution recognise their own trees and keys by a serial, not
+by an address a freed table's successor could reuse. Checking the derived log
+filter left 13.1 MB allocated per check and per emission; the `memory` suite
+now runs twenty checks and four emissions with debugging information in one
+process and leaves nothing behind, with a control that three kept
+compilations are counted. The count is the allocator's live bytes: `mallinfo2`
+on Linux, and on Darwin the zones' enumerated in-use ranges, because a
+GNAT-linked binary records SDK 10.21 and under it `size_in_use` keeps freed
+blocks counted. `scripts/driver_manifest.py` held every commit to its parent:
+all 8,127 entries agree — status, report, assembly, build report and source
+map for every fixture on every target — and the largest scaling ratio is 2.19
+against the parent's 2.18. The Mac ran the host suite, 754 cases, and the
+gate was green on every job on the code of `434b2477`, run before it was
+rebased onto a commit that changed only `flake.nix`.
 
 ### R10.20 — Keep comments and layout
 
