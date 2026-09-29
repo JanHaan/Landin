@@ -10,6 +10,7 @@ package body Landin.Diagnostics.Modules is
       Where   : Landin.Source.Span;
       Message : String;
       Note    : String := "";
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List)
    is
       Row : constant Rows.Code_Name :=
@@ -25,6 +26,9 @@ package body Landin.Diagnostics.Modules is
       if Note /= "" then
          Add_Note (Made, Note);
       end if;
+      for One of Fixes loop
+         Add_Fix (Made, One);
+      end loop;
       if Rows.Required_Notes (Row) /= Note_Count (Made)
         or else Label_Count (Made) < Rows.Minimum_Secondaries (Row)
         or else Label_Count (Made) > Rows.Maximum_Secondaries (Row)

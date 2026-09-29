@@ -213,6 +213,60 @@ package body Landin.Resolution is
       return No_Declaration;
    end Visible;
 
+   procedure Each_Visible
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Visit    : not null access procedure
+        (Id : Declaration_Id; Depth : Natural))
+   is
+      Chain : Scope_Id_Vectors.Vector;
+      Where : Scope_Id := Scope;
+   begin
+      while Where /= No_Scope loop
+         Chain.Append (Where);
+         Where := Enclosing (Of_Table, Where);
+      end loop;
+
+      --  One pass over the declarations per scope keeps every depth's
+      --  names in recorded order; the chain is a handful of scopes long.
+      for Depth in 1 .. Natural (Chain.Length) loop
+         declare
+            Here : constant Scope_Id := Chain.Element (Depth);
+         begin
+            if Sort_Of (Of_Table, Here) = File_Imports then
+               for Bound of Of_Table.Import_Order loop
+                  if Bound.Member /= No_Declaration
+                    and then File_Scope_Of (Of_Table, Bound.Source) = Here
+                  then
+                     Visit (Bound.Member, Depth - 1);
+                  end if;
+               end loop;
+            end if;
+            for Index in 1 .. Declaration_Count (Of_Table) loop
+               if Of_Table.Declarations.Element (Index).Scope = Here then
+                  Visit (Declaration_Id (Index), Depth - 1);
+               end if;
+            end loop;
+         end;
+      end loop;
+   end Each_Visible;
+
+   procedure Each_Public_In_Module
+     (Of_Table : Table;
+      Module   : Landin.Modules.Module_Id;
+      Visit    : not null access procedure (Id : Declaration_Id))
+   is
+      Here : constant Scope_Id := Module_Scope_Of (Of_Table, Module);
+   begin
+      for Index in 1 .. Declaration_Count (Of_Table) loop
+         if Of_Table.Declarations.Element (Index).Scope = Here
+           and then Of_Table.Declarations.Element (Index).Public
+         then
+            Visit (Declaration_Id (Index));
+         end if;
+      end loop;
+   end Each_Public_In_Module;
+
    function Visible_Public_In_Module
      (Of_Table : Table;
       Module   : Landin.Modules.Module_Id;
@@ -260,6 +314,9 @@ package body Landin.Resolution is
            (Source => Source, Name => Name,
             Target => Landin.Modules.No_Module,
             Member => Target, Origin => Origin));
+      Into.Import_Order.Append
+        (Into.Imports.Element
+           (Key'(Scope => File_Scope_Of (Into, Source), Name => Name)));
    end Bind_Imported_Declaration;
 
    function Import_Origin
@@ -306,6 +363,9 @@ package body Landin.Resolution is
          Import_Binding'
            (Source => Source, Name => Name,
             Target => Target, Member => No_Declaration, Origin => Origin));
+      Into.Import_Order.Append
+        (Into.Imports.Element
+           (Key'(Scope => File_Scope_Of (Into, Source), Name => Name)));
    end Bind_Imported_Module;
 
    --  What a declaration declares, from the node and the scope it is in.
@@ -460,6 +520,28 @@ package body Landin.Resolution is
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Scope_Id
      is (Of_Table.Opened.Element (Slot (Of_Table, Of_Tree, Node)));
+
+   function Unresolved_In
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Scope_Id
+   is
+      Found : constant Slot_Scope_Maps.Cursor :=
+        Of_Table.Left_Unresolved.Find (Slot (Of_Table, Of_Tree, Node));
+   begin
+      return (if Slot_Scope_Maps.Has_Element (Found)
+              then Slot_Scope_Maps.Element (Found) else No_Scope);
+   end Unresolved_In;
+
+   procedure Leave_Unresolved
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Inside  : Scope_Id)
+   is
+   begin
+      Into.Left_Unresolved.Include (Slot (Into, Of_Tree, Node), Inside);
+   end Leave_Unresolved;
 
    procedure Record_Scope
      (Into    : in out Table;

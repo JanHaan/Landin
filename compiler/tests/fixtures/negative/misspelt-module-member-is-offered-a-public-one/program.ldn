@@ -1,0 +1,3 @@
+import lib
+
+f: () -> (value: i32) = lib.anwser end f

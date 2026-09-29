@@ -13,6 +13,7 @@ package body Landin.Diagnostics.Checking is
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
       Refused : Refused_Use := Struct_Value;
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List)
    is
       Named : constant Rows.Code_Name := Code_For (Item);
@@ -54,6 +55,10 @@ package body Landin.Diagnostics.Checking is
            (Built,
             Make_Label (Related.Source, Related.Where, Because));
       end if;
+
+      for One of Fixes loop
+         Add_Fix (Built, One);
+      end loop;
 
       --  The row this code carries is checked against the diagnostic just
       --  built, for Landin.Diagnostics.Lexical's reason: a code whose

@@ -18,7 +18,9 @@ with Ada.Unchecked_Deallocation;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
+with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Resolution;
+with Landin.Diagnostics.Suggestions;
 with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -401,6 +403,54 @@ package body Landin.Stages.Checking is
 
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
+
+      --  [1860] for a type name, which resolution leaves to this stage:
+      --  the types, concepts and type formals the scope it was looked up in
+      --  reaches, the kernel's scalar names and the text views.  Never a
+      --  name of the refused-type table, which is not a misspelling but a
+      --  form the kernel omits, and is reported as that before this runs.
+      function Types_Near (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
+        return Landin.Diagnostics.Fix_List;
+
+      function Types_Near (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
+        return Landin.Diagnostics.Fix_List
+      is
+         Spelling : constant String := Spelled (Syn.Name (Of_Tree, Written));
+         Inside   : constant Res.Scope_Id :=
+           Res.Unresolved_In (Meanings.all, Of_Tree, Written);
+         Offered  : Landin.Diagnostics.Suggestions.Ranking;
+         Deepest  : Natural := 0;
+
+         procedure Visit (Id : Res.Declaration_Id; Depth : Natural);
+
+         procedure Visit (Id : Res.Declaration_Id; Depth : Natural) is
+         begin
+            Deepest := Natural'Max (Deepest, Depth);
+            if Res.Sort_Of (Meanings.all, Id)
+                 in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter
+            then
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Spelling,
+                  Spelled (Res.Name_Of (Meanings.all, Id)), Depth);
+            end if;
+         end Visit;
+      begin
+         if Res."=" (Inside, Res.No_Scope) then
+            return Landin.Diagnostics.No_Fixes;
+         end if;
+         Res.Each_Visible (Meanings.all, Inside, Visit'Access);
+         --  The predeclared names are the outermost of all [0120].
+         for Scalar in Ty.Scalar_Name loop
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Spelling, Ty.Spelling (Scalar), Deepest + 1);
+         end loop;
+         for View in Ty.Text_View loop
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Spelling, Ty.Spelling (View), Deepest + 1);
+         end loop;
+         return Landin.Diagnostics.Fixes.Respellings
+           (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Written), Offered);
+      end Types_Near;
 
       --  D72 leaves a labelled direct application neutral in syntax.  These
       --  accessors expose the construction projection selected by resolution,
@@ -7643,6 +7693,7 @@ package body Landin.Stages.Checking is
                              & " reaches",
                   Note    => "[1860]: a name that names nothing is"
                              & " refused",
+                  Fixes   => Types_Near (Of_Tree, Written),
                   Into    => Found);
             end if;
 
@@ -13270,19 +13321,36 @@ package body Landin.Stages.Checking is
                         end if;
                      end loop;
                      if Position = 0 then
-                        Bad.Report
-                          (Item    => Bad.Type_Mismatch,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Anchor (Of_Tree, Argument),
-                           Message => "`" & Spelled (Label)
-                                      & "` is not a runtime parameter of"
-                                      & " this callable",
-                           Note    => "[0980]: a named argument names one"
-                                      & " parameter",
-                           Related => Landin.Checking.Signature_Origin
-                                        (Types.all, Signature),
-                           Because => "the callable signature",
-                           Into    => Found);
+                        declare
+                           --  [0980]: the labels this callable has, which
+                           --  are the only names a named argument can be.
+                           Offered : Landin.Diagnostics.Suggestions.Ranking;
+                        begin
+                           for Formal in Offset + 1 .. Total_Parameters loop
+                              Landin.Diagnostics.Suggestions.Consider
+                                (Offered, Spelled (Label),
+                                 Spelled
+                                   (Landin.Checking.Nth_Signature_Parameter
+                                      (Types.all, Signature, Formal).Name));
+                           end loop;
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Argument),
+                              Message => "`" & Spelled (Label)
+                                         & "` is not a runtime parameter of"
+                                         & " this callable",
+                              Note    => "[0980]: a named argument names one"
+                                         & " parameter",
+                              Related => Landin.Checking.Signature_Origin
+                                           (Types.all, Signature),
+                              Because => "the callable signature",
+                              Fixes   =>
+                                Landin.Diagnostics.Fixes.Respellings
+                                  (Syn.Source_Of (Of_Tree),
+                                   Syn.Anchor (Of_Tree, Argument), Offered),
+                              Into    => Found);
+                        end;
                         Valid := False;
                      end if;
                   end if;
@@ -14368,6 +14436,73 @@ package body Landin.Stages.Checking is
                      (Of_Tree.all,
                       Syn.Nth_Field (Of_Tree.all, Written, Index)));
       end Field_Spelling;
+
+      --  [0750] by name: the fields of the struct Wrote names, or of the
+      --  result Shape describes, that the written name is near.  Fields are
+      --  declared in one body, so all are at one depth and the order among
+      --  them is by spelling.
+      function Fields_Near
+        (Of_Tree : Syn.Tree;
+         Where   : Syn.Node_Id;
+         Written : Landin.Source.Names.Name_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape   : Landin.Checking.Signature_Id :=
+           Landin.Checking.No_Signature)
+         return Landin.Diagnostics.Fix_List;
+
+      function Fields_Near
+        (Of_Tree : Syn.Tree;
+         Where   : Syn.Node_Id;
+         Written : Landin.Source.Names.Name_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape   : Landin.Checking.Signature_Id :=
+           Landin.Checking.No_Signature)
+         return Landin.Diagnostics.Fix_List
+      is
+         Spelling : constant String := Spelled (Written);
+         Offered  : Landin.Diagnostics.Suggestions.Ranking;
+      begin
+         if Shape /= Landin.Checking.No_Signature then
+            for Index in
+              1 .. Landin.Checking.Signature_Result_Count (Types.all, Shape)
+            loop
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Spelling,
+                  Spelled (Landin.Checking.Nth_Signature_Result
+                             (Types.all, Shape, Index).Name));
+            end loop;
+         elsif Wrote /= Landin.Checking.No_Nominal_Type
+           and then Landin.Checking.Template_Of (Types.all, Wrote)
+                      /= Res.No_Declaration
+         then
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Landin.Checking.Template_Of (Types.all, Wrote);
+               Body_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+               Written_Body : constant Syn.Node_Id :=
+                 Syn.Declared_Type
+                   (Body_Tree.all, Res.Node_Of (Meanings.all, Template));
+            begin
+               if Written_Body /= Syn.No_Node
+                 and then Syn.Kind (Body_Tree.all, Written_Body)
+                            = Syn.Struct_Body
+               then
+                  for Index in
+                    1 .. Syn.Field_Count (Body_Tree.all, Written_Body)
+                  loop
+                     Landin.Diagnostics.Suggestions.Consider
+                       (Offered, Spelling,
+                        Field_Spelling (Template, Index));
+                  end loop;
+               end if;
+            end;
+         end if;
+         return Landin.Diagnostics.Fixes.Respellings
+           (Syn.Source_Of (Of_Tree), Syn.Anchor (Of_Tree, Where), Offered);
+      end Fields_Near;
 
       function Result_Field_At
         (Shape : Landin.Checking.Signature_Id;
@@ -20346,6 +20481,9 @@ package body Landin.Stages.Checking is
                                       & "`",
                            Note    => "[0750]: a struct has the fields it"
                                       & " was declared with, and no others",
+                           Fixes   => Fields_Near
+                             (Of_Tree, Node, Syn.Name (Of_Tree, Node),
+                              Wrote => Wrote, Shape => Shape),
                            Into    => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;
@@ -23111,19 +23249,40 @@ package body Landin.Stages.Checking is
                      end loop;
 
                      if Payload_Field = 0 then
-                        Bad.Report
-                          (Item    => Bad.Unresolved_Field,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Anchor (Of_Tree, Label),
-                           Message => "this variant case has no payload"
-                                      & " field called `"
-                                      & Spelled
-                                        (Construction_Field_Name
-                                           (Of_Tree, Label))
-                                      & "`",
-                           Note    => "D76: a case construction has exactly"
-                                      & " its declared payload fields",
-                           Into    => Found);
+                        declare
+                           Offered : Landin.Diagnostics.Suggestions.Ranking;
+                        begin
+                           for Candidate in 1 .. Count loop
+                              Landin.Diagnostics.Suggestions.Consider
+                                (Offered,
+                                 Spelled (Construction_Field_Name
+                                            (Of_Tree, Label)),
+                                 Spelled
+                                   (Syn.Name
+                                      (Body_Tree.all,
+                                       Syn.Nth_Payload_Field
+                                         (Body_Tree.all, Case_Node,
+                                          Candidate))));
+                           end loop;
+                           Bad.Report
+                             (Item    => Bad.Unresolved_Field,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Label),
+                              Message => "this variant case has no payload"
+                                         & " field called `"
+                                         & Spelled
+                                           (Construction_Field_Name
+                                              (Of_Tree, Label))
+                                         & "`",
+                              Note    => "D76: a case construction has"
+                                         & " exactly its declared payload"
+                                         & " fields",
+                              Fixes   =>
+                                Landin.Diagnostics.Fixes.Respellings
+                                  (Syn.Source_Of (Of_Tree),
+                                   Syn.Anchor (Of_Tree, Label), Offered),
+                              Into    => Found);
+                        end;
                         Failed := True;
                      elsif First (Payload_Field) /= Syn.No_Node then
                         Bad.Report
@@ -23980,6 +24139,10 @@ package body Landin.Stages.Checking is
                                 & "`",
                      Note    => "[0750]: a struct has the fields it was"
                                 & " declared with, and no others",
+                     Fixes   => Fields_Near
+                       (Of_Tree, Field,
+                        Construction_Field_Name (Of_Tree, Field),
+                        Wrote => Wrote),
                      Into    => Found);
                   Failed := True;
                elsif First (Which) /= Syn.No_Node then
@@ -26484,6 +26647,10 @@ package body Landin.Stages.Checking is
                                        Note    => "[0990]: result binding is"
                                                   & " by name, never by"
                                                   & " position",
+                                       Fixes   => Fields_Near
+                                         (Of_Tree, Field,
+                                          Syn.Name (Of_Tree, Field),
+                                          Shape => Shape),
                                        Into    => Found);
                                  elsif Seen (Which) then
                                     Bad.Report

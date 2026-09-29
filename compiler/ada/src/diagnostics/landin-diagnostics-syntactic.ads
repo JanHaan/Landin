@@ -144,6 +144,7 @@ package Landin.Diagnostics.Syntactic is
       Related  : Landin.Source.Span := Landin.Source.Empty_Span;
       Because  : String := "";
       Refused  : Refused_Construct := Declared_Type;
+      Fixes    : Fix_List := No_Fixes;
       Into     : in out Diagnostic_List);
 
 private

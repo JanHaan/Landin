@@ -454,13 +454,13 @@ class GrammarCorpus(unittest.TestCase):
             case = root / "compiler/tests/fixtures/negative/invented-fix"
             case.mkdir(parents=True)
             (case / "program.ldn").write_text("f: () -> none =\nend g\n")
-            (case / "fixed.ldn").write_text("%%% not Landin %%%\n")
+            (case / "program.fixed").write_text("%%% not Landin %%%\n")
             (case / "fixture.meta").write_text(
                 "class: negative\nsummary: invented\nprogram: program.ldn\n"
-                "codes: L0109\nfixed: fixed.ldn\n")
+                "codes: L0109\nfixed: program.fixed\n")
             said = [why for where, _, why
                     in checker.check_grammar_corpus(True)
-                    if where.endswith("invented-fix/fixed.ldn")]
+                    if where.endswith("invented-fix/program.fixed")]
         self.assertTrue(said)
 
     def test_a_grammar_rule_nothing_reaches_is_reported(self):
@@ -773,9 +773,9 @@ class Transcriptions(unittest.TestCase):
             (case / "program.ldn").write_text("x\n")
             (case / "fixture.meta").write_text(
                 "class: negative\nsummary: invented\nprogram: program.ldn\n"
-                "codes: L0110\nfixed: absent.ldn\n")
+                "codes: L0110\nfixed: absent.fixed\n")
             said = [why for _, _, why in checker.fixture_sources()]
-        self.assertIn("`fixed` names absent.ldn, which is not here", said)
+        self.assertIn("`fixed` names absent.fixed, which is not here", said)
 
     def test_a_missing_diagnostic_matrix_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_diagnostic_matrix,

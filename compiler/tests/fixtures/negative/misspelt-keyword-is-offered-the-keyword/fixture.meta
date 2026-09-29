@@ -1,0 +1,7 @@
+class: negative
+summary: [1810] requires `then` after a condition, and a name written near it is offered the keyword
+program: program.ldn
+codes: L0103, L0104, L0104, L0110
+fixed: program.fixed
+constructs: 1150, 1760, 1810
+targets: linux-x86-64, macos-arm64, synthetic-32

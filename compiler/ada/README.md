@@ -141,7 +141,9 @@ different responsibilities.
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | infer target policy from the host, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Firmware` | compiler-owned reset text, constrained linker script and bounded image materialization | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
-| `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
+| `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, ordering | render, apply a fix, or own the catalogue of codes |
+| `Landin.Diagnostics.Fixes` | the one constructor and sentence of each kind of fix, and whether it is exact or likely | decide which names a position could mean, or where a fix may appear |
+| `Landin.Diagnostics.Suggestions` | [1860]'s nearness: the distance, its bound and the deterministic order of the names a stage offers | choose candidates, or offer one out of scope or inaccessible |
 | `Landin.Diagnostics.Modules` | catalogue diagnostics for rooted module discovery failures | perform filesystem discovery or invent diagnostic codes |
 | `Landin.Diagnostics.Text` | deterministic rendering, sharing a primary snippet with its first related label only when source and complete span agree | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |

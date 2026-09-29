@@ -16,7 +16,9 @@ with Landin.IR.Specialization;
 with Landin.Optimization;
 with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
+with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Modules;
+with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Resolution;
 with Landin.IR;
 with Landin.Modules;
@@ -769,6 +771,85 @@ package body Landin.Driver is
             return "";
          end Select_Module_Directory;
 
+         --  [1420]: the import names no directory under any root, so its
+         --  first segment that no root holds is a misspelling of a
+         --  directory that is there.  Every root is listed at that depth,
+         --  in the roots' order and each listing in its sorted order, so
+         --  the same tree always gets the same suggestion; only a name a
+         --  module could have, a directory with an identifier's spelling,
+         --  is offered.
+         function Modules_Near
+           (Of_Tree : Landin.Syntax.Tree;
+            Node    : Landin.Syntax.Node_Id)
+            return Landin.Diagnostics.Fix_List;
+
+         function Modules_Near
+           (Of_Tree : Landin.Syntax.Tree;
+            Node    : Landin.Syntax.Node_Id)
+            return Landin.Diagnostics.Fix_List
+         is
+            Count : constant Natural :=
+              Landin.Syntax.Import_Segment_Count (Of_Tree, Node);
+            Reached : Landin.Platform.Path_List := Roots;
+
+            function Segment (Position : Positive) return String
+              is (Landin.Source.Names.Spelling
+                    (Landin.Stages.Identities (Context).all,
+                     Landin.Syntax.Name
+                       (Of_Tree,
+                        Landin.Syntax.Nth_Import_Segment
+                          (Of_Tree, Node, Position))));
+
+            function Could_Name (Entry_Name : String) return Boolean
+              is (Entry_Name'Length > 0
+                  and then Entry_Name (Entry_Name'First) in 'a' .. 'z'
+                  and then (for all C of Entry_Name =>
+                              C in 'a' .. 'z' | '0' .. '9' | '_'));
+         begin
+            for Position in 1 .. Count loop
+               declare
+                  Written : constant String := Segment (Position);
+                  Deeper  : Landin.Platform.Path_List;
+                  Offered : Landin.Diagnostics.Suggestions.Ranking;
+               begin
+                  for Directory of Reached loop
+                     declare
+                        Entries : Landin.Platform.Path_List;
+                        Status  : Landin.Platform.List_Status;
+                     begin
+                        Host.List_Directory (Directory, Entries, Status);
+                        if Status = Landin.Platform.List_Ok then
+                           for Child_Name of Entries loop
+                              if Child_Name = Written then
+                                 Deeper.Append
+                                   (Joined_Path (Directory, Child_Name));
+                              elsif Could_Name (Child_Name)
+                                and then Host.Is_Directory
+                                  (Joined_Path (Directory, Child_Name))
+                              then
+                                 Landin.Diagnostics.Suggestions.Consider
+                                   (Offered, Written, Child_Name);
+                              end if;
+                           end loop;
+                        end if;
+                     end;
+                  end loop;
+
+                  if Deeper.Is_Empty then
+                     return Landin.Diagnostics.Fixes.Respellings
+                       (Landin.Syntax.Source_Of (Of_Tree),
+                        Landin.Syntax.Anchor
+                          (Of_Tree,
+                           Landin.Syntax.Nth_Import_Segment
+                             (Of_Tree, Node, Position)),
+                        Offered);
+                  end if;
+                  Reached := Deeper;
+               end;
+            end loop;
+            return Landin.Diagnostics.No_Fixes;
+         end Modules_Near;
+
          procedure Load_Reachable_Program (Entry_Directory : String) is
             Graph : constant not null access Landin.Modules.Table :=
               Landin.Stages.Modules (Context);
@@ -980,6 +1061,8 @@ package body Landin.Driver is
                                              Note    => "[1420]: roots are"
                                                         & " searched in"
                                                         & " supplied order",
+                                             Fixes   => Modules_Near
+                                               (Tree.all, Import_Node),
                                              Into    => Found);
                                           Landin.Stages.Report
                                             (Context,

@@ -1,5 +1,7 @@
 with Ada.Containers.Vectors;
 
+with Landin.Diagnostics.Fixes;
+with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Syntactic;
 with Landin.Packed;
 with Landin.Syntax.Precedence;
@@ -366,7 +368,9 @@ package body Landin.Syntax.Parser is
                Related : Landin.Source.Span := Landin.Source.Empty_Span;
                Because : String := "";
                Refused : Syn.Refused_Construct := Syn.Declared_Type;
-               Gate    : Boolean := True);
+               Gate    : Boolean := True;
+               Fixes   : Landin.Diagnostics.Fix_List :=
+                 Landin.Diagnostics.No_Fixes);
 
             procedure Refuse
               (Item : Syn.Refused_Construct;
@@ -1032,7 +1036,9 @@ package body Landin.Syntax.Parser is
                Related : Landin.Source.Span := Landin.Source.Empty_Span;
                Because : String := "";
                Refused : Syn.Refused_Construct := Syn.Declared_Type;
-               Gate    : Boolean := True)
+               Gate    : Boolean := True;
+               Fixes   : Landin.Diagnostics.Fix_List :=
+                 Landin.Diagnostics.No_Fixes)
             is
                function Inequality_Typo return Boolean;
 
@@ -1088,6 +1094,7 @@ package body Landin.Syntax.Parser is
                   Related => Related,
                   Because => Because,
                   Refused => Refused,
+                  Fixes   => Fixes,
                   Into    => Report);
             end Complain;
 
@@ -1102,6 +1109,31 @@ package body Landin.Syntax.Parser is
                   Message => Message,
                   Refused => Item);
             end Refuse;
+
+            --  A keyword that was required, where a name near it was
+            --  written instead: `thne` for `then`.  [1760] makes a keyword
+            --  a word no name can be, so the name is the misspelling and
+            --  the keyword the only thing the position could have meant.
+            function Keyword_Near
+              (Wanted : Tok.Token_Kind) return Landin.Diagnostics.Fix_List;
+
+            function Keyword_Near
+              (Wanted : Tok.Token_Kind) return Landin.Diagnostics.Fix_List
+            is
+               Offered : Landin.Diagnostics.Suggestions.Ranking;
+            begin
+               if Wanted not in Tok.Reserved_Word
+                 or else Peek /= Tok.Identifier
+               then
+                  return Landin.Diagnostics.No_Fixes;
+               end if;
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered,
+                  Landin.Source.Names.Spelling (Names, Named_Here),
+                  Tok.Spelling (Wanted));
+               return Landin.Diagnostics.Fixes.Respellings
+                 (Origin_Of, Here, Offered);
+            end Keyword_Near;
 
             --  P2: a token no kernel rule spells, where a terminal is
             --  required, is skipped silently and the requirement retried.
@@ -1138,7 +1170,8 @@ package body Landin.Syntax.Parser is
                      Message => Message,
                      Note    => Note,
                      Related => Related,
-                     Because => Because);
+                     Because => Because,
+                     Fixes   => Keyword_Near (Wanted));
                end if;
                return False;
             end Expect;

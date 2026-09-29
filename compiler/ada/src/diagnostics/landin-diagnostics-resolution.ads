@@ -55,7 +55,8 @@ package Landin.Diagnostics.Resolution is
    --  Report checks the catalogue row for the code it used against the
    --  diagnostic it just built, so a code whose occurrences do not carry
    --  what its row promises is a compiler defect rather than a shipped
-   --  diagnostic.
+   --  diagnostic.  Fixes are attached in the order given, the first the
+   --  one a tool prefers, and the row says whether the code may carry any.
    procedure Report
      (Item    : Failure;
       Source  : Landin.Source.Source_Id;
@@ -64,6 +65,7 @@ package Landin.Diagnostics.Resolution is
       Note    : String;
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List);
 
 end Landin.Diagnostics.Resolution;

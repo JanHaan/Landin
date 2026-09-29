@@ -1,0 +1,8 @@
+class: negative
+summary: [1420] refuses a member a module does not have and offers only a public member near it, never a module-internal one
+program: program.ldn
+root: root
+codes: L0201
+fixed: program.fixed
+constructs: 1410, 1420, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32

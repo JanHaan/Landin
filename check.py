@@ -2261,10 +2261,13 @@ def check_grammar_corpus(full_run):
 
             #  A fix's result is a program that compiles clean, so it
             #  derives however the program it was made from was refused.
+            #  It is not a `.ldn` itself, because an entry module is every
+            #  `.ldn` in its directory and a rooted fixture's result would
+            #  otherwise join the program it replaces.
             results = fixed_results(meta) if os.path.exists(meta) else set()
 
             for source in sorted(f for f in os.listdir(case)
-                                 if f.endswith(".ldn")):
+                                 if f.endswith(".ldn") or f in results):
                 path = os.path.join(case, source)
                 where = "compiler/tests/fixtures/%s/%s/%s" % (kind, name,
                                                              source)
@@ -3524,6 +3527,12 @@ def fixture_sources():
                             out.append((where, 1,
                                         "`fixed` names %s, which is not here"
                                         % one))
+                    result = pair.split("->")[-1].strip()
+                    if result and not result.endswith(".fixed"):
+                        out.append((where, 1,
+                                    "`fixed` names %s, and a fix's result"
+                                    " ends in .fixed so no module reads it"
+                                    % result))
 
             named_root = re.search(r"^root: (.+)$", text, re.M)
             if named_root:

@@ -1,7 +1,9 @@
 with Landin.Memory;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
+with Landin.Diagnostics.Fixes;
 with Landin.Diagnostics.Resolution;
+with Landin.Diagnostics.Suggestions;
 with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -66,6 +68,87 @@ package body Landin.Stages.Resolution is
       function Reserved_Tool_Name
         (Named : Landin.Source.Names.Name_Id) return Boolean
         is (Spelled (Named) in "compiler" | "assembler" | "linker");
+
+      --  [1860]: a name that names nothing is a misspelling, so the report
+      --  says which names in scope it is near.  Only names the position
+      --  could have meant are offered: a type position is offered types
+      --  and concepts, a concept position concepts, and a value position
+      --  everything else.  Nothing out of scope is ever a candidate,
+      --  because Each_Visible walks the scopes Visible would have.
+      function Near_In_Scope
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id)
+         return Landin.Diagnostics.Fix_List;
+
+      function Near_In_Scope
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id)
+         return Landin.Diagnostics.Fix_List
+      is
+         Written : constant String := Spelled (Syn.Name (Of_Tree, Node));
+         Offered : Landin.Diagnostics.Suggestions.Ranking;
+
+         procedure Visit (Id : Res.Declaration_Id; Depth : Natural);
+
+         procedure Visit (Id : Res.Declaration_Id; Depth : Natural) is
+            Sort : constant Res.Declaration_Sort :=
+              Res.Sort_Of (Meanings.all, Id);
+            Fits : constant Boolean :=
+              (case Syn.Kind (Of_Tree, Node) is
+                  when Syn.Type_Reference =>
+                     Sort in Res.Module_Type | Res.Module_Concept
+                           | Res.Type_Parameter,
+                  when Syn.Concept_Reference =>
+                     Sort = Res.Module_Concept,
+                  when others =>
+                     Sort not in Res.Module_Type | Res.Module_Concept
+                               | Res.Type_Parameter);
+         begin
+            if Fits then
+               Landin.Diagnostics.Suggestions.Consider
+                 (Offered, Written,
+                  Spelled (Res.Name_Of (Meanings.all, Id)), Depth);
+            end if;
+         end Visit;
+      begin
+         Res.Each_Visible (Meanings.all, Inside, Visit'Access);
+         return Landin.Diagnostics.Fixes.Respellings
+           (Syn.Source_Of (Of_Tree), Syn.Anchor (Of_Tree, Node), Offered);
+      end Near_In_Scope;
+
+      --  A member a qualified selection or a selected import could have
+      --  named: public ones only, since a module-internal one would be
+      --  refused as inaccessible [1410].
+      function Near_In_Module
+        (Source  : Landin.Source.Source_Id;
+         Where   : Landin.Source.Span;
+         Written : String;
+         Module  : Landin.Modules.Module_Id)
+         return Landin.Diagnostics.Fix_List;
+
+      function Near_In_Module
+        (Source  : Landin.Source.Source_Id;
+         Where   : Landin.Source.Span;
+         Written : String;
+         Module  : Landin.Modules.Module_Id)
+         return Landin.Diagnostics.Fix_List
+      is
+         Offered : Landin.Diagnostics.Suggestions.Ranking;
+
+         procedure Visit (Id : Res.Declaration_Id);
+
+         procedure Visit (Id : Res.Declaration_Id) is
+         begin
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Written, Spelled (Res.Name_Of (Meanings.all, Id)));
+         end Visit;
+      begin
+         Res.Each_Public_In_Module (Meanings.all, Module, Visit'Access);
+         return Landin.Diagnostics.Fixes.Respellings
+           (Source, Where, Offered);
+      end Near_In_Module;
 
       procedure Report_Reserved (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
@@ -1077,6 +1160,10 @@ package body Landin.Stages.Resolution is
                                       & Spelled (Member_Name) & "`",
                            Note    => "[1420]: a plain import exposes only"
                                       & " qualified public members",
+                           Fixes   => Near_In_Module
+                             (Syn.Source_Of (Of_Tree),
+                              Syn.Anchor (Of_Tree, Node),
+                              Spelled (Member_Name), Imported),
                            Into    => Found);
                      end if;
                   end;
@@ -1149,8 +1236,11 @@ package body Landin.Stages.Resolution is
                        and then Spelled (Named) = "zeroable")
                   then
                      --  Scalar type names and the closed compiler concept have
-                     --  no source declaration to bind.
-                     null;
+                     --  no source declaration to bind.  Where it was looked
+                     --  for is kept, for the checker's report if it turns
+                     --  out to be a misspelling.
+                     Res.Leave_Unresolved
+                       (Meanings.all, Of_Tree, Node, Inside);
                   --  D242: an import of this name was refused in this file, so
                   --  the name is not a misspelling and its visibility was
                   --  already decided and reported once.  The refusal stands;
@@ -1169,6 +1259,7 @@ package body Landin.Stages.Resolution is
                                    & " reaches",
                         Note    => "[1860]: a name that is not in scope is"
                                    & " a misspelling, not a new binding",
+                        Fixes   => Near_In_Scope (Of_Tree, Node, Inside),
                         Into    => Found);
                   end if;
                else
@@ -1807,6 +1898,9 @@ package body Landin.Stages.Resolution is
                                       & Spelled (Named) & "`",
                            Note => "[1440]: selected imports name public"
                                    & " declarations in the selected module",
+                           Fixes => Near_In_Module
+                             (Source_Id, Syn.Anchor (Of_Tree.all, Node),
+                              Spelled (Named), Target),
                            Into => Found);
                         --  D242: a refused import answers for its name.  The
                         --  program is refused either way, and every later

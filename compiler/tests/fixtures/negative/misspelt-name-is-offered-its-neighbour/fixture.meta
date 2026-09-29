@@ -1,0 +1,7 @@
+class: negative
+summary: [1860] refuses a name declared nowhere and offers the nearest names in scope, a parameter and a function
+program: program.ldn
+codes: L0201, L0201
+fixed: program.fixed
+constructs: 0140, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32

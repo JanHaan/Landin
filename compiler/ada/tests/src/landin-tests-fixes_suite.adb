@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
+with Landin.Diagnostics.Suggestions;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
@@ -91,13 +92,13 @@ package body Landin.Tests.Fixes_Suite is
         (Item, Clashed, "and say that they clashed");
    end Fixes_Apply_From_The_End;
 
-   --  Every fixture that pins a fix: its program is compiled, the first fix
-   --  of every diagnostic is applied, the result must be the bytes the
-   --  fixture records, and the result must then compile with nothing at
-   --  all to report.  A one-file fixture runs on a fake filesystem holding
-   --  its sources; reading those sources, the goldens and a rooted
-   --  fixture's module closure from the real tree is this case's
-   --  deliberate exception, as it is the parser suite's.
+   --  Every fixture that pins a fix: its program is compiled, the first
+   --  fix of every diagnostic that offers one is applied, the result must
+   --  be the bytes the fixture records, and the result must then compile
+   --  with nothing at all to report.  A one-file fixture runs on a fake
+   --  filesystem holding its sources; reading those sources, the goldens
+   --  and a rooted fixture's module closure from the real tree is this
+   --  case's deliberate exception, as it is the parser suite's.
    procedure Every_Pinned_Fix_Compiles_Clean
      (Item : in out Landin.Testing.Context);
 
@@ -203,11 +204,16 @@ package body Landin.Tests.Fixes_Suite is
                Fixtures.Normalized_Codes (Fixtures.Codes (Fixture)),
                Label & ": the report carries its pinned codes");
 
-            for Index in 1 .. Diag.Count (Ran.Found) loop
-               Landin.Testing.Check
-                 (Item, Diag.Fix_Count (Diag.Get (Ran.Found, Index)) > 0,
-                  Label & ": every diagnostic offers a fix");
-            end loop;
+            --  A mistake can be reported more than once -- a misspelt
+            --  argument label also leaves its parameter unfilled -- and
+            --  only the report that names it can say how to repair it.
+            --  That the fixes offered are enough is what compiling the
+            --  result clean shows.
+            Landin.Testing.Check
+              (Item,
+               (for some Index in 1 .. Diag.Count (Ran.Found) =>
+                  Diag.Fix_Count (Diag.Get (Ran.Found, Index)) > 0),
+               Label & ": the report offers a fix");
 
             declare
                Fixed_Host : Landin.Testing.Fixes.Overlay_Filesystem;
@@ -293,8 +299,73 @@ package body Landin.Tests.Fixes_Suite is
         (Item, Pinned, Expected, "every fixture that pins a fix was run");
    end Every_Pinned_Fix_Compiles_Clean;
 
+   --  [1860]'s nearness: the distance counts a swap of two neighbours as
+   --  one edit, the bound is a third of the written name and never admits
+   --  a name no longer than the distance, and the order is total.
+   procedure Nearness_Is_Bounded_And_Ordered
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nearness_Is_Bounded_And_Ordered
+     (Item : in out Landin.Testing.Context)
+   is
+      package Near renames Landin.Diagnostics.Suggestions;
+      Tied   : Near.Ranking;
+      Nested : Near.Ranking;
+      Many   : Near.Ranking;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Near.Distance ("cuont", "count"), 1,
+         "two swapped neighbours are one edit");
+      Landin.Testing.Check_Equal
+        (Item, Near.Distance ("limt", "limit"), 1, "a missing byte is one");
+      Landin.Testing.Check_Equal
+        (Item, Near.Distance ("abc", "xyz"), 3, "three replacements");
+      Landin.Testing.Check_Equal
+        (Item, Near.Distance ("", "ab"), 2, "from nothing");
+      Landin.Testing.Check
+        (Item, not Near.Near ("c", "b"),
+         "a one-byte name is not a misspelling of another");
+      Landin.Testing.Check
+        (Item, not Near.Near ("abcde", "abxye"),
+         "two edits in five bytes is past the bound");
+      Landin.Testing.Check
+        (Item, Near.Near ("abcdef", "abxyef"),
+         "two edits in six bytes is inside it");
+      Landin.Testing.Check
+        (Item, not Near.Near ("same", "same"),
+         "a name is never its own suggestion");
+
+      Near.Consider (Tied, "tota", "totb", Depth => 0);
+      Near.Consider (Tied, "tota", "total", Depth => 1);
+      Near.Consider (Tied, "tota", "iota", Depth => 0);
+      Near.Consider (Tied, "tota", "toto", Depth => 1);
+      Landin.Testing.Check_Equal
+        (Item, Near.Count (Tied), 3, "at most three, all at one distance");
+      Landin.Testing.Check
+        (Item,
+         Near.Nth (Tied, 1) = "iota" and then Near.Nth (Tied, 2) = "totb"
+           and then Near.Nth (Tied, 3) = "total",
+         "innermost first, then by spelling");
+
+      Near.Consider (Nested, "vlaue", "values", Depth => 0);
+      Near.Consider (Nested, "vlaue", "value", Depth => 2);
+      Landin.Testing.Check
+        (Item, Near.Count (Nested) = 1 and then Near.Nth (Nested, 1) = "value",
+         "a nearer name wins over an inner one, and farther ones go");
+
+      Near.Consider (Many, "item", "items", Depth => 3);
+      Near.Consider (Many, "item", "items", Depth => 1);
+      Near.Consider (Many, "item", "itex", Depth => 2);
+      Landin.Testing.Check
+        (Item, Near.Count (Many) = 2 and then Near.Nth (Many, 1) = "items",
+         "a spelling offered twice keeps its innermost depth once");
+   end Nearness_Is_Bounded_And_Ordered;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixes", "nearness is bounded and ordered",
+         Nearness_Is_Bounded_And_Ordered'Access);
       Landin.Testing.Register
         (Into, "fixes", "fixes apply from the end",
          Fixes_Apply_From_The_End'Access);

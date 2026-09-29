@@ -252,6 +252,7 @@ package Landin.Diagnostics.Checking is
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
       Refused : Refused_Use := Struct_Value;
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List);
 
 private

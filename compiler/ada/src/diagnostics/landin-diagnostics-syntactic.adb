@@ -13,6 +13,7 @@ package body Landin.Diagnostics.Syntactic is
       Related  : Landin.Source.Span := Landin.Source.Empty_Span;
       Because  : String := "";
       Refused  : Refused_Construct := Declared_Type;
+      Fixes    : Fix_List := No_Fixes;
       Into     : in out Diagnostic_List)
    is
       Named : constant Rows.Code_Name := Code_For (Item);
@@ -53,6 +54,10 @@ package body Landin.Diagnostics.Syntactic is
       if Because /= "" then
          Add_Label (Built, Make_Label (Source, Related, Because));
       end if;
+
+      for One of Fixes loop
+         Add_Fix (Built, One);
+      end loop;
 
       --  The row this code carries is checked against the diagnostic just
       --  built.  A code whose occurrences do not carry what it promises is

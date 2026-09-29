@@ -612,6 +612,17 @@ package Landin.Diagnostics.Catalogue is
 
    function Fixes (Of_Code : Code_Name) return Fix_Admission
      is (case Of_Code is
+            --  [1420]'s import, offered the module directories it is near.
+            when Module_Not_Found => May_Fix,
+            --  [1860]'s misspelling, offered the names it is near.
+            when Unresolved_Name => May_Fix,
+            --  [0750]'s field by name, offered the fields it is near.
+            when Unresolved_Field => May_Fix,
+            --  [0980]'s argument label, offered the parameters it is near.
+            --  The row admits a fix; only that one occurrence offers one.
+            when Type_Mismatch => May_Fix,
+            --  A keyword that was required and a name near it written.
+            when Token_Expected => May_Fix,
             when others => No_Fix);
 
    function Count return Natural

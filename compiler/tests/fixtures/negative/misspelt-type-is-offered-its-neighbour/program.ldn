@@ -1,0 +1,8 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+shift: (at: piont, by: i23) -> (moved: point) =
+    moved = (x: at.x + by, y: at.y)
+end shift

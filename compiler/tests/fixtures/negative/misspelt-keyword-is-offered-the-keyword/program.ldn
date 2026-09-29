@@ -1,0 +1,7 @@
+f: (x: u32) -> (result: u32) =
+    if x > 1 thne
+        result = 1
+    else
+        result = 2
+    end if
+end f

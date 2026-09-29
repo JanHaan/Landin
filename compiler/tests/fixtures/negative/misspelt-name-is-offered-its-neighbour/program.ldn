@@ -1,0 +1,9 @@
+count: (value: u32) -> (result: u32) = value + 1 end count
+
+total: (limit: u32) -> (result: u32) =
+    mut sum: u32 = 0
+    while sum < limt do
+        sum = cuont(value: sum)
+    end while
+    result = sum
+end total

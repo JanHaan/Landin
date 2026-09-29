@@ -1,0 +1,3 @@
+add: (left: i32, right: i32) -> (sum: i32) = left + right end add
+
+f: () -> (result: i32) = add(left: 1, right: 2) end f

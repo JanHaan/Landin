@@ -1,0 +1,8 @@
+class: negative
+summary: [1420] refuses an import no root holds and offers the module directory near it, never a directory no import could spell
+program: program.ldn
+root: root
+codes: L0006
+fixed: program.fixed
+constructs: 1410, 1420
+targets: linux-x86-64, macos-arm64

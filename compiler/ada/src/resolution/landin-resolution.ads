@@ -320,6 +320,33 @@ package Landin.Resolution is
                            and then Name_Of (Of_Table, Visible'Result)
                                     = Name);
 
+   --  Every name this scope or an enclosing one declares or imports,
+   --  offered to Visit innermost first with how many scopes outward it was
+   --  found, which is the order Visible searches in and the only order a
+   --  suggestion is allowed to prefer.  A name shadowed by an inner one is
+   --  still offered, at its own depth: Visit is asked about spellings, and
+   --  the innermost depth of a spelling is the one it keeps.  Declarations
+   --  come in the order they were recorded and imports in the order they
+   --  were bound, never in the order a hash would give them.  A report
+   --  that a name names nothing is the only caller, so this walk is never
+   --  on the path of a program that is accepted.
+   procedure Each_Visible
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Visit    : not null access procedure
+        (Id : Declaration_Id; Depth : Natural))
+     with Pre => Is_Prepared (Of_Table) and then Holds (Of_Table, Scope);
+
+   --  Every public declaration of a module, in the order recorded: what a
+   --  qualified selection or a selected import could have named.  Never a
+   --  module-internal one, which is inaccessible [1410] and so no answer.
+   procedure Each_Public_In_Module
+     (Of_Table : Table;
+      Module   : Landin.Modules.Module_Id;
+      Visit    : not null access procedure (Id : Declaration_Id))
+     with Pre => Is_Prepared (Of_Table)
+                 and then Module /= Landin.Modules.No_Module;
+
    function Visible_Public_In_Module
      (Of_Table : Table;
       Module   : Landin.Modules.Module_Id;
@@ -500,6 +527,30 @@ package Landin.Resolution is
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   --  The scope a type or concept name was looked up in and not found.
+   --  Resolution leaves such a name to the checker, which alone can tell a
+   --  type the tour writes and the kernel omits from a misspelling; when
+   --  it is the second, the checker offers the names this scope reaches,
+   --  as resolution does for a value.  No_Scope for any other node.
+   function Unresolved_In
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Scope_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Leave_Unresolved
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Inside  : Scope_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Inside),
+          Post => Unresolved_In (Into, Of_Tree, Node) = Inside;
 
    --  Says a node opened a scope.  Once, for Bind's reason: a node that
    --  opened two scopes is a resolver that walked it twice.
@@ -747,6 +798,9 @@ private
       Origin : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
 
+   package Import_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Import_Binding);
+
    type Application_Fact is record
       Class    : Application_Class := Unclassified_Application;
       Match    : Call_Match_State := Call_Not_Matched;
@@ -781,6 +835,16 @@ private
       Hash            => Hash,
       Equivalent_Keys => "=");
 
+   function Hash_Slot (Item : Positive) return Ada.Containers.Hash_Type
+     is (Ada.Containers.Hash_Type (Item));
+
+   --  Keyed by a node's slot and never iterated.
+   package Slot_Scope_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Positive,
+      Element_Type    => Scope_Id,
+      Hash            => Hash_Slot,
+      Equivalent_Keys => "=");
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Declarations : Declaration_Vectors.Vector;
@@ -788,6 +852,9 @@ private
       Module_Scopes : Scope_Id_Vectors.Vector;
       File_Scopes   : Scope_Id_Vectors.Vector;
       Imports       : Import_Maps.Map;
+      --  The same bindings in the order they were made, so a walk over a
+      --  file's imports never reads the hashed map's order.
+      Import_Order  : Import_Vectors.Vector;
       --  Import names this file wrote and the binder refused.  Kept apart
       --  from Imports so that Has_Import keeps meaning exactly what it
       --  meant: a name an import successfully gave to something.
@@ -801,6 +868,7 @@ private
       Applications : Application_Vectors.Vector;
       Return_Sources : Position_Vectors.Vector;
       Index        : Key_Maps.Map;
+      Left_Unresolved : Slot_Scope_Maps.Map;
    end record;
 
 end Landin.Resolution;

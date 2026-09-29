@@ -22,6 +22,7 @@ package Landin.Diagnostics.Modules is
       Where   : Landin.Source.Span;
       Message : String;
       Note    : String := "";
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List);
 
 end Landin.Diagnostics.Modules;

@@ -1,0 +1,15 @@
+counters: type = struct
+    hits: u32
+    misses: u32
+end counters
+
+pair: () -> (first: u32, second: u32) =
+    first = 1
+    second = 2
+end pair
+
+f: () -> (result: u32) =
+    seen: counters = (hist: 1, misses: 2)
+    (frist: a, second: b) := pair()
+    result = seen.mises + a + b
+end f

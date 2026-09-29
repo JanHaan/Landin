@@ -1,0 +1,3 @@
+import geomtry
+
+f: () -> (value: i32) = geometry.origin end f

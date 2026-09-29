@@ -12,6 +12,7 @@ package body Landin.Diagnostics.Resolution is
       Note    : String;
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
+      Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List)
    is
       Named : constant Rows.Code_Name := Code_For (Item);
@@ -40,6 +41,10 @@ package body Landin.Diagnostics.Resolution is
            (Built,
             Make_Label (Related.Source, Related.Where, Because));
       end if;
+
+      for One of Fixes loop
+         Add_Fix (Built, One);
+      end loop;
 
       --  The row this code carries is checked against the diagnostic just
       --  built, exactly as Landin.Diagnostics.Syntactic does.
