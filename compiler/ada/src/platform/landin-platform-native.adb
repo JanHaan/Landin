@@ -300,6 +300,7 @@ package body Landin.Platform.Native is
    is
       pragma Unreferenced (Host);
       use type Interfaces.C.int;
+      use type Interfaces.C.long_long;
       function Usage
         (Processor : out Interfaces.C.long_long;
          Peak      : out Interfaces.C.long_long) return Interfaces.C.int
@@ -309,13 +310,18 @@ package body Landin.Platform.Native is
         with Import, Convention => C,
              External_Name => "landin_allocated_bytes";
       Processor, Peak : Interfaces.C.long_long;
+      Held : Interfaces.C.long_long;
    begin
       if Usage (Processor, Peak) /= 0 then
          raise Host_Exhausted with "the host refused its resource counters";
       end if;
+      Held := Allocated;
+      if Held < 0 then
+         raise Host_Exhausted with "the host refused its allocator's count";
+      end if;
       return (Processor_Microseconds => Long_Long_Integer (Processor),
               Peak_Resident_KiB      => Long_Long_Integer (Peak),
-              Allocated_Bytes        => Long_Long_Integer (Allocated));
+              Allocated_Bytes        => Long_Long_Integer (Held));
    end Sample;
 
 end Landin.Platform.Native;

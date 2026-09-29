@@ -14,6 +14,7 @@
 #endif
 #include <sys/resource.h>
 #ifdef __APPLE__
+#include <mach/mach.h>
 #include <malloc/malloc.h>
 #else
 #include <malloc.h>
@@ -48,14 +49,66 @@ int landin_resource_usage(long long *cpu_microseconds, long long *peak_kib)
    anything or on what the kernel paged in, so two identical runs of one
    deterministic request leave it at the same number. glibc counts blocks
    it carved from its arenas in uordblks and blocks it mapped directly in
-   hblkhd, which is where a large source or table goes. */
+   hblkhd, which is where a large source or table goes.
+
+   Darwin's own count, malloc_zone_statistics' size_in_use, is not that
+   number for this program. The GNAT link records an SDK version of 10.21,
+   and under it the allocator keeps freed blocks of a hundred kilobytes and
+   more cached and still counts them, by amounts that differ between two
+   identical runs and can fall below zero; a C program linked for the
+   current SDK does not. So on Darwin every zone is asked for the ranges it
+   holds in use and their sizes are summed, which is exact however the
+   binary was linked. A zone is locked while it is walked, so an allocation
+   on another thread cannot change it mid-walk, and nothing called while
+   it is locked allocates. */
+#ifdef __APPLE__
+static kern_return_t landin_read_self(task_t task, vm_address_t address,
+                                      vm_size_t size, void **local)
+{
+    (void)task;
+    (void)size;
+    *local = (void *)address;
+    return KERN_SUCCESS;
+}
+
+static void landin_sum_ranges(task_t task, void *context, unsigned type,
+                              vm_range_t *ranges, unsigned count)
+{
+    long long *sum = context;
+    unsigned index;
+
+    (void)task;
+    (void)type;
+    for (index = 0; index < count; index++)
+        *sum += (long long)ranges[index].size;
+}
+#endif
+
 long long landin_allocated_bytes(void)
 {
 #ifdef __APPLE__
-    malloc_statistics_t statistics;
+    vm_address_t *zones;
+    unsigned count, index;
+    long long sum = 0;
 
-    malloc_zone_statistics(NULL, &statistics);
-    return (long long)statistics.size_in_use;
+    if (malloc_get_all_zones(mach_task_self(), landin_read_self, &zones,
+                             &count) != KERN_SUCCESS)
+        return -1;
+    for (index = 0; index < count; index++) {
+        malloc_zone_t *zone = (malloc_zone_t *)zones[index];
+        malloc_introspection_t *look = zone->introspect;
+
+        if (look == NULL || look->enumerator == NULL)
+            continue;
+        if (look->force_lock != NULL)
+            look->force_lock(zone);
+        look->enumerator(mach_task_self(), &sum,
+                         MALLOC_PTR_IN_USE_RANGE_TYPE, zones[index],
+                         landin_read_self, landin_sum_ranges);
+        if (look->force_unlock != NULL)
+            look->force_unlock(zone);
+    }
+    return sum;
 #else
     struct mallinfo2 info = mallinfo2();
 
