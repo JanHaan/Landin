@@ -357,7 +357,7 @@ rebased onto a commit that changed only `flake.nix`.
 
 ### R10.20 — Keep comments and layout
 
-Status: planned
+Status: complete
 Depends on: none
 
 Comments produce no token and layout is discarded. Keep both in a side table
@@ -365,6 +365,24 @@ beside the token stream without changing what the parser sees.
 
 Exit evidence: every source in the corpus and `core` reproduced byte for byte
 from its tokens and the side table.
+
+Done: the scan keeps every byte that is not a token as a piece of space in the
+stream: a run of blanks, each line end with its own bytes, and the line, doc
+and block comments, one never closed running to the end of the file beside
+its fault. Doc comments are a kind of piece rather than a table of their own,
+and a token's pieces are found by offset, never recorded twice. A byte-order
+mark and every other byte no rule spells stay tokens. The syntax stage copies
+each stream's pieces into `Landin.Tokens.Spacing`, a table of the compilation
+beside the forest, after the parse; the parser and every later stage read
+none. A test-side check written from [1750] and [1780] requires tokens and
+pieces to tile each file exactly: all 2,098 `.ldn` files in the repository,
+faulty ones included, and every corpus program, truncation, mutant and random
+stream the parser suite reads. A piece is 12 bytes, and the derived log
+filter's 28 sources keep 185 KB of it, 1.4% of what one check allocates; the
+memory suite stays flat. `scripts/driver_manifest.py` held every commit to
+its parent: all 8,127 entries agree, and the largest scaling ratio is 2.20
+against the parent's 2.17. The Mac ran the host suite in debug and release,
+757 cases each, and the gate was green on every job on `3687cfbe`.
 
 ### R10.30 — Make diagnostics say how to fix it
 
