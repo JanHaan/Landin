@@ -966,6 +966,7 @@ negative/r740-cortex-name-declared-nowhere | cortex-m
 negative/r740-missing-import-adds-no-cascade | linux-x86-64, macos-arm64
 negative/r740-parameterized-application-boundary | linux-x86-64, macos-arm64
 negative/r740-refused-private-import-adds-no-cascade | linux-x86-64, macos-arm64
+negative/range-selection-is-not-a-place | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1864,6 +1865,7 @@ runtime/r720-feature-interactions | linux-x86-64, macos-arm64
 runtime/r720-inferred-arrays-hold-references | linux-x86-64, macos-arm64
 runtime/r720-labelled-block-transfers | linux-x86-64, macos-arm64
 runtime/r720-payload-arrays-take-values | linux-x86-64, macos-arm64
+runtime/range-selection-element-is-a-place | linux-x86-64, macos-arm64
 runtime/range-subtype-checks | linux-x86-64, macos-arm64
 runtime/range-subtype-conversion-traps | linux-x86-64, macos-arm64
 runtime/range-subtype-store-traps | linux-x86-64, macos-arm64

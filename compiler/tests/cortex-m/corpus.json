@@ -1646,6 +1646,9 @@
     "runtime/r720-payload-arrays-take-values": {
       "mode": "execute"
     },
+    "runtime/range-selection-element-is-a-place": {
+      "mode": "execute"
+    },
     "runtime/range-subtype-checks": {
       "mode": "execute"
     },

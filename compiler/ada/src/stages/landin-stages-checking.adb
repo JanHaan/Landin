@@ -21994,6 +21994,29 @@ package body Landin.Stages.Checking is
          --  brackets were written.
          Base : Syn.Node_Id := Node;
       begin
+         --  [0570]: a range selection is a new view over its source, a
+         --  value like the slice a call returns, so it is not a place to
+         --  replace; `inout` already refuses it for the same reason.  An
+         --  element indexed through one is still a place, which is why
+         --  only the whole target is asked.
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Inclusive_Slice | Syn.Half_Open_Slice
+         then
+            Bad.Report
+              (Item    => Bad.Immutable_Target,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "a range selection is a view, not a place to"
+                          & " assign",
+               Note    => "[0570]: write its elements, or give the view"
+                          & " to a binding and replace that",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the range selected here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          while Syn.Kind (Of_Tree, Base)
                in Syn.Member_Selection | Syn.Element_Index
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Base) /= Res.Bound

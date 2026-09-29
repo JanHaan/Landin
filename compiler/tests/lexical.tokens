@@ -76883,6 +76883,41 @@ file negative/r740-parameterized-application-boundary/program.ldn tokens 28
   336 337 ,
   338 339 4
   339 340 )
+file negative/range-selection-is-not-a-place/program.ldn tokens 34
+  0 3 bad
+  3 4 :
+  5 6 (
+  6 12 target
+  12 13 :
+  14 15 [
+  15 16 ]
+  16 19 mut
+  20 22 u8
+  22 23 ,
+  24 30 source
+  30 31 :
+  32 33 [
+  33 34 ]
+  34 36 u8
+  36 37 )
+  38 40 ->
+  41 45 none
+  46 47 =
+  52 58 target
+  58 59 [
+  59 60 0
+  60 63 ..<
+  63 64 2
+  64 65 ]
+  66 67 =
+  68 74 source
+  74 75 [
+  75 76 0
+  76 79 ..<
+  79 80 2
+  80 81 ]
+  82 85 end
+  86 89 bad
 file negative/range-subtype-address/program.ldn tokens 43
   0 7 percent
   7 8 :

@@ -1,0 +1,16 @@
+--  D250: a range selection is not a place, but an element indexed through
+--  one is, with the permission of the view it selects from.
+public main: () -> (code: i32) =
+    mut storage: [4]u8 = [1, 2, 3, 4]
+    view: []mut u8 = storage[0..<4]
+    view[1..<3][0] = 20
+    inc view[2..3][0]
+    view[3..3][0] += 10
+    if storage[0] == 1 and storage[1] == 20 and storage[2] == 4
+      and storage[3] == 14
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

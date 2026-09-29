@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an element indexed through a range selection is an ordinary place written through the view's permission
+constructs: 0390, 0400, 0570, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64

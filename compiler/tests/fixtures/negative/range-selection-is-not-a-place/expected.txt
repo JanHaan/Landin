@@ -1,0 +1,6 @@
+error[L0303]: a range selection is a view, not a place to assign
+  --> ../tests/fixtures/negative/range-selection-is-not-a-place/program.ldn:2:5
+  |
+2 |     target[0..<2] = source[0..<2]
+  |     ^^^^^^^^^^^^^ the range selected here
+  = note: [0570]: write its elements, or give the view to a binding and replace that

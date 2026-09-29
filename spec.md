@@ -1207,7 +1207,11 @@ kernel has, two may be written and two may not.
 | an `inout` parameter | may be replaced, through the caller-owned place |
 
 An atom declaration and a recovery clause's error name are immutable values,
-not places. A function declaration is not a place. A local or module binding holding a
+not places. A function declaration is not a place. Nor is a range selection
+[0570]: it is a new view over its source, as a returned slice is, so an
+assignment, `inc` or `dec` naming one is refused with L0303 as `inout`
+already refused it, while an element indexed through it is an ordinary
+place (D250). A local or module binding holding a
 function value is an ordinary place: an immutable one may be called but not
 replaced, and a mutable one may be replaced only by a value with the same
 complete signature. A named function-valued return is a writable place; an
@@ -5712,6 +5716,32 @@ declined.
 `runtime/core-mem-initialized-objects`, `runtime/core-tree-indices`,
 `runtime/text-range-slicing`, `runtime/derived-containers`, and the
 `text.indexing` guarantee row.
+
+### D250 — A range selection is a view, not a place
+
+**The tour said** that [0570]'s range selection is a view, a pointer and a
+length that copies nothing, and the grammar's `place` is any `indexed` form,
+which includes a range selection. [1900] lists what may be written and does not
+name one. The checker accepted `view[0..0] = other` and `inc a[0..<2]`, and
+lowering, which has no storage for a view that no binding holds, stopped the
+compilation as an internal defect. `inout` already refused the same
+selection as a temporary value.
+
+**Chosen:** a range selection is not a place. An assignment, compound
+assignment, `inc` or `dec` whose target is one is L0303, saying that the range
+is a view. An element indexed through a range remains an ordinary place, with
+the write permission of the view it selects from, so `view[1..<3][0] = 20`
+writes the storage behind `view`. The grammar is unchanged; this is a checking
+rule, as the writability of every other `indexed` form is.
+
+**The alternatives:** copy the right-hand side's elements into the selected
+range, or rebind the view. The first is a hidden loop, with a length check
+and an overlap question, behind the syntax of a scalar store; the second
+replaces a view that no binding holds, so nothing could observe it. Both were
+declined; a copy stays the explicit loop or library call it is today.
+
+**Pinned by** `negative/range-selection-is-not-a-place` and
+`runtime/range-selection-element-is-a-place`.
 
 ### D209 — Numeric array arithmetic retains values before scalar loops
 

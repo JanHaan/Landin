@@ -1,0 +1,3 @@
+bad: (target: []mut u8, source: []u8) -> none =
+    target[0..<2] = source[0..<2]
+end bad
