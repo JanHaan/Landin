@@ -16,6 +16,7 @@ with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
+with Landin.Checking.Spelling;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
 with Landin.Diagnostics.Fixes;
@@ -46,6 +47,7 @@ package body Landin.Stages.Checking is
    package Bad renames Landin.Diagnostics.Checking;
    package Name_Bad renames Landin.Diagnostics.Resolution;
    package Res renames Landin.Resolution;
+   package Spelling renames Landin.Checking.Spelling;
    package Syn renames Landin.Syntax;
    package Ty renames Landin.Types;
 
@@ -5457,8 +5459,6 @@ package body Landin.Stages.Checking is
          Pointer : Landin.Checking.Reference_Id)
          return Landin.Checking.Nominal_Type_Id
       is
-         package US renames Ada.Strings.Unbounded;
-
          Plain : constant Landin.Checking.Reference_Id :=
            (if Landin.Checking.Is_Optional_Pointer (Types.all, Pointer)
             then Landin.Checking.Present_Pointer_Of (Types.all, Pointer)
@@ -5468,211 +5468,8 @@ package body Landin.Stages.Checking is
              (Types.all,
               Landin.Checking.Add_Atom_Set (Types.all, Members), Plain);
          Fits : Boolean;
-
-         function Atoms_Text (Set_Id : Landin.Checking.Atom_Set_Id)
-            return String;
-         function Nominal_Text (Id : Landin.Checking.Nominal_Type_Id)
-            return String;
-         function Reference_Text (Id : Landin.Checking.Reference_Id)
-            return String;
-         function Referent_Text
-           (Item : Landin.Checking.Reference_Descriptor) return String;
-         function Shape_Text (Shape : Landin.Checking.Field_Shape)
-            return String;
-
-         --  The canonical order is each atom's own spelling, then its
-         --  declaration identity for two atoms spelt alike.  Neither the
-         --  order a declaration wrote nor the order sets were first seen
-         --  in can change it.
-         function Atoms_Text (Set_Id : Landin.Checking.Atom_Set_Id)
-            return String
-         is
-            Count : constant Natural :=
-              Landin.Checking.Atom_Count (Types.all, Set_Id);
-            Order : array (1 .. Count) of Res.Declaration_Id;
-            Text : US.Unbounded_String;
-
-            function Name (Atom : Res.Declaration_Id) return String
-              is (Spelled (Res.Name_Of (Meanings.all, Atom)));
-
-            function Before (Left, Right : Res.Declaration_Id)
-               return Boolean
-              is (Name (Left) < Name (Right)
-                  or else (Name (Left) = Name (Right)
-                           and then Left < Right));
-         begin
-            for Index in Order'Range loop
-               Order (Index) :=
-                 Landin.Checking.Nth_Atom (Types.all, Set_Id, Index);
-            end loop;
-            for Index in 2 .. Count loop
-               declare
-                  Moving : constant Res.Declaration_Id := Order (Index);
-                  Place : Natural := Index - 1;
-               begin
-                  while Place >= 1 and then Before (Moving, Order (Place))
-                  loop
-                     Order (Place + 1) := Order (Place);
-                     Place := Place - 1;
-                  end loop;
-                  Order (Place + 1) := Moving;
-               end;
-            end loop;
-            for Index in Order'Range loop
-               if Index > 1 then
-                  US.Append (Text, " | ");
-               end if;
-               US.Append (Text, Name (Order (Index)));
-            end loop;
-            return US.To_String (Text);
-         end Atoms_Text;
-
-         function Nominal_Text (Id : Landin.Checking.Nominal_Type_Id)
-            return String
-         is
-         begin
-            if Landin.Checking.Is_Pointer_Union (Types.all, Id) then
-               return "(" & Atoms_Text
-                 (Landin.Checking.Union_Atoms (Types.all, Id))
-                 & " | " & Reference_Text
-                   (Landin.Checking.Union_Pointer (Types.all, Id)) & ")";
-            end if;
-            declare
-               Text : US.Unbounded_String := US.To_Unbounded_String
-                 (Spelled (Res.Name_Of
-                    (Meanings.all,
-                     Landin.Checking.Template_Of (Types.all, Id))));
-               Count : constant Natural :=
-                 Landin.Checking.Instance_Actual_Count (Types.all, Id);
-            begin
-               for Position in 1 .. Count loop
-                  declare
-                     Key : constant Landin.Checking.Actual_Key :=
-                       Landin.Checking.Nth_Instance_Actual
-                         (Types.all, Id, Position);
-                  begin
-                     US.Append (Text, (if Position = 1 then "(" else ", "));
-                     if Landin.Checking.Actual_Kind_Of (Key)
-                       = Landin.Checking.Fixed_Actual_Kind
-                     then
-                        US.Append (Text, Ada.Strings.Fixed.Trim
-                          (Ty.Magnitude'Image
-                             (Landin.Checking.Fixed_Magnitude_Of (Key)),
-                           Ada.Strings.Both));
-                     else
-                        case Landin.Checking.Type_Form_Of (Key) is
-                           when Landin.Checking.Scalar_Actual_Type =>
-                              US.Append (Text, Ty.Spelling
-                                (Landin.Checking.Scalar_Of
-                                   (Types.all, Key)));
-                           when Landin.Checking.Nominal_Actual_Type =>
-                              US.Append (Text, Nominal_Text
-                                (Landin.Checking.Nominal_Of
-                                   (Types.all, Key)));
-                           when Landin.Checking.Reference_Actual_Type =>
-                              US.Append (Text, Reference_Text
-                                (Landin.Checking.Reference_Of
-                                   (Types.all, Key)));
-                           when Landin.Checking.Atom_Set_Actual_Type =>
-                              US.Append (Text, Atoms_Text
-                                (Landin.Checking.Atom_Set_Of
-                                   (Types.all, Key)));
-                           when others =>
-                              US.Append (Text, "_");
-                        end case;
-                     end if;
-                  end;
-               end loop;
-               if Count > 0 then
-                  US.Append (Text, ")");
-               end if;
-               return US.To_String (Text);
-            end;
-         end Nominal_Text;
-
-         function Shape_Text (Shape : Landin.Checking.Field_Shape)
-            return String
-         is
-         begin
-            case Shape.Kind is
-               when Landin.Checking.Scalar_Field =>
-                  if Shape.Atoms /= Landin.Checking.No_Atom_Set then
-                     return Atoms_Text (Shape.Atoms);
-                  elsif Shape.Signature /= Landin.Checking.No_Signature then
-                     return "function";
-                  end if;
-                  return Ty.Spelling (Shape.Element);
-               when Landin.Checking.Reference_Field =>
-                  return Reference_Text (Shape.Reference);
-               when Landin.Checking.Aggregate_Field =>
-                  return Nominal_Text (Shape.Nominal);
-               when Landin.Checking.Fixed_Array_Field =>
-                  return "[" & Ada.Strings.Fixed.Trim
-                    (Landin.Checking.Element_Count'Image (Shape.Length),
-                     Ada.Strings.Both) & "]"
-                    & Shape_Text (Landin.Checking.Array_Field_Element
-                        (Types.all, Shape));
-               when Landin.Checking.Variant_Field =>
-                  return "variant";
-            end case;
-         end Shape_Text;
-
-         function Referent_Text
-           (Item : Landin.Checking.Reference_Descriptor) return String is
-         begin
-            case Item.Referent is
-               when Ty.Scalar_Name =>
-                  return Ty.Spelling (Item.Referent);
-               when Ty.Aggregate =>
-                  return Nominal_Text (Item.Nominal);
-               when Ty.Atom_Value =>
-                  return Atoms_Text (Item.Atoms);
-               when Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value =>
-                  return Reference_Text (Item.Reference);
-               when Ty.Function_Value =>
-                  return "function";
-               when Ty.Fixed_Array =>
-                  return "[" & Ada.Strings.Fixed.Trim
-                    (Landin.Checking.Element_Count'Image (Item.Length),
-                     Ada.Strings.Both) & "]"
-                    & (if Item.Element_Nominal
-                            /= Landin.Checking.No_Nominal_Type
-                       then Nominal_Text (Item.Element_Nominal)
-                       elsif Item.Element_Shape.Kind
-                               /= Landin.Checking.Scalar_Field
-                         or else Item.Element_Shape.Atoms
-                               /= Landin.Checking.No_Atom_Set
-                       then Shape_Text (Item.Element_Shape)
-                       else Ty.Spelling (Item.Element));
-               when others =>
-                  return "_";
-            end case;
-         end Referent_Text;
-
-         function Reference_Text (Id : Landin.Checking.Reference_Id)
-            return String
-         is
-            Item : constant Landin.Checking.Reference_Descriptor :=
-              Landin.Checking.Descriptor_Of (Types.all, Id);
-         begin
-            if Item.View in Ty.Text_View then
-               return Ty.Spelling (Item.View);
-            end if;
-            case Item.Kind is
-               when Ty.Pointer_Value =>
-                  return "ptr " & (if Item.Mutable then "mut " else "")
-                    & Referent_Text (Item);
-               when Ty.Slice_Value =>
-                  return "[]" & (if Item.Mutable then "mut " else "")
-                    & Referent_Text (Item);
-               when Ty.Any_Value =>
-                  return "any " & Spelled (Res.Name_Of
-                    (Meanings.all, Landin.Checking.Concept_Declaration
-                       (Types.all, Item.Concept)));
-               when others =>
-                  return "_";
-            end case;
-         end Reference_Text;
+         Spelt : constant Landin.Checking.Spelling.Tables :=
+           (Types => Types, Meanings => Meanings, Spellings => Spellings);
       begin
          if Landin.Checking.Instance_State_Of (Types.all, Union)
            = Landin.Checking.Instance_Unseen
@@ -5700,9 +5497,11 @@ package body Landin.Stages.Checking is
               (Types.all, Union,
                Landin.Source.Names.Intern
                  (Spellings.all,
-                  Atoms_Text (Landin.Checking.Union_Atoms (Types.all, Union))
-                  & " | " & Reference_Text
-                    (Landin.Checking.Union_Pointer (Types.all, Union))));
+                  Spelling.Atoms_Text
+                    (Spelt, Landin.Checking.Union_Atoms (Types.all, Union))
+                  & " | " & Spelling.Reference_Text
+                    (Spelt,
+                     Landin.Checking.Union_Pointer (Types.all, Union))));
          end if;
          return Union;
       end Pointer_Union_Of;
