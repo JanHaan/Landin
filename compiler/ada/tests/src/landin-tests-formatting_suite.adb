@@ -6,7 +6,9 @@
 --  does.  The edges are the bytes no example shows.  The corpus case is
 --  the item's evidence: every Landin source in the repository is either
 --  refused whole or formatted into the same tokens and the same comments,
---  and formatting the result again offers nothing.
+--  and formatting the result again offers nothing.  The last case is what
+--  the gate holds: `core`, the examples and the running examples are
+--  formatted already.
 
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
@@ -520,6 +522,74 @@ package body Landin.Tests.Formatting_Suite is
       end loop;
    end Every_Source_Keeps_What_It_Says;
 
+   --  What the gate holds: the library, the example programs and the
+   --  running examples are formatted, so what a reader copies from them is
+   --  the layout.  The running examples are read from examples.md, whose
+   --  listings check.py holds to the runtime sources byte for byte.
+   procedure Core_And_Examples_Are_Formatted
+     (Item : in out Landin.Testing.Context);
+
+   procedure Core_And_Examples_Are_Formatted
+     (Item : in out Landin.Testing.Context)
+   is
+      Files    : Natural := 0;
+      Listings : Natural := 0;
+
+      procedure Visit (Path, Text : String);
+
+      procedure Visit (Path, Text : String) is
+         Answer : constant Landin.Formatting.Result := Format (Text);
+      begin
+         Files := Files + 1;
+         Landin.Testing.Check
+           (Item, Answer.Outcome = Landin.Formatting.Formatted
+                  and then Answer.Edits.Is_Empty,
+            Path & " is formatted; run refine fmt on it");
+      end Visit;
+
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Content : Unbounded.Unbounded_String;
+      Status  : Landin.Platform.Read_Status;
+   begin
+      Walk_Sources (Item, Root & "/core", Visit'Access);
+      Walk_Sources (Item, Root & "/examples", Visit'Access);
+      Landin.Testing.Check
+        (Item, Files >= 30, "core and the examples were read, and"
+         & Files'Image & " sources were");
+
+      Host.Read_File (Root & "/examples.md", Content, Status);
+      if Status /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail (Item, "examples.md cannot be read");
+         return;
+      end if;
+      declare
+         Page    : constant String := Unbounded.To_String (Content);
+         Opening : constant String := "```landin" & LF;
+         Closing : constant String := LF & "```" & LF;
+         Cursor  : Natural := Page'First;
+      begin
+         loop
+            declare
+               Start : constant Natural :=
+                 Ada.Strings.Fixed.Index (Page, Opening, Cursor);
+               Stop  : Natural;
+            begin
+               exit when Start = 0;
+               Stop := Ada.Strings.Fixed.Index
+                 (Page, Closing, Start + Opening'Length - 1);
+               exit when Stop = 0;
+               Listings := Listings + 1;
+               Visit ("examples.md listing" & Listings'Image,
+                      Page (Start + Opening'Length .. Stop));
+               Cursor := Stop + Closing'Length;
+            end;
+         end loop;
+      end;
+      Landin.Testing.Check
+        (Item, Listings = 11, "every running example was read, and"
+         & Listings'Image & " were");
+   end Core_And_Examples_Are_Formatted;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -534,6 +604,9 @@ package body Landin.Tests.Formatting_Suite is
       Landin.Testing.Register
         (Into, "formatting", "every source keeps what it says",
          Every_Source_Keeps_What_It_Says'Access);
+      Landin.Testing.Register
+        (Into, "formatting", "core and the examples are formatted",
+         Core_And_Examples_Are_Formatted'Access);
    end Register;
 
 end Landin.Tests.Formatting_Suite;

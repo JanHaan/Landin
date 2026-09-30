@@ -104,9 +104,9 @@ end parse_digits
 
 parse_entry: (source: []u8, inout parser: parser_state,
               inout logger: any diag.log,
-             escaping inout arena: mem.arena)
+              escaping inout arena: mem.arena)
              -> (item: entry from arena)
-                ! entry_failure =
+             ! entry_failure =
     if parser.look.what <> lexer.identifier then
         try report(logger, parser.look.begins, expected_name[0..<16])
         recover_to_boundary(source, parser)
@@ -133,14 +133,14 @@ parse_entry: (source: []u8, inout parser: parser_state,
             (arena, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
-                    body: text_value(begins: begins, ends: ends))
+                         body: text_value(begins: begins, ends: ends))
         item = allocated
         return
     end if
     if parser.look.what == lexer.number then
         number: u32 = (parse_digits(source, parser.look.begins,
                                     parser.look.ends, 0)
-          else (problem)
+            else (problem)
             _ = problem
             try report(logger, parser.look.begins, bad_number[0..<20])
             recover_to_boundary(source, parser)
@@ -152,7 +152,7 @@ parse_entry: (source: []u8, inout parser: parser_state,
             (arena, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
-                    body: integer_value(number: number))
+                         body: integer_value(number: number))
         item = allocated
         return
     end if
@@ -167,8 +167,8 @@ parse_entry: (source: []u8, inout parser: parser_state,
             (arena, sizeof value, alignof value)
         allocated: ptr mut value = ptr(usize(block))
         allocated.val = (name_begins: name_begins, name_ends: name_ends,
-                    body: group_value(count: vec.length(children),
-                                      items: children))
+                         body: group_value(count: vec.length(children),
+                                           items: children))
         item = allocated
         return
     end if
@@ -236,7 +236,7 @@ parse_sequence: (source: []u8, inout parser: parser_state,
     end
     match parsed
         no_entry: _ = no_entry
-        ptr(item): try vec.push(items, arena, item)
+        ptr (item): try vec.push(items, arena, item)
     end match
     try parse_sequence(source, parser, logger, arena, items, nested)
 end parse_sequence

@@ -296,13 +296,13 @@ public main: () -> (code: i32) =
     insertion_sort(values)
 
     if values[0] == -9
-        and values[1] == -4
-        and values[2] == 0
-        and values[3] == 1
-        and values[4] == 7
-        and values[5] == 7
-        and values[6] == 9
-        and values[7] == 42
+      and values[1] == -4
+      and values[2] == 0
+      and values[3] == 1
+      and values[4] == 7
+      and values[5] == 7
+      and values[6] == 9
+      and values[7] == 42
     then
         code = 42
     else
@@ -334,7 +334,7 @@ search: (values: []i32, needle: i32) -> (result: search_result) =
         middle: usize = left + (right - left) / 2
         candidate: i32 = values[middle]
         break with search_result(kind: found(index: middle))
-          when candidate == needle
+            when candidate == needle
         if candidate < needle then
             left = middle + 1
         else
@@ -547,13 +547,13 @@ public main: () -> (code: i32) =
     merge_sort(values)
 
     if values[0] == -12
-        and values[1] == -3
-        and values[2] == 0
-        and values[3] == 2
-        and values[4] == 5
-        and values[5] == 5
-        and values[6] == 18
-        and values[7] == 99
+      and values[1] == -3
+      and values[2] == 0
+      and values[3] == 2
+      and values[4] == 5
+      and values[5] == 5
+      and values[6] == 18
+      and values[7] == 99
     then
         code = 42
     else

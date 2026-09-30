@@ -9,7 +9,7 @@ import core/text
 extern(c) _landin_host_argument_count: () -> (count: usize)
 extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
 extern(c) _landin_host_argument_at_from: (table: ptr ptr u8, index: usize)
-                                          -> (data: ptr u8 from table)
+                                         -> (data: ptr u8 from table)
 extern(c) _landin_host_text_length: (data: ptr u8) -> (length: usize)
 extern(c) _landin_host_open_read: (path: ptr u8) -> (descriptor: i32)
 extern(c) _landin_host_open_write: (path: ptr u8) -> (descriptor: i32)
@@ -227,7 +227,7 @@ system_open_read: (self: ptr mut system, path: ptr u8)
             self.val.failure_errno = number
             fail not_found when number == linux_enoent
             fail no_access when number == linux_eperm or number == linux_eacces
-                                or number == linux_erofs
+              or number == linux_erofs
             fail io_failed
         end if
     end loop
@@ -252,7 +252,7 @@ system_open_write: (self: ptr mut system, path: ptr u8)
             self.val.failure_errno = number
             fail not_found when number == linux_enoent
             fail no_access when number == linux_eperm or number == linux_eacces
-                                or number == linux_erofs
+              or number == linux_erofs
             fail io_failed
         end if
     end loop

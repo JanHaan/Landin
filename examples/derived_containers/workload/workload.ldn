@@ -133,7 +133,7 @@ numbers_path: () -> (ok: bool) =
         return
     end
     restored: bool = removed == 20 and vec.length(numbers) == 20
-                    and (vec.get(numbers, last_index) else 0) == 20
+                     and (vec.get(numbers, last_index) else 0) == 20
     vec.release(numbers, provider)
     ok = source_shape and sorted and squares_ok and restored
          and map.length(squares) == 0
@@ -228,13 +228,13 @@ raw_reference_prefix: () -> (ok: bool) =
         return
     end
     second_ok: bool = removed_second.val.value == 2
-                    and mem.initialized(storage) == 1
+                      and mem.initialized(storage) == 1
     removed_first: ptr sample_node = mem.release(storage) else (problem)
         _ = problem
         return
     end
     first_ok: bool = removed_first.val.value == 1
-                   and mem.initialized(storage) == 0
+                     and mem.initialized(storage) == 0
     released: ptr mut u8 = mem.dispose(storage) else (problem)
         _ = problem
         return
@@ -554,12 +554,12 @@ map_operations: () -> (ok: bool) =
     map.insert(value, provider, k7, 107) else (problem) _ = problem return end
     map.insert(value, provider, k8, 108) else (problem) _ = problem return end
     rehashed: bool = map.length(value) == 7
-                   and map_has(value, 2, 202)
-                   and map_has(value, 4, 104)
-                   and map_has(value, 8, 108)
+                     and map_has(value, 2, 202)
+                     and map_has(value, 4, 104)
+                     and map_has(value, 8, 108)
     map.remove(value, k3) else (problem) _ = problem return end
     removed: bool = map.length(value) == 6 and map_lacks(value, 3)
-                   and map_has(value, 7, 107)
+                    and map_has(value, 7, 107)
     used_bytes: bool = provider.used > 0
     map.release_map(value, provider)
 
@@ -609,8 +609,8 @@ map_operations: () -> (ok: bool) =
         discarded
     end
     enumerated_through_tombstones: bool = tombstone_count == 3
-        and tombstone_key_sum == 15 and tombstone_item_sum == 165
-        and tombstone_exhausted and tombstone_exhausted_again
+                                          and tombstone_key_sum == 15 and tombstone_item_sum == 165
+                                          and tombstone_exhausted and tombstone_exhausted_again
 
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
     compacted: bool = before_capacity == 8 and before_tombstones == 3
@@ -788,10 +788,10 @@ tree_append_retry: () -> (ok: bool) =
         tree.id(0)
     end
     initial: bool = empty_failed and tree.length(value) == 0
-                   and failing.attempts(state) == 1
-                   and failing.injected_failures(state) == 1
-                   and failing.delegated(state) == 0
-                   and pool.live(inner) == 0
+                    and failing.attempts(state) == 1
+                    and failing.injected_failures(state) == 1
+                    and failing.delegated(state) == 0
+                    and pool.live(inner) == 0
 
     failing.permit(state, one)
     mut at: usize = 0
@@ -799,9 +799,9 @@ tree_append_retry: () -> (ok: bool) =
     while at < 8 do
         added: tree.node_id = tree.add_leaf(value, state, leaf_name)
             else (problem)
-                _ = problem
-                return
-            end
+            _ = problem
+            return
+        end
         if u32(added) <> u32(at) then
             ids_ok = false
         end if
@@ -817,10 +817,10 @@ tree_append_retry: () -> (ok: bool) =
     mut branch_failed: bool = false
     _ = tree.add_branch(value, state, branch_name, tree.id(0), eight)
         else (problem)
-            _ = problem
-            branch_failed = true
-            tree.id(0)
-        end
+        _ = problem
+        branch_failed = true
+        tree.id(0)
+    end
 
     mut retained: bool = leaf_failed and branch_failed
                          and tree.length(value) == 8
@@ -844,10 +844,10 @@ tree_append_retry: () -> (ok: bool) =
         first: u32 = name[0]
         leaves: u32 = tree.count_leaves(value, tree.id(u32(at)))
             else (problem)
-                _ = problem
-                retained = false
-                0
-            end
+            _ = problem
+            retained = false
+            0
+        end
         if u32(tree.node_id(u32(at))) <> u32(at)
           or lenof name <> 4 or first <> 'l' or leaves <> 1
         then

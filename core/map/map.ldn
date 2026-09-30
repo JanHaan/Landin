@@ -106,14 +106,14 @@ public next_entry: (key: type is hashable, item: type,
         if record.state == slot_used then
             found_key: key = (mem.get(value.keys, record.dense_index)
                 else (problem)
-                    _ = problem
-                    fail end_of_entries
-                end)
+                _ = problem
+                fail end_of_entries
+            end)
             found_item: item = (mem.get(value.values, record.dense_index)
                 else (problem)
-                    _ = problem
-                    fail end_of_entries
-                end)
+                _ = problem
+                fail end_of_entries
+            end)
             result = (key: found_key, item: found_item)
             return
         end if

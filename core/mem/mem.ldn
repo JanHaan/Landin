@@ -142,7 +142,7 @@ end release
 
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage)
-                   ! raw_not_empty | raw_empty =
+                ! raw_not_empty | raw_empty =
     fail raw_not_empty when initialized(storage) <> 0
     match storage.base
         no_storage: fail raw_empty

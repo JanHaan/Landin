@@ -78,9 +78,9 @@ number: (bytes: []u8) -> (value: usize) ! bad_argument =
 end number
 
 public build_logged: (provider: type is mem.allocator, inout allocator: provider,
-               world: any io.world, log: any diag.log) -> (value: config)
-              ! bad_argument | mem.out_of_memory
-              | io.not_found | io.no_access | io.io_failed =
+                      world: any io.world, log: any diag.log) -> (value: config)
+                     ! bad_argument | mem.out_of_memory
+                     | io.not_found | io.no_access | io.io_failed =
     arguments := try copy_arguments(allocator, world)
     args := vec.used(arguments)
     mut chain := vec.new_list(item: any filter)
@@ -124,17 +124,17 @@ public build_logged: (provider: type is mem.allocator, inout allocator: provider
                     if problem == bad_encoding then
                         inc encoding_warnings
                         try log.note(text.nowhere, diag.error,
-                            "--every argument is not UTF-8, using 1\n")
+                                     "--every argument is not UTF-8, using 1\n")
                     else
                         try log.note(text.nowhere, diag.error,
-                            "--every wants a positive number, using 1\n")
+                                     "--every wants a positive number, using 1\n")
                     end if
                     1
                 end)
                 if every == 0 then every = 1
                     inc warnings
                     try log.note(text.nowhere, diag.error,
-                        "--every 0 makes no sense, using 1\n")
+                                 "--every 0 makes no sense, using 1\n")
                 end if
                 initial: sample_filter = (every: every, seen: 0)
                 object := try mem.new(allocator, initial)

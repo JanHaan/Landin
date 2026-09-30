@@ -62,7 +62,7 @@ public add_branch: (provider: type is mem.allocator, inout value: tree_value,
                     first: node_id, count: u32)
                    -> (id: node_id)
                    ! mem.out_of_memory | too_many_nodes
-                     | invalid_children | too_many_leaves =
+                   | invalid_children | too_many_leaves =
     id = try next_id(length(value))
     begins: usize = usize(u32(first))
     amount: usize = usize(count)

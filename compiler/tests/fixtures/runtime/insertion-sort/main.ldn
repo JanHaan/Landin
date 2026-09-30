@@ -23,13 +23,13 @@ public main: () -> (code: i32) =
     insertion_sort(values)
 
     if values[0] == -9
-        and values[1] == -4
-        and values[2] == 0
-        and values[3] == 1
-        and values[4] == 7
-        and values[5] == 7
-        and values[6] == 9
-        and values[7] == 42
+      and values[1] == -4
+      and values[2] == 0
+      and values[3] == 1
+      and values[4] == 7
+      and values[5] == 7
+      and values[6] == 9
+      and values[7] == 42
     then
         code = 42
     else

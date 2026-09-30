@@ -72,7 +72,7 @@ jobs:
           python3 compiler/tests/quality/test_check.py
           python3 compiler/tests/debugging/test_check.py
 
-  #  The debug compiler and all 774 cases, then the checks that need a built
+  #  The debug compiler and all 775 cases, then the checks that need a built
   #  compiler and no corpus.  scripts/test.sh builds first, so this is also
   #  where a compile error is reported.
   compiler:

@@ -80,7 +80,7 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
               slot_count: usize, slot_alignment: usize,
               bookkeeping: []mut slot)
              -> (state: provider from base, bookkeeping)
-                ! mem.out_of_memory =
+             ! mem.out_of_memory =
     fail mem.out_of_memory when slot_count > lenof bookkeeping
 
     mut normalized_alignment: usize = slot_alignment

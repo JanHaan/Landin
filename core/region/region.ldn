@@ -74,7 +74,7 @@ end release_region
 --  Keep the ledger view and parent capability as separate parameters while
 --  freeing payloads; the payload alias does not expose the whole region.
 release_records: (provider: type is mem.allocator, parent: ptr mut provider,
-                   inout records: vec.list(allocation)) -> none =
+                  inout records: vec.list(allocation)) -> none =
     mut remaining: usize = vec.length(records)
     while remaining > 0 do
         dec remaining

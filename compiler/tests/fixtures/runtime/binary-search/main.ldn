@@ -14,7 +14,7 @@ search: (values: []i32, needle: i32) -> (result: search_result) =
         middle: usize = left + (right - left) / 2
         candidate: i32 = values[middle]
         break with search_result(kind: found(index: middle))
-          when candidate == needle
+            when candidate == needle
         if candidate < needle then
             left = middle + 1
         else
