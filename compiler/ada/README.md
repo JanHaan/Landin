@@ -37,6 +37,7 @@ compiler/ada/
     resolution/         declarations, scopes and what each name means
     checking/           types, node facts, IR and verified transformations
     backend/            the frame, and the assembly emitted against it
+    formatting/         the one layout of a source, as edits
     driver/             request/results, source maps and report provenance
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -107,6 +108,7 @@ different responsibilities.
 | `Landin.Syntax.Parser` | the parse, including contextual separation of a final `try` expression from a `try` statement followed by more body items, D185's initialized condition-binding form D186's contextual caller parameter and D187's two-token contextual `unchecked` region, D233's one declaration node per shared name, contextual-name bindings and assignments selected by their punctuation before control-word dispatch, and the only construction of a tree | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and freed with the forest | hand out a tree that can be copied, written to or kept past the forest |
+| `Landin.Formatting` | D252's layout of one source's bytes: the scan and the parse as locals, the edits that take the source to the layout, and a re-scan that the edits changed no token and no comment | read anything later than the parse, keep anything past the call, break or join a line, or write a file |
 | `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
 | `Landin.Resolution` | declarations, scopes, which declaration each name means and which declaration each declaring node made | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |

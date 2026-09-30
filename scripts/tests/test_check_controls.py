@@ -822,6 +822,27 @@ class Transcriptions(unittest.TestCase):
             said = [why for _, _, why in checker.check_explanations(True)]
         self.assertTrue(any("stale" in why for why in said))
 
+    def test_the_layout_page_shows_a_program_before_and_after(self):
+        from check_controls import tree
+        with tree(copied=["docs/format.md", "spec.md"]) as root:
+            self.assertEqual(checker.check_layout_page(True), [])
+            page = root / "docs/format.md"
+            text = page.read_text()
+            head, rules = text.split("## Rules\n", 1)
+            rules = rules.replace(
+                "```landin\n    counter: u32 = 0\n", "```text\n", 1)
+            rules = rules.replace("r = a * (b + -1) - -a", "r = a *", 1)
+            rules += ("\n### Nothing\n\n```landin\na: u32 = 1\n```\n\n"
+                      "```landin\na: u32 = 1\n```\n")
+            page.write_text(head + "## Rules\n" + rules)
+            said = [why for _, _, why in checker.check_layout_page(True)]
+        self.assertIn("a rule's only blocks are its two landin examples",
+                      said)
+        self.assertTrue(any(why.startswith("the grammar does not derive")
+                            for why in said))
+        self.assertIn("Nothing shows a program the layout does not change",
+                      said)
+
     def test_a_missing_diagnostic_matrix_is_reported_rather_than_skipped(self):
         said = reasons(checker.check_diagnostic_matrix,
                        copied=["compiler/ada/src", "compiler/ada/tests",

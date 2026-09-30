@@ -14662,6 +14662,51 @@ fixtures, `backend/assembly blocks keep their registers`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.
 
+### D252 — A source has one layout, and the compiler lays it out
+
+**From** [1060], [1750] and [1780].
+
+**The tour said** that space separates tokens and means nothing else [1750],
+that no newline is ever required [1060], and that a comment is space [1780].
+It said nothing about how a program should be laid out, so every program
+chose, and `core` and the examples agreed with each other only as far as
+their writers happened to.
+
+**Chosen:** one layout, decided by the compiler and not by the program:
+`refine fmt`. It decides space and nothing else. It never adds, removes or
+changes a token, never changes a comment's bytes or moves one past a token,
+and never breaks or joins a line; what it decides is where each line starts,
+the space between two things on one line, that a run of blank lines is one
+and none begins or ends a file, and that every line ends in one LF. It reads
+the scan and the tree and nothing later, so a program is formatted whether
+or not its names and types are right, and one that does not parse is refused
+with its report and not touched. The rules, each with a program as written
+and as formatted, are `docs/format.md`'s, which the test program holds the
+implementation to; they were measured on `core` and the examples before any
+was written, and where those disagreed the majority was taken. Formatting
+changes byte offsets, so a caller location (D192), a panic site (D232) and
+debug information follow the formatted source; nothing else a program does
+can change.
+
+**The alternatives:** a style with options, which is a second opinion the
+language would then have to settle between two programs that follow different
+ones; the one layout is what makes a formatted file mean one thing to a
+reader. A printer that breaks and joins lines at a width, which lays out every
+expression from scratch and so moves every comment's line, every caller
+location and every debugger breakpoint whenever a name's length changes; no
+width is enforced here, and one that is would bring such a printer with it.
+Keeping each file's own line ends, which leaves two spellings of every line
+in one repository; [1750] admits three on input and nothing needs more than
+one on output. Leaving the layout to the tools of the editor that happens to
+be open, which is what the language had before and what `core` shows.
+
+**Pinned by** `positive/comment-forms`, `positive/space-forms`,
+`positive/line-ends-crlf`, `positive/line-ends-lone-cr`,
+`positive/line-ends-mixed` and `positive/no-final-line-end`, which the
+`formatting/every source keeps what it says` case requires to be formatted,
+`negative/unclosed-block-comment` and `negative/latin1-byte-in-name`, which it
+requires to be refused, and `formatting/the page is the layout`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

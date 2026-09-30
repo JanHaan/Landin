@@ -64,6 +64,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/documents.md",
                      "docs/environments.md",
                      "docs/diagnostics.md",
+                     "docs/format.md",
                      "docs/ir.md",
                      "docs/targets.md",
                      "compiler/ada/README.md",
@@ -5366,6 +5367,75 @@ def check_explanations(full_run):
     return out
 
 
+LAYOUT = "docs/format.md"
+
+
+def check_layout_page(full_run):
+    """`docs/format.md` shows each rule as a program before and after.
+
+    The test program formats the first example of every rule and requires
+    the second, and requires the second to be formatted already; this side
+    holds the page to the shape that case reads -- two `landin` blocks under
+    each `###` of `## Rules`, and nothing else fenced there -- and holds
+    both programs to the grammar, since a layout of a program the grammar
+    refuses would be a rule about a file `refine fmt` refuses too.
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, LAYOUT)
+    missing = absent([path])
+    if missing:
+        return missing
+    rules, trees, problems = read_grammar(os.path.join(ROOT, SPEC_NAME))
+    if problems:
+        return []
+    signs = grammar_signs(trees)
+    lines = io.open(path, encoding="utf-8").read().split("\n")
+    out = []
+    in_rules, title, start, blocks, block = False, None, 0, [], None
+
+    def finish():
+        if title is None:
+            return
+        if len(blocks) != 2:
+            out.append((LAYOUT, start, "%s shows %d examples, not a program"
+                        " before and after" % (title, len(blocks))))
+        for line, text in blocks:
+            tokens, complaint = landin_tokens(text, signs, trees)
+            if tokens is None or not grammar_recognises(rules, trees, tokens):
+                out.append((LAYOUT, line, "the grammar does not derive this"
+                            " example: %s" % (complaint or "no derivation")))
+        if len(blocks) == 2 and blocks[0][1] == blocks[1][1]:
+            out.append((LAYOUT, start, "%s shows a program the layout does"
+                        " not change" % title))
+
+    for n, line in enumerate(lines, 1):
+        if block is not None:
+            if line == "```":
+                blocks.append((block[0], "\n".join(block[1]) + "\n"))
+                block = None
+            else:
+                block[1].append(line)
+            continue
+        if line == "## Rules":
+            in_rules = True
+        elif line.startswith("## "):
+            finish()
+            in_rules, title, blocks = False, None, []
+        elif in_rules and line.startswith("### "):
+            finish()
+            title, start, blocks = line[4:], n, []
+        elif in_rules and line.startswith("```"):
+            if line != "```landin" or title is None:
+                out.append((LAYOUT, n, "a rule's only blocks are its two"
+                            " landin examples"))
+            block = (n + 1, [])
+    finish()
+    if "## Rules" not in lines:
+        out.append((LAYOUT, 1, "the page has no rules"))
+    return out
+
+
 def check_diagnostic_matrix(full_run):
     if not full_run:
         return []
@@ -6974,6 +7044,7 @@ def main(argv):
     extra += check_catalogue(full_run)
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
+    extra += check_layout_page(full_run)
     extra += check_coverage_registers(full_run)
     if full_run:
         extra += fixture_constructs()

@@ -920,6 +920,10 @@ GUIDES = [
          blurb="Every diagnostic code: the rule it enforces, the paragraph "
                "that states it, and what to change. What `refine explain` "
                "prints."),
+    dict(key="format", src="docs/format.md", out="format.html",
+         nav="how a source is laid out", group="the implementation",
+         blurb="The one layout `refine fmt` gives every source: each rule "
+               "with a program as written and as formatted."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "
@@ -1493,8 +1497,8 @@ NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "documents"]),
     ("the prototypes", ["p1", "p2", "p3", "p4"]),
     ("the project", ["readme", "roadmap", "handoff"]),
-    ("the compiler", ["compiler", "ir", "diagnostics", "targets", "core",
-                      "toolchain", "editors"]),
+    ("the compiler", ["compiler", "ir", "diagnostics", "format", "targets",
+                      "core", "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),
