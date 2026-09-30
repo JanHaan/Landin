@@ -93,6 +93,7 @@ different responsibilities.
 | `Landin.Optimization` | optimization objectives, specialization modes and their request spellings | change source meaning or disable runtime checks |
 | `Landin.Serials` | process-unique identities for trees and checking tables, so a stale key or tree is refused rather than matched by a reused address | reach output, numbering or iteration order |
 | `Landin.Build_Reports` | deterministic compiler decisions, outcomes and work counts | claim assembled-byte measurements or diagnose source |
+| `Landin.Json` | reading a protocol message as strict RFC 8259 JSON, bounded in depth and never raising, and writing canonical JSON | convert a floating-point number, accept a duplicate key or invalid UTF-8, or write a build report or source map |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, owned and freed by their snapshot, which is limited and handed out by reference | put a source file in an automatic object, or copy a snapshot |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |

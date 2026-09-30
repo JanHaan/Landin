@@ -31,6 +31,7 @@ with Landin.Tests.Fixes_Suite;
 with Landin.Tests.Formatting_Suite;
 with Landin.Tests.Harness_Suite;
 with Landin.Tests.IR_Suite;
+with Landin.Tests.Json_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
 with Landin.Tests.Memory_Suite;
@@ -97,6 +98,7 @@ procedure Landin_Tests is
       "harness          ",
       "ir               ",
       "ir opt           ",
+      "json             ",
       "lexer            ",
       "lowering         ",
       "memory           ",
@@ -298,6 +300,7 @@ begin
    Landin.Tests.Fixes_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
    Landin.Tests.IR_Suite.Register (Cases);
+   Landin.Tests.Json_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Lowering_Suite.Register (Cases);
    Landin.Tests.Memory_Suite.Register (Cases);
