@@ -386,7 +386,7 @@ against the parent's 2.17. The Mac ran the host suite in debug and release,
 
 ### R10.30 — Make diagnostics say how to fix it
 
-Status: planned
+Status: complete
 Depends on: R8.10
 
 Suggestions for misspelt names and near misses; machine-applicable edits
@@ -397,6 +397,31 @@ second opinion.
 Exit evidence: each edit pinned by a fixture that applies it and then compiles
 clean, every catalogue code explained, and every lint a catalogued code with a
 negative fixture.
+
+Done: a diagnostic carries fixes beside its notes, each a kind, an exact or
+likely applicability, a help sentence and edits: byte spans of one or several
+sources and their replacements, ordered and never overlapping, which is an
+editor's workspace edit with its coordinates still to convert. The catalogue's
+`Fixes` column says which codes may carry one and which must, the driver hands
+the report back as data beside its text, and the compiler never applies a fix.
+Suggestions rank what a position could have named by bounded optimal string
+alignment distance, innermost scope first, and never offer a name out of scope
+or inaccessible: L0201 for values, types, module members and selected imports,
+L0308, a misspelt argument label, a misspelt keyword and a missing module.
+L0109 is offered its declared name exactly, L0303 `mut`, L0105 `==`. Eleven
+negative fixtures apply every kind of fix through the `fixes` suite and compile
+the result clean. `refine explain` is a subcommand printing
+`docs/diagnostics.md`, generated into the compiler as an exhaustive case, so
+every code is explained and each example is compiled to its own code. D251
+admits a warning only as the compiler's judgement with the exact fix that
+settles it; the first and only lint is L0326, a local `mut` nothing needed,
+pinned by `negative/mut-never-written`, and `codes:` pins warnings on every
+fixture that compiles a program. `scripts/driver_manifest.py` held every
+commit to its parent: status, assembly, build report and source map agree for
+all 8,169 entries, and the only report differences are added help lines and
+warnings. The largest scaling ratio is 2.21. The Mac ran the host suite in
+debug and release, 766 cases each, and the gate was green on every job on
+`f7ab10af`.
 
 ### R10.40 — Format source
 
