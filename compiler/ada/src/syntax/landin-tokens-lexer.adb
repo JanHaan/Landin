@@ -630,9 +630,13 @@ package body Landin.Tokens.Lexer is
          end if;
 
          --  The line end is not the comment's: it is a piece of its own,
-         --  whatever precedes it.
+         --  whatever precedes it.  Nor are the blanks before it, which are
+         --  as invisible as the line end and are kept as blanks, so a
+         --  comment's bytes are exactly what a reader sees and a formatter
+         --  that removes trailing blanks never has to cut into a comment.
          declare
-            Doc : constant Boolean := Ahead ("---");
+            Doc  : constant Boolean := Ahead ("---");
+            Stop : Natural;
          begin
             while Position <= Last and then Text (Position) /= LF
               and then Text (Position) /= CR
@@ -640,8 +644,16 @@ package body Landin.Tokens.Lexer is
                Advance;
             end loop;
 
-            Keep ((if Doc then Doc_Comment else Line_Comment),
-                  First, Position - 1);
+            --  The opener is never a blank, so this stops inside it.
+            Stop := Position - 1;
+            while Text (Stop) = ' ' or else Text (Stop) = Tab loop
+               Stop := Stop - 1;
+            end loop;
+
+            Keep ((if Doc then Doc_Comment else Line_Comment), First, Stop);
+            if Stop < Position - 1 then
+               Keep (Blanks, Stop + 1, Position - 1);
+            end if;
          end;
       end Scan_Comment;
 

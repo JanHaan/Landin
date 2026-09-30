@@ -993,6 +993,11 @@ package body Landin.Tests.Lexer_Suite is
       Expect ("a CR that ends the file", "a" & CR, "n");
       Expect ("no final line end", "a b", "b");
       Expect ("trailing blanks", "a  " & LF & "  ", "bnb");
+      Expect ("blanks after a line comment are not the comment's",
+              "a -- note " & Tab & LF & "b", "blbn");
+      Expect ("blanks after a doc comment at the end of the file",
+              "--- doc  ", "db");
+      Expect ("a line comment of two dashes and a blank", "--  ", "lb");
       Expect ("a line comment and its line end",
               "a -- note" & CR & LF & "b", "bln");
       Expect ("a doc comment and its line end", "--- doc" & LF & "a", "dn");

@@ -289,7 +289,8 @@ package Landin.Tokens is
    --  The four forms [1750] calls space, with [1780]'s three comments told
    --  apart.  A run of blanks is spaces and tabs only, and as long as it
    --  can be.  A line end is one of [1750]'s three, and its bytes say
-   --  which.  A line or doc comment stops before its line end.  A block
+   --  which.  A line or doc comment stops at its last byte that is not a
+   --  blank, and any blanks after it are a run of their own.  A block
    --  comment runs to its own `)--` and keeps the line ends inside it; one
    --  never closed runs to the end of the file, with the fault beside it,
    --  as a malformed token has one.  A doc comment is a kind rather than a

@@ -43,11 +43,25 @@ package body Landin.Testing.Layout is
       function Is_Blank (Item : Character) return Boolean
         is (Item = ' ' or else Item = Tab);
 
-      --  Whether the file's next byte after Stop is a line end, or there
-      --  is none: where a line or doc comment has to end.
+      --  Whether only blanks lie between Stop and a line end or the end of
+      --  the file, and the comment's own last byte is not one: where a line
+      --  or doc comment has to end.
+      function At_Line_End (Stop : Landin.Source.Byte_Offset)
+        return Boolean;
+
       function At_Line_End (Stop : Landin.Source.Byte_Offset)
         return Boolean
-        is (Stop = Length or else At_Offset (Stop) in LF | CR);
+      is
+         Cursor : Landin.Source.Byte_Offset := Stop;
+      begin
+         if Is_Blank (At_Offset (Stop - 1)) then
+            return False;
+         end if;
+         while Cursor < Length and then Is_Blank (At_Offset (Cursor)) loop
+            Cursor := Cursor + 1;
+         end loop;
+         return Cursor = Length or else At_Offset (Cursor) in LF | CR;
+      end At_Line_End;
 
       function Has_No_Line_End (Where : Landin.Source.Span) return Boolean
         is (for all Item of Slice (Where) => Item not in LF | CR);
