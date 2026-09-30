@@ -156,7 +156,8 @@ different responsibilities.
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
 | `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads | perform an effect, or let a measurement decide anything |
-| `Landin.Platform.Native` | the only filesystem implementation, and the process's own resource counters through its host C adapter | be reached except through the interface |
+| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, and the process's own resource counters through its host C adapter | be reached except through the interface |
+| `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | constrained Cortex memory-map facts and source assembly admission | invoke tools or derive target widths from the host |

@@ -1,4 +1,5 @@
 with Ada.Containers.Indefinite_Vectors;
+with Ada.Strings.Unbounded;
 
 package body Landin.Testing.Fixes is
 
@@ -109,79 +110,5 @@ package body Landin.Testing.Fixes is
 
       return Unbounded.To_String (Result);
    end Applied;
-
-   procedure Replace
-     (Host : in out Overlay_Filesystem; Path : String; Content : String) is
-   begin
-      Host.Replaced.Include (Path, Content);
-   end Replace;
-
-   overriding function Exists
-     (Host : Overlay_Filesystem; Path : String) return Boolean
-     is (Host.Replaced.Contains (Path) or else Host.Real.Exists (Path));
-
-   overriding function Working_Directory
-     (Host : Overlay_Filesystem) return String
-     is (Host.Real.Working_Directory);
-
-   overriding function Paths_Overlap
-     (Host : Overlay_Filesystem; Left, Right : String) return Boolean
-     is (Host.Real.Paths_Overlap (Left, Right));
-
-   overriding function Same_File
-     (Host : Overlay_Filesystem; Left, Right : String) return Boolean
-     is (Host.Real.Same_File (Left, Right));
-
-   overriding function Is_Directory
-     (Host : Overlay_Filesystem; Path : String) return Boolean
-     is (Host.Real.Is_Directory (Path));
-
-   overriding procedure Read_File
-     (Host    : Overlay_Filesystem;
-      Path    : String;
-      Content : out Ada.Strings.Unbounded.Unbounded_String;
-      Status  : out Landin.Platform.Read_Status)
-   is
-      Found : constant Content_Maps.Cursor := Host.Replaced.Find (Path);
-   begin
-      if Content_Maps.Has_Element (Found) then
-         Content := Unbounded.To_Unbounded_String
-           (Content_Maps.Element (Found));
-         Status := Landin.Platform.Read_Ok;
-      else
-         Host.Real.Read_File (Path, Content, Status);
-      end if;
-   end Read_File;
-
-   overriding procedure Write_File
-     (Host    : Overlay_Filesystem;
-      Path    : String;
-      Content : String;
-      Status  : out Landin.Platform.Write_Status)
-   is
-      pragma Unreferenced (Host, Path, Content);
-   begin
-      Status := Landin.Platform.Not_Writable;
-   end Write_File;
-
-   overriding procedure Remove_File
-     (Host   : Overlay_Filesystem;
-      Path   : String;
-      Status : out Landin.Platform.Remove_Status)
-   is
-      pragma Unreferenced (Host, Path);
-   begin
-      Status := Landin.Platform.Not_Removable;
-   end Remove_File;
-
-   overriding procedure List_Directory
-     (Host    : Overlay_Filesystem;
-      Path    : String;
-      Entries : out Landin.Platform.Path_List;
-      Status  : out Landin.Platform.List_Status)
-   is
-   begin
-      Host.Real.List_Directory (Path, Entries, Status);
-   end List_Directory;
 
 end Landin.Testing.Fixes;

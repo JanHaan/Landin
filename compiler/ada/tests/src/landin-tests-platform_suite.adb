@@ -9,6 +9,7 @@ with Interfaces.C;
 
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
+with Landin.Platform.Overlays;
 with Landin.Testing.Fakes;
 
 package body Landin.Tests.Platform_Suite is
@@ -1186,6 +1187,62 @@ package body Landin.Tests.Platform_Suite is
          "known filesystems keep their own rules");
    end Native_Name_Rules_On_Unknown_Filesystems;
 
+   --  A held buffer is read in place of the file and listed beside the
+   --  host's own entries, in order and once, so a module holding an
+   --  unsaved buffer is loaded as the saved one would be.  Nothing is
+   --  written through, and releasing a path reads the host again.
+   procedure An_Overlay_Holds_Buffers
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Overlay_Holds_Buffers
+     (Item : in out Landin.Testing.Context)
+   is
+      Under : aliased Landin.Testing.Fakes.Fake_Filesystem;
+   begin
+      Under.Add_Directory ("/m");
+      Under.Add_File ("/m/b.ldn", "saved");
+      Under.Add_File ("/m/d.ldn", "other");
+      declare
+         Host    : Landin.Platform.Overlays.Overlay (Under'Access);
+         Content : Unbounded.Unbounded_String;
+         Read    : Landin.Platform.Read_Status;
+         Listed  : Landin.Platform.Path_List;
+         Status  : Landin.Platform.List_Status;
+         Written : Landin.Platform.Write_Status;
+      begin
+         Host.Hold ("/m/b.ldn", "edited");
+         Host.Hold ("/m/c.ldn", "new");
+         Host.Hold ("/other/a.ldn", "elsewhere");
+         Host.Read_File ("/m/b.ldn", Content, Read);
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Content), "edited",
+            "a held buffer is read in place of the file");
+         Host.List_Directory ("/m", Listed, Status);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined (Listed),
+            "b.ldn" & ASCII.LF & "c.ldn" & ASCII.LF & "d.ldn" & ASCII.LF,
+            "held entries are listed in order and once");
+         Landin.Testing.Check
+           (Item, Host.Exists ("/m/c.ldn")
+                  and then not Host.Is_Directory ("/m/c.ldn"),
+            "an unsaved buffer exists and is a file");
+         Host.Write_File ("/m/b.ldn", "x", Written);
+         Landin.Testing.Check
+           (Item, Written = Landin.Platform.Not_Writable
+                  and then Under.Write_Count = 0,
+            "nothing is written through an overlay");
+         Host.Release ("/m/b.ldn");
+         Host.Read_File ("/m/b.ldn", Content, Read);
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Content), "saved",
+            "a released path is read from the host again");
+         Host.List_Directory ("/missing", Listed, Status);
+         Landin.Testing.Check
+           (Item, Status /= Landin.Platform.List_Ok and then Listed.Is_Empty,
+            "a directory the host cannot list is not invented");
+      end;
+   end An_Overlay_Holds_Buffers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1266,6 +1323,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native allocation is counted",
          Native_Allocation_Is_Counted'Access);
+      Landin.Testing.Register
+        (Into, "platform", "an overlay holds buffers",
+         An_Overlay_Holds_Buffers'Access);
    end Register;
 
 end Landin.Tests.Platform_Suite;

@@ -6,6 +6,7 @@ with Landin.Diagnostics.Suggestions;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
+with Landin.Platform.Overlays;
 with Landin.Source;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixes;
@@ -105,7 +106,7 @@ package body Landin.Tests.Fixes_Suite is
    procedure Every_Pinned_Fix_Compiles_Clean
      (Item : in out Landin.Testing.Context)
    is
-      Real      : Landin.Platform.Native.Native_Filesystem;
+      Real      : aliased Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Pinned    : Natural := 0;
       Expected  : Natural := 0;
@@ -186,7 +187,7 @@ package body Landin.Tests.Fixes_Suite is
          Fixtures.Append_Module_Arguments (Fixture, Corpus, Arguments);
 
          declare
-            First_Host : Landin.Testing.Fixes.Overlay_Filesystem;
+            First_Host : Landin.Platform.Overlays.Overlay (Real'Access);
             Fake_Host  : Landin.Testing.Fakes.Fake_Filesystem;
             Ran : Landin.Driver.Outcome;
          begin
@@ -216,7 +217,7 @@ package body Landin.Tests.Fixes_Suite is
                Label & ": the report offers a fix");
 
             declare
-               Fixed_Host : Landin.Testing.Fixes.Overlay_Filesystem;
+               Fixed_Host : Landin.Platform.Overlays.Overlay (Real'Access);
                Fixed_Fake : Landin.Testing.Fakes.Fake_Filesystem;
                Goldens    : Natural := 0;
             begin
@@ -250,7 +251,7 @@ package body Landin.Tests.Fixes_Suite is
                      end if;
 
                      if Rooted then
-                        Fixed_Host.Replace (Path, After);
+                        Fixed_Host.Hold (Path, After);
                      else
                         Fixed_Fake.Add_File (Path, After);
                      end if;
