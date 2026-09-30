@@ -63,7 +63,9 @@ def main():
             expected_status = int(meta.get('status', '1' if meta['class'] == 'negative' else '0'))
             require(status == expected_status, f'{name}: expected {expected_status}, got {status}')
             actual = stdout + stderr
-            codes = re.findall(rb'error\[(L[0-9]{4})\]', actual)
+            # A fixture's `codes:` pins warnings as it pins errors, in report
+            # order (D251), and a diagnostic's level and code begin its line.
+            codes = re.findall(rb'(?m)^(?:error|warning)\[(L[0-9]{4})\]', actual)
             expected_codes = [c.strip().encode() for c in meta.get('codes', '').split(',') if c.strip()]
             require(codes == expected_codes, f'{name}: diagnostic codes differ: {codes!r}')
             if 'expect' in meta:
