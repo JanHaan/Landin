@@ -22,6 +22,7 @@ with Landin.Diagnostics.Modules;
 with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Resolution;
 with Landin.Diagnostics.Text;
+with Landin.Formatting;
 with Landin.IR;
 with Landin.Modules;
 with Landin.Resolution;
@@ -57,6 +58,7 @@ package body Landin.Driver is
 
    use type Landin.IR.Item_Id;
    use type Landin.Checking.Signature_Id;
+   use type Landin.Formatting.Verdict;
    use type Landin.IR.Item_Kind;
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.List_Status;
@@ -116,6 +118,7 @@ package body Landin.Driver is
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
       & "       refine explain [CODE ...]" & LF
+      & "       refine fmt [--check] source.ldn ..." & LF
       & LF
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
@@ -156,7 +159,11 @@ package body Landin.Driver is
       & LF
       & "`refine explain L0201` says what that code means and how to fix"
       & LF
-      & "it." & LF
+      & "it.  `refine fmt` rewrites each named source in the one layout;"
+      & LF
+      & "with --check it writes nothing and reports each source that is"
+      & LF
+      & "not in it." & LF
       & LF
       & "The toolchain is found by the target's GNU triplet, so"
       & LF
@@ -270,6 +277,177 @@ package body Landin.Driver is
       return Result;
    end Explain;
 
+   ---------------------------------------------------------------------
+   --  Format
+   --
+   --  Also a request with no compilation in it.  Every source is its own:
+   --  it is read, laid out and written back, or refused, before the next
+   --  one is read, and its snapshot joins one source set so the report can
+   --  point into every file it names.
+   ---------------------------------------------------------------------
+
+   function Format (Arguments : Landin.Platform.Path_List;
+                    Host      : Landin.Platform.Filesystem'Class)
+     return Outcome;
+
+   function Format (Arguments : Landin.Platform.Path_List;
+                    Host      : Landin.Platform.Filesystem'Class)
+     return Outcome
+   is
+      Result  : Outcome;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Sources : Landin.Source.Sets.Source_Set;
+      Named   : Landin.Platform.Path_List;
+      Check   : Boolean := False;
+      Misused : Boolean := False;
+
+      procedure Refuse (Code : Landin.Diagnostics.Code_String;
+                        Message : String);
+
+      procedure Refuse (Code : Landin.Diagnostics.Code_String;
+                        Message : String) is
+      begin
+         Found.Append
+           (Landin.Diagnostics.Make
+              (Code    => Code,
+               Level   => Landin.Diagnostics.Error,
+               Source  => Landin.Source.No_Source,
+               Where   => Landin.Source.Empty_Span,
+               Message => Message));
+      end Refuse;
+
+      --  L0008 at the first line whose bytes the layout changes, found by
+      --  reading the source and the formatted text line by line.  A line
+      --  the source has and the layout drops is changed too.
+      procedure Not_Formatted (Answer : Landin.Formatting.Result);
+
+      procedure Not_Formatted (Answer : Landin.Formatting.Result) is
+         Snapshot : Landin.Source.Snapshot renames
+           Sources.Get (Answer.Id).Element.all;
+         Formatted : constant String := Unbounded.To_String (Answer.Text);
+
+         function Changed_Line return Landin.Source.Line_Number;
+
+         function Changed_Line return Landin.Source.Line_Number is
+            Cursor : Natural := Formatted'First;
+         begin
+            for Line in 1 .. Landin.Source.Line_Count (Snapshot) loop
+               declare
+                  Was  : constant String :=
+                    Landin.Source.Line_Text (Snapshot, Line);
+                  Stop : Natural :=
+                    Ada.Strings.Fixed.Index (Formatted, [LF], Cursor);
+               begin
+                  if Stop = 0 then
+                     Stop := Formatted'Last + 1;
+                  end if;
+                  if Cursor > Formatted'Last
+                    or else Formatted (Cursor .. Stop - 1) /= Was
+                  then
+                     return Line;
+                  end if;
+                  Cursor := Stop + 1;
+               end;
+            end loop;
+            return Landin.Source.Line_Count (Snapshot);
+         end Changed_Line;
+
+         Line : constant Landin.Source.Line_Number := Changed_Line;
+         Item : Landin.Diagnostics.Diagnostic := Landin.Diagnostics.Make
+           (Code    => Rows.Code (Rows.Not_Formatted),
+            Level   => Landin.Diagnostics.Error,
+            Source  => Answer.Id,
+            Where   => Landin.Source.Line_Text_Span (Snapshot, Line),
+            Message => "this source is not in the layout");
+      begin
+         Landin.Diagnostics.Add_Note
+           (Item, "D252: `refine fmt` puts it in the layout and changes"
+                  & " only its space");
+         Found.Append (Item);
+      end Not_Formatted;
+   begin
+      for Index in 2 .. Natural (Arguments.Length) loop
+         declare
+            Argument : constant String := Arguments.Element (Index);
+         begin
+            if Argument = "--check" and then not Check then
+               Check := True;
+            elsif Argument'Length > 0
+              and then Argument (Argument'First) = '-'
+            then
+               Misused := True;
+               Refuse (Code_Unknown_Option,
+                       "fmt takes no option but --check, once: " & Argument);
+            elsif Host.Is_Directory (Argument) then
+               Misused := True;
+               Refuse (Code_Unknown_Option,
+                       "fmt formats files, not directories: " & Argument);
+            elsif Named.Contains (Argument) then
+               Misused := True;
+               Refuse (Code_Unknown_Option,
+                       "fmt is given one source twice: " & Argument);
+            else
+               Named.Append (Argument);
+            end if;
+         end;
+      end loop;
+      if Named.Is_Empty and then not Misused then
+         Misused := True;
+         Refuse (Code_Unknown_Option, "fmt needs a source to format");
+      end if;
+
+      if not Misused then
+         for Path of Named loop
+            declare
+               Content : Unbounded.Unbounded_String;
+               Read    : Landin.Platform.Read_Status;
+            begin
+               Host.Read_File (Path, Content, Read);
+               if Read /= Landin.Platform.Read_Ok then
+                  Refuse (Code_Unreadable,
+                          (if Read = Landin.Platform.Not_Found
+                           then "source not found: "
+                           else "source not readable: ") & Path);
+               else
+                  declare
+                     Answer : constant Landin.Formatting.Result :=
+                       Landin.Formatting.Format
+                         (Sources, Path, Unbounded.To_String (Content));
+                     Written : Landin.Platform.Write_Status;
+                  begin
+                     Result.Named.Append (Path);
+                     for Position in 1 .. Answer.Found.Count loop
+                        Found.Append (Answer.Found.Get (Position));
+                     end loop;
+                     if Answer.Outcome = Landin.Formatting.Refused
+                       or else Answer.Edits.Is_Empty
+                     then
+                        null;
+                     elsif Check then
+                        Not_Formatted (Answer);
+                     else
+                        Host.Write_File
+                          (Path, Unbounded.To_String (Answer.Text), Written);
+                        if Written /= Landin.Platform.Write_Ok then
+                           Refuse (Code_Unwritable, "cannot write: " & Path);
+                        end if;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end if;
+
+      Result.Found := Found;
+      Result.Report := Unbounded.To_Unbounded_String
+        (Landin.Diagnostics.Text.Render (Found, Sources));
+      Result.Status :=
+        (if Misused then Status_Misuse
+         elsif Found.Has_Errors then Status_Reported
+         else Status_Success);
+      return Result;
+   end Format;
+
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
@@ -335,6 +513,8 @@ package body Landin.Driver is
 
       if Arguments.Element (1) = Explain_Command then
          return Explain (Arguments);
+      elsif Arguments.Element (1) = Format_Command then
+         return Format (Arguments, Host);
       end if;
 
       --  Argument classification first, so that a request is fully known

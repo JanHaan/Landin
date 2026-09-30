@@ -40,6 +40,13 @@ package body Landin.Diagnostics.Explanations is
                "With `--root=`, the entry module is a directory [1410], "
                & "and the operand given is not a readable one. Pass the di"
                & "rectory, not a file inside it.",
+            when Catalogue.Not_Formatted =>
+               "`refine fmt --check` found a source that is not in the l"
+               & "ayout D252 decides and `docs/format.md` shows. The diagn"
+               & "ostic points at the first line that would change. Nothin"
+               & "g is wrong with the program: run `refine fmt` on the fil"
+               & "e to put it in the layout, which changes its space and n"
+               & "othing else.",
             when Catalogue.Construct_Not_Enabled =>
                "The program uses a construct the tour describes and the "
                & "kernel does not enable yet [1830]. The two notes name th"
@@ -289,6 +296,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Not_Found =>
                "",
             when Catalogue.Module_Directory_Invalid =>
+               "",
+            when Catalogue.Not_Formatted =>
                "",
             when Catalogue.Construct_Not_Enabled =>
                "point: type = struct"

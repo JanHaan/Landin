@@ -62,6 +62,13 @@ diagnostic offers it as a likely fix.
 With `--root=`, the entry module is a directory [1410], and the operand given
 is not a readable one. Pass the directory, not a file inside it.
 
+### L0008
+
+`refine fmt --check` found a source that is not in the layout D252 decides
+and `docs/format.md` shows. The diagnostic points at the first line that
+would change. Nothing is wrong with the program: run `refine fmt` on the file
+to put it in the layout, which changes its space and nothing else.
+
 ## Lexical, and what is not enabled
 
 ### L0010

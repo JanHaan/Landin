@@ -40,6 +40,7 @@ targets and the microcontrollers people buy.**
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 and Darwin arm64 backends and native toolchain paths, and its own test harness. |
 | `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
 | `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
+| `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
 | `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
 | `docs/notes/` | exploratory design notes, explicitly non-normative and not roadmap commitments; [the formatting API note](docs/notes/printf-alternative.md) is the one so far. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
@@ -165,6 +166,11 @@ span, a caret and a note. If what you wrote is a construct the tour describes
 and the kernel omits, the note names the paragraph that describes it and says
 whether the form is a recorded boundary, withdrawn or transferred to a
 successor.
+
+`refine fmt source.ldn ...` rewrites each named source in the one layout
+[`docs/format.md`](docs/format.md) shows, changing its space and nothing
+else; `refine fmt --check` writes nothing and reports each source that is not
+in it. `core` and the examples are kept in that layout.
 
 ## What comes next
 

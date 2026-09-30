@@ -74,6 +74,17 @@ package Landin.Driver is
    --  reach it; it reads and writes no file.
    Explain_Command : constant String := "explain";
 
+   --  `refine fmt [--check] FILE ...`: every named source in D252's one
+   --  layout, rewritten in place when it is not in it already.  With
+   --  `--check` nothing is written and each source out of the layout is an
+   --  L0008 at its first line that would change.  A source that does not
+   --  scan or parse is refused with its own report and left as it is, and
+   --  the others are formatted all the same.  Each file stands alone: no
+   --  import is followed and no other stage runs, so an operand is always
+   --  a file and never a module directory.  `--check` is the only option:
+   --  it chooses whether the layout is written and never what it is.
+   Format_Command : constant String := "fmt";
+
    --  What `--emit=exe` writes beside its output, and reads back as the
    --  assembler's input.  Named here because a test asserts the path and a
    --  reader should not have to infer it from a concatenation.

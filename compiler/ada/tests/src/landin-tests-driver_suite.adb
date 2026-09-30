@@ -3628,7 +3628,7 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0506  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 63,
+        (Item, Occurrences (Listed, "" & LF), 64,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,
@@ -3655,11 +3655,165 @@ package body Landin.Tests.Driver_Suite is
          "a source called explain is named by a path");
    end Explain_Is_A_Subcommand;
 
+   --  `refine fmt` is the second subcommand: it rewrites a source that is
+   --  out of the layout and leaves one in it alone, refuses one that does
+   --  not parse without touching it while formatting the rest, and with
+   --  `--check` writes nothing and says which is out of the layout.
+   procedure Fmt_Is_A_Subcommand (Item : in out Landin.Testing.Context);
+
+   procedure Fmt_Is_A_Subcommand (Item : in out Landin.Testing.Context) is
+      Loose    : constant String := "a:u32=1" & LF & LF & LF & "b: u32 = 2";
+      Laid_Out : constant String := "a: u32 = 1" & LF & LF & "b: u32 = 2" & LF;
+      Broken   : constant String := "f: () -> none =" & LF & "if x" & LF;
+
+      function Run
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         Words : Landin.Platform.Path_List) return Landin.Driver.Outcome;
+
+      function Run
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem;
+         Words : Landin.Platform.Path_List) return Landin.Driver.Outcome
+      is
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         return Landin.Driver.Execute (Words, Host, Tools);
+      end Run;
+
+      function Words (Items : Landin.Platform.Path_List)
+        return Landin.Platform.Path_List;
+
+      function Words (Items : Landin.Platform.Path_List)
+        return Landin.Platform.Path_List
+      is
+         Result : Landin.Platform.Path_List := Arguments_Of ("fmt");
+      begin
+         Result.Append_Vector (Items);
+         return Result;
+      end Words;
+   begin
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("loose.ldn", Loose);
+         Host.Add_File ("laid.ldn", Laid_Out);
+         Host.Add_File ("broken.ldn", Broken);
+         declare
+            Checked : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "loose.ldn", "laid.ldn"]));
+            Report : constant String := Unbounded.To_String (Checked.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Checked.Status, Landin.Driver.Status_Reported,
+               "--check reports a source out of the layout");
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Count (Checked.Found) = 1
+                     and then Landin.Diagnostics.Code
+                                (Landin.Diagnostics.Get (Checked.Found, 1))
+                              = "L0008"
+                     and then Contains (Report, "loose.ldn:1:1"),
+               "once, at its first line that would change");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "--check writes nothing");
+         end;
+         declare
+            Rewritten : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["loose.ldn", "broken.ldn", "laid.ldn"]));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Rewritten.Status, Landin.Driver.Status_Reported,
+               "a source that does not parse is reported");
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Rewritten.Report),
+                               "broken.ldn:2")
+                     and then Landin.Diagnostics.Count (Rewritten.Found) > 0,
+               "with its own report, returned as data too");
+            Landin.Testing.Check_Equal
+              (Item, Host.Written ("loose.ldn"), Laid_Out,
+               "the other is formatted all the same");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 1,
+               "and nothing in the layout or refused is written");
+         end;
+         declare
+            Again : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "loose.ldn"]));
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Again.Status, Landin.Driver.Status_Success,
+               "a formatted source passes --check");
+            Landin.Testing.Check
+              (Item, Unbounded.Length (Again.Report) = 0
+                     and then Unbounded.Length (Again.Output) = 0,
+               "and prints nothing");
+         end;
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("loose.ldn", Loose);
+         Host.Add_Unreadable ("hidden.ldn");
+         Host.Add_Directory ("module");
+         Host.Refuse_Writes;
+         declare
+            Unwritable : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["loose.ldn", "hidden.ldn", "absent.ldn"]));
+            Report : constant String :=
+              Unbounded.To_String (Unwritable.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Unwritable.Status = Landin.Driver.Status_Reported
+                     and then Contains (Report, "L0005")
+                     and then Contains (Report, "cannot write: loose.ldn")
+                     and then Contains (Report, "not readable: hidden.ldn")
+                     and then Contains (Report, "not found: absent.ldn"),
+               "unreadable, missing and unwritable sources are reported");
+         end;
+         declare
+            procedure Refused (Given : Landin.Platform.Path_List;
+                               Why : String);
+
+            procedure Refused (Given : Landin.Platform.Path_List;
+                               Why : String)
+            is
+               Answer : constant Landin.Driver.Outcome :=
+                 Run (Host, Words (Given));
+            begin
+               Landin.Testing.Check
+                 (Item, Answer.Status = Landin.Driver.Status_Misuse
+                        and then Contains
+                          (Unbounded.To_String (Answer.Report), "L0002"),
+                  Why & " is misuse");
+            end Refused;
+         begin
+            Refused (Landin.Platform.No_Arguments, "no source");
+            Refused (["--wat", "loose.ldn"], "an unknown option");
+            Refused (["--check", "--check", "loose.ldn"], "--check twice");
+            Refused (["module"], "a directory");
+            Refused (["loose.ldn", "loose.ldn"], "one source twice");
+         end;
+      end;
+
+      declare
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Named : constant Landin.Driver.Outcome :=
+           Run (Host, Arguments_Of ("./fmt"));
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Named.Report),
+                            "source not found: ./fmt"),
+            "a source called fmt is named by a path");
+      end;
+   end Fmt_Is_A_Subcommand;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "driver", "explain is a subcommand",
          Explain_Is_A_Subcommand'Access);
+      Landin.Testing.Register
+        (Into, "driver", "fmt is a subcommand",
+         Fmt_Is_A_Subcommand'Access);
       Landin.Testing.Register
         (Into, "driver", "reports are returned as data",
          Reports_Are_Returned_As_Data'Access);

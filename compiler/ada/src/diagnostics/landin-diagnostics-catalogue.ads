@@ -65,6 +65,10 @@ package Landin.Diagnostics.Catalogue is
       Unwritable_Output,
       Module_Not_Found,
       Module_Directory_Invalid,
+      --  `refine fmt --check`: a source that parses and is not in the
+      --  layout.  Whose rule is D252, not a language rule, and no program
+      --  is refused for it.
+      Not_Formatted,
       --  The scanner.
       Construct_Not_Enabled,
       Malformed_Integer,
@@ -173,6 +177,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => "L0005",
             when Module_Not_Found      => "L0006",
             when Module_Directory_Invalid => "L0007",
+            when Not_Formatted         => "L0008",
             when Construct_Not_Enabled => "L0010",
             when Malformed_Integer     => "L0011",
             when Unknown_Bytes         => "L0012",
@@ -239,6 +244,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => Error,
             when Module_Not_Found      => Error,
             when Module_Directory_Invalid => Error,
+            when Not_Formatted         => Error,
             when Construct_Not_Enabled => Error,
             when Malformed_Integer     => Error,
             when Unknown_Bytes         => Error,
@@ -271,6 +277,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => Live,
             when Module_Not_Found      => Live,
             when Module_Directory_Invalid => Live,
+            when Not_Formatted         => Live,
             when Construct_Not_Enabled => Live,
             when Malformed_Integer     => Live,
             when Unknown_Bytes         => Live,
@@ -306,6 +313,8 @@ package Landin.Diagnostics.Catalogue is
                "[1420]: no ordered import root contains the requested module",
             when Module_Directory_Invalid =>
                "[1410]: an entry module must be a readable directory",
+            when Not_Formatted         =>
+               "D252: a source `refine fmt --check` finds out of the layout",
             when Construct_Not_Enabled =>
                "[1830]: the tour describes this and the kernel omits it",
             when Malformed_Integer     =>
@@ -456,6 +465,7 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => False,
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
+            when Not_Formatted         => True,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -485,6 +495,9 @@ package Landin.Diagnostics.Catalogue is
             when Unwritable_Output     => False,
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
+            --  The first line out of the layout, which may be one whose
+            --  only fault is its missing line end, and so empty.
+            when Not_Formatted         => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -586,6 +599,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
             when Module_Not_Found | Module_Directory_Invalid => 1,
+            --  What a reader runs to put the file right.
+            when Not_Formatted         => 1,
             when Name_Expected .. Positional_After_Named => 1,
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 1,

@@ -150,6 +150,58 @@ package body Landin.Tests.Memory_Suite is
       end;
    end Repeat;
 
+   --  What an editor does on every keystroke: format the same file again.
+   --  `--check` so nothing is written, whether a file is in the layout or
+   --  not; every source of the derived log filter, laid out whole.
+   procedure Formatting_Stays_Flat (Item : in out Landin.Testing.Context);
+
+   procedure Formatting_Stays_Flat (Item : in out Landin.Testing.Context) is
+      Host  : Landin.Platform.Native.Native_Filesystem;
+      Tools : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Meter : Landin.Platform.Native.Native_Meter;
+      Arguments : Landin.Platform.Path_List;
+      Settled : Long_Long_Integer := 0;
+      Warm : constant := 3;
+      Measured : constant := 20;
+   begin
+      Landin.Platform.Add (Arguments, "fmt");
+      Landin.Platform.Add (Arguments, "--check");
+      for Name of Landin.Platform.Path_List'
+        (["app/app.ldn", "app/config.ldn", "app/dest.ldn", "app/entry.ldn",
+          "app/filter.ldn", "app/reader.ldn", "main.ldn"])
+      loop
+         Landin.Platform.Add
+           (Arguments, Repository & "/examples/derived_hosted/" & Name);
+      end loop;
+      for Run in 1 .. Warm + Measured loop
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Arguments, Host, Tools);
+         begin
+            if Result.Status not in Landin.Driver.Status_Success
+                                  | Landin.Driver.Status_Reported
+            then
+               Landin.Testing.Fail
+                 (Item, "formatting run" & Run'Image & " was refused:"
+                  & Unbounded.To_String (Result.Report));
+               return;
+            end if;
+            if Run = Warm then
+               Settled := Meter.Sample.Allocated_Bytes;
+            end if;
+         end;
+      end loop;
+      declare
+         Final : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
+      begin
+         Landin.Testing.Check
+           (Item, Final - Settled <= Tolerance,
+            "formatting the derived log filter: after" & Measured'Image
+            & " more runs the allocator holds " & Image (Final - Settled)
+            & " bytes more; at most " & Image (Tolerance) & " may remain");
+      end;
+   end Formatting_Stays_Flat;
+
    procedure Checking_Stays_Flat (Item : in out Landin.Testing.Context);
 
    procedure Checking_Stays_Flat (Item : in out Landin.Testing.Context) is
@@ -277,6 +329,9 @@ package body Landin.Tests.Memory_Suite is
       Landin.Testing.Register
         (Into, "memory", "a kept compilation is seen",
          A_Kept_Compilation_Is_Seen'Access);
+      Landin.Testing.Register
+        (Into, "memory", "formatting stays flat",
+         Formatting_Stays_Flat'Access);
    end Register;
 
 end Landin.Tests.Memory_Suite;

@@ -92,7 +92,7 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | ubuntu-24.04 | the debug compiler's 768 cases at `LANDIN_TEST_JOBS=8`, the determinism closures and native report identity |
+| `compiler` | ubuntu-24.04 | the debug compiler's 774 cases at `LANDIN_TEST_JOBS=8`, the determinism closures and native report identity |
 | `release` | ubuntu-24.04 | the same with the release compiler, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
@@ -263,9 +263,10 @@ tests, never an authority for semantics, implementation decisions or work.
 `docs/targets.md` does the same for the C and link-name package boundaries,
 `docs/diagnostics.md` explains every diagnostic code and is the text
 `refine explain` prints, generated into the compiler by
-`python3 check.py --catalogue`, and `examples.md` holds the complete programs
-the runtime suite executes. All four are derived documents and none of them
-decides anything.
+`python3 check.py --catalogue`, `docs/format.md` shows every rule of the one
+layout `refine fmt` gives a source, which the test program holds the
+formatter to, and `examples.md` holds the complete programs the runtime suite
+executes. All five are derived documents and none of them decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
