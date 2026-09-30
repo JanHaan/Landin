@@ -262,7 +262,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R10.40 — Format source (planned).**
+**Next roadmap item: R10.50 — Serve an editor (planned).**
 
 ## License
 

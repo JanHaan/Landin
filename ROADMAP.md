@@ -425,13 +425,35 @@ debug and release, 766 cases each, and the gate was green on every job on
 
 ### R10.40 — Format source
 
-Status: planned
+Status: complete
 Depends on: R10.20
 
 `refine fmt`: one style and no options.
 
 Exit evidence: formatting is idempotent and preserves every comment over the
 whole corpus, and `core` and the examples are formatted, which the gate holds.
+
+Done: D252 records one layout decided by the compiler: space only, never a
+token, a comment's bytes or a line broken or joined, LF line ends, and
+continuation lines placed by the tree. Its rules were measured on `core` and
+the examples before any was written, and `docs/format.md` shows each with a
+program as written and as formatted, which the `formatting` suite holds
+`Landin.Formatting` to. The formatter returns space-only edits in byte order,
+the shape R10.50's formatting request answers with, and refuses a source that
+does not parse with its own report; it scans its own result and raises a
+defect if a token or comment moved. A line comment now ends at its last
+visible byte, so no trailing blank belongs to a comment. `refine fmt` rewrites
+files and `refine fmt --check` reports L0008. Over all 2,114 sources in the
+repository the 80 that fail to scan or parse are refused and every other keeps
+its tokens and comments, adds no line, and offers nothing when formatted again;
+`core`, the examples and the running examples are formatted, which the gate's
+`formatting` case holds. Seventy lines moved and no line number anything pins.
+`scripts/driver_manifest.py` held the four formatter commits equal to the parent
+at all 8,169 entries, and the reformat equal under `--layout-only` from one
+checkout: 316 entries moved, all in fixtures that read a formatted source, none
+in status, output or report. The largest scaling ratio is 2.19. The Mac ran the
+host suite in debug and release, 773 cases each, and the gate was green on every
+job on `af14ff10`.
 
 ### R10.50 — Serve an editor
 
