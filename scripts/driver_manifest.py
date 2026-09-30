@@ -35,6 +35,21 @@ records `errors`, the report with every `  = help:` line and every whole
 `warning[...]` block removed, and `--report-only` requires that and every
 other field equal, except `stderr` itself, which it lists instead: the
 entries whose reports grew are named, and every other difference fails.
+
+    compare --layout-only A.json B.json
+                                     require them to agree except where a
+                                     source's space changed
+
+A change to the space of the sources themselves -- `refine fmt` over a
+module -- moves byte offsets and columns and nothing else, and is compared
+with one compiler over the two trees.  Each entry also records `layout`:
+the assembly with every `.loc` column, every debug section, the build
+identity and every panic site's number removed, the build report with its
+source digests and byte spans removed, and the source map with its digests,
+lengths, line offsets and panic bases removed.  `--layout-only` requires
+status, output and report equal as they are, and `layout` equal where the
+raw artefacts differ.  A line that moved would show in a `.loc`'s line and
+in a report's line numbers, so both still count.
 """
 import concurrent.futures
 import hashlib
@@ -99,6 +114,50 @@ def without_additions(report):
     return b"".join(kept)
 
 
+#  What a change of space may move, taken out.  See the module header.
+LOCATION = re.compile(rb"^(\s*\.loc \d+ \d+) \d+", re.M)
+#  A panic site is the handler's second argument, loaded just before the
+#  call: %esi on x86-64, x1 on arm64 and r1 on Cortex-M0.  Its number is a
+#  byte offset into a source, so a change of space moves it.
+SITE = re.compile(rb"^(\s*(?:movl\s+\$|movz\s+x1,\s*#|movk\s+x1,\s*#|"
+                  rb"ldr\s+r1,\s*=|movs\s+r1,\s*#))\d+((?:,\s*lsl\s*#\d+)?"
+                  rb"(?:,\s*%esi)?)\s*$"
+                  rb"(?=(?:\n\s*(?:mov\w*|ldr)\s+[^\n]*)*\n\s*"
+                  rb"(?:call|bl|blx)\s+_?panic_handler)", re.M)
+SECTION = re.compile(rb"^\s*(?:\.section|\.text|\.data|\.bss)\b.*$", re.M)
+IDENTITY = re.compile(rb"^# Landin caller files [0-9a-f]+\n", re.M)
+SPANS = re.compile(rb'"(?:sha256|source_sha256|assembly_sha256|build_id|'
+                   rb'first|last|byte_length|panic_base)":\s*("[^"]*"|\d+)')
+OFFSETS = re.compile(rb'"line_offsets":\[[^\]]*\]')
+
+
+def without_debug_sections(assembly):
+    """The assembly with every section that is debug information, or the
+    build identity, removed whole: from its directive to the next one."""
+    kept, dropping, last = [], False, 0
+    for found in SECTION.finditer(assembly):
+        if not dropping:
+            kept.append(assembly[last:found.start()])
+        line = found.group(0)
+        dropping = b"debug" in line or b"landin_id" in line
+        last = found.start()
+    if not dropping:
+        kept.append(assembly[last:])
+    return b"".join(kept)
+
+
+def layout_digest(assembly, report, maps):
+    """The artefacts with what a change of space moves taken out."""
+    code = IDENTITY.sub(b"", assembly)
+    code = without_debug_sections(code)
+    code = LOCATION.sub(rb"\1", code)
+    code = SITE.sub(rb"\1SITE\2", code)
+    parts = [code, SPANS.sub(b"", report)]
+    for extra in maps:
+        parts.append(OFFSETS.sub(b"", SPANS.sub(b"", extra)))
+    return text_digest(b"\0".join(parts))
+
+
 def run_one(refine, fixture, sources, target, variant, work):
     """One compilation, and every artifact it produced, as digests."""
     out = work / fixture.parent.name / fixture.name / target / variant
@@ -129,6 +188,10 @@ def run_one(refine, fixture, sources, target, variant, work):
                   ("out.s", "build.json"))
     for extra in maps:
         entry["file:" + extra.name] = digest(extra)
+    entry["layout"] = layout_digest(
+        asm.read_bytes() if asm.exists() else b"",
+        report.read_bytes() if report.exists() else b"",
+        [extra.read_bytes() for extra in maps])
     shutil.rmtree(out)
     return entry
 
@@ -174,11 +237,16 @@ def emit(refine, root, work, out):
     return 0
 
 
-def compare(first, second, report_only=False):
+#  What a change of space may move, per field; `layout` stands for them.
+MOVED_BY_LAYOUT = {"asm", "report"}
+
+
+def compare(first, second, report_only=False, layout_only=False):
     a = json.loads(Path(first).read_text())
     b = json.loads(Path(second).read_text())
     faults = []
     grown = []
+    moved = []
     for key in sorted(set(a) | set(b)):
         if key not in a or key not in b:
             faults.append("%s: only in one manifest" % key)
@@ -188,12 +256,19 @@ def compare(first, second, report_only=False):
             if report_only and fields == ["stderr"]:
                 grown.append(key)
                 continue
+            if layout_only and "layout" not in fields and all(
+                    f in MOVED_BY_LAYOUT or f.startswith("file:")
+                    for f in fields):
+                moved.append(key)
+                continue
             faults.append("%s: %s differ" % (key, ", ".join(fields)))
     if report_only:
         print("compare: %d reports grew by help lines or warnings"
               % len(grown))
         for line in grown:
             print("  " + line)
+    if layout_only:
+        print("compare: %d entries moved only by layout" % len(moved))
     if faults:
         print("compare: %d of %d entries differ" % (len(faults), len(a)),
               file=sys.stderr)
@@ -213,10 +288,12 @@ def main(argv):
         return compare(argv[2], argv[3])
     if len(argv) == 5 and argv[1:3] == ["compare", "--report-only"]:
         return compare(argv[3], argv[4], report_only=True)
+    if len(argv) == 5 and argv[1:3] == ["compare", "--layout-only"]:
+        return compare(argv[3], argv[4], layout_only=True)
     print("usage: driver_manifest.py emit REFINE ROOT WORK OUT.json",
           file=sys.stderr)
-    print("       driver_manifest.py compare [--report-only] A.json B.json",
-          file=sys.stderr)
+    print("       driver_manifest.py compare [--report-only | --layout-only]"
+          " A.json B.json", file=sys.stderr)
     return 2
 
 
