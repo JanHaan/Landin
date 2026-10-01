@@ -3806,6 +3806,42 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Fmt_Is_A_Subcommand;
 
+   --  `refine lsp` and `refine lsp --stdio` start a server, which refine
+   --  runs before it asks the driver anything; any other argument after
+   --  `lsp` is a misuse the driver reports.
+   procedure Lsp_Is_A_Subcommand (Item : in out Landin.Testing.Context);
+
+   procedure Lsp_Is_A_Subcommand (Item : in out Landin.Testing.Context) is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Port  : constant Landin.Platform.Path_List := ["lsp", "--port=1"];
+      Asked : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Port, Host, Tools);
+   begin
+      Landin.Testing.Check
+        (Item, Landin.Driver.Is_Server (Arguments_Of ("lsp"))
+               and then Landin.Driver.Is_Server
+                 (Landin.Platform.Path_List'(["lsp", "--stdio"])),
+         "lsp, and lsp with --stdio, start a server");
+      Landin.Testing.Check
+        (Item, not Landin.Driver.Is_Server (Port)
+               and then not Landin.Driver.Is_Server
+                 (Arguments_Of ("./lsp"))
+               and then not Landin.Driver.Is_Server
+                 (Landin.Platform.Path_List'(["--stdio", "lsp"])),
+         "nothing else does");
+      Landin.Testing.Check_Equal
+        (Item, Asked.Status, Landin.Driver.Status_Misuse,
+         "another argument after lsp is a misuse");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Asked.Report),
+                         "lsp takes no argument but --stdio"),
+         "and says so");
+      Landin.Testing.Check
+        (Item, Contains (Landin.Driver.Usage, "refine lsp"),
+         "the usage names it");
+   end Lsp_Is_A_Subcommand;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3814,6 +3850,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "fmt is a subcommand",
          Fmt_Is_A_Subcommand'Access);
+      Landin.Testing.Register
+        (Into, "driver", "lsp is a subcommand",
+         Lsp_Is_A_Subcommand'Access);
       Landin.Testing.Register
         (Into, "driver", "reports are returned as data",
          Reports_Are_Returned_As_Data'Access);

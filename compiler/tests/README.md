@@ -13,6 +13,8 @@ compiler/tests/
                                          harness-cases/README.md
   fuzz/                                  a seeded corpus mutator run by hand,
                                          and what it found; see fuzz/README.md
+  server/<name>/session.lsp              a scripted language-server session, and its
+                                         workspace; see "Language-server sessions"
   registers.md                           source: the four evidence registers the matrices are generated from
   constructs.matrix                      generated: every [NNNN], its evidence and inventory
   diagnostics.catalogue                  generated: every code and its rule
@@ -345,6 +347,29 @@ own filesystem (for example `/tmp`), then retain its `measurements.json` in
 the host build tree. This changes no source, profile, execution oracle or
 acceptance threshold; the native gate's ordinary `scripts/quality.sh` output
 already resides on its Linux filesystem.
+
+## Language-server sessions
+
+Each directory under `server/` is one scripted session of `refine lsp`: a
+`session.lsp` transcript and, if the session reads files the editor has not
+opened, a `workspace/` tree, served under `file:///workspace`. The transcript
+is lines: `-> ` and one JSON message the editor sends, `<- ` and one message
+the server must send, byte for byte, `pause` where the editor waits and the
+server catches up, `chunk: N` to feed the input N bytes at a time, `raw: `
+and bytes for a frame that is wrong on purpose, `#` for a comment, and
+`exit: N` last, the status the session must end with. Every message the
+server sends must be in the transcript, in order.
+
+The `server` suite's `every session runs as written` case runs each
+transcript in the test program against the fake channel and filesystem.
+`python3 compiler/tests/server/native_session.py --refine ABSOLUTE_PATH`
+runs the same transcripts through the executable over pipes, with each
+workspace copied into a temporary directory and its URI written in place of
+`file:///workspace`; the gate runs it beside the native report identity, with
+both build modes on Linux and on macOS. `./scripts/test.sh --record` rewrites
+every `<-` line and exit status with what the server sends now, as it does
+`lowering.ir`; read the difference before keeping it, because a recording is
+not a verdict.
 
 ## Complete programs to try
 

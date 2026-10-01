@@ -503,13 +503,36 @@ package body Landin.Testing.Fakes is
    function Logged (Host : Fake_Channel) return String
      is (Unbounded.To_String (Host.Log));
 
+   procedure Pause_At (Host : in out Fake_Channel; Offset : Natural) is
+   begin
+      Host.Pauses.Append (Offset);
+   end Pause_At;
+
+   --  The input left before the next pause, in bytes.
+   function Before_Pause (Host : Fake_Channel) return Natural;
+
+   function Before_Pause (Host : Fake_Channel) return Natural is
+      Consumed : constant Natural := Host.Next - 1;
+   begin
+      for Offset of Host.Pauses loop
+         if Offset > Consumed then
+            return Offset - Consumed;
+         end if;
+      end loop;
+      return Unbounded.Length (Host.Input) - Consumed;
+   end Before_Pause;
+
+   --  A read stops at the next pause; Before_Pause has already moved on to
+   --  the one after it when a read starts at one.
    overriding procedure Read
      (Host : in out Fake_Channel;
       Into : out String;
       Last : out Natural)
    is
       Left : constant Natural :=
-        Unbounded.Length (Host.Input) - Host.Next + 1;
+        (if Before_Pause (Host) = 0
+         then Unbounded.Length (Host.Input) - Host.Next + 1
+         else Before_Pause (Host));
       Taken : constant Natural :=
         Natural'Min (Left, Natural'Min (Into'Length, Host.Chunk));
    begin
@@ -521,8 +544,12 @@ package body Landin.Testing.Fakes is
       end if;
    end Read;
 
+   --  At a pause, the editor is waiting: nothing is ready, though more
+   --  will come once the server reads again.
    overriding function Pending (Host : in out Fake_Channel) return Boolean
-     is (Host.Next <= Unbounded.Length (Host.Input));
+     is (Host.Next <= Unbounded.Length (Host.Input)
+         and then not (for some Offset of Host.Pauses =>
+                         Offset = Host.Next - 1));
 
    overriding procedure Write (Host : in out Fake_Channel; Item : String) is
    begin

@@ -35,6 +35,9 @@ package Landin.Server.Analysis is
       Roots           : Landin.Platform.Path_List;
       --  Otherwise these files, as one module.
       Files           : Landin.Platform.Path_List;
+      --  Each `name=value` a `--option=` would give.  Valid and distinct:
+      --  the caller has refused anything else.
+      Options         : Landin.Platform.Path_List;
    end record;
 
    package Hold_Vectors is new Ada.Containers.Indefinite_Vectors

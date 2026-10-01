@@ -1,0 +1,4 @@
+twice: (x: u8) -> (y: u8) =
+    w := x + x
+    y = w + true
+end twice

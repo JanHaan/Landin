@@ -924,6 +924,10 @@ GUIDES = [
          nav="how a source is laid out", group="the implementation",
          blurb="The one layout `refine fmt` gives every source: each rule "
                "with a program as written and as formatted."),
+    dict(key="server", src="docs/server.md", out="server.html",
+         nav="what the language server answers", group="the implementation",
+         blurb="`refine lsp`: where a file belongs, what each request is "
+               "answered with, and how far it reads past a syntax error."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
          nav="the intermediate representation", group="the implementation",
          blurb="How checked source becomes verified, target-neutral IR, "
@@ -1497,8 +1501,8 @@ NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "documents"]),
     ("the prototypes", ["p1", "p2", "p3", "p4"]),
     ("the project", ["readme", "roadmap", "handoff"]),
-    ("the compiler", ["compiler", "ir", "diagnostics", "format", "targets",
-                      "core", "toolchain", "editors"]),
+    ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
+                      "targets", "core", "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),

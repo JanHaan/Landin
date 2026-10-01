@@ -41,6 +41,7 @@ targets and the microcontrollers people buy.**
 | `docs/documents.md` | how `spec.md` and `tour.md` are arranged, where a new rule goes, and what the arrangement is and is not evidence of. Derived; never an authority. |
 | `docs/diagnostics.md` | [what each diagnostic code means](docs/diagnostics.md) and what to change, the text `refine explain` prints. Derived from the catalogue and the specification; never an authority. |
 | `docs/format.md` | [how a source is laid out](docs/format.md): the one layout `refine fmt` gives every source, each rule with a program as written and as formatted. Derived from D252 and the implementation; never an authority. |
+| `docs/server.md` | [what the language server answers](docs/server.md): where `refine lsp` places a file, what each request is answered with, and how far it reads past a syntax error. Derived from D253 and the implementation; never an authority. |
 | `docs/ir.md` | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
 | `docs/notes/` | exploratory design notes, explicitly non-normative and not roadmap commitments; [the formatting API note](docs/notes/printf-alternative.md) is the one so far. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
@@ -171,6 +172,12 @@ successor.
 [`docs/format.md`](docs/format.md) shows, changing its space and nothing
 else; `refine fmt --check` writes nothing and reports each source that is not
 in it. `core` and the examples are kept in that layout.
+
+`refine lsp` is a language server over standard input and output: an editor
+started with it gets diagnostics, definitions, hover types, formatting and
+quick fixes from the compiler's own stages, as
+[`docs/server.md`](docs/server.md) describes, and the packages under
+`highlight/` start it.
 
 ## What comes next
 

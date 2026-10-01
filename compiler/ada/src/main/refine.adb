@@ -15,6 +15,7 @@ with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
+with Landin.Server.Sessions;
 
 procedure Refine is
 
@@ -23,7 +24,7 @@ procedure Refine is
    package Text_IO renames Ada.Text_IO;
 
    Arguments : Landin.Platform.Path_List;
-   Host      : Landin.Platform.Native.Native_Filesystem;
+   Host      : aliased Landin.Platform.Native.Native_Filesystem;
    Tools     : Landin.Platform.Native.Tools.Native_Tool_Runner;
    Meter     : Landin.Platform.Native.Native_Meter;
 
@@ -31,6 +32,19 @@ begin
    for Index in 1 .. Command_Line.Argument_Count loop
       Arguments.Append (Command_Line.Argument (Index));
    end loop;
+
+   --  A server talks to its editor for as long as the editor runs it, so
+   --  it has the process's channel rather than a request and a result.
+   if Landin.Driver.Is_Server (Arguments) then
+      declare
+         Channel : Landin.Platform.Native.Native_Channel;
+         Status  : Landin.Server.Sessions.Exit_Status;
+      begin
+         Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+         Command_Line.Set_Exit_Status (Command_Line.Exit_Status (Status));
+         return;
+      end;
+   end if;
 
    declare
       Result : constant Landin.Driver.Outcome :=

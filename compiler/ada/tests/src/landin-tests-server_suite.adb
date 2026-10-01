@@ -20,6 +20,7 @@ with Landin.Source;
 with Landin.Stages;
 with Landin.Targets;
 with Landin.Testing.Fakes;
+with Landin.Testing.Sessions;
 with Landin.Testing.Fixtures;
 
 package body Landin.Tests.Server_Suite is
@@ -34,6 +35,7 @@ package body Landin.Tests.Server_Suite is
    use type Transport.Status;
    use type Landin.Server.Positions.Position;
    use type Landin.Source.Byte_Offset;
+   use type Landin.Platform.Write_Status;
    use type Landin.Source.Span;
    use type Fixtures.Fixture_Class;
 
@@ -574,6 +576,69 @@ package body Landin.Tests.Server_Suite is
          "the end of a file with no final line end");
    end Positions_Count_What_Was_Agreed;
 
+   ---------------------------------------------------------------------
+   --  Sessions
+   ---------------------------------------------------------------------
+
+   Sessions_Root : constant String := "../tests/server";
+
+   --  Every session under compiler/tests/server runs as its transcript
+   --  says, read through the real filesystem, which is this case's
+   --  deliberate exception; the server itself sees only the fake.
+   procedure Every_Session_Runs_As_Written
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Session_Runs_As_Written
+     (Item : in out Landin.Testing.Context)
+   is
+      Real    : Landin.Platform.Native.Native_Filesystem;
+      Entries : Landin.Platform.Path_List;
+      Listed  : Landin.Platform.List_Status;
+      Ran     : Natural := 0;
+   begin
+      Real.List_Directory (Sessions_Root, Entries, Listed);
+      for Name of Entries loop
+         if Real.Exists (Sessions_Root & "/" & Name & "/session.lsp") then
+            declare
+               Result : constant Landin.Testing.Sessions.Outcome :=
+                 Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
+            begin
+               Ran := Ran + 1;
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Result.Problem), "", Name);
+            end;
+         end if;
+      end loop;
+      Landin.Testing.Check (Item, Ran > 0, "the sessions were found");
+   end Every_Session_Runs_As_Written;
+
+   procedure Record_Sessions (Wrote : out Boolean) is
+      Real    : Landin.Platform.Native.Native_Filesystem;
+      Entries : Landin.Platform.Path_List;
+      Listed  : Landin.Platform.List_Status;
+   begin
+      Wrote := True;
+      Real.List_Directory (Sessions_Root, Entries, Listed);
+      for Name of Entries loop
+         declare
+            Path : constant String :=
+              Sessions_Root & "/" & Name & "/session.lsp";
+         begin
+            if Real.Exists (Path) then
+               declare
+                  Result : constant Landin.Testing.Sessions.Outcome :=
+                    Landin.Testing.Sessions.Run (Sessions_Root & "/" & Name);
+                  Status : Landin.Platform.Write_Status;
+               begin
+                  Real.Write_File
+                    (Path, Unbounded.To_String (Result.Recorded), Status);
+                  Wrote := Wrote and then Status = Landin.Platform.Write_Ok;
+               end;
+            end if;
+         end;
+      end loop;
+   end Record_Sessions;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -600,6 +665,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "positions count what was agreed",
          Positions_Count_What_Was_Agreed'Access);
+      Landin.Testing.Register
+        (Into, "server", "every session runs as written",
+         Every_Session_Runs_As_Written'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

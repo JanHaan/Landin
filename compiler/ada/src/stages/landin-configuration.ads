@@ -55,6 +55,15 @@ package Landin.Configuration is
      (In_Table : Table; Name : Landin.Source.Names.Name_Id)
       return Landin.Provenance.Origin;
 
+   --  Whether Name may be a fixed option's name in a request: lowercase
+   --  letters, digits after the first, and underscores.
+   function Is_Option_Name (Name : String) return Boolean
+     is (Name'Length > 0
+         and then (for all Index in Name'Range =>
+                     Name (Index) in 'a' .. 'z' | '_'
+                     or else (Index /= Name'First
+                              and then Name (Index) in '0' .. '9')));
+
    --  Request inputs survive Prepare; outputs are rebuilt for each run.
    procedure Add_Override
      (Into : in out Table; Name : String; Value : String);

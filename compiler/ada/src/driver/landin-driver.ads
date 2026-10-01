@@ -85,6 +85,17 @@ package Landin.Driver is
    --  it chooses whether the layout is written and never what it is.
    Format_Command : constant String := "fmt";
 
+   --  `refine lsp [--stdio]`: a language server over standard input and
+   --  output, which `refine` runs itself before it asks this package
+   --  anything, because it needs the process's channel and not a request
+   --  and a result.  Here is only its misuse: any argument after it but
+   --  the `--stdio` an editor's client adds by convention is refused, and
+   --  Is_Server says which argument lists start one.
+   Server_Command : constant String := "lsp";
+
+   function Is_Server (Arguments : Landin.Platform.Path_List)
+     return Boolean;
+
    --  What `--emit=exe` writes beside its output, and reads back as the
    --  assembler's input.  Named here because a test asserts the path and a
    --  reader should not have to infer it from a concatenation.

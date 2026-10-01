@@ -253,6 +253,16 @@ begin
 
             if Wrote then
                Text_IO.Put_Line ("wrote compiler/tests/layout.targets");
+
+               Landin.Tests.Server_Suite.Record_Sessions (Wrote);
+               if Wrote then
+                  Text_IO.Put_Line ("wrote compiler/tests/server");
+               else
+                  Text_IO.Put_Line
+                    (Text_IO.Standard_Error,
+                     "could not write ../tests/server");
+                  Ada.Command_Line.Set_Exit_Status (1);
+               end if;
             else
                Text_IO.Put_Line
                  (Text_IO.Standard_Error,

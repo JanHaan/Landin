@@ -1,5 +1,7 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Strings.Fixed;
 
+with Landin.Configuration;
 with Landin.Diagnostics.Lexical;
 with Landin.Driver.Checking;
 with Landin.Driver.Loading;
@@ -129,6 +131,17 @@ package body Landin.Server.Analysis is
       Standing : Boolean := False;
    begin
       Answer := (others => <>);
+      for Option of Asked.Options loop
+         declare
+            Separator : constant Natural :=
+              Ada.Strings.Fixed.Index (Option, "=");
+         begin
+            Landin.Configuration.Add_Override
+              (Landin.Stages.Configurations (Context).all,
+               Option (Option'First .. Separator - 1),
+               Option (Separator + 1 .. Option'Last));
+         end;
+      end loop;
 
       --  The entry module's sources, or the named files, are planned
       --  before anything is loaded.  An imported module is not: its

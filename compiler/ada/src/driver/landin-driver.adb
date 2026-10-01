@@ -97,6 +97,7 @@ package body Landin.Driver is
      ("usage: refine [options] [source.ldn ...]" & LF
       & "       refine explain [CODE ...]" & LF
       & "       refine fmt [--check] source.ldn ..." & LF
+      & "       refine lsp" & LF
       & LF
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
@@ -141,7 +142,8 @@ package body Landin.Driver is
       & LF
       & "with --check it writes nothing and reports each source that is"
       & LF
-      & "not in it." & LF
+      & "not in it.  `refine lsp` is a language server over standard" & LF
+      & "input and output." & LF
       & LF
       & "The toolchain is found by the target's GNU triplet, so"
       & LF
@@ -426,6 +428,13 @@ package body Landin.Driver is
       return Result;
    end Format;
 
+   function Is_Server (Arguments : Landin.Platform.Path_List)
+     return Boolean
+     is (Natural (Arguments.Length) in 1 .. 2
+         and then Arguments.Element (1) = Server_Command
+         and then (Natural (Arguments.Length) = 1
+                   or else Arguments.Element (2) = "--stdio"));
+
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
@@ -493,6 +502,26 @@ package body Landin.Driver is
          return Explain (Arguments);
       elsif Arguments.Element (1) = Format_Command then
          return Format (Arguments, Host);
+      elsif Arguments.Element (1) = Server_Command then
+         --  A server is started by the caller when Is_Server says so, so
+         --  an argument list that reaches here is a misuse of it.
+         declare
+            Found : Landin.Diagnostics.Diagnostic_List;
+            Sources : Landin.Source.Sets.Source_Set;
+         begin
+            Found.Append
+              (Landin.Diagnostics.Make
+                 (Code    => Code_Unknown_Option,
+                  Level   => Landin.Diagnostics.Error,
+                  Source  => Landin.Source.No_Source,
+                  Where   => Landin.Source.Empty_Span,
+                  Message => "lsp takes no argument but --stdio"));
+            Result.Found := Found;
+            Result.Report := Unbounded.To_Unbounded_String
+              (Landin.Diagnostics.Text.Render (Found, Sources));
+            Result.Status := Status_Misuse;
+            return Result;
+         end;
       end if;
 
       --  Argument classification first, so that a request is fully known
@@ -1491,14 +1520,8 @@ package body Landin.Driver is
                  Landin.Stages.Configurations (Context);
             begin
                if Valid then
-                  for Index in Option'First .. Separator - 1 loop
-                     if Option (Index) not in 'a' .. 'z' | '_'
-                       and then (Index = Option'First
-                                 or else Option (Index) not in '0' .. '9')
-                     then
-                        Valid := False;
-                     end if;
-                  end loop;
+                  Valid := Landin.Configuration.Is_Option_Name
+                    (Option (Option'First .. Separator - 1));
                   for Index in 1 .. Landin.Configuration.Override_Count
                     (Config.all)
                   loop

@@ -100,13 +100,14 @@ jobs:
 
       #  The linked-image half needs the pinned driver on PATH, as
       #  scripts/env.sh puts it for the harness.
-      - name: Determinism closures and native report identity
+      - name: Determinism closures, native report identity and the server
         run: |
           set -eu
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           refine="$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The same corpus with the release compiler, which is the one people run,
   #  and the lanes that measure or debug what it emits: object quality and
@@ -127,13 +128,14 @@ jobs:
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
 
-      - name: Determinism closures and native report identity
+      - name: Determinism closures, native report identity and the server
         run: |
           set -eu
           PATH="$LANDIN_GNAT_HOME/bin:$PATH"
           refine="$PWD/compiler/ada/build/linux-amd64/release/bin/refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
 
       - name: Object quality
         run: ./scripts/quality.sh
@@ -282,12 +284,13 @@ jobs:
       - name: The compiler host suite
         run: ./scripts/test.sh --host
 
-      - name: Determinism closures and native report identity
+      - name: Determinism closures, native report identity and the server
         run: |
           set -eu
           refine="$PWD/compiler/ada/build/darwin-arm64/$LANDIN_BUILD_MODE/bin/refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The shared hosted corpus executed natively, every source verdict with
   #  Darwin selected, end-to-end fixtures among them, and the regenerated

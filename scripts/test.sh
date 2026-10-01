@@ -2,8 +2,9 @@
 #  Run the repository's own test program.  It is run from compiler/ada so
 #  that fixture discovery resolves compiler/tests the same way everywhere.
 #
-#  Arguments are passed through.  --record writes compiler/tests/lowering.ir
-#  and compiler/tests/layout.targets and runs no case.  --record-and-run does
+#  Arguments are passed through.  --record writes compiler/tests/lowering.ir,
+#  compiler/tests/layout.targets and the server sessions' transcripts and runs
+#  no case.  --record-and-run does
 #  both invocations after one build.  --suite, --case and --fixture select a
 #  visibly FILTERED developer run; none replaces the no-argument gate.
 #  --host explicitly excludes native target workload emission/execution and reports

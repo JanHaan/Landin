@@ -164,8 +164,10 @@ package Landin.Testing.Fakes is
 
    --  Scripted input, read in chunks of at most Chunk bytes so a test can
    --  split a message wherever it likes, and captured output and log.
-   --  Pending is whether scripted bytes remain, so a session that sends
-   --  three edits before a request sees them as one burst, every time.
+   --  Pending is whether scripted bytes remain before the next pause, so a
+   --  session that sends three edits before a request sees them as one
+   --  burst, every time.  A pause is where an editor would wait: Pending
+   --  is false there once, and reading goes on past it.
    type Fake_Channel is limited new Landin.Platform.Channel with private;
 
    procedure Script
@@ -176,6 +178,9 @@ package Landin.Testing.Fakes is
      (Host  : in out Fake_Channel;
       Input : Ada.Strings.Unbounded.Unbounded_String;
       Chunk : Positive := 4096);
+
+   --  Where the scripted input pauses: byte offsets into it, ascending.
+   procedure Pause_At (Host : in out Fake_Channel; Offset : Natural);
 
    function Output (Host : Fake_Channel) return String;
 
@@ -275,10 +280,14 @@ private
       State : Recorder_Owner;
    end record;
 
+   package Offset_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
    type Fake_Channel is limited new Landin.Platform.Channel with record
       Input  : Unbounded.Unbounded_String;
       Next   : Positive := 1;
       Chunk  : Positive := 4096;
+      Pauses : Offset_Vectors.Vector;
       Output : Unbounded.Unbounded_String;
       Log    : Unbounded.Unbounded_String;
    end record;

@@ -265,8 +265,10 @@ tests, never an authority for semantics, implementation decisions or work.
 `refine explain` prints, generated into the compiler by
 `python3 check.py --catalogue`, `docs/format.md` shows every rule of the one
 layout `refine fmt` gives a source, which the test program holds the
-formatter to, and `examples.md` holds the complete programs the runtime suite
-executes. All five are derived documents and none of them decides anything.
+formatter to, `docs/server.md` says what `refine lsp` answers, which the
+scripted sessions under `compiler/tests/server/` hold the server to, and
+`examples.md` holds the complete programs the runtime suite executes. All
+six are derived documents and none of them decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 

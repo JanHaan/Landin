@@ -26,12 +26,17 @@
 
 with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Unchecked_Deallocation;
 
 with Landin.Driver;
+with Landin.Json;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
+with Landin.Server.Documents;
+with Landin.Server.Sessions;
+with Landin.Server.Transport;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Stages.Checking;
@@ -40,6 +45,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
+with Landin.Testing.Fakes;
 
 package body Landin.Tests.Memory_Suite is
 
@@ -318,6 +324,128 @@ package body Landin.Tests.Memory_Suite is
       end;
    end A_Kept_Compilation_Is_Seen;
 
+   --  A server session over the derived log filter: its entry module
+   --  opened, twenty edits each analysed, a format, code actions and a
+   --  close, against the real tree, which is this case's deliberate
+   --  exception.  Whole sessions are repeated, so what one leaves behind
+   --  -- a compilation, a document, a stand-in -- would show as growth.
+   procedure Serving_Stays_Flat (Item : in out Landin.Testing.Context);
+
+   procedure Serving_Stays_Flat (Item : in out Landin.Testing.Context) is
+      Host     : aliased Landin.Platform.Native.Native_Filesystem;
+      Meter    : Landin.Platform.Native.Native_Meter;
+      Settled  : Long_Long_Integer := 0;
+      Warm     : constant := 2;
+      Measured : constant := 6;
+      Directory : constant String :=
+        Ada.Directories.Full_Name (Repository & "/examples/derived_hosted");
+      Root : constant String :=
+        Ada.Directories.Full_Name (Repository);
+      URI  : constant String :=
+        Landin.Server.Documents.URI_Of (Directory & "/main.ldn");
+      Text : Unbounded.Unbounded_String;
+      Read : Landin.Platform.Read_Status;
+      Script : Unbounded.Unbounded_String;
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Landin.Server.Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Read_File (Directory & "/main.ldn", Text, Read);
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[" & Landin.Json.Quoted
+                (Landin.Server.Documents.URI_Of (Root)) & "]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI) & ",""languageId"":""landin"","
+            & """version"":1,""text"":"
+            & Landin.Json.Quoted (Unbounded.To_String (Text)) & "}}}");
+      for Edit in 2 .. 21 loop
+         --  Every other edit breaks a body, so the stand-in is made too.
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didChange"","
+               & """params"":{""textDocument"":{""uri"":"
+               & Landin.Json.Quoted (URI) & ",""version"":"
+               & Ada.Strings.Fixed.Trim (Edit'Image, Ada.Strings.Left)
+               & "},""contentChanges"":[{""text"":"
+               & Landin.Json.Quoted
+                   (Unbounded.To_String (Text)
+                    & (if Edit mod 2 = 0
+                       then "broken: () -> none =" & ASCII.LF
+                            & "    x := (" & ASCII.LF & "end broken"
+                            & ASCII.LF
+                       else ""))
+               & "}]}}");
+         Send ("{""jsonrpc"":""2.0"",""id"":" & Edit'Image
+               & ",""method"":""textDocument/codeAction"",""params"":"
+               & "{""textDocument"":{""uri"":" & Landin.Json.Quoted (URI)
+               & "},""range"":{""start"":{""line"":0,""character"":0},"
+               & """end"":{""line"":9999,""character"":0}},"
+               & """context"":{""diagnostics"":[]}}}");
+      end loop;
+      Send ("{""jsonrpc"":""2.0"",""id"":90,""method"":"
+            & """textDocument/formatting"",""params"":{""textDocument"":"
+            & "{""uri"":" & Landin.Json.Quoted (URI) & "},""options"":"
+            & "{""tabSize"":4,""insertSpaces"":true}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didClose"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (URI) & "}}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":91,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+
+      for Run in 1 .. Warm + Measured loop
+         declare
+            Channel : Landin.Testing.Fakes.Fake_Channel;
+            Status  : Landin.Server.Sessions.Exit_Status;
+         begin
+            Channel.Script_Unbounded (Script);
+            Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+            --  Twenty analyses published, so the work was done: the open and
+            --  the first edit arrive together and are one.
+            if Status /= 0
+              or else Ada.Strings.Fixed.Index
+                (Landin.Testing.Fakes.Output (Channel), "defect") > 0
+              or else Ada.Strings.Fixed.Count
+                (Landin.Testing.Fakes.Output (Channel),
+                 """uri"":" & Landin.Json.Quoted (URI) & ",""version"":")
+                < 20
+              or else Ada.Strings.Fixed.Count
+                (Landin.Testing.Fakes.Output (Channel), "L0102") < 10
+            then
+               Landin.Testing.Fail
+                 (Item, "session" & Run'Image & " did not end cleanly:"
+                  & Natural'Image (Ada.Strings.Fixed.Count
+                      (Landin.Testing.Fakes.Output (Channel),
+                       "publishDiagnostics"))
+                  & " publications," & Natural'Image (Ada.Strings.Fixed.Count
+                      (Landin.Testing.Fakes.Output (Channel), "L0102"))
+                  & " syntax errors," & Natural'Image (Ada.Strings.Fixed.Count
+                      (Landin.Testing.Fakes.Output (Channel),
+                       """uri"":" & Landin.Json.Quoted (URI)
+                       & ",""version"":")) & " of the entry; "
+                  & Landin.Testing.Fakes.Logged (Channel));
+               return;
+            end if;
+         end;
+         if Run = Warm then
+            Settled := Meter.Sample.Allocated_Bytes;
+         end if;
+      end loop;
+      declare
+         Final : constant Long_Long_Integer := Meter.Sample.Allocated_Bytes;
+      begin
+         Landin.Testing.Check
+           (Item, Final - Settled <= Tolerance,
+            "serving the derived log filter: after" & Measured'Image
+            & " more sessions of twenty edits the allocator holds "
+            & Image (Final - Settled) & " bytes more; at most "
+            & Image (Tolerance) & " may remain");
+      end;
+   end Serving_Stays_Flat;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -332,6 +460,9 @@ package body Landin.Tests.Memory_Suite is
       Landin.Testing.Register
         (Into, "memory", "formatting stays flat",
          Formatting_Stays_Flat'Access);
+      Landin.Testing.Register
+        (Into, "memory", "serving stays flat",
+         Serving_Stays_Flat'Access);
    end Register;
 
 end Landin.Tests.Memory_Suite;
