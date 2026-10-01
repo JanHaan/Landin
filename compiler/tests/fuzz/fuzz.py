@@ -138,8 +138,14 @@ class Server:
 
     def __init__(self, refine, memory, seconds):
         def limit():
+            #  Darwin refuses to lower RLIMIT_AS, so there the bound is
+            #  the host's own; the gate runs the lane on Linux, where it
+            #  holds.  A refusal must not stop the server from starting.
             if memory:
-                resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+                try:
+                    resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+                except (ValueError, OSError):
+                    pass
         self.seconds = seconds
         self.process = subprocess.Popen(
             [refine, "lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,

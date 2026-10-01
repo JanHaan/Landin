@@ -31,10 +31,11 @@ closed. A mutant is a hit when the server stops, does not answer within
 `--seconds` (default 10), answers a request with anything but a result or a
 protocol error, or reports a compiler defect, on its log or through
 `showMessage`. The server runs under an address-space bound, `--memory`,
-2 GiB by default. A diagnostic is never a hit: a refusal is the answer a
-mutant should get. Each hit is kept as `OUT/hit-SEED.ldn` with the session
-that broke it as `OUT/hit-SEED.lsp`, a hit restarts the server, and any hit
-fails the run.
+2 GiB by default, where the host allows one: Darwin refuses to lower
+`RLIMIT_AS`, so there the bound is the host's own. A diagnostic is never a
+hit: a refusal is the answer a mutant should get. Each hit is kept as
+`OUT/hit-SEED.ldn` with the session that broke it as `OUT/hit-SEED.lsp`, a hit
+restarts the server, and any hit fails the run.
 
 `--batch` runs the original oracle instead: `refine FILE` on each mutant,
 where an exit other than 0 or 1, a run past the bound or a defect line is a
