@@ -457,7 +457,7 @@ job on `af14ff10`.
 
 ### R10.50 — Serve an editor
 
-Status: planned
+Status: complete
 Depends on: R10.10, R10.30, R10.40
 
 A language server linked against the compiler library, over standard input
@@ -469,6 +469,33 @@ here.
 Exit evidence: scripted sessions in the gate for each capability, and a
 bounded run over mutated corpus sources that never crashes the server, which
 takes on the frontend part of R551-19.
+
+Done: `refine lsp` is a language server over standard input and output, a
+subcommand like `explain` and `fmt`, with full synchronisation:
+diagnostics with their codes, explanations and related information,
+definitions, hover with types as the checker spells them and doc comments,
+D252's formatting as edits, and R10.30's fixes as quick fixes, preferred
+when exact. It reads with the driver's own loader and checks with its own
+stages, now `Landin.Driver.Loading` and `Landin.Driver.Checking`, through
+buffers held over the filesystem; a file belongs to its directory's module
+under the editor's roots. One compilation lives per analysis and a burst of
+edits is analysed once. D253 answers past a hole only inside a routine body:
+the server checks a stand-in with each broken body blanked and `loop do end
+loop` written in it, so no stage changed and `refine` reports as before.
+[2000] and D254 say what a doc comment is about. JSON is read strictly and
+bounded, framing is bounded, and positions are converted in one package, in
+UTF-8 or UTF-16. Fifteen scripted sessions under `compiler/tests/server/`
+run in the test program and through the executable on Linux and macOS; the
+memory suite runs eight sessions of twenty edits and stays flat.
+`compiler/tests/fuzz/fuzz.py` gives every one-file corpus program and
+reproducer, mutated, to the server in the gate, and its first run found a
+query of a module refused before the checker raising, which is fixed and
+pinned. Neovim, Helix, Emacs, Zed, VS Code, Vim, Sublime Text and Kate
+start the server, and Neovim and Emacs were run against it.
+`scripts/driver_manifest.py` held every commit to its parent at all 8,169
+entries, and the largest scaling ratio is 2.10. The Mac ran the host suite
+in debug and release, 793 cases each, the sessions and the fuzz lane, and
+the gate was green on every job on `14a89242`.
 
 ### R10 gate
 

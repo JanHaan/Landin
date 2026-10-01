@@ -269,7 +269,7 @@ current roadmap starts where it stopped; a build tool, package acquisition,
 release versioning and self-hosting stay outside it. No version or release
 designation changes automatically.
 
-**Next roadmap item: R10.50 — Serve an editor (planned).**
+**Next roadmap item: R11.10 — Describe CPU feature levels (planned).**
 
 ## License
 
