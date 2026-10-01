@@ -123,5 +123,14 @@
                                     (landin-ts-mode)
                                   (landin-mode)))))
 
+;; `refine lsp`, the compiler's language server, for Eglot: diagnostics,
+;; definitions, hover, formatting and quick fixes from the compiler's own
+;; stages.  `M-x eglot` in a Landin buffer starts it with `refine` on the
+;; path; `eglot-ensure` in `landin-mode-hook` starts it every time.
+;;;###autoload
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((landin-mode landin-ts-mode) . ("refine" "lsp"))))
+
 (provide 'landin-mode)
 ;;; landin-mode.el ends here

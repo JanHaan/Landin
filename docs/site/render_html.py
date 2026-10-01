@@ -961,7 +961,8 @@ GUIDES = [
     dict(key="editors", src="highlight/README.md", out="editors.html",
          nav="editor and IDE support", group="the implementation",
          blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "
-               "Vim, Emacs, Helix and the other major editor families."),
+               "Vim, Emacs, Helix and the other major editor families, "
+               "and the language server each of them starts."),
     dict(key="fixtures", src="compiler/tests/README.md", out="fixtures.html",
          nav="the fixtures", group="the implementation",
          blurb="The test format that has to outlive the implementation "

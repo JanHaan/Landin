@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "landin": {
+      "command": ["refine", "lsp"],
+      "highlightingModeRegex": "^Landin$",
+      "rootIndicationFileNames": [".git"],
+      "url": "https://www.701.dev/server.html"
+    }
+  }
+}

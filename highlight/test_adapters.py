@@ -150,36 +150,76 @@ def main() -> int:
     for word in BUILTIN_MODULES:
         assert word in textmate, f"TextMate vocabulary omits {word}"
 
+    #  Every editor that starts the language server starts `refine lsp`,
+    #  for Landin and nothing else.
+    assert helix["language"][0]["language-servers"] == ["refine"]
+    assert helix["language-server"]["refine"] == {
+        "command": "refine", "args": ["lsp"]}
+    assert zed["language_servers"]["refine"]["languages"] == ["Landin"]
+    assert zed_language["name"] == "Landin"
+    zed_source = (ROOT / "zed/src/landin.rs").read_text(encoding="utf-8")
+    assert 'which("refine")' in zed_source and '"lsp"' in zed_source
+    nvim = (ROOT / "nvim/lsp/refine.lua").read_text(encoding="utf-8")
+    assert 'cmd = { "refine", "lsp" }' in nvim
+    assert 'filetypes = { "landin" }' in nvim
+    assert '"refine" "lsp"' in emacs and "eglot-server-programs" in emacs
+    vim_lsp = (ROOT / "vim/plugin/landin_lsp.vim").read_text(encoding="utf-8")
+    assert "['refine', 'lsp']" in vim_lsp
+    assert "'allowlist': ['landin']" in vim_lsp
+    sublime = json.loads("\n".join(
+        line for line in (ROOT / "sublime/LSP-refine.sublime-settings")
+        .read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("//")))
+    assert sublime["clients"]["refine"]["command"] == ["refine", "lsp"]
+    assert sublime["clients"]["refine"]["selector"] == grammar["scopeName"]
+    kate_lsp = load_json("kate/lsp-client.json")
+    assert kate_lsp["servers"]["landin"]["command"] == ["refine", "lsp"]
+    assert kate.getroot().attrib["name"] == "Landin"
+    client = (ROOT / "textmate/extension.js").read_text(encoding="utf-8")
+    assert 'args: ["lsp"]' in client and 'language: "landin"' in client
+    assert package["main"] == "./extension.js"
+    assert "vscode-languageclient" in package["dependencies"]
+
     required = [
         "emacs/landin-mode.el",
         "eclipse/README.md",
         "helix/runtime/queries/landin/highlights.scm",
         "jetbrains/README.md",
         "kate/landin.xml",
+        "kate/lsp-client.json",
         "nano/landin.nanorc",
+        "nvim/lsp/refine.lua",
         "nvim/parser/.gitkeep",
         "notepad-plus-plus/Landin.xml",
         "nvim/queries/landin/highlights.scm",
         "sublime/Landin.tmLanguage",
+        "sublime/LSP-refine.sublime-settings",
+        "textmate/extension.js",
         "textmate/package.json",
         "textmate/package-lock.json",
         "textmate/LICENSE",
         "tree-sitter/grammar.js",
         "tree-sitter/src/parser.c",
         "tests/lexical.ldn",
+        "tests/emacs-lsp-smoke.el",
+        "tests/nvim-lsp-smoke.lua",
         "tests/nvim-smoke.lua",
         "tests/structural.ldn",
         "tests/textmate-smoke.mjs",
         "vim/ftdetect/landin.vim",
         "vim/ftplugin/landin.vim",
         "vim/indent/landin.vim",
+        "vim/plugin/landin_lsp.vim",
         "vim/syntax/landin.vim",
         "visual-studio/install.ps1",
         "zed/languages/landin/highlights.scm",
+        "zed/src/landin.rs",
+        "zed/Cargo.toml",
+        "zed/Cargo.lock",
     ]
     missing = [relative for relative in required if not (ROOT / relative).is_file()]
     assert not missing, "missing editor artifacts: " + ", ".join(missing)
-    print("editor manifests and package inventory clean")
+    print("editor manifests, server configurations and package inventory clean")
     return 0
 
 

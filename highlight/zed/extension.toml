@@ -10,3 +10,7 @@ repository = "https://github.com/JanHaan/Landin"
 repository = "https://github.com/JanHaan/Landin"
 rev = "main"
 path = "highlight/tree-sitter"
+
+[language_servers.refine]
+name = "refine"
+languages = ["Landin"]

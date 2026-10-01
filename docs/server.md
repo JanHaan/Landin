@@ -142,3 +142,25 @@ server with status 1, because there is no way to find where the next message
 starts. A message that is not JSON is answered with ParseError and the server
 goes on. `exit` after `shutdown` is status 0, and any other end is 1.
 
+## In an editor
+
+The packages under `highlight/` start the server, each where its editor
+makes that a matter of configuration; [`highlight/README.md`](../highlight/README.md)
+says how to install each. `refine` must be on the editor's path, as
+`nix build .#refine` or a release asset puts it.
+
+| editor | how it starts `refine lsp` |
+|---|---|
+| Neovim 0.11+ | `highlight/nvim/lsp/refine.lua`, enabled by the package when `refine` is on the path |
+| Helix | `highlight/helix/languages.toml` names `refine` as Landin's language server |
+| Emacs | `highlight/emacs/landin-mode.el` registers it with Eglot; `M-x eglot` starts it |
+| Zed | `highlight/zed` names it as Landin's language server and finds `refine` on the path |
+| VS Code and its descendants | `highlight/textmate`'s client starts it; `landin.server.path` names another compiler |
+| Vim | `highlight/vim` registers it with vim-lsp when vim-lsp is installed |
+| Sublime Text | `highlight/sublime/LSP-refine.sublime-settings`, for the LSP package |
+| Kate | `highlight/kate/lsp-client.json`, for the LSP Client plugin |
+
+`highlight/test_adapters.py` holds every one of these to `refine lsp`, and
+`highlight/test.sh` starts the server through Neovim and Emacs when
+`LANDIN_REFINE` names a compiler. Nano and Notepad++ have no language
+client, and JetBrains IDEs and Eclipse load the TextMate grammar alone.

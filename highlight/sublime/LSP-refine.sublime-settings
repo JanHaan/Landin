@@ -1,0 +1,12 @@
+// `refine lsp`, the Landin compiler's language server, for the LSP package
+// (https://lsp.sublimetext.io).  Merge "clients" into the LSP package's
+// settings (Preferences: LSP Settings); `refine` must be on the path.
+{
+  "clients": {
+    "refine": {
+      "enabled": true,
+      "command": ["refine", "lsp"],
+      "selector": "source.landin"
+    }
+  }
+}

@@ -6,7 +6,12 @@ repository package is unreleased, not that Landin has a release version.
 
 For VS Code, VSCodium, Cursor, or Windsurf, run `npm install`, then
 `npx vsce package` and choose **Install from VSIX**, or copy this directory to
-the editor's extensions directory while developing. `npm test` drives the
+the editor's extensions directory while developing. The extension also
+starts `refine lsp`, the compiler's language server, through
+`vscode-languageclient`: diagnostics, go to definition, hover, formatting and
+quick fixes. `refine` must be on the path, or `landin.server.path` must name
+it; `landin.server.enable` turns the server off. `npm install` fetches the
+client, and the VSIX carries it. `npm test` drives the
 grammar through VS Code's own TextMate and Oniguruma libraries; `npm run
 package:check` validates the files that will enter the extension.
 

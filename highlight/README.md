@@ -38,14 +38,24 @@ objects or an outline where their host supports them.
 | Helix | `highlight/helix` | Merge `languages.toml`, copy the query directory into the matching runtime directory, then run `hx --grammar fetch` and `hx --grammar build`. |
 | Vim | `highlight/vim` | Copy the directory to `~/.vim/pack/landin/start/landin`, or point a package manager at it. |
 | Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`; on Emacs 29+, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode. |
-| Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. |
+| Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. For the language server, merge `LSP-refine.sublime-settings` into the LSP package's settings. |
 | Visual Studio | `highlight/visual-studio` | Run `install.ps1` in PowerShell, then reopen the file or restart Visual Studio. |
 | JetBrains IDEs | `highlight/textmate` | Enable **TextMate Bundles**, import this directory as a bundle, and map `*.ldn` if necessary. |
 | Eclipse | `highlight/textmate` | With TM4E installed, import `syntaxes/landin.tmLanguage.json` and open `.ldn` files in the Generic Editor. |
 | Notepad++ | `highlight/notepad-plus-plus` | From **Language**, open **User Defined Language** and import `Landin.xml`, or copy it to the user-defined-language directory. |
-| Kate | `highlight/kate/landin.xml` | Install the XML file as a user syntax-highlighting definition. |
+| Kate | `highlight/kate` | Install `landin.xml` as a user syntax-highlighting definition, and merge `lsp-client.json` into the LSP Client plugin's settings for the language server. |
 | Nano | `highlight/nano/landin.nanorc` | Include the syntax file from the user's `nanorc`. |
 | Pygments, Sphinx, MkDocs | `highlight` | Run `pip install ./highlight`; the lexer registers the `landin` and `ldn` aliases and the `.ldn` suffix. |
+
+## The language server
+
+`refine lsp` is the compiler's language server: diagnostics, go to
+definition, hover, formatting and quick fixes from the compiler's own stages,
+as [`docs/server.md`](../docs/server.md) describes. The Neovim, Helix, Emacs,
+Zed, VS Code, Vim, Sublime Text and Kate packages each start it, with
+`refine` on the editor's path; each package's README says how, and
+`test_adapters.py` holds every one of them to `refine lsp`. `test.sh` starts it
+through Neovim and Emacs when `LANDIN_REFINE` names a compiler.
 
 The TextMate grammar can also be loaded directly by TextMate, Shiki and
 `bat`. The package-specific README in each directory records any additional

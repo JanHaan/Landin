@@ -7,3 +7,10 @@ text objects. The checked-in queries are synchronized with `../tree-sitter`.
 
 The parser targets current Neovim's built-in tree-sitter interface; the Vim
 package in `../vim` remains the fallback for installations without it.
+
+With Neovim 0.11 or later and `refine` on the path, the package also starts
+`refine lsp`, the compiler's language server, for every Landin buffer:
+diagnostics, go to definition, hover, formatting and quick fixes. Its
+configuration is `lsp/refine.lua`; `require("landin").setup({ lsp = false })`
+leaves it off. A module's imports are found under the workspace root, the
+nearest directory holding `.git`.

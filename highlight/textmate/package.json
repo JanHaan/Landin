@@ -1,7 +1,7 @@
 {
   "name": "landin-language",
   "displayName": "Landin Language Support",
-  "description": "Syntax highlighting, comments, brackets, and file recognition for Landin",
+  "description": "Syntax highlighting, comments, brackets, file recognition and the refine language server for Landin",
   "version": "0.0.0",
   "publisher": "landin",
   "license": "MIT OR Apache-2.0",
@@ -9,18 +9,33 @@
     "type": "git",
     "url": "https://github.com/JanHaan/Landin"
   },
+  "main": "./extension.js",
   "files": [
+    "extension.js",
     "language-configuration.json",
+    "node_modules/vscode-languageclient/**",
+    "node_modules/vscode-languageserver-protocol/**",
+    "node_modules/vscode-languageserver-textdocument/**",
+    "node_modules/vscode-languageserver-types/**",
+    "node_modules/vscode-jsonrpc/**",
+    "node_modules/minimatch/**",
+    "node_modules/brace-expansion/**",
+    "node_modules/balanced-match/**",
+    "node_modules/semver/**",
     "LICENSE",
     "README.md",
     "syntaxes"
   ],
-  "engines": {"vscode": "^1.75.0"},
+  "engines": {"vscode": "^1.91.0"},
   "categories": ["Programming Languages"],
   "keywords": ["Landin", "language", "syntax"],
+  "activationEvents": [],
   "scripts": {
     "test": "node ../tests/textmate-smoke.mjs",
     "package:check": "vsce ls"
+  },
+  "dependencies": {
+    "vscode-languageclient": "10.1.2"
   },
   "devDependencies": {
     "@vscode/vsce": "3.9.2",
@@ -38,6 +53,21 @@
       "language": "landin",
       "scopeName": "source.landin",
       "path": "./syntaxes/landin.tmLanguage.json"
-    }]
+    }],
+    "configuration": {
+      "title": "Landin",
+      "properties": {
+        "landin.server.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start refine lsp, the compiler's language server, for Landin files."
+        },
+        "landin.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "The refine compiler to run as `refine lsp`; empty finds refine on the path."
+        }
+      }
+    }
   }
 }

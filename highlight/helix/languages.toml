@@ -2,10 +2,17 @@
 name = "landin"
 scope = "source.landin"
 file-types = ["ldn"]
+roots = [".git"]
 comment-tokens = ["--"]
 block-comment-tokens = { start = "--(", end = ")--" }
 indent = { tab-width = 4, unit = "    " }
 grammar = "landin"
+language-servers = ["refine"]
+auto-format = false
+
+[language-server.refine]
+command = "refine"
+args = ["lsp"]
 
 [[grammar]]
 name = "landin"

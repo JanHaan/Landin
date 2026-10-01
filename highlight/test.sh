@@ -143,4 +143,32 @@ if command -v pwsh >/dev/null 2>&1; then
     echo "Visual Studio installer syntax clean"
 fi
 
+#  The language server through the editors that can start it by
+#  configuration alone, against a refine that LANDIN_REFINE names: each
+#  smoke opens a file with a type error and waits for refine lsp's L0301.
+#  Without LANDIN_REFINE nothing here starts a server.
+if test -n "${LANDIN_REFINE-}"; then
+    server_bin="$test_tmp/server-bin"
+    server_work="$test_tmp/server-work"
+    mkdir -p "$server_bin" "$server_work/.git"
+    ln -s "$LANDIN_REFINE" "$server_bin/refine"
+    printf 'twice: (x: u8) -> (y: u8) =\n    y = x + true\nend twice\n' \
+      > "$server_work/smoke.ldn"
+    if command -v nvim >/dev/null 2>&1; then
+        (cd "$server_work" && PATH="$server_bin:$PATH" \
+          LANDIN_FIXTURE="$server_work/smoke.ldn" \
+          nvim -n --headless --clean \
+          --cmd "set runtimepath^=$root/highlight/nvim" \
+          -l "$root/highlight/tests/nvim-lsp-smoke.lua")
+        echo "Neovim language server smoke clean"
+    fi
+    if command -v emacs >/dev/null 2>&1; then
+        (cd "$server_work" && PATH="$server_bin:$PATH" \
+          LANDIN_FIXTURE="$server_work/smoke.ldn" \
+          emacs --batch -Q -L "$root/highlight/emacs" \
+          -l "$root/highlight/tests/emacs-lsp-smoke.el")
+        echo "Emacs language server smoke clean"
+    fi
+fi
+
 echo "highlight packages clean"
