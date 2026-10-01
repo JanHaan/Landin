@@ -58,8 +58,8 @@ are used.
 | request | answer |
 |---|---|
 | `textDocument/publishDiagnostics` | every diagnostic of each source of the module, after every change |
-| `textDocument/definition` | null, until the server answers it |
-| `textDocument/hover` | null, until the server answers it |
+| `textDocument/definition` | where the name under the cursor is declared |
+| `textDocument/hover` | what the name or expression under the cursor is, and its doc comment |
 | `textDocument/formatting` | D252's layout, as edits |
 | `textDocument/codeAction` | each fix of a diagnostic the range touches, as a quick fix |
 
@@ -83,6 +83,15 @@ Formatting ignores the editor's tab size and indentation preference: there is
 one layout, D252's. A source that does not parse is not formatted, and the
 answer is null; its diagnostics already say why.
 
+Definitions and hover answer from the names and types the module was checked
+with. A definition is the declared name itself, wherever it is written, and a
+name with no declaration in source, such as a predeclared type, a keyword
+or a literal, has none. Hover shows a routine, type or atom as its first line is
+written, and any other name with its type as the checker's reports spell it,
+then its doc comment: the run of `---` lines directly above a declaration
+that begins its line [2000]. Over an expression, hover shows its type. Inside
+a routine body that does not parse, both answer nothing.
+
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
 one after `shutdown` with InvalidRequest, and one `$/cancelRequest` named
@@ -95,7 +104,8 @@ not know is ignored.
 too, with one exception, D253's: when every error lies inside the bodies of
 routines whose name and signature parsed, those bodies are stood in for and
 the rest of the module is checked. So while a body is half written, a type
-error in the routine below it is still reported. Nothing is reported inside the broken body except its
+error in the routine below it is still reported, and hover and definitions
+work everywhere else. Nothing is reported inside the broken body except its
 own syntax errors, and no warning is given until it parses. Any other syntax
 error, such as one in a signature, a type or a binding, leaves the module
 reported exactly as `refine` reports it.

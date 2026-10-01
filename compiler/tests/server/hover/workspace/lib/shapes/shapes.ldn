@@ -1,0 +1,5 @@
+--- A place on the grid.
+public point: type = struct
+    x: u32
+    y: u32
+end

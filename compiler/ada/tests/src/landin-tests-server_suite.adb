@@ -6,6 +6,7 @@
 --  compile.  The corpus cases read the real fixture tree and the fuzzer's
 --  reproducers, which is their deliberate exception to the fake host.
 
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
@@ -14,6 +15,7 @@ with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Analysis;
 with Landin.Server.Holes;
+with Landin.Server.Navigation;
 with Landin.Server.Positions;
 with Landin.Server.Transport;
 with Landin.Source;
@@ -639,6 +641,47 @@ package body Landin.Tests.Server_Suite is
       end loop;
    end Record_Sessions;
 
+   --  [2000]: the run of `---` lines directly above a declaration's line,
+   --  read top to bottom, each without its `---` and one blank after it.
+   procedure Doc_Comments_Are_The_Run_Above
+     (Item : in out Landin.Testing.Context);
+
+   procedure Doc_Comments_Are_The_Run_Above
+     (Item : in out Landin.Testing.Context)
+   is
+      package N renames Landin.Server.Navigation;
+
+      function Doc (Text : String) return String
+        is (N.Doc_Comment
+              (Text, Landin.Source.Byte_Offset
+                 (Ada.Strings.Fixed.Index (Text, "f:") - Text'First)));
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- one" & LF & "---two" & LF & "f: u8 = 0" & LF),
+         "one" & LF & "two", "a run of two lines, the blank once removed");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- a" & ASCII.CR & ASCII.LF & "  --- b" & ASCII.CR
+                    & "    f: u8 = 0" & LF),
+         "a" & LF & "b", "over CR LF and lone CR, indented");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- gone" & LF & LF & "f: u8 = 0" & LF), "",
+         "a blank line ends the run");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- gone" & LF & "-- line" & LF & "f: u8 = 0" & LF),
+         "", "a line comment ends the run");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--- kept" & LF & "--( block )--" & LF & "f: u8 = 0"),
+         "", "a block comment ends it too");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("x: u8 = 0 --- trailing" & LF & "f: u8 = 0" & LF), "",
+         "a doc comment after code is about nothing");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("f: u8 = 0" & LF), "", "no comment at all");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("---" & LF & "f: u8 = 0" & LF), "",
+         "an empty doc comment says nothing");
+   end Doc_Comments_Are_The_Run_Above;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -668,6 +711,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "every session runs as written",
          Every_Session_Runs_As_Written'Access);
+      Landin.Testing.Register
+        (Into, "server", "doc comments are the run above",
+         Doc_Comments_Are_The_Run_Above'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

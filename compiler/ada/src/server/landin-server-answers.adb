@@ -2,6 +2,8 @@ with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Strings.Unbounded;
 
+with Landin.Server.Navigation;
+
 package body Landin.Server.Answers is
 
    package Diag renames Landin.Diagnostics;
@@ -12,6 +14,7 @@ package body Landin.Server.Answers is
    use type J.Integer_Value;
    use type Diag.Severity;
    use type Landin.Source.Source_Id;
+   use type Landin.Server.Navigation.Place;
 
    function Capabilities (Unit : Positions.Encoding) return String is
       Written : J.Builder;
@@ -383,6 +386,35 @@ package body Landin.Server.Answers is
       return Landin.Source.No_Source;
    end Source_For;
 
+   --  A location in a source of the compilation.
+   procedure Write_Location
+     (Written : in out J.Builder;
+      Context : Landin.Stages.Compilation;
+      Store   : Landin.Server.Documents.Store;
+      Where   : Landin.Server.Navigation.Place;
+      Unit    : Positions.Encoding);
+
+   procedure Write_Location
+     (Written : in out J.Builder;
+      Context : Landin.Stages.Compilation;
+      Store   : Landin.Server.Documents.Store;
+      Where   : Landin.Server.Navigation.Place;
+      Unit    : Positions.Encoding)
+   is
+      Sources : constant not null access constant
+        Landin.Source.Sets.Source_Set := Landin.Stages.Sources (Context);
+   begin
+      J.Begin_Object (Written);
+      J.Name (Written, "uri");
+      J.Write_String
+        (Written, Landin.Server.Documents.URI_For
+           (Store, Name_Of (Sources, Where.Source)));
+      J.Name (Written, "range");
+      Write_Range
+        (Written, Text_Of (Sources, Where.Source), Where.Where, Unit);
+      J.End_Object (Written);
+   end Write_Location;
+
    function Code_Actions
      (Message : J.Document;
       Params  : J.Value;
@@ -479,7 +511,62 @@ package body Landin.Server.Answers is
          return Code_Actions
            (Message, Params, URI, Context, Answer, Store, Unit);
       end if;
-      return "null";
+
+      declare
+         Source : constant Landin.Source.Source_Id :=
+           Source_For (Context, Store, URI);
+      begin
+         if Source = Landin.Source.No_Source then
+            return "null";
+         end if;
+         declare
+            Text   : constant String :=
+              Text_Of (Landin.Stages.Sources (Context), Source);
+            Offset : constant Integer :=
+              Offset_Asked (Message, Params, Text, "position", Unit);
+            Written : J.Builder;
+         begin
+            if Offset < 0 then
+               return "null";
+            elsif Method = "textDocument/definition" then
+               declare
+                  Found : constant Landin.Server.Navigation.Place :=
+                    Landin.Server.Navigation.Definition
+                      (Context, Answer, Source,
+                       Landin.Source.Byte_Offset (Offset));
+               begin
+                  if Found = Landin.Server.Navigation.No_Place then
+                     return "null";
+                  end if;
+                  Write_Location (Written, Context, Store, Found, Unit);
+                  return J.Result (Written);
+               end;
+            else
+               declare
+                  Said : constant Landin.Server.Navigation.Description :=
+                    Landin.Server.Navigation.Hover
+                      (Context, Answer, Source,
+                       Landin.Source.Byte_Offset (Offset));
+               begin
+                  if Said.Length = 0 then
+                     return "null";
+                  end if;
+                  J.Begin_Object (Written);
+                  J.Name (Written, "contents");
+                  J.Begin_Object (Written);
+                  J.Name (Written, "kind");
+                  J.Write_String (Written, "markdown");
+                  J.Name (Written, "value");
+                  J.Write_String (Written, Said.Text);
+                  J.End_Object (Written);
+                  J.Name (Written, "range");
+                  Write_Range (Written, Text, Said.Range_Of.Where, Unit);
+                  J.End_Object (Written);
+                  return J.Result (Written);
+               end;
+            end if;
+         end;
+      end;
    end Query;
 
 end Landin.Server.Answers;

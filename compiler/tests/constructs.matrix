@@ -17,8 +17,8 @@
 #  transferred, as their [1830] note says.  State, targets,
 #  gaps and owner come from the inventory, whose
 #  disposition column explains every row.
-#  201 constructs, 196 with fixture evidence, 5 with none.
-#  States: 191 executed, 5 compiled, 2 transferred, 3 advisory.
+#  202 constructs, 196 with fixture evidence, 6 with none.
+#  States: 191 executed, 5 compiled, 2 transferred, 4 advisory.
 #  8 rows name an open owner; 0 have target gaps.
 #
 #  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
@@ -223,3 +223,4 @@
 1975 | spec | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | The selected hosted C boundaries
 1980 | spec | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
 1990 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
+2000 | spec | - | - | - | - | - | advisory | none | none | none | What a doc comment is about

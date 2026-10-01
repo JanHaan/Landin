@@ -188,6 +188,7 @@ different responsibilities.
 | `Landin.Server.Documents` | the documents an editor holds open, each held over the filesystem by path, and the module each belongs to: its directory under the roots, or itself alone | read a file a document does not hold, or decide what a module means |
 | `Landin.Server.Sessions` | one session from `initialize` to `exit`: dispatch, the lifecycle's refusals, when to analyse, and the exit status | keep a compilation past one analysis, or answer a request it does not offer |
 | `Landin.Server.Answers` | each answer as the protocol's JSON: capabilities, published diagnostics, formatting edits, code actions, definitions and hover | decide anything a stage decided, or convert a position itself |
+| `Landin.Server.Navigation` | what is at a byte of a checked module: the name it is in, where that is declared, its type as the checker spells one, its written header and its doc comment [2000] | answer where the stages decided nothing, or inside a held body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |

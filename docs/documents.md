@@ -17,7 +17,7 @@ arrays is answered in one place whichever document it is asked of.
 | part | what it holds |
 | --- | --- |
 | the grammar of the enabled kernel, [1740] to [1830] | what the compiler accepts today, and nothing else. It shrinks as the language grows. |
-| the rules the tour left unsaid, [1840] to [1990] | the permanent rules a tutorial omits because a reader supplies them. Grouped: names and scopes, types and literal context, what an operator takes, places and assignment, calls and errors, module values, and the boundaries the compiler owns. |
+| the rules the tour left unsaid, [1840] to [2000] | the permanent rules a tutorial omits because a reader supplies them. Grouped: names, scopes and doc comments, types and literal context, what an operator takes, places and assignment, calls and errors, module values, and the boundaries the compiler owns. |
 | the decisions this document took, D1 to D252 | fourteen subject sections, each decision with what the tour said before, what was chosen, the alternative, and the fixture that pins it. |
 
 A construct id is a stable citation anchor and never moves. The consequence

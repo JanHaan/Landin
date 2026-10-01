@@ -242,6 +242,7 @@ with every named refusal and the wording of its [1830] note.
 | `[1975]` | executed | hosted | none | none | matrix evidence; Cortex-M C boundaries are restricted |
 | `[1980]` | executed | all | none | none | matrix evidence |
 | `[1990]` | executed | cortex-m | none | none | D229 and D230 firmware and machine directives execute through compiler-owned firmware and the derived driver; hosted targets select them away. |
+| `[2000]` | advisory | none | none | none | A doc comment gives a program no meaning, so no fixture can discriminate it; D254 records the attachment a tool shows, and the `server` suite's doc-comment case and `hover` session pin it. |
 
 ## Hosted compile-time evidence
 

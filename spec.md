@@ -13,7 +13,7 @@ program may say and what the compiler will accept are the same sentence. A
 construct `tour.md` describes and this grammar omits is not enabled yet, and
 the compiler says so by [1830] rather than guessing.
 
-**The rules the tour left unsaid**, [1840] to [1990], are not about the
+**The rules the tour left unsaid**, [1840] to [2000], are not about the
 kernel and they will not be deleted as it grows: that a comparison yields a
 bool, that an immutable binding may not be written, that a name must be
 assigned before it is read. The tour teaches by example and a tutorial omits
@@ -845,12 +845,12 @@ states their binding and visibility rules.
 ## THE RULES THE TOUR LEFT UNSAID
 
 These are the rules an implementation needed and `tour.md` does not state.
-They are grouped by subject: names and scopes, then the types and the context
-a literal takes its type from, then what an operator takes and what it
-refuses, then places, assignment and what may be discarded, then calls and
-the declared-error channel, then module values, and last the three boundaries
-the compiler owns — the hosted entry, the C boundary, and the firmware and
-machine directives.
+They are grouped by subject: names, scopes and what a doc comment is about,
+then the types and the context a literal takes its type from, then what an
+operator takes and what it refuses, then places, assignment and what may be
+discarded, then calls and the declared-error channel, then module values, and
+last the three boundaries the compiler owns — the hosted entry, the C
+boundary, and the firmware and machine directives.
 
 ### [1840] The kernel's scopes, outermost first
 
@@ -916,6 +916,31 @@ runtime or type value and is likewise refused. A name a selected import [1440]
 wrote and the import refused is not a misspelling either: the import is where
 the mistake is and where the one report goes, and a later use of that name adds
 none (D242). The program is refused by the import.
+
+### [2000] What a doc comment is about
+
+A doc comment [0030] is about the declaration that follows it, and the
+language gives it no other meaning: a program means the same with every doc
+comment removed. The doc comment of a declaration is the run of doc comment
+lines directly above the line it begins on, read top to bottom. Each line of
+the run holds nothing but blanks and one doc comment, and the run ends at the
+first line above it that holds anything else, a blank line among them, so a
+line comment or an empty line between a doc comment and a declaration keeps
+the doc comment for nothing. A doc comment on the same line as code, or
+below a declaration, is about nothing. A doc comment's text is what follows
+its `---`, without one blank after it if there is one.
+
+```landin
+--- The larger of two counts.
+--- Equal counts give the first.
+larger: (a: u32, b: u32) -> (c: u32) =
+    c = if a < b then b else a end if
+end larger
+
+--- About nothing: a blank line follows it.
+
+total: u32 = 0
+```
 
 ### [1870] The kernel's types, and what each of them holds
 
@@ -2302,6 +2327,32 @@ wasted work the language chose not to make.
 **Pinned by** `negative/mut-never-written`, which applies the fix and compiles
 the result clean, and the `codes:` of every accepted fixture whose program
 warns.
+
+### D254 — A doc comment is the run of lines directly above a declaration
+
+**From** [0030] and [1780].
+
+**The tour said** that a doc comment attaches to the declaration that
+follows it, and nothing about what "follows" means when a blank line, another
+comment or code comes between, or when two doc comments are stacked. Nothing
+read a doc comment until an editor asked what a name was.
+
+**Chosen:** [2000]. The run of doc comment lines directly above the line a
+declaration begins on, read top to bottom; anything else on a line, a blank
+line among them, ends the run, and a doc comment beside code or below a
+declaration is about nothing. A declaration that does not begin its line,
+such as a parameter, has none. The language gives a doc comment no other
+meaning, so this decides only what a tool shows.
+
+**The alternatives:** the nearest doc comment above, however far, which hands
+a file's opening comment to whatever is declared first; a blank line allowed
+between, which makes a section heading the documentation of the first
+declaration under it; and a doc comment after the declaration on the same
+line, which [1780]'s line comment already serves and which would make every
+trailing remark documentation.
+
+**Pinned by** `server/doc comments are the run above` and the `hover`
+session under `compiler/tests/server/`.
 
 ## DECISIONS: NUMBERS AND LITERALS
 
