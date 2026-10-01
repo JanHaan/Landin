@@ -335,7 +335,10 @@ package body Landin.Backend.X86_64 is
       Level : Landin.Targets.Levels.Feature_Level :=
         Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_X86_64))
    is
-      pragma Unreferenced (Level);
+      --  D255: x86-64-v3's BMI2 shifts by any register, so a variable
+      --  shift at 32 or 64 bits needs neither %cl nor its operand loaded.
+      Has_BMI2 : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Bmi2);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -3411,6 +3414,23 @@ package body Landin.Backend.X86_64 is
                            & Value_Operand (Value));
                      Emit ("jmp " & Done);
                      Put (In_Range & ":");
+
+                     --  BMI2 takes the count from any register, here the
+                     --  accumulator that already holds it, and the shifted
+                     --  operand from where it is; it has no 8- or 16-bit
+                     --  form, so a narrow shift keeps the legacy one.
+                     if Has_BMI2 and then Held in Landin.Targets.Byte_4
+                                                | Landin.Targets.Byte_8
+                     then
+                        Emit (Instruction & "x " & Accumulator (Held) & ", "
+                              & Value_Operand (Operand (1), Held) & ", "
+                              & Accumulator (Held));
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Accumulator (Held) & ", "
+                              & Value_Operand (Value));
+                        Put (Done & ":");
+                        return;
+                     end if;
 
                      --  The count is below the width, so its low byte is the
                      --  whole of it and `%cl` is where a variable count goes.

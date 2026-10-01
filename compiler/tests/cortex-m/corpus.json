@@ -1968,6 +1968,9 @@
     "runtime/variant-zeroed-storage-is-distinct": {
       "mode": "execute"
     },
+    "runtime/variable-shifts-at-every-width": {
+      "mode": "execute"
+    },
     "runtime/whole-array-elements": {
       "mode": "execute"
     },

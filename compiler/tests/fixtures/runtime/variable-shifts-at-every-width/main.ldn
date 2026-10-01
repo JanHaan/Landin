@@ -1,0 +1,60 @@
+-- Every amount arrives as a parameter, so no shift here is folded: each one
+-- is the variable shift a level may select differently, at every width and
+-- signedness, within the width, at it and beyond it.
+left_32: (value: u32, amount: u32) -> (result: u32) =
+    result = value << amount
+end left_32
+
+right_32: (value: i32, amount: i32) -> (result: i32) =
+    result = value >> amount
+end right_32
+
+left_64: (value: i64, amount: i64) -> (result: i64) =
+    result = value << amount
+end left_64
+
+right_64: (value: u64, amount: u64) -> (result: u64) =
+    result = value >> amount
+end right_64
+
+arithmetic_64: (value: i64, amount: i64) -> (result: i64) =
+    result = value >> amount
+end arithmetic_64
+
+left_8: (value: u8, amount: u8) -> (result: u8) =
+    result = value << amount
+end left_8
+
+right_16: (value: i16, amount: i16) -> (result: i16) =
+    result = value >> amount
+end right_16
+
+public main: () -> (code: i32) =
+    if left_32(3, 30) == 3221225472
+        and left_32(1, 31) == 2147483648
+        and left_32(1, 32) == 0
+        and left_32(1, 33) == 0
+        and left_32(7, 0) == 7
+        and right_32(-256, 4) == -16
+        and right_32(-1, 31) == -1
+        and right_32(-1, 32) == 0
+        and right_32(2147483647, 30) == 1
+        and left_64(1, 62) == 4611686018427387904
+        and left_64(5, 64) == 0
+        and left_64(-1, 63) == -9223372036854775808
+        and right_64(18446744073709551615, 60) == 15
+        and right_64(18446744073709551615, 63) == 1
+        and right_64(18446744073709551615, 64) == 0
+        and arithmetic_64(-9223372036854775808, 63) == -1
+        and arithmetic_64(-9223372036854775808, 65) == 0
+        and arithmetic_64(4096, 12) == 1
+        and left_8(3, 6) == 192
+        and left_8(3, 8) == 0
+        and right_16(-32768, 15) == -1
+        and right_16(-32768, 16) == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

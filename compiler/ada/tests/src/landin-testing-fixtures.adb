@@ -1,6 +1,8 @@
 with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Strings.Fixed;
 
+with Landin.Targets.Levels;
+
 package body Landin.Testing.Fixtures is
 
    use type Landin.Platform.List_Status;
@@ -42,6 +44,22 @@ package body Landin.Testing.Fixtures is
 
    function Profile_Count (Item : Fixture) return Positive
      is (if Item.Profiles = Specialization then 6 else 4);
+
+   function Levels (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Levels));
+
+
+   --  The description a fixture target label stands for, which is how a
+   --  level is held to belonging to one of the fixture's own targets.
+   function Is_Level_Of_Label (Label, Level : String) return Boolean
+     is ((Label = "linux-x86-64" and then Landin.Targets.Levels.Is_Level_Of
+            (Landin.Targets.Linux_X86_64, Level))
+         or else (Label = "macos-arm64"
+           and then Landin.Targets.Levels.Is_Level_Of
+             (Landin.Targets.Darwin_Arm64, Level))
+         or else (Label = "cortex-m"
+           and then Landin.Targets.Levels.Is_Level_Of
+             (Landin.Targets.Cortex_M, Level)));
 
    function Name (Item : Fixture) return String
      is (Unbounded.To_String (Item.Name));
@@ -111,6 +129,31 @@ package body Landin.Testing.Fixtures is
      is (Unbounded.To_String (Item.Fixed));
 
    function Trimmed (Text : String) return String;
+
+   function Levels_Of_Family
+     (Item : Fixture; Family : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List
+   is
+      Value : constant String := Unbounded.To_String (Item.Levels);
+      First : Integer := Value'First;
+      Result : Landin.Platform.Path_List;
+   begin
+      for Index in Value'First .. Value'Last + 1 loop
+         if Index > Value'Last or else Value (Index) = ',' then
+            declare
+               One : constant String := Trimmed (Value (First .. Index - 1));
+            begin
+               if One /= ""
+                 and then Landin.Targets.Levels.Is_Level_Of (Family, One)
+               then
+                  Result.Append (One);
+               end if;
+            end;
+            First := Index + 1;
+         end if;
+      end loop;
+      return Result;
+   end Levels_Of_Family;
 
    procedure Append_Module_Arguments
      (Item         : Fixture;
@@ -219,7 +262,9 @@ package body Landin.Testing.Fixtures is
    begin
       for Item of In_Catalogue.Items loop
          if Class (Item) = Of_Class then
-            Total := Total + Profile_Count (Item);
+            Total := Total + Profile_Count (Item)
+              * (1 + Natural (Levels_Of_Family
+                   (Item, Landin.Targets.Linux_X86_64).Length));
          end if;
       end loop;
       return Total;
@@ -374,6 +419,7 @@ package body Landin.Testing.Fixtures is
       Seen_C_Args  : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
+      Seen_Levels : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
       Line_Number  : Natural := 0;
@@ -592,6 +638,14 @@ package body Landin.Testing.Fixtures is
                   Complain ("profiles is not standard or specialization: "
                             & Value);
                end if;
+
+            elsif Key = "levels" then
+               if Seen_Levels then
+                  Complain ("duplicate key: levels");
+                  return;
+               end if;
+               Seen_Levels := True;
+               Item.Levels := Unbounded.To_Unbounded_String (Value);
 
             elsif Key = "stream" then
                if Seen_Stream then
@@ -837,7 +891,8 @@ package body Landin.Testing.Fixtures is
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
-               Profiles => Standard);
+               Profiles => Standard,
+               Levels  => Unbounded.Null_Unbounded_String);
 
       for Index in Content'Range loop
          if Content (Index) = Character'Val (10) then
@@ -873,6 +928,48 @@ package body Landin.Testing.Fixtures is
 
       if Seen_Args and then not Seen_Expect then
          Complain ("args without expect: nothing would be compared");
+      end if;
+
+      --  Read after every key, because a level is held to the fixture's
+      --  targets wherever in the file either was written.
+      if Seen_Levels then
+         if Expected /= Runtime then
+            Complain ("levels belong to a runtime fixture");
+         end if;
+         declare
+            Value : constant String := Unbounded.To_String (Item.Levels);
+            Listed : constant String := Unbounded.To_String (Item.Targets);
+            First : Integer := Value'First;
+            Named : Natural := 0;
+         begin
+            for Index in Value'First .. Value'Last + 1 loop
+               if Index > Value'Last or else Value (Index) = ',' then
+                  declare
+                     One : constant String :=
+                       Trimmed (Value (First .. Index - 1));
+                     Owned : Boolean := False;
+                     Start : Integer := Listed'First;
+                  begin
+                     Named := Named + 1;
+                     for Mark in Listed'First .. Listed'Last + 1 loop
+                        if Mark > Listed'Last or else Listed (Mark) = ',' then
+                           Owned := Owned or else Is_Level_Of_Label
+                             (Trimmed (Listed (Start .. Mark - 1)), One);
+                           Start := Mark + 1;
+                        end if;
+                     end loop;
+                     if not Owned then
+                        Complain ("level is no level of the fixture's"
+                                  & " targets: " & One);
+                     end if;
+                  end;
+                  First := Index + 1;
+               end if;
+            end loop;
+            if Named = 0 then
+               Complain ("levels names no level");
+            end if;
+         end;
       end if;
 
       if Expected in Runtime | Abi then

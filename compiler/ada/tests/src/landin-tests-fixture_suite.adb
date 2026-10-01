@@ -109,14 +109,18 @@ package body Landin.Tests.Fixture_Suite is
          Name : String;
          Metadata : String;
          Expected : Natural;
-         Fault : String := "");
+         Fault : String := "";
+         Runs : Natural := 0);
 
+      --  Runs is how many profile runs the fixture contributes, which is
+      --  its profiles at each level it is executed at; zero means Expected.
       procedure Check
         (Kind : Fixture_Class;
          Name : String;
          Metadata : String;
          Expected : Natural;
-         Fault : String := "")
+         Fault : String := "";
+         Runs : Natural := 0)
       is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Found : Catalogue;
@@ -147,7 +151,8 @@ package body Landin.Tests.Fixture_Suite is
                  (Item, Profile_Count (Nth (Found, 1)), Expected,
                   Name & " selects its written policy");
                Landin.Testing.Check_Equal
-                 (Item, Profile_Run_Count (Found, Kind), Expected,
+                 (Item, Profile_Run_Count (Found, Kind),
+                  (if Runs = 0 then Expected else Runs),
                   Name & " contributes every selected profile");
             end if;
          else
@@ -181,6 +186,33 @@ package body Landin.Tests.Fixture_Suite is
       Check
         (Positive_Program, "wrong-class", "profiles: standard" & LF, 0,
          "profiles belong only to a runtime or ABI fixture");
+
+      --  D255: each level the Linux lane runs repeats every profile, and a
+      --  level is held to the fixture's own targets and to a runtime one.
+      Check
+        (Runtime, "levelled",
+         "profiles: standard" & LF & "levels: x86-64-v3" & LF, 4,
+         Runs => 8);
+      Check
+        (Runtime, "levelled-twice",
+         "profiles: specialization" & LF
+         & "levels: x86-64-v2, x86-64-v4" & LF, 6, Runs => 18);
+      Check
+        (Runtime, "foreign-level",
+         "profiles: standard" & LF & "levels: armv7-m" & LF, 0,
+         "level is no level of the fixture's targets: armv7-m");
+      Check
+        (Runtime, "unknown-level",
+         "profiles: standard" & LF & "levels: x86-64-v5" & LF, 0,
+         "level is no level of the fixture's targets: x86-64-v5");
+      Check
+        (Runtime, "duplicate-levels",
+         "profiles: standard" & LF & "levels: x86-64-v3" & LF
+         & "levels: x86-64-v2" & LF, 0, "duplicate key: levels");
+      Check
+        (Abi, "levelled-abi",
+         "profiles: standard" & LF & "levels: x86-64-v3" & LF, 0,
+         "levels belong to a runtime fixture");
    end Profiles_Are_Explicit;
 
    procedure Well_Formed_Fixtures_Are_Discovered

@@ -13,6 +13,7 @@ with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform;
+with Landin.Targets;
 
 package Landin.Testing.Fixtures is
 
@@ -63,6 +64,19 @@ package Landin.Testing.Fixtures is
    --  select compiler policy, and a renamed fixture retains its matrix.
    function Profile_Count (Item : Fixture) return Positive
      with Pre => Class (Item) in Runtime | Abi;
+
+   --  `levels:` names CPU feature levels, beyond each target's default, at
+   --  which a runtime fixture is also executed (D255): a comma-separated
+   --  list, each a level of one of the fixture's own targets.  Each lane
+   --  reads the levels of its own family and runs the fixture's profiles
+   --  again at each.  The empty string when the fixture names none.
+   function Levels (Item : Fixture) return String;
+
+   --  The levels `levels:` names that are x86-64's, which the Linux lane
+   --  runs; each lane reads its own family's.
+   function Levels_Of_Family
+     (Item : Fixture; Family : Landin.Targets.Target_Facts)
+      return Landin.Platform.Path_List;
 
    --  Whether the fixture's program must end without exiting.  [1960] says
    --  a trap's operating-system encoding is not stable program behaviour,
@@ -198,6 +212,7 @@ private
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;
+      Levels    : Ada.Strings.Unbounded.Unbounded_String;
    end record;
 
    package Fixture_Vectors is new Ada.Containers.Indefinite_Vectors

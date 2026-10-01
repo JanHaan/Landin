@@ -17,6 +17,7 @@ with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 
@@ -822,25 +823,98 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Profiles (Profile).Specialize));
    end Append_Profile;
 
-   procedure Run_Runtime
-     (Case_Item : Fixture;
-      Host      : Landin.Platform.Filesystem'Class;
-      Program   : String;
-      Profile   : Positive;
-      Item      : in out Landin.Testing.Context);
+   --  The x86-64 levels a runtime fixture's `levels:` names; the other
+   --  families' levels are their own lanes' to run.
+   function X86_Levels (Case_Item : Fixture) return Landin.Platform.Path_List
+     is (Levels_Of_Family (Case_Item, Landin.Targets.Linux_X86_64));
+
+   --  Whether this processor has every feature of an x86-64 level.  The
+   --  deliberate exception to the fake platform: what is asked is the real
+   --  host's processor, because a level above it must be refused rather
+   --  than run and hoped, and the kernel's flags are where Linux says what
+   --  the processor has.  The flags are the kernel's names, which are the
+   --  feature names of D255 but for `cx16`, `lahf_lm`, `pni` for SSE3
+   --  and `abm` for LZCNT.
+   function Host_Has_Level
+     (Host : Landin.Platform.Filesystem'Class; Level : String;
+      Missing : out Unbounded.Unbounded_String) return Boolean;
+
+   function Host_Has_Level
+     (Host : Landin.Platform.Filesystem'Class; Level : String;
+      Missing : out Unbounded.Unbounded_String) return Boolean
+   is
+      package L renames Landin.Targets.Levels;
+      Text : Unbounded.Unbounded_String;
+      Read : Landin.Platform.Read_Status;
+      Selected : constant L.Feature_Level :=
+        L.Level_Named (Landin.Targets.Linux_X86_64, Level);
+      Flags : Unbounded.Unbounded_String;
+   begin
+      Missing := Unbounded.Null_Unbounded_String;
+      Host.Read_File ("/proc/cpuinfo", Text, Read);
+      if Read /= Landin.Platform.Read_Ok then
+         Missing := Unbounded.To_Unbounded_String ("/proc/cpuinfo");
+         return False;
+      end if;
+      declare
+         Whole : constant String := Unbounded.To_String (Text);
+         At_Flags : constant Natural :=
+           Ada.Strings.Fixed.Index (Whole, "flags" & ASCII.HT);
+         Ends : Natural;
+      begin
+         if At_Flags = 0 then
+            Missing := Unbounded.To_Unbounded_String ("a flags line");
+            return False;
+         end if;
+         Ends := Ada.Strings.Fixed.Index (Whole, "" & ASCII.LF, At_Flags);
+         Flags := Unbounded.To_Unbounded_String
+           (Whole (At_Flags .. (if Ends = 0 then Whole'Last else Ends - 1))
+            & " ");
+      end;
+      for Each in L.Feature loop
+         if L.Has (Selected, Each) then
+            declare
+               Kernel : constant String :=
+                 (case Each is
+                     when L.Cmpxchg16b => "cx16",
+                     when L.Lahf       => "lahf_lm",
+                     when L.Sse3       => "pni",
+                     when L.Lzcnt      => "abm",
+                     when others       => L.Spelling (Each));
+            begin
+               if Unbounded.Index (Flags, " " & Kernel & " ") = 0 then
+                  Unbounded.Append (Missing, " " & L.Spelling (Each));
+               end if;
+            end;
+         end if;
+      end loop;
+      return Unbounded.Length (Missing) = 0;
+   end Host_Has_Level;
 
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
       Program   : String;
       Profile   : Positive;
-      Item      : in out Landin.Testing.Context)
+      Item      : in out Landin.Testing.Context;
+      Level     : String := "");
+
+   procedure Run_Runtime
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Profile   : Positive;
+      Item      : in out Landin.Testing.Context;
+      Level     : String := "")
    is
+      At_Level : constant String :=
+        (if Level = "" then "" else " at " & Level);
       Label   : constant String := "runtime/" & Name (Case_Item)
-        & " [" & Profile_Name (Profile) & "]";
+        & " [" & Profile_Name (Profile) & At_Level & "]";
       Built   : constant String :=
         Output_Directory & "runtime-" & Name (Case_Item)
-        & "-" & Profile_Name (Profile);
+        & "-" & Profile_Name (Profile)
+        & (if Level = "" then "" else "-" & Level);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Ready   : Boolean;
       Outcome : Landin.Platform.Tool_Result;
@@ -850,9 +924,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Read     : Landin.Platform.Read_Status;
       Said     : Unbounded.Unbounded_String;
    begin
+      if Level /= "" then
+         declare
+            Missing : Unbounded.Unbounded_String;
+         begin
+            if not Host_Has_Level (Host, Level, Missing) then
+               Landin.Testing.Fail
+                 (Item, Label & ": this processor cannot run " & Level
+                  & "; it lacks" & Unbounded.To_String (Missing));
+               return;
+            end if;
+         end;
+      end if;
+
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
 
       Append_Profile (Args, Profile);
+      if Level /= "" then
+         Landin.Platform.Add (Args, "--level=" & Level);
+      end if;
       Landin.Platform.Add (Args, "--emit=exe");
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
@@ -862,6 +952,27 @@ package body Landin.Tests.Fixture_Execution_Suite is
       if Ready then
          Check_Accepted_Report
            (Case_Item, Label, Unbounded.To_String (Said), Item);
+
+         --  The executable is held to the level it was built for: its GNU
+         --  property note names that level as needed, which is also what
+         --  makes the loader refuse it on a processor without it.  This is
+         --  the image that then runs, so the lowering is shown to have
+         --  reached the bytes, not only the assembly text.
+         if Level /= "" then
+            declare
+               Note : Landin.Platform.Tool_Result;
+               Args : Landin.Platform.Path_List;
+            begin
+               Args.Append ("-n");
+               Args.Append (Built);
+               Runner.Run ("readelf", Args, Note, Landin.Platform.Merged);
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Unbounded.To_String (Note.Output),
+                     "x86 ISA needed: x86-64-baseline, " & Level) > 0,
+                  Label & ": the executable needs " & Level);
+            end;
+         end if;
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
            (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
@@ -1130,6 +1241,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
                case Piece.Kind is
                   when Runtime_Piece =>
                      Run_Runtime (Case_Item, Host, Program, Profile, Slot);
+                     for Level of X86_Levels (Case_Item) loop
+                        Run_Runtime
+                          (Case_Item, Host, Program, Profile, Slot, Level);
+                     end loop;
                   when ABI_Piece =>
                      Run_ABI (Case_Item, Host, Program, Profile, Slot);
                end case;
@@ -1152,8 +1267,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Runtime_Ran := Runtime_Ran + 1;
                   Last := Last + 1;
                   Work (Last) := (Index, Runtime_Piece);
-                  Runtime_Profiles :=
-                    Runtime_Profiles + Profile_Count (Case_Item);
+                  Runtime_Profiles := Runtime_Profiles
+                    + Profile_Count (Case_Item)
+                      * (1 + Natural (X86_Levels (Case_Item).Length));
                elsif Class (Case_Item) = Abi then
                   ABI_Ran := ABI_Ran + 1;
                   Last := Last + 1;
@@ -1229,6 +1345,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
                elsif Class (Case_Item) = Runtime then
                   for Profile in 1 .. Profile_Count (Case_Item) loop
                      Run_Runtime (Case_Item, Host, Program, Profile, Item);
+                     for Level of X86_Levels (Case_Item) loop
+                        Run_Runtime
+                          (Case_Item, Host, Program, Profile, Item, Level);
+                     end loop;
                   end loop;
                else
                   Landin.Testing.Fail

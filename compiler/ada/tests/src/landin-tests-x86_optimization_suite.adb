@@ -15,6 +15,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
+with Landin.Targets.Levels;
 
 package body Landin.Tests.X86_Optimization_Suite is
 
@@ -54,6 +55,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Pressure_And_C_Homes (Item : in out Landin.Testing.Context);
    procedure Bounded_Probes (Item : in out Landin.Testing.Context);
    procedure Final_Folding (Item : in out Landin.Testing.Context);
+   procedure Level_Selects_Shifts (Item : in out Landin.Testing.Context);
 
    procedure Lower
      (Item : in out Landin.Testing.Context;
@@ -393,6 +395,77 @@ package body Landin.Tests.X86_Optimization_Suite is
          "static image and runtime function addresses both prevent folding");
    end Final_Folding;
 
+   --  D255: at x86-64-v3 a variable 32- or 64-bit shift is BMI2's, which
+   --  shifts by any register, and at the baseline it is the legacy shift by
+   --  %cl.  The 8- and 16-bit shifts BMI2 has no form for stay legacy at
+   --  both, and every guard [0320] and [1950] ask for is kept at both.
+   procedure Level_Selects_Shifts (Item : in out Landin.Testing.Context) is
+      Source : constant String :=
+        "public shifts: (a: u32, b: i64, c: u64, d: u8, e: i16)"
+        & " -> (r: u32, s: i64, t: u64, u: u8, v: i16) =" & LF
+        & "    r = a << a" & LF
+        & "    s = b >> b" & LF
+        & "    t = c >> c" & LF
+        & "    u = d << d" & LF
+        & "    v = e >> e" & LF
+        & "end shifts" & LF;
+      Facts : constant Landin.Targets.Target_Facts :=
+        Landin.Targets.Linux_X86_64;
+      Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+
+      function At_Level (Name : String) return String;
+
+      function At_Level (Name : String) return String is
+         Assembly : US.Unbounded_String;
+         Report : Reports.Report;
+      begin
+         X86.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Opt.Default_Options, Assembly, Report,
+            Level => Landin.Targets.Levels.Level_Named (Facts, Name));
+         return US.To_String (Assembly);
+      end At_Level;
+   begin
+      Lower (Item, Work, Source);
+      declare
+         Base : constant String := At_Level ("x86-64-v1");
+         Two : constant String := At_Level ("x86-64-v2");
+         Three : constant String := At_Level ("x86-64-v3");
+         Four : constant String := At_Level ("x86-64-v4");
+
+         function Count (Text, Needle : String) return Natural
+           is (Ada.Strings.Fixed.Count (Text, Needle));
+      begin
+         Landin.Testing.Check
+           (Item, Base = Emitted (Work) and then Two = Base,
+            "the baseline and x86-64-v2 select what was always selected");
+         Landin.Testing.Check
+           (Item, Count (Base, "%cl, ") = 5
+              and then not Contains (Base, "shlx")
+              and then not Contains (Base, "sarx")
+              and then not Contains (Base, "shrx"),
+            "the baseline shifts all five by %cl");
+         Landin.Testing.Check
+           (Item, Contains (Three, "shlx %eax, ")
+              and then Contains (Three, "sarx %rax, ")
+              and then Contains (Three, "shrx %rax, ")
+              and then Count (Three, "%cl, ") = 2
+              and then Contains (Three, "shlb %cl, %al")
+              and then Contains (Three, "sarw %cl, %ax"),
+            "x86-64-v3 shifts 32 and 64 bits by BMI2 and narrow ones by %cl");
+         Landin.Testing.Check
+           (Item, Count (Three, "_inrange:") = Count (Base, "_inrange:")
+              and then Count (Three, "_nonnegative:")
+                = Count (Base, "_nonnegative:")
+              and then Count (Three, "ud2") = Count (Base, "ud2"),
+            "every width and sign guard is kept at every level");
+         Landin.Testing.Check
+           (Item, Four = Three, "x86-64-v4 shifts as x86-64-v3 does");
+      end;
+   end Level_Selects_Shifts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -408,6 +481,9 @@ package body Landin.Tests.X86_Optimization_Suite is
         (Into, "x86 opt", "bounded probes", Bounded_Probes'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "final folding", Final_Folding'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "a level selects its shifts",
+         Level_Selects_Shifts'Access);
    end Register;
 
 end Landin.Tests.X86_Optimization_Suite;

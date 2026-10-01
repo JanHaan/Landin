@@ -14849,7 +14849,10 @@ so no option name collides with one. Like every other fact it is read only
 in a fixed configuration expression.
 
 A level changes which instructions the backend selects and which the
-toolchain accepts, and nothing else: every level of a family shares one
+toolchain accepts, and nothing else. At `x86-64-v3` a variable shift of 32 or
+64 bits is BMI2's `shlx`, `shrx` or `sarx`, which shifts by any register
+rather than by `%cl`; narrower shifts, which BMI2 has no form for, and every
+guard [0320] and [1950] ask of a shift are unchanged. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and the checker and the
@@ -14878,7 +14881,9 @@ within its family`, `positive/feature-level-selects-declarations`,
 `end-to-end/feature-level-armv8-1-a-has-lse`,
 `end-to-end/feature-level-armv6-m-lacks-idiv`,
 `end-to-end/feature-level-armv7-m-has-idiv` and
-`end-to-end/feature-level-of-another-family`.
+`end-to-end/feature-level-of-another-family`,
+`x86 opt/a level selects its shifts`, `fixtures/profiles are explicit` and
+`runtime/variable-shifts-at-every-width`, which executes at `x86-64-v3` too.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

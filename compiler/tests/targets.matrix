@@ -1973,6 +1973,7 @@ runtime/utf8-position-at-end-traps | linux-x86-64, macos-arm64
 runtime/utf8-position-not-boundary-traps | linux-x86-64, macos-arm64
 runtime/utf8-slice-lower-not-boundary-traps | linux-x86-64, macos-arm64
 runtime/utf8-slice-upper-not-boundary-traps | linux-x86-64, macos-arm64
+runtime/variable-shifts-at-every-width | linux-x86-64, macos-arm64, cortex-m
 runtime/variant-case-construction-runs-in-source-order | linux-x86-64, macos-arm64
 runtime/variant-inside-an-element | linux-x86-64, macos-arm64
 runtime/variant-match-array-payload-bindings-update-storage | linux-x86-64, macos-arm64
