@@ -119,7 +119,8 @@ def run(refine, name):
                         break
                     output += data
                     quiet_since = time.monotonic()
-        process.stdin.close()
+        #  communicate flushes and closes standard input itself, and a
+        #  Python before 3.13 refuses to flush one already closed.
         try:
             rest, errors = process.communicate(timeout=SECONDS)
         except subprocess.TimeoutExpired:
