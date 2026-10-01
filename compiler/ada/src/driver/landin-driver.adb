@@ -17,6 +17,7 @@ with Landin.Panics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Text;
+with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.Formatting;
 with Landin.IR;
@@ -27,11 +28,6 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source_Maps;
 with Landin.Stages;
-with Landin.Stages.Checking;
-with Landin.Stages.Configuration;
-with Landin.Stages.Lowering;
-with Landin.Stages.Resolution;
-with Landin.Stages.Syntax;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
@@ -62,15 +58,6 @@ package body Landin.Driver is
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Targets.Capabilities.Debug_Format;
 
-   --  The syntax stage holds nothing, so one instance for the process is
-   --  right, and it has to outlive the access type that names it: a
-   --  Stage_Reference is a library-level access type by design, because a
-   --  pipeline must not be able to outlive a stage.
-   Frontend : aliased Landin.Stages.Syntax.Instance;
-   Names    : aliased Landin.Stages.Resolution.Instance;
-   Configurer : aliased Landin.Stages.Configuration.Instance;
-   Checker  : aliased Landin.Stages.Checking.Instance;
-   Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
@@ -1632,40 +1619,7 @@ package body Landin.Driver is
          if Landin.Stages.Source_Count (Context) > 0
            and then not Landin.Stages.Failed (Context)
          then
-            declare
-               Line : Landin.Stages.Pipeline;
-               Ran  : Natural;
-            begin
-               Landin.Stages.Append (Line, Frontend'Access);
-               Landin.Stages.Append (Line, Configurer'Access);
-               Landin.Stages.Append (Line, Names'Access);
-               Landin.Stages.Append (Line, Checker'Access);
-               Landin.Stages.Append (Line, Lowerer'Access);
-               Ran := Landin.Stages.Run
-                 (Line, Context, Watch_Stage'Access);
-
-               --  Each stage runs only when the one before it produced
-               --  something worth reading: a stage stops the pipeline on
-               --  its own failure, so a file with a missing `then` does not
-               --  also report every name the hole swallowed, and one with
-               --  an unknown name does not also report its type.  Four
-               --  since the lowering joined: it is the last, and it refuses to
-               --  run on a refused program itself rather than relying on
-               --  being queued after the checker.
-               if Ran not in 1 .. 5 then
-                  raise Compiler_Defect
-                    with "the frontend pipeline did not run";
-               end if;
-            end;
-
-            if not Landin.Stages.Failed (Context) then
-               Landin.Panics.Prepare (Context, Panic, Panic_Problem);
-               if Unbounded.Length (Panic_Problem) /= 0 then
-                  Note_Failure
-                    (Rows.Code (Rows.Panic_Contract_Invalid),
-                     Unbounded.To_String (Panic_Problem));
-               end if;
-            end if;
+            Checking.Run (Context, Panic, Watch_Stage'Access);
 
             --  The backend runs on nothing that was refused, for the same
             --  reason the lowering does: an unaccepted program has no Unit

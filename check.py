@@ -5142,6 +5142,8 @@ def diagnostic_matrix_dump():
     if rows is None:
         return None
     adapters = ("compiler/ada/src/driver/landin-driver.adb",
+                "compiler/ada/src/driver/landin-driver-checking.adb",
+                "compiler/ada/src/driver/landin-driver-loading.adb",
                 "compiler/ada/src/diagnostics/landin-diagnostics-lexical.adb",
                 "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
                 "compiler/ada/src/diagnostics/landin-diagnostics-resolution.ads",
