@@ -92,13 +92,13 @@
           #  README first, and a tagged tree cannot hold the hashes of assets
           #  built from itself, so the two move in the commit that records
           #  the new hashes and never before.
-          releaseVersion = "0.2.2";
+          releaseVersion = "0.2.3";
 
           releaseHashes = {
             x86_64-linux =
-              "929f669cb1477ac856762ee9f0d69a8e6fbec8630c911edf7fbbc2556bd5f7a3";
+              "db6c945ac24c6472c1cc54c7b51e13560490fa76b88a04c6c7f085f71059d8ff";
             aarch64-darwin =
-              "4b6d08f95d41deb9ea988e11941e1d920e2a8a86df2c2923886588ca4b3b426a";
+              "974cb6c7223a5dc91815670ab11f58060fe6354e4dab323992da6aff16369dc9";
           };
 
           releases = pin "LANDIN_RELEASES";
