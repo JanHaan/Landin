@@ -14,6 +14,8 @@ with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Analysis;
 with Landin.Server.Holes;
+with Landin.Server.Positions;
+with Landin.Server.Transport;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Targets;
@@ -25,9 +27,13 @@ package body Landin.Tests.Server_Suite is
    package Diag renames Landin.Diagnostics;
    package Fixtures renames Landin.Testing.Fixtures;
    package Holes renames Landin.Server.Holes;
+   package Transport renames Landin.Server.Transport;
    package Unbounded renames Ada.Strings.Unbounded;
 
    use type Holes.Verdict;
+   use type Transport.Status;
+   use type Landin.Server.Positions.Position;
+   use type Landin.Source.Byte_Offset;
    use type Landin.Source.Span;
    use type Fixtures.Fixture_Class;
 
@@ -379,6 +385,195 @@ package body Landin.Tests.Server_Suite is
         (Item, Past > 0, "some were analysed past their holes");
    end Refused_Sources_Are_Served;
 
+   ---------------------------------------------------------------------
+   --  Framing
+   ---------------------------------------------------------------------
+
+   --  Messages split across reads at every byte, with headers in any case
+   --  and order, arrive whole and in order.
+   procedure Messages_Arrive_Whole
+     (Item : in out Landin.Testing.Context);
+
+   procedure Messages_Arrive_Whole
+     (Item : in out Landin.Testing.Context)
+   is
+      CR_LF : constant String := ASCII.CR & ASCII.LF;
+      Input : constant String :=
+        Transport.Framed ("{""a"":1}")
+        & "content-type: application/vscode-jsonrpc; charset=utf-8" & CR_LF
+        & "CONTENT-LENGTH:  3" & CR_LF & "X-Other: ignored" & CR_LF & CR_LF
+        & "[1]";
+   begin
+      for Chunk in 1 .. 7 loop
+         declare
+            Channel : Landin.Testing.Fakes.Fake_Channel;
+            From    : Transport.Reader;
+            Outcome : Transport.Status;
+            Text, Fault : Unbounded.Unbounded_String;
+         begin
+            Channel.Script (Input, Chunk);
+            Transport.Next (From, Channel, Outcome, Text, Fault);
+            Landin.Testing.Check
+              (Item, Outcome = Transport.Message
+                     and then Unbounded.To_String (Text) = "{""a"":1}",
+               "the first message, read" & Chunk'Image & " at a time");
+            Transport.Next (From, Channel, Outcome, Text, Fault);
+            Landin.Testing.Check
+              (Item, Outcome = Transport.Message
+                     and then Unbounded.To_String (Text) = "[1]",
+               "the second, its headers in any case and order");
+            Transport.Next (From, Channel, Outcome, Text, Fault);
+            Landin.Testing.Check
+              (Item, Outcome = Transport.Ended,
+               "and then the end of input");
+         end;
+      end loop;
+   end Messages_Arrive_Whole;
+
+   --  Every way a frame can be wrong, and what each costs.
+   procedure Faulty_Frames_Are_Named
+     (Item : in out Landin.Testing.Context);
+
+   procedure Faulty_Frames_Are_Named
+     (Item : in out Landin.Testing.Context)
+   is
+      CR_LF : constant String := ASCII.CR & ASCII.LF;
+
+      procedure Expect
+        (Input : String; Wanted : Transport.Status; Reason : String);
+
+      procedure Expect
+        (Input : String; Wanted : Transport.Status; Reason : String)
+      is
+         Channel : Landin.Testing.Fakes.Fake_Channel;
+         From    : Transport.Reader;
+         Outcome : Transport.Status;
+         Text, Fault : Unbounded.Unbounded_String;
+      begin
+         Channel.Script (Input);
+         Transport.Next (From, Channel, Outcome, Text, Fault);
+         Landin.Testing.Check
+           (Item, Outcome = Wanted
+                  and then Unbounded.To_String (Fault) = Reason,
+            Reason & " (" & Outcome'Image & ": "
+            & Unbounded.To_String (Fault) & ")");
+      end Expect;
+   begin
+      Expect ("Content-Length: 5" & CR_LF & CR_LF & "{}",
+              Transport.Broken, "the input ended inside a message");
+      Expect ("Content-Length: 5" & CR_LF,
+              Transport.Broken, "the input ended inside a header");
+      Expect ("X: y" & CR_LF & CR_LF & "{}",
+              Transport.Broken, "a message has no Content-Length");
+      Expect ("Content-Length: -2" & CR_LF & CR_LF,
+              Transport.Broken, "Content-Length is not a decimal length");
+      Expect ("Content-Length: 99999999999" & CR_LF & CR_LF,
+              Transport.Broken, "Content-Length is not a decimal length");
+      Expect ("Content-Length: 2" & CR_LF & "Content-Length: 2" & CR_LF
+              & CR_LF & "{}",
+              Transport.Broken, "Content-Length is given twice");
+      Expect ("Content-Length 2" & CR_LF & CR_LF & "{}",
+              Transport.Broken, "a header line has no ':'");
+      Expect ("Content-Length: 2" & CR_LF & "Content-Type: text/plain"
+              & CR_LF & CR_LF & "{}",
+              Transport.Broken, "Content-Type is not JSON-RPC in UTF-8");
+      Expect ([1 .. Transport.Maximum_Header + 8 => 'x'],
+              Transport.Broken, "a header block is longer than 4096 bytes");
+      Expect ("", Transport.Ended, "");
+
+      --  A body too long to hold is read past, and the next one is read.
+      declare
+         Huge : constant Natural := Transport.Maximum_Body + 1;
+         Channel : Landin.Testing.Fakes.Fake_Channel;
+         From    : Transport.Reader;
+         Outcome : Transport.Status;
+         Text, Fault : Unbounded.Unbounded_String;
+         Input : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String
+             ("Content-Length:" & Huge'Image & CR_LF & CR_LF);
+      begin
+         Unbounded.Append (Input, Unbounded."*" (Huge, ' '));
+         Unbounded.Append (Input, Transport.Framed ("{}"));
+         Channel.Script_Unbounded (Input, Chunk => 1024 * 1024);
+         Transport.Next (From, Channel, Outcome, Text, Fault);
+         Landin.Testing.Check
+           (Item, Outcome = Transport.Too_Long, "a body past the bound");
+         Transport.Next (From, Channel, Outcome, Text, Fault);
+         Landin.Testing.Check
+           (Item, Outcome = Transport.Message
+                  and then Unbounded.To_String (Text) = "{}",
+            "is skipped, and the next message read");
+      end;
+   end Faulty_Frames_Are_Named;
+
+   ---------------------------------------------------------------------
+   --  Positions
+   ---------------------------------------------------------------------
+
+   procedure Positions_Count_What_Was_Agreed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Positions_Count_What_Was_Agreed
+     (Item : in out Landin.Testing.Context)
+   is
+      package P renames Landin.Server.Positions;
+
+      E_Acute : constant String :=
+        Character'Val (16#C3#) & Character'Val (16#A9#);
+      Clef : constant String :=
+        Character'Val (16#F0#) & Character'Val (16#9D#)
+        & Character'Val (16#84#) & Character'Val (16#9E#);
+      Invalid : constant String := [1 => Character'Val (16#FF#)];
+      --  Lines: "a" CR LF, E_Acute Clef Invalid "z" CR, "q" LF, "" (end)
+      Text : constant String :=
+        "a" & ASCII.CR & ASCII.LF & E_Acute & Clef & Invalid & "z"
+        & ASCII.CR & "q" & ASCII.LF;
+
+      procedure Both
+        (Offset : Natural; Line, U8, U16 : Natural; Label : String);
+
+      procedure Both
+        (Offset : Natural; Line, U8, U16 : Natural; Label : String)
+      is
+         At_Byte : constant Landin.Source.Byte_Offset :=
+           Landin.Source.Byte_Offset (Offset);
+         Eight   : constant P.Position :=
+           P.Position_Of (Text, At_Byte, P.UTF_8);
+         Sixteen : constant P.Position :=
+           P.Position_Of (Text, At_Byte, P.UTF_16);
+      begin
+         Landin.Testing.Check
+           (Item, Eight = (Line, U8) and then Sixteen = (Line, U16),
+            Label & ": to a position");
+         Landin.Testing.Check
+           (Item, P.Offset_Of (Text, (Line, U8), P.UTF_8) = At_Byte
+                  and then P.Offset_Of (Text, (Line, U16), P.UTF_16)
+                             = At_Byte,
+            Label & ": and back");
+      end Both;
+   begin
+      Both (0, 0, 0, 0, "the first byte");
+      Both (1, 0, 1, 1, "before CR LF");
+      Both (3, 1, 0, 0, "after CR LF");
+      Both (5, 1, 2, 1, "after a two-byte character");
+      Both (9, 1, 6, 3, "after a surrogate pair");
+      Both (10, 1, 7, 4, "after an invalid byte, one unit");
+      Both (12, 2, 0, 0, "after a lone CR");
+      Both (14, 3, 0, 0, "the end of a file ending in a line end");
+      Landin.Testing.Check
+        (Item, P.Offset_Of (Text, (1, 2), P.UTF_16) = 5,
+         "a unit inside a surrogate pair is the pair's first byte");
+      Landin.Testing.Check
+        (Item, P.Offset_Of (Text, (0, 40), P.UTF_16) = 1,
+         "a position past its line is the line's end");
+      Landin.Testing.Check
+        (Item, P.Offset_Of (Text, (9, 0), P.UTF_16) = 14,
+         "a line past the text is its end");
+      Landin.Testing.Check
+        (Item, P.Position_Of ("ab", 2, P.UTF_16) = (0, 2),
+         "the end of a file with no final line end");
+   end Positions_Count_What_Was_Agreed;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -396,6 +591,15 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "refused sources are served",
          Refused_Sources_Are_Served'Access);
+      Landin.Testing.Register
+        (Into, "server", "messages arrive whole",
+         Messages_Arrive_Whole'Access);
+      Landin.Testing.Register
+        (Into, "server", "faulty frames are named",
+         Faulty_Frames_Are_Named'Access);
+      Landin.Testing.Register
+        (Into, "server", "positions count what was agreed",
+         Positions_Count_What_Was_Agreed'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

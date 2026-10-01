@@ -166,6 +166,36 @@ package Landin.Platform is
 
    overriding function Sample (Host : Unmetered) return Resource_Sample;
 
+   ---------------------------------------------------------------------
+   --  A byte channel
+   --
+   --  What a server talks to its editor through: standard input, output
+   --  and error for a real one, scripted bytes for a test.  Bytes and not
+   --  lines, because a protocol message carries its own length and a
+   --  text-mode read would rewrite line ends out from under it.  Reading
+   --  says how many bytes arrived and whether the input has ended; Pending
+   --  says whether bytes are waiting now, without waiting for any, which is
+   --  how a server with one thread tells a burst of edits from a pause.
+   ---------------------------------------------------------------------
+
+   type Channel is limited interface;
+
+   --  Up to Into'Length bytes, waiting for at least one unless the input
+   --  has ended.  Last is Into'First - 1 exactly when it has.
+   procedure Read
+     (Host : in out Channel;
+      Into : out String;
+      Last : out Natural) is abstract;
+
+   --  Whether a Read would return at least one byte without waiting.
+   function Pending (Host : in out Channel) return Boolean is abstract;
+
+   --  Every byte of Item, in order.
+   procedure Write (Host : in out Channel; Item : String) is abstract;
+
+   --  A line for a person reading the server's log, never the protocol.
+   procedure Log (Host : in out Channel; Line : String) is abstract;
+
    --  Helpers for building an argument list without exposing the container.
    function No_Arguments return Path_List;
    function Arguments (First : String) return Path_List;

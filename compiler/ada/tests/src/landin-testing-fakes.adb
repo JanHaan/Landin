@@ -473,4 +473,65 @@ package body Landin.Testing.Fakes is
             Capture   => Capture));
    end Run;
 
+   ---------------------------------------------------------------------
+   --  Channel
+   ---------------------------------------------------------------------
+
+   procedure Script
+     (Host : in out Fake_Channel; Input : String; Chunk : Positive := 4096)
+   is
+   begin
+      Host.Input := Unbounded.To_Unbounded_String (Input);
+      Host.Next := 1;
+      Host.Chunk := Chunk;
+   end Script;
+
+   procedure Script_Unbounded
+     (Host  : in out Fake_Channel;
+      Input : Ada.Strings.Unbounded.Unbounded_String;
+      Chunk : Positive := 4096)
+   is
+   begin
+      Host.Input := Input;
+      Host.Next := 1;
+      Host.Chunk := Chunk;
+   end Script_Unbounded;
+
+   function Output (Host : Fake_Channel) return String
+     is (Unbounded.To_String (Host.Output));
+
+   function Logged (Host : Fake_Channel) return String
+     is (Unbounded.To_String (Host.Log));
+
+   overriding procedure Read
+     (Host : in out Fake_Channel;
+      Into : out String;
+      Last : out Natural)
+   is
+      Left : constant Natural :=
+        Unbounded.Length (Host.Input) - Host.Next + 1;
+      Taken : constant Natural :=
+        Natural'Min (Left, Natural'Min (Into'Length, Host.Chunk));
+   begin
+      Last := Into'First + Taken - 1;
+      if Taken > 0 then
+         Into (Into'First .. Last) := Unbounded.Slice
+           (Host.Input, Host.Next, Host.Next + Taken - 1);
+         Host.Next := Host.Next + Taken;
+      end if;
+   end Read;
+
+   overriding function Pending (Host : in out Fake_Channel) return Boolean
+     is (Host.Next <= Unbounded.Length (Host.Input));
+
+   overriding procedure Write (Host : in out Fake_Channel; Item : String) is
+   begin
+      Unbounded.Append (Host.Output, Item);
+   end Write;
+
+   overriding procedure Log (Host : in out Fake_Channel; Line : String) is
+   begin
+      Unbounded.Append (Host.Log, Line & ASCII.LF);
+   end Log;
+
 end Landin.Testing.Fakes;

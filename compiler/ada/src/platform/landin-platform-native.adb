@@ -2,6 +2,7 @@ with Ada.Directories;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
 with Interfaces.C;
+with System;
 
 package body Landin.Platform.Native is
 
@@ -323,5 +324,83 @@ package body Landin.Platform.Native is
               Peak_Resident_KiB      => Long_Long_Integer (Peak),
               Allocated_Bytes        => Long_Long_Integer (Held));
    end Sample;
+
+   ---------------------------------------------------------------------
+   --  The channel
+   ---------------------------------------------------------------------
+
+   function Channel_Read
+     (Into : System.Address; Length : Interfaces.C.long)
+      return Interfaces.C.long
+     with Import, Convention => C, External_Name => "landin_channel_read";
+
+   function Channel_Pending return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_channel_pending";
+
+   function Channel_Write
+     (Descriptor : Interfaces.C.int;
+      Item       : System.Address;
+      Length     : Interfaces.C.long) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_channel_write";
+
+   procedure Write_To (Descriptor : Interfaces.C.int; Item : String);
+
+   procedure Write_To (Descriptor : Interfaces.C.int; Item : String) is
+      use type Interfaces.C.int;
+   begin
+      if Item'Length > 0
+        and then Channel_Write
+          (Descriptor, Item (Item'First)'Address,
+           Interfaces.C.long (Item'Length)) /= 0
+      then
+         raise Host_Exhausted with "the host refused a write";
+      end if;
+   end Write_To;
+
+   overriding procedure Read
+     (Host : in out Native_Channel;
+      Into : out String;
+      Last : out Natural)
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.long;
+      Got : Interfaces.C.long;
+   begin
+      if Into'Length = 0 then
+         Last := Into'First - 1;
+         return;
+      end if;
+      Got := Channel_Read
+        (Into (Into'First)'Address, Interfaces.C.long (Into'Length));
+      if Got < 0 then
+         raise Host_Exhausted with "the host refused a read";
+      end if;
+      Last := Into'First + Natural (Got) - 1;
+   end Read;
+
+   overriding function Pending (Host : in out Native_Channel) return Boolean
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      Ready : constant Interfaces.C.int := Channel_Pending;
+   begin
+      if Ready < 0 then
+         raise Host_Exhausted with "the host refused to poll its input";
+      end if;
+      return Ready > 0;
+   end Pending;
+
+   overriding procedure Write (Host : in out Native_Channel; Item : String)
+   is
+      pragma Unreferenced (Host);
+   begin
+      Write_To (1, Item);
+   end Write;
+
+   overriding procedure Log (Host : in out Native_Channel; Line : String) is
+      pragma Unreferenced (Host);
+   begin
+      Write_To (2, Line & ASCII.LF);
+   end Log;
 
 end Landin.Platform.Native;

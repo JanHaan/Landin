@@ -56,4 +56,20 @@ package Landin.Platform.Native is
 
    overriding function Sample (Host : Native_Meter) return Resource_Sample;
 
+   --  Standard input, output and error, through the host C adapter
+   --  `landin_channel.c`.  A host that refuses a read or a write raises
+   --  Host_Exhausted: the editor at the other end has gone.
+   type Native_Channel is limited new Channel with null record;
+
+   overriding procedure Read
+     (Host : in out Native_Channel;
+      Into : out String;
+      Last : out Natural);
+
+   overriding function Pending (Host : in out Native_Channel) return Boolean;
+
+   overriding procedure Write (Host : in out Native_Channel; Item : String);
+
+   overriding procedure Log (Host : in out Native_Channel; Line : String);
+
 end Landin.Platform.Native;

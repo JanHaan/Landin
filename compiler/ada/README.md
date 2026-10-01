@@ -157,8 +157,8 @@ different responsibilities.
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
-| `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads | perform an effect, or let a measurement decide anything |
-| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, and the process's own resource counters through its host C adapter | be reached except through the interface |
+| `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
+| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning and capture files and GNAT for path lookup; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
@@ -183,6 +183,8 @@ different responsibilities.
 | `Landin.Server` | the language server's namespace: the compiler's third client after `refine` and the test program | decide anything a stage decides |
 | `Landin.Server.Holes` | D253's stand-in: which routine bodies of a source a server may check as `loop do end loop`, and the bytes it checks instead | change what a stage accepts, or stand in for anything but a body |
 | `Landin.Server.Analysis` | one analysis of one module for a server: loaded through the editor's buffers, checked by `Landin.Driver.Checking`, and reported with D253's stand-in where it applies | keep a compilation between two analyses, or report inside a stood-in body |
+| `Landin.Server.Transport` | the protocol's framing: header lines, Content-Length and a body, read from a channel and bounded, and a body framed to write | parse a body, or read past a header it cannot read |
+| `Landin.Server.Positions` | the one conversion between a byte offset and an editor's line and character, in UTF-8 or UTF-16 units | count a column any other way |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |

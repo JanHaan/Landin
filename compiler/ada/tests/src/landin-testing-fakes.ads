@@ -158,6 +158,40 @@ package Landin.Testing.Fakes is
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode;
 
+   ---------------------------------------------------------------------
+   --  Channel
+   ---------------------------------------------------------------------
+
+   --  Scripted input, read in chunks of at most Chunk bytes so a test can
+   --  split a message wherever it likes, and captured output and log.
+   --  Pending is whether scripted bytes remain, so a session that sends
+   --  three edits before a request sees them as one burst, every time.
+   type Fake_Channel is limited new Landin.Platform.Channel with private;
+
+   procedure Script
+     (Host : in out Fake_Channel; Input : String; Chunk : Positive := 4096);
+
+   --  The same for input too long to hold on the stack.
+   procedure Script_Unbounded
+     (Host  : in out Fake_Channel;
+      Input : Ada.Strings.Unbounded.Unbounded_String;
+      Chunk : Positive := 4096);
+
+   function Output (Host : Fake_Channel) return String;
+
+   function Logged (Host : Fake_Channel) return String;
+
+   overriding procedure Read
+     (Host : in out Fake_Channel;
+      Into : out String;
+      Last : out Natural);
+
+   overriding function Pending (Host : in out Fake_Channel) return Boolean;
+
+   overriding procedure Write (Host : in out Fake_Channel; Item : String);
+
+   overriding procedure Log (Host : in out Fake_Channel; Line : String);
+
 private
 
    package Unbounded renames Ada.Strings.Unbounded;
@@ -239,6 +273,14 @@ private
    type Fake_Tool_Runner is limited new Landin.Platform.Tool_Runner
    with record
       State : Recorder_Owner;
+   end record;
+
+   type Fake_Channel is limited new Landin.Platform.Channel with record
+      Input  : Unbounded.Unbounded_String;
+      Next   : Positive := 1;
+      Chunk  : Positive := 4096;
+      Output : Unbounded.Unbounded_String;
+      Log    : Unbounded.Unbounded_String;
    end record;
 
 end Landin.Testing.Fakes;
