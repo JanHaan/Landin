@@ -11,8 +11,8 @@ compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
   harness-cases/malformed/               trees that must be rejected; see
                                          harness-cases/README.md
-  fuzz/                                  a seeded corpus mutator run by hand,
-                                         and what it found; see fuzz/README.md
+  fuzz/                                  a seeded corpus mutator that drives the
+                                         server, and what it found; see fuzz/README.md
   server/<name>/session.lsp              a scripted language-server session, and its
                                          workspace; see "Language-server sessions"
   registers.md                           source: the four evidence registers the matrices are generated from

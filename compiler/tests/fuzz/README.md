@@ -1,39 +1,58 @@
 # Mutation fuzzing
 
-A seeded mutation driver over the fixture corpus, and the crashes it has
-found. Nothing runs it automatically: it is a tool you run by hand, and its
-reproducers are a record of what it found, not fixtures the harness runs.
+A seeded mutation driver over the fixture corpus, the crashes it has found,
+and the lane the gate runs. `fuzz.py` makes each mutant and gives it to
+`refine lsp` as an editor would; its reproducers are a record of what it
+found, not fixtures the harness runs.
 
 ## Running it
 
 ```sh
-nix develop -c compiler/tests/fuzz/fuzz.sh compiler/ada/build/nix/debug/bin/refine 4 100000
+nix develop -c compiler/tests/fuzz/fuzz.py \
+  --refine compiler/ada/build/nix/debug/bin/refine --seed 500000 --rounds 1
 ```
 
-`fuzz.sh REFINE ROUNDS SEED [OUT]` takes every positive and negative fixture
-with exactly one `.ldn` file and writes `ROUNDS` mutants of it, one seed each,
-counting up from `SEED`. `mutate.pl SEED IN OUT` makes one mutation, chosen by
-the seed from seven kinds: truncate the file, delete a line, duplicate a line,
-replace a word with a keyword, insert punctuation or an oversized literal,
-delete a character, or swap two words.
+The seeds are every positive and negative fixture with exactly one `.ldn`
+file, in sorted order, then every reproducer below: 1,414 today. Each is
+mutated `--rounds` times, one mutant per seed number, counting up from
+`--seed`. A mutation is one of seven kinds: truncate the file, delete a
+line, duplicate a line, replace a word with a keyword, insert punctuation or
+an oversized literal, delete a character, or swap two words. The seed number
+picks the kind and every choice inside it through splitmix64, so a seed
+number names one mutant on every host and every Python, against the same
+fixture tree; `scripts/tests/test_fuzz_mutator.py` holds the generator to
+splitmix64's published outputs and each kind to the bytes it makes. A source
+is read as an editor shows it, a byte that is not UTF-8 as U+FFFD.
 
-A mutant is a hit when `refine` exits with anything but 0 or 1, runs past
-`LANDIN_FUZZ_SECONDS` (default 30), or prints a defect or exhaustion line. A
-refusal is the answer a mutant should get, so it is never a hit. Each hit is
-kept as `OUT/hit-SEED.ldn`, and `OUT` is a new temporary directory unless it
-is given.
+One server serves fifty mutants, each its own document. Each is opened as
+its seed's source, changed to the mutant, then asked for a hover, a
+definition, formatting and code actions at positions the seed picks, and
+closed. A mutant is a hit when the server stops, does not answer within
+`--seconds` (default 10), answers a request with anything but a result or a
+protocol error, or reports a compiler defect, on its log or through
+`showMessage`. The server runs under an address-space bound, `--memory`,
+2 GiB by default. A diagnostic is never a hit: a refusal is the answer a
+mutant should get. Each hit is kept as `OUT/hit-SEED.ldn` with the session
+that broke it as `OUT/hit-SEED.lsp`, a hit restarts the server, and any hit
+fails the run.
 
-A seed names the same mutant only against the same fixture tree, because the
-seeds are handed out in the sorted order of the fixtures. The recorded runs
-below used the tree at `06f748f1`.
+`--batch` runs the original oracle instead: `refine FILE` on each mutant,
+where an exit other than 0 or 1, a run past the bound or a defect line is a
+hit. `--reduce FILE` deletes runs of lines from a hit, sixteen down to one,
+for as long as a fresh server given the text still breaks, and writes
+`OUT/reduced.ldn`. Before trusting that the reduced file shows the same
+defect as the original, compare the two server logs.
 
-`reduce.sh REFINE IN OUT [STATUS]` deletes runs of lines, from sixteen lines
-down to one, for as long as `refine` still exits with `STATUS` (default 70).
-The exit status is the only signature it keeps. Before trusting that the
-reduced file shows the same defect as the original, compare the two under
-`gdb -ex 'catch exception'`.
+The gate's `compiler` job runs one round from seed 500000 with the debug
+compiler, whose contracts are the stronger oracle: about thirty seconds on
+the runner. Its first run against the server found a definition asked of a
+module whose names were refused raising a defect; the server suite pins the
+fix.
 
-Both scripts need `perl` and `timeout` on the path.
+The first driver was a Perl mutator, `mutate.pl`, run by `fuzz.sh`, with a
+`reduce.sh` beside it. They made the two recorded runs below and are in the
+history, last at commit `bb04329d`; a seed in those logs names a mutant only
+under them.
 
 ## What it found
 
@@ -46,8 +65,8 @@ The runs date from the review before 0.2.1. In `runs/`:
 
 Seed 103339 was a false flag. `refine` exited 1 with a proper refusal, but
 a line of the report matched the driver's defect pattern. The pattern now
-matches `raised ` only at the start of a line. The other twelve were internal compiler defects: exit 70 with
-no diagnostic for the user's actual mistake. Most were a misspelled or
+matches `raised ` only at the start of a line. The other twelve were internal
+compiler defects: exit 70 with no diagnostic for the user's actual mistake. Most were a misspelled or
 refused field type in a struct whose field was then written, a fallible
 function with an undeclared result type, or a loop without `break with`
 standing where a function value belongs.
@@ -78,9 +97,10 @@ not a second copy of those tests:
 
 ## What it is not
 
-This covers one process and one file per mutant. It does not cover the
-driver's options, several files resolved as one module, a target other than
-the default, or emission and linking of the mutants that are accepted. It
-never runs the executables it builds. Its oracle is "does not crash", not
-"gives the right verdict". Every mutant it writes lies within one edit of a
-fixture. `ROADMAP.md` records what broader coverage still needs.
+The gate's lane drives the frontend through the server, one file per
+document, with the default target. It does not cover the driver's options,
+a target other than the default, several files resolved as one module, or
+emission, linking and running the mutants that are accepted. Its oracle is
+"does not crash", not "gives the right verdict", and every mutant it makes
+lies within one edit of a fixture. `ROADMAP.md` records what broader
+coverage still needs.

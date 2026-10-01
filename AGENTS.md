@@ -92,13 +92,13 @@ share nothing, and its final `gate` job fails unless every one succeeded:
 |---|---|---|
 | `documents` | ubuntu-24.04 | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
 | `scripts` | ubuntu-24.04 | every `scripts/tests` module, `check.py`'s controls among them, and the determinism, quality and debugging controls |
-| `compiler` | ubuntu-24.04 | the debug compiler's 775 cases at `LANDIN_TEST_JOBS=8`, the determinism closures and native report identity |
-| `release` | ubuntu-24.04 | the same with the release compiler, then object quality and the GDB sessions |
+| `compiler` | ubuntu-24.04 | the debug compiler's 775 cases at `LANDIN_TEST_JOBS=8`, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
+| `release` | ubuntu-24.04 | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
 | `bindings` | ubuntu-24.04 | the C binding generator against its pinned Clang |
 | `editor-grammar` | ubuntu-24.04 | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `cortex-m` | ubuntu-24.04 | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4` |
 | `scaling` | ubuntu-24.04 | `scripts/scaling.sh`, failing when the frontend's or emission's time grows more than 2.5 times per doubling |
-| `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism and report identity |
+| `darwin-host` | macos-26 | the compiler host suite in debug and release, determinism, report identity and the scripted server sessions |
 | `darwin-parity` | macos-26 | the hosted corpus executed natively, every Darwin source verdict and the bindings |
 | `lldb` | macos-26 | the LLDB sessions |
 

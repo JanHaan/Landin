@@ -109,6 +109,17 @@ jobs:
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
+      #  Every one-file corpus program and every reproducer, mutated once
+      #  and given to refine lsp as an editor would, with the debug
+      #  compiler, whose contracts are the stronger oracle.  The seed is
+      #  fixed, so a hit is a mutant anyone can make again.  About thirty
+      #  seconds; each response is bounded at ten and the server at 2 GiB.
+      - name: The server under mutated sources
+        run: >-
+          python3 compiler/tests/fuzz/fuzz.py --seed 500000 --rounds 1
+          --refine "$PWD/compiler/ada/build/linux-amd64/debug/bin/refine"
+          --out "$RUNNER_TEMP/fuzz"
+
   #  The same corpus with the release compiler, which is the one people run,
   #  and the lanes that measure or debug what it emits: object quality and
   #  the GDB sessions.  Release only, because the debug compiler's checks

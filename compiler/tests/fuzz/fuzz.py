@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""Mutate the corpus and drive `refine lsp` with it, and keep what breaks it.
+
+Every positive and negative fixture with exactly one `.ldn` file, and every
+reproducer in `reproducers/`, is a seed.  Each mutant is one of seven
+mutations of one seed, chosen by a splitmix64 generator from its own seed
+number, so a seed number names one mutant on every host and every Python.
+The server is given each mutant as an editor would: the seed's source is
+opened, changed to the mutant, and then asked for hover, a definition,
+formatting and code actions at positions the same generator picks.
+
+A mutant is a hit when the server stops, or does not answer within the
+per-response bound, or answers a request with anything but a result or
+an error of the protocol, or reports a compiler defect, on its log or
+through showMessage.  A diagnostic is never a hit: refusing a mutant is
+what a mutant should get.  Each hit is written as OUT/hit-SEED.ldn beside
+its transcript, OUT/hit-SEED.lsp, and the run fails.
+
+One server serves a batch of mutants, each its own document, closed after
+it, so a defect that only a long session reaches can show, and a hit
+restarts the server.  `--batch` runs the old oracle instead, `refine FILE`
+on each mutant, where any exit but 0 or 1 is a hit.  `--reduce FILE` deletes
+lines from a hit, sixteen at a time down to one, for as long as it still
+breaks the server.
+
+The gate runs `fuzz.py --refine PATH --seed 500000 --rounds 1`, under a
+memory bound the runner's limit sets.  Standard library only.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import resource
+import select
+import subprocess
+import sys
+import time
+
+HERE = Path(__file__).resolve().parent
+FIXTURES = HERE.parent / "fixtures"
+MASK = (1 << 64) - 1
+
+KEYWORDS = ("end begin match if then else elsif while do loop for in break "
+            "continue with return fail try defer undo sink inout escaping "
+            "from ptr addr mut type struct variant atom concept is any "
+            "unchecked zeroed lenof sizeof when complete public import fixed "
+            "range").split()
+PUNCTUATION = ["(", ")", "[", "]", ":", "=", ",", ".", "..", "..<", "->",
+               "!", "|", "+%", "<<", "-", '"', "'", "--", "{-", "-}", "\n",
+               " ", "0x", "1e999", "99999999999999999999999999"]
+
+
+class Generator:
+    """splitmix64: the same numbers from the same seed everywhere."""
+
+    def __init__(self, seed):
+        self.state = seed & MASK
+
+    def next(self):
+        self.state = (self.state + 0x9E3779B97F4A7C15) & MASK
+        z = self.state
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & MASK
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & MASK
+        return z ^ (z >> 31)
+
+    def below(self, bound):
+        return self.next() % bound if bound > 0 else 0
+
+
+def mutate(seed, text):
+    """One of the seven mutations, as mutate.pl made them."""
+    pick = Generator(seed)
+    kind = pick.below(7)
+    length = max(len(text), 1)
+    if kind == 0:
+        return text[:pick.below(length)]
+    lines = text.split("\n")
+    if kind == 1:
+        del lines[pick.below(len(lines))]
+        return "\n".join(lines)
+    if kind == 2:
+        copied = lines[pick.below(len(lines))]
+        lines.insert(pick.below(len(lines)), copied)
+        return "\n".join(lines)
+    if kind == 3:
+        words = list(re.finditer(r"\b[a-z_][a-z0-9_]*\b", text))
+        if not words:
+            return text
+        word = words[pick.below(len(words))]
+        return (text[:word.start()] + KEYWORDS[pick.below(len(KEYWORDS))]
+                + text[word.end():])
+    if kind == 4:
+        at = pick.below(length)
+        return text[:at] + PUNCTUATION[pick.below(len(PUNCTUATION))] + text[at:]
+    if kind == 5:
+        at = pick.below(length)
+        return text[:at] + text[at + 1:]
+    words = list(re.finditer(r"\S+", text))
+    if len(words) < 2:
+        return text
+    first, second = (words[pick.below(len(words))],
+                     words[pick.below(len(words))])
+    if first.start() >= second.start():
+        return text
+    return (text[:first.start()] + second.group() + text[first.end():
+            second.start()] + first.group() + text[second.end():])
+
+
+def seeds():
+    """(label, text) for every seed source, in a fixed order.
+
+    An editor holds text, not bytes, so a byte that is not UTF-8 is read as
+    it would show one: U+FFFD.  The scanner's own byte checks are the
+    parser suite's to drive; what reaches a server is always UTF-8."""
+    found = []
+    for kind in ("positive", "negative"):
+        for directory in sorted((FIXTURES / kind).iterdir()):
+            sources = sorted(directory.glob("*.ldn"))
+            if len(sources) == 1:
+                found.append((kind + "/" + directory.name,
+                              sources[0].read_bytes().decode(
+                                  "utf-8", "replace")))
+    for path in sorted((HERE / "reproducers").glob("*.ldn")):
+        found.append(("reproducers/" + path.name,
+                      path.read_bytes().decode("utf-8", "replace")))
+    return found
+
+
+def framed(message):
+    data = json.dumps(message, ensure_ascii=False).encode(
+        "utf-8", "surrogateescape")
+    return b"Content-Length: %d\r\n\r\n" % len(data) + data
+
+
+class Server:
+    """One `refine lsp` process and what it has said."""
+
+    def __init__(self, refine, memory, seconds):
+        def limit():
+            if memory:
+                resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+        self.seconds = seconds
+        self.process = subprocess.Popen(
+            [refine, "lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, preexec_fn=limit)
+        self.held = b""
+        self.log = b""
+        self.transcript = []
+        self.next_id = 1
+        self.request("initialize", {"capabilities": {}})
+        self.notify("initialized", {})
+
+    def send(self, message):
+        self.transcript.append("-> " + json.dumps(message, ensure_ascii=False))
+        try:
+            self.process.stdin.write(framed(message))
+            self.process.stdin.flush()
+        except (BrokenPipeError, OSError):
+            raise Broken("the server closed its input")
+
+    def notify(self, method, params):
+        self.send({"jsonrpc": "2.0", "method": method, "params": params})
+
+    def receive(self):
+        """The next message, or Broken."""
+        deadline = time.monotonic() + self.seconds
+        while True:
+            head, separator, rest = self.held.partition(b"\r\n\r\n")
+            if separator:
+                fields = dict(line.split(b":", 1)
+                              for line in head.split(b"\r\n") if b":" in line)
+                length = int(fields.get(b"Content-Length", b"-1"))
+                if length < 0:
+                    raise Broken("a frame with no length")
+                if len(rest) >= length:
+                    body, self.held = rest[:length], rest[length:]
+                    text = body.decode("utf-8", "surrogateescape")
+                    self.transcript.append("<- " + text)
+                    try:
+                        return json.loads(text)
+                    except ValueError:
+                        raise Broken("a body that is not JSON")
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise Broken("no answer within %d seconds" % self.seconds)
+            ready, _, _ = select.select(
+                [self.process.stdout, self.process.stderr], [], [], left)
+            for stream in ready:
+                data = os.read(stream.fileno(), 1 << 16)
+                if stream is self.process.stderr:
+                    self.log += data
+                    if b"defect" in self.log:
+                        raise Broken("the server logged a defect")
+                elif not data:
+                    raise Broken("the server stopped, status %s"
+                                 % self.process.poll())
+                else:
+                    self.held += data
+
+    def request(self, method, params):
+        """The answer to a request; notifications on the way are checked."""
+        number = self.next_id
+        self.next_id += 1
+        self.send({"jsonrpc": "2.0", "id": number, "method": method,
+                   "params": params})
+        while True:
+            message = self.receive()
+            if message.get("method") == "window/showMessage" and \
+                    "defect" in message.get("params", {}).get("message", ""):
+                raise Broken("the server reported a defect")
+            if "id" not in message:
+                continue
+            if message["id"] != number:
+                raise Broken("an answer to the wrong request")
+            if "result" in message:
+                return message["result"]
+            error = message.get("error", {})
+            if error.get("code") == -32603 or "defect" in str(error):
+                raise Broken("the request failed: %s" % error)
+            if not isinstance(error.get("code"), int):
+                raise Broken("an answer with neither result nor error")
+            return None
+
+    def stop(self):
+        try:
+            self.request("shutdown", None)
+            self.notify("exit", None)
+            self.process.wait(timeout=self.seconds)
+        except Exception:
+            pass
+        if self.process.poll() is None:
+            self.process.kill()
+            self.process.wait()
+        for stream in (self.process.stdin, self.process.stdout,
+                       self.process.stderr):
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+class Broken(Exception):
+    pass
+
+
+def position(pick, text):
+    lines = text.split("\n")
+    line = pick.below(len(lines))
+    return {"line": line, "character": pick.below(len(lines[line]) + 2)}
+
+
+def serve_one(server, seed, original, mutant):
+    """Give the server one mutant as an editor would."""
+    uri = "file:///fuzz/m%d/case.ldn" % seed
+    pick = Generator(seed ^ 0x5DEECE66D)
+    server.notify("textDocument/didOpen", {"textDocument": {
+        "uri": uri, "languageId": "landin", "version": 1, "text": original}})
+    server.notify("textDocument/didChange", {
+        "textDocument": {"uri": uri, "version": 2},
+        "contentChanges": [{"text": mutant}]})
+    document = {"uri": uri}
+    for method in ("textDocument/hover", "textDocument/definition"):
+        server.request(method, {"textDocument": document,
+                                "position": position(pick, mutant)})
+    server.request("textDocument/formatting", {
+        "textDocument": document,
+        "options": {"tabSize": 4, "insertSpaces": True}})
+    start = position(pick, mutant)
+    server.request("textDocument/codeAction", {
+        "textDocument": document,
+        "range": {"start": start, "end": start},
+        "context": {"diagnostics": []}})
+    server.notify("textDocument/didClose", {"textDocument": document})
+
+
+def batch_one(refine, seconds, mutant):
+    path = Path("/tmp") / ("landin-fuzz-%d.ldn" % os.getpid())
+    path.write_bytes(mutant.encode("utf-8", "surrogateescape"))
+    try:
+        ran = subprocess.run([refine, str(path)], capture_output=True,
+                             timeout=seconds)
+    except subprocess.TimeoutExpired:
+        return "timed out"
+    finally:
+        path.unlink(missing_ok=True)
+    report = ran.stdout + ran.stderr
+    if ran.returncode not in (0, 1) or b"internal compiler defect" in report:
+        return "exit %d" % ran.returncode
+    return ""
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--refine", required=True)
+    parser.add_argument("--seed", type=int, default=500000)
+    parser.add_argument("--rounds", type=int, default=1)
+    parser.add_argument("--out", default="")
+    parser.add_argument("--seconds", type=int, default=10,
+                        help="bound on one response")
+    parser.add_argument("--memory", type=int, default=2 << 30,
+                        help="address-space bound on the server, in bytes")
+    parser.add_argument("--per-server", type=int, default=50)
+    parser.add_argument("--batch", action="store_true",
+                        help="run refine FILE on each mutant instead")
+    parser.add_argument("--reduce", default="",
+                        help="reduce this hit instead of fuzzing")
+    arguments = parser.parse_args()
+    refine = os.path.abspath(arguments.refine)
+    out = Path(arguments.out or ("/tmp/landin-fuzz-%d" % arguments.seed))
+    out.mkdir(parents=True, exist_ok=True)
+
+    def breaks(text):
+        """Whether a fresh server, given text as it was given the hit,
+        breaks.  The original is the text itself: what is opened and what
+        it is changed to are the same, so nothing but text can matter."""
+        if arguments.batch:
+            return batch_one(refine, arguments.seconds, text)
+        server = Server(refine, arguments.memory, arguments.seconds)
+        try:
+            serve_one(server, 0, text, text)
+            return ""
+        except Broken as problem:
+            return str(problem)
+        finally:
+            server.stop()
+
+    if arguments.reduce:
+        text = Path(arguments.reduce).read_text(encoding="utf-8",
+                                                errors="surrogateescape")
+        lines = text.split("\n")
+        for size in (16, 8, 4, 2, 1):
+            changed = True
+            while changed:
+                changed = False
+                index = len(lines) - size
+                while index >= 0:
+                    trial = lines[:index] + lines[index + size:]
+                    if breaks("\n".join(trial)):
+                        lines = trial
+                        changed = True
+                    index -= size
+        reduced = out / "reduced.ldn"
+        reduced.write_text("\n".join(lines), encoding="utf-8",
+                           errors="surrogateescape")
+        print("reduced to %d lines: %s" % (len(lines), reduced))
+        return 0
+
+    started = time.monotonic()
+    total, hits = 0, 0
+    server = None
+    for label, original in seeds():
+        for _ in range(arguments.rounds):
+            seed = arguments.seed + total
+            total += 1
+            mutant = mutate(seed, original)
+            problem = ""
+            if arguments.batch:
+                problem = batch_one(refine, arguments.seconds, mutant)
+                transcript = []
+            else:
+                if server is None or total % arguments.per_server == 0:
+                    if server is not None:
+                        server.stop()
+                    server = Server(refine, arguments.memory,
+                                    arguments.seconds)
+                try:
+                    serve_one(server, seed, original, mutant)
+                except Broken as broken:
+                    problem = str(broken)
+                transcript = server.transcript
+                server.transcript = []
+                if problem:
+                    server.stop()
+                    server = None
+            if problem:
+                hits += 1
+                (out / ("hit-%d.ldn" % seed)).write_bytes(
+                    mutant.encode("utf-8", "surrogateescape"))
+                (out / ("hit-%d.lsp" % seed)).write_text(
+                    "\n".join(transcript) + "\n", encoding="utf-8",
+                    errors="surrogateescape")
+                print("HIT seed=%d src=%s :: %s" % (seed, label, problem),
+                      flush=True)
+    if server is not None:
+        server.stop()
+    print("total=%d hits=%d seconds=%d out=%s"
+          % (total, hits, time.monotonic() - started, out))
+    return 1 if hits else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
