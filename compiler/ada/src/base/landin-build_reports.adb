@@ -117,6 +117,14 @@ package body Landin.Build_Reports is
      (Of_Report : Report;
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return String
+     is (JSON (Of_Report, Facts, Landin.Targets.Levels.Default_Level (Facts),
+               Options));
+
+   function JSON
+     (Of_Report : Report;
+      Facts : Landin.Targets.Target_Facts;
+      Level : Landin.Targets.Levels.Feature_Level;
+      Options : Landin.Optimization.Options) return String
    is
       package US renames Ada.Strings.Unbounded;
       Text : US.Unbounded_String;
@@ -143,7 +151,8 @@ package body Landin.Build_Reports is
       end Field;
    begin
       Put ("{""format"":""landin-build-report-1"",""target"":"""
-           & Landin.Targets.Name (Facts) & """,""optimize"":"""
+           & Landin.Targets.Name (Facts) & """,""level"":"""
+           & Landin.Targets.Levels.Name (Level) & """,""optimize"":"""
            & Landin.Optimization.Spelling (Options.Optimize)
            & """,""specialize"":"""
            & Landin.Optimization.Spelling (Options.Specialize)

@@ -5450,8 +5450,9 @@ def check_diagnostic_matrix(full_run):
     lines = {line[:5]: line for line in fresh.splitlines()
              if re.match(r"L\d{4}", line)}
     #  L0008 refuses no program: its evidence is the driver case that
-    #  checks a file out of the layout.
-    driver = {"L0002", "L0003", "L0004", "L0005", "L0008",
+    #  checks a file out of the layout.  L0009 refuses none either: its
+    #  evidence is the driver case that names a level another family has.
+    driver = {"L0002", "L0003", "L0004", "L0005", "L0008", "L0009",
               "L0500", "L0501", "L0502", "L0504"}
     fixed = set()
     for _, fields in fixture_records().values():

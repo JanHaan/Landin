@@ -50,6 +50,13 @@ lengths, line offsets and panic bases removed.  `--layout-only` requires
 status, output and report equal as they are, and `layout` equal where the
 raw artefacts differ.  A line that moved would show in a `.loc`'s line and
 in a report's line numbers, so both still count.
+
+Every compilation is at its target's default CPU feature level, which the
+build report names as `"level"`.  That member is taken out before the report
+is digested, so a compiler that names the level and one that predates levels
+are compared on everything else; the level itself is recorded as `level`,
+and a manifest that has it is compared with one that does not as though it
+were absent only when it is the default.
 """
 import concurrent.futures
 import hashlib
@@ -126,6 +133,7 @@ SITE = re.compile(rb"^(\s*(?:movl\s+\$|movz\s+x1,\s*#|movk\s+x1,\s*#|"
                   rb"(?:call|bl|blx)\s+_?panic_handler)", re.M)
 SECTION = re.compile(rb"^\s*(?:\.section|\.text|\.data|\.bss)\b.*$", re.M)
 IDENTITY = re.compile(rb"^# Landin caller files [0-9a-f]+\n", re.M)
+LEVEL = re.compile(rb',"level":"([^"]*)"')
 SPANS = re.compile(rb'"(?:sha256|source_sha256|assembly_sha256|build_id|'
                    rb'first|last|byte_length|panic_base)":\s*("[^"]*"|\d+)')
 OFFSETS = re.compile(rb'"line_offsets":\[[^\]]*\]')
@@ -176,21 +184,27 @@ def run_one(refine, fixture, sources, target, variant, work):
         command += ["--build-mode=release"]
     result = subprocess.run(command + sources, capture_output=True,
                             cwd=fixture)
+    built = report.read_bytes() if report.exists() else None
+    named = LEVEL.search(built) if built is not None else None
+    if named:
+        built = LEVEL.sub(b"", built, count=1)
     entry = {
         "status": result.returncode,
         "stdout": text_digest(result.stdout),
         "stderr": text_digest(result.stderr),
         "errors": text_digest(without_additions(result.stderr)),
         "asm": digest(asm),
-        "report": digest(report),
+        "report": "absent" if built is None else text_digest(built),
     }
+    if named:
+        entry["level"] = named.group(1).decode()
     maps = sorted(p for p in out.iterdir() if p.name not in
                   ("out.s", "build.json"))
     for extra in maps:
         entry["file:" + extra.name] = digest(extra)
     entry["layout"] = layout_digest(
         asm.read_bytes() if asm.exists() else b"",
-        report.read_bytes() if report.exists() else b"",
+        built if built is not None else b"",
         [extra.read_bytes() for extra in maps])
     shutil.rmtree(out)
     return entry
@@ -237,6 +251,11 @@ def emit(refine, root, work, out):
     return 0
 
 
+#  The level a compilation assumes when none is selected, which is the only
+#  one a manifest compiles at and so the only one it may treat as absent.
+DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "darwin-arm64": "armv8-a",
+                 "cortex-m0": "armv6-m"}
+
 #  What a change of space may move, per field; `layout` stands for them.
 MOVED_BY_LAYOUT = {"asm", "report"}
 
@@ -250,7 +269,12 @@ def compare(first, second, report_only=False, layout_only=False):
     for key in sorted(set(a) | set(b)):
         if key not in a or key not in b:
             faults.append("%s: only in one manifest" % key)
-        elif a[key] != b[key]:
+            continue
+        target = key.split("|")[1]
+        for entry in (a[key], b[key]):
+            if entry.get("level") == DEFAULT_LEVEL[target]:
+                entry.pop("level")
+        if a[key] != b[key]:
             fields = sorted(f for f in set(a[key]) | set(b[key])
                             if a[key].get(f) != b[key].get(f))
             if report_only and fields == ["stderr"]:

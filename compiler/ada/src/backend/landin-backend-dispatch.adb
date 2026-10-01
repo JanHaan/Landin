@@ -41,6 +41,7 @@ package body Landin.Backend.Dispatch is
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
       Facts    : Landin.Targets.Target_Facts;
+      Level    : Landin.Targets.Levels.Feature_Level;
       Options  : Landin.Optimization.Options;
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
@@ -49,19 +50,22 @@ package body Landin.Backend.Dispatch is
       Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Panic : access constant Landin.Panics.Plan := null) is
    begin
+      if not Landin.Targets.Levels.Belongs_To (Level, Facts) then
+         raise Compiler_Defect with "a level of another target's family";
+      end if;
       case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.Linux_X86_64_ELF =>
             Landin.Backend.X86_64.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
-               Hosted_Entry, Debug, Panic);
+               Hosted_Entry, Debug, Panic, Level);
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
             Landin.Backend.Arm64.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
-               Hosted_Entry, Debug, Panic);
+               Hosted_Entry, Debug, Panic, Level);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             Landin.Backend.Cortex_M.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
-               Hosted_Entry, Debug, Firmware_Entry, Panic);
+               Hosted_Entry, Debug, Firmware_Entry, Panic, Level);
          when Landin.Targets.Capabilities.No_Backend =>
             raise Compiler_Defect with "target has no assembly emitter";
       end case;

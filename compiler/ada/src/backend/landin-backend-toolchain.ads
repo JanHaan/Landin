@@ -38,6 +38,7 @@
 
 with Landin.Platform;
 with Landin.Targets;
+with Landin.Targets.Levels;
 
 package Landin.Backend.Toolchain is
 
@@ -89,11 +90,34 @@ package Landin.Backend.Toolchain is
    --  `mold -run`.  So selecting a linker changes one argument and not the
    --  shape of the invocation.  The empty string leaves the driver's own
    --  default alone.
+   --
+   --  A CPU feature level other than the target's default is passed to the
+   --  tools, so that the assembler refuses an instruction the level does not
+   --  have and the linker selects the runtime and records the level that
+   --  the build assumed (D255).  The default level adds no argument: every
+   --  build that selects none is invoked exactly as before levels existed.
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
-      Debug : Boolean := False)
-      return Landin.Platform.Path_List;
+      Debug : Boolean := False;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
+      return Landin.Platform.Path_List
+     with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
 
+   function Link_Arguments
+     (Assembly : String;
+      Output   : String;
+      Linker   : String;
+      Build_Id : String := "";
+      Libraries : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments;
+      Facts : Landin.Targets.Target_Facts;
+      Full_Debug : Boolean := False;
+      Level : Landin.Targets.Levels.Feature_Level)
+      return Landin.Platform.Path_List
+     with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
+
+   --  The same at the target's default level.
    function Link_Arguments
      (Assembly : String;
       Output   : String;
@@ -104,5 +128,11 @@ package Landin.Backend.Toolchain is
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False)
       return Landin.Platform.Path_List;
+
+   --  The GNU assembler's `-march=` for an x86-64 level: `generic64`, the
+   --  psABI baseline, with each extension the level adds.  The pinned
+   --  assembler does not accept the psABI's own `x86-64-v3` spelling.
+   function X86_Assembler_Architecture
+     (Level : Landin.Targets.Levels.Feature_Level) return String;
 
 end Landin.Backend.Toolchain;

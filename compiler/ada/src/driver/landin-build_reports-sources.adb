@@ -21,7 +21,8 @@ package body Landin.Build_Reports.Sources is
    begin
       US.Append (Result, "{""schema"":1,""build"":"
         & Landin.Build_Reports.JSON
-          (Of_Report, Landin.Stages.Target (Context), Options)
+          (Of_Report, Landin.Stages.Target (Context),
+           Landin.Stages.Level (Context), Options)
         & ",""sources"":[" & LF);
       for Index in 1 .. Landin.Stages.Source_Count (Context) loop
          declare

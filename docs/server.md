@@ -40,16 +40,20 @@ there are no roots. `fixture.meta` means nothing to the server: a fixture
 directory is analysed as the module its files make, which is not always what
 the test program compiles.
 
-Two more options choose what `--target=` and `--option=` choose:
+Three more options choose what `--target=`, `--level=` and `--option=`
+choose:
 
 ```json
 {"roots": ["file:///home/me/landin"],
  "target": "cortex-m0",
+ "level": "armv7-m",
  "options": {"board": "rp2040"}}
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, the default,
-`darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one mapping. An
+`darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one mapping.
+`level` is a CPU feature level of that target's family, read after it as
+`refine` reads it, and the target's default when absent. An
 option is named in lowercase letters, digits and underscores. A value the
 server refuses is reported once, through `window/showMessage`, and the rest
 are used.

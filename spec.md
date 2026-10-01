@@ -14799,6 +14799,69 @@ syntax error, which is what an editor had before.
 `server/only a body is stood in for`, `server/analysis continues past a body`,
 `server/analysis agrees with refine` and `server/refused sources are served`.
 
+### D255 — A build assumes a CPU feature level, and a level changes no layout
+
+**From** [1500] and [1550].
+
+**The discrepancy:** [1500] selects declarations by architecture, and a
+target description named one processor: `cortex-m0` was ARMv6-M, and the
+hosted targets emitted for the oldest processor of their architecture. A
+program could not be built for a processor with more, nor ask whether the
+one it was built for had something, so every instruction a newer core adds
+was out of reach without leaving the language for `assembler.block`.
+
+**Chosen:** a build assumes one CPU feature level of its target's family,
+selected with `--level=NAME` and by the language server's `level` option.
+A level is a set of features; the levels and what each holds are:
+
+| family | level | features |
+|---|---|---|
+| x86-64 | `x86-64-v1`, the default | none |
+| | `x86-64-v2` | `cmpxchg16b`, `lahf`, `popcnt`, `sse3`, `ssse3`, `sse4_1`, `sse4_2` |
+| | `x86-64-v3` | those, and `avx`, `avx2`, `bmi1`, `bmi2`, `f16c`, `fma`, `lzcnt`, `movbe`, `xsave` |
+| | `x86-64-v4` | those, and `avx512f`, `avx512bw`, `avx512cd`, `avx512dq`, `avx512vl` |
+| arm64 | `armv8-a`, the default | none |
+| | `armv8.1-a` | `lse`, `crc32`, `rdm` |
+| M profile | `armv6-m`, the default | none |
+| | `armv7-m` | `thumb2`, `idiv` |
+| | `armv7e-m` | `thumb2`, `idiv`, `dsp` |
+
+The x86-64 levels are the [x86-64 psABI](https://gitlab.com/x86-psABIs/x86-64-ABI)'s
+microarchitecture levels; the Arm ones are the architecture versions of the
+[A-profile](https://developer.arm.com/documentation/ddi0487/mc/) and
+[M-profile](https://developer.arm.com/documentation/ddi0403/ee/) manuals, in
+GCC's spelling. Synthetic-32 describes no processor and has no level. Each
+default is the level every backend emitted for before levels existed, so a
+build that selects none is the build it was. `cortex_m0` names the M-profile
+backend's family, not its core: a build at `armv7-m` is still `cortex-m0`'s
+description and ABI. Darwin's lowest processor, Apple's M1, has more than
+`armv8-a`; assuming less than a machine has is sound, so the default stays
+and a build for Apple silicon may select `armv8.1-a`.
+
+A level changes which instructions the backend selects and which the
+toolchain accepts, and nothing else: every level of a family shares one
+layout, one calling convention and one C ABI, so code built at two levels of
+one family links together. A level is not a target. Comparing two
+descriptions still says which backend and which ABI, and the checker and the
+target-neutral IR never see a level. A name that is no level of the selected
+family is L0009. A build at a level the machine running it lacks is not
+detected by the program; on Linux the executable carries the level in its
+ISA note and the loader refuses it.
+
+**The alternatives:** a target per level, `--target=x86-64-v3`, which
+multiplies every operating system by every level and makes comparing two
+descriptions answer a question about the processor when every caller asks
+which backend. A level in the target description, which is the same thing
+inside the compiler. Ordering levels and comparing them, `compiler.level >=
+v3`: the psABI's levels nest, but ARMv8-M's baseline lacks what ARMv7-M has
+and RISC-V's extensions combine freely, so a set is what a level is. Taking
+Apple's floor as Darwin's default, which changes the code every existing
+Darwin build emits.
+
+**Pinned by** `targets/levels are stated per family`,
+`targets/names select their descriptions` and `driver/a level is selected
+within its family`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

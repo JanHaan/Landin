@@ -9,6 +9,7 @@ with Landin.IR;
 with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Targets;
+with Landin.Targets.Levels;
 
 package Landin.Backend.Cortex_M is
 
@@ -29,6 +30,8 @@ package Landin.Backend.Cortex_M is
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
       Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Panic : access constant Landin.Panics.Plan := null);
+      Panic : access constant Landin.Panics.Plan := null;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M));
 
 end Landin.Backend.Cortex_M;

@@ -235,8 +235,11 @@ package body Landin.Backend.Cortex_M is
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
       Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
-      Panic : access constant Landin.Panics.Plan := null)
+      Panic : access constant Landin.Panics.Plan := null;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
    is
+      use type Landin.Targets.Levels.Feature_Level;
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -4258,8 +4261,10 @@ package body Landin.Backend.Cortex_M is
       end Emit_Datum;
 
    begin
-      if Facts /= Landin.Targets.Cortex_M then
-         raise Compiler_Defect with "Cortex emission needs ARMv6-M";
+      if Facts /= Landin.Targets.Cortex_M
+        or else not Landin.Targets.Levels.Belongs_To (Level, Facts)
+      then
+         raise Compiler_Defect with "Cortex emission needs an M profile";
       end if;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
@@ -4271,7 +4276,13 @@ package body Landin.Backend.Cortex_M is
          Emit (".space 4");
       end if;
       Emit (".syntax unified");
-      Emit (".cpu cortex-m0");
+      --  ARMv6-M keeps naming its core.  A higher level names its
+      --  architecture, so the assembler admits exactly what it has (D255).
+      if Level = Landin.Targets.Levels.Default_Level (Facts) then
+         Emit (".cpu cortex-m0");
+      else
+         Emit (".arch " & Landin.Targets.Levels.Name (Level));
+      end if;
       Emit (".thumb");
       Emit (".text");
       if Debug /= null then

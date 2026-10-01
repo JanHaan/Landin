@@ -69,6 +69,10 @@ package Landin.Diagnostics.Catalogue is
       --  layout.  Whose rule is D252, not a language rule, and no program
       --  is refused for it.
       Not_Formatted,
+      --  `--level=` names no CPU feature level of the selected target's
+      --  family.  A sibling of Unknown_Target, and no program is refused
+      --  for it.
+      Unknown_Level,
       --  The scanner.
       Construct_Not_Enabled,
       Malformed_Integer,
@@ -178,6 +182,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => "L0006",
             when Module_Directory_Invalid => "L0007",
             when Not_Formatted         => "L0008",
+            when Unknown_Level         => "L0009",
             when Construct_Not_Enabled => "L0010",
             when Malformed_Integer     => "L0011",
             when Unknown_Bytes         => "L0012",
@@ -245,6 +250,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => Error,
             when Module_Directory_Invalid => Error,
             when Not_Formatted         => Error,
+            when Unknown_Level         => Error,
             when Construct_Not_Enabled => Error,
             when Malformed_Integer     => Error,
             when Unknown_Bytes         => Error,
@@ -278,6 +284,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => Live,
             when Module_Directory_Invalid => Live,
             when Not_Formatted         => Live,
+            when Unknown_Level         => Live,
             when Construct_Not_Enabled => Live,
             when Malformed_Integer     => Live,
             when Unknown_Bytes         => Live,
@@ -315,6 +322,8 @@ package Landin.Diagnostics.Catalogue is
                "[1410]: an entry module must be a readable directory",
             when Not_Formatted         =>
                "D252: a source `refine fmt --check` finds out of the layout",
+            when Unknown_Level         =>
+               "D255: a CPU feature level the selected target does not have",
             when Construct_Not_Enabled =>
                "[1830]: the tour describes this and the kernel omits it",
             when Malformed_Integer     =>
@@ -466,6 +475,7 @@ package Landin.Diagnostics.Catalogue is
             when Module_Not_Found      => True,
             when Module_Directory_Invalid => False,
             when Not_Formatted         => True,
+            when Unknown_Level         => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -498,6 +508,7 @@ package Landin.Diagnostics.Catalogue is
             --  The first line out of the layout, which may be one whose
             --  only fault is its missing line end, and so empty.
             when Not_Formatted         => False,
+            when Unknown_Level         => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,

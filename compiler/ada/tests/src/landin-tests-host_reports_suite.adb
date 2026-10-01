@@ -153,7 +153,8 @@ package body Landin.Tests.Host_Reports_Suite is
            (Item, Reports.JSON (Report, Landin.Targets.Linux_X86_64,
                                 Landin.Optimization.Reference_Options),
             "{""format"":""landin-build-report-1"","
-            & """target"":""linux-x86-64"",""optimize"":""none"","
+            & """target"":""linux-x86-64"",""level"":""x86-64-v1"","
+            & """optimize"":""none"","
             & """specialize"":""off"",""specializations"": ["
             & "],""routines"": [],""layouts"": [" & LF
             & "{""nominal"":1,""policy"":""natural"",""size"":0,"

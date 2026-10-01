@@ -9,6 +9,7 @@ with Landin.IR;
 with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Targets;
+with Landin.Targets.Levels;
 
 package Landin.Backend.Arm64 is
 
@@ -28,6 +29,8 @@ package Landin.Backend.Arm64 is
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
-      Panic : access constant Landin.Panics.Plan := null);
+      Panic : access constant Landin.Panics.Plan := null;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Darwin_Arm64));
 
 end Landin.Backend.Arm64;

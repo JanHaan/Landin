@@ -32,6 +32,7 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Levels;
 with Landin.Targets.Selection;
 
 package body Landin.Driver is
@@ -60,6 +61,8 @@ package body Landin.Driver is
    use type Landin.Targets.Capabilities.Debug_Format;
 
 
+   Code_Unknown_Level : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Unknown_Level);
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
@@ -92,7 +95,13 @@ package body Landin.Driver is
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF
       & "targets described: linux-x86-64, darwin-arm64, cortex-m0, "
-      & "synthetic-32" & LF);
+      & "synthetic-32" & LF
+      & "levels of linux-x86-64: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_X86_64) & LF
+      & "levels of darwin-arm64: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Darwin_Arm64) & LF
+      & "levels of cortex-m0: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF);
 
    function Usage return String is
      ("usage: refine [options] [source.ldn ...]" & LF
@@ -103,6 +112,8 @@ package body Landin.Driver is
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
       & "  --target=NAME       select a described target" & LF
+      & "  --level=NAME        assume a CPU feature level of that target"
+      & LF
       & "  --option=NAME=VALUE set a declared fixed build option" & LF
       & "  --build-mode=NAME   debug (default) or release" & LF
       & "  --optimize=NAME     none, size (default), or speed" & LF
@@ -473,6 +484,9 @@ package body Landin.Driver is
       Unknowns : Landin.Platform.Path_List;
       Targets  : Landin.Platform.Path_List;
       Rejected : Landin.Platform.Path_List;
+      Levels   : Landin.Platform.Path_List;
+      Level    : Landin.Targets.Levels.Feature_Level;
+      Level_Problem : Unbounded.Unbounded_String;
       Wants_Usage    : Boolean := False;
       Wants_Identity : Boolean := False;
       Emit      : Emit_Kind := Emit_Nothing;
@@ -546,6 +560,9 @@ package body Landin.Driver is
 
             elsif Starts_With (Argument, "--target=") then
                Targets.Append (After (Argument, "--target="));
+
+            elsif Starts_With (Argument, "--level=") then
+               Levels.Append (After (Argument, "--level="));
 
             elsif Starts_With (Argument, "--option=") then
                Options.Append (After (Argument, "--option="));
@@ -724,9 +741,29 @@ package body Landin.Driver is
          end if;
       end loop;
 
+      --  A level is a level of the family the target selected, so it is
+      --  resolved after the target, and a level named for another family
+      --  is refused rather than read as the nearest one this family has.
+      Level := Landin.Targets.Levels.Default_Level (Facts);
+      if Natural (Levels.Length) > 1 then
+         Unknowns.Append ("--level given more than once");
+         Bad_Use := True;
+      elsif Natural (Levels.Length) = 1 and then Rejected.Is_Empty then
+         if Landin.Targets.Levels.Is_Level_Of
+           (Facts, Levels.Element (1))
+         then
+            Level := Landin.Targets.Levels.Level_Named
+              (Facts, Levels.Element (1));
+         else
+            Level_Problem := Unbounded.To_Unbounded_String
+              ("unknown level for " & Landin.Targets.Name (Facts) & ": "
+               & Levels.Element (1));
+         end if;
+      end if;
+
       declare
          Context : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Facts);
+           Landin.Stages.Create (Facts, Level);
          Panic : aliased Landin.Panics.Plan;
          Panic_Problem : Unbounded.Unbounded_String;
 
@@ -1320,6 +1357,7 @@ package body Landin.Driver is
                   Landin.Stages.Meanings (Context).all,
                   Landin.Stages.Identities (Context).all,
                   Landin.Stages.Target (Context),
+                  Landin.Stages.Level (Context),
                   Optimization, Emitted, Evidence,
                   Hosted_Entry => Landin.Backend.Entry_Point.Hosted_Main
                     (Landin.Stages.Code (Context).all,
@@ -1409,7 +1447,8 @@ package body Landin.Driver is
                        (Driver,
                         Landin.Backend.Toolchain.Assemble_Arguments
                           (Assembly_Path, Product_Path & ".o", Facts,
-                           Debug => Debug_Enabled),
+                           Debug => Debug_Enabled,
+                           Level => Landin.Stages.Level (Context)),
                         Ran, Landin.Platform.Merged);
                      if Ran.Ended /= Landin.Platform.Exited
                        or else Ran.Exit_Code /= 0
@@ -1439,7 +1478,8 @@ package body Landin.Driver is
                           Linker   => Unbounded.To_String (Linker),
                           Build_Id => Unbounded.To_String (Map_Id),
                           Full_Debug => Debug_Enabled,
-                          Libraries => Libraries, Facts => Facts),
+                          Libraries => Libraries, Facts => Facts,
+                          Level => Landin.Stages.Level (Context)),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -1544,6 +1584,11 @@ package body Landin.Driver is
          for Name of Rejected loop
             Note_Failure (Code_Unknown_Target, "unknown target: " & Name);
          end loop;
+
+         if Unbounded.Length (Level_Problem) > 0 then
+            Note_Failure
+              (Code_Unknown_Level, Unbounded.To_String (Level_Problem));
+         end if;
 
          for Option of Unknowns loop
             Note_Failure (Code_Unknown_Option, "unknown option: " & Option);

@@ -5,6 +5,57 @@ with Landin.Targets.Capabilities;
 package body Landin.Backend.Toolchain is
 
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Levels.Feature_Level;
+
+   package Levels renames Landin.Targets.Levels;
+
+   function Is_Default
+     (Level : Levels.Feature_Level; Facts : Landin.Targets.Target_Facts)
+      return Boolean
+     is (Level = Levels.Default_Level (Facts));
+
+   --  The GNU assembler's name for each x86-64 feature, which is not
+   --  always the psABI's: `cx16`, `lahf_sahf`, `bmi`, and dotted SSE4.
+   function Gas_Spelling (Of_Feature : Levels.Feature) return String
+     is (case Of_Feature is
+            when Levels.Cmpxchg16b => "cx16",
+            when Levels.Lahf       => "lahf_sahf",
+            when Levels.Sse4_1     => "sse4.1",
+            when Levels.Sse4_2     => "sse4.2",
+            when Levels.Bmi1       => "bmi",
+            when others            => Levels.Spelling (Of_Feature));
+
+   function X86_Assembler_Architecture
+     (Level : Levels.Feature_Level) return String
+   is
+      Result : Ada.Strings.Unbounded.Unbounded_String :=
+        Ada.Strings.Unbounded.To_Unbounded_String ("generic64");
+   begin
+      for Each in Levels.Cmpxchg16b .. Levels.Avx512vl loop
+         if Levels.Has (Level, Each) then
+            Ada.Strings.Unbounded.Append (Result, "+" & Gas_Spelling (Each));
+         end if;
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Result);
+   end X86_Assembler_Architecture;
+
+   --  An M-profile level's processor arguments.  ARMv6-M keeps the core it
+   --  always named; a higher level names its architecture, which is also
+   --  what selects that architecture's libgcc multilib.
+   procedure Add_M_Profile
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level; Facts : Landin.Targets.Target_Facts);
+
+   procedure Add_M_Profile
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level; Facts : Landin.Targets.Target_Facts) is
+   begin
+      if Is_Default (Level, Facts) then
+         List.Append ("-mcpu=cortex-m0");
+      else
+         List.Append ("-march=" & Levels.Name (Level));
+      end if;
+   end Add_M_Profile;
 
    function Identity_Section
      (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String
@@ -167,7 +218,9 @@ package body Landin.Backend.Toolchain is
 
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
-      Debug : Boolean := False)
+      Debug : Boolean := False;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -177,7 +230,7 @@ package body Landin.Backend.Toolchain is
       then
          raise Compiler_Defect with "firmware assembly requires Cortex-M0";
       end if;
-      List.Append ("-mcpu=cortex-m0");
+      Add_M_Profile (List, Level, Facts);
       List.Append ("-mthumb");
       List.Append ("-mfloat-abi=soft");
       List.Append ("-mabi=aapcs");
@@ -204,10 +257,28 @@ package body Landin.Backend.Toolchain is
       Facts : Landin.Targets.Target_Facts;
       Full_Debug : Boolean := False)
       return Landin.Platform.Path_List
+     is (Link_Arguments
+           (Assembly, Output, Linker, Build_Id, Libraries, Facts, Full_Debug,
+            Levels.Default_Level (Facts)));
+
+   function Link_Arguments
+     (Assembly : String;
+      Output   : String;
+      Linker   : String;
+      Build_Id : String := "";
+      Libraries : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments;
+      Facts : Landin.Targets.Target_Facts;
+      Full_Debug : Boolean := False;
+      Level : Landin.Targets.Levels.Feature_Level)
+      return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
 
    begin
+      if not Levels.Belongs_To (Level, Facts) then
+         raise Compiler_Defect with "a level of another target's family";
+      end if;
       if Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.No_Backend
       then
@@ -219,7 +290,7 @@ package body Landin.Backend.Toolchain is
          if not Libraries.Is_Empty then
             raise Compiler_Defect with "unsupported firmware link request";
          end if;
-         List.Append ("-mcpu=cortex-m0");
+         Add_M_Profile (List, Level, Facts);
          List.Append ("-mthumb");
          List.Append ("-mfloat-abi=soft");
          List.Append ("-mabi=aapcs");
@@ -292,6 +363,18 @@ package body Landin.Backend.Toolchain is
           = Landin.Targets.Capabilities.Linux_X86_64_ELF
       then
          Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
+      end if;
+
+      --  The assembler refuses what the level lacks, and the linker marks
+      --  the executable with the level in its GNU property note, which the
+      --  dynamic loader checks against the processor it is started on.
+      if not Is_Default (Level, Facts) and then
+        Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.Linux_X86_64_ELF
+      then
+         Landin.Platform.Add
+           (List, "-Wa,-march=" & X86_Assembler_Architecture (Level));
+         Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
       end if;
 
       return List;

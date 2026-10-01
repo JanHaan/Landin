@@ -69,6 +69,13 @@ and `docs/format.md` shows. The diagnostic points at the first line that
 would change. Nothing is wrong with the program: run `refine fmt` on the file
 to put it in the layout, which changes its space and nothing else.
 
+### L0009
+
+`--level=`, or the language server's `level` option, names no CPU feature
+level of the selected target's family (D255). A level belongs to one family,
+so `armv8.1-a` is refused with `--target=linux-x86-64`, and synthetic-32 has
+no level to select. `refine --identify` lists each target's levels.
+
 ## Lexical, and what is not enabled
 
 ### L0010

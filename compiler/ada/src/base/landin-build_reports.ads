@@ -7,6 +7,7 @@ with Landin.IR;
 with Landin.Layouts;
 with Landin.Optimization;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Targets.Layouts;
 
 package Landin.Build_Reports is
@@ -84,6 +85,14 @@ package Landin.Build_Reports is
    function JSON
      (Of_Report : Report;
       Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return String;
+
+   --  The same, naming the CPU feature level the build assumed beside its
+   --  target; the one above names the target's default level.
+   function JSON
+     (Of_Report : Report;
+      Facts : Landin.Targets.Target_Facts;
+      Level : Landin.Targets.Levels.Feature_Level;
       Options : Landin.Optimization.Options) return String;
 
 private

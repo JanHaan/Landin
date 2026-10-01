@@ -47,6 +47,13 @@ package body Landin.Diagnostics.Explanations is
                & "g is wrong with the program: run `refine fmt` on the fil"
                & "e to put it in the layout, which changes its space and n"
                & "othing else.",
+            when Catalogue.Unknown_Level =>
+               "`--level=`, or the language server's `level` option, nam"
+               & "es no CPU feature level of the selected target's family "
+               & "(D255). A level belongs to one family, so `armv8.1-a` is"
+               & " refused with `--target=linux-x86-64`, and synthetic-32 "
+               & "has no level to select. `refine --identify` lists each t"
+               & "arget's levels.",
             when Catalogue.Construct_Not_Enabled =>
                "The program uses a construct the tour describes and the "
                & "kernel does not enable yet [1830]. The two notes name th"
@@ -298,6 +305,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Directory_Invalid =>
                "",
             when Catalogue.Not_Formatted =>
+               "",
+            when Catalogue.Unknown_Level =>
                "",
             when Catalogue.Construct_Not_Enabled =>
                "point: type = struct"

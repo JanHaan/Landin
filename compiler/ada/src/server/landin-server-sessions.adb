@@ -16,6 +16,7 @@ with Landin.Source;
 with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Targets.Selection;
 
 package body Landin.Server.Sessions is
@@ -53,6 +54,8 @@ package body Landin.Server.Sessions is
       Store     : Landin.Server.Documents.Store (Host);
       Unit      : Positions.Encoding := Positions.UTF_16;
       Facts     : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+      Level     : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_X86_64);
       Options   : Landin.Platform.Path_List;
       Started   : Boolean := False;
       Stopping  : Boolean := False;
@@ -147,7 +150,8 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result))
       is
-         Context : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Context : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Facts, Level);
          Answer  : Landin.Server.Analysis.Result;
          Asked   : Landin.Server.Analysis.Request :=
            Landin.Server.Documents.Request_For (Store, URI);
@@ -393,6 +397,30 @@ package body Landin.Server.Sessions is
                end;
             elsif J.Is_Present (Target) then
                Unbounded.Append (Bad, "a target is a string");
+            end if;
+            Level := Landin.Targets.Levels.Default_Level (Facts);
+         end;
+
+         --  After the target, because a level belongs to its family; the
+         --  driver resolves `--level=` in the same order.
+         declare
+            Named : constant J.Value :=
+              J.Member (Message, Settings, "level");
+         begin
+            if J.Is_Kind (Message, Named, J.String_Value) then
+               declare
+                  Name : constant String := J.Text (Message, Named);
+               begin
+                  if Landin.Targets.Levels.Is_Level_Of (Facts, Name) then
+                     Level := Landin.Targets.Levels.Level_Named (Facts, Name);
+                  else
+                     Unbounded.Append
+                       (Bad, "unknown level for "
+                        & Landin.Targets.Name (Facts) & ": " & Name);
+                  end if;
+               end;
+            elsif J.Is_Present (Named) then
+               Unbounded.Append (Bad, "a level is a string");
             end if;
          end;
 

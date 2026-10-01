@@ -854,6 +854,101 @@ package body Landin.Tests.Driver_Suite is
          "a refused target is not announced as selected");
    end Targets_Are_Selected_By_Name;
 
+   --  D255: a level is resolved after the target and within its family,
+   --  the default level changes no tool invocation, and a selected level
+   --  reaches both the toolchain and the build report.
+   procedure A_Level_Is_Selected_Within_Its_Family
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Level_Is_Selected_Within_Its_Family
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "public main: () -> (code: i32) =" & LF & "    code = 42" & LF
+        & "end main" & LF;
+
+      function Linked (Level : String) return String;
+
+      function Linked (Level : String) return String is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args  : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Program);
+         Tools.Set_Result (0, "");
+         if Level /= "" then
+            Args.Append ("--level=" & Level);
+         end if;
+         Args.Append ("--emit=exe");
+         Args.Append ("--build-report=build.json");
+         Args.Append ("main.ldn");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a program links at level '" & Level & "': "
+            & Unbounded.To_String (Result.Report));
+         return Tools.Last_Command & " |" & Host.Written ("build.json");
+      end Linked;
+
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Foreign : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute
+          (Arguments_Of ("--level=armv8.1-a"), Host, Tools);
+      None : Landin.Platform.Path_List :=
+        Arguments_Of ("--target=synthetic-32");
+      Twice : Landin.Platform.Path_List := Arguments_Of ("--level=x86-64-v2");
+      Cortex : Landin.Platform.Path_List := Arguments_Of ("--level=armv7-m");
+      Plain : constant String := Linked ("");
+      Named : constant String := Linked ("x86-64-v1");
+      Third : constant String := Linked ("x86-64-v3");
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Foreign.Status, Landin.Driver.Status_Reported,
+         "a level of another family is reported");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Foreign.Report),
+           "error[L0009]: unknown level for linux-x86-64: armv8.1-a"),
+         "L0009 names the target and the level it does not have");
+
+      None.Append ("--level=none");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String
+           (Landin.Driver.Execute (None, Host, Tools).Report), "L0009"),
+         "synthetic-32 has no level to select");
+
+      Twice.Append ("--level=x86-64-v3");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Execute (Twice, Host, Tools).Status,
+         Landin.Driver.Status_Misuse, "a repeated level is a misuse");
+
+      Cortex.Prepend ("--target=cortex-m0");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Execute (Cortex, Host, Tools).Status,
+         Landin.Driver.Status_Success,
+         "a level is read in the family the target selected");
+
+      Landin.Testing.Check_Equal
+        (Item, Plain, Named,
+         "naming the default level is building without one");
+      Landin.Testing.Check
+        (Item, not Contains (Plain, "-march") and then not Contains
+           (Plain, "-z,x86-64"),
+         "the default level adds no tool argument");
+      Landin.Testing.Check
+        (Item, Contains (Plain, """level"":""x86-64-v1"""),
+         "the build report names the default level");
+      Landin.Testing.Check
+        (Item, Contains
+           (Third, "-Wa,-march=generic64+cx16+lahf_sahf+popcnt+sse3+ssse3"
+              & "+sse4.1+sse4.2+avx+avx2+bmi+bmi2+f16c+fma+lzcnt+movbe"
+              & "+xsave ")
+           and then Contains (Third, " -Wl,-z,x86-64-v3 ")
+           and then Contains (Third, """level"":""x86-64-v3"""),
+         "a selected level reaches the assembler, linker and report");
+   end A_Level_Is_Selected_Within_Its_Family;
+
    --  Help is a documented surface: it has to be deterministic, and nothing
    --  exercised it.
    procedure Help_Is_Printed (Item : in out Landin.Testing.Context);
@@ -3628,7 +3723,7 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0506  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 64,
+        (Item, Occurrences (Listed, "" & LF), 65,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,
@@ -3930,6 +4025,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "targets are selected by name",
          Targets_Are_Selected_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a level is selected within its family",
+         A_Level_Is_Selected_Within_Its_Family'Access);
       Landin.Testing.Register
         (Into, "driver", "help is printed", Help_Is_Printed'Access);
       Landin.Testing.Register

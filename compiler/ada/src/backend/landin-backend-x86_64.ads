@@ -78,6 +78,7 @@ with Landin.IR;
 with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Targets;
+with Landin.Targets.Levels;
 
 package Landin.Backend.X86_64 is
 
@@ -137,6 +138,8 @@ package Landin.Backend.X86_64 is
       Report   : in out Landin.Build_Reports.Report;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
       Debug : access constant Landin.Debugging.Information := null;
-      Panic : access constant Landin.Panics.Plan := null);
+      Panic : access constant Landin.Panics.Plan := null;
+      Level : Landin.Targets.Levels.Feature_Level :=
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_X86_64));
 
 end Landin.Backend.X86_64;
