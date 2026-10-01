@@ -39,6 +39,7 @@ compiler/ada/
     backend/            the frame, and the assembly emitted against it
     formatting/         the one layout of a source, as edits
     driver/             request/results, source maps and report provenance
+    server/             the language server, its stand-in, positions and protocol
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
 ```
@@ -179,6 +180,9 @@ different responsibilities.
 | `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
 | `Landin.Driver.Checking` | the stages a loaded program runs, in their one order, and the panic contract after them, for `refine` and a server alike | decide whether a stage runs past a refusal, or hold a compilation |
+| `Landin.Server` | the language server's namespace: the compiler's third client after `refine` and the test program | decide anything a stage decides |
+| `Landin.Server.Holes` | D253's stand-in: which routine bodies of a source a server may check as `loop do end loop`, and the bytes it checks instead | change what a stage accepts, or stand in for anything but a body |
+| `Landin.Server.Analysis` | one analysis of one module for a server: loaded through the editor's buffers, checked by `Landin.Driver.Checking`, and reported with D253's stand-in where it applies | keep a compilation between two analyses, or report inside a stood-in body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
 | `Refine` | printing and the exit status | contain a decision |

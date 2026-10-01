@@ -14707,6 +14707,47 @@ be open, which is what the language had before and what `core` shows.
 `negative/unclosed-block-comment` and `negative/latin1-byte-in-name`, which it
 requires to be refused, and `formatting/the page is the layout`.
 
+### D253 — An editor is answered past a broken body, and a build is not
+
+**The discrepancy:** nothing in the language says what a tool may report
+about a program that does not parse, and the compiler reports only what the
+scan and the parse found: each stage stops on a refusal, so a hole does not
+cascade into reports about everything it swallowed. That is right for a build
+and wrong for an editor, where nearly every edit leaves some body half
+written and a server that stopped at it would say nothing about the rest of
+the program while a person types.
+
+**Chosen:** `refine` is unchanged, and a server answers past a hole only where
+a hole cannot take a name away from anything else: inside a routine body,
+because nothing a body declares is visible outside it. When every error in a
+source lies inside the bodies of module routines whose name and signature
+parsed, the server checks a stand-in: the same bytes, each such body blanked
+with its line ends kept and `loop do end loop` written into it, which every
+signature accepts because it never finishes, so every offset, line and
+column is the source's own. The unchanged stages check the stand-in. The
+server reports the source's own syntax errors, then whatever the stages
+report that touches no stood-in body, and no warning, because D251 admits one
+only on a program the compiler accepted. A body is not stood in for when it
+belongs to a generic or a routine whose error set is inferred, because the
+body is what decides them; when it is not closed by the `end` the parser
+matched; when a line inside it begins in the first column, where recovery
+may have read a declaration as a statement; or when it is too short to hold
+the stand-in. Any other hole, and any error outside a body, leaves the source
+reported exactly as `refine` reports it.
+
+**The alternatives:** teaching every stage to skip a subtree with a hole in
+it. That is a mode in each of five stages, and in a checker that sweeps every
+node of a tree in more than a dozen places, none of which has ever seen a
+hole; a stand-in is legal source that the stages already check, so it cannot
+reach a path they have not taken. Letting `refine` report past a hole too,
+which moves the report of every program the parser refuses and makes a
+build's verdict depend on how well recovery guessed. Answering nothing past a
+syntax error, which is what an editor had before.
+
+**Pinned by** `server/a broken body is stood in for`,
+`server/only a body is stood in for`, `server/analysis continues past a body`,
+`server/analysis agrees with refine` and `server/refused sources are served`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

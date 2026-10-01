@@ -165,6 +165,12 @@ package Landin.Diagnostics is
    --  fixture assertable.
    function Sorted (List : Diagnostic_List) return Diagnostic_List;
 
+   --  Item with every label and edit that names a source naming Source
+   --  instead: a report made over one copy of a file, moved onto the
+   --  identity another compilation gave the same bytes.
+   function Retargeted
+     (Item : Diagnostic; Source : Landin.Source.Source_Id) return Diagnostic;
+
    --  What a construct refused by name is, which [1830]'s second note
    --  says: a recorded boundary of a construct that is otherwise enabled,
    --  a form the language withdrew, or one a successor roadmap owns.  The

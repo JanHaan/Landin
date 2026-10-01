@@ -40,6 +40,7 @@ with Landin.Tests.Optimization_Foundations_Suite;
 with Landin.Tests.Parser_Suite;
 with Landin.Tests.Platform_Suite;
 with Landin.Tests.Resolution_Suite;
+with Landin.Tests.Server_Suite;
 with Landin.Tests.Source_Suite;
 with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
@@ -107,6 +108,7 @@ procedure Landin_Tests is
       "parser           ",
       "platform         ",
       "resolution       ",
+      "server           ",
       "source           ",
       "stages           ",
       "targets          ",
@@ -309,6 +311,7 @@ begin
    Landin.Tests.Parser_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);
    Landin.Tests.Resolution_Suite.Register (Cases);
+   Landin.Tests.Server_Suite.Register (Cases);
    Landin.Tests.Source_Suite.Register (Cases);
    Landin.Tests.Stages_Suite.Register (Cases);
    Landin.Tests.Targets_Suite.Register (Cases);

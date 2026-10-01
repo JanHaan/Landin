@@ -286,4 +286,30 @@ package body Landin.Diagnostics is
       return Result;
    end Sorted;
 
+   function Retargeted
+     (Item : Diagnostic; Source : Landin.Source.Source_Id) return Diagnostic
+   is
+      Moved : Diagnostic := Item;
+
+      procedure Move (Into : in out Landin.Source.Source_Id);
+
+      procedure Move (Into : in out Landin.Source.Source_Id) is
+      begin
+         if Into /= Landin.Source.No_Source then
+            Into := Source;
+         end if;
+      end Move;
+   begin
+      Move (Moved.Primary.Source);
+      for Extra of Moved.Labels loop
+         Move (Extra.Source);
+      end loop;
+      for One of Moved.Fixes loop
+         for Change of One.Edits loop
+            Move (Change.Source);
+         end loop;
+      end loop;
+      return Moved;
+   end Retargeted;
+
 end Landin.Diagnostics;
