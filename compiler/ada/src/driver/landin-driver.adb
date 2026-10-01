@@ -32,6 +32,7 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Selection;
 
 package body Landin.Driver is
 
@@ -716,14 +717,8 @@ package body Landin.Driver is
       --  defect: every compilation silently carried the default target
       --  however the command line was written.
       for Name of Targets loop
-         if Name = "linux-x86-64" then
-            Facts := Landin.Targets.Linux_X86_64;
-         elsif Name = "darwin-arm64" then
-            Facts := Landin.Targets.Darwin_Arm64;
-         elsif Name = "cortex-m0" then
-            Facts := Landin.Targets.Cortex_M;
-         elsif Name = "synthetic-32" then
-            Facts := Landin.Targets.Synthetic_32;
+         if Landin.Targets.Selection.Is_Described (Name) then
+            Facts := Landin.Targets.Selection.Described (Name);
          else
             Rejected.Append (Name);
          end if;

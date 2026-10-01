@@ -48,7 +48,8 @@ Two more options choose what `--target=` and `--option=` choose:
  "options": {"board": "rp2040"}}
 ```
 
-`target` is `linux-x86-64`, the default, `darwin-arm64` or `cortex-m0`. An
+`target` is any name `--target=` takes: `linux-x86-64`, the default,
+`darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one mapping. An
 option is named in lowercase letters, digits and underscores. A value the
 server refuses is reported once, through `window/showMessage`, and the rest
 are used.

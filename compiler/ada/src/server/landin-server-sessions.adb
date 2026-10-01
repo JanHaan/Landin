@@ -16,6 +16,7 @@ with Landin.Source;
 with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Targets;
+with Landin.Targets.Selection;
 
 package body Landin.Server.Sessions is
 
@@ -384,12 +385,8 @@ package body Landin.Server.Sessions is
                declare
                   Name : constant String := J.Text (Message, Target);
                begin
-                  if Name = "linux-x86-64" then
-                     Facts := Landin.Targets.Linux_X86_64;
-                  elsif Name = "darwin-arm64" then
-                     Facts := Landin.Targets.Darwin_Arm64;
-                  elsif Name = "cortex-m0" then
-                     Facts := Landin.Targets.Cortex_M;
+                  if Landin.Targets.Selection.Is_Described (Name) then
+                     Facts := Landin.Targets.Selection.Described (Name);
                   else
                      Unbounded.Append (Bad, "unknown target: " & Name);
                   end if;

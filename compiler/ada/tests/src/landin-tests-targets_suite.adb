@@ -12,6 +12,7 @@ with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Selection;
 with Landin.Types;
 with Landin.Packed;
 with Landin.Targets.Packed;
@@ -151,6 +152,42 @@ package body Landin.Tests.Targets_Suite is
          Capabilities.Backend_For (Synthetic_32) = Capabilities.No_Backend,
          "synthetic-32 has no backend");
    end Backends_Are_Stated_Per_Target;
+
+   --  The driver and the server select through one mapping, so each
+   --  name must reach the constructor it names and nothing else may.
+   procedure Names_Select_Their_Descriptions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Names_Select_Their_Descriptions
+     (Item : in out Landin.Testing.Context)
+   is
+      package Selection renames Landin.Targets.Selection;
+   begin
+      Landin.Testing.Check
+        (Item,
+         Selection.Described ("linux-x86-64") = Linux_X86_64
+           and then Selection.Described ("darwin-arm64") = Darwin_Arm64
+           and then Selection.Described ("cortex-m0") = Cortex_M
+           and then Selection.Described ("synthetic-32") = Synthetic_32,
+         "each described name selects its own constructor");
+      Landin.Testing.Check
+        (Item,
+         Name (Selection.Described ("linux-x86-64")) = "linux-x86-64"
+           and then Name (Selection.Described ("darwin-arm64"))
+                    = "darwin-arm64"
+           and then Name (Selection.Described ("cortex-m0")) = "cortex-m0"
+           and then Name (Selection.Described ("synthetic-32"))
+                    = "synthetic-32",
+         "a selected description is named as it was selected");
+      Landin.Testing.Check
+        (Item,
+         not Selection.Is_Described ("x86_64-pc-linux-gnu")
+           and then not Selection.Is_Described ("cortex-m")
+           and then not Selection.Is_Described ("macos-arm64")
+           and then not Selection.Is_Described ("Linux-x86-64")
+           and then not Selection.Is_Described (""),
+         "a triplet, a fixture label or another spelling selects nothing");
+   end Names_Select_Their_Descriptions;
 
    ------------------------------------------------------------------
    --  Alignment is walked over every Scalar_Size for both descriptions,
@@ -1306,6 +1343,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "backends are stated per target",
          Backends_Are_Stated_Per_Target'Access);
+      Landin.Testing.Register
+        (Into, "targets", "names select their descriptions",
+         Names_Select_Their_Descriptions'Access);
       Landin.Testing.Register
         (Into, "targets", "alignments are stated per target",
          Alignments_Are_Stated_Per_Target'Access);
