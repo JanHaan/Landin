@@ -36,6 +36,7 @@ package body Landin.Tests.Server_Suite is
    use type Holes.Verdict;
    use type Transport.Status;
    use type Landin.Server.Positions.Position;
+   use type Landin.Server.Navigation.Place;
    use type Landin.Source.Byte_Offset;
    use type Landin.Platform.Write_Status;
    use type Landin.Source.Span;
@@ -682,6 +683,42 @@ package body Landin.Tests.Server_Suite is
          "an empty doc comment says nothing");
    end Doc_Comments_Are_The_Run_Above;
 
+   --  A source refused before the checker ran has no names or types, so
+   --  every query of it answers nothing.  The fuzz lane found a definition
+   --  asked of a module whose resolution had been refused raising instead.
+   procedure Queries_Of_A_Refused_Module_Answer_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure Queries_Of_A_Refused_Module_Answer_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+   begin
+      Host.Add_File
+        ("/w/m.ldn", "f: () -> none = g () end f" & LF
+                     & "f: () -> none = g () end f" & LF);
+      declare
+         Context : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Answer  : Landin.Server.Analysis.Result;
+      begin
+         Landin.Server.Analysis.Analyse
+           (Context, Host, One_File ("/w/m.ldn"), Answer);
+         Landin.Testing.Check
+           (Item, not Answer.Checked and then Answer.Found.Count > 0,
+            "a module resolution refuses is not checked");
+         for Offset in Landin.Source.Byte_Offset range 0 .. 50 loop
+            Landin.Testing.Check
+              (Item, Landin.Server.Navigation.Definition
+                       (Context, Answer, 1, Offset)
+                     = Landin.Server.Navigation.No_Place
+                     and then Landin.Server.Navigation.Hover
+                       (Context, Answer, 1, Offset).Length = 0,
+               "nothing is answered at" & Offset'Image);
+         end loop;
+      end;
+   end Queries_Of_A_Refused_Module_Answer_Nothing;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -714,6 +751,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "doc comments are the run above",
          Doc_Comments_Are_The_Run_Above'Access);
+      Landin.Testing.Register
+        (Into, "server", "queries of a refused module answer nothing",
+         Queries_Of_A_Refused_Module_Answer_Nothing'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

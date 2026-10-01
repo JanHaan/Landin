@@ -1,12 +1,14 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Strings.Fixed;
 
+with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Lexical;
 with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.Panics;
 with Landin.Platform.Overlays;
+with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Syntax.Parser;
@@ -116,6 +118,19 @@ package body Landin.Server.Analysis is
       end;
    end Syntax_Of;
 
+   --  Whether a stage before the checker refused something: the scan, the
+   --  parse, the configuration or names, each of which stops the run before
+   --  the checker has typed anything.  A code says where it was born and
+   --  not which stage raised it, so the stages are asked by their tables:
+   --  resolution prepared its table only if every earlier stage passed,
+   --  and the checker its own only if resolution did.
+   function Has_Frontend_Error
+     (Context : in out Landin.Stages.Compilation) return Boolean
+     is (not Landin.Resolution.Is_Prepared
+               (Landin.Stages.Meanings (Context).all)
+         or else not Landin.Checking.Is_Prepared
+               (Landin.Stages.Types (Context).all));
+
    procedure Analyse
      (Context : in out Landin.Stages.Compilation;
       Host    : Landin.Platform.Filesystem'Class;
@@ -193,7 +208,9 @@ package body Landin.Server.Analysis is
            and then not Landin.Stages.Failed (Context)
          then
             Landin.Driver.Checking.Run (Context, Panic);
-            Answer.Checked := True;
+            --  Names and types exist only where every frontend stage ran,
+            --  which is exactly when nothing before the checker refused.
+            Answer.Checked := not Has_Frontend_Error (Context);
          end if;
       end;
 

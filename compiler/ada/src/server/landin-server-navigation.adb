@@ -135,7 +135,9 @@ package body Landin.Server.Navigation is
         Landin.Stages.Meanings (Context);
       Anchor   : constant Landin.Source.Span := Syn.Anchor (Of_Tree, Node);
    begin
-      if not Res.Covers (Meanings.all, Of_Tree) then
+      if not Res.Is_Prepared (Meanings.all)
+        or else not Res.Covers (Meanings.all, Of_Tree)
+      then
          return Res.No_Declaration;
       elsif Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound then
          return Res.Bound_To (Meanings.all, Of_Tree, Node);
