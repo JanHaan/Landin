@@ -1,0 +1,9 @@
+class: negative
+summary: D255 makes compiler.feature a fixed configuration fact, which a body cannot read as a runtime value
+program: main.ldn
+codes: L0203
+constructs: 1500, 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/feature-outside-configuration/main.ldn
+status: 1

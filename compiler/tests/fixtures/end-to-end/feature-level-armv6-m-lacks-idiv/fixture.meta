@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 assumes Armv6-M on the M profile when no level is selected, which has no divide instruction
+program: main.ldn
+constructs: 1500, 1510
+targets: cortex-m
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/end-to-end/feature-level-armv6-m-lacks-idiv/main.ldn
+status: 1

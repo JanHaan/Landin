@@ -1,0 +1,6 @@
+error[L0203]: unavailable tool reference: compiler.feature
+  --> ../tests/fixtures/negative/feature-outside-configuration/main.ldn:3:17
+  |
+3 |     if compiler.feature.lse then
+  |                 ^^^^^^^
+  = note: D255: compiler.feature.NAME is available only in fixed configuration expressions

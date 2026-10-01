@@ -9,6 +9,7 @@ with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Types;
 with Landin.Tokens.Text;
 
@@ -115,6 +116,26 @@ package body Landin.Stages.Configuration is
 
       function Spelled (Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Names.all, Name));
+
+      --  Whether NODE is `compiler.WORD`, and what it reads when it is.
+      function Is_Compiler_Member
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            and then Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+              = Syn.Name_Reference
+            and then Spelled (Syn.Name
+              (Of_Tree, Syn.Target_Of (Of_Tree, Node))) = "compiler");
+
+      --  D255: `compiler.feature.NAME` is one member selection further out
+      --  than every other fact, so it is recognised by its shape before a
+      --  member's own word is read.
+      function Is_Feature_Fact
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            and then Is_Compiler_Member
+              (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+            and then Spelled (Syn.Name
+              (Of_Tree, Syn.Target_Of (Of_Tree, Node))) = "feature");
 
       function Option_Index (Name : Landin.Source.Names.Name_Id)
         return Natural is
@@ -260,15 +281,23 @@ package body Landin.Stages.Configuration is
                      return Byte_Order;
                   elsif Word in "debug" | "release" then
                      return Build_Kind;
-                  else
+                  elsif Word in "x86_64" | "arm64" | "cortex_m0"
+                              | "synthetic_32"
+                  then
                      return Machine;
+                  else
+                     return Bad_Value;
                   end if;
                end;
             when Syn.Member_Selection =>
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word in "c_sysv_lp64" | "c_darwin_lp64" then
+                  --  Every fact is named, and only `arch` is a machine: an
+                  --  unnamed one is not typed as the nearest fact there is.
+                  if Is_Feature_Fact (Of_Tree, Node) then
+                     return Truth;
+                  elsif Word in "c_sysv_lp64" | "c_darwin_lp64" then
                      return Truth;
                   elsif Word = "word_size" then
                      return Number;
@@ -276,8 +305,10 @@ package body Landin.Stages.Configuration is
                      return Byte_Order;
                   elsif Word = "build_mode" then
                      return Build_Kind;
-                  else
+                  elsif Word = "arch" then
                      return Machine;
+                  else
+                     return Bad_Value;
                   end if;
                end;
             when others =>
@@ -322,23 +353,28 @@ package body Landin.Stages.Configuration is
                end;
 
             when Syn.Member_Selection =>
-               declare
-                  Base : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
-                  Is_Compiler : constant Boolean :=
-                    Syn.Kind (Of_Tree, Base) = Syn.Name_Reference
-                    and then Spelled (Syn.Name (Of_Tree, Base)) = "compiler";
-               begin
-                  if not Is_Compiler
-                    or else Spelled (Syn.Name (Of_Tree, Node))
-                      not in "arch" | "word_size" | "byte_order"
-                           | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
+               if Is_Feature_Fact (Of_Tree, Node) then
+                  if not Landin.Targets.Levels.Is_Feature_Name
+                    (Spelled (Syn.Name (Of_Tree, Node)))
                   then
                      Report_Not_Fixed
                        (Of_Tree, Node,
-                        "unknown compiler fixed fact");
+                        "unknown CPU feature: "
+                        & Spelled (Syn.Name (Of_Tree, Node)),
+                        Note => "D255: compiler.feature names a feature of"
+                          & " a level a target can select");
                      Valid := False;
                   end if;
-               end;
+               elsif not Is_Compiler_Member (Of_Tree, Node)
+                 or else Spelled (Syn.Name (Of_Tree, Node))
+                   not in "arch" | "word_size" | "byte_order"
+                        | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
+               then
+                  Report_Not_Fixed
+                    (Of_Tree, Node,
+                     "unknown compiler fixed fact");
+                  Valid := False;
+               end if;
 
             when Syn.Size_Of | Syn.Align_Of =>
                if Scalar_Type (Of_Tree, Syn.Measured_Type (Of_Tree, Node))
@@ -450,19 +486,32 @@ package body Landin.Stages.Configuration is
                                then Landin.Configuration.Debug
                                else Landin.Configuration.Release));
                   end if;
-                  return (Kind => Machine,
-                          Architecture_Value =>
-                            (if Word = "x86_64" then Landin.Targets.X86_64
-                             elsif Word = "arm64" then Landin.Targets.Arm64
-                             elsif Word = "cortex_m0" then
-                                Landin.Targets.Cortex_M0
-                             else Landin.Targets.Synthetic_32_Architecture));
+                  if Word = "x86_64" then
+                     return (Kind => Machine,
+                             Architecture_Value => Landin.Targets.X86_64);
+                  elsif Word = "arm64" then
+                     return (Kind => Machine,
+                             Architecture_Value => Landin.Targets.Arm64);
+                  elsif Word = "cortex_m0" then
+                     return (Kind => Machine,
+                             Architecture_Value => Landin.Targets.Cortex_M0);
+                  elsif Word = "synthetic_32" then
+                     return (Kind => Machine, Architecture_Value =>
+                               Landin.Targets.Synthetic_32_Architecture);
+                  end if;
+                  raise Compiler_Defect
+                    with "an unvalidated fixed name was evaluated: " & Word;
                end;
             when Syn.Member_Selection =>
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word = "c_sysv_lp64" then
+                  if Is_Feature_Fact (Of_Tree, Node) then
+                     return Boolean_Result
+                       (Landin.Targets.Levels.Has
+                          (Level (Context),
+                           Landin.Targets.Levels.Feature_Named (Word)));
+                  elsif Word = "c_sysv_lp64" then
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.SysV_AMD64_LP64);
@@ -479,12 +528,15 @@ package body Landin.Stages.Configuration is
                   elsif Word = "build_mode" then
                      return (Kind => Build_Kind, Mode_Value =>
                        Landin.Configuration.Mode (Activity.all));
-                  else
+                  elsif Word = "arch" then
                      return (Kind => Machine,
                              Architecture_Value =>
                                Landin.Targets.Architecture_Of
                                  (Target (Context)));
                   end if;
+                  raise Compiler_Defect
+                    with "an unvalidated compiler fact was evaluated: "
+                      & Word;
                end;
             when Syn.Size_Of | Syn.Align_Of =>
                declare

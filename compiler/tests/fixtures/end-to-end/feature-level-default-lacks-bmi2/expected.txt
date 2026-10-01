@@ -1,0 +1,6 @@
+error[L0324]: compile-time assertion is false
+  --> ../tests/fixtures/end-to-end/feature-level-default-lacks-bmi2/main.ldn:1:17
+  |
+1 | compiler.assert(compiler.feature.bmi2)
+  |                 ^^^^^^^^^^^^^^^^^^^^^
+  = note: [1510]: compiler.assert requires a true fixed bool expression

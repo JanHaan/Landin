@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 assumes x86-64-v1 when no level is selected, which has no BMI2
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-x86-64
+expect: expected.txt
+args:  ../tests/fixtures/end-to-end/feature-level-default-lacks-bmi2/main.ldn
+status: 1

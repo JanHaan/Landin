@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 gives arm64 at armv8.1-a the LSE atomics Armv8.0 lacks
+program: main.ldn
+constructs: 1500, 1510
+targets: macos-arm64
+expect: expected.txt
+args: --target=darwin-arm64 --level=armv8.1-a ../tests/fixtures/end-to-end/feature-level-armv8-1-a-has-lse/main.ldn
+status: 0

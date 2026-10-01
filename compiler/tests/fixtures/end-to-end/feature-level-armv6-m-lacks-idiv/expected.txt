@@ -1,0 +1,6 @@
+error[L0324]: compile-time assertion is false
+  --> ../tests/fixtures/end-to-end/feature-level-armv6-m-lacks-idiv/main.ldn:1:17
+  |
+1 | compiler.assert(compiler.feature.idiv)
+  |                 ^^^^^^^^^^^^^^^^^^^^^
+  = note: [1510]: compiler.assert requires a true fixed bool expression

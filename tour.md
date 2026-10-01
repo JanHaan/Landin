@@ -3500,7 +3500,24 @@ The compiler exposes `compiler.arch`, whose compiler-owned values are
 `x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
 (`debug` or `release`), plus `compiler.c_sysv_lp64` and
-`compiler.c_darwin_lp64`, bools identifying the selected C ABI rather than inferring it from pointer width. Build mode is an
+`compiler.c_darwin_lp64`, bools identifying the selected C ABI rather than inferring it from pointer width.
+A build also assumes a CPU feature level of its target, selected with
+`--level=` and defaulting to the oldest processor of the architecture, and
+`compiler.feature.NAME` is a bool saying whether that level has the feature
+NAME, such as `bmi2` on x86-64, `lse` on arm64 or `idiv` on the M profile.
+A feature of another architecture is false, so the test needs no
+`compiler.arch` before it:
+
+```landin
+fixed if compiler.feature.idiv then
+    divide_cycles: u32 = 12
+else
+    divide_cycles: u32 = 40
+end if
+```
+
+A level changes the instructions a build may use and never a layout or a
+calling convention, so code built at two levels links together. Build mode is an
 explicit request value, defaulting
 to debug; it does not change runtime checks or optimization policy.
 Conditions also see the program's declared options [1530]. They use a closed
@@ -3623,7 +3640,7 @@ else.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, and the atomic, volatile and register intrinsics |
+| `compiler` | target, word size, byte order, build mode, CPU features, and the atomic, volatile and register intrinsics |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 

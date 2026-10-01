@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 gives the M profile at armv7-m the hardware divide Armv6-M lacks
+program: main.ldn
+constructs: 1500, 1510
+targets: cortex-m
+expect: expected.txt
+args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/end-to-end/feature-level-armv7-m-has-idiv/main.ldn
+status: 0

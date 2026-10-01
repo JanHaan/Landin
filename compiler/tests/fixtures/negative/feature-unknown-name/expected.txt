@@ -1,0 +1,6 @@
+error[L0305]: unknown CPU feature: bmi3
+  --> ../tests/fixtures/negative/feature-unknown-name/main.ldn:1:21
+  |
+1 | compiler.assert(not compiler.feature.bmi3)
+  |                     ^^^^^^^^^^^^^^^^^^^^^
+  = note: D255: compiler.feature names a feature of a level a target can select

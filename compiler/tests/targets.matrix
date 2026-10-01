@@ -41,6 +41,12 @@ abi/r640-exhaustive-encodings | linux-x86-64, macos-arm64
 abi/r640-reserved-trap | linux-x86-64, macos-arm64
 abi/r670-noreturn | linux-x86-64, macos-arm64
 abi/r670-panic | linux-x86-64, macos-arm64
+end-to-end/feature-level-armv6-m-lacks-idiv | cortex-m
+end-to-end/feature-level-armv7-m-has-idiv | cortex-m
+end-to-end/feature-level-armv8-1-a-has-lse | macos-arm64
+end-to-end/feature-level-default-lacks-bmi2 | linux-x86-64
+end-to-end/feature-level-of-another-family | linux-x86-64
+end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, macos-arm64
@@ -273,6 +279,9 @@ negative/fail-carries-no-value | linux-x86-64, macos-arm64
 negative/fail-needs-one-atom | linux-x86-64, synthetic-32
 negative/fail-outside-declared-set | linux-x86-64, synthetic-32
 negative/failing-function-signature-mismatch | linux-x86-64, synthetic-32
+negative/feature-compared-with-architecture | linux-x86-64, synthetic-32
+negative/feature-outside-configuration | linux-x86-64, synthetic-32
+negative/feature-unknown-name | linux-x86-64, synthetic-32
 negative/fixed-array-bound-call | linux-x86-64, macos-arm64
 negative/fixed-array-bound-invalid | linux-x86-64, macos-arm64
 negative/fixed-conditional-active-duplicate | linux-x86-64, macos-arm64, synthetic-32
@@ -1237,6 +1246,7 @@ positive/discard-of-a-value | linux-x86-64, macos-arm64
 positive/distinct-declaration | linux-x86-64, macos-arm64
 positive/divisor-is-not-known | linux-x86-64, macos-arm64
 positive/external-scalar-c-boundary | linux-x86-64
+positive/feature-level-selects-declarations | linux-x86-64, macos-arm64, synthetic-32
 positive/fixed-array-bound-expression | linux-x86-64, macos-arm64
 positive/fixed-array-bound-zero | linux-x86-64, macos-arm64
 positive/fixed-conditional-cross-file-forward | linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,9 @@
+class: negative
+summary: D255 refuses a feature no level of any family holds rather than reading it as false
+program: main.ldn
+codes: L0305
+constructs: 1500, 1510
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/feature-unknown-name/main.ldn
+status: 1

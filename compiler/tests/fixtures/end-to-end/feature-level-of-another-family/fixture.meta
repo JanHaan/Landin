@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 refuses a level of another family as L0009 rather than reading it as the nearest one
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-x86-64
+expect: expected.txt
+args: --level=armv8.1-a ../tests/fixtures/end-to-end/feature-level-of-another-family/main.ldn
+status: 1

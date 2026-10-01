@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D255 gives x86-64-v3 the psABI's v3 features, BMI2 among them
+program: main.ldn
+constructs: 1500, 1510
+targets: linux-x86-64
+expect: expected.txt
+args: --level=x86-64-v3 ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn
+status: 0

@@ -1492,6 +1492,12 @@ file positive/external-scalar-c-boundary/program.ldn
 unit signatures 1 items 1
 signature 1 extern(c) (in i32, in usize, in usize) -> usize
 item 1 ROUTINE host_read result usize signature 1 extern(c) link host_read params 0 slots 0 blocks 0 values 0
+file positive/feature-level-selects-declarations/main.ldn
+unit signatures 0 items 1
+item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
 file positive/fixed-array-bound-expression/program.ldn
 unit signatures 0 items 1
 item 1 DATUM storage result array params 0 slots 0 blocks 1 values 1

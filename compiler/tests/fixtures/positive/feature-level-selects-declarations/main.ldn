@@ -1,0 +1,9 @@
+fixed if compiler.feature.bmi2 or compiler.feature.lse then
+    ignored: i32 = absent
+elsif compiler.feature.idiv and compiler.arch == cortex_m0 then
+    ignored_m: i32 = missing
+else
+    selected: i32 = 42
+end if
+compiler.assert(not compiler.feature.avx512f)
+compiler.assert(compiler.feature.thumb2 == compiler.feature.dsp)

@@ -13769,7 +13769,8 @@ range violations are errors. `--build-mode=debug|release` supplies a separate
 request fact, default debug; it does not change runtime checks or optimization.
 `compiler.arch` retains D139's constructor-selected architecture;
 `compiler.word_size` counts bits and `compiler.byte_order` is `little` or `big`.
-These facts are fixed configuration values. Word size is eight times
+D255 adds `compiler.feature.NAME`, a bool for each feature of the selected
+CPU feature level. These facts are fixed configuration values. Word size is eight times
 `sizeof usize`, including on a synthetic 32-bit target hosted by a 64-bit
 compiler.
 
@@ -14838,6 +14839,15 @@ description and ABI. Darwin's lowest processor, Apple's M1, has more than
 `armv8-a`; assuming less than a machine has is sound, so the default stays
 and a build for Apple silicon may select `armv8.1-a`.
 
+A program reads its level as `compiler.feature.NAME`, a fixed bool fact
+[1500] that holds when the selected level has the feature NAME, spelled as
+in the table. A feature of another family is false rather than refused, so
+`fixed if compiler.feature.lse then` needs no architecture test before it,
+and a name no family has is L0305. `compiler.feature` is a member chain the
+grammar already derives; it adds no reserved word and no configuration atom,
+so no option name collides with one. Like every other fact it is read only
+in a fixed configuration expression.
+
 A level changes which instructions the backend selects and which the
 toolchain accepts, and nothing else: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
@@ -14859,8 +14869,16 @@ Apple's floor as Darwin's default, which changes the code every existing
 Darwin build emits.
 
 **Pinned by** `targets/levels are stated per family`,
-`targets/names select their descriptions` and `driver/a level is selected
-within its family`.
+`targets/names select their descriptions`, `driver/a level is selected
+within its family`, `positive/feature-level-selects-declarations`,
+`negative/feature-unknown-name`, `negative/feature-outside-configuration`,
+`negative/feature-compared-with-architecture`,
+`end-to-end/feature-level-default-lacks-bmi2`,
+`end-to-end/feature-level-x86-64-v3-has-bmi2`,
+`end-to-end/feature-level-armv8-1-a-has-lse`,
+`end-to-end/feature-level-armv6-m-lacks-idiv`,
+`end-to-end/feature-level-armv7-m-has-idiv` and
+`end-to-end/feature-level-of-another-family`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

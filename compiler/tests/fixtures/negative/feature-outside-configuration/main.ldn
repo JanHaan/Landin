@@ -1,0 +1,6 @@
+public main: () -> (code: i32) =
+    code = 0
+    if compiler.feature.lse then
+        code = 1
+    end if
+end main
