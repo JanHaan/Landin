@@ -1,3 +1,4 @@
+# The open buffer replaces a saved main.ldn in workspace/app.
 # What a name or an expression is: a routine's header and its doc
 # comment, an inferred local's type, a parameter, a struct type and its
 # doc comment from another module, a comparison, a field selection and a

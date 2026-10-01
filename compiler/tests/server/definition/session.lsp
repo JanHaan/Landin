@@ -1,3 +1,4 @@
+# The open buffer replaces a saved main.ldn in workspace/app.
 # Where a name is declared: a routine in the same file, a local, a
 # parameter, a type in an imported module found under the roots, and a
 # declaring name, which is its own declaration.  A predeclared type, a

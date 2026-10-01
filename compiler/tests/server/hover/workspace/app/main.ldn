@@ -1,0 +1,3 @@
+main: () -> (status: i32) =
+    status = 0
+end main
