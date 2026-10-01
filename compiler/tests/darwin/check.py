@@ -63,6 +63,41 @@ def assembly_contract(text):
     require(count > 0, "no emitted routine frames")
 
 
+#  The Darwin arm64 CPU feature levels (D255) above the default, each with
+#  the sysctl that says this Mac's processor has it and what the executed
+#  image must then contain and lack.
+LEVELS = {"armv8.1-a": {"sysctl": "hw.optional.arm.FEAT_LSE",
+                        "present": r"\b(?:ldadd|swp|cas)al[bh]?\b",
+                        "absent": r"\b(?:ldxr|stxr)[bh]?\b"}}
+
+
+def levels_of(meta):
+    """The arm64 levels a fixture's `levels:` names beyond the default."""
+    named = [one.strip() for one in meta.get("levels", "").split(",") if one.strip()]
+    return [one for one in named if one in LEVELS]
+
+
+def host_has(level):
+    """Whether this Mac's processor has the level, which it must before a
+    build for that level is run: a level above it is refused, not hoped."""
+    probe = subprocess.run(["sysctl", "-n", LEVELS[level]["sysctl"]],
+                           capture_output=True, text=True)
+    return probe.returncode == 0 and probe.stdout.strip() == "1"
+
+
+def level_lowering(executable, level, cwd, run, label):
+    """The executed image's own instructions, so the level is shown to have
+    reached the bytes that ran and not only the assembly refine wrote."""
+    _, listing, _ = run.command(["/usr/bin/objdump", "-d", "--no-show-raw-insn", executable],
+                                label + "-disassemble", cwd)
+    text = listing.decode(errors="replace")
+    present = len(re.findall(LEVELS[level]["present"], text))
+    require(present > 0, level + ": the image has no instruction of the level")
+    require(not re.search(LEVELS[level]["absent"], text),
+            level + ": the image still holds the default level's sequence")
+    return {"level_instructions": present}
+
+
 def workers():
     """How many fixtures run at once: LANDIN_DARWIN_JOBS, default 1.
 
@@ -171,10 +206,14 @@ def main(argv=None):
                 profiles = [("none", "off"), ("size", "off"), ("size", "auto"), ("speed", "auto")]
                 if meta.get("profiles") == "specialization":
                     profiles += [("none", "all"), ("speed", "all")]
-            for optimize, specialize in profiles:
+            levels = [None] + (levels_of(meta) if args.parity and meta["class"] == "runtime" else [])
+            for level in levels:
+                require(level is None or host_has(level), "this Mac cannot run " + str(level))
+            for level, (optimize, specialize) in [(lv, p) for lv in levels for p in profiles]:
                 if args.profile and optimize != args.profile:
                     continue
-                label = name.replace("/", "-") + "-" + optimize + ("-" + specialize if args.parity else "")
+                label = (name.replace("/", "-") + "-" + optimize + ("-" + specialize if args.parity else "")
+                         + ("-" + level if level else ""))
                 labels.append(label)
                 assembly = directory / (label + ".s")
                 object_file = directory / (label + ".o")
@@ -184,7 +223,7 @@ def main(argv=None):
                            if "root" in meta else [str(source)])
                 sources += [str(base / part.strip()) for part in meta.get("with", "").split(",") if part.strip()]
                 argv = [refine, "--target=darwin-arm64", "--optimize=" + optimize,
-                        "--specialize=" + specialize, *sources]
+                        "--specialize=" + specialize, *(["--level=" + level] if level else []), *sources]
                 cwd = ROOT / "compiler/ada"
                 # Runtime cases exercise refine's native driver selection;
                 # ABI cases retain a separate Apple-assembled Mach-O object.
@@ -240,9 +279,11 @@ def main(argv=None):
                     verdict = "platform-limited"
                 else:
                     outcome(meta, status, stdout, stderr, expected)
+                lowering = level_lowering(executable, level, cwd, run, label) if level else {}
                 if args.parity:
                     require(object_file.is_file(), "linked object was not retained")
                 results.append({"case": name, "optimize": optimize, "specialize": specialize,
+                                **({"level": level, **lowering} if level else {}),
                                 "status": verdict, "exit": status,
                                 **({"assembly": hash_file(assembly), "object": hash_file(object_file),
                                     "executable": hash_file(executable)} if args.parity else {})})

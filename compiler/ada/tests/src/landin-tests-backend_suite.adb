@@ -38,6 +38,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Types;
 
 package body Landin.Tests.Backend_Suite is
@@ -6742,6 +6743,83 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Darwin_Wide_Parts_Keep_Target_Offsets;
 
+   --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
+   --  at every width, inside the same fences, and the default emits the
+   --  exclusive-monitor loop it always did.
+   procedure A_Level_Selects_Its_Instructions
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Level_Selects_Its_Instructions
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+
+      function Emitted
+        (Facts : Landin.Targets.Target_Facts; Source, Level : String)
+         return String;
+
+      function Emitted
+        (Facts : Landin.Targets.Target_Facts; Source, Level : String)
+         return String
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, Level & ": the source lowers");
+         if Landin.Stages.Failed (Work) then
+            return "";
+         end if;
+         Landin.Backend.Arm64.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Landin.Optimization.Reference_Options, Assembly, Report,
+            Level => L.Level_Named (Facts, Level));
+         return Ada.Strings.Unbounded.To_String (Assembly);
+      end Emitted;
+
+      Atomics : constant String :=
+        "public rmw: (a: ptr mut u8, b: ptr mut u16, c: ptr mut u32,"
+        & " d: ptr mut u64) -> (r: u64) ="
+        & LF
+        & "    w := compiler.atomic_add(a, 1, compiler.relaxed)" & LF
+        & "    x := compiler.atomic_exchange(b, 2, compiler.acq_rel)" & LF
+        & "    y := compiler.atomic_compare_exchange(c, 3, 4,"
+        & " compiler.seq_cst, compiler.acquire)" & LF
+        & "    z := compiler.atomic_add(d, 5, compiler.seq_cst)" & LF
+        & "    r = u64(w) + u64(x) + u64(y) + z" & LF
+        & "end rmw" & LF;
+      Base_Arm : constant String :=
+        Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8-a");
+      LSE : constant String :=
+        Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8.1-a");
+   begin
+      Landin.Testing.Check
+        (Item, Occurrences (Base_Arm, "ldxr") = 4
+           and then Occurrences (Base_Arm, "stxr") = 4
+           and then Occurrences (Base_Arm, "ldadd") = 0
+           and then Occurrences (Base_Arm, ".arch") = 0,
+         "armv8-a keeps the exclusive-monitor loop and names no level");
+      Landin.Testing.Check
+        (Item, Contains (LSE, ".arch armv8.1-a" & LF)
+           and then Contains (LSE, "ldaddalb w11, w9, [x10]")
+           and then Contains (LSE, "swpalh w11, w9, [x10]")
+           and then Contains (LSE, "casal w9, w12, [x10]")
+           and then Contains (LSE, "ldaddal x11, x9, [x10]")
+           and then Occurrences (LSE, "ldxr") = 0
+           and then Occurrences (LSE, "stxr") = 0
+           and then Occurrences (LSE, "clrex") = 0,
+         "armv8.1-a does each read-modify-write in one LSE instruction");
+      Landin.Testing.Check
+        (Item, Occurrences (LSE, "dmb ish")
+                 = Occurrences (Base_Arm, "dmb ish"),
+         "LSE keeps every fence the loop had");
+   end A_Level_Selects_Its_Instructions;
+
    --  [1630] on x86-64: the text as written with `{name}` filled, each
    --  input extended into its register before it and each output stored
    --  after it; a declared callee-saved register saved and restored with
@@ -6907,6 +6985,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a level selects its instructions",
+         A_Level_Selects_Its_Instructions'Access);
       Landin.Testing.Register
         (Into, "backend", "imported function addresses use the GOT",
          Imported_Function_Addresses_Use_The_GOT'Access);

@@ -408,8 +408,11 @@ x86 uses aligned MOV for loads, XCHG for stores/exchanges, LOCK XADD for wrappin
 fetch-add and LOCK CMPXCHG for strong compare-exchange, with MFENCE before and
 after each. Darwin uses DMB ISH before and after, ordinary scalar load/store,
 and a baseline LDXR/STXR retry loop for read-modify-write; a failed comparison
-clears the reservation with CLREX. It requires no LSE extension or out-of-line
-atomic helper. Retry loops promise no wait-free bound. Scalar volatile accesses
+clears the reservation with CLREX. At the default `armv8-a` level it requires no
+LSE extension or out-of-line atomic helper. At `armv8.1-a` (D255) each
+read-modify-write is instead one LSE instruction, LDADDAL, SWPAL or CASAL at
+the access's width, inside the same DMB ISH pair. Retry loops promise no
+wait-free bound. Scalar volatile accesses
 use exactly one width-matched load/store and no implicit hardware fence.
 
 Compiler barriers have no hardware instruction. Thread fences use MFENCE or

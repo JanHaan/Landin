@@ -5,3 +5,4 @@ constructs: 0430, 0850, 1620
 targets: linux-x86-64, macos-arm64
 status: 42
 profiles: specialization
+levels: armv8.1-a

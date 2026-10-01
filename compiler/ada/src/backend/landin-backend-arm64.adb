@@ -317,7 +317,10 @@ package body Landin.Backend.Arm64 is
       Level : Landin.Targets.Levels.Feature_Level :=
         Landin.Targets.Levels.Default_Level (Landin.Targets.Darwin_Arm64))
    is
-      pragma Unreferenced (Level);
+      --  D255: Armv8.1-A's LSE does a read-modify-write in one instruction
+      --  rather than an exclusive-monitor retry loop.
+      Has_LSE : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Lse);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -2129,6 +2132,25 @@ package body Landin.Backend.Arm64 is
                         elsif M in Atomic_Store | Volatile_Store then
                            Load_Value (Operand (2));
                            Memory (True, Size, "x9", "x10");
+                        elsif Has_LSE then
+                           --  The acquire-release forms, inside the same
+                           --  full fences the retry loop has: an ordering
+                           --  is strengthened exactly as much at both
+                           --  levels.  Each returns the value it found in
+                           --  memory, which is the operation's result.
+                           Load_Value (Operand (2), "x11");
+                           if M = Atomic_Compare_Exchange then
+                              Load_Value (Operand (3), "x12");
+                              Emit ("mov " & R9 & ", " & R11);
+                              Emit ("casal" & Suffix & " " & R9 & ", " & R12
+                                    & ", [x10]");
+                           elsif M = Atomic_Add then
+                              Emit ("ldaddal" & Suffix & " " & R11 & ", "
+                                    & R9 & ", [x10]");
+                           else
+                              Emit ("swpal" & Suffix & " " & R11 & ", "
+                                    & R9 & ", [x10]");
+                           end if;
                         else
                            Load_Value (Operand (2), "x11");
                            if M = Atomic_Compare_Exchange then
@@ -4430,9 +4452,20 @@ package body Landin.Backend.Arm64 is
       end Runtime;
 
    begin
-      if Facts /= Landin.Targets.Darwin_Arm64 then
+      if Facts /= Landin.Targets.Darwin_Arm64
+        or else not Landin.Targets.Levels.Belongs_To (Level, Facts)
+      then
          raise Compiler_Defect with
            "arm64 emission needs Darwin";
+      end if;
+      --  The default level names nothing, as before levels existed; a
+      --  higher one names its architecture so the assembler admits exactly
+      --  what that level has (D255).
+      if Landin.Targets.Levels.Name (Level)
+        /= Landin.Targets.Levels.Name
+             (Landin.Targets.Levels.Default_Level (Facts))
+      then
+         Emit (".arch " & Landin.Targets.Levels.Name (Level));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          if Landin.IR.Is_External (Of_Unit, Landin.IR.Item_Id (Index))
