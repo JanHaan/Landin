@@ -509,7 +509,7 @@ feature levels before it grows targets.
 
 ### R11.10 — Describe CPU feature levels
 
-Status: planned
+Status: complete
 Depends on: none
 
 A target description carries a feature level: x86-64 v1 to v4, arm64's
@@ -519,6 +519,27 @@ selected per build and visible to `fixed if`.
 Exit evidence: feature levels selectable on every target, visible as
 compiler facts, and one feature-dependent lowering per target family executed
 at two levels.
+
+Done: a build assumes a CPU feature level of its target's family, selected
+with `--level=` or the server's `level` option through the one target mapping
+both now share; an unknown or foreign level is L0009. D255 records the
+levels, x86-64 v1 to v4, `armv8-a` and `armv8.1-a`, and `armv6-m`, `armv7-m`
+and `armv7e-m`, each a feature set whose default is what the backend always
+emitted. A level is a value beside `Target_Facts`, so layout, checking, the
+IR and every ABI see none, and `compiler.feature.NAME` reads one in
+`fixed if`. Three lowerings run at two levels: BMI2 shifts at `x86-64-v3` on
+Linux, whose lane refuses a level the processor lacks and requires the level
+in the executable's ISA note; LSE atomics at `armv8.1-a` on macOS, whose lane
+asks for FEAT_LSE and requires the executed image to hold the LSE instructions
+and no exclusive loop; and hardware division at `armv7-m` on QEMU's MPS2 AN385
+Cortex-M3 from the locked binary, whose lane requires the image to divide in
+hardware and call no 32-bit helper. The x86-64 assembler is held to the level
+at the baseline too, so an assembly block cannot outrun the build. A runtime
+fixture's `levels:` names the levels each lane runs. `scripts/driver_manifest.py`
+held every commit to its parent at all 8,169 original entries, the only
+differences being the new fixtures' own; the largest scaling ratio is 2.19.
+The Mac ran the LSE lane and the host suite, 798 cases in release, from a
+fresh clone of the branch, and the gate was green on every job on `f43e2858`.
 
 ### R11.20 — Linux arm64
 
