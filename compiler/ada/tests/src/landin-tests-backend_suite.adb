@@ -20,6 +20,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Backend.Arm64;
+with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
@@ -78,6 +79,7 @@ package body Landin.Tests.Backend_Suite is
    use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Scalar_Size;
+   use type Landin.Targets.Target_Facts;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -6745,7 +6747,8 @@ package body Landin.Tests.Backend_Suite is
 
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
    --  at every width, inside the same fences, and the default emits the
-   --  exclusive-monitor loop it always did.
+   --  exclusive-monitor loop it always did; the Cortex-M profile at armv7-m
+   --  divides 32 bits in hardware and still asks the runtime for 64.
    procedure A_Level_Selects_Its_Instructions
      (Item : in out Landin.Testing.Context);
 
@@ -6773,12 +6776,21 @@ package body Landin.Tests.Backend_Suite is
          if Landin.Stages.Failed (Work) then
             return "";
          end if;
-         Landin.Backend.Arm64.Emit
-           (Landin.Stages.Code (Work).all,
-            Landin.Stages.Meanings (Work).all,
-            Landin.Stages.Identities (Work).all, Facts,
-            Landin.Optimization.Reference_Options, Assembly, Report,
-            Level => L.Level_Named (Facts, Level));
+         if Facts = Landin.Targets.Darwin_Arm64 then
+            Landin.Backend.Arm64.Emit
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, Facts,
+               Landin.Optimization.Reference_Options, Assembly, Report,
+               Level => L.Level_Named (Facts, Level));
+         else
+            Landin.Backend.Cortex_M.Emit
+              (Landin.Stages.Code (Work).all,
+               Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, Facts,
+               Landin.Optimization.Reference_Options, Assembly, Report,
+               Level => L.Level_Named (Facts, Level));
+         end if;
          return Ada.Strings.Unbounded.To_String (Assembly);
       end Emitted;
 
@@ -6793,10 +6805,22 @@ package body Landin.Tests.Backend_Suite is
         & "    z := compiler.atomic_add(d, 5, compiler.seq_cst)" & LF
         & "    r = u64(w) + u64(x) + u64(y) + z" & LF
         & "end rmw" & LF;
+      Division : constant String :=
+        "public divide: (a: i32, b: u32, c: i64, d: u16)"
+        & " -> (q: i32, r: u32, s: i64, t: u16) =" & LF
+        & "    q = a / a" & LF
+        & "    r = b % b" & LF
+        & "    s = c / c" & LF
+        & "    t = d % d" & LF
+        & "end divide" & LF;
       Base_Arm : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8-a");
       LSE : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8.1-a");
+      Base_M : constant String :=
+        Emitted (Landin.Targets.Cortex_M, Division, "armv6-m");
+      Seven : constant String :=
+        Emitted (Landin.Targets.Cortex_M, Division, "armv7-m");
    begin
       Landin.Testing.Check
         (Item, Occurrences (Base_Arm, "ldxr") = 4
@@ -6818,6 +6842,25 @@ package body Landin.Tests.Backend_Suite is
         (Item, Occurrences (LSE, "dmb ish")
                  = Occurrences (Base_Arm, "dmb ish"),
          "LSE keeps every fence the loop had");
+      Landin.Testing.Check
+        (Item, Contains (Base_M, ".cpu cortex-m0" & LF)
+           and then Occurrences (Base_M, "bl __aeabi_idivmod") = 1
+           and then Occurrences (Base_M, "bl __aeabi_uidivmod") = 2
+           and then Occurrences (Base_M, "bl __aeabi_ldivmod") = 1
+           and then Occurrences (Base_M, "sdiv") = 0,
+         "armv6-m divides through the runtime helpers");
+      Landin.Testing.Check
+        (Item, Contains (Seven, ".arch armv7-m" & LF)
+           and then not Contains (Seven, ".cpu cortex-m0")
+           and then Occurrences (Seven, "sdiv r1, r0, r2") = 1
+           and then Occurrences (Seven, "udiv r1, r0, r2") = 2
+           and then Occurrences (Seven, "mls r0, r1, r2, r0") = 2
+           and then Occurrences (Seven, "idivmod") = 0
+           and then Occurrences (Seven, "bl __aeabi_ldivmod") = 1,
+         "armv7-m divides 32 bits in hardware and still calls for 64");
+      Landin.Testing.Check
+        (Item, Occurrences (Seven, "udf") = Occurrences (Base_M, "udf"),
+         "every division guard is kept at both levels");
    end A_Level_Selects_Its_Instructions;
 
    --  [1630] on x86-64: the text as written with `{name}` filled, each

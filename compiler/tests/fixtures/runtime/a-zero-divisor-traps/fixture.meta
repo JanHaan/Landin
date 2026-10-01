@@ -5,3 +5,4 @@ constructs: 1800, 1920, 1950, 1960
 program: main.ldn
 traps: yes
 targets: linux-x86-64, macos-arm64
+levels: armv7-m

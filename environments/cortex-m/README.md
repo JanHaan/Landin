@@ -12,6 +12,7 @@ and `core/cpu`/`core/panic` consumers run through that compiler-owned firmware p
 |---|---|
 | Probe host | native Linux x86-64 with glibc 2.38 or later and `dpkg-deb`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
+| Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-none-eabi-gcc` 14.2.1 20241119, Debian `15:14.2.rel1-1` |
@@ -90,6 +91,21 @@ the CPU that executes the peripheral lanes is the one the CPU lanes execute.
 The harness is single-threaded and owns the only stream it reads. It replaced
 Renode 1.17.0, whose own threads twice put text on the console a lane's
 result was read from, and whose CPU descends from QEMU as this one does.
+
+One QEMU binary still means one emulator, but not one machine. QEMU's
+micro:bit is a Cortex-M0 whatever `-cpu` says, so a corpus fixture executed
+at `armv7-m` (D255) runs on the MPS2 AN385's Cortex-M3 from the same locked
+binary. Its memory puts writable SSRAM at 0 and RAM at `0x20000000`, so the
+external harness's 32 KiB/16 KiB map, vectors and stack reservation hold
+unchanged; the probe stub assembles under `-march=armv7-m`, the image must
+carry `Tag_CPU_arch: v7` with Thumb-2, and libgcc comes from
+`thumb/v7-m/nofp`. Only the corpus runs there. The AN385 has real devices
+at `0x40020000`, where `PrototypePeripheral` lives, and its flash is RAM,
+so no peripheral, firmware or flash-protection lane moves to it. Each image
+run at `armv7-m` is disassembled and required to divide in hardware and to
+ask libgcc for no 32-bit quotient, so the level is shown to have reached
+the bytes that ran. The three division fixtures the corpus runs at
+`armv7-m` add 12 QEMU sessions.
 
 ## Executable routes and limits
 

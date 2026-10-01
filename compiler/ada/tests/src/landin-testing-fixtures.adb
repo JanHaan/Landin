@@ -49,17 +49,17 @@ package body Landin.Testing.Fixtures is
      is (Unbounded.To_String (Item.Levels));
 
 
-   --  The description a fixture target label stands for, which is how a
-   --  level is held to belonging to one of the fixture's own targets.
-   function Is_Level_Of_Label (Label, Level : String) return Boolean
-     is ((Label = "linux-x86-64" and then Landin.Targets.Levels.Is_Level_Of
-            (Landin.Targets.Linux_X86_64, Level))
-         or else (Label = "macos-arm64"
-           and then Landin.Targets.Levels.Is_Level_Of
-             (Landin.Targets.Darwin_Arm64, Level))
-         or else (Label = "cortex-m"
-           and then Landin.Targets.Levels.Is_Level_Of
-             (Landin.Targets.Cortex_M, Level)));
+   --  Whether a level is one of a product target's.  A runtime fixture is
+   --  executed on every lane its inventories select -- its `targets` for
+   --  the hosted ones, compiler/tests/cortex-m/corpus.json for the M
+   --  profile -- so a level is held to being a level some lane has, and
+   --  each lane runs its own family's.
+   function Is_Product_Level (Level : String) return Boolean
+     is (Landin.Targets.Levels.Is_Level_Of (Landin.Targets.Linux_X86_64, Level)
+         or else Landin.Targets.Levels.Is_Level_Of
+           (Landin.Targets.Darwin_Arm64, Level)
+         or else Landin.Targets.Levels.Is_Level_Of
+           (Landin.Targets.Cortex_M, Level));
 
    function Name (Item : Fixture) return String
      is (Unbounded.To_String (Item.Name));
@@ -930,15 +930,12 @@ package body Landin.Testing.Fixtures is
          Complain ("args without expect: nothing would be compared");
       end if;
 
-      --  Read after every key, because a level is held to the fixture's
-      --  targets wherever in the file either was written.
       if Seen_Levels then
          if Expected /= Runtime then
             Complain ("levels belong to a runtime fixture");
          end if;
          declare
             Value : constant String := Unbounded.To_String (Item.Levels);
-            Listed : constant String := Unbounded.To_String (Item.Targets);
             First : Integer := Value'First;
             Named : Natural := 0;
          begin
@@ -947,20 +944,10 @@ package body Landin.Testing.Fixtures is
                   declare
                      One : constant String :=
                        Trimmed (Value (First .. Index - 1));
-                     Owned : Boolean := False;
-                     Start : Integer := Listed'First;
                   begin
                      Named := Named + 1;
-                     for Mark in Listed'First .. Listed'Last + 1 loop
-                        if Mark > Listed'Last or else Listed (Mark) = ',' then
-                           Owned := Owned or else Is_Level_Of_Label
-                             (Trimmed (Listed (Start .. Mark - 1)), One);
-                           Start := Mark + 1;
-                        end if;
-                     end loop;
-                     if not Owned then
-                        Complain ("level is no level of the fixture's"
-                                  & " targets: " & One);
+                     if not Is_Product_Level (One) then
+                        Complain ("level is no product target's: " & One);
                      end if;
                   end;
                   First := Index + 1;

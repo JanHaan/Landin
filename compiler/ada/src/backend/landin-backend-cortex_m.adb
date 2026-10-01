@@ -240,6 +240,12 @@ package body Landin.Backend.Cortex_M is
         Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
    is
       use type Landin.Targets.Levels.Feature_Level;
+
+      --  D255: Armv7-M divides 32 bits in one instruction, so a 32-bit
+      --  quotient or remainder needs no runtime helper.  The 64-bit ones
+      --  still call it, since no M profile divides 64 bits.
+      Has_Divide : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Idiv);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -2152,6 +2158,19 @@ package body Landin.Backend.Cortex_M is
                            if Op = Landin.IR.Remainder then
                               Emit ("mov r0, r2");
                               Emit ("mov r1, r3");
+                           end if;
+                        elsif Has_Divide then
+                           --  The guards above have already refused a zero
+                           --  divisor and settled the minimum over -1, so
+                           --  what reaches here divides as the helper did:
+                           --  the quotient rounds toward zero, and the
+                           --  remainder is the dividend less its product.
+                           Emit ((if Signed then "sdiv" else "udiv")
+                                 & " r1, r0, r2");
+                           if Op = Landin.IR.Remainder then
+                              Emit ("mls r0, r1, r2, r0");
+                           else
+                              Emit ("mov r0, r1");
                            end if;
                         else
                            Emit ("mov r1, r2");

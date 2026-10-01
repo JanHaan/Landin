@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: quotients and remainders of operands known only at run time round toward zero at every width and signedness
+constructs: 0300, 1800, 1890, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64
+levels: armv7-m

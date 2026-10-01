@@ -187,8 +187,9 @@ package body Landin.Tests.Fixture_Suite is
         (Positive_Program, "wrong-class", "profiles: standard" & LF, 0,
          "profiles belong only to a runtime or ABI fixture");
 
-      --  D255: each level the Linux lane runs repeats every profile, and a
-      --  level is held to the fixture's own targets and to a runtime one.
+      --  D255: each level the Linux lane runs repeats every profile, another
+      --  lane's level adds no Linux run, and a level is held to being some
+      --  product target's and to a runtime fixture.
       Check
         (Runtime, "levelled",
          "profiles: standard" & LF & "levels: x86-64-v3" & LF, 4,
@@ -198,13 +199,16 @@ package body Landin.Tests.Fixture_Suite is
          "profiles: specialization" & LF
          & "levels: x86-64-v2, x86-64-v4" & LF, 6, Runs => 18);
       Check
-        (Runtime, "foreign-level",
-         "profiles: standard" & LF & "levels: armv7-m" & LF, 0,
-         "level is no level of the fixture's targets: armv7-m");
+        (Runtime, "other-lane-level",
+         "profiles: standard" & LF & "levels: armv7-m" & LF, 4);
       Check
         (Runtime, "unknown-level",
          "profiles: standard" & LF & "levels: x86-64-v5" & LF, 0,
-         "level is no level of the fixture's targets: x86-64-v5");
+         "level is no product target's: x86-64-v5");
+      Check
+        (Runtime, "no-level",
+         "profiles: standard" & LF & "levels: none" & LF, 0,
+         "level is no product target's: none");
       Check
         (Runtime, "duplicate-levels",
          "profiles: standard" & LF & "levels: x86-64-v3" & LF

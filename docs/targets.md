@@ -552,7 +552,7 @@ are checked against actual linked code and execution.
 | Helper family | Purpose and transport |
 |---|---|
 | `__aeabi_lmul` | low 64-bit product, two core-register pairs; checked selection first proves the product fits |
-| `__aeabi_idivmod`, `__aeabi_uidivmod` | 32-bit quotient in r0 and remainder in r1 |
+| `__aeabi_idivmod`, `__aeabi_uidivmod` | 32-bit quotient in r0 and remainder in r1; not requested at `armv7-m`, which divides in hardware (D255) |
 | `__aeabi_ldivmod`, `__aeabi_uldivmod` | 64-bit quotient in r0/r1 and remainder in r2/r3; also bounds checked multiplication |
 | `__aeabi_fadd/fsub/fmul/fdiv`, `__aeabi_dadd/dsub/dmul/ddiv` | soft IEEE f32/f64 arithmetic in core bit carriers |
 | `__aeabi_fcmp*`, `__aeabi_dcmp*` | ordered/equality predicates; inequality inverts equality |
@@ -569,6 +569,14 @@ atomic emulation. Division guards prevent entering the archive's divide-zero
 fallback; dependency members remain visible in the map. The firmware linker explicitly selects the pinned thumb/v6-m/nofp archive
 with `-lgcc`. Runtime and CPU-library packaging belong to the freestanding
 `core` slice.
+
+At `armv7-m` (D255) the emitter names `.arch armv7-m` instead of `.cpu
+cortex-m0`, a 32-bit quotient is SDIV or UDIV and its remainder MLS after it,
+after the same zero-divisor and minimum-over-minus-one guards, and the link
+selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. Every
+other selection above, the r0-r7 selector, the instruction envelope of
+inline assembly and the 64-bit helpers, is unchanged: a level adds
+instructions where it says so and nowhere else.
 
 The [execution guide](../environments/cortex-m/README.md#compiler-generated-execution)
 separates generated code, independent controls, target refusals and physical

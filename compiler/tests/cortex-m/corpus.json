@@ -556,6 +556,9 @@
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
+    "runtime/division-by-arguments-at-every-width": {
+      "mode": "execute"
+    },
     "runtime/division-and-remainder-exit-with-their-results": {
       "mode": "execute"
     },

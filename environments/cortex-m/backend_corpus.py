@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import re
 
-from backend import ROOT, COUNTERPARTS, fixture, metadata
+from backend import ROOT, COUNTERPARTS, fixture, levels_of, metadata
 from run import Run, require, workers
 from setup import DEFAULT, sha, supported_host
 
@@ -96,6 +96,22 @@ def image_limit(run, row, error):
     return result
 
 
+def divide_lowering(run):
+    """What the executed image divides with, read from its disassembly.
+
+    A level that changed nothing would still pass every status, so the
+    image a higher level ran is required to divide in hardware and to have
+    asked the runtime for no 32-bit quotient: the lowering is shown to have
+    changed in the bytes QEMU executed, not only in the text refine wrote.
+    """
+    text = (run.out / 'disassembly.log').read_text()
+    divides = len(re.findall(r'\t[su]div\t', text))
+    calls = re.findall(r'\bbl\s+[0-9a-f]+ <(__aeabi_u?idivmod)>', text)
+    require(divides > 0, 'the image divides in no hardware instruction')
+    require(not calls, 'the image still calls ' + ', '.join(sorted(set(calls))))
+    return {'hardware_divides': divides, 'helper_divides': 0}
+
+
 def execute(output, tools, refine, selected=(), profiles=()):
     rows = inventory()
     require(set(profiles) <= {'none-off', 'size-off', 'size-auto', 'speed-auto', 'none-all', 'speed-all'},
@@ -114,14 +130,21 @@ def execute(output, tools, refine, selected=(), profiles=()):
             modes = [p for p in modes if '-'.join(p) in profiles]
             if selected:
                 require(bool(modes), 'profile is not applicable to the selected fixture')
-        work += [(name, row, opt, spec) for opt, spec in modes]
+        levels = ['armv6-m']
+        if row['mode'] == 'execute':
+            levels += levels_of(meta)
+        work += [(name, row, opt, spec, level)
+                 for level in levels for opt, spec in modes]
 
     def one(item):
-        name, row, opt, spec = item
-        out = output / (name.replace('/', '--') + '--' + opt + '-' + spec)
+        name, row, opt, spec, level = item
+        out = output / (name.replace('/', '--') + '--' + opt + '-' + spec
+                        + ('' if level == 'armv6-m' else '--' + level))
         out.mkdir(parents=True, exist_ok=False)
         run = Run(out, tools)
         result = {'fixture': name, 'optimize': opt, 'specialize': spec}
+        if level != 'armv6-m':
+            result['level'] = level
         try:
             if row['mode'] == 'restriction':
                 result.update(verdict='target-restriction', reason=row['reason'],
@@ -130,8 +153,10 @@ def execute(output, tools, refine, selected=(), profiles=()):
                 result.update(source_refusal(run, refine, name, row))
             else:
                 try:
-                    fixture(run, refine, name, opt, spec)
+                    fixture(run, refine, name, opt, spec, level)
                     result['verdict'] = 'executed'
+                    if level != 'armv6-m':
+                        result['lowering'] = divide_lowering(run)
                 except RuntimeError as error:
                     result.update(image_limit(run, row, error))
             result['status'] = 'passed'

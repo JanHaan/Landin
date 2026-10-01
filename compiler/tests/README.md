@@ -472,7 +472,7 @@ emits assembly text.
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
 | `profiles` | yes for runtime and ABI only | `standard` for the four baseline compiler profiles, or `specialization` for all six; independent of fixture name |
-| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each a level of one of the fixture's `targets`, at which the program is also built and executed under every profile; each target's lane runs its own family's, and the default level always runs. A lane whose host lacks a level fails rather than skipping it |
+| `levels` | no, and runtime only | comma-separated CPU feature levels (D255), each some product target's, at which the program is also built and executed under every profile; each lane runs its own family's (Linux the x86-64 ones, Darwin the arm64 ones, the Cortex-M corpus the M-profile ones), and the default level always runs. A lane whose host lacks a level fails rather than skipping it |
 | `program` | yes for runtime, ABI, and a rooted positive or negative | the `.ldn` program the fixture runs or uses as its compile-only corpus file |
 | `with` | no | the rest of the Landin module, when one file is not enough; never a C source |
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |

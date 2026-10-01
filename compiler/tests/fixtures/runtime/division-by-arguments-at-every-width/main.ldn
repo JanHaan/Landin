@@ -1,0 +1,56 @@
+-- Every operand arrives as a parameter, so no quotient or remainder here is
+-- folded: each is the division a level may select differently, at every
+-- width and signedness, rounding toward zero with the dividend's sign.
+quotient_32: (a: i32, b: i32) -> (q: i32) =
+    q = a / b
+end quotient_32
+
+remainder_32: (a: i32, b: i32) -> (r: i32) =
+    r = a % b
+end remainder_32
+
+unsigned_quotient_32: (a: u32, b: u32) -> (q: u32) =
+    q = a / b
+end unsigned_quotient_32
+
+unsigned_remainder_32: (a: u32, b: u32) -> (r: u32) =
+    r = a % b
+end unsigned_remainder_32
+
+quotient_8: (a: i8, b: i8) -> (q: i8) =
+    q = a / b
+end quotient_8
+
+remainder_16: (a: u16, b: u16) -> (r: u16) =
+    r = a % b
+end remainder_16
+
+quotient_64: (a: i64, b: i64) -> (q: i64) =
+    q = a / b
+end quotient_64
+
+public main: () -> (code: i32) =
+    if quotient_32(7, 2) == 3
+        and quotient_32(-7, 2) == -3
+        and quotient_32(7, -2) == -3
+        and quotient_32(-2147483648, 1) == -2147483648
+        and quotient_32(-2147483647, -1) == 2147483647
+        and remainder_32(7, 2) == 1
+        and remainder_32(-7, 2) == -1
+        and remainder_32(7, -2) == 1
+        and remainder_32(-2147483648, -1) == 0
+        and remainder_32(-2147483648, 3) == -2
+        and unsigned_quotient_32(4294967295, 2) == 2147483647
+        and unsigned_quotient_32(4294967295, 4294967295) == 1
+        and unsigned_remainder_32(4294967295, 10) == 5
+        and unsigned_remainder_32(3, 4294967295) == 3
+        and quotient_8(-128, 3) == -42
+        and quotient_8(127, -1) == -127
+        and remainder_16(65535, 256) == 255
+        and quotient_64(-9223372036854775807, 2) == -4611686018427387903
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

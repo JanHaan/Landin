@@ -154,6 +154,26 @@ class ProbeFailures(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'inventory disagrees'):
                     inventory()
 
+    def test_a_level_must_change_the_executed_image(self):
+        from backend import LEVELS, levels_of, level_flags
+        from backend_corpus import divide_lowering
+        self.assertEqual(levels_of({'levels': 'x86-64-v3, armv7-m'}), ['armv7-m'])
+        self.assertEqual(level_flags('armv7-m')[0], '-march=armv7-m')
+        self.assertNotIn('-mcpu=cortex-m0', level_flags('armv7-m'))
+        self.assertEqual(LEVELS['armv7-m']['machine'], 'mps2-an385')
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), HERE)
+            listing = Path(directory) / 'disassembly.log'
+            listing.write_text('  10:\tfb90 f1f2 \tsdiv\tr1, r0, r2\n')
+            self.assertEqual(divide_lowering(run)['hardware_divides'], 1)
+            listing.write_text('  10:\tf000 f800 \tbl\t20 <__aeabi_idivmod>\n')
+            with self.assertRaisesRegex(RuntimeError, 'no hardware instruction'):
+                divide_lowering(run)
+            listing.write_text('  10:\tfb90 f1f2 \tsdiv\tr1, r0, r2\n'
+                               '  14:\tf000 f800 \tbl\t20 <__aeabi_uidivmod>\n')
+            with self.assertRaisesRegex(RuntimeError, 'still calls __aeabi_uidivmod'):
+                divide_lowering(run)
+
     def test_image_limit_does_not_hide_codegen_failure(self):
         from backend_corpus import image_limit
         row = {'profile_limit': 'selected-image', 'reason': 'test physical map'}

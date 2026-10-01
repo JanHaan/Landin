@@ -17,6 +17,30 @@ from setup import DEFAULT, HERE, inventory, sha, supported_host
 ROOT = HERE.parent.parent
 COUNTERPARTS = ROOT / 'compiler/tests/cortex-m'
 
+#  The CPU feature levels (D255) the corpus executes beyond Armv6-M, each
+#  with the processor arguments the external harness assembles and links
+#  with, the libgcc multilib that selects, the ELF attributes the image must
+#  carry and the QEMU machine that executes it.  QEMU's micro:bit is a
+#  Cortex-M0 whatever -cpu says, so a higher level runs on the MPS2 AN385's
+#  Cortex-M3, from the same locked binary; its RAM sits where the selected
+#  map puts it, and only the corpus runs there, because the synthetic
+#  peripheral windows are real devices on that board.
+LEVELS = {
+    'armv6-m': {'flags': ['-mcpu=cortex-m0'], 'multilib': '/thumb/v6-m/nofp/',
+                'attributes': ['Tag_CPU_arch: v6S-M', 'Tag_THUMB_ISA_use: Thumb-1'],
+                'machine': 'microbit'},
+    'armv7-m': {'flags': ['-march=armv7-m'], 'multilib': '/thumb/v7-m/nofp/',
+                'attributes': ['Tag_CPU_arch: v7', 'Tag_CPU_arch_profile: Microcontroller',
+                               'Tag_THUMB_ISA_use: Thumb-2'],
+                'machine': 'mps2-an385'},
+}
+
+
+def level_flags(level):
+    """FLAGS with the processor argument the level selects."""
+    require(level in LEVELS, 'unknown Cortex level: ' + level)
+    return LEVELS[level]['flags'] + [f for f in FLAGS if not f.startswith('-mcpu=')]
+
 
 def metadata(path):
     result = {}
@@ -29,7 +53,7 @@ def metadata(path):
     return result
 
 
-def execute(run, elf, expected, traps, before=()):
+def execute(run, elf, expected, traps, before=(), level='armv6-m'):
     listener, port, stub = gdb_listener()
     script = run.out / 'backend.gdb'
     script.write_text('\n'.join([
@@ -54,7 +78,7 @@ def execute(run, elf, expected, traps, before=()):
         'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
         f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":0x20003000+4*first,"reserved_bytes":4096,"is_stack_bound":False}},f)',
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', '']))
-    argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel',
+    argv = [str(run.bin / 'qemu-system-arm'), '-M', LEVELS[level]['machine'], '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]
     record = {'name': 'qemu-backend', 'argv': argv, 'timeout_seconds': 25}
@@ -145,9 +169,12 @@ def image_contract(path):
             'stack_reserved': 4096, 'entry': header[4]}
 
 
-def build(run, refine, inputs, optimize, specialize, extra=(), linker=None):
+def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
+          level='armv6-m'):
+    flags = level_flags(level)
+    selected = [] if level == 'armv6-m' else ['--level=' + level]
     assembly = run.out / 'program.s'
-    run.command('compile', [refine, *inputs, '--target=cortex-m0', '--emit=asm',
+    run.command('compile', [refine, *inputs, '--target=cortex-m0', *selected, '--emit=asm',
                 '--optimize=' + optimize, '--specialize=' + specialize,
                 '-o', assembly, '--build-report=' + str(run.out / 'build.json')], timeout=60)
     preflight(assembly)
@@ -158,17 +185,17 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None):
     objects = []
     for index, source in enumerate([HERE / 'probes/backend-start.S', assembly, *extra]):
         obj = run.out / ('input-' + str(index) + '.o')
-        run.command('assemble-' + str(index), [run.bin / 'arm-none-eabi-gcc', *FLAGS,
+        run.command('assemble-' + str(index), [run.bin / 'arm-none-eabi-gcc', *flags,
                     '-c', source, '-o', obj])
         objects.append(obj)
     run.command('object-disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', objects[1]])
-    run.command('assemble-link', [run.bin / 'arm-none-eabi-gcc', *FLAGS,
+    run.command('assemble-link', [run.bin / 'arm-none-eabi-gcc', *flags,
                 '-Wl,-T,' + str(linker or HERE / 'probes/backend-memory.ld') +
                 ',--gc-sections,-Map,program.map', *objects, '-lgcc', '-o', elf])
     (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
     attributes = run.command('elf', [run.bin / 'arm-none-eabi-readelf', '-h', '-A', '-S', elf])
-    require('Tag_CPU_arch: v6S-M' in attributes and 'Tag_THUMB_ISA_use: Thumb-1' in attributes,
-            'ELF does not describe the selected ARMv6-M profile')
+    require(all(tag in attributes for tag in LEVELS[level]['attributes']),
+            'ELF does not describe the selected ' + level + ' profile')
     require('Tag_ARM_ISA_use: Yes' not in attributes and 'VFP registers' not in attributes,
             'ELF requires an unsupported instruction or floating ABI')
     run.command('disassembly', [run.bin / 'arm-none-eabi-objdump', '-dr', elf])
@@ -176,9 +203,9 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None):
     require(not run.command('undefined', [run.bin / 'arm-none-eabi-nm', '-u', elf]).strip(),
             'freestanding test image has unresolved dependencies')
     library = Path(run.command('libgcc-path', [run.bin / 'arm-none-eabi-gcc',
-                   '-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft',
+                   *LEVELS[level]['flags'], '-mthumb', '-mfloat-abi=soft',
                    '-print-libgcc-file-name']).strip()).resolve(strict=True)
-    require('/thumb/v6-m/nofp/' in str(library), 'wrong Arm runtime multilib')
+    require(LEVELS[level]['multilib'] in str(library), 'wrong Arm runtime multilib')
     (run.out / 'helpers.json').write_text(json.dumps({
         'library': str(library), 'sha256': sha(library),
         'requested': sorted(set(re.findall(r'\bbl (__aeabi_\w+)', assembly.read_text()))),
@@ -187,7 +214,7 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None):
     return elf
 
 
-def fixture(run, refine, name, optimize, specialize):
+def fixture(run, refine, name, optimize, specialize, level='armv6-m'):
     source = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(source / 'fixture.meta')
     require(meta['class'] == 'runtime', 'development selector requires runtime fixture')
@@ -202,11 +229,17 @@ def fixture(run, refine, name, optimize, specialize):
     require(not meta.get('args'), 'fixture has explicit compiler arguments')
     require(not meta.get('run_args') and not meta.get('run_expect'),
             'fixture requires hosted input/output')
-    elf = build(run, refine, inputs, optimize, specialize)
+    elf = build(run, refine, inputs, optimize, specialize, level=level)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else
-            int(meta.get('status', '0')), meta.get('traps') == 'yes')
+            int(meta.get('status', '0')), meta.get('traps') == 'yes', level=level)
     return {'fixture': name, 'optimize': optimize, 'specialize': specialize,
             'compiler_sha256': sha(refine), 'status': 'passed'}
+
+
+def levels_of(meta):
+    """The M-profile levels a fixture's `levels:` names beyond the default."""
+    named = [one.strip() for one in meta.get('levels', '').split(',') if one.strip()]
+    return [one for one in named if one in LEVELS]
 
 
 def main():

@@ -14856,7 +14856,10 @@ guard [0320] and [1950] ask of a shift are unchanged. At `armv8.1-a` an
 atomic add, exchange or compare-exchange is one LSE instruction, `ldaddal`,
 `swpal` or `casal`, rather than an exclusive-monitor retry loop; the
 acquire-release form inside the same full fences strengthens every ordering
-exactly as much as the loop does. Beyond that: every level of a family shares one
+exactly as much as the loop does. At `armv7-m` a 32-bit quotient is `sdiv` or
+`udiv` and its remainder `mls`, after the same zero-divisor and
+minimum-over-minus-one guards, rather than a call to the runtime's
+`__aeabi_idivmod`; a 64-bit one still calls the runtime. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and the checker and the
@@ -14889,7 +14892,10 @@ within its family`, `positive/feature-level-selects-declarations`,
 `x86 opt/a level selects its shifts`, `fixtures/profiles are explicit` and
 `runtime/variable-shifts-at-every-width`, which executes at `x86-64-v3` too,
 `backend/a level selects its instructions`, and `runtime/r630-memory-scalars`,
-which the Darwin lane executes at `armv8.1-a` too.
+which the Darwin lane executes at `armv8.1-a` too, and
+`runtime/division-by-arguments-at-every-width`,
+`runtime/a-zero-divisor-traps` and `runtime/signed-division-overflow-traps`,
+which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
