@@ -14849,7 +14849,9 @@ so no option name collides with one. Like every other fact it is read only
 in a fixed configuration expression.
 
 A level changes which instructions the backend selects and which the
-toolchain accepts, and nothing else. At `x86-64-v3` a variable shift of 32 or
+toolchain accepts, and nothing else. The assembler is held to the level at
+every level, the default included, so an `assembler.block` can use no
+instruction the build does not assume. At `x86-64-v3` a variable shift of 32 or
 64 bits is BMI2's `shlx`, `shrx` or `sarx`, which shifts by any register
 rather than by `%cl`; narrower shifts, which BMI2 has no form for, and every
 guard [0320] and [1950] ask of a shift are unchanged. At `armv8.1-a` an
@@ -14893,6 +14895,8 @@ within its family`, `positive/feature-level-selects-declarations`,
 `runtime/variable-shifts-at-every-width`, which executes at `x86-64-v3` too,
 `backend/a level selects its instructions`, and `runtime/r630-memory-scalars`,
 which the Darwin lane executes at `armv8.1-a` too, and
+`runtime/assembly-block-at-its-level`, which selects a BMI2 assembly block
+by `compiler.feature.bmi2` and runs at both x86-64 levels,
 `runtime/division-by-arguments-at-every-width`,
 `runtime/a-zero-divisor-traps` and `runtime/signed-division-overflow-traps`,
 which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.

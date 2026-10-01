@@ -1,0 +1,19 @@
+-- An assembly block may use what the build's CPU feature level has.  This
+-- program selects a BMI2 block where the level has BMI2 and a plain shift
+-- where it does not, so both builds give the same answer and each uses only
+-- what its level has: the baseline's assembler is held to the baseline.
+fixed if compiler.feature.bmi2 then
+    doubled: (value: u64) -> (r: u64) =
+        r = assembler.block("shlxq {b}, {a}, {a}",
+                            inout a: u64 at general = value,
+                            in b: u64 at general = 1)
+    end doubled
+else
+    doubled: (value: u64) -> (r: u64) =
+        r = value << 1
+    end doubled
+end if
+
+public main: () -> (code: i32) =
+    code = i32(doubled(21))
+end main

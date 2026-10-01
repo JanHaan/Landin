@@ -91,11 +91,11 @@ package Landin.Backend.Toolchain is
    --  shape of the invocation.  The empty string leaves the driver's own
    --  default alone.
    --
-   --  A CPU feature level other than the target's default is passed to the
-   --  tools, so that the assembler refuses an instruction the level does not
-   --  have and the linker selects the runtime and records the level that
-   --  the build assumed (D255).  The default level adds no argument: every
-   --  build that selects none is invoked exactly as before levels existed.
+   --  A CPU feature level is passed to the tools, so that the assembler
+   --  refuses an instruction the level does not have and the linker selects
+   --  the runtime and records the level that the build assumed (D255).  On
+   --  x86-64 the assembler is held to the level at the baseline too; on the
+   --  M profile the baseline keeps naming its core, as it always did.
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
       Debug : Boolean := False;

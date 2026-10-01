@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a fixed if on compiler.feature selects a BMI2 assembly block at x86-64-v3 and a plain shift at the baseline, and both run
+constructs: 1500, 1630
+program: main.ldn
+status: 42
+targets: linux-x86-64, macos-arm64
+levels: x86-64-v3

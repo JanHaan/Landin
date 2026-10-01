@@ -365,16 +365,20 @@ package body Landin.Backend.Toolchain is
          Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
       end if;
 
-      --  The assembler refuses what the level lacks, and the linker marks
-      --  the executable with the level in its GNU property note, which the
-      --  dynamic loader checks against the processor it is started on.
-      if not Is_Default (Level, Facts) and then
-        Landin.Targets.Capabilities.Backend_For (Facts)
-          = Landin.Targets.Capabilities.Linux_X86_64_ELF
+      --  The assembler refuses what the level lacks, at every level, the
+      --  baseline included, so an assembly block cannot use more than the
+      --  build assumed.  Above the baseline the linker also marks the
+      --  executable with the level in its GNU property note, which the
+      --  dynamic loader checks against the processor it is started on; the
+      --  baseline is what every x86-64 processor has, and needs no mark.
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Linux_X86_64_ELF
       then
          Landin.Platform.Add
            (List, "-Wa,-march=" & X86_Assembler_Architecture (Level));
-         Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
+         if not Is_Default (Level, Facts) then
+            Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
+         end if;
       end if;
 
       return List;

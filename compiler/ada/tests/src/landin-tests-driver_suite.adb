@@ -933,9 +933,9 @@ package body Landin.Tests.Driver_Suite is
         (Item, Plain, Named,
          "naming the default level is building without one");
       Landin.Testing.Check
-        (Item, not Contains (Plain, "-march") and then not Contains
-           (Plain, "-z,x86-64"),
-         "the default level adds no tool argument");
+        (Item, Contains (Plain, " -Wa,-march=generic64 ")
+           and then not Contains (Plain, "-z,x86-64"),
+         "the baseline holds the assembler to itself and marks nothing");
       Landin.Testing.Check
         (Item, Contains (Plain, """level"":""x86-64-v1"""),
          "the build report names the default level");
@@ -1343,8 +1343,10 @@ package body Landin.Tests.Driver_Suite is
             "the driver is found by the target's triplet");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
-            "main.s" & LF & "-o" & LF & "main" & LF,
-            "and is handed the assembly it wrote and the output asked for");
+            "main.s" & LF & "-o" & LF & "main" & LF
+            & "-Wa,-march=generic64" & LF,
+            "and is handed the assembly it wrote, the output asked for and"
+            & " the level it assumes");
          Landin.Testing.Check
            (Item, Contains (Host.Written ("main.s"), ".globl main"),
             "the assembly beside the output is what it assembles");
@@ -1385,7 +1387,8 @@ package body Landin.Tests.Driver_Suite is
             "a named toolchain wins over the triplet");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
-            "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF,
+            "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF
+            & "-Wa,-march=generic64" & LF,
             "and the linker rides through as one more argument");
       end;
    end A_Named_Linker_Reaches_The_Driver;

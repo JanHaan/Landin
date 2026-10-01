@@ -1503,6 +1503,7 @@ runtime/array-of-structs | linux-x86-64, macos-arm64
 runtime/array-repetition-evaluates-once | linux-x86-64, macos-arm64
 runtime/array-returns-cross-calls | linux-x86-64, macos-arm64
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64, macos-arm64
+runtime/assembly-block-at-its-level | linux-x86-64, macos-arm64
 runtime/assembly-every-general-register | linux-x86-64, macos-arm64
 runtime/assembly-memory-boundary | linux-x86-64, macos-arm64
 runtime/assembly-operand-free | linux-x86-64, macos-arm64

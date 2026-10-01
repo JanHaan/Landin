@@ -88,16 +88,20 @@ ABI, is the same at every level of a family.
 
 | target | default | other levels | what a higher level selects | its tool arguments |
 |---|---|---|---|---|
-| `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64+...` with the level's extensions, `-Wl,-z,x86-64-vN` |
+| `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | `.arch` in the assembly, `-march=` for the assembler and linker |
 | `synthetic-32` | none | none | nothing | none |
 
-The default level adds no argument and no directive. The pinned GNU
-assembler does not accept the psABI's `x86-64-v3` spelling as `-march`, so
-the level is spelled `generic64` with its extensions; the linker's
-`-z x86-64-vN` writes the level into the executable's GNU property note,
-and glibc's loader refuses an executable whose level the processor lacks.
+The x86-64 assembler is held to the level at every level, the baseline's
+plain `-Wa,-march=generic64` included, so an `assembler.block` using a v3
+instruction is refused by the assembler unless the build assumes v3; the
+other targets' default levels add no argument and no directive. The pinned
+GNU assembler does not accept the psABI's `x86-64-v3` spelling as `-march`,
+so the level is spelled `generic64` with its extensions; above the baseline
+the linker's `-z x86-64-vN` writes the level into the executable's GNU
+property note, and glibc's loader refuses an executable whose level the
+processor lacks.
 Darwin's lowest processor, Apple's M1, has more than `armv8-a`; the default
 assumes less than any Mac has, which is sound, and a build for Apple silicon
 may select `armv8.1-a`. Each test lane runs the levels a runtime fixture's

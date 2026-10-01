@@ -252,6 +252,9 @@
     "runtime/array-zeroed-assignment-clears-storage": {
       "mode": "execute"
     },
+    "runtime/assembly-block-at-its-level": {
+      "mode": "execute"
+    },
     "runtime/assembly-every-general-register": {
       "mode": "execute"
     },
