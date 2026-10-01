@@ -12,6 +12,7 @@ with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Levels;
 with Landin.Targets.Selection;
 with Landin.Types;
 with Landin.Packed;
@@ -188,6 +189,134 @@ package body Landin.Tests.Targets_Suite is
            and then not Selection.Is_Described (""),
          "a triplet, a fixture label or another spelling selects nothing");
    end Names_Select_Their_Descriptions;
+
+   --  Every level is asserted against the platform's own definition of
+   --  it: the x86-64 psABI's level table, Arm's v8.1 extensions and the
+   --  M-profile architecture manuals.  A feature another family has is
+   --  never held, and a level is selected only within its own family.
+   procedure Levels_Are_Stated_Per_Family
+     (Item : in out Landin.Testing.Context);
+
+   procedure Levels_Are_Stated_Per_Family
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      use type L.Feature;
+      use type L.Feature_Level;
+
+      function At_Level (Facts : Target_Facts; Name : String)
+        return L.Feature_Level is (L.Level_Named (Facts, Name));
+
+      function Holds (Facts : Target_Facts; Name : String) return String;
+
+      function Holds (Facts : Target_Facts; Name : String) return String is
+         Result : Ada.Strings.Unbounded.Unbounded_String;
+      begin
+         for Each in L.Feature loop
+            if L.Has (At_Level (Facts, Name), Each) then
+               if Ada.Strings.Unbounded.Length (Result) > 0 then
+                  Ada.Strings.Unbounded.Append (Result, " ");
+               end if;
+               Ada.Strings.Unbounded.Append (Result, L.Spelling (Each));
+            end if;
+         end loop;
+         return Ada.Strings.Unbounded.To_String (Result);
+      end Holds;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (Linux_X86_64)), "x86-64-v1",
+         "x86-64 assumes the psABI baseline by default");
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (Darwin_Arm64)), "armv8-a",
+         "arm64 assumes Armv8.0-A by default");
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (Cortex_M)), "armv6-m",
+         "the M profile assumes Armv6-M by default");
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (Synthetic_32)), "none",
+         "synthetic-32 has no processor to assume anything of");
+
+      Landin.Testing.Check_Equal
+        (Item, L.Levels_Of (Linux_X86_64),
+         "x86-64-v1, x86-64-v2, x86-64-v3, x86-64-v4",
+         "x86-64 selects the four psABI levels");
+      Landin.Testing.Check_Equal
+        (Item, L.Levels_Of (Darwin_Arm64), "armv8-a, armv8.1-a",
+         "arm64 selects Armv8.0-A and Armv8.1-A");
+      Landin.Testing.Check_Equal
+        (Item, L.Levels_Of (Cortex_M), "armv6-m, armv7-m, armv7e-m",
+         "the M profile selects Armv6-M, Armv7-M and Armv7E-M");
+      Landin.Testing.Check_Equal
+        (Item, L.Levels_Of (Synthetic_32), "",
+         "synthetic-32 selects no level");
+
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_X86_64, "x86-64-v1"), "",
+         "the baseline holds no level feature");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_X86_64, "x86-64-v2"),
+         "cmpxchg16b lahf popcnt sse3 ssse3 sse4_1 sse4_2",
+         "x86-64-v2 is the psABI's v2 list");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_X86_64, "x86-64-v3"),
+         "cmpxchg16b lahf popcnt sse3 ssse3 sse4_1 sse4_2 avx avx2 bmi1"
+         & " bmi2 f16c fma lzcnt movbe xsave",
+         "x86-64-v3 adds the psABI's v3 list");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Linux_X86_64, "x86-64-v4"),
+         "cmpxchg16b lahf popcnt sse3 ssse3 sse4_1 sse4_2 avx avx2 bmi1"
+         & " bmi2 f16c fma lzcnt movbe xsave avx512f avx512bw avx512cd"
+         & " avx512dq avx512vl",
+         "x86-64-v4 adds the psABI's v4 list");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Darwin_Arm64, "armv8-a"), "",
+         "Armv8.0-A holds no level feature");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Darwin_Arm64, "armv8.1-a"), "lse crc32 rdm",
+         "Armv8.1-A makes LSE, CRC32 and RDM mandatory");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Cortex_M, "armv6-m"), "",
+         "Armv6-M holds no level feature");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Cortex_M, "armv7-m"), "thumb2 idiv",
+         "Armv7-M has Thumb-2 and hardware division");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Cortex_M, "armv7e-m"), "thumb2 idiv dsp",
+         "Armv7E-M adds the DSP extension");
+
+      Landin.Testing.Check
+        (Item,
+         not L.Is_Level_Of (Linux_X86_64, "armv8.1-a")
+           and then not L.Is_Level_Of (Darwin_Arm64, "x86-64-v3")
+           and then not L.Is_Level_Of (Cortex_M, "armv8-a")
+           and then not L.Is_Level_Of (Synthetic_32, "none")
+           and then not L.Is_Level_Of (Linux_X86_64, "v3")
+           and then not L.Is_Level_Of (Linux_X86_64, "none"),
+         "a level is selected only by its own name within its family");
+      Landin.Testing.Check
+        (Item,
+         L.Belongs_To (L.Default_Level (Synthetic_32), Synthetic_32)
+           and then not L.Belongs_To
+             (At_Level (Linux_X86_64, "x86-64-v3"), Darwin_Arm64)
+           and then not L.Belongs_To
+             (L.Default_Level (Cortex_M), Linux_X86_64),
+         "a level belongs to its own family alone");
+      Landin.Testing.Check
+        (Item,
+         At_Level (Linux_X86_64, "x86-64-v1")
+           = L.Default_Level (Linux_X86_64)
+         and then At_Level (Cortex_M, "armv6-m")
+           = L.Default_Level (Cortex_M),
+         "selecting the default by name is the default");
+      Landin.Testing.Check
+        (Item,
+         (for all Each in L.Feature =>
+            L.Is_Feature_Name (L.Spelling (Each))
+            and then L.Feature_Named (L.Spelling (Each)) = Each)
+         and then not L.Is_Feature_Name ("BMI2")
+         and then not L.Is_Feature_Name ("sse4.2"),
+         "every feature is named by exactly its spelling");
+   end Levels_Are_Stated_Per_Family;
 
    ------------------------------------------------------------------
    --  Alignment is walked over every Scalar_Size for both descriptions,
@@ -1346,6 +1475,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "names select their descriptions",
          Names_Select_Their_Descriptions'Access);
+      Landin.Testing.Register
+        (Into, "targets", "levels are stated per family",
+         Levels_Are_Stated_Per_Family'Access);
       Landin.Testing.Register
         (Into, "targets", "alignments are stated per target",
          Alignments_Are_Stated_Per_Target'Access);

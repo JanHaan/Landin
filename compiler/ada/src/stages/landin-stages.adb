@@ -7,14 +7,32 @@ package body Landin.Stages is
      return Compilation
    is
    begin
+      return Create
+        (For_Target, Landin.Targets.Levels.Default_Level (For_Target));
+   end Create;
+
+   function Create
+     (For_Target : Landin.Targets.Target_Facts;
+      At_Level   : Landin.Targets.Levels.Feature_Level)
+     return Compilation
+   is
+   begin
+      if not Landin.Targets.Levels.Belongs_To (At_Level, For_Target) then
+         raise Compiler_Defect with "a level of another target's family";
+      end if;
       return Result : Compilation do
          Result.Facts := For_Target;
+         Result.Assumed := At_Level;
          Landin.Modules.Initialize (Result.Grouped);
       end return;
    end Create;
 
    function Target (Context : Compilation) return Landin.Targets.Target_Facts
      is (Context.Facts);
+
+   function Level
+     (Context : Compilation) return Landin.Targets.Levels.Feature_Level
+     is (Context.Assumed);
 
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)

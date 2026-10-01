@@ -61,6 +61,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Tokens.Spacing;
 
 package Landin.Stages is
@@ -70,7 +71,18 @@ package Landin.Stages is
    function Create (For_Target : Landin.Targets.Target_Facts)
      return Compilation;
 
+   --  A compilation that assumes a selected CPU feature level of its
+   --  target's family; the one above assumes the target's default level.
+   function Create
+     (For_Target : Landin.Targets.Target_Facts;
+      At_Level   : Landin.Targets.Levels.Feature_Level)
+     return Compilation
+     with Pre => Landin.Targets.Levels.Belongs_To (At_Level, For_Target);
+
    function Target (Context : Compilation) return Landin.Targets.Target_Facts;
+
+   function Level
+     (Context : Compilation) return Landin.Targets.Levels.Feature_Level;
 
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)
@@ -222,6 +234,7 @@ private
    --  the aliased formal keeps from outliving it; see the header.
    type Compilation is tagged limited record
       Facts   : Landin.Targets.Target_Facts;
+      Assumed : Landin.Targets.Levels.Feature_Level;
       Held    : aliased Landin.Source.Sets.Source_Set;
       Reports : Landin.Diagnostics.Diagnostic_List;
       Named   : aliased Landin.Source.Names.Table;
