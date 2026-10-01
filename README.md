@@ -219,6 +219,14 @@ explicit environment troubleshooting. What it does today, by capability:
   [emulator](environments/cortex-m/README.md), with synthetic devices served
   through its debugger stub. Thirty RP2040 registers are
   checked in as [generated device fixtures](devices/README.md).
+- **CPU feature levels.** A build assumes a level of its target's family,
+  selected with `--level=`: x86-64 v1 to v4, arm64's `armv8-a` and
+  `armv8.1-a`, and the M profile's `armv6-m`, `armv7-m` and `armv7e-m`, each
+  defaulting to what the backend always emitted. A program reads a level as
+  `compiler.feature.NAME` in `fixed if`. A level changes instructions and
+  never layout or ABI: BMI2 shifts at `x86-64-v3`, LSE atomics at
+  `armv8.1-a` and hardware division at `armv7-m`, each executed at both
+  levels, the last on QEMU's Cortex-M3.
 - **Code generation.** Target code and the build report are byte-identical
   whatever the build directory, environment or order, on all three targets;
   the hosted linked image is not claimed. Compact numeric-array loops,

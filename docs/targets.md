@@ -77,6 +77,37 @@ triple, macros and data model. The native Apple corpus regenerates all binding
 categories, including TLS, nullable callbacks and incoming-varargs adapters;
 existing Linux generated files remain unchanged.
 
+## CPU feature levels
+
+A build assumes one CPU feature level of its target's family (D255), given
+with `--level=NAME` or the language server's `level` option and resolved
+after the target, so a level of another family is L0009. `refine --identify`
+lists each target's levels. The level is a value beside `Target_Facts`, so
+every capability query above, and every layout, calling convention and C
+ABI, is the same at every level of a family.
+
+| target | default | other levels | what a higher level selects | its tool arguments |
+|---|---|---|---|---|
+| `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64+...` with the level's extensions, `-Wl,-z,x86-64-vN` |
+| `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly |
+| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | `.arch` in the assembly, `-march=` for the assembler and linker |
+| `synthetic-32` | none | none | nothing | none |
+
+The default level adds no argument and no directive. The pinned GNU
+assembler does not accept the psABI's `x86-64-v3` spelling as `-march`, so
+the level is spelled `generic64` with its extensions; the linker's
+`-z x86-64-vN` writes the level into the executable's GNU property note,
+and glibc's loader refuses an executable whose level the processor lacks.
+Darwin's lowest processor, Apple's M1, has more than `armv8-a`; the default
+assumes less than any Mac has, which is sound, and a build for Apple silicon
+may select `armv8.1-a`. Each test lane runs the levels a runtime fixture's
+`levels:` names for its own family, asks its host processor for every
+feature first (`/proc/cpuinfo`, `hw.optional.arm.FEAT_LSE`) and fails
+rather than skipping a level the host lacks, and requires the executable it
+ran to show the level: the ISA note on Linux, the LSE instructions and no
+exclusive loop on Darwin, hardware division and no 32-bit helper on
+Cortex-M, where `armv7-m` runs on QEMU's Cortex-M3.
+
 ## Native source debugging
 
 `refine --target=darwin-arm64 --debug=full --emit=exe program.ldn -o program`

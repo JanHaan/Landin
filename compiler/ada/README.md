@@ -426,6 +426,15 @@ a named target, not from a record literal that happens to describe the
 development host. Where a type is limited, that is deliberate too: a
 compilation cannot be copied out from under its stages.
 
+A CPU feature level (D255) is a `Landin.Targets.Levels.Feature_Level` held
+beside the description in the compilation, not a field of it. Comparing two
+`Target_Facts` therefore still answers which backend, object format and ABI,
+which is the only question `Targets.Capabilities` and the backends' guards
+ask; no stage that lays data out or checks a program is handed a level.
+Configuration reads it for `compiler.feature`, and emission and the
+toolchain arguments read it to select instructions. Each backend's default
+level emits exactly what it did before levels existed.
+
 The `darwin-arm64` description has 64-bit pointers, eight-byte pointer
 alignment, sixteen-byte stack/scalar maximum alignment and little-endian
 storage. Its Darwin AAPCS64 LP64 ABI identity is distinct from SysV AMD64.

@@ -547,7 +547,9 @@ Status: planned
 Depends on: R11.10
 
 A RISC-V backend, RV64GC with the LP64D convention, whose instruction selection
-R12.40 reuses for rv32.
+R12.40 reuses for rv32. Its levels are ISA strings, `rv64gc` the default,
+whose single-letter and `Z` extensions are the feature set D255 already
+models as a set rather than a rank.
 
 Exit evidence: the corpus and GDB sessions on RISC-V hardware in the gate,
 through the RISE project's runners, with QEMU user emulation as the fallback
@@ -596,7 +598,10 @@ Depends on: R12.20
 
 The ARMv7-M and ARMv8-M instruction sets and the hardware floating point of
 the M4F, for RP2350 and an STM32 Nucleo board, with QEMU's M33 machine as the
-emulator lane.
+emulator lane. `armv7-m` and `armv7e-m` exist as D255 levels with hardware
+division only; this adds `armv8-m.main`, Thumb-2 selection beyond division,
+and the M4F's float registers, which change the C ABI and so are a
+description rather than a level.
 
 Exit evidence: the Cortex-M corpus on the emulator lane in the gate, and a
 recorded run on each board.
