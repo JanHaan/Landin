@@ -89,9 +89,12 @@ package body Landin.Server.Sessions is
       --  A publication belongs to a path, even when several open entry
       --  modules read it.  Refresh another reporter instead of erasing its
       --  diagnostics when one module stops reporting that path.
-      procedure Clear_Unless_Shared (Key, Path : String);
+      procedure Clear_Unless_Shared
+        (Key, Path : String; Closing_URI : String := "");
 
-      procedure Clear_Unless_Shared (Key, Path : String) is
+      procedure Clear_Unless_Shared
+        (Key, Path : String; Closing_URI : String := "")
+      is
          Shared : Boolean := False;
       begin
          for Position in Published.Iterate loop
@@ -107,7 +110,8 @@ package body Landin.Server.Sessions is
          end loop;
          if not Shared then
             Send (Landin.Server.Answers.Cleared
-              (Landin.Server.Documents.URI_For (Store, Path)));
+              (if Closing_URI /= "" then Closing_URI
+               else Landin.Server.Documents.URI_For (Store, Path)));
          end if;
       end Clear_Unless_Shared;
 
@@ -599,6 +603,8 @@ package body Landin.Server.Sessions is
                declare
                   Key : constant String :=
                     Landin.Server.Documents.Module_Key (Store, URI);
+                  Closing_Path : constant String :=
+                    Landin.Server.Documents.Held_Path (Store, URI);
                   Others_Open : Boolean := False;
                begin
                   Landin.Server.Documents.Close (Store, URI);
@@ -623,7 +629,10 @@ package body Landin.Server.Sessions is
                            for Index in Earlier'Range loop
                               if Earlier (Index) = ASCII.LF then
                                  Clear_Unless_Shared
-                                   (Key, Earlier (First .. Index - 1));
+                                   (Key, Earlier (First .. Index - 1),
+                                    (if Earlier (First .. Index - 1)
+                                          = Closing_Path
+                                     then URI else ""));
                                  First := Index + 1;
                               end if;
                            end loop;

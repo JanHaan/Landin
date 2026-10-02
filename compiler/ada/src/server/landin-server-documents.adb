@@ -116,7 +116,9 @@ package body Landin.Server.Documents is
       Name : Unbounded.Unbounded_String;
    begin
       for C of URI loop
-         if C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' then
+         --  '_' starts an escaped byte, so a literal one must be escaped
+         --  too; otherwise distinct URIs can name the same held path.
+         if C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' then
             Unbounded.Append (Name, C);
          else
             Unbounded.Append
