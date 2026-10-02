@@ -49,8 +49,7 @@ choose:
 ```json
 {"roots": ["file:///home/me/landin"],
  "target": "cortex-m0",
- "level": "armv7-m",
- "options": {"board": "rp2040"}}
+ "level": "armv7-m"}
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, `linux-arm64`,
@@ -60,9 +59,12 @@ target describes checks for `synthetic-32` and says, through
 `window/showMessage`, that a target has to be named.
 `level` is a CPU feature level of that target's family, read after it as
 `refine` reads it, and the target's default when absent. An
-option is named in lowercase letters, digits and underscores. A value the
-server refuses is reported once, through `window/showMessage`, and the rest
-are used.
+option must be declared in a reached source and named in lowercase letters,
+digits and underscores. For example, `option enabled: bool = true` can be
+overridden with `"options": {"enabled": "false"}`. Option values are strings
+containing `true`, `false`, or signed decimal integer text that fits the
+declared type. A value the server refuses is reported once, through
+`window/showMessage`, and the rest are used.
 
 ## What it answers
 

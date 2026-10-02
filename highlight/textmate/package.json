@@ -84,7 +84,7 @@
           "default": {},
           "scope": "window",
           "additionalProperties": { "type": "string" },
-          "description": "Build options for editor analysis, as in --option=NAME=VALUE. Keys are lowercase letters, digits and underscores; values are nonempty strings."
+          "description": "Build options for editor analysis, as in --option=NAME=VALUE. Keys name declared options; values are strings containing true, false or signed decimal integer text that fits the declared type."
         }
       }
     }

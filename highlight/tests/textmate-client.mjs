@@ -42,12 +42,12 @@ assert.deepEqual(defaults[3].initializationOptions, { options: {} });
 const configured = await startedWith({
   "server.target": "cortex-m0",
   "server.level": "armv7-m",
-  "server.options": { board: "rp2040" },
+  "server.options": { enabled: "false" },
 });
 assert.deepEqual(configured[3].initializationOptions, {
   target: "cortex-m0",
   level: "armv7-m",
-  options: { board: "rp2040" },
+  options: { enabled: "false" },
 });
 
 console.log("TextMate language client settings clean");
