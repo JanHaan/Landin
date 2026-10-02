@@ -4,6 +4,7 @@ with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Cortex_M;
 with Landin.Build_Reports;
+with Landin.Build_Reports.Firmware;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
@@ -890,6 +891,101 @@ package body Landin.Tests.Cortex_Suite is
    end Backend_Boundaries;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context);
+   procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context);
+
+   procedure Linked_Firmware_Evidence (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Data : String (1 .. 512) := [others => Character'Val (0)];
+      Result : U.Unbounded_String;
+      Valid : Boolean;
+      Args : Landin.Platform.Path_List;
+
+      procedure Put (Offset : Natural; Value : Natural; Width : Positive);
+      procedure Put (Offset : Natural; Value : Natural; Width : Positive) is
+         Rest : Natural := Value;
+      begin
+         for Index in 0 .. Width - 1 loop
+            Data (Offset + Index + 1) := Character'Val (Rest mod 256);
+            Rest := Rest / 256;
+         end loop;
+      end Put;
+   begin
+      Data (1 .. 6) := Character'Val (127) & "ELF"
+        & Character'Val (1) & Character'Val (1);
+      Put (16, 2, 2);
+      Put (18, 40, 2);
+      Put (20, 1, 4);
+      Put (28, 52, 4);
+      Put (40, 52, 2);
+      Put (42, 32, 2);
+      Put (44, 3, 2);
+      --  Vectors, flash text, and copied data plus zero-filled RAM.
+      Put (52, 1, 4);
+      Put (56, 148, 4);
+      Put (68, 192, 4);
+      Put (72, 192, 4);
+      Put (84, 1, 4);
+      Put (88, 340, 4);
+      Put (92, 512, 4);
+      Put (96, 512, 4);
+      Put (100, 100, 4);
+      Put (104, 100, 4);
+      Put (116, 1, 4);
+      Put (120, 440, 4);
+      Put (124, 16#2000_0008#, 4);
+      Put (128, 768, 4);
+      Put (132, 16, 4);
+      Put (136, 32, 4);
+      Host.Add_File ("p.elf", Data);
+      Host.Add_File ("p.elf.map",
+        "/tool/libgcc.a(_udivsi3.o)" & LF
+        & "/tool/libgcc.a(_muldi3.o)" & LF
+        & "/tool/libgcc.a(_udivsi3.o)" & LF);
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, Valid, "ELF load extents are measured");
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Result),
+         "{""flash_used"":784,""flash_limit"":32768,"
+         & """flash_remaining"":31984,""static_ram_used"":40,"
+         & """static_ram_limit"":12288,""static_ram_remaining"":12248,"
+         & """stack_reserved"":4096,""runtime_members"":"
+         & "[""_muldi3.o"",""_udivsi3.o""]}",
+         "occupied extents include gaps and archive members are sorted");
+
+      Host.Add_File ("p.ldn", "start: () -> none = end start");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=exe");
+      Args.Append ("--build-report=p.json");
+      Args.Append ("-o");
+      Args.Append ("p.elf");
+      Args.Append ("p.ldn");
+      Tools.Set_Result (0, "");
+      declare
+         Built : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Built.Status, Landin.Driver.Status_Success,
+            U.To_String (Built.Report));
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index
+              (Host.Written ("p.json"), """flash_used"":784") > 0,
+            "post-link measurement reaches the emitted report");
+      end;
+      Host.Add_File ("p.elf", "invalid ELF");
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, not Valid, "invalid ELF is refused");
+      Host.Add_File ("p.elf", Data);
+      Host.Add_File ("p.elf.map", "");
+      Landin.Build_Reports.Firmware.Measure
+        (Host, "p.elf", "p.elf.map", Result, Valid);
+      Landin.Testing.Check (Item, not Valid, "empty map is refused");
+   end Linked_Firmware_Evidence;
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context) is
    begin
@@ -1411,6 +1507,9 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "machine directives", Machine_Directives'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "firmware path", Firmware_Path'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "linked firmware evidence",
+         Linked_Firmware_Evidence'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
       Landin.Testing.Register

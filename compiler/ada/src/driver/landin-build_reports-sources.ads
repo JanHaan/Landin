@@ -6,5 +6,6 @@ package Landin.Build_Reports.Sources is
    function JSON
      (Of_Report : Report;
       Context : in out Landin.Stages.Compilation;
-      Options : Landin.Optimization.Options) return String;
+      Options : Landin.Optimization.Options;
+      Firmware : String := "") return String;
 end Landin.Build_Reports.Sources;
