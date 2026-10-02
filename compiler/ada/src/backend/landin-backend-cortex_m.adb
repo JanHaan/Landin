@@ -127,13 +127,66 @@ package body Landin.Backend.Cortex_M is
       Slots : Masks.Buffer (IR.Slot_Count (Of_Unit, Item));
       Values : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
       Last : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
-      Free_After : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
+      Release_Data, Next_Release_Data, Heap_Data :
+        Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
       Spills : Extents.Buffer (IR.Value_Count (Of_Unit, Item));
       Count : Natural := 0;
+      Block_Homes : Natural := 0;
+      Heap_Count : Natural := 0;
+
+      --  Keep the lowest available home, as the former linear search did.
+      --  A heap bounds selection by the logarithm of the block's peak
+      --  liveness; release buckets visit each scalar only once.
+      procedure Free_Home (Home : Positive);
+      function Take_Home return Positive;
+
+      procedure Free_Home (Home : Positive) is
+         Index : Positive;
+      begin
+         Heap_Count := Heap_Count + 1;
+         Index := Heap_Count;
+         while Index > 1
+           and then Heap_Data.Data (Index / 2) > Home
+         loop
+            Heap_Data.Data (Index) := Heap_Data.Data (Index / 2);
+            Index := Index / 2;
+         end loop;
+         Heap_Data.Data (Index) := Home;
+      end Free_Home;
+
+      function Take_Home return Positive is
+         Home : constant Positive := Heap_Data.Data (1);
+         Last_Home : constant Positive := Heap_Data.Data (Heap_Count);
+         Index : Positive := 1;
+         Child : Natural;
+      begin
+         Heap_Count := Heap_Count - 1;
+         while Index <= Heap_Count / 2 loop
+            Child := Index * 2;
+            if Child < Heap_Count
+              and then Heap_Data.Data (Child + 1) < Heap_Data.Data (Child)
+            then
+               Child := Child + 1;
+            end if;
+            exit when Last_Home <= Heap_Data.Data (Child);
+            Heap_Data.Data (Index) := Heap_Data.Data (Child);
+            Index := Child;
+         end loop;
+         if Heap_Count > 0 then
+            Heap_Data.Data (Index) := Last_Home;
+         end if;
+         return Home;
+      end Take_Home;
    begin
       for Block in 1 .. IR.Block_Count (Of_Unit, Item) loop
-         for Home in 1 .. Count loop
-            Free_After.Data (Home) := 0;
+         --  All prior homes are available at a block boundary. Start this
+         --  block at home 1 instead of clearing the routine's high-water mark.
+         Block_Homes := 0;
+         Heap_Count := 0;
+         for Position in 1 .. IR.Length
+           (Of_Unit, Item, IR.Block_Id (Block))
+         loop
+            Release_Data.Data (Position) := 0;
          end loop;
          for Position in 1 .. IR.Length
            (Of_Unit, Item, IR.Block_Id (Block))
@@ -155,19 +208,30 @@ package body Landin.Backend.Cortex_M is
             declare
                Value : constant IR.Value_Id := IR.Nth_Value
                  (Of_Unit, Item, IR.Block_Id (Block), Position);
-               Home : Positive := 1;
+               Home : Positive;
+               Released : Natural :=
+                 (if Position > 1 then Release_Data.Data (Position - 1)
+                  else 0);
             begin
+               while Released /= 0 loop
+                  Free_Home (Positive (Values.Data (Released)));
+                  Released := Next_Release_Data.Data (Released);
+               end loop;
                if IR.Result_Of (Of_Unit, Item, Value)
                  in Landin.Types.Scalar_Name
                then
-                  while Home <= Count
-                    and then Free_After.Data (Home) >= Position
-                  loop
-                     Home := Home + 1;
-                  end loop;
-                  Count := Natural'Max (Count, Home);
+                  if Heap_Count > 0 then
+                     Home := Take_Home;
+                  else
+                     Block_Homes := Block_Homes + 1;
+                     Home := Block_Homes;
+                  end if;
+                  Count := Natural'Max (Count, Block_Homes);
                   Values.Data (Positive (Value)) := Home;
-                  Free_After.Data (Home) := Last.Data (Positive (Value));
+                  Next_Release_Data.Data (Positive (Value)) :=
+                    Release_Data.Data (Last.Data (Positive (Value)));
+                  Release_Data.Data (Last.Data (Positive (Value))) :=
+                    Positive (Value);
                   declare
                      Held : constant Landin.Targets.Scalar_Size :=
                        Landin.Types.Storage_Size

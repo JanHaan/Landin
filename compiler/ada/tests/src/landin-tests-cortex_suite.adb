@@ -120,6 +120,7 @@ package body Landin.Tests.Cortex_Suite is
             Routine : IR.Item_Id;
             Signature : IR.Signature_Id;
             Block : IR.Block_Id;
+            Next_Block : IR.Block_Id := IR.No_Block;
             Left, Right, Sum, Next : IR.Value_Id;
             Assembly : U.Unbounded_String;
             Report : Landin.Build_Reports.Report;
@@ -158,8 +159,23 @@ package body Landin.Tests.Cortex_Suite is
                Sum := IR.Emit_Binary
                  (Unit, Routine, IR.Add, Left, Right, Ty.U64, Site);
             end if;
-            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            if Index = 5 then
+               Next_Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Emit_Jump (Unit, Routine, Next_Block, Site);
+            else
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            end if;
             IR.Leave_Block (Unit, Routine);
+            if Index = 5 then
+               --  The next block starts at home 1 after the first grew to
+               --  three homes.
+               IR.Enter (Unit, Routine, Next_Block);
+               Left := IR.Emit_Number
+                 (Unit, Routine, Ty.U8, 6, False, Site);
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Routine);
+            end if;
             Landin.Testing.Check
               (Item, IR.Verifier.Check (Unit, T.Cortex_M).Kind
                 = IR.Verifier.Nothing_Wrong,
