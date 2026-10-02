@@ -15,8 +15,8 @@
 --  what the stand-in says there is not what the source says.  A module with
 --  any other syntax error is reported exactly as `refine` reports it.
 --
---  The compilation is the caller's, created for one analysis and freed
---  with it: nothing here keeps a table between two.
+--  A compilation lives only for the visit.  Nothing here keeps a table
+--  between two analyses.
 
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
@@ -26,6 +26,8 @@ with Landin.Platform;
 with Landin.Server.Holes;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Targets;
+with Landin.Targets.Levels;
 
 package Landin.Server.Analysis is
 
@@ -57,13 +59,16 @@ package Landin.Server.Analysis is
       Missing_Directories : Landin.Platform.Path_List;
    end record;
 
-   --  Load and check Asked into Context, a compilation nothing else has
-   --  touched.  Host serves every read; nothing is written.
+   --  Visit the checked compilation before it is freed.  A broken body may
+   --  require a second compilation with stand-ins; a sound source uses the
+   --  tree made by the first syntax pass.
    procedure Analyse
-     (Context : in out Landin.Stages.Compilation;
+     (For_Target : Landin.Targets.Target_Facts;
+      At_Level   : Landin.Targets.Levels.Feature_Level;
       Host    : Landin.Platform.Filesystem'Class;
       Asked   : Request;
-      Answer  : out Result);
+      Visit   : not null access procedure
+        (Context : in out Landin.Stages.Compilation; Answer : Result));
 
    --  Whether Where in Source lies in one of its held regions.
    function Is_Held

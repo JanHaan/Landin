@@ -26,6 +26,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Targets;
+with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
 with Landin.Testing.Sessions;
 with Landin.Testing.Fixtures;
@@ -81,11 +82,25 @@ package body Landin.Tests.Server_Suite is
       Asked : Landin.Server.Analysis.Request)
       return Landin.Server.Analysis.Result
    is
-      Context : Landin.Stages.Compilation :=
-        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Answer  : Landin.Server.Analysis.Result;
+      procedure Visit
+        (Context : in out Landin.Stages.Compilation;
+         Result  : Landin.Server.Analysis.Result);
+
+      procedure Visit
+        (Context : in out Landin.Stages.Compilation;
+         Result  : Landin.Server.Analysis.Result)
+      is
+         pragma Unreferenced (Context);
+      begin
+         Answer := Result;
+      end Visit;
    begin
-      Landin.Server.Analysis.Analyse (Context, Host, Asked, Answer);
+      Landin.Server.Analysis.Analyse
+        (Landin.Targets.Linux_X86_64,
+         Landin.Targets.Levels.Default_Level
+           (Landin.Targets.Linux_X86_64),
+         Host, Asked, Visit'Access);
       return Answer;
    end Analysed;
 
@@ -933,24 +948,34 @@ package body Landin.Tests.Server_Suite is
         ("/w/m.ldn", "f: () -> none = g () end f" & LF
                      & "f: () -> none = g () end f" & LF);
       declare
-         Context : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
-         Answer  : Landin.Server.Analysis.Result;
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer  : Landin.Server.Analysis.Result);
+
+         procedure Visit
+           (Context : in out Landin.Stages.Compilation;
+            Answer  : Landin.Server.Analysis.Result)
+         is
+         begin
+            Landin.Testing.Check
+              (Item, not Answer.Checked and then Answer.Found.Count > 0,
+               "a module resolution refuses is not checked");
+            for Offset in Landin.Source.Byte_Offset range 0 .. 50 loop
+               Landin.Testing.Check
+                 (Item, Landin.Server.Navigation.Definition
+                          (Context, Answer, 1, Offset)
+                        = Landin.Server.Navigation.No_Place
+                        and then Landin.Server.Navigation.Hover
+                          (Context, Answer, 1, Offset).Length = 0,
+                  "nothing is answered at" & Offset'Image);
+            end loop;
+         end Visit;
       begin
          Landin.Server.Analysis.Analyse
-           (Context, Host, One_File ("/w/m.ldn"), Answer);
-         Landin.Testing.Check
-           (Item, not Answer.Checked and then Answer.Found.Count > 0,
-            "a module resolution refuses is not checked");
-         for Offset in Landin.Source.Byte_Offset range 0 .. 50 loop
-            Landin.Testing.Check
-              (Item, Landin.Server.Navigation.Definition
-                       (Context, Answer, 1, Offset)
-                     = Landin.Server.Navigation.No_Place
-                     and then Landin.Server.Navigation.Hover
-                       (Context, Answer, 1, Offset).Length = 0,
-               "nothing is answered at" & Offset'Image);
-         end loop;
+           (Landin.Targets.Linux_X86_64,
+            Landin.Targets.Levels.Default_Level
+              (Landin.Targets.Linux_X86_64),
+            Host, One_File ("/w/m.ldn"), Visit'Access);
       end;
    end Queries_Of_A_Refused_Module_Answer_Nothing;
 

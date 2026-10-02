@@ -190,15 +190,12 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result))
       is
-         Context : Landin.Stages.Compilation :=
-           Landin.Stages.Create (Facts, Level);
-         Answer  : Landin.Server.Analysis.Result;
          Asked   : Landin.Server.Analysis.Request :=
            Landin.Server.Documents.Request_For (Store, URI);
       begin
          Asked.Options := Options;
-         Landin.Server.Analysis.Analyse (Context, Store.Held, Asked, Answer);
-         Visit (Context, Answer);
+         Landin.Server.Analysis.Analyse
+           (Facts, Level, Store.Held, Asked, Visit);
       end With_Analysis;
 
       --  Publish every source of the module of URI.

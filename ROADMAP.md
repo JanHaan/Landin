@@ -485,10 +485,12 @@ D252's formatting as edits, and R10.30's fixes as quick fixes, preferred
 when exact. It reads with the driver's own loader and checks with its own
 stages, now `Landin.Driver.Loading` and `Landin.Driver.Checking`, through
 buffers held over the filesystem; a file belongs to its directory's module
-under the editor's roots. One compilation lives per analysis and a burst of
-edits is analysed once. D253 answers past a hole only inside a routine body:
-the server checks a stand-in with each broken body blanked and `loop do end
-loop` written in it, so no stage changed and `refine` reports as before.
+under the editor's roots. A sound analysis uses one compilation; an eligible
+broken body causes a second compilation after the first is released, and a
+burst of edits is analysed once. D253 answers past a hole only inside a
+routine body: the server checks a stand-in with each broken body blanked and
+`loop do end loop` written in it, so no stage changed and `refine` reports as
+before.
 [2000] and D254 say what a doc comment is about. JSON is read strictly and
 bounded, framing is bounded, and positions are converted in one package, in
 UTF-8 or UTF-16. The scripted sessions under `compiler/tests/server/`
