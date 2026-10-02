@@ -12570,11 +12570,11 @@ refers to the retained two-word erased value, not the represented object.
 conformance in source order, derive
 Cur or Item from provider bodies, share an aggregate cursor's result and input
 storage, make Item an alias, call `next` before cleanup, or reinterpret `any`
-as a slice. Those choices respectively make declaration order semantic, lose
-associated-type identity, permit hidden result/input aliasing, contradict
-[1160], move effects across a loop edge, or confuse unrelated representations.
-All were declined. Repeated by-value calls require source-sized callee copies
-on each loop step even when providers only inspect the source.
+as a slice. Those choices respectively require source-sized callee copies on
+each loop step even when providers only inspect the source, make declaration
+order semantic, lose associated-type identity, permit hidden result/input
+aliasing, contradict [1160], move effects across a loop edge, or confuse
+unrelated representations. All were declined.
 
 **Pinned by** `runtime/for-iterable-evidence-traversal`,
 `runtime/for-fallible-iteration`,

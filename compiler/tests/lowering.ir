@@ -9700,10 +9700,10 @@ unit signatures 14 items 11
 atom set 1 atoms {problem}
 atom set 2 atoms {problem}
 atom set 3 atoms {problem}
-signature 1 (in struct bag) -> usize
-signature 2 (in struct bag, in usize) -> bool
-signature 3 (in struct bag, in usize) -> u32
-signature 4 (in struct bag, in usize) -> usize
+signature 1 (in usize) -> usize
+signature 2 (in usize, in usize) -> bool
+signature 3 (in usize, in usize) -> u32
+signature 4 (in usize, in usize) -> usize
 signature 5 (in struct bag) -> u32
 signature 6 (in struct bag) -> u32
 signature 7 (in struct bag) -> u32 errors atoms {problem}
@@ -9720,7 +9720,7 @@ evidence 1 concrete represents struct (u32)
   entry 3 target 3 provider 3 dispatch 3
   entry 4 target 4 provider 4 dispatch 4
 item 1 ROUTINE first result usize signature 1 params 1 slots 2 blocks 1 values 4
-  slot 1 s aggregate fields u32 param 1
+  slot 1 s usize param 1
   slot 2 c usize return
   block 1 scope 5 SIGNATURE length 4
     1 NUMBER usize 0
@@ -9728,7 +9728,7 @@ item 1 ROUTINE first result usize signature 1 params 1 slots 2 blocks 1 values 4
     3 LOAD usize slot 2
     4 LEAVE <- 3
 item 2 ROUTINE at_end result bool signature 2 params 2 slots 4 blocks 1 values 8
-  slot 1 s aggregate fields u32 param 1
+  slot 1 s usize param 1
   slot 2 c usize param 2
   slot 3 yes bool return
   slot 4 - usize
@@ -9741,17 +9741,25 @@ item 2 ROUTINE at_end result bool signature 2 params 2 slots 4 blocks 1 values 8
     6 STORE slot 3 <- 5
     7 LOAD bool slot 3
     8 LEAVE <- 7
-item 3 ROUTINE bag_item result u32 signature 3 params 2 slots 3 blocks 1 values 4
-  slot 1 s aggregate fields u32 param 1
+item 3 ROUTINE bag_item result u32 signature 3 params 2 slots 5 blocks 1 values 10
+  slot 1 s usize param 1
   slot 2 c usize param 2
   slot 3 v u32 return
-  block 1 scope 7 SIGNATURE length 4
-    1 LOAD_FIELD u32 slot 1 field 1
-    2 STORE slot 3 <- 1
-    3 LOAD u32 slot 3
-    4 LEAVE <- 3
+  slot 4 - address of struct (u32)
+  slot 5 - address of u32
+  block 1 scope 7 SIGNATURE length 10
+    1 LOAD usize slot 1
+    2 POINTER_ADDRESS usize <- 1
+    3 STORE slot 4 <- 2
+    4 PLACE_ADDRESS usize
+    5 STORE slot 5 <- 4
+    6 LOAD usize slot 5
+    7 LOAD_INDIRECT u32 address slot 5 <- 6
+    8 STORE slot 3 <- 7
+    9 LOAD u32 slot 3
+    10 LEAVE <- 9
 item 4 ROUTINE next result usize signature 4 params 2 slots 4 blocks 1 values 8
-  slot 1 s aggregate fields u32 param 1
+  slot 1 s usize param 1
   slot 2 c usize param 2
   slot 3 c2 usize return
   slot 4 - usize
@@ -9786,7 +9794,7 @@ item 5 ROUTINE sum result u32 signature 5 params 1 slots 11 blocks 6 values 52
     7 COPY_ARRAY from address slot 6 to address slot 5
     8 EVIDENCE_ADDRESS usize evidence 1
     9 EVIDENCE_FUNCTION usize table evidence 1 entry 1 signature 1 <- 8
-    10 STORAGE_ADDRESS usize storage slot 4
+    10 PLACE_ADDRESS usize
     11 INDIRECT_CALL usize signature 1 <- 9 10
     12 STORE slot 7 <- 11
     13 NUMBER usize 0
@@ -9795,14 +9803,14 @@ item 5 ROUTINE sum result u32 signature 5 params 1 slots 11 blocks 6 values 52
   block 2 scope 12 BLOCK length 6
     18 EVIDENCE_ADDRESS usize evidence 1
     19 EVIDENCE_FUNCTION usize table evidence 1 entry 2 signature 2 <- 18
-    20 STORAGE_ADDRESS usize storage slot 4
+    20 PLACE_ADDRESS usize
     21 LOAD usize slot 7
     22 INDIRECT_CALL bool signature 2 <- 19 20 21
     23 BRANCH target 4 alternative 3 <- 22
   block 3 scope 13 BLOCK length 16
     24 EVIDENCE_ADDRESS usize evidence 1
     25 EVIDENCE_FUNCTION usize table evidence 1 entry 3 signature 3 <- 24
-    26 STORAGE_ADDRESS usize storage slot 4
+    26 PLACE_ADDRESS usize
     27 LOAD usize slot 7
     28 INDIRECT_CALL u32 signature 3 <- 25 26 27
     29 STORE slot 3 <- 28
@@ -9822,7 +9830,7 @@ item 5 ROUTINE sum result u32 signature 5 params 1 slots 11 blocks 6 values 52
   block 5 scope 13 BLOCK length 11
     40 EVIDENCE_ADDRESS usize evidence 1
     41 EVIDENCE_FUNCTION usize table evidence 1 entry 4 signature 4 <- 40
-    42 STORAGE_ADDRESS usize storage slot 4
+    42 PLACE_ADDRESS usize
     43 LOAD usize slot 7
     44 INDIRECT_CALL usize signature 4 <- 41 42 43
     45 STORE slot 7 <- 44
@@ -9854,7 +9862,7 @@ item 6 ROUTINE pick result u32 signature 6 params 1 slots 11 blocks 7 values 51
     5 COPY_ARRAY from address slot 8 to address slot 7
     6 EVIDENCE_ADDRESS usize evidence 1
     7 EVIDENCE_FUNCTION usize table evidence 1 entry 1 signature 1 <- 6
-    8 STORAGE_ADDRESS usize storage slot 6
+    8 PLACE_ADDRESS usize
     9 INDIRECT_CALL usize signature 1 <- 7 8
     10 STORE slot 9 <- 9
     11 NUMBER usize 0
@@ -9863,14 +9871,14 @@ item 6 ROUTINE pick result u32 signature 6 params 1 slots 11 blocks 7 values 51
   block 2 scope 15 BLOCK length 6
     16 EVIDENCE_ADDRESS usize evidence 1
     17 EVIDENCE_FUNCTION usize table evidence 1 entry 2 signature 2 <- 16
-    18 STORAGE_ADDRESS usize storage slot 6
+    18 PLACE_ADDRESS usize
     19 LOAD usize slot 9
     20 INDIRECT_CALL bool signature 2 <- 17 18 19
     21 BRANCH target 4 alternative 3 <- 20
   block 3 scope 16 BLOCK length 9
     22 EVIDENCE_ADDRESS usize evidence 1
     23 EVIDENCE_FUNCTION usize table evidence 1 entry 3 signature 3 <- 22
-    24 STORAGE_ADDRESS usize storage slot 6
+    24 PLACE_ADDRESS usize
     25 LOAD usize slot 9
     26 INDIRECT_CALL u32 signature 3 <- 23 24 25
     27 STORE slot 5 <- 26
@@ -9885,7 +9893,7 @@ item 6 ROUTINE pick result u32 signature 6 params 1 slots 11 blocks 7 values 51
   block 5 scope 16 BLOCK length 11
     31 EVIDENCE_ADDRESS usize evidence 1
     32 EVIDENCE_FUNCTION usize table evidence 1 entry 4 signature 4 <- 31
-    33 STORAGE_ADDRESS usize storage slot 6
+    33 PLACE_ADDRESS usize
     34 LOAD usize slot 9
     35 INDIRECT_CALL usize signature 4 <- 32 33 34
     36 STORE slot 9 <- 35
@@ -9927,7 +9935,7 @@ item 7 ROUTINE propagate result u32 signature 7 params 1 slots 12 blocks 8 value
     7 COPY_ARRAY from address slot 6 to address slot 5
     8 EVIDENCE_ADDRESS usize evidence 1
     9 EVIDENCE_FUNCTION usize table evidence 1 entry 1 signature 1 <- 8
-    10 STORAGE_ADDRESS usize storage slot 4
+    10 PLACE_ADDRESS usize
     11 INDIRECT_CALL usize signature 1 <- 9 10
     12 STORE slot 7 <- 11
     13 NUMBER usize 0
@@ -9936,14 +9944,14 @@ item 7 ROUTINE propagate result u32 signature 7 params 1 slots 12 blocks 8 value
   block 2 scope 21 BLOCK length 6
     18 EVIDENCE_ADDRESS usize evidence 1
     19 EVIDENCE_FUNCTION usize table evidence 1 entry 2 signature 2 <- 18
-    20 STORAGE_ADDRESS usize storage slot 4
+    20 PLACE_ADDRESS usize
     21 LOAD usize slot 7
     22 INDIRECT_CALL bool signature 2 <- 19 20 21
     23 BRANCH target 4 alternative 3 <- 22
   block 3 scope 22 BLOCK length 12
     24 EVIDENCE_ADDRESS usize evidence 1
     25 EVIDENCE_FUNCTION usize table evidence 1 entry 3 signature 3 <- 24
-    26 STORAGE_ADDRESS usize storage slot 4
+    26 PLACE_ADDRESS usize
     27 LOAD usize slot 7
     28 INDIRECT_CALL u32 signature 3 <- 25 26 27
     29 STORE slot 3 <- 28
@@ -9959,7 +9967,7 @@ item 7 ROUTINE propagate result u32 signature 7 params 1 slots 12 blocks 8 value
   block 5 scope 22 BLOCK length 11
     43 EVIDENCE_ADDRESS usize evidence 1
     44 EVIDENCE_FUNCTION usize table evidence 1 entry 4 signature 4 <- 43
-    45 STORAGE_ADDRESS usize storage slot 4
+    45 PLACE_ADDRESS usize
     46 LOAD usize slot 7
     47 INDIRECT_CALL usize signature 4 <- 44 45 46
     48 STORE slot 7 <- 47
@@ -10022,7 +10030,7 @@ item 10 ROUTINE - result u32 signature 12 params 1 slots 11 blocks 6 values 52
     7 COPY_ARRAY from address slot 6 to address slot 5
     8 EVIDENCE_ADDRESS usize evidence 1
     9 EVIDENCE_FUNCTION usize table evidence 1 entry 1 signature 1 <- 8
-    10 STORAGE_ADDRESS usize storage slot 4
+    10 PLACE_ADDRESS usize
     11 INDIRECT_CALL usize signature 1 <- 9 10
     12 STORE slot 7 <- 11
     13 NUMBER usize 0
@@ -10031,14 +10039,14 @@ item 10 ROUTINE - result u32 signature 12 params 1 slots 11 blocks 6 values 52
   block 2 scope 24 BLOCK length 6
     18 EVIDENCE_ADDRESS usize evidence 1
     19 EVIDENCE_FUNCTION usize table evidence 1 entry 2 signature 2 <- 18
-    20 STORAGE_ADDRESS usize storage slot 4
+    20 PLACE_ADDRESS usize
     21 LOAD usize slot 7
     22 INDIRECT_CALL bool signature 2 <- 19 20 21
     23 BRANCH target 4 alternative 3 <- 22
   block 3 scope 25 BLOCK length 16
     24 EVIDENCE_ADDRESS usize evidence 1
     25 EVIDENCE_FUNCTION usize table evidence 1 entry 3 signature 3 <- 24
-    26 STORAGE_ADDRESS usize storage slot 4
+    26 PLACE_ADDRESS usize
     27 LOAD usize slot 7
     28 INDIRECT_CALL u32 signature 3 <- 25 26 27
     29 STORE slot 3 <- 28
@@ -10058,7 +10066,7 @@ item 10 ROUTINE - result u32 signature 12 params 1 slots 11 blocks 6 values 52
   block 5 scope 25 BLOCK length 11
     40 EVIDENCE_ADDRESS usize evidence 1
     41 EVIDENCE_FUNCTION usize table evidence 1 entry 4 signature 4 <- 40
-    42 STORAGE_ADDRESS usize storage slot 4
+    42 PLACE_ADDRESS usize
     43 LOAD usize slot 7
     44 INDIRECT_CALL usize signature 4 <- 41 42 43
     45 STORE slot 7 <- 44

@@ -3,4 +3,4 @@ error[L0301]: this iterable evidence does not implement [1320]'s exact call cont
    |
 16 |     for element in source do
    |                    ^^^^^^ this traversal source
-  = note: D180: first, at_end, item and next are infallible in-value calls with one retained Cur and Item identity
+  = note: D180: providers are infallible calls taking a read-only source pointer, with one Cur and Item identity
