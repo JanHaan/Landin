@@ -3,8 +3,8 @@
 # comment, an inferred local's type, a parameter, a struct type and its
 # doc comment from another module, a comparison, a field selection and a
 # literal; a keyword is not described.
-# Positions are UTF-16 code units here.
--> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"initializationOptions":{"roots":["file:///workspace"]}}}
+# Positions are UTF-16 code units here. Workspace folder URIs may end in '/'.
+-> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"workspaceFolders":[{"uri":"file:///workspace/","name":"workspace"}]}}
 -> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///workspace/app/main.ldn","languageId":"landin","version":1,"text":"import lib/shapes\n\n--- The larger of two counts.\n--- Equal counts give the first.\nlarger: (a: u32, b: u32) -> (c: u32) =\n    c = if a < b then b else a end if\nend larger\n\nmain: () -> (status: i32) =\n    count := larger (2, 40)\n    corner: shapes.point = (x: 1, y: 2)\n    status = i32 (count + corner.x)\nend main\n"}}}
 pause
 -> {"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///workspace/app/main.ldn"},"position":{"line":9,"character":13}}}

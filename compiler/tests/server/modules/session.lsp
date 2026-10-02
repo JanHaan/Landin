@@ -1,8 +1,8 @@
 # A file's directory is its entry module and its imports are found under
 # the configured roots, so a misspelt member is offered the public one; an
 # untitled buffer is analysed alone; options refine would not accept are
-# reported through showMessage.
--> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"initializationOptions":{"roots":["file:///workspace"],"target":"linux-x86-64","options":{"Bad-Name":"1"}}}}
+# reported through showMessage. A configured folder root may end in '/'.
+-> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"initializationOptions":{"roots":["file:///workspace/"],"target":"linux-x86-64","options":{"Bad-Name":"1"}}}}
 -> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///workspace/app/main.ldn","languageId":"landin","version":1,"text":"import lib/numbers\n\nmain: () -> (status: i32) =\n    status = i32 (numbers.doubel (21))\nend main\n"}}}
 pause
 -> {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"untitled:Untitled-1","languageId":"landin","version":1,"text":"f: () -> none = undefined () end f\n"}}}

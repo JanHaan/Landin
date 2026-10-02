@@ -29,6 +29,9 @@ preference:
 | the editor's workspace folders | each folder, in order |
 | the editor's root URI | that directory |
 
+The three sources accept a folder URI with or without a trailing slash;
+both forms name the same root.
+
 For this repository the root is the checkout, which is how the examples and
 `core` are compiled: `refine --root=. examples/derived_hosted`.
 

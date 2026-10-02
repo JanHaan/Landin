@@ -377,7 +377,8 @@ package body Landin.Server.Sessions is
          procedure Add_Root (URI : String);
 
          procedure Add_Root (URI : String) is
-            Path : constant String := Landin.Server.Documents.Path_Of (URI);
+            Path : constant String :=
+              Landin.Server.Documents.Root_Path_Of (URI);
          begin
             if Path = "" then
                Unbounded.Append (Bad, "a root is not a file URI: " & URI);

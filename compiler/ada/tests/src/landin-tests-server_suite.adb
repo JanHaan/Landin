@@ -14,6 +14,7 @@ with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Server.Analysis;
+with Landin.Server.Documents;
 with Landin.Server.Holes;
 with Landin.Server.Navigation;
 with Landin.Server.Positions;
@@ -688,6 +689,37 @@ package body Landin.Tests.Server_Suite is
       end;
    end Opening_A_Missing_Import_Refreshes_Its_Importer;
 
+   procedure Root_URIs_Accept_Trailing_Slashes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Root_URIs_Accept_Trailing_Slashes
+     (Item : in out Landin.Testing.Context)
+   is
+      package Documents renames Landin.Server.Documents;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace"),
+         "/workspace", "root without trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace/"),
+         "/workspace", "root with trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace%2F"),
+         "/workspace", "root with encoded trailing slash");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace//"),
+         "/workspace", "root with repeated trailing slashes");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///"),
+         "/", "filesystem root");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Path_Of ("file:///workspace/"),
+         "", "a folder URI is not a document path");
+      Landin.Testing.Check_Equal
+        (Item, Documents.Root_Path_Of ("file:///workspace/../"),
+         "", "a parent segment is still refused");
+   end Root_URIs_Accept_Trailing_Slashes;
+
    --  Every session under compiler/tests/server runs as its transcript
    --  says, read through the real filesystem, which is this case's
    --  deliberate exception; the server itself sees only the fake.
@@ -854,6 +886,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "opening a missing import refreshes its importer",
          Opening_A_Missing_Import_Refreshes_Its_Importer'Access);
+      Landin.Testing.Register
+        (Into, "server", "root URIs accept trailing slashes",
+         Root_URIs_Accept_Trailing_Slashes'Access);
       Landin.Testing.Register
         (Into, "server", "doc comments are the run above",
          Doc_Comments_Are_The_Run_Above'Access);

@@ -24,6 +24,10 @@ package Landin.Server.Documents is
    --  path holding a NUL or a `..` segment is no path.
    function Path_Of (URI : String) return String;
 
+   --  A root URI names a directory.  Accept a final slash and return the
+   --  same path as the URI without it (including percent-encoded slashes).
+   function Root_Path_Of (URI : String) return String;
+
    --  The `file:` URI of an absolute path, percent-encoding every byte
    --  that is not unreserved or '/'.
    function URI_Of (Path : String) return String;
