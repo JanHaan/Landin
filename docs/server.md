@@ -143,11 +143,11 @@ A position past the end of its line is the line's end.
 After every change, but only once the editor has stopped sending: a burst of
 edits is analysed once, when no more input is waiting, and a request is
 answered from the documents as they stand when it arrives. A sound entry
-source is parsed once in its compilation. If a broken body can be stood in
-for, the first compilation is released and a second checks the stand-in.
-Only one compilation is alive at a time, so a long session holds no more
-memory than a short one; the `memory` suite holds a session of twenty edits
-to that.
+source is parsed once per analysis, even if another source has a broken body.
+The stand-in compilation takes unchanged syntax trees and spacing from the
+first, then parses the stand-in source. Both compilations end before the next
+analysis, so a long session holds no more memory than a short one; the
+`memory` suite holds a session of twenty edits to that.
 
 ## Limits
 

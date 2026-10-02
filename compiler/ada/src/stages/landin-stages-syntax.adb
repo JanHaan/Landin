@@ -18,6 +18,16 @@ package body Landin.Stages.Syntax is
       Outcome : out Stage_Outcome)
    is
       pragma Unreferenced (Item);
+   begin
+      Run_Using (Whole, Outcome);
+   end Run;
+
+   procedure Run_Using
+     (Whole    : in out Compilation'Class;
+      Outcome  : out Stage_Outcome;
+      Previous : access Compilation := null;
+      Watch    : access procedure (Name : String) := null)
+   is
       --  The one view every helper below takes; see Landin.Stages.Run.
       Context : Compilation renames Compilation (Whole);
 
@@ -46,54 +56,71 @@ package body Landin.Stages.Syntax is
               Nth_Source (Context, Index);
             Snapshot : Landin.Source.Snapshot renames
               Source (Context, Id);
-            Stream : Landin.Tokens.Token_Stream;
-            Found  : Landin.Diagnostics.Diagnostic_List;
+            Reuse : constant Boolean := Previous /= null
+              and then Index <= Source_Count (Previous.all)
+              and then Landin.Syntax.Forest.Contains
+                (Landin.Stages.Trees (Previous.all).all, Id)
+              and then Landin.Source.Name (Snapshot) =
+                Landin.Source.Name (Source (Previous.all, Id))
+              and then Landin.Source.Text (Snapshot) =
+                Landin.Source.Text (Source (Previous.all, Id));
          begin
-            Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
-            Landin.Diagnostics.Lexical.Report (Stream, Found);
+            if Reuse then
+               Landin.Syntax.Forest.Transfer_Next
+                 (Landin.Stages.Trees (Previous.all).all, Trees.all);
+               Landin.Tokens.Spacing.Transfer_Next
+                 (Landin.Stages.Spacing (Previous.all).all, Spaces.all);
+            else
+               declare
+                  Stream : Landin.Tokens.Token_Stream;
+                  Found  : Landin.Diagnostics.Diagnostic_List;
+               begin
+                  if Watch /= null then
+                     Watch (Landin.Source.Name (Snapshot));
+                  end if;
+                  Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
+                  Landin.Diagnostics.Lexical.Report (Stream, Found);
 
-            --  One tree per source, in the order the sources were added,
-            --  which is the order the forest numbers them by.
-            Landin.Syntax.Forest.Add
-              (Trees.all, Stream, Names.all, Found);
+                  --  One tree per source, in source order.
+                  Landin.Syntax.Forest.Add
+                    (Trees.all, Stream, Names.all, Found);
 
-            --  The stream ends with this iteration, and its space is kept
-            --  beside the tree under the same identity.  The parse has
-            --  already run, so nothing it decided can depend on this.
-            Landin.Tokens.Spacing.Add (Spaces.all, Stream);
+                  --  Space remains beside the tree after the stream ends.
+                  Landin.Tokens.Spacing.Add (Spaces.all, Stream);
 
-            --  Recovery may retain error nodes, but it must explain them.
-            --  Keep this invariant in release builds too: an undiagnosed
-            --  unsound tree must never advance to checking or lowering.
-            declare
-               Parsed : constant not null access constant
-                 Landin.Syntax.Tree := Trees.Tree_Of (Id);
-            begin
-               if not Landin.Syntax.Is_Sound
-                 (Parsed.all, Landin.Syntax.Root (Parsed.all))
-                 and then not Found.Has_Errors
-               then
-                  raise Landin.Compiler_Defect with
-                    "syntax recovery produced no error diagnostic";
-               end if;
-            end;
+                  --  An unsound recovery tree needs an error diagnostic.
+                  declare
+                     Parsed : constant not null access constant
+                       Landin.Syntax.Tree := Trees.Tree_Of (Id);
+                  begin
+                     if not Landin.Syntax.Is_Sound
+                       (Parsed.all, Landin.Syntax.Root (Parsed.all))
+                       and then not Found.Has_Errors
+                     then
+                        raise Landin.Compiler_Defect with
+                          "syntax recovery produced no error diagnostic";
+                     end if;
+                  end;
 
-            --  Sorted per source, appended in source order: a report is
-            --  read top to bottom of the file it is about.
-            declare
-               Ordered : constant Landin.Diagnostics.Diagnostic_List :=
-                 Landin.Diagnostics.Sorted (Found);
-            begin
-               for Position in 1 .. Landin.Diagnostics.Count (Ordered) loop
-                  Report
-                    (Context,
-                     Landin.Diagnostics.Get (Ordered, Position));
-               end loop;
-            end;
+                  --  Sorted per source, appended in source order: a report
+                  --  is read top to bottom of the file it is about.
+                  declare
+                     Ordered : constant Landin.Diagnostics.Diagnostic_List :=
+                       Landin.Diagnostics.Sorted (Found);
+                  begin
+                     for Position in 1 .. Landin.Diagnostics.Count (Ordered)
+                     loop
+                        Report
+                          (Context,
+                           Landin.Diagnostics.Get (Ordered, Position));
+                     end loop;
+                  end;
+               end;
+            end if;
          end;
       end loop;
 
       Outcome := (if Failed (Context) then Stop else Continue);
-   end Run;
+   end Run_Using;
 
 end Landin.Stages.Syntax;

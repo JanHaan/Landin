@@ -32,6 +32,10 @@ package Landin.Source.Names is
 
    function Count (Of_Table : Table) return Natural;
 
+   --  Give a fresh compilation the same identities as an earlier parse.
+   procedure Copy_Into (From : Table; Into : in out Table)
+     with Pre => Count (Into) = 0;
+
    function Is_Interned (Of_Table : Table; Id : Name_Id) return Boolean;
 
    --  Interning is by bytes, so one spelling has one identity however many

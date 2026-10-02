@@ -68,7 +68,8 @@ package Landin.Server.Analysis is
       Host    : Landin.Platform.Filesystem'Class;
       Asked   : Request;
       Visit   : not null access procedure
-        (Context : in out Landin.Stages.Compilation; Answer : Result));
+        (Context : in out Landin.Stages.Compilation; Answer : Result);
+      Watch_Syntax : access procedure (Name : String) := null);
 
    --  Whether Where in Source lies in one of its held regions.
    function Is_Held

@@ -31,6 +31,17 @@ package body Landin.Syntax.Forest is
         (new Tree'(Landin.Syntax.Parser.Parse (From, Names, Report)));
    end Add;
 
+   procedure Transfer_Next (From : in out Table; Into : in out Table) is
+      Index : constant Positive := Count (Into) + 1;
+      Item  : constant Tree_Access := From.Owned.Items.Element (Index);
+   begin
+      if Item = null then
+         raise Landin.Compiler_Defect with "syntax tree already transferred";
+      end if;
+      Into.Owned.Items.Append (Item);
+      From.Owned.Items.Replace_Element (Index, null);
+   end Transfer_Next;
+
    function Tree_Of (Of_Forest : aliased Table; Id : Landin.Source.Source_Id)
      return not null access constant Tree
      is (Of_Forest.Owned.Items.Element (Positive (Id)));

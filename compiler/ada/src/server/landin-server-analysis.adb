@@ -10,6 +10,7 @@ with Landin.Modules;
 with Landin.Panics;
 with Landin.Platform.Overlays;
 with Landin.Resolution;
+with Landin.Source.Names;
 with Landin.Stages.Syntax;
 
 package body Landin.Server.Analysis is
@@ -48,7 +49,8 @@ package body Landin.Server.Analysis is
       Host    : Landin.Platform.Filesystem'Class;
       Asked   : Request;
       Visit   : not null access procedure
-        (Context : in out Landin.Stages.Compilation; Answer : Result))
+        (Context : in out Landin.Stages.Compilation; Answer : Result);
+      Watch_Syntax : access procedure (Name : String) := null)
    is
       Plans    : Plan_Maps.Map;
       Original_Names : Name_Vectors.Vector;
@@ -78,25 +80,27 @@ package body Landin.Server.Analysis is
 
       procedure Load
         (Context : in out Landin.Stages.Compilation;
-         From    : Landin.Platform.Filesystem'Class);
+         From    : Landin.Platform.Filesystem'Class;
+         Previous : access Landin.Stages.Compilation := null);
 
       procedure Load
         (Context : in out Landin.Stages.Compilation;
-         From    : Landin.Platform.Filesystem'Class)
+         From    : Landin.Platform.Filesystem'Class;
+         Previous : access Landin.Stages.Compilation := null)
       is
-         Frontend : Landin.Stages.Syntax.Instance;
          Outcome  : Landin.Stages.Stage_Outcome;
       begin
          if Rooted then
             Landin.Driver.Loading.Load_Reachable_Program
               (Context, From, Asked.Roots, Entry_Directory,
-               Missing'Access);
+               Missing'Access, Previous, Watch_Syntax);
          else
             Landin.Driver.Loading.Load_Files (Context, From, Asked.Files);
             if Landin.Stages.Source_Count (Context) > 0
               and then not Landin.Stages.Failed (Context)
             then
-               Frontend.Run (Context, Outcome);
+               Landin.Stages.Syntax.Run_Using
+                 (Context, Outcome, Previous, Watch_Syntax);
             end if;
          end if;
       end Load;
@@ -203,7 +207,7 @@ package body Landin.Server.Analysis is
 
    begin
       declare
-         Original : Landin.Stages.Compilation :=
+         Original : aliased Landin.Stages.Compilation :=
            Landin.Stages.Create (For_Target, At_Level);
       begin
          Apply_Options (Original);
@@ -280,24 +284,29 @@ package body Landin.Server.Analysis is
          else
             Finish (Original);
          end if;
-      end;
 
-      if Standing then
-         declare
-            Stand_In : Landin.Platform.Overlays.Overlay (Host'Access);
-            Context : Landin.Stages.Compilation :=
-              Landin.Stages.Create (For_Target, At_Level);
-         begin
-            for Position in Plans.Iterate loop
-               Stand_In.Hold
-                 (Plan_Maps.Key (Position),
-                  Plan_Maps.Element (Position).Text);
-            end loop;
-            Apply_Options (Context);
-            Load (Context, Stand_In);
-            Finish (Context);
-         end;
-      end if;
+         if Standing then
+            declare
+               Stand_In : Landin.Platform.Overlays.Overlay (Host'Access);
+               Context : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (For_Target, At_Level);
+            begin
+               for Position in Plans.Iterate loop
+                  Stand_In.Hold
+                    (Plan_Maps.Key (Position),
+                     Plan_Maps.Element (Position).Text);
+               end loop;
+               --  Moved trees keep their original Name_Id values.  Copy
+               --  the name table before the stand-in can intern new names.
+               Landin.Source.Names.Copy_Into
+                 (Landin.Stages.Identities (Original).all,
+                  Landin.Stages.Identities (Context).all);
+               Apply_Options (Context);
+               Load (Context, Stand_In, Original'Access);
+               Finish (Context);
+            end;
+         end if;
+      end;
    end Analyse;
 
    function Is_Held

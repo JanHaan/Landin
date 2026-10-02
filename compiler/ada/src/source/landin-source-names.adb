@@ -1,5 +1,17 @@
 package body Landin.Source.Names is
 
+   procedure Copy_Into (From : Table; Into : in out Table) is
+   begin
+      for Spelling of From.Spellings loop
+         declare
+            Id : constant Name_Id := Intern (Into, Spelling);
+            pragma Unreferenced (Id);
+         begin
+            null;
+         end;
+      end loop;
+   end Copy_Into;
+
    function Count (Of_Table : Table) return Natural
      is (Natural (Of_Table.Spellings.Length));
 

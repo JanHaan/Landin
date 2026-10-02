@@ -28,6 +28,17 @@ package body Landin.Tokens.Spacing is
       Into.Owned.Rows.Append (Row);
    end Add;
 
+   procedure Transfer_Next (From : in out Table; Into : in out Table) is
+      Index : constant Positive := Count (Into) + 1;
+      Row   : constant Space_Access := From.Owned.Rows.Element (Index);
+   begin
+      if Row = null then
+         raise Landin.Compiler_Defect with "syntax space already transferred";
+      end if;
+      Into.Owned.Rows.Append (Row);
+      From.Owned.Rows.Replace_Element (Index, null);
+   end Transfer_Next;
+
    function Row_Of
      (Of_Table : Table; Id : Landin.Source.Source_Id) return Space_Access
      is (Of_Table.Owned.Rows.Element (Positive (Id)));

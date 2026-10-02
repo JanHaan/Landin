@@ -45,6 +45,11 @@ package Landin.Tokens.Spacing is
                   = Landin.Source.Source_Id (Count (Into) + 1),
           Post => Count (Into) = Count (Into)'Old + 1;
 
+   --  Move the row of an unchanged source alongside its transferred tree.
+   procedure Transfer_Next (From : in out Table; Into : in out Table)
+     with Pre => Count (From) > Count (Into),
+          Post => Count (Into) = Count (Into)'Old + 1;
+
    function Space_Count
      (Of_Table : Table; Id : Landin.Source.Source_Id) return Natural
      with Pre => Contains (Of_Table, Id);

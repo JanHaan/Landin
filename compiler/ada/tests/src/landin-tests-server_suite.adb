@@ -218,6 +218,84 @@ package body Landin.Tests.Server_Suite is
       end;
    end Analysis_Continues_Past_A_Body;
 
+   --  A broken neighbour needs its stand-in parse, but the sound source's
+   --  first tree is transferred to that compilation without a second pass.
+   procedure A_Mixed_Module_Parses_Sound_Source_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Mixed_Module_Parses_Sound_Source_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      First_Sound_Passes, Last_Sound_Passes, Broken_Passes : Natural := 0;
+      procedure Watch (Name : String);
+      procedure Visit
+        (Context : in out Landin.Stages.Compilation;
+         Answer : Landin.Server.Analysis.Result);
+
+      procedure Watch (Name : String) is
+      begin
+         if Name = "/w/a.ldn" then
+            First_Sound_Passes := First_Sound_Passes + 1;
+         elsif Name = "/w/b.ldn" then
+            Broken_Passes := Broken_Passes + 1;
+         elsif Name = "/w/c.ldn" then
+            Last_Sound_Passes := Last_Sound_Passes + 1;
+         end if;
+      end Watch;
+
+      procedure Visit
+        (Context : in out Landin.Stages.Compilation;
+         Answer : Landin.Server.Analysis.Result)
+      is
+         pragma Unreferenced (Context);
+      begin
+         Landin.Testing.Check
+           (Item, Answer.Checked, "mixed module reaches checking");
+      end Visit;
+
+      procedure Check_Request
+        (Asked : Landin.Server.Analysis.Request; Label : String);
+
+      procedure Check_Request
+        (Asked : Landin.Server.Analysis.Request; Label : String) is
+      begin
+         First_Sound_Passes := 0;
+         Last_Sound_Passes := 0;
+         Broken_Passes := 0;
+         Landin.Server.Analysis.Analyse
+           (Landin.Targets.Linux_X86_64,
+            Landin.Targets.Levels.Default_Level
+              (Landin.Targets.Linux_X86_64),
+            Host, Asked, Visit'Access, Watch'Access);
+         Landin.Testing.Check_Equal
+           (Item, First_Sound_Passes, 1,
+            Label & ": first sound source syntax passes");
+         Landin.Testing.Check_Equal
+           (Item, Last_Sound_Passes, 1,
+            Label & ": last sound source syntax passes");
+         Landin.Testing.Check_Equal
+           (Item, Broken_Passes, 2, Label & ": broken source syntax passes");
+      end Check_Request;
+
+      Rooted : Landin.Server.Analysis.Request;
+      Named  : Landin.Server.Analysis.Request;
+   begin
+      Host.Add_Directory ("/w");
+      Host.Add_File ("/w/a.ldn", "ready: u8 = 1" & LF);
+      Host.Add_File
+        ("/w/b.ldn", "sum: (x: u8, y: u8) -> (z: u8) =" & LF
+         & "    z = x + y * 3 -" & LF & "end sum" & LF);
+      Host.Add_File ("/w/c.ldn", "also_ready: u8 = 2" & LF);
+      Rooted.Entry_Directory := Unbounded.To_Unbounded_String ("/w");
+      Rooted.Roots := Landin.Platform.Arguments ("/");
+      Named.Files.Append ("/w/a.ldn");
+      Named.Files.Append ("/w/b.ldn");
+      Named.Files.Append ("/w/c.ldn");
+      Check_Request (Rooted, "rooted");
+      Check_Request (Named, "explicit files");
+   end A_Mixed_Module_Parses_Sound_Source_Once;
+
    ---------------------------------------------------------------------
    --  The corpus
    ---------------------------------------------------------------------
@@ -990,6 +1068,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "analysis continues past a body",
          Analysis_Continues_Past_A_Body'Access);
+      Landin.Testing.Register
+        (Into, "server", "a mixed module parses sound source once",
+         A_Mixed_Module_Parses_Sound_Source_Once'Access);
       Landin.Testing.Register
         (Into, "server", "analysis agrees with refine",
          Analysis_Agrees_With_Refine'Access);

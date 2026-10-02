@@ -4,10 +4,11 @@
 --  why: a vector of a limited type is not a thing Ada has, so the answer had
 --  to be a decision rather than a guess.  This is the decision, and it is the
 --  one Landin.Source.Sets made one level down.  The trees are on the heap,
---  one per source, and the forest frees them when it is finalized, which is
---  when the compilation that holds it ends.  Nothing can point into a tree
---  past that: Tree_Of takes the forest as an aliased parameter, so the
---  reference it returns cannot be kept anywhere that outlives the forest,
+--  one per source, and the owning forest frees them when it is finalized.
+--  A server may transfer an unchanged tree to its stand-in compilation;
+--  the old slot is then empty and must not be read again.  Tree_Of takes
+--  the forest as an aliased parameter, so its reference cannot be kept
+--  anywhere that outlives the forest,
 --  and a diagnostic holds a span and a source number rather than a tree.
 --
 --  Why an allocator and not a container.  A Tree is limited with unknown
@@ -67,6 +68,12 @@ package Landin.Syntax.Forest is
           Post => Count (Into) = Count (Into)'Old + 1
                   and then Contains (Into, Landin.Tokens.Source_Of (From));
 
+   --  Move an unchanged source's tree into the next compilation.  Its
+   --  Source_Id and every interned Name_Id must have the same meaning there.
+   procedure Transfer_Next (From : in out Table; Into : in out Table)
+     with Pre => Count (From) > Count (Into),
+          Post => Count (Into) = Count (Into)'Old + 1;
+
    --  The tree a source was parsed into, by reference and read only.
    function Tree_Of (Of_Forest : aliased Table; Id : Landin.Source.Source_Id)
      return not null access constant Tree
@@ -75,8 +82,8 @@ package Landin.Syntax.Forest is
 
 private
 
-   --  Freed with the forest; see the header.  The access type is not
-   --  visible, so nothing outside can hold a tree past the forest.
+   --  Freed with the forest that owns it; see the header.  The access
+   --  type is private, so nothing outside can hold an owned tree past it.
    type Tree_Access is access Tree;
 
    package Tree_Vectors is new Ada.Containers.Vectors

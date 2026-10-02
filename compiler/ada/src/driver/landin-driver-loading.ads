@@ -33,7 +33,9 @@ package Landin.Driver.Loading is
       Host            : Landin.Platform.Filesystem'Class;
       Roots           : Landin.Platform.Path_List;
       Entry_Directory : String;
-      Missing_Directories : access Landin.Platform.Path_List := null);
+      Missing_Directories : access Landin.Platform.Path_List := null;
+      Previous        : access Landin.Stages.Compilation := null;
+      Watch_Syntax    : access procedure (Name : String) := null);
 
    function Joined_Path (Directory, Child : String) return String;
 

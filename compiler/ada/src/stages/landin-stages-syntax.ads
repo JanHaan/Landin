@@ -27,4 +27,13 @@ package Landin.Stages.Syntax is
       Whole   : in out Compilation'Class;
       Outcome : out Stage_Outcome);
 
+   --  Reuse unchanged parsed sources from Previous when source identities
+   --  and text agree. The caller first copies Previous's interned names in
+   --  their original order into Whole. Watch marks each actual lex/parse.
+   procedure Run_Using
+     (Whole    : in out Compilation'Class;
+      Outcome  : out Stage_Outcome;
+      Previous : access Compilation := null;
+      Watch    : access procedure (Name : String) := null);
+
 end Landin.Stages.Syntax;

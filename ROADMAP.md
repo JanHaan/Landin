@@ -486,8 +486,9 @@ when exact. It reads with the driver's own loader and checks with its own
 stages, now `Landin.Driver.Loading` and `Landin.Driver.Checking`, through
 buffers held over the filesystem; a file belongs to its directory's module
 under the editor's roots. A sound analysis uses one compilation; an eligible
-broken body causes a second compilation after the first is released, and a
-burst of edits is analysed once. D253 answers past a hole only inside a
+broken body causes a second compilation that takes unchanged syntax trees
+from the first, and a burst of edits is analysed once. D253 answers past a
+hole only inside a
 routine body: the server checks a stand-in with each broken body blanked and
 `loop do end loop` written in it, so no stage changed and `refine` reports as
 before.

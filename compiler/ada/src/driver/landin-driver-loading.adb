@@ -27,8 +27,6 @@ package body Landin.Driver.Loading is
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
 
-   Frontend : aliased Landin.Stages.Syntax.Instance;
-
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
      Landin.Diagnostics.Catalogue.Code
        (Landin.Diagnostics.Catalogue.Unreadable_Source);
@@ -110,7 +108,9 @@ package body Landin.Driver.Loading is
       Host            : Landin.Platform.Filesystem'Class;
       Roots           : Landin.Platform.Path_List;
       Entry_Directory : String;
-      Missing_Directories : access Landin.Platform.Path_List := null)
+      Missing_Directories : access Landin.Platform.Path_List := null;
+      Previous        : access Landin.Stages.Compilation := null;
+      Watch_Syntax    : access procedure (Name : String) := null)
    is
       function Import_Path
         (Of_Tree : Landin.Syntax.Tree;
@@ -421,7 +421,8 @@ package body Landin.Driver.Loading is
                declare
                   Syntax_Outcome : Landin.Stages.Stage_Outcome;
                begin
-                  Frontend.Run (Context, Syntax_Outcome);
+                  Landin.Stages.Syntax.Run_Using
+                    (Context, Syntax_Outcome, Previous, Watch_Syntax);
                end;
             end if;
             exit when Landin.Stages.Failed (Context);
