@@ -310,40 +310,32 @@ package body Landin.Driver is
                Message => Message));
       end Refuse;
 
-      --  L0008 at the first line whose bytes the layout changes, found by
-      --  reading the source and the formatted text line by line.  A line
-      --  the source has and the layout drops is changed too.
+      --  L0008 at the first changed byte, including line terminators.
+      --  A missing or removed suffix changes at the first byte past the
+      --  common prefix.
       procedure Not_Formatted (Answer : Landin.Formatting.Result);
 
       procedure Not_Formatted (Answer : Landin.Formatting.Result) is
          Snapshot : Landin.Source.Snapshot renames
            Sources.Get (Answer.Id).Element.all;
+         Original  : constant String := Landin.Source.Text (Snapshot);
          Formatted : constant String := Unbounded.To_String (Answer.Text);
 
          function Changed_Line return Landin.Source.Line_Number;
 
          function Changed_Line return Landin.Source.Line_Number is
-            Cursor : Natural := Formatted'First;
          begin
-            for Line in 1 .. Landin.Source.Line_Count (Snapshot) loop
-               declare
-                  Was  : constant String :=
-                    Landin.Source.Line_Text (Snapshot, Line);
-                  Stop : Natural :=
-                    Ada.Strings.Fixed.Index (Formatted, [LF], Cursor);
-               begin
-                  if Stop = 0 then
-                     Stop := Formatted'Last + 1;
-                  end if;
-                  if Cursor > Formatted'Last
-                    or else Formatted (Cursor .. Stop - 1) /= Was
-                  then
-                     return Line;
-                  end if;
-                  Cursor := Stop + 1;
-               end;
+            for Index in 1 .. Natural'Min
+              (Original'Length, Formatted'Length)
+            loop
+               if Original (Index) /= Formatted (Index) then
+                  return Landin.Source.Position_Of
+                    (Snapshot, Landin.Source.Byte_Offset (Index - 1)).Line;
+               end if;
             end loop;
-            return Landin.Source.Line_Count (Snapshot);
+            return Landin.Source.Position_Of
+              (Snapshot, Landin.Source.Byte_Offset
+                 (Natural'Min (Original'Length, Formatted'Length))).Line;
          end Changed_Line;
 
          Line : constant Landin.Source.Line_Number := Changed_Line;

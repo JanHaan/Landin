@@ -19,6 +19,7 @@ package body Landin.Tests.Driver_Suite is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
    LF : constant Character := Character'Val (10);
+   CR : constant Character := Character'Val (13);
 
    function Arguments_Of (First : String) return Landin.Platform.Path_List;
 
@@ -3912,6 +3913,37 @@ package body Landin.Tests.Driver_Suite is
               (Item, Unbounded.Length (Again.Report) = 0
                      and then Unbounded.Length (Again.Output) = 0,
                "and prints nothing");
+         end;
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File
+           ("crlf.ldn", "x: u8 = 1" & CR & LF & "y: u8 = 2" & CR & LF);
+         Host.Add_File
+           ("later-crlf.ldn", "x: u8 = 1" & LF
+            & "y: u8 = 2" & CR & LF);
+         declare
+            First : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "crlf.ldn"]));
+            Later : constant Landin.Driver.Outcome :=
+              Run (Host, Words (["--check", "later-crlf.ldn"]));
+         begin
+            Landin.Testing.Check
+              (Item, First.Status = Landin.Driver.Status_Reported
+                     and then Contains
+                       (Unbounded.To_String (First.Report),
+                        "crlf.ldn:1:1"),
+               "CRLF-only changes point at the first line ending");
+            Landin.Testing.Check
+              (Item, Later.Status = Landin.Driver.Status_Reported
+                     and then Contains
+                       (Unbounded.To_String (Later.Report),
+                        "later-crlf.ldn:2:1"),
+               "a later changed line ending points at its own line");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "--check leaves CRLF sources alone");
          end;
       end;
 
