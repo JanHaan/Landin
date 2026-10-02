@@ -32,7 +32,7 @@ def entry(report):
         "stdout": digest(b""),
         "stderr": digest(report),
         "stderr_base64": base64.b64encode(report).decode("ascii"),
-        "errors": digest(ERROR),
+        "errors": digest(driver_manifest.without_additions(report)),
         "asm": "absent",
         "report": "absent",
         "layout": digest(b"\0\0"),
@@ -52,6 +52,20 @@ def compare(old, new, report_only=True):
 
 
 class ReportOnlyComparison(unittest.TestCase):
+    def test_help_appended_inside_existing_warning_is_accepted(self):
+        old = b"warning[L0326]: local mut is unused\n  = note: unchanged\n"
+        new = old + b"  = help: remove mut\n"
+        result = compare(entry(old), entry(new))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("1 reports grew", result.stdout)
+
+    def test_existing_warning_help_cannot_be_removed_or_replaced(self):
+        old = WARNING + HELP
+        for new in (WARNING, WARNING + b"  = help: something else\n"):
+            with self.subTest(report=new):
+                self.assertEqual(compare(entry(old), entry(new)).returncode,
+                                 1)
+
     def test_new_help_and_whole_warning_are_accepted(self):
         result = compare(entry(ERROR), entry(ERROR + HELP + WARNING))
         self.assertEqual(result.returncode, 0, result.stderr)

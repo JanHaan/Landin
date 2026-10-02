@@ -158,16 +158,43 @@ def report_bytes(entry):
 
 
 def only_report_additions(old, new):
-    """Keep every old unit in order; skip only newly added allowed units."""
+    """Keep every old unit in order; skip only newly added allowed units.
+
+    A warning is a unit when it is newly added, but an existing warning may
+    gain help lines among its existing lines.  Keep multiple possible matches
+    so repeated warnings do not make the choice of an added block ambiguous.
+    """
     old_parts = report_parts(old)
     new_parts = report_parts(new)
-    position = 0
-    for part in new_parts:
-        if position < len(old_parts) and part == old_parts[position]:
-            position += 1
-        elif not part[1]:
+    positions = {0}
+    for data, allowed in new_parts:
+        following = set()
+        for position in positions:
+            if position < len(old_parts):
+                old_data = old_parts[position][0]
+                if data == old_data or (
+                        data.startswith(b"warning[") and
+                        old_data.startswith(b"warning[") and
+                        help_added_to_warning(old_data, data)):
+                    following.add(position + 1)
+            if allowed:
+                following.add(position)
+        if not following:
             return False
-    return position == len(old_parts)
+        positions = following
+    return len(old_parts) in positions
+
+
+def help_added_to_warning(old, new):
+    """Require every old warning line in order; allow only new help lines."""
+    old_lines = old.splitlines(keepends=True)
+    position = 0
+    for line in new.splitlines(keepends=True):
+        if position < len(old_lines) and line == old_lines[position]:
+            position += 1
+        elif not line.startswith(b"  = help: "):
+            return False
+    return position == len(old_lines)
 
 
 #  What a change of space may move, taken out.  See the module header.
