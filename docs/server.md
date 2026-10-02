@@ -168,7 +168,7 @@ says how to install each. `refine` must be on the editor's path, as
 | Helix | `highlight/helix/languages.toml` names `refine` as Landin's language server |
 | Emacs | `highlight/emacs/landin-mode.el` registers it with Eglot; `M-x eglot` starts it |
 | Zed | `highlight/zed` names it as Landin's language server and finds `refine` on the path |
-| VS Code and its descendants | `highlight/textmate`'s client starts it; `landin.server.path` names another compiler |
+| VS Code and its descendants | `highlight/textmate`'s client starts it; `landin.server.path` names another compiler, and `landin.server.target`, `landin.server.level` and `landin.server.options` set the analysis target and build options |
 | Vim | `highlight/vim` registers it with vim-lsp when vim-lsp is installed |
 | Sublime Text | `highlight/sublime/LSP-refine.sublime-settings`, for the LSP package |
 | Kate | `highlight/kate/lsp-client.json`, for the LSP Client plugin |

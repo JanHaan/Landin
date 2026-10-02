@@ -206,6 +206,7 @@ def main() -> int:
         "tests/nvim-smoke.lua",
         "tests/structural.ldn",
         "tests/textmate-smoke.mjs",
+        "tests/textmate-client.mjs",
         "vim/ftdetect/landin.vim",
         "vim/ftplugin/landin.vim",
         "vim/indent/landin.vim",

@@ -15,6 +15,26 @@ client, and the VSIX carries it. `npm test` drives the
 grammar through VS Code's own TextMate and Oniguruma libraries; `npm run
 package:check` validates the files that will enter the extension.
 
+Set `landin.server.target`, `landin.server.level` and
+`landin.server.options` in VS Code's workspace settings to match the build.
+For example, `.vscode/settings.json` for a Cortex-M0 build at the armv7-m
+feature level with a `board` option can contain:
+
+```json
+{
+  "landin.server.target": "cortex-m0",
+  "landin.server.level": "armv7-m",
+  "landin.server.options": { "board": "rp2040" }
+}
+```
+
+An empty target selects `linux-x86-64`; an empty level selects that target's
+default level. Option names use lowercase letters, digits and underscores,
+and values are nonempty strings. The extension sends these settings when
+`refine lsp` starts. After changing them, use **Developer: Reload Window**
+to start it with the new values. The server reports invalid values in an
+editor message.
+
 Sublime Text and TextMate can load `syntaxes/landin.tmLanguage.json` directly.
 JetBrains IDEs with the TextMate Bundles plugin can import this entire
 directory.
