@@ -235,6 +235,14 @@ workflows install, verified against the same checksums, because it reads
 of writing nixpkgs carries GNAT 16.2.0 and GPRbuild 25.0.0, and the pin is
 GNAT 16.1.0 with GPRbuild 26.0.0.
 
+It is defined for the three systems the pins carry checksums for,
+`x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. The prebuilt
+`.#refine-bin` exists only for a system a release has published an asset
+for, with its hash recorded in the flake, so `aarch64-linux` has the shell
+and the source build `.#refine` and gains the prebuilt compiler with the
+first release that publishes it. The aarch64-linux shell is evaluated on
+x86-64, not yet built on arm64 hardware; Nix CI stays deferred.
+
 It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
 other environments leave in the same checkout. `python3` comes with
 it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it

@@ -79,10 +79,18 @@ emitted program's optimization policy.
 
 The releases below are the ones the pins name. Every checksum here has been
 verified against the archive it names, before that archive was unpacked: the
-macOS rows on the development machine, the Linux rows inside the pinned
+macOS rows on the development machine, the Linux x86-64 rows inside the pinned
 linux/amd64 image built by `environments/linux-amd64/Containerfile`, which
-runs `sha256sum -c` before it unpacks anything. A host may build the same
-versions from source instead.
+runs `sha256sum -c` before it unpacks anything, and the Linux arm64 rows by
+the gate's `ubuntu-24.04-arm` jobs, which do the same through
+`environments/pins.sh`. A host may build the same versions from source
+instead.
+
+Each archive installs its compiler driver under its own GNU triplet, which is
+the name `refine` asks for: `x86_64-pc-linux-gnu-gcc` on Linux x86-64 and
+`aarch64-linux-gnu-gcc` on Linux arm64. The arm64 archive also bundles its own
+`as`, `ld` and `gdb`, so the GDB sessions on that host use the pinned debugger
+as they do on x86-64.
 
 | platform | archive | sha256 |
 |---|---|---|
@@ -90,6 +98,8 @@ versions from source instead.
 | macOS arm64 | `gprbuild-aarch64-darwin-26.0.0-1.tar.gz` | `6bf7d80c8a9702d851c5b992d7c72a07a9dbf13e8de9947b80927ea2667b6be8` |
 | Linux x86-64 | `gnat-x86_64-linux-16.1.0-1.tar.gz` | `9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703` |
 | Linux x86-64 | `gprbuild-x86_64-linux-26.0.0-1.tar.gz` | `e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b` |
+| Linux arm64 | `gnat-aarch64-linux-16.1.0-1.tar.gz` | `8e297497f2d6d6845920a363a277b6ef5bc454e48a66d0d606b89d71e31ee623` |
+| Linux arm64 | `gprbuild-aarch64-linux-26.0.0-1.tar.gz` | `c125424447144944973d24de43a53b3e7008dbda306e0d540db07e635dea24e4` |
 
 The structural editor grammar's CLI is not a compiler tool, but the gate
 fetches it, so it is pinned the same way: tree-sitter `0.26.9`, the version

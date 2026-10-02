@@ -36,8 +36,9 @@ export LANDIN_BUILD_MODE
 if [ -z "${LANDIN_BUILD_TAG:-}" ]; then
     LANDIN_BUILD_TAG="$(uname -s)-$(uname -m)"
     LANDIN_BUILD_TAG="$(printf '%s' "$LANDIN_BUILD_TAG" | tr 'A-Z' 'a-z')"
-    #  The documents and the container say linux-amd64 and darwin-arm64;
-    #  uname says x86_64 and, on some hosts, aarch64.
+    #  The documents, the container and the gate say linux-amd64,
+    #  linux-arm64 and darwin-arm64; uname says x86_64 and, on Linux
+    #  arm64, aarch64.
     LANDIN_BUILD_TAG="$(printf '%s' "$LANDIN_BUILD_TAG" \
         | sed -e 's/-x86_64$/-amd64/' -e 's/-aarch64$/-arm64/')"
 fi

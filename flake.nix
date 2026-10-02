@@ -22,6 +22,7 @@
       #  provide, so it is absent rather than broken.
       systems = [
         "x86_64-linux"
+        "aarch64-linux"
         "aarch64-darwin"
       ];
 
@@ -93,6 +94,15 @@
           #  built from itself, so the two move in the commit that records
           #  the new hashes and never before.
           releaseVersion = "0.2.3";
+
+          #  The triplet the pinned archive installs its driver under on
+          #  each Linux system, which is the name refine asks for.
+          driverTriplet =
+            {
+              x86_64-linux = "x86_64-pc-linux-gnu";
+              aarch64-linux = "aarch64-linux-gnu";
+            }
+            .${system} or "";
 
           releaseHashes = {
             x86_64-linux =
@@ -287,7 +297,7 @@
               #  the host already has.
               mkdir -p "$out/libexec/landin"
               ln -s "${pkgs.stdenv.cc}/bin/cc" \
-                "$out/libexec/landin/x86_64-pc-linux-gnu-gcc"
+                "$out/libexec/landin/${driverTriplet}-gcc"
               wrapProgram "$out/bin/refine" \
                 --prefix PATH : "$out/libexec/landin"
             ''
@@ -363,6 +373,10 @@
             };
           };
 
+          #  Whether a release published an asset for this system and its
+          #  hash is recorded.
+          hasRelease = releaseHashes ? ${system};
+
           shell = pkgs.mkShell {
             packages = [
               gnat
@@ -420,8 +434,12 @@
           #  toolchain that made it.
           default = built.refine;
           inherit (built) refine;
-          refine-bin = built.refineBin;
         }
+        #  Only a system a release published an asset for, and whose hash
+        #  is recorded, has the prebuilt compiler: a hash nobody wrote down
+        #  is a download nobody checked, so the package is absent rather
+        #  than broken, as a system with no pinned toolchain is.
+        // (if built.hasRelease then { refine-bin = built.refineBin; } else { })
       ) perSystem;
     };
 }

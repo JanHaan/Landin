@@ -33,18 +33,24 @@ LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252
 LANDIN_GPRBUILD_SHA256_X86_64_LINUX=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b
 LANDIN_GNAT_SHA256_AARCH64_DARWIN=657cf254323eb91f79768918e8bd8887d6da7ac6056732a38f21e2848267da18
 LANDIN_GPRBUILD_SHA256_AARCH64_DARWIN=6bf7d80c8a9702d851c5b992d7c72a07a9dbf13e8de9947b80927ea2667b6be8
+LANDIN_GNAT_SHA256_AARCH64_LINUX=8e297497f2d6d6845920a363a277b6ef5bc454e48a66d0d606b89d71e31ee623
+LANDIN_GPRBUILD_SHA256_AARCH64_LINUX=c125424447144944973d24de43a53b3e7008dbda306e0d540db07e635dea24e4
 
 #  Installs the pinned toolchain for one platform into $1, verifying each
 #  archive against the checksum above before unpacking it.  A mismatch is
 #  not a slower build, it is a different compiler.
 landin_install_toolchain() {
     Into="$1"
-    Platform="$2"        # x86_64-linux or aarch64-darwin
+    Platform="$2"        # x86_64-linux, aarch64-linux or aarch64-darwin
 
     case "$Platform" in
         x86_64-linux)
             Gnat_Sha="$LANDIN_GNAT_SHA256_X86_64_LINUX"
             Gpr_Sha="$LANDIN_GPRBUILD_SHA256_X86_64_LINUX"
+            ;;
+        aarch64-linux)
+            Gnat_Sha="$LANDIN_GNAT_SHA256_AARCH64_LINUX"
+            Gpr_Sha="$LANDIN_GPRBUILD_SHA256_AARCH64_LINUX"
             ;;
         aarch64-darwin)
             Gnat_Sha="$LANDIN_GNAT_SHA256_AARCH64_DARWIN"
