@@ -1380,6 +1380,7 @@ package body Landin.Syntax.Parser is
                while Peek = Tok.Kw_Import loop
                   Items.Append (Parse_Import);
                end loop;
+               Result.Import_Prefix_Length := Natural (Items.Length);
 
                while Peek /= Tok.End_Of_Input loop
                   declare

@@ -244,16 +244,7 @@ package body Landin.Syntax is
      is (Run_Length (Of_Tree, Root (Of_Tree)) - Import_Count (Of_Tree));
 
    function Import_Count (Of_Tree : Tree) return Natural is
-      Count : Natural := 0;
-   begin
-      for Index in 1 .. Run_Length (Of_Tree, Root (Of_Tree)) loop
-         exit when Kind
-           (Of_Tree, Nth_Item (Of_Tree, Root (Of_Tree), Index))
-             /= Import_Declaration;
-         Count := Count + 1;
-      end loop;
-      return Count;
-   end Import_Count;
+      (Of_Tree.Import_Prefix_Length);
 
    function Nth_Import (Of_Tree : Tree; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Root (Of_Tree), Index));

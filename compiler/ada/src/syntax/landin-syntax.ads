@@ -1642,6 +1642,8 @@ private
       Items  : Node_Vectors.Vector;
       Links  : Slot_Vectors.Vector;
       Signature_Links : Slot_Vectors.Vector;
+      --  The parser fixes this before appending declarations to Program.
+      Import_Prefix_Length : Natural := 0;
    end record;
 
 end Landin.Syntax;

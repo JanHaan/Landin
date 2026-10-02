@@ -2390,6 +2390,45 @@ package body Landin.Tests.Parser_Suite is
       end;
 
       declare
+         Late_Sources : Landin.Source.Sets.Source_Set;
+         Late_Names   : Landin.Source.Names.Table;
+         Late_Stream  : Landin.Tokens.Token_Stream;
+         Late_Found   : Landin.Diagnostics.Diagnostic_List;
+         Late_Id      : constant Landin.Source.Source_Id :=
+           Late_Sources.Add
+             ("late-import.ldn",
+              "import first" & ASCII.LF
+              & "a: u8 = 1" & ASCII.LF
+              & "import second" & ASCII.LF
+              & "b: u8 = 2" & ASCII.LF);
+      begin
+         Landin.Tokens.Lexer.Lex
+           (Late_Sources.Get (Late_Id), Late_Names, Late_Stream);
+         Landin.Diagnostics.Lexical.Report (Late_Stream, Late_Found);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse
+                (Late_Stream, Late_Names, Late_Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Import_Count (Parsed), 1,
+               "only the leading import belongs to the prelude");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Declaration_Count (Parsed), 3,
+               "the late import remains in the declaration suffix");
+            Landin.Testing.Check
+              (Item, Landin.Syntax.Kind
+                 (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))
+                 = Landin.Syntax.Error_Declaration
+               and then Landin.Syntax.Kind
+                 (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 3))
+                 = Landin.Syntax.Binding,
+               "declaration indexing preserves source order after a late"
+               & " import error");
+         end;
+      end;
+
+      declare
          Codes : Unbounded.Unbounded_String;
          Total : Natural;
          Nodes : Natural;
