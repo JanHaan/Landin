@@ -15762,7 +15762,9 @@ inner allocator.
 the monotonic `core/mem.arena` and hosted `core/heap`. Construction receives an
 explicit byte pointer and exact extent, a positive uniform slot size, a finite
 slot count, a slot alignment, and a caller-supplied initialized `[]mut
-pool.slot`. The slice length is the explicit finite bookkeeping capacity and
+pool.slot`. Each record holds occupancy, the live request extent, and one
+free-index heap entry; the heap uses the same caller-supplied slice and no
+other storage. The slice length is the explicit finite bookkeeping capacity and
 the requested slot count may not exceed it. Construction clears the active
 records only after every configuration check succeeds. The caller reserves
 those records for the provider while it is in use. Its result's `from base,
@@ -15792,6 +15794,10 @@ unoccupied is rejected and counted. After the same slot is freed and reused
 for the same extent, a stale pointer is indistinguishable from the current
 allocation and remains [0430]'s pointer-validity non-guarantee; the pool adds
 no generation identity.
+The free-index min heap selects the lowest free slot in logarithmic time.
+Free derives a candidate index from the address and fixed stride before
+checking occupancy and extent; a valid free updates the heap in logarithmic
+time, while an invalid free leaves it unchanged.
 Allocation, valid-free, live and rejected-free counts are observable audit
 evidence.
 
