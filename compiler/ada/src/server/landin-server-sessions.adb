@@ -53,9 +53,20 @@ package body Landin.Server.Sessions is
       From      : Landin.Server.Transport.Reader;
       Store     : Landin.Server.Documents.Store (Host);
       Unit      : Positions.Encoding := Positions.UTF_16;
-      Facts     : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+      --  D257: the compiler's own host, as `refine` defaults to, until the
+      --  editor names a target.  A host no description covers starts on
+      --  synthetic-32, which checks a program and emits nothing, and the
+      --  editor is told to name one.
+      Has_Default : constant Boolean :=
+        Landin.Targets.Selection.Has_Host_Default
+          (Landin.Targets.Selection.Build_Triplet);
+      Facts     : Landin.Targets.Target_Facts :=
+        (if Has_Default
+         then Landin.Targets.Selection.Host_Default
+                (Landin.Targets.Selection.Build_Triplet)
+         else Landin.Targets.Synthetic_32);
       Level     : Landin.Targets.Levels.Feature_Level :=
-        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_X86_64);
+        Landin.Targets.Levels.Default_Level (Facts);
       Options   : Landin.Platform.Path_List;
       Started   : Boolean := False;
       Stopping  : Boolean := False;
@@ -397,6 +408,11 @@ package body Landin.Server.Sessions is
                end;
             elsif J.Is_Present (Target) then
                Unbounded.Append (Bad, "a target is a string");
+            elsif not Has_Default then
+               Unbounded.Append
+                 (Bad, "no target describes this compiler's host, "
+                  & Landin.Targets.Selection.Build_Triplet
+                  & "; name one with the target option");
             end if;
             Level := Landin.Targets.Levels.Default_Level (Facts);
          end;

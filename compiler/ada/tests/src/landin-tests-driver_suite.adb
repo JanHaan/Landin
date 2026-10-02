@@ -878,6 +878,7 @@ package body Landin.Tests.Driver_Suite is
       begin
          Host.Add_File ("main.ldn", Program);
          Tools.Set_Result (0, "");
+         Args.Append ("--target=linux-x86-64");
          if Level /= "" then
             Args.Append ("--level=" & Level);
          end if;
@@ -896,7 +897,7 @@ package body Landin.Tests.Driver_Suite is
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Foreign : constant Landin.Driver.Outcome :=
         Landin.Driver.Execute
-          (Arguments_Of ("--level=armv8.1-a"), Host, Tools);
+          (Both ("--target=linux-x86-64", "--level=armv8.1-a"), Host, Tools);
       None : Landin.Platform.Path_List :=
         Arguments_Of ("--target=synthetic-32");
       Twice : Landin.Platform.Path_List := Arguments_Of ("--level=x86-64-v2");
@@ -1141,6 +1142,58 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item, Contains (Landin.Driver.Identity, "synthetic-32"),
          "and so is the synthetic one");
+
+      --  D257: a build that names no target is for the compiler's own host,
+      --  which is the triplet it was built for, so each build reaches its
+      --  own description, and one no description covers is refused.
+      declare
+         procedure Check (Built_For, Expected : String);
+
+         procedure Check (Built_For, Expected : String) is
+            Files : Landin.Testing.Fakes.Fake_Filesystem;
+            Nothing : Landin.Platform.Unmetered;
+            Args : Landin.Platform.Path_List :=
+              Arguments_Of ("main.ldn");
+         begin
+            Files.Add_File
+              ("main.ldn",
+               "public main: () -> (code: i32) =" & LF
+               & "    code = 0" & LF & "end main" & LF);
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("out.s");
+            Args.Append ("--build-report=build.json");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (Args, Files, Tools, Nothing, Built_For => Built_For);
+            begin
+               if Expected = "" then
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Reported,
+                     Built_For & " has no default");
+                  Landin.Testing.Check
+                    (Item, Contains (Unbounded.To_String (Result.Report),
+                       "error[L0004]: no --target given"),
+                     "and saying so is L0004");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Success,
+                     Built_For & " compiles for its own host: "
+                     & Unbounded.To_String (Result.Report));
+                  Landin.Testing.Check
+                    (Item, Contains (Files.Written ("build.json"),
+                       """target"":""" & Expected & """"),
+                     Built_For & " defaults to " & Expected);
+               end if;
+            end;
+         end Check;
+      begin
+         Check ("x86_64-pc-linux-gnu", "linux-x86-64");
+         Check ("aarch64-linux-gnu", "linux-arm64");
+         Check ("aarch64-apple-darwin24.6.0", "darwin-arm64");
+         Check ("x86_64-apple-darwin24.6.0", "");
+      end;
    end Targets_Have_A_Default;
 
    --  A source that exists and cannot be read is its own branch, and it
@@ -1221,11 +1274,13 @@ package body Landin.Tests.Driver_Suite is
         & " value = where.line end capture" & LF
         & "public main: () -> (code: i32) =" & LF
         & " code = i32(capture() + capture()) end main" & LF;
-      Args : constant Landin.Platform.Path_List := Both (Path, "--emit=exe");
+      Args : Landin.Platform.Path_List := Both (Path, "--emit=exe");
       Result : Landin.Driver.Outcome;
       Original : Unbounded.Unbounded_String;
       Original_Assembly : Unbounded.Unbounded_String;
    begin
+      --  ELF carries the source map's identity as the build id.
+      Args.Append ("--target=linux-x86-64");
       Host.Add_File (Path, Program);
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
@@ -1324,6 +1379,7 @@ package body Landin.Tests.Driver_Suite is
       Args  : Landin.Platform.Path_List;
    begin
       Host.Add_File ("main.ldn", Entry_Program);
+      Args.Append ("--target=linux-x86-64");
       Args.Append ("main.ldn");
       Args.Append ("--emit=exe");
       Args.Append ("-o");
@@ -1371,6 +1427,7 @@ package body Landin.Tests.Driver_Suite is
       Args.Append ("main");
       Args.Append ("--toolchain=x86_64-unknown-linux-gnu-gcc");
       Args.Append ("--linker=mold");
+      Args.Append ("--target=linux-x86-64");
 
       declare
          Result : constant Landin.Driver.Outcome :=
@@ -1599,7 +1656,11 @@ package body Landin.Tests.Driver_Suite is
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Wide_Request : Landin.Platform.Path_List :=
+        Both ("wide.ldn", "--emit=asm");
    begin
+      --  The seventh is SysV's first stack parameter.
+      Wide_Request.Append ("--target=linux-x86-64");
       Host.Add_File
         ("wide.ldn",
          "seven: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,"
@@ -1610,7 +1671,7 @@ package body Landin.Tests.Driver_Suite is
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Driver.Execute
-             (Both ("wide.ldn", "--emit=asm"), Host, Tools);
+             (Wide_Request, Host, Tools);
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -2169,6 +2230,8 @@ package body Landin.Tests.Driver_Suite is
          & "public main: () -> (code: i32) = code = 42 end main" & LF);
       Host.Add_File
         ("root/support/a.ldn", "linker.library(""first"")" & LF);
+      --  Linux's exact-archive spelling; Darwin resolves archives itself.
+      Args.Append ("--target=linux-x86-64");
       Args.Append ("--root=root");
       Args.Append ("--emit=exe");
       Args.Append ("entry");

@@ -14958,6 +14958,45 @@ assembly block's register rules depend on the operating system.
 identity`, `driver/fixed facts come from the target`, and
 `end-to-end/refine-identity`.
 
+### D257 — A build targets the compiler's own host, and another target is named
+
+**From** [1500] and [1550].
+
+**The discrepancy:** [1550] says Landin relies on the assembler and linker of
+the platform, and says nothing of which platform a build that names none is
+for. The driver and the language server answered `linux-x86-64` everywhere,
+so a plain `refine --emit=exe` on a Mac or on Linux arm64 compiled for a
+machine it was not running on and handed that assembly to a driver that
+could not finish it: a cross-compilation nobody had asked for.
+
+**Chosen:** a build that names no `--target=`, and a language server whose
+editor names no `target`, is for the compiler's own host, and every other
+target is named. The host is the triplet the compiler itself was built for,
+which the Ada compiler fixes when it builds `refine`: an `x86_64` Linux build
+defaults to `linux-x86-64`, an `aarch64` Linux build to `linux-arm64`, and an
+`aarch64` Darwin build to `darwin-arm64`. A compiler built for any other host
+has no default: a compilation that names no target is L0004, and a server
+there checks for `synthetic-32`, which emits nothing, and asks for a target.
+A request that compiles nothing, `--identify` or `--help`, needs none.
+`refine --identify` lists what is described, not the default, so its text is
+the same on every host. Nothing asks the running machine: a compiler built
+for x86-64 still defaults to `linux-x86-64` under an emulator on an arm64
+host, which is the compiler's host as its build says.
+
+**The alternatives:** keeping `linux-x86-64` as the default everywhere, which
+makes every native build off x86-64 Linux a silent cross-compilation. Asking
+the operating system at run time, `uname` or its equivalents, which is the
+host detection `Landin.Targets` exists to keep out of the compiler and which
+answers differently under emulation than the compiler's own build does.
+Refusing every build that names no target, which makes the common native
+build longer to write and gives cross-compilation no distinction.
+
+**Pinned by** `targets/names select their descriptions`,
+`driver/targets have a default`, which reaches every host's default through
+the driver and the refusal of a host with none, and
+`compiler/tests/test_default_target.py`, which every gate host runs against
+its own `refine`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

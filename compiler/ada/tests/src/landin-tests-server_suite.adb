@@ -231,10 +231,15 @@ package body Landin.Tests.Server_Suite is
                   Asked     : Landin.Server.Analysis.Request;
                   Rooted    : Boolean := False;
                begin
+                  --  The analysis is linux-x86-64's, and so is refine's
+                  --  verdict it is compared with, on every host.
+                  Arguments.Append ("--target=linux-x86-64");
                   Fixtures.Append_Module_Arguments
                     (Fixture, Corpus, Arguments);
                   for Argument of Arguments loop
-                     if Argument'Length > 7
+                     if Argument = "--target=linux-x86-64" then
+                        null;
+                     elsif Argument'Length > 7
                        and then Argument (Argument'First
                                           .. Argument'First + 6) = "--root="
                      then

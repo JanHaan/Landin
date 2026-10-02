@@ -10,12 +10,35 @@ package body Landin.Testing.Fixtures is
 
    Metadata_Name : constant String := "fixture.meta";
 
-   --  The product targets -- Linux x86-64, macOS arm64 and the Cortex-M
-   --  reference profile -- and the synthetic 32-bit layout target.  A fixture
-   --  may name only these, because naming a target nothing describes is how a
-   --  fixture quietly stops applying to anything.
+   --  The product targets -- Linux x86-64 and arm64, macOS arm64 and the
+   --  Cortex-M reference profile -- and the synthetic 32-bit layout target.
+   --  A fixture may name only these, because naming a target nothing
+   --  describes is how a fixture quietly stops applying to anything.
    function Is_Named_Target (Name : String) return Boolean is
-     (Name in "linux-x86-64" | "macos-arm64" | "cortex-m" | "synthetic-32");
+     (Name in "linux-x86-64" | "linux-arm64" | "macos-arm64" | "cortex-m"
+            | "synthetic-32");
+
+   --  Whether a `targets:` list names LABEL.
+   function Names_Label (Targets, Label : String) return Boolean;
+
+   function Names_Label (Targets, Label : String) return Boolean is
+      First : Integer := Targets'First;
+   begin
+      for Index in Targets'First .. Targets'Last + 1 loop
+         if Index > Targets'Last or else Targets (Index) = ',' then
+            if Ada.Strings.Fixed.Trim
+                 (Targets (First .. Index - 1), Ada.Strings.Both) = Label
+            then
+               return True;
+            end if;
+            First := Index + 1;
+         end if;
+      end loop;
+      return False;
+   end Names_Label;
+
+   function In_Lane (Item : Fixture; Label : String) return Boolean
+     is (Label = "" or else Names_Label (Targets (Item), Label));
 
    function Class_Directory (Item : Fixture_Class) return String is
      (case Item is
@@ -215,12 +238,13 @@ package body Landin.Testing.Fixtures is
      is (In_Catalogue.Items.Element (Index));
 
    function Count_Of
-     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class;
+      Lane : String := "") return Natural
    is
       Total : Natural := 0;
    begin
       for Item of In_Catalogue.Items loop
-         if Item.Class = Of_Class then
+         if Item.Class = Of_Class and then In_Lane (Item, Lane) then
             Total := Total + 1;
          end if;
       end loop;
@@ -230,12 +254,14 @@ package body Landin.Testing.Fixtures is
    function Program_Count
      (In_Catalogue : Catalogue;
       Of_Class : Fixture_Class;
-      Require_Codes : Boolean := False) return Natural
+      Require_Codes : Boolean := False;
+      Lane : String := "") return Natural
    is
       Total : Natural := 0;
    begin
       for Item of In_Catalogue.Items loop
          if Class (Item) = Of_Class and then Program (Item) /= ""
+           and then In_Lane (Item, Lane)
            and then (not Require_Codes or else Codes (Item) /= "")
          then
             Total := Total + 1;
@@ -256,15 +282,16 @@ package body Landin.Testing.Fixtures is
    end Recorded_Count;
 
    function Profile_Run_Count
-     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class;
+      Family : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+      Lane : String := "") return Natural
    is
       Total : Natural := 0;
    begin
       for Item of In_Catalogue.Items loop
-         if Class (Item) = Of_Class then
+         if Class (Item) = Of_Class and then In_Lane (Item, Lane) then
             Total := Total + Profile_Count (Item)
-              * (1 + Natural (Levels_Of_Family
-                   (Item, Landin.Targets.Linux_X86_64).Length));
+              * (1 + Natural (Levels_Of_Family (Item, Family).Length));
          end if;
       end loop;
       return Total;

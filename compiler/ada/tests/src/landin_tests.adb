@@ -13,6 +13,7 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Landin.Testing;
+with Landin.Testing.Lanes;
 with Landin.Tests.Array_Layout_Suite;
 with Landin.Tests.IR_Optimization_Suite;
 with Landin.Tests.Backend_Plans_Suite;
@@ -147,24 +148,88 @@ procedure Landin_Tests is
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       landin_tests --host [--suite=NAME | --case=SUITE/NAME]");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       and any of --target=NAME --runner=PROGRAM"
+         & " --toolchain=DRIVER");
    end Print_Usage;
 
+   --  The lane's own options may accompany any selection, each once; what
+   --  is left is the selection, read as before.
    procedure Read_Arguments is
+      Rest : array (1 .. 2) of Natural := [0, 0];
+      Kept : Natural := 0;
+      Seen_Target, Seen_Runner, Seen_Toolchain : Boolean := False;
       Selected : Positive := 1;
+
+      function Value (Argument, Prefix : String) return String
+        is (Argument (Argument'First + Prefix'Length .. Argument'Last));
    begin
-      if Ada.Command_Line.Argument_Count = 0 then
-         return;
-      elsif Ada.Command_Line.Argument_Count = 2 then
-         if Ada.Command_Line.Argument (1) = "--host" then
-            Selected := 2;
-         elsif Ada.Command_Line.Argument (2) /= "--host" then
-            Mode := Misuse;
-            return;
-         end if;
-         Host_Only := True;
-      elsif Ada.Command_Line.Argument_Count /= 1 then
+      for Index in 1 .. Ada.Command_Line.Argument_Count loop
+         declare
+            Argument : constant String := Ada.Command_Line.Argument (Index);
+         begin
+            if Starts_With (Argument, "--target=") then
+               if Seen_Target
+                 or else not Landin.Testing.Lanes.Select_Target
+                   (Value (Argument, "--target="))
+               then
+                  Mode := Misuse;
+                  return;
+               end if;
+               Seen_Target := True;
+            elsif Starts_With (Argument, "--runner=")
+              and then Argument'Length > 9
+            then
+               if Seen_Runner then
+                  Mode := Misuse;
+                  return;
+               end if;
+               Landin.Testing.Lanes.Select_Runner
+                 (Value (Argument, "--runner="));
+               Seen_Runner := True;
+            elsif Starts_With (Argument, "--toolchain=")
+              and then Argument'Length > 12
+            then
+               if Seen_Toolchain then
+                  Mode := Misuse;
+                  return;
+               end if;
+               Landin.Testing.Lanes.Select_Toolchain
+                 (Value (Argument, "--toolchain="));
+               Seen_Toolchain := True;
+            elsif Kept = Rest'Last then
+               Mode := Misuse;
+               return;
+            else
+               Kept := Kept + 1;
+               Rest (Kept) := Index;
+            end if;
+         end;
+      end loop;
+
+      if not Landin.Testing.Lanes.Has_Target then
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error,
+            "landin_tests: no target describes this host; name --target=");
          Mode := Misuse;
          return;
+      end if;
+
+      if Kept = 0 then
+         return;
+      elsif Kept = 2 then
+         if Ada.Command_Line.Argument (Rest (1)) = "--host" then
+            Selected := Rest (2);
+         elsif Ada.Command_Line.Argument (Rest (2)) /= "--host" then
+            Mode := Misuse;
+            return;
+         else
+            Selected := Rest (1);
+         end if;
+         Host_Only := True;
+      else
+         Selected := Rest (1);
       end if;
 
       declare
@@ -374,6 +439,12 @@ begin
       Text_IO.Put_Line
         ("HOST-ONLY compiler checks; target workload"
          & " emission/execution excluded");
+      Text_IO.New_Line;
+   end if;
+   --  A native run's transcript is what it always was, and a cross run's
+   --  says it is one, so the two cannot be read as each other.
+   if not Landin.Testing.Lanes.Is_Native then
+      Text_IO.Put_Line ("LANE " & Landin.Testing.Lanes.Describe);
       Text_IO.New_Line;
    end if;
    Text_IO.Put (Unbounded.To_String (Transcript));

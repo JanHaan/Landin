@@ -20,6 +20,7 @@ with Landin.Targets;
 with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
+with Landin.Testing.Lanes;
 
 --  This suite runs the real `refine` against the real fixture tree through
 --  the real tool adapter.  That is the point of it: everything else in the
@@ -36,9 +37,90 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Platform.Write_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Capture_Mode;
+   use type Landin.Targets.Architecture;
 
    Fixture_Root : constant String := "../tests/fixtures";
    Selected     : Unbounded.Unbounded_String;
+
+   package Lanes renames Landin.Testing.Lanes;
+
+   function In_Lane (Case_Item : Fixture) return Boolean
+     is (Lanes.Applies (Landin.Testing.Fixtures.Targets (Case_Item)));
+
+   --  A recorded fixture that names its own target is a verdict of that
+   --  target's that no host changes, so every lane runs it; one that takes
+   --  the default is its lane's.
+   function Recorded_In_Lane (Case_Item : Fixture) return Boolean
+     is (Ada.Strings.Fixed.Index (Args (Case_Item), "--target=") > 0
+         or else In_Lane (Case_Item));
+
+   function Recorded_Lane_Count (Found : Catalogue) return Natural;
+
+   function Recorded_Lane_Count (Found : Catalogue) return Natural is
+      Total : Natural := 0;
+   begin
+      for Index in 1 .. Count (Found) loop
+         if Expect (Nth (Found, Index)) /= ""
+           and then Recorded_In_Lane (Nth (Found, Index))
+         then
+            Total := Total + 1;
+         end if;
+      end loop;
+      return Total;
+   end Recorded_Lane_Count;
+
+   --  A refine invocation for the lane: the target a cross run names, then
+   --  the rest.  A fixture's own `args` that name a target keep it.
+   function Lane_Arguments
+     (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List;
+
+   function Lane_Arguments
+     (Rest : Landin.Platform.Path_List) return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List := Lanes.Target_Arguments;
+   begin
+      for Argument of Rest loop
+         if Argument'Length > 9
+           and then Argument (Argument'First .. Argument'First + 8)
+                    = "--target="
+         then
+            return Rest;
+         end if;
+      end loop;
+      for Argument of Rest loop
+         Result.Append (Argument);
+      end loop;
+      return Result;
+   end Lane_Arguments;
+
+   --  A compiled program run on the lane: directly on the host's own, and
+   --  through the named runner on any other.
+   procedure Run_Program
+     (Runner    : Landin.Platform.Tool_Runner'Class;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Outcome   : out Landin.Platform.Tool_Result;
+      Capture   : Landin.Platform.Capture_Mode);
+
+   procedure Run_Program
+     (Runner    : Landin.Platform.Tool_Runner'Class;
+      Program   : String;
+      Arguments : Landin.Platform.Path_List;
+      Outcome   : out Landin.Platform.Tool_Result;
+      Capture   : Landin.Platform.Capture_Mode)
+   is
+      Through : Landin.Platform.Path_List;
+   begin
+      if Lanes.Runner = "" then
+         Runner.Run (Program, Arguments, Outcome, Capture);
+      else
+         Through.Append (Program);
+         for Argument of Arguments loop
+            Through.Append (Argument);
+         end loop;
+         Runner.Run (Lanes.Runner, Through, Outcome, Capture);
+      end if;
+   end Run_Program;
 
    procedure Select_Fixture (Path : String) is
    begin
@@ -381,6 +463,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    --  All recorded and compiled-program oracles use the same capture
    --  selection and stderr obligation. The runner seam permits fake checks.
+   --  Compiled is a program refine built, which a cross lane runs through
+   --  its runner; refine itself always runs on the host.
    procedure Run_With_Stream
      (Case_Item : Fixture;
       Label : String;
@@ -388,7 +472,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Program : String;
       Arguments : Landin.Platform.Path_List;
       Outcome : out Landin.Platform.Tool_Result;
-      Item : in out Landin.Testing.Context);
+      Item : in out Landin.Testing.Context;
+      Compiled : Boolean := False);
 
    procedure Run_With_Stream
      (Case_Item : Fixture;
@@ -397,13 +482,18 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Program : String;
       Arguments : Landin.Platform.Path_List;
       Outcome : out Landin.Platform.Tool_Result;
-      Item : in out Landin.Testing.Context)
+      Item : in out Landin.Testing.Context;
+      Compiled : Boolean := False)
    is
+      Capture : constant Landin.Platform.Capture_Mode :=
+        (if Stream (Case_Item) = Output
+         then Landin.Platform.Output_Only else Landin.Platform.Merged);
    begin
-      Runner.Run
-        (Program, Arguments, Outcome,
-         (if Stream (Case_Item) = Output
-          then Landin.Platform.Output_Only else Landin.Platform.Merged));
+      if Compiled then
+         Run_Program (Runner, Program, Arguments, Outcome, Capture);
+      else
+         Runner.Run (Program, Arguments, Outcome, Capture);
+      end if;
       if Stream (Case_Item) = Output then
          Landin.Testing.Check_Equal
            (Item, Unbounded.To_String (Outcome.Error_Output), "",
@@ -462,8 +552,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end if;
 
       Run_With_Stream
-        (Case_Item, Label, Runner, Program, Split (Args (Case_Item)),
-         Outcome, Item);
+        (Case_Item, Label, Runner, Program,
+         Lane_Arguments (Split (Args (Case_Item))), Outcome, Item);
       Check_Output
         (Case_Item, Label, Outcome, Unbounded.To_String (Expected), Item);
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
@@ -576,7 +666,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, Written);
 
       Produce_Output
-        (Host, Runner, Program, Label, Written, Args, Item, Ready, Said);
+        (Host, Runner, Program, Label, Written, Lane_Arguments (Args), Item,
+         Ready, Said);
       if Ready then
          Landin.Testing.Check
            (Item, True, Label & ": this attempt produced fresh assembly");
@@ -600,7 +691,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Args    : Landin.Platform.Path_List;
    begin
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
-      Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+      Runner.Run
+        (Program, Lane_Arguments (Args), Outcome, Landin.Platform.Merged);
 
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
    end Run_Negative;
@@ -640,7 +732,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          declare
             Case_Item : constant Fixture := Nth (Found, Index);
          begin
-            if Expect (Case_Item) /= "" then
+            if Expect (Case_Item) /= "" and then Recorded_In_Lane (Case_Item)
+            then
                Run_Recorded (Case_Item, Host, Program, Item);
                Ran := Ran + 1;
                Negative_Ran := Negative_Ran
@@ -655,7 +748,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Ran, Recorded_Count (Found),
+        (Item, Ran, Recorded_Lane_Count (Found),
          "every recorded expectation was attempted");
       Landin.Testing.Check
         (Item, Negative_Ran and then End_To_End_Ran,
@@ -768,6 +861,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             begin
                if Class (Case_Item) = Positive_Program
                  and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
+                 and then In_Lane (Case_Item)
                then
                   Last := Last + 1;
                   Work (Last) := Index;
@@ -780,7 +874,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Ran, Program_Count (Found, Positive_Program),
+        (Item, Ran,
+         Program_Count
+           (Found, Positive_Program, Lane => Lanes.Fixture_Label),
          "every eligible positive fixture was attempted");
       Landin.Testing.Check
         (Item, Ran > 0, "the positive program obligation remains present");
@@ -823,18 +919,62 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Profiles (Profile).Specialize));
    end Append_Profile;
 
-   --  The x86-64 levels a runtime fixture's `levels:` names; the other
-   --  families' levels are their own lanes' to run.
-   function X86_Levels (Case_Item : Fixture) return Landin.Platform.Path_List
-     is (Levels_Of_Family (Case_Item, Landin.Targets.Linux_X86_64));
+   --  The levels of the lane's family a runtime fixture's `levels:` names;
+   --  the other families' levels are their own lanes' to run.
+   function Lane_Levels (Case_Item : Fixture) return Landin.Platform.Path_List
+     is (Levels_Of_Family (Case_Item, Lanes.Target));
 
-   --  Whether this processor has every feature of an x86-64 level.  The
-   --  deliberate exception to the fake platform: what is asked is the real
-   --  host's processor, because a level above it must be refused rather
-   --  than run and hoped, and the kernel's flags are where Linux says what
-   --  the processor has.  The flags are the kernel's names, which are the
-   --  feature names of D255 but for `cx16`, `lahf_lm`, `pni` for SSE3
-   --  and `abm` for LZCNT.
+   --  An arm64 executable carries no level note, so the image that ran is
+   --  held to the level by its instructions: at Armv8.1-A an atomic
+   --  read-modify-write is one LSE instruction, and no exclusive-monitor
+   --  loop of the default remains.  The lane's toolchain says which
+   --  objdump reads the image.
+   procedure Check_Arm64_Level
+     (Built, Label : String; Item : in out Landin.Testing.Context);
+
+   procedure Check_Arm64_Level
+     (Built, Label : String; Item : in out Landin.Testing.Context)
+   is
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Listing : Landin.Platform.Tool_Result;
+      Args : Landin.Platform.Path_List;
+      Tool : constant String :=
+        (if Lanes.Toolchain'Length > 4
+           and then Lanes.Toolchain (Lanes.Toolchain'Last - 3
+                                     .. Lanes.Toolchain'Last) = "-gcc"
+         then Lanes.Toolchain (Lanes.Toolchain'First
+                               .. Lanes.Toolchain'Last - 4) & "-objdump"
+         else "objdump");
+   begin
+      Args.Append ("-d");
+      Args.Append ("--no-show-raw-insn");
+      Args.Append (Built);
+      Runner.Run (Tool, Args, Listing, Landin.Platform.Output_Only);
+      declare
+         Text : constant String := Unbounded.To_String (Listing.Output);
+
+         function Has (Word : String) return Boolean
+           is (Ada.Strings.Fixed.Index (Text, ASCII.HT & Word) > 0);
+      begin
+         Landin.Testing.Check
+           (Item, Has ("ldaddal") or else Has ("swpal") or else Has ("casal"),
+            Label & ": the image holds an LSE instruction");
+         Landin.Testing.Check
+           (Item, not Has ("ldaxr") and then not Has ("stlxr"),
+            Label & ": no exclusive-monitor loop remains");
+      end;
+   end Check_Arm64_Level;
+
+   --  Whether this processor has every feature of a level of the lane's
+   --  family.  The deliberate exception to the fake platform: what is asked
+   --  is the real host's processor, because a level above it must be
+   --  refused rather than run and hoped, and the kernel's flags are where
+   --  Linux says what the processor has.  The flags are the kernel's names,
+   --  which are the feature names of D255 but for `cx16`, `lahf_lm`, `pni`
+   --  for SSE3 and `abm` for LZCNT on x86-64, whose line is `flags`, and
+   --  `atomics` for LSE and `asimdrdm` for RDM on arm64, whose line is
+   --  `Features`.  A cross lane's runner is an emulator that offers every
+   --  level the lane has, so the host is not asked.
    function Host_Has_Level
      (Host : Landin.Platform.Filesystem'Class; Level : String;
       Missing : out Unbounded.Unbounded_String) return Boolean;
@@ -847,10 +987,16 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Text : Unbounded.Unbounded_String;
       Read : Landin.Platform.Read_Status;
       Selected : constant L.Feature_Level :=
-        L.Level_Named (Landin.Targets.Linux_X86_64, Level);
+        L.Level_Named (Lanes.Target, Level);
+      Is_Arm64 : constant Boolean :=
+        Landin.Targets.Architecture_Of (Lanes.Target) = Landin.Targets.Arm64;
+      Line : constant String := (if Is_Arm64 then "Features" else "flags");
       Flags : Unbounded.Unbounded_String;
    begin
       Missing := Unbounded.Null_Unbounded_String;
+      if not Lanes.Is_Native then
+         return True;
+      end if;
       Host.Read_File ("/proc/cpuinfo", Text, Read);
       if Read /= Landin.Platform.Read_Ok then
          Missing := Unbounded.To_Unbounded_String ("/proc/cpuinfo");
@@ -859,7 +1005,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       declare
          Whole : constant String := Unbounded.To_String (Text);
          At_Flags : constant Natural :=
-           Ada.Strings.Fixed.Index (Whole, "flags" & ASCII.HT);
+           Ada.Strings.Fixed.Index (Whole, Line & ASCII.HT);
          Ends : Natural;
       begin
          if At_Flags = 0 then
@@ -880,6 +1026,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                      when L.Lahf       => "lahf_lm",
                      when L.Sse3       => "pni",
                      when L.Lzcnt      => "abm",
+                     when L.Lse        => "atomics",
+                     when L.Rdm        => "asimdrdm",
                      when others       => L.Spelling (Each));
             begin
                if Unbounded.Index (Flags, " " & Kernel & " ") = 0 then
@@ -946,9 +1094,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Args, "--emit=exe");
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
+      if Lanes.Toolchain /= "" then
+         Landin.Platform.Add (Args, "--toolchain=" & Lanes.Toolchain);
+      end if;
 
       Produce_Output
-        (Host, Runner, Program, Label, Built, Args, Item, Ready, Said);
+        (Host, Runner, Program, Label, Built, Lane_Arguments (Args), Item,
+         Ready, Said);
       if Ready then
          Check_Accepted_Report
            (Case_Item, Label, Unbounded.To_String (Said), Item);
@@ -957,8 +1109,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
          --  property note names that level as needed, which is also what
          --  makes the loader refuse it on a processor without it.  This is
          --  the image that then runs, so the lowering is shown to have
-         --  reached the bytes, not only the assembly text.
-         if Level /= "" then
+         --  reached the bytes, not only the assembly text.  An arm64
+         --  executable carries no note, so its image is held to holding
+         --  the level's instructions and not the default's sequence.
+         if Level /= "" and then Lanes.Target_Name = "linux-arm64" then
+            Check_Arm64_Level (Built, Label, Item);
+         elsif Level /= "" then
             declare
                Note : Landin.Platform.Tool_Result;
                Args : Landin.Platform.Path_List;
@@ -975,7 +1131,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
          end if;
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
-           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
+           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item,
+            Compiled => True);
 
          if Outcome.Ended = Landin.Platform.Timed_Out then
             Landin.Testing.Fail
@@ -1047,10 +1204,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Built     : constant String :=
         Output_Directory & "abi-" & Name (Case_Item)
         & "-" & Profile_Name (Profile);
-      Facts     : constant Landin.Targets.Target_Facts :=
-        Landin.Targets.Linux_X86_64;
+      Facts     : constant Landin.Targets.Target_Facts := Lanes.Target;
       Driver    : constant String :=
-        Landin.Backend.Toolchain.Driver_For (Facts, "");
+        Landin.Backend.Toolchain.Driver_For (Facts, Lanes.Toolchain);
       Runner    : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Ready     : Boolean;
       Said      : Unbounded.Unbounded_String;
@@ -1113,7 +1269,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Platform.Add (Driver_Arguments, "-Wall");
       Landin.Platform.Add (Driver_Arguments, "-Wextra");
       Landin.Platform.Add (Driver_Arguments, "-Werror");
-      Landin.Platform.Add (Driver_Arguments, "-no-pie");
+      --  x86-64's emitted code addresses data RIP-relative and absolute
+      --  alike; arm64's is position-independent, as the driver defaults.
+      if Landin.Targets.Architecture_Of (Facts) = Landin.Targets.X86_64 then
+         Landin.Platform.Add (Driver_Arguments, "-no-pie");
+      end if;
       declare
          Options : constant Landin.Platform.Path_List :=
            Split (C_Args (Case_Item));
@@ -1127,7 +1287,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       if Driver = "" then
          Landin.Testing.Fail
-           (Item, Label & ": linux-x86-64 names no C toolchain driver");
+           (Item, Label & ": " & Landin.Targets.Name (Facts)
+            & " names no C toolchain driver");
          return;
       end if;
 
@@ -1137,7 +1298,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       if Ready then
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Run_With_Stream
-           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item);
+           (Case_Item, Label, Runner, Built, Runtime_Arguments, Outcome, Item,
+            Compiled => True);
 
          if Outcome.Ended = Landin.Platform.Timed_Out then
             Landin.Testing.Fail
@@ -1241,7 +1403,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
                case Piece.Kind is
                   when Runtime_Piece =>
                      Run_Runtime (Case_Item, Host, Program, Profile, Slot);
-                     for Level of X86_Levels (Case_Item) loop
+                     for Level of Lane_Levels (Case_Item) loop
                         Run_Runtime
                           (Case_Item, Host, Program, Profile, Slot, Level);
                      end loop;
@@ -1263,13 +1425,15 @@ package body Landin.Tests.Fixture_Execution_Suite is
             declare
                Case_Item : constant Fixture := Nth (Found, Index);
             begin
-               if Class (Case_Item) = Runtime then
+               if not In_Lane (Case_Item) then
+                  null;
+               elsif Class (Case_Item) = Runtime then
                   Runtime_Ran := Runtime_Ran + 1;
                   Last := Last + 1;
                   Work (Last) := (Index, Runtime_Piece);
                   Runtime_Profiles := Runtime_Profiles
                     + Profile_Count (Case_Item)
-                      * (1 + Natural (X86_Levels (Case_Item).Length));
+                      * (1 + Natural (Lane_Levels (Case_Item).Length));
                elsif Class (Case_Item) = Abi then
                   ABI_Ran := ABI_Ran + 1;
                   Last := Last + 1;
@@ -1283,16 +1447,20 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Runtime_Ran, Count_Of (Found, Runtime),
-         "every runtime fixture was selected");
+        (Item, Runtime_Ran,
+         Count_Of (Found, Runtime, Lanes.Fixture_Label),
+         "every runtime fixture of the lane was selected");
       Landin.Testing.Check_Equal
-        (Item, ABI_Ran, Count_Of (Found, Abi),
-         "every ABI fixture was selected");
+        (Item, ABI_Ran, Count_Of (Found, Abi, Lanes.Fixture_Label),
+         "every ABI fixture of the lane was selected");
       Landin.Testing.Check_Equal
-        (Item, Runtime_Profiles, Profile_Run_Count (Found, Runtime),
+        (Item, Runtime_Profiles,
+         Profile_Run_Count
+           (Found, Runtime, Lanes.Target, Lanes.Fixture_Label),
          "every runtime profile was attempted");
       Landin.Testing.Check_Equal
-        (Item, ABI_Profiles, Profile_Run_Count (Found, Abi),
+        (Item, ABI_Profiles,
+         Profile_Run_Count (Found, Abi, Lanes.Target, Lanes.Fixture_Label),
          "every ABI profile was attempted");
       Landin.Testing.Check
         (Item, Runtime_Ran > 0, "the runtime obligation remains present");
@@ -1329,7 +1497,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
          declare
             Case_Item : constant Fixture := Nth (Found, Index);
          begin
-            if Label_Of (Case_Item) = Wanted then
+            if Label_Of (Case_Item) = Wanted
+              and then not In_Lane (Case_Item)
+            then
+               Landin.Testing.Fail
+                 (Item, Wanted & ": names no " & Lanes.Fixture_Label
+                  & " target, so the " & Lanes.Target_Name
+                  & " lane does not run it");
+            elsif Label_Of (Case_Item) = Wanted then
                Ran := Ran + 1;
 
                if Class (Case_Item) = Abi then
@@ -1345,7 +1520,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
                elsif Class (Case_Item) = Runtime then
                   for Profile in 1 .. Profile_Count (Case_Item) loop
                      Run_Runtime (Case_Item, Host, Program, Profile, Item);
-                     for Level of X86_Levels (Case_Item) loop
+                     for Level of Lane_Levels (Case_Item) loop
                         Run_Runtime
                           (Case_Item, Host, Program, Profile, Item, Level);
                      end loop;

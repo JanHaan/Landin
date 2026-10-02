@@ -44,9 +44,12 @@ package body Landin.Tests.Debugging_Suite is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
    function Request return Landin.Platform.Path_List;
+   --  These cases read x86-64 assembly and ELF DWARF, so they name their
+   --  target rather than take the compiler's host (D257).
    function Request return Landin.Platform.Path_List is
       Args : Landin.Platform.Path_List;
    begin
+      Args.Append ("--target=linux-x86-64");
       Args.Append ("main.ldn");
       Args.Append ("--emit=asm");
       Args.Append ("-o");

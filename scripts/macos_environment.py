@@ -300,7 +300,10 @@ def main():
             require(capture.text(f"{mode}-architecture", ["lipo", "-archs", binary]) == "arm64",
                     "refine is not a native arm64 executable")
             capture.run(f"{mode}-identify", [binary, "--identify"])
-            command = ["./scripts/test.sh"] + ([] if args.full_harness else ["--host"])
+            #  The historical scope is the Linux lane's: a refine built on
+            #  the Mac defaults to darwin-arm64 (D257), so it is named.
+            command = ["./scripts/test.sh"] + (["--target=linux-x86-64"]
+                                               if args.full_harness else ["--host"])
             code, output, expired = capture.run(f"{mode}-harness", command,
                                                env=env, timeout=7200, check=False)
             result = harness_result(code, output, expired, host_only=not args.full_harness)

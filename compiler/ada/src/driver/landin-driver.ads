@@ -16,6 +16,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics;
 with Landin.Platform;
+with Landin.Targets.Selection;
 
 package Landin.Driver is
 
@@ -54,11 +55,16 @@ package Landin.Driver is
    --  The same request, with a meter for `--stage-report=PATH`.  Without
    --  one, the report is written with every measurement zero, which is what
    --  a fake host has to offer.
+   --  BUILT_FOR is the triplet whose host a build that names no target is
+   --  for (D257).  It is the compiler's own build, and a test names another
+   --  to reach every answer through this one path.
    function Execute
      (Arguments : Landin.Platform.Path_List;
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
-      Meter     : Landin.Platform.Resource_Meter'Class) return Outcome;
+      Meter     : Landin.Platform.Resource_Meter'Class;
+      Built_For : String := Landin.Targets.Selection.Build_Triplet)
+      return Outcome;
 
    --  Identity without a version.  This roadmap assigns no release
    --  designation, so neither does the executable.

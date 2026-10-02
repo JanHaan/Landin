@@ -1496,12 +1496,17 @@ package body Landin.Tests.Parser_Suite is
       --  what a fixture pins is what a reader sees.
       function Codes_In (Text : String) return String;
 
+      --  A negative fixture's codes are linux-x86-64's verdict on every
+      --  host, so a request that names no target names that one.
       function Arguments_Of (First : String; Written : String)
         return Landin.Platform.Path_List
       is
          Made : Landin.Platform.Path_List;
          Start : Integer := Written'First;
       begin
+         if Ada.Strings.Fixed.Index (Written, "--target=") = 0 then
+            Made.Append ("--target=linux-x86-64");
+         end if;
          if Written = "" then
             Made.Append (First);
             return Made;
@@ -1639,6 +1644,7 @@ package body Landin.Tests.Parser_Suite is
                               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
                               Arguments : Landin.Platform.Path_List;
                            begin
+                              Arguments.Append ("--target=linux-x86-64");
                               Fixtures.Append_Module_Arguments
                                 (Fixture, Corpus, Arguments);
                               Check_Outcome

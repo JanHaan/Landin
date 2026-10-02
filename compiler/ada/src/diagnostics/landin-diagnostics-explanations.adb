@@ -25,8 +25,11 @@ package body Landin.Diagnostics.Explanations is
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",
             when Catalogue.Unknown_Target =>
-               "`--target=` names no target the compiler describes. `ref"
-               & "ine --identify` lists the described targets.",
+               "`--target=` names no target the compiler describes, or n"
+               & "one was named and this compiler's own host is not a desc"
+               & "ribed target, so a build has nothing to compile for unti"
+               & "l one is named. `refine --identify` lists the described "
+               & "targets.",
             when Catalogue.Unwritable_Output =>
                "An output file cannot be written: its directory is missi"
                & "ng or read-only. Choose another path with `-o`.",

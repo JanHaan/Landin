@@ -33,7 +33,6 @@ with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
 with Landin.Targets.Levels;
-with Landin.Targets.Selection;
 
 package body Landin.Driver is
 
@@ -475,9 +474,19 @@ package body Landin.Driver is
      (Arguments : Landin.Platform.Path_List;
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
-      Meter     : Landin.Platform.Resource_Meter'Class) return Outcome
+      Meter     : Landin.Platform.Resource_Meter'Class;
+      Built_For : String := Landin.Targets.Selection.Build_Triplet)
+      return Outcome
    is
-      Facts    : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+      --  D257: the compiler's own host unless --target= names another.  A
+      --  host no description covers has no default, and a build that then
+      --  names none is refused before it is compiled for anything.
+      Has_Default : constant Boolean :=
+        Landin.Targets.Selection.Has_Host_Default (Built_For);
+      Facts    : Landin.Targets.Target_Facts :=
+        (if Has_Default
+         then Landin.Targets.Selection.Host_Default (Built_For)
+         else Landin.Targets.Synthetic_32);
       Inputs   : Landin.Platform.Path_List;
       Roots    : Landin.Platform.Path_List;
       Options  : Landin.Platform.Path_List;
@@ -1587,6 +1596,18 @@ package body Landin.Driver is
          for Name of Rejected loop
             Note_Failure (Code_Unknown_Target, "unknown target: " & Name);
          end loop;
+
+         --  Without a description of its own host the compiler has nothing
+         --  to compile for until --target= says.  A request that compiles
+         --  nothing, --identify or --help, needs no target.
+         if not Has_Default and then Targets.Is_Empty
+           and then Natural (Inputs.Length) > 0
+         then
+            Note_Failure
+              (Code_Unknown_Target,
+               "no --target given, and no target describes this compiler's"
+               & " host, " & Built_For);
+         end if;
 
          if Unbounded.Length (Level_Problem) > 0 then
             Note_Failure

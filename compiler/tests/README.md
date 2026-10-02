@@ -92,6 +92,33 @@ on the complete suite.
 native target-workload emission/execution cases. Its `HOST-ONLY` banner
 identifies the scope; compiler units, diagnostics and the complete IR golden
 remain included.
+
+### Lanes
+
+A run executes one product target's corpus, its lane: the fixtures whose
+`targets:` name it are emitted, compiled, linked and run, and every other
+is left to its own lane. The lane is the compiler's own host (D257) unless
+`--target=NAME` names another, with `refine`'s own name for it, so the same
+command is the Linux x86-64 lane on an x86-64 runner and the Linux arm64
+lane on an arm64 one, and nothing in the harness asks the machine which.
+Either option may accompany any selection, and the counts a lane is held
+to are its own fixtures'. A recorded fixture whose `args:` name a target
+is that target's verdict whatever the host, and every lane runs it.
+
+A lane that is not the host's is a cross run. Its transcript begins
+`LANE CROSS NAME`, every compilation names the target, and an executable
+runs through `--runner=PROGRAM` and links with `--toolchain=DRIVER`:
+
+```sh
+./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
+    --toolchain=aarch64-unknown-linux-gnu-gcc --suite='fixture execution'
+```
+
+That is QEMU's user emulation with nixpkgs' cross driver, which is
+evidence that the emitted code is right and none about the pinned
+toolchain on its own host; the gate's `ubuntu-24.04-arm` jobs are that.
+A level above the default is not asked of the host on a cross run, since
+the emulator offers every level its lane has.
 The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
 acceptance ran the complete suite in both modes. Nothing runs either now:

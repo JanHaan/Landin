@@ -42,8 +42,10 @@ path and its permissions.
 
 ### L0004
 
-`--target=` names no target the compiler describes. `refine --identify` lists
-the described targets.
+`--target=` names no target the compiler describes, or none was named and
+this compiler's own host is not a described target, so a build has nothing
+to compile for until one is named. `refine --identify` lists the described
+targets.
 
 ### L0005
 

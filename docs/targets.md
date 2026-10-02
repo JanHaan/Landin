@@ -28,7 +28,10 @@ architecture does not either: `linux-arm64` and `darwin-arm64` are both
 hosted systems. Darwin enables C signatures, C records, variadic calls and
 native Mach-O emission. `--target=darwin-arm64 --emit=exe`
 selects `/usr/bin/clang -arch arm64`; `--toolchain=PATH` explicitly overrides
-the driver. The default target remains Linux. `--debug=full` selects native DWARF and
+the driver. A build that names no target is for the compiler's own host
+(D257): the triplet `refine` was built for, so a Mac's compiler defaults to
+`darwin-arm64` and Linux arm64's to `linux-arm64`, and cross-compilation is
+always explicit. `--debug=full` selects native DWARF and
 dSYM packaging on Darwin; the synthetic target has no debug capability.
 The synthetic 32-bit seam has no emitter, object format or C ABI.
 

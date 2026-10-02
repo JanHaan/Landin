@@ -207,6 +207,35 @@ package body Landin.Tests.Targets_Suite is
            and then not Selection.Is_Described ("Linux-x86-64")
            and then not Selection.Is_Described (""),
          "a triplet, a fixture label or another spelling selects nothing");
+
+      --  D257: a build names its host by the triplet it was built for, and
+      --  only the parts that say which description applies are read.
+      Landin.Testing.Check
+        (Item,
+         Selection.Host_Default ("x86_64-pc-linux-gnu") = Linux_X86_64
+           and then Selection.Host_Default ("x86_64-linux-gnu")
+                    = Linux_X86_64
+           and then Selection.Host_Default ("aarch64-linux-gnu")
+                    = Linux_Arm64
+           and then Selection.Host_Default ("aarch64-unknown-linux-gnu")
+                    = Linux_Arm64
+           and then Selection.Host_Default ("aarch64-apple-darwin24.6.0")
+                    = Darwin_Arm64
+           and then Selection.Host_Default ("aarch64-apple-darwin25.5.0")
+                    = Darwin_Arm64,
+         "each described host defaults to its own description");
+      Landin.Testing.Check
+        (Item,
+         not Selection.Has_Host_Default ("x86_64-apple-darwin24.6.0")
+           and then not Selection.Has_Host_Default ("aarch64-unknown-freebsd")
+           and then not Selection.Has_Host_Default ("x86_64-w64-mingw32")
+           and then not Selection.Has_Host_Default ("arm-none-eabi")
+           and then not Selection.Has_Host_Default ("riscv64-linux-gnu")
+           and then not Selection.Has_Host_Default (""),
+         "a host no description covers has no default");
+      Landin.Testing.Check
+        (Item, Selection.Build_Triplet'Length > 0,
+         "the compiler knows the triplet it was built for");
    end Names_Select_Their_Descriptions;
 
    --  Every level is asserted against the platform's own definition of

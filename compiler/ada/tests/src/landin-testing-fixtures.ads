@@ -157,19 +157,26 @@ package Landin.Testing.Fixtures is
      with Pre => Index <= Count (In_Catalogue);
 
    function Count_Of
-     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural;
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class;
+      Lane : String := "") return Natural;
 
    --  Independent metadata obligations for the corpus runners. These count
    --  eligible fixtures, not successful verdicts or generated executables.
+   --  LANE is a `targets:` label; a count with one counts only the fixtures
+   --  that name it, and the empty string counts every fixture.
    function Program_Count
      (In_Catalogue : Catalogue;
       Of_Class : Fixture_Class;
-      Require_Codes : Boolean := False) return Natural;
+      Require_Codes : Boolean := False;
+      Lane : String := "") return Natural;
 
    function Recorded_Count (In_Catalogue : Catalogue) return Natural;
 
+   --  FAMILY's levels are the ones each counted fixture also runs at.
    function Profile_Run_Count
-     (In_Catalogue : Catalogue; Of_Class : Fixture_Class) return Natural
+     (In_Catalogue : Catalogue; Of_Class : Fixture_Class;
+      Family : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
+      Lane : String := "") return Natural
      with Pre => Of_Class in Runtime | Abi;
 
    --  Compare every discovered identity and target list with check.py's

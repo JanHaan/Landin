@@ -4,5 +4,5 @@ program: main.ldn
 constructs: 1500, 1510
 targets: linux-x86-64
 expect: expected.txt
-args:  ../tests/fixtures/end-to-end/feature-level-default-lacks-bmi2/main.ldn
+args: --target=linux-x86-64 ../tests/fixtures/end-to-end/feature-level-default-lacks-bmi2/main.ldn
 status: 1
