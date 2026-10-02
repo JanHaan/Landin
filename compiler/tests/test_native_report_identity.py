@@ -75,7 +75,8 @@ class NativeReportIdentity(unittest.TestCase):
         return subprocess.run(
             [str(REFINE), source, "--emit=" + ("exe" if executable else "asm"),
              "-o", output, "--build-report=" + report,
-             "--toolchain=" + str(self.tool)], cwd=self.root,
+             *(["--toolchain=" + str(self.tool)] if executable else [])],
+            cwd=self.root,
             capture_output=True, timeout=30)
 
     def refuses_without_effects(self, output, report, **kwargs):
