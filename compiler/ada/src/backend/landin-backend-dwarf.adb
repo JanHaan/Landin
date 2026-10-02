@@ -571,6 +571,8 @@ package body Landin.Backend.Dwarf is
 
       procedure Routine (Item : Item_Id);
       procedure Routine (Item : Item_Id) is
+         Availability : Debug_Locations.Analysis :=
+           Debug_Locations.Prepare (Of_Unit, Item);
          Plan : constant Placement :=
            Make (Of_Unit, Item, Facts, Options);
          Frame_Plan : constant Frame :=
@@ -750,7 +752,8 @@ package body Landin.Backend.Dwarf is
                      Put (HT & ".long " & Loc & "-" & Prefix & "debug_loc");
                      Location_List
                        (Loc, Expr, Debug_Locations.Available_Alias
-                          (Of_Unit, Meanings, Info, Item, Index));
+                          (Availability, Of_Unit, Meanings, Info,
+                           Item, Index));
                   end if;
                end;
             end loop;
@@ -804,7 +807,8 @@ package body Landin.Backend.Dwarf is
                        (Slot_Expression (Plan, Frame_Plan, Slot,
                           Is_Address (Of_Unit, Item, Slot), False));
                      Location_List (Loc, Expr, Debug_Locations.Available
-                       (Of_Unit, Meanings, Info, Item, Slot, Parameter));
+                       (Availability, Of_Unit, Meanings, Info,
+                        Item, Slot, Parameter));
                   end if;
                end;
             end loop;

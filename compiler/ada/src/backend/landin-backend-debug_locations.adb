@@ -1,4 +1,3 @@
-with Landin.IR.Control_Flow;
 with Landin.Provenance;
 with Landin.Source;
 with Landin.Types;
@@ -31,11 +30,39 @@ package body Landin.Backend.Debug_Locations is
    --  repeat their element run, and variants have a tag followed by disjoint
    --  case runs.  Intervals keep even a target-sized array compact.  No
    --  physical layout, padding, or register choice enters this analysis.
-   type Interval is record
-      First, Last : Element_Total := 0;
-   end record;
-   package Intervals is new Ada.Containers.Vectors (Positive, Interval);
    use type Intervals.Vector;
+
+   function Prepare (Of_Unit : Unit; Item : Item_Id) return Analysis is
+      Result : Analysis :=
+        (Blocks => Block_Count (Of_Unit, Item),
+         Slots => Slot_Count (Of_Unit, Item),
+         Graph => Control_Flow.Make (Of_Unit, Item),
+         Cache => [others => <>], Reuse => [others => False],
+         Solves => 0);
+   begin
+      --  Only alias carriers can need the same fixed point again.  Keep no
+      --  block-state vectors for the other slots in a large routine.
+      for Index in 1 .. Source_Alias_Count (Of_Unit, Item) loop
+         declare
+            Alias : constant Source_Alias :=
+              Nth_Source_Alias (Of_Unit, Item, Index);
+         begin
+            case Alias.Place.Kind is
+               when Frame_Slot =>
+                  Result.Reuse (Positive (Alias.Place.Slot)) := True;
+               when Runtime_Address =>
+                  if Alias.Initialized_On_Entry then
+                     Result.Reuse (Positive (Alias.Place.Address)) := True;
+                  end if;
+               when Module_Datum => null;
+            end case;
+         end;
+      end loop;
+      return Result;
+   end Prepare;
+
+   function Fixed_Point_Count (Work : Analysis) return Natural is
+     (Work.Solves);
 
    procedure Include
      (Into : in out Intervals.Vector; First, Last : Element_Total);
@@ -110,7 +137,8 @@ package body Landin.Backend.Debug_Locations is
    end Meet;
 
    function Analyze
-     (Of_Unit : Unit;
+     (Work : in out Analysis;
+      Of_Unit : Unit;
       Meanings : Landin.Resolution.Table;
       Info : Landin.Debugging.Information;
       Item : Item_Id;
@@ -119,7 +147,8 @@ package body Landin.Backend.Debug_Locations is
       Alias_Index : Natural := 0) return Flags.Vector;
 
    function Analyze
-     (Of_Unit : Unit;
+     (Work : in out Analysis;
+      Of_Unit : Unit;
       Meanings : Landin.Resolution.Table;
       Info : Landin.Debugging.Information;
       Item : Item_Id;
@@ -128,7 +157,6 @@ package body Landin.Backend.Debug_Locations is
       Alias_Index : Natural := 0) return Flags.Vector
    is
       pragma Unreferenced (Info);
-      Graph : constant Control_Flow.Graph := Control_Flow.Make (Of_Unit, Item);
       Binding : constant Declaration_Id :=
         (if Alias_Index = 0 then Declares (Of_Unit, Item, Slot)
          else Nth_Source_Alias (Of_Unit, Item, Alias_Index).Binding);
@@ -141,6 +169,7 @@ package body Landin.Backend.Debug_Locations is
       Whole, Wanted : Intervals.Vector;
       Birth : Value_Id := No_Value;
       Changed : Boolean := True;
+      Key : Positive range 1 .. 3;
 
       type Selection is record
          Known : Boolean := False;
@@ -566,46 +595,64 @@ package body Landin.Backend.Debug_Locations is
             end;
          end loop;
       end if;
-      Inputs := [others => Whole];
-      Outputs := Inputs;
-      while Changed loop
-         Changed := False;
-         for B in 1 .. Block_Count (Of_Unit, Item) loop
-            declare
-               Block : constant Block_Id := Block_Id (B);
-               State : Intervals.Vector := Whole;
-               Edge : Natural := Control_Flow.First_Predecessor (Graph, Block);
-            begin
-               if Block = First_Block then
-                  if not Parameter then
-                     State.Clear;
-                  end if;
-               elsif not Control_Flow.Is_Reachable (Graph, Block) then
-                  State.Clear;
-               else
-                  while Edge /= 0 loop
-                     declare
-                        Pred : constant Block_Id :=
-                          Control_Flow.Predecessor (Graph, Edge);
-                     begin
-                        if Control_Flow.Is_Reachable (Graph, Pred) then
-                           State := Meet (State, On_Edge (Pred, Block));
-                        end if;
-                     end;
-                     Edge := Control_Flow.Next_Predecessor (Graph, Edge);
-                  end loop;
-               end if;
-               Inputs (B) := State;
-               for P in 1 .. Length (Of_Unit, Item, Block) loop
-                  Transfer (State, Nth_Value (Of_Unit, Item, Block, P));
-               end loop;
-               if Outputs (B) /= State then
-                  Outputs (B) := State;
-                  Changed := True;
-               end if;
-            end;
+      --  A slot has one declaration birth.  Aliases have none; entry-proven
+      --  slots form the third independent initial-state class.
+      Key := (if Parameter then 1 elsif Birth = No_Value then 2 else 3);
+      if Work.Cache (Positive (Slot)) (Key).Ready then
+         for B in Inputs'Range loop
+            Inputs (B) := Work.Cache (Positive (Slot)) (Key).Inputs (B);
          end loop;
-      end loop;
+      else
+         Work.Solves := Work.Solves + 1;
+         Inputs := [others => Whole];
+         Outputs := Inputs;
+         while Changed loop
+            Changed := False;
+            for B in 1 .. Block_Count (Of_Unit, Item) loop
+               declare
+                  Block : constant Block_Id := Block_Id (B);
+                  State : Intervals.Vector := Whole;
+                  Edge : Natural := Control_Flow.First_Predecessor
+                    (Work.Graph, Block);
+               begin
+                  if Block = First_Block then
+                     if not Parameter then
+                        State.Clear;
+                     end if;
+                  elsif not Control_Flow.Is_Reachable (Work.Graph, Block) then
+                     State.Clear;
+                  else
+                     while Edge /= 0 loop
+                        declare
+                           Pred : constant Block_Id :=
+                             Control_Flow.Predecessor (Work.Graph, Edge);
+                        begin
+                           if Control_Flow.Is_Reachable (Work.Graph, Pred) then
+                              State := Meet (State, On_Edge (Pred, Block));
+                           end if;
+                        end;
+                        Edge := Control_Flow.Next_Predecessor
+                          (Work.Graph, Edge);
+                     end loop;
+                  end if;
+                  Inputs (B) := State;
+                  for P in 1 .. Length (Of_Unit, Item, Block) loop
+                     Transfer (State, Nth_Value (Of_Unit, Item, Block, P));
+                  end loop;
+                  if Outputs (B) /= State then
+                     Outputs (B) := State;
+                     Changed := True;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         if Work.Reuse (Positive (Slot)) then
+            for State of Inputs loop
+               Work.Cache (Positive (Slot)) (Key).Inputs.Append (State);
+            end loop;
+            Work.Cache (Positive (Slot)) (Key).Ready := True;
+         end if;
+      end if;
       for B in 1 .. Block_Count (Of_Unit, Item) loop
          declare
             Block : constant Block_Id := Block_Id (B);
@@ -623,7 +670,7 @@ package body Landin.Backend.Debug_Locations is
                begin
                   Result (Positive (Value)) := Meet (State, Wanted) = Wanted
                     and then Value /= Birth and then Visible
-                    and then Control_Flow.Is_Reachable (Graph, Block)
+                    and then Control_Flow.Is_Reachable (Work.Graph, Block)
                     --  An implicit return inherits the routine's anchor,
                     --  which precedes its bindings. Definite initialization
                     --  and lexical scope still govern terminal availability.
@@ -640,16 +687,32 @@ package body Landin.Backend.Debug_Locations is
    end Analyze;
 
    function Available
+     (Work : in out Analysis;
+      Of_Unit : Unit;
+      Meanings : Landin.Resolution.Table;
+      Info : Landin.Debugging.Information;
+      Item : Item_Id;
+      Slot : Slot_Id;
+      Parameter : Boolean) return Flags.Vector
+   is (Analyze (Work, Of_Unit, Meanings, Info, Item, Slot, Parameter));
+
+   function Available
      (Of_Unit : Unit;
       Meanings : Landin.Resolution.Table;
       Info : Landin.Debugging.Information;
       Item : Item_Id;
       Slot : Slot_Id;
       Parameter : Boolean) return Flags.Vector
-   is (Analyze (Of_Unit, Meanings, Info, Item, Slot, Parameter));
+   is
+      Work : Analysis := Prepare (Of_Unit, Item);
+   begin
+      return Available (Work, Of_Unit, Meanings, Info, Item,
+                        Slot, Parameter);
+   end Available;
 
    function Available_Alias
-     (Of_Unit : Unit;
+     (Work : in out Analysis;
+      Of_Unit : Unit;
       Meanings : Landin.Resolution.Table;
       Info : Landin.Debugging.Information;
       Item : Item_Id;
@@ -686,7 +749,20 @@ package body Landin.Backend.Debug_Locations is
          Parameter := Parameter
            or else Nth_Parameter (Of_Unit, Item, P) = Slot;
       end loop;
-      return Analyze (Of_Unit, Meanings, Info, Item, Slot, Parameter, Index);
+      return Analyze
+        (Work, Of_Unit, Meanings, Info, Item, Slot, Parameter, Index);
+   end Available_Alias;
+
+   function Available_Alias
+     (Of_Unit : Unit;
+      Meanings : Landin.Resolution.Table;
+      Info : Landin.Debugging.Information;
+      Item : Item_Id;
+      Index : Positive) return Flags.Vector
+   is
+      Work : Analysis := Prepare (Of_Unit, Item);
+   begin
+      return Available_Alias (Work, Of_Unit, Meanings, Info, Item, Index);
    end Available_Alias;
 
 end Landin.Backend.Debug_Locations;

@@ -29,6 +29,8 @@ package body Landin.Tests.Debugging_Suite is
    use type IR.Opcode;
    use type IR.Item_Id;
    use type IR.Slot_Id;
+   use type IR.Storage_Kind;
+   use type Landin.Backend.Debug_Locations.Flags.Vector;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Byte_Offset;
    LF : constant Character := Character'Val (10);
@@ -525,6 +527,95 @@ package body Landin.Tests.Debugging_Suite is
       Expect (Item, Work, Text, "rem", "probe(30)", True);
       Expect (Item, Work, Text, "quotient", "probe(40)", True);
       Expect (Item, Work, Text, "residue", "probe(40)", True);
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Info : Landin.Debugging.Information
+           (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+         Shared_Pair : Boolean := False;
+      begin
+         for I in 1 .. IR.Item_Count (Code) loop
+            if IR.Kind_Of (Code, IR.Item_Id (I)) = IR.Routine then
+               declare
+                  Routine : constant IR.Item_Id := IR.Item_Id (I);
+                  Analysis : Landin.Backend.Debug_Locations.Analysis :=
+                    Landin.Backend.Debug_Locations.Prepare (Code, Routine);
+               begin
+                  for A in 1 .. IR.Source_Alias_Count (Code, Routine) loop
+                     for B in A + 1 .. IR.Source_Alias_Count
+                       (Code, Routine)
+                     loop
+                        declare
+                           Left : constant IR.Source_Alias :=
+                             IR.Nth_Source_Alias (Code, Routine, A);
+                           Right : constant IR.Source_Alias :=
+                             IR.Nth_Source_Alias (Code, Routine, B);
+                        begin
+                           if Left.Place.Kind = IR.Frame_Slot
+                             and then Right.Place.Kind = IR.Frame_Slot
+                             and then Left.Place.Slot = Right.Place.Slot
+                           then
+                              declare
+                                 Before : constant Natural :=
+                                   Landin.Backend.Debug_Locations
+                                     .Fixed_Point_Count (Analysis);
+                                 First : constant Landin.Backend
+                                   .Debug_Locations.Flags.Vector :=
+                                     Landin.Backend.Debug_Locations
+                                       .Available_Alias
+                                         (Analysis, Code,
+                                          Landin.Stages.Meanings (Work).all,
+                                          Info, Routine, A);
+                                 Middle : constant Natural :=
+                                   Landin.Backend.Debug_Locations
+                                     .Fixed_Point_Count (Analysis);
+                                 Second : constant Landin.Backend
+                                   .Debug_Locations.Flags.Vector :=
+                                     Landin.Backend.Debug_Locations
+                                       .Available_Alias
+                                         (Analysis, Code,
+                                          Landin.Stages.Meanings (Work).all,
+                                          Info, Routine, B);
+                              begin
+                                 Landin.Testing.Check
+                                   (Item, First = Landin.Backend
+                                     .Debug_Locations.Available_Alias
+                                       (Code,
+                                        Landin.Stages.Meanings (Work).all,
+                                        Info, Routine, A),
+                                    "first shared alias retains availability");
+                                 Landin.Testing.Check
+                                   (Item, Second = Landin.Backend
+                                     .Debug_Locations.Available_Alias
+                                       (Code,
+                                        Landin.Stages.Meanings (Work).all,
+                                        Info, Routine, B),
+                                    "second shared alias retains "
+                                    & "availability");
+                                 Landin.Testing.Check
+                                   (Item, Middle = Before + 1,
+                                    "first alias solves its slot state");
+                                 Landin.Testing.Check
+                                   (Item, Landin.Backend.Debug_Locations
+                                     .Fixed_Point_Count (Analysis) = Middle,
+                                    "second alias reuses its slot state");
+                              end;
+                              Shared_Pair := True;
+                              exit;
+                           end if;
+                        end;
+                     end loop;
+                     exit when Shared_Pair;
+                  end loop;
+               end;
+            end if;
+            exit when Shared_Pair;
+         end loop;
+         Landin.Testing.Check
+           (Item, Shared_Pair, "result aliases share a frame slot");
+      end;
    end Aliases;
 
    procedure Register_Locations_Preserve_Indirection
