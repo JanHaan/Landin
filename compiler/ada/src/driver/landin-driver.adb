@@ -129,8 +129,8 @@ package body Landin.Driver is
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
-      & "  --toolchain=NAME    the assembler and linker driver to run" & LF
-      & "  --linker=NAME       pass -fuse-ld=NAME to that driver" & LF
+      & "  --toolchain=NAME    driver to run with --emit=exe" & LF
+      & "  --linker=NAME       pass -fuse-ld=NAME with --emit=exe" & LF
       & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
       & LF
       & LF
@@ -497,6 +497,7 @@ package body Landin.Driver is
       Output    : Unbounded.Unbounded_String;
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
+      Toolchain_Seen, Linker_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
       Build_Report_Path : Unbounded.Unbounded_String;
@@ -659,11 +660,25 @@ package body Landin.Driver is
                  (After (Argument, "--firmware-entry="));
 
             elsif Starts_With (Argument, "--toolchain=") then
+               if Toolchain_Seen
+                 or else After (Argument, "--toolchain=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Toolchain_Seen := True;
                Toolchain :=
                  Unbounded.To_Unbounded_String
                    (After (Argument, "--toolchain="));
 
             elsif Starts_With (Argument, "--linker=") then
+               if Linker_Seen
+                 or else After (Argument, "--linker=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Linker_Seen := True;
                Linker :=
                  Unbounded.To_Unbounded_String
                    (After (Argument, "--linker="));
@@ -1627,6 +1642,19 @@ package body Landin.Driver is
          for Option of Unknowns loop
             Note_Failure (Code_Unknown_Option, "unknown option: " & Option);
          end loop;
+
+         if Emit /= Emit_Executable then
+            if Toolchain_Seen then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, "--toolchain requires --emit=exe");
+            end if;
+            if Linker_Seen then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, "--linker requires --emit=exe");
+            end if;
+         end if;
 
          --  A request to emit with nothing to compile exited zero and
          --  wrote nothing, which a script read as success.  An empty root

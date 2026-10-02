@@ -38,6 +38,10 @@ code no catalogue row holds. `refine --help` lists the options. The status is
 Give `--target=` only once. Repeating it is a misuse even when both names
 are the same; the driver does not choose between target selections.
 
+`--toolchain=NAME` and `--linker=NAME` require `--emit=exe`: checking and
+assembly emission do not run a linker. Each selection must have a nonempty
+value and may be given only once.
+
 ### L0003
 
 A source named on the command line is missing or cannot be read. Check the

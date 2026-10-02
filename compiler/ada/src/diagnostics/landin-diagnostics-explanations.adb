@@ -25,7 +25,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "Give `--target=` only once. Repeating it is a misuse eve"
                & "n when both names are the same; the driver does not choo"
-               & "se between target selections.",
+               & "se between target selections."
+               & LF
+               & LF
+               & "`--toolchain=NAME` and `--linker=NAME` require `--emit=e"
+               & "xe`: checking and assembly emission do not run a linker."
+               & " Each selection must have a nonempty value and may be gi"
+               & "ven only once.",
             when Catalogue.Unreadable_Source =>
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",

@@ -1142,6 +1142,10 @@ package body Landin.Tests.Driver_Suite is
             Check (Help, First, "--emit=asm",
                    Landin.Driver.Status_Misuse, "need a source",
                    Input => False);
+            Check (Help, First, "--toolchain=missing",
+                   Landin.Driver.Status_Misuse, "requires --emit=exe");
+            Check (Help, First, "--linker=missing",
+                   Landin.Driver.Status_Misuse, "requires --emit=exe");
             Check (Help, First, "--target=synthetic-32",
                    Landin.Driver.Status_Success);
             Check (Help, First, "--build-mode=release",
@@ -1372,6 +1376,65 @@ package body Landin.Tests.Driver_Suite is
          end;
       end loop;
    end Caller_Files_Are_Separate;
+
+   procedure Link_Selections_Require_Executable_Output
+     (Item : in out Landin.Testing.Context);
+
+   procedure Link_Selections_Require_Executable_Output
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Refused
+        (Option, Emission, Needle : String; Repeat : Boolean := False);
+
+      procedure Refused
+        (Option, Emission, Needle : String; Repeat : Boolean := False)
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args  : Landin.Platform.Path_List := Arguments_Of ("main.ldn");
+      begin
+         Host.Add_File ("main.ldn", Entry_Program);
+         if Emission /= "" then
+            Args.Append (Emission);
+         end if;
+         Args.Append (Option);
+         if Repeat then
+            Args.Append (Option);
+         end if;
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Misuse,
+               "ineffective, empty or repeated link selection is misuse");
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Result.Report),
+                               "error[L0002]: " & Needle),
+               "the report names the refused selection");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no tool runs on a refused request");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0,
+               "no artifact is written on a refused request");
+         end;
+      end Refused;
+   begin
+      for Linker_Option in Boolean loop
+         declare
+            Name : constant String :=
+              (if Linker_Option then "--linker" else "--toolchain");
+         begin
+            Refused (Name & "=missing", "", Name & " requires --emit=exe");
+            Refused (Name & "=missing", "--emit=asm",
+                     Name & " requires --emit=exe");
+            Refused (Name & "=", "--emit=exe",
+                     "unknown option: " & Name & "=");
+            Refused (Name & "=named", "--emit=exe",
+                     "unknown option: " & Name & "=named", Repeat => True);
+         end;
+      end loop;
+   end Link_Selections_Require_Executable_Output;
 
    procedure Assembly_Is_Written_Without_A_Tool
      (Item : in out Landin.Testing.Context);
@@ -4212,6 +4275,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "caller files are separate",
          Caller_Files_Are_Separate'Access);
+      Landin.Testing.Register
+        (Into, "driver", "link selections require executable output",
+         Link_Selections_Require_Executable_Output'Access);
       Landin.Testing.Register
         (Into, "driver", "assembly is written without a tool",
          Assembly_Is_Written_Without_A_Tool'Access);
