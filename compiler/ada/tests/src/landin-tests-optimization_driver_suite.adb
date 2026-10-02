@@ -299,6 +299,10 @@ package body Landin.Tests.Optimization_Driver_Suite is
         is (Ada.Strings.Fixed.Index (Text, Part) > 0);
 
       procedure Refused (Name : String; A, B, C : String := "");
+      procedure Refused_Artifact
+        (Name, Stage_Path : String; Executable : Boolean := False;
+         With_Map : Boolean := False; Target : String := "";
+         Map_Alias : Boolean := False);
 
       procedure Refused (Name : String; A, B, C : String := "") is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -325,6 +329,40 @@ package body Landin.Tests.Optimization_Driver_Suite is
          Landin.Testing.Check_Equal
            (Item, Host.Write_Count, 0, Name & " writes nothing");
       end Refused;
+
+      procedure Refused_Artifact
+        (Name, Stage_Path : String; Executable : Boolean := False;
+         With_Map : Boolean := False; Target : String := "";
+         Map_Alias : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         if Map_Alias then
+            Host.Add_Alias (Stage_Path, "out.s.sources.json");
+         end if;
+         Args.Append ("main.ldn");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         Args.Append ("-o");
+         Args.Append (if Executable then "out" else "out.s");
+         if With_Map then
+            Args.Append ("--panic-map");
+         end if;
+         if Target /= "" then
+            Args.Append ("--target=" & Target);
+         end if;
+         Args.Append ("--stage-report=" & Stage_Path);
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse, Name);
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, Name & " writes nothing");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, Name & " invokes no tool");
+      end Refused_Artifact;
    begin
       Refused ("an empty stage report path", "--stage-report=");
       Refused ("a repeated stage report",
@@ -336,6 +374,65 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Refused ("a stage report over the build report",
                "--stage-report=r.json", "--build-report=r.json",
                "--emit=asm");
+      Refused_Artifact
+        ("a stage report over the source map", "out.s.sources.json",
+         With_Map => True);
+      Refused_Artifact
+        ("a stage report alias over the source map", "alias.json",
+         With_Map => True, Map_Alias => True);
+      Refused_Artifact
+        ("a stage report over executable assembly", "out.s",
+         Executable => True);
+      Refused_Artifact
+        ("a stage report over firmware object", "out.o",
+         Executable => True, Target => "cortex-m0");
+      Refused_Artifact
+        ("a stage report over firmware linker script", "out.ld",
+         Executable => True, Target => "cortex-m0");
+      Refused_Artifact
+        ("a stage report over firmware map", "out.map",
+         Executable => True, Target => "cortex-m0");
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Request;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("--stage-report=out.s.sources.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "an unused source-map path is free for the stage report");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("out.s.sources.json"),
+                       """format"":""landin-stage-report-1"""),
+            "the stage report occupies the unused source-map path");
+      end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Request;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Args.Append ("--panic-map");
+         Args.Append ("--stage-report=stages.json");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "separate stage report and source map succeed");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("out.s.sources.json"),
+                       """build_id"":"),
+            "a separate source map retains its build identity");
+         Landin.Testing.Check
+           (Item, Has (Host.Written ("stages.json"),
+                       """format"":""landin-stage-report-1"""),
+            "the separate stage report is written");
+      end;
 
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;

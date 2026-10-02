@@ -1030,6 +1030,8 @@ package body Landin.Driver is
             Map_Path : constant String := Source_Map_Beside (Product_Path);
             Report_Path : constant String :=
               Unbounded.To_String (Build_Report_Path);
+            Stage_Path : constant String :=
+              Unbounded.To_String (Stage_Report_Path);
             Emit_Map : constant Boolean := Debug_Enabled or else Panic_Map
               or else Landin.IR.Caller_Source_Count
                 (Landin.Stages.Code (Context).all) > 0;
@@ -1078,6 +1080,18 @@ package body Landin.Driver is
             end if;
             if Emit_Map then
                Destinations.Append (Map_Path);
+            end if;
+            if Stage_Report_Seen then
+               for Path of Destinations loop
+                  if Host.Paths_Overlap (Stage_Path, Path) then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "stage report collides with an artifact: "
+                        & Stage_Path);
+                     return;
+                  end if;
+               end loop;
             end if;
             if Report_Seen then
                for Path of Destinations loop
