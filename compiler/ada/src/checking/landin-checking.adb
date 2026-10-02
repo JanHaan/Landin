@@ -916,6 +916,11 @@ package body Landin.Checking is
       Nominal : Nominal_Type_Id;
       Shape   : Field_Shape) return Field_Shape;
 
+   function Atom_Set_Digest
+     (Of_Table : Table; Atoms : Atom_Set_Id;
+      Include_Encodings : Boolean := False)
+      return Ada.Containers.Hash_Type;
+
    function Mix
      (Left, Right : Ada.Containers.Hash_Type)
       return Ada.Containers.Hash_Type
@@ -925,8 +930,42 @@ package body Landin.Checking is
       return Left * 31 xor Right;
    end Mix;
 
+   function Atom_Set_Digest
+     (Of_Table : Table; Atoms : Atom_Set_Id;
+      Include_Encodings : Boolean := False)
+      return Ada.Containers.Hash_Type
+   is
+      use type Ada.Containers.Hash_Type;
+      Members : Ada.Containers.Hash_Type := 0;
+      Width : constant Natural :=
+        (if Include_Encodings then Encoding_Width (Of_Table, Atoms)
+         else 0);
+   begin
+      --  Membership and encoding agreement ignore declaration order. A
+      --  commutative fold preserves that rule without sorting the set.
+      for Index in 1 .. Atom_Count (Of_Table, Atoms) loop
+         declare
+            Member : Ada.Containers.Hash_Type :=
+              Mix (16#9E37_79B9#, Ada.Containers.Hash_Type'Mod
+                (Nth_Atom (Of_Table, Atoms, Index)));
+         begin
+            if Width /= 0 then
+               Member := Mix
+                 (Member, Ada.Containers.Hash_Type'Mod
+                    (Nth_Encoding (Of_Table, Atoms, Index)));
+            end if;
+            Members := Members + Member;
+         end;
+      end loop;
+      return Mix
+        (Mix (Members, Ada.Containers.Hash_Type
+           (Atom_Count (Of_Table, Atoms))),
+         Ada.Containers.Hash_Type (Width));
+   end Atom_Set_Digest;
+
    function Conformance_Digest
-     (Of_Table : Table; Shape : Field_Shape)
+     (Of_Table : Table; Shape : Field_Shape;
+      Include_Encodings : Boolean := False)
       return Ada.Containers.Hash_Type;
    function Conformance_Digest
      (Of_Table : Table; Reference : Reference_Id)
@@ -941,7 +980,8 @@ package body Landin.Checking is
    --  Hash only properties that the structural equality routines require to
    --  agree.  Their remaining details are checked inside the selected bucket.
    function Conformance_Digest
-     (Of_Table : Table; Shape : Field_Shape)
+     (Of_Table : Table; Shape : Field_Shape;
+      Include_Encodings : Boolean := False)
       return Ada.Containers.Hash_Type
    is
       Result : Ada.Containers.Hash_Type :=
@@ -953,7 +993,8 @@ package body Landin.Checking is
               (Result, Ada.Containers.Hash_Type'Mod (Shape.Length));
             Result := Mix
               (Result, Conformance_Digest
-                 (Of_Table, Array_Field_Element (Of_Table, Shape)));
+                 (Of_Table, Array_Field_Element (Of_Table, Shape),
+                  Include_Encodings));
          when Scalar_Field =>
             Result := Mix
               (Result, Ada.Containers.Hash_Type
@@ -963,8 +1004,8 @@ package body Landin.Checking is
                  (Boolean'Pos (Shape.Atoms /= No_Atom_Set)));
             if Shape.Atoms /= No_Atom_Set then
                Result := Mix
-                 (Result, Ada.Containers.Hash_Type
-                    (Atom_Count (Of_Table, Shape.Atoms)));
+                 (Result, Atom_Set_Digest
+                    (Of_Table, Shape.Atoms, Include_Encodings));
             end if;
             Result := Mix
               (Result, Ada.Containers.Hash_Type
@@ -988,10 +1029,30 @@ package body Landin.Checking is
                      (Of_Table, Shape.Reference)));
             end;
          when Aggregate_Field | Variant_Field =>
+            --  Field_Shapes_Agree uses record equality for these kinds.
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type (Shape.Packing.First));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type (Shape.Packing.Bits));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type (Shape.Packing.Storage));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type
+                 (Landin.Types.Scalar_Name'Pos (Shape.Element)));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type'Mod (Shape.Length));
             Result := Mix
               (Result, Nominal_Identities.Hash (Shape.Nominal));
             Result := Mix
               (Result, Ada.Containers.Hash_Type (Shape.Cases));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type (Shape.Payloads_First));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type'Mod (Shape.Signature));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type'Mod (Shape.Atoms));
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type'Mod (Shape.Reference));
       end case;
       return Result;
    end Conformance_Digest;
@@ -1025,8 +1086,7 @@ package body Landin.Checking is
               (Result, Conformance_Digest (Of_Table, Held.Reference));
          when Landin.Types.Atom_Value =>
             Result := Mix
-              (Result, Ada.Containers.Hash_Type
-                 (Atom_Count (Of_Table, Held.Atoms)));
+              (Result, Atom_Set_Digest (Of_Table, Held.Atoms));
          when Landin.Types.Fixed_Array =>
             Result := Mix
               (Result, Ada.Containers.Hash_Type'Mod (Held.Length));
@@ -1073,8 +1133,7 @@ package body Landin.Checking is
               (Result, Conformance_Digest (Of_Table, Part.Reference));
          when Landin.Types.Atom_Value =>
             Result := Mix
-              (Result, Ada.Containers.Hash_Type
-                 (Atom_Count (Of_Table, Part.Atoms)));
+              (Result, Atom_Set_Digest (Of_Table, Part.Atoms));
          when Landin.Types.Fixed_Array =>
             Result := Mix
               (Result, Ada.Containers.Hash_Type'Mod (Part.Length));
@@ -1122,9 +1181,8 @@ package body Landin.Checking is
               (Signature_Error_Form (Of_Table, Signature))));
       if Signature_Error_Form (Of_Table, Signature) = Concrete then
          Result := Mix
-           (Result, Ada.Containers.Hash_Type
-              (Atom_Count
-                 (Of_Table, Signature_Errors (Of_Table, Signature))));
+           (Result, Atom_Set_Digest
+              (Of_Table, Signature_Errors (Of_Table, Signature)));
       end if;
       for Index in 1 .. Signature_Parameter_Count
         (Of_Table, Signature)
@@ -1142,6 +1200,18 @@ package body Landin.Checking is
            (Result, Conformance_Digest
               (Of_Table, Nth_Signature_Result
                  (Of_Table, Signature, Index)));
+         Result := Mix
+           (Result, Ada.Containers.Hash_Type
+              (Signature_Return_Source_Count
+                 (Of_Table, Signature, Index)));
+         for Source in
+           1 .. Signature_Return_Source_Count (Of_Table, Signature, Index)
+         loop
+            Result := Mix
+              (Result, Ada.Containers.Hash_Type
+                 (Nth_Signature_Return_Source
+                    (Of_Table, Signature, Index, Source)));
+         end loop;
       end loop;
       return Mix
         (Result, Ada.Containers.Hash_Type
@@ -1160,12 +1230,13 @@ package body Landin.Checking is
       case Actual.Type_Form is
          when Atom_Set_Actual_Type =>
             Result := Mix
-              (Result, Ada.Containers.Hash_Type
-                 (Atom_Count (Of_Table, Actual.Atoms)));
+              (Result, Atom_Set_Digest
+                 (Of_Table, Actual.Atoms, Include_Encodings => True));
          when Fixed_Array_Actual_Type =>
             Result := Mix
               (Result, Conformance_Digest
-                 (Of_Table, Array_Element_Shape_Of (Of_Table, Actual)));
+                 (Of_Table, Array_Element_Shape_Of (Of_Table, Actual),
+                  Include_Encodings => True));
          when Function_Actual_Type =>
             Result := Mix
               (Result, Conformance_Digest (Of_Table, Actual.Signature));

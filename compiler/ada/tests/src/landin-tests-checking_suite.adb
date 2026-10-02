@@ -9649,8 +9649,14 @@ package body Landin.Tests.Checking_Suite is
       Order : Landin.Stages.Pipeline;
       Ran : Natural;
       Src : Landin.Source.Source_Id;
+      Text : US.Unbounded_String := US.To_Unbounded_String (Program);
    begin
-      Src := Landin.Stages.Add_Source (Work, "conformance-table.ldn", Program);
+      for Index in 1 .. 128 loop
+         US.Append
+           (Text, "key" & Image (Index) & ": type = i32" & LF);
+      end loop;
+      Src := Landin.Stages.Add_Source
+        (Work, "conformance-table.ldn", US.To_String (Text));
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -9774,6 +9780,74 @@ package body Landin.Tests.Checking_Suite is
                      Landin.Checking.Reference_Type_Actual
                        (Types.all, Different), Empty) = Different_Row,
                   "structurally equal keys find their original row");
+            end;
+
+            declare
+               Rows : array (1 .. 128) of Landin.Checking.Conformance_Id;
+               First_Member : constant Natural :=
+                 Landin.Checking.Declaration_Limit (Types.all) - 128;
+            begin
+               for Index in Rows'Range loop
+                  declare
+                     Member : constant Landin.Provenance.Declaration_Id :=
+                       Landin.Provenance.Declaration_Id
+                         (First_Member + Index);
+                     Atoms : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all, [Point, Member]);
+                     Target : constant Landin.Checking.Actual_Key :=
+                       Landin.Checking.Atom_Set_Type_Actual
+                         (Types.all, Atoms);
+                  begin
+                     Landin.Checking.Set_Encodings
+                       (Types.all, Atoms, [0, 1], 2);
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept, Target, Empty)
+                          = Landin.Checking.No_Conformance,
+                        "a distinct equal-size atom set misses");
+                     Rows (Index) := Landin.Checking.Add_Conformance
+                       (Types.all, Concept, Target, Empty, Empty, Src,
+                        Point_Node, Landin.Checking.Declared_Conformance);
+                  end;
+               end loop;
+               for Index in Rows'Range loop
+                  declare
+                     Member : constant Landin.Provenance.Declaration_Id :=
+                       Landin.Provenance.Declaration_Id
+                         (First_Member + Index);
+                     Reversed : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all, [Member, Point]);
+                  begin
+                     Landin.Checking.Set_Encodings
+                       (Types.all, Reversed, [1, 0], 2);
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept,
+                           Landin.Checking.Atom_Set_Type_Actual
+                             (Types.all, Reversed), Empty) = Rows (Index),
+                        "reordered atoms and encodings find their row");
+                  end;
+               end loop;
+               declare
+                  Different_Encoding : constant
+                    Landin.Checking.Atom_Set_Id :=
+                      Landin.Checking.Add_Atom_Set
+                        (Types.all,
+                         [Point, Landin.Provenance.Declaration_Id
+                            (First_Member + 1)]);
+               begin
+                  Landin.Checking.Set_Encodings
+                    (Types.all, Different_Encoding, [1, 0], 2);
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Find_Conformance
+                       (Types.all, Concept,
+                        Landin.Checking.Atom_Set_Type_Actual
+                          (Types.all, Different_Encoding), Empty)
+                        = Landin.Checking.No_Conformance,
+                     "a different encoding map has no conformance");
+               end;
             end;
          end;
       end;
