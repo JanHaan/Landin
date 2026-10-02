@@ -447,11 +447,12 @@ Inequality is <>, not !=.
 
 ### [0360] Ranges
 
-Ranges, inclusive unless narrowed:
-0..9  inclusive     0..<10  half-open
-A range is an ordinary value from core that satisfies
-iterable, not a concept of its own. Left-exclusive forms
-are gone; step(0, 10, 2) and friends are library calls.
+Integer range traversal is written in a `for` header:
+`for i in 0..9 do` includes 9; `for i in 0..<10 do` excludes 10.
+The same bounds spellings select a slice, as in `items[0..<10]`.
+They do not construct a value: `0..<10` cannot be stored, passed, or
+returned on its own. Left-exclusive forms are gone; a library can supply
+custom stepping through an iterable value [1330].
 
 ### [0370] sizeof, alignof and lenof
 
@@ -2977,26 +2978,19 @@ binding value rather than an alias into it. A provider result declared
 storage-derived references can instead return an initialized slice view and
 use the built-in slice traversal, as `for value in vec.used(list)` does.
 
-### [1330] A range is not a concept
+### [1330] Integer range traversal uses bounds
 
-A range is not a concept. '0..<10' builds an ordinary value
-from core that satisfies iterable, and the spelling is
-built in for integer-like types only. Anything else a type
-wants to be traversed by, it satisfies iterable for. Custom
-stepping is a library call, so the step is visible where it
-is used rather than hidden in a type.
+In `for i in 0..<10 do`, the two integer bounds are evaluated once and
+the loop traverses them directly [1150]. Neither `0..<10` nor `0..9` is
+an expression or an ordinary value from `core`; the spellings also occur
+between slice bounds [0360]. The range header does not select [1320]'s
+`iterable` conformance.
 
-```landin
-step_range: type (t: type) = struct
-    low:  t
-    high: t
-    by:   t
-end step_range
-
-step: (t: type, low: t, high: t, by: t) -> (r: step_range(t)) = ... end
-```
-
-used as: for i in step(0, 10, 2) do ... end for
+A type that needs custom stepping can expose an ordinary struct value
+with its own `iterable` conformance. A library could provide a `step`
+function returning such a value, then callers could write
+`for i in step(0, 10, 2) do ... end for`. This describes a possible
+library API; `core` does not currently provide `step` or `step_range`.
 
 ### [1340] Concepts compose
 
@@ -4283,8 +4277,8 @@ what it refused.
   an operation costs is a library's business, and no language
   guarantee should rest on how clever an optimiser happens to be
   [1270].
-- a concept for ranges. A range is an ordinary value satisfying
-  iterable, and left-exclusive forms went with it [0360].
+- a concept for ranges. Integer range traversal now uses bounds in a
+  `for` header, and left-exclusive forms went with the concept [0360].
 - a second type with the shape of a fixed array and different
   operator rules. Fixed arrays are the vector type [0590].
 - transposed collections, designed and deferred: they touch aliasing,

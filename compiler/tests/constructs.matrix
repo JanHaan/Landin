@@ -154,7 +154,7 @@
 1300 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | At the call site the type is inferred from the arguments
 1310 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Evidence is the foundation; specialization is optional
 1320 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Traversal is a concept
-1330 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A range is not a concept
+1330 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Integer range traversal uses bounds
 1340 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Concepts compose
 1350 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Types take parameters through a declaration form of their
 1360 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Allocation is an ordinary concept
