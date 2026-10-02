@@ -84,13 +84,15 @@ end log
 One implementation: a fixed-capacity list, because this runs in a
 place where an unbounded one would be the wrong shape. Overflow is
 not an error: past the limit it counts and stops storing, since
-the twentieth message helps nobody.
+the twentieth message helps nobody. It still counts every error, so
+`failed` includes errors that the log could not retain.
 
 ```landin
 public bounded: type (fixed capacity: u32) = struct
     notes:   [capacity]entry
     stored:  usize
     dropped: usize
+    errors:  usize
 end bounded
 
 bounded_note: (inout d: bounded(capacity), fixed capacity: u32,
@@ -102,15 +104,13 @@ bounded_note: (inout d: bounded(capacity), fixed capacity: u32,
     else
         inc d.dropped
     end if
+    if kind == error then
+        inc d.errors
+    end if
 end bounded_note
 
 bounded_failed: (d: bounded(capacity), fixed capacity: u32) -> (yes: bool) =
-    yes = false
-    for i in 0..<d.stored do
-        if d.notes[i].kind == error then
-            yes = true
-        end if
-    end for
+    yes = d.errors > 0
 end bounded_failed
 
 ```
@@ -123,7 +123,7 @@ aggregate holding one. So the empty note has to be spelt.
 blank: entry = (where: text.nowhere, kind: warning, what: "")
 
 public new_log: (fixed capacity: u32) -> (d: bounded(capacity)) =
-    d = (notes: [of blank], stored: 0, dropped: 0)
+    d = (notes: [of blank], stored: 0, dropped: 0, errors: 0)
 end new_log
 
 (fixed capacity: u32) bounded(capacity) is log (note: bounded_note,
