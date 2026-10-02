@@ -79,7 +79,8 @@ source, such as a refused option, goes to `window/showMessage`.
 
 Every source the module reads is published, so an error in a file the editor
 has not opened is still shown, and one that is fixed is cleared. Closing the
-last open file of a module clears everything it reported.
+last open file of a module clears sources only that module reported. Sources
+also reported by another open module are reanalysed through that module.
 
 A quick fix is preferred when it is exact: its rule decides the replacement,
 and applying it keeps what the program means, so an editor may apply it

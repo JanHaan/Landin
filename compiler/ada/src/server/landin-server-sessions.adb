@@ -86,6 +86,31 @@ package body Landin.Server.Sessions is
          Channel.Write (Landin.Server.Transport.Framed (Item));
       end Send;
 
+      --  A publication belongs to a path, even when several open entry
+      --  modules read it.  Refresh another reporter instead of erasing its
+      --  diagnostics when one module stops reporting that path.
+      procedure Clear_Unless_Shared (Key, Path : String);
+
+      procedure Clear_Unless_Shared (Key, Path : String) is
+         Shared : Boolean := False;
+      begin
+         for Position in Published.Iterate loop
+            if Text_Maps.Key (Position) /= Key
+              and then Unbounded.Index
+                (Unbounded.To_Unbounded_String
+                   (ASCII.LF & Text_Maps.Element (Position)),
+                 ASCII.LF & Path & ASCII.LF) > 0
+            then
+               Shared := True;
+               Stale.Include (Text_Maps.Key (Position));
+            end if;
+         end loop;
+         if not Shared then
+            Send (Landin.Server.Answers.Cleared
+              (Landin.Server.Documents.URI_For (Store, Path)));
+         end if;
+      end Clear_Unless_Shared;
+
       --  An id as written, to answer with: a number or a string.
       function Id_Text (Message : J.Document; Id : J.Value) return String
         is (if J.Is_Kind (Message, Id, J.String_Value)
@@ -245,8 +270,7 @@ package body Landin.Server.Sessions is
             --  A path last published to and not reported on now is clear.
             for Path of Was loop
                if not Now.Contains (Path) then
-                  Send (Landin.Server.Answers.Cleared
-                    (Landin.Server.Documents.URI_For (Store, Path)));
+                  Clear_Unless_Shared (Key, Path);
                end if;
             end loop;
             declare
@@ -597,9 +621,8 @@ package body Landin.Server.Sessions is
                         begin
                            for Index in Earlier'Range loop
                               if Earlier (Index) = ASCII.LF then
-                                 Send (Landin.Server.Answers.Cleared
-                                   (Landin.Server.Documents.URI_For
-                                      (Store, Earlier (First .. Index - 1))));
+                                 Clear_Unless_Shared
+                                   (Key, Earlier (First .. Index - 1));
                                  First := Index + 1;
                               end if;
                            end loop;
