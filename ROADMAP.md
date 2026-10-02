@@ -581,10 +581,12 @@ gate was green on every job on `6750dfcb`.
 Status: planned
 Depends on: R11.20
 
-The hosted layer and platform driver for FreeBSD, emitted from Linux and run
-in a FreeBSD virtual machine on a Linux runner.
+The hosted layer and platform driver for FreeBSD x86-64 and arm64, emitted
+from Linux and run in FreeBSD virtual machines on Linux runners, one for each
+architecture.
 
-Exit evidence: the runtime corpus executed in that machine in the gate.
+Exit evidence: separate gate verdicts for the runtime corpus executed in the
+FreeBSD x86-64 and FreeBSD arm64 virtual machines.
 
 ### R11.40 — RISC-V rv64 Linux
 
@@ -620,7 +622,8 @@ derive or refuse as decided.
 
 ### R11 gate
 
-- Linux arm64, FreeBSD and rv64 Linux run the corpus in the gate.
+- Linux arm64, FreeBSD x86-64, FreeBSD arm64 and rv64 Linux each run the
+  corpus in the gate, with a separate verdict for each architecture.
 - A conversion names its type as written, without an alias.
 
 ## R12 — Microcontrollers
