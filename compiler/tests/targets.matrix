@@ -475,6 +475,7 @@ negative/misspelt-keyword-is-offered-the-keyword | linux-x86-64, linux-arm64, ma
 negative/misspelt-module-is-offered-its-directory | linux-x86-64, linux-arm64, macos-arm64
 negative/misspelt-module-member-is-offered-a-public-one | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/misspelt-name-is-offered-its-neighbour | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/misspelt-selected-import-is-offered | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/misspelt-type-is-offered-its-neighbour | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/module-address-initializer-refused | linux-x86-64, linux-arm64, macos-arm64
 negative/module-array-fold-agreement | linux-x86-64, linux-arm64, macos-arm64

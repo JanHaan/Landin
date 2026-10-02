@@ -746,6 +746,7 @@ private
       Source : Landin.Source.Source_Id     := Landin.Source.No_Source;
       Node   : Landin.Syntax.Node_Id       := Landin.Syntax.No_Node;
       Public : Boolean                     := False;
+      Next_In_Scope : Declaration_Id        := No_Declaration;
    end record;
 
    package Declaration_Vectors is new Ada.Containers.Vectors
@@ -754,6 +755,10 @@ private
    type Scope is record
       Sort      : Scope_Sort := Program;
       Enclosing : Scope_Id   := No_Scope;
+      First_Declaration : Declaration_Id := No_Declaration;
+      Last_Declaration  : Declaration_Id := No_Declaration;
+      First_Import      : Natural := 0;
+      Last_Import       : Natural := 0;
    end record;
 
    package Scope_Vectors is new Ada.Containers.Vectors
@@ -796,6 +801,7 @@ private
       Target : Landin.Modules.Module_Id := Landin.Modules.No_Module;
       Member : Declaration_Id := No_Declaration;
       Origin : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+      Next_In_Scope : Natural := 0;
    end record;
 
    package Import_Vectors is new Ada.Containers.Vectors
@@ -852,8 +858,8 @@ private
       Module_Scopes : Scope_Id_Vectors.Vector;
       File_Scopes   : Scope_Id_Vectors.Vector;
       Imports       : Import_Maps.Map;
-      --  The same bindings in the order they were made, so a walk over a
-      --  file's imports never reads the hashed map's order.
+      --  Bindings linked by file scope in the order they were made.  The
+      --  map supplies exact-name lookup; this vector supplies stable walks.
       Import_Order  : Import_Vectors.Vector;
       --  Import names this file wrote and the binder refused.  Kept apart
       --  from Imports so that Has_Import keeps meaning exactly what it

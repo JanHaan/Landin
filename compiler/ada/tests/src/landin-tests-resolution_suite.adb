@@ -108,6 +108,40 @@ package body Landin.Tests.Resolution_Suite is
          Second : constant Landin.Resolution.Scope_Id :=
            Landin.Resolution.Scope_At
              (Meanings.all, Of_Tree.all, Otherwise);
+         type Id_List is array (Positive range 1 .. 4) of
+           Landin.Resolution.Declaration_Id;
+         Expected : constant Id_List :=
+           [Landin.Resolution.Declaration_At
+              (Meanings.all, Id,
+               Landin.Syntax.Nth_Statement (Of_Tree.all, Arm, 1)),
+            Landin.Resolution.Declaration_At
+              (Meanings.all, Id,
+               Landin.Syntax.Nth_Parameter (Of_Tree.all, Fn, 1)),
+            Landin.Resolution.Declaration_At
+              (Meanings.all, Id,
+               Landin.Syntax.Nth_Return (Of_Tree.all, Fn, 1)),
+            Landin.Resolution.Declaration_At (Meanings.all, Id, Fn)];
+         Expected_Depth : constant array (Positive range 1 .. 4) of Natural :=
+           [0, 2, 2, 4];
+         Offered : Natural := 0;
+
+         procedure Visit
+           (Declaration : Landin.Resolution.Declaration_Id;
+            Depth : Natural);
+
+         procedure Visit
+           (Declaration : Landin.Resolution.Declaration_Id;
+            Depth : Natural) is
+         begin
+            Offered := Offered + 1;
+            if Offered <= Expected'Last then
+               Landin.Testing.Check
+                 (Item,
+                  Declaration = Expected (Offered)
+                    and then Depth = Expected_Depth (Offered),
+                  "suggestions follow scope depth and declaration order");
+            end if;
+         end Visit;
       begin
          --  [1840]: a function opens a signature inside its file import
          --  scope, which in turn sits inside the containing module.
@@ -159,6 +193,10 @@ package body Landin.Tests.Resolution_Suite is
             and then Landin.Resolution.Enclosing (Meanings.all, Second)
                      = Inside,
             "both arms sit directly in the body, as siblings");
+         Landin.Resolution.Each_Visible (Meanings.all, First, Visit'Access);
+         Landin.Testing.Check_Equal
+           (Item, Offered, Expected'Length,
+            "only enclosing declarations are offered");
       end;
    end Every_Scope_Names_The_Node_That_Opened_It;
 

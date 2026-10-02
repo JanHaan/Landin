@@ -67,10 +67,12 @@ package body Landin.Resolution is
       --  [1740] gives the reached program one root.  Each selected module
       --  then gets its unordered declaration scope, and each file a private
       --  import scope enclosing that module.
-      Into.Scopes.Append (Scope'(Sort => Program, Enclosing => No_Scope));
+      Into.Scopes.Append
+        (Scope'(Sort => Program, Enclosing => No_Scope, others => <>));
       for Index in 1 .. Landin.Modules.Module_Count (Modules) loop
          Into.Scopes.Append
-           (Scope'(Sort => Module_Scope, Enclosing => Program_Scope));
+           (Scope'(Sort => Module_Scope, Enclosing => Program_Scope,
+                   others => <>));
          Into.Module_Scopes.Append (Scope_Id (Into.Scopes.Length));
       end loop;
       for Index in 1 .. Landin.Syntax.Forest.Count (Trees) loop
@@ -84,7 +86,7 @@ package body Landin.Resolution is
               (Scope'
                  (Sort      => File_Imports,
                   Enclosing => Into.Module_Scopes.Element
-                    (Positive (Module))));
+                    (Positive (Module)), others => <>));
             Into.File_Scopes.Append (Scope_Id (Into.Scopes.Length));
          end;
       end loop;
@@ -117,7 +119,8 @@ package body Landin.Resolution is
      return Scope_Id
    is
    begin
-      Into.Scopes.Append (Scope'(Sort => Sort, Enclosing => Inside));
+      Into.Scopes.Append
+        (Scope'(Sort => Sort, Enclosing => Inside, others => <>));
       return Scope_Id (Into.Scopes.Length);
    end Open_Scope;
 
@@ -219,35 +222,35 @@ package body Landin.Resolution is
       Visit    : not null access procedure
         (Id : Declaration_Id; Depth : Natural))
    is
-      Chain : Scope_Id_Vectors.Vector;
       Where : Scope_Id := Scope;
+      Depth : Natural := 0;
    begin
       while Where /= No_Scope loop
-         Chain.Append (Where);
-         Where := Enclosing (Of_Table, Where);
-      end loop;
-
-      --  One pass over the declarations per scope keeps every depth's
-      --  names in recorded order; the chain is a handful of scopes long.
-      for Depth in 1 .. Natural (Chain.Length) loop
          declare
-            Here : constant Scope_Id := Chain.Element (Depth);
+            Here : constant Landin.Resolution.Scope :=
+              Of_Table.Scopes.Element (Positive (Where));
+            Import_Index : Natural := Here.First_Import;
+            Declaration_Index : Declaration_Id := Here.First_Declaration;
          begin
-            if Sort_Of (Of_Table, Here) = File_Imports then
-               for Bound of Of_Table.Import_Order loop
-                  if Bound.Member /= No_Declaration
-                    and then File_Scope_Of (Of_Table, Bound.Source) = Here
-                  then
-                     Visit (Bound.Member, Depth - 1);
+            while Import_Index /= 0 loop
+               declare
+                  Bound : constant Import_Binding :=
+                    Of_Table.Import_Order.Element (Import_Index);
+               begin
+                  if Bound.Member /= No_Declaration then
+                     Visit (Bound.Member, Depth);
                   end if;
-               end loop;
-            end if;
-            for Index in 1 .. Declaration_Count (Of_Table) loop
-               if Of_Table.Declarations.Element (Index).Scope = Here then
-                  Visit (Declaration_Id (Index), Depth - 1);
-               end if;
+                  Import_Index := Bound.Next_In_Scope;
+               end;
+            end loop;
+            while Declaration_Index /= No_Declaration loop
+               Visit (Declaration_Index, Depth);
+               Declaration_Index := Of_Table.Declarations.Element
+                 (Positive (Declaration_Index)).Next_In_Scope;
             end loop;
          end;
+         Where := Enclosing (Of_Table, Where);
+         Depth := Depth + 1;
       end loop;
    end Each_Visible;
 
@@ -257,13 +260,15 @@ package body Landin.Resolution is
       Visit    : not null access procedure (Id : Declaration_Id))
    is
       Here : constant Scope_Id := Module_Scope_Of (Of_Table, Module);
+      Index : Declaration_Id := Of_Table.Scopes.Element
+        (Positive (Here)).First_Declaration;
    begin
-      for Index in 1 .. Declaration_Count (Of_Table) loop
-         if Of_Table.Declarations.Element (Index).Scope = Here
-           and then Of_Table.Declarations.Element (Index).Public
-         then
-            Visit (Declaration_Id (Index));
+      while Index /= No_Declaration loop
+         if Of_Table.Declarations.Element (Positive (Index)).Public then
+            Visit (Index);
          end if;
+         Index := Of_Table.Declarations.Element
+           (Positive (Index)).Next_In_Scope;
       end loop;
    end Each_Public_In_Module;
 
@@ -301,6 +306,39 @@ package body Landin.Resolution is
      is (Of_Table.Imports.Contains
            (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name)));
 
+   procedure Append_Import
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name : Landin.Source.Names.Name_Id);
+
+   procedure Append_Import
+     (Into : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name : Landin.Source.Names.Name_Id)
+   is
+      Here : constant Positive := Positive (File_Scope_Of (Into, Source));
+      Scope_Data : Landin.Resolution.Scope := Into.Scopes.Element (Here);
+      New_Index : constant Positive :=
+        Natural (Into.Import_Order.Length) + 1;
+   begin
+      Into.Import_Order.Append
+        (Into.Imports.Element (Key'(Scope => Scope_Id (Here), Name => Name)));
+      if Scope_Data.Last_Import = 0 then
+         Scope_Data.First_Import := New_Index;
+      else
+         declare
+            Previous : Import_Binding :=
+              Into.Import_Order.Element (Scope_Data.Last_Import);
+         begin
+            Previous.Next_In_Scope := New_Index;
+            Into.Import_Order.Replace_Element
+              (Scope_Data.Last_Import, Previous);
+         end;
+      end if;
+      Scope_Data.Last_Import := New_Index;
+      Into.Scopes.Replace_Element (Here, Scope_Data);
+   end Append_Import;
+
    procedure Bind_Imported_Declaration
      (Into   : in out Table;
       Source : Landin.Source.Source_Id;
@@ -313,10 +351,8 @@ package body Landin.Resolution is
          Import_Binding'
            (Source => Source, Name => Name,
             Target => Landin.Modules.No_Module,
-            Member => Target, Origin => Origin));
-      Into.Import_Order.Append
-        (Into.Imports.Element
-           (Key'(Scope => File_Scope_Of (Into, Source), Name => Name)));
+            Member => Target, Origin => Origin, others => <>));
+      Append_Import (Into, Source, Name);
    end Bind_Imported_Declaration;
 
    function Import_Origin
@@ -341,7 +377,7 @@ package body Landin.Resolution is
          Import_Binding'
            (Source => Source, Name => Name,
             Target => Landin.Modules.No_Module,
-            Member => No_Declaration, Origin => Origin));
+            Member => No_Declaration, Origin => Origin, others => <>));
    end Refuse_Import;
 
    function Import_Refused
@@ -362,10 +398,9 @@ package body Landin.Resolution is
         (Key'(Scope => File_Scope_Of (Into, Source), Name => Name),
          Import_Binding'
            (Source => Source, Name => Name,
-            Target => Target, Member => No_Declaration, Origin => Origin));
-      Into.Import_Order.Append
-        (Into.Imports.Element
-           (Key'(Scope => File_Scope_Of (Into, Source), Name => Name)));
+            Target => Target, Member => No_Declaration, Origin => Origin,
+            others => <>));
+      Append_Import (Into, Source, Name);
    end Bind_Imported_Module;
 
    --  What a declaration declares, from the node and the scope it is in.
@@ -445,9 +480,29 @@ package body Landin.Resolution is
                       | Landin.Syntax.Concept_Declaration
                       | Landin.Syntax.Binding
                and then Landin.Syntax.Is_Public (Of_Tree, Node))
-              or else Inherits_Public));
+              or else Inherits_Public,
+            others => <>));
 
       Into.Index.Insert (Key'(Scope => Inside, Name => Named), Fresh);
+      declare
+         Here : constant Positive := Positive (Inside);
+         Scope_Data : Landin.Resolution.Scope := Into.Scopes.Element (Here);
+      begin
+         if Scope_Data.Last_Declaration = No_Declaration then
+            Scope_Data.First_Declaration := Fresh;
+         else
+            declare
+               Previous : Declaration := Into.Declarations.Element
+                 (Positive (Scope_Data.Last_Declaration));
+            begin
+               Previous.Next_In_Scope := Fresh;
+               Into.Declarations.Replace_Element
+                 (Positive (Scope_Data.Last_Declaration), Previous);
+            end;
+         end if;
+         Scope_Data.Last_Declaration := Fresh;
+         Into.Scopes.Replace_Element (Here, Scope_Data);
+      end;
       declare
          Where : constant Positive := Slot (Into, Of_Tree, Node);
       begin

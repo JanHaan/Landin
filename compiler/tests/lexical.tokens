@@ -50436,6 +50436,26 @@ file negative/misspelt-name-is-offered-its-neighbour/program.ldn tokens 59
   203 206 sum
   207 210 end
   211 216 total
+file negative/misspelt-selected-import-is-offered/program.ldn tokens 19
+  0 6 import
+  7 10 lib
+  11 12 (
+  12 18 answer
+  18 19 )
+  21 22 f
+  22 23 :
+  24 25 (
+  25 26 )
+  27 29 ->
+  30 31 (
+  31 36 value
+  36 37 :
+  38 41 i32
+  41 42 )
+  43 44 =
+  45 51 anwser
+  52 55 end
+  56 57 f
 file negative/misspelt-type-is-offered-its-neighbour/program.ldn tokens 50
   0 5 point
   5 6 :
