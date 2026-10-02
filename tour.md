@@ -290,7 +290,8 @@ including subnormals.
 
 ```landin
 pi_exact: f64 = 0x1.921fb54442d18p+1
-smallest: f32 = 0x1.0p-126
+smallest_subnormal: f32 = 0x1.0p-149
+smallest_normal: f32 = 0x1.0p-126
 
 ```
 
