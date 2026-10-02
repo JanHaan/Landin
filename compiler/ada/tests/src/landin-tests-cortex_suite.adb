@@ -205,6 +205,76 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
+   procedure Register_Staging (Item : in out Landin.Testing.Context);
+
+   procedure Register_Staging (Item : in out Landin.Testing.Context) is
+   begin
+      for Count in 0 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Parameters : constant String :=
+              (case Count is
+                 when 0 => "",
+                 when 1 => "a: u32",
+                 when 2 => "a: u32, b: u32",
+                 when 3 => "a: u32, b: u32, c: u32",
+                 when 4 => "a: u32, b: u32, c: u32, d: u32");
+            Store : constant String :=
+              (case Count is
+                 when 0 => "",
+                 when 1 => "str r0, [sp]",
+                 when 2 => "stmia r6!, {r0, r1}",
+                 when 3 => "stmia r6!, {r0, r1, r2}",
+                 when 4 => "stmia r6!, {r0, r1, r2, r3}");
+            Reserve : constant String :=
+              (if Count = 0 then ""
+               elsif Count <= 2 then "sub sp, #16"
+               else "sub sp, #32");
+         begin
+            Host.Add_File ("p.ldn", "f: (" & Parameters
+              & ") -> none = end f");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "Cortex register staging" & Count'Image & ": "
+                  & U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Code : constant String := Host.Written ("p.s");
+                  begin
+                     Landin.Testing.Check
+                       (Item, (Store = "" or else
+                          Ada.Strings.Fixed.Index (Code, Store) > 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "stmia r6!") = 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "str r0, [sp]") = 0)
+                        and then (Count = 4 or else
+                          Ada.Strings.Fixed.Index
+                            (Code, "stmia r6!, {r0, r1, r2, r3}") = 0),
+                        "entry stores only the planned core words");
+                     Landin.Testing.Check
+                       (Item, (Reserve = "" or else
+                          Ada.Strings.Fixed.Index (Code, Reserve) > 0)
+                        and then (Count /= 0 or else
+                          Ada.Strings.Fixed.Index (Code, "sub sp, #") = 0),
+                        "frame reserves only aligned argument homes");
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Register_Staging;
 
    procedure Contract (Item : in out Landin.Testing.Context) is
       Unit : IR.Unit;
@@ -1204,6 +1274,8 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "scalar spill homes",
          Scalar_Spill_Homes'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "register staging", Register_Staging'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register

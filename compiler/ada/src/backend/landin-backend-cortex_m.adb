@@ -936,7 +936,12 @@ package body Landin.Backend.Cortex_M is
            Landin.IR.Result_Of (Of_Unit, Item);
          Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
-         Homes : constant Landin.Targets.Byte_Count := Extent (Layout) + 16;
+         --  Keep the incoming register words below the laid-out frame.
+         --  Round up so calls retain eight-byte SP alignment.
+         Home_Bytes : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8;
+         Homes : constant Landin.Targets.Byte_Count :=
+           Extent (Layout) + Home_Bytes;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          Ordinary : constant Boolean := Landin.IR.Signature_Machine
@@ -3078,8 +3083,19 @@ package body Landin.Backend.Cortex_M is
             Emit ("movs r7, #1");
             Emit ("str r7, [r6]");
          end if;
-         Emit ("mov r6, sp");
-         Emit ("stmia r6!, {r0, r1, r2, r3}");
+         case Plan.Core_Used is
+            when 0 => null;
+            when 1 => Emit ("str r0, [sp]");
+            when 2 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1}");
+            when 3 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1, r2}");
+            when 4 =>
+               Emit ("mov r6, sp");
+               Emit ("stmia r6!, {r0, r1, r2, r3}");
+         end case;
          if Plan.Result.Shape.Indirect then
             Store_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1));
          end if;
