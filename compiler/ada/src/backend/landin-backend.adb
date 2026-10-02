@@ -575,6 +575,9 @@ package body Landin.Backend is
    function Spill_Bytes (Of_Frame : Frame) return Targets.Byte_Count
      is (Of_Frame.Spill_Total);
 
+   function Spill_Count (Of_Frame : Frame) return Natural
+     is (Natural (Of_Frame.Spills.Length));
+
    function Save_Bytes (Of_Frame : Frame) return Targets.Byte_Count
      is (Of_Frame.Save_Total);
 

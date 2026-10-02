@@ -2,6 +2,8 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
+with Landin.Backend.Cortex_M;
+with Landin.Build_Reports;
 with Landin.Driver;
 with Landin.Testing.Fakes;
 with Landin.IR;
@@ -9,6 +11,9 @@ with Landin.IR.Dump;
 with Landin.IR.Verifier;
 with Landin.IR.Testing_Support;
 with Landin.Machine;
+with Landin.Optimization;
+with Landin.Provenance;
+with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Platform.Native;
 with Landin.Source;
@@ -91,6 +96,99 @@ package body Landin.Tests.Cortex_Suite is
    procedure Refusals (Item : in out Landin.Testing.Context);
    procedure Source_Carriers (Item : in out Landin.Testing.Context);
    procedure Driver_Boundaries (Item : in out Landin.Testing.Context);
+   procedure Scalar_Spill_Homes (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Spill_Homes (Item : in out Landin.Testing.Context) is
+      use type IR.Verifier.Fault_Kind;
+      Kinds : constant array (Positive range 1 .. 5) of Ty.Integer_Name :=
+        [Ty.U8, Ty.U16, Ty.U32, Ty.U64, Ty.U8];
+      Bytes : constant array (Positive range 1 .. 5) of T.Byte_Count :=
+        [1, 2, 4, 8, 8];
+      Narrow_Frame : T.Byte_Count := 0;
+   begin
+      for Index in Kinds'Range loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (T.Cortex_M);
+            Order : Landin.Stages.Pipeline;
+            Written : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source
+                (Work, "spill.ldn", "f: () -> none = end f");
+            Unit : IR.Unit;
+            Site : constant Landin.Provenance.Origin :=
+              (Written, Landin.Source.Empty_Span);
+            Routine : IR.Item_Id;
+            Signature : IR.Signature_Id;
+            Block : IR.Block_Id;
+            Left, Right, Sum, Next : IR.Value_Id;
+            Assembly : U.Unbounded_String;
+            Report : Landin.Build_Reports.Report;
+         begin
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Resolver'Access);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Stages.Run (Order, Work), 3,
+               "spill declarations resolve");
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Ty.No_Value, Site);
+            Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts, (others => <>));
+            IR.Set_Signature (Unit, Routine, Signature);
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            Left := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 1, False, Site);
+            Right := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 2, False, Site);
+            Sum := IR.Emit_Binary
+              (Unit, Routine, IR.Add, Left, Right, Kinds (Index), Site);
+            Next := IR.Emit_Number
+              (Unit, Routine, Kinds (Index), 3, False, Site);
+            Sum := IR.Emit_Binary
+              (Unit, Routine, IR.Add, Sum, Next, Kinds (Index), Site);
+            if Index = 5 then
+               --  Later wide values enlarge the three reused homes.
+               Left := IR.Emit_Number
+                 (Unit, Routine, Ty.U64, 4, False, Site);
+               Right := IR.Emit_Number
+                 (Unit, Routine, Ty.U64, 5, False, Site);
+               Sum := IR.Emit_Binary
+                 (Unit, Routine, IR.Add, Left, Right, Ty.U64, Site);
+            end if;
+            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit, T.Cortex_M).Kind
+                = IR.Verifier.Nothing_Wrong,
+               "overlapping and reused scalar values verify");
+            Landin.Backend.Cortex_M.Emit
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all, T.Cortex_M,
+               Landin.Optimization.Reference_Options, Assembly, Report);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Build_Reports.Routine_Count (Report), 1,
+               "one scalar routine is emitted");
+            declare
+               Stats : constant Landin.Build_Reports.Routine_Statistics :=
+                 Landin.Build_Reports.Nth_Routine (Report, 1);
+            begin
+               if Index = 1 then
+                  Narrow_Frame := Stats.Frame_Bytes;
+               end if;
+               Landin.Testing.Check
+                 (Item, Stats.Spill_Count = 3
+                    and then Stats.Spill_Bytes = 3 * Bytes (Index)
+                    and then Stats.Frame_Bytes =
+                      Narrow_Frame + T.Align_Up
+                        (3 * Bytes (Index), 8) - 8,
+                  "three live homes use scalar widths and aligned frames");
+            end;
+         end;
+      end loop;
+   end Scalar_Spill_Homes;
 
    procedure Contract (Item : in out Landin.Testing.Context) is
       Unit : IR.Unit;
@@ -1087,6 +1185,9 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "scalar spill homes",
+         Scalar_Spill_Homes'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register

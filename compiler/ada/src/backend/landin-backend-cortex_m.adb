@@ -106,8 +106,8 @@ package body Landin.Backend.Cortex_M is
 
    --  All source places stay pinned. Verified scalar temporaries are block
    --  local: an operand's last read precedes reuse, including across calls.
-   --  Scratch registers belong to selection; eight-byte spill homes hold any
-   --  admitted scalar without a second calling convention or host-sized math.
+   --  Scratch registers belong to selection. A reused spill home grows to
+   --  hold the widest scalar assigned to it.
    function Allocated_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
@@ -123,7 +123,7 @@ package body Landin.Backend.Cortex_M is
       package Masks is new Work_Arrays (Boolean, Home_Mask, True);
       package Numbers is new Work_Arrays (Natural, Spill_Assignments, 0);
       package Extents is new Work_Arrays
-        (L.Field_Extent, L.Field_Extent_Array, (8, 8));
+        (L.Field_Extent, L.Field_Extent_Array, (0, 1));
       Slots : Masks.Buffer (IR.Slot_Count (Of_Unit, Item));
       Values : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
       Last : Numbers.Buffer (IR.Value_Count (Of_Unit, Item));
@@ -168,6 +168,22 @@ package body Landin.Backend.Cortex_M is
                   Count := Natural'Max (Count, Home);
                   Values.Data (Positive (Value)) := Home;
                   Free_After.Data (Home) := Last.Data (Positive (Value));
+                  declare
+                     Held : constant Landin.Targets.Scalar_Size :=
+                       Landin.Types.Storage_Size
+                         (Landin.Types.Scalar_Name
+                            (IR.Result_Of (Of_Unit, Item, Value)), Facts);
+                  begin
+                     Spills.Data (Home).Size :=
+                       Landin.Targets.Byte_Count'Max
+                         (Spills.Data (Home).Size,
+                          Landin.Targets.Byte_Count
+                            (Landin.Targets.Bytes (Held)));
+                     Spills.Data (Home).Alignment :=
+                       Landin.Targets.Byte_Alignment'Max
+                         (Spills.Data (Home).Alignment,
+                          Landin.Targets.Alignment_Of (Facts, Held));
+                  end;
                end if;
             end;
          end loop;
@@ -3070,7 +3086,7 @@ package body Landin.Backend.Cortex_M is
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Homes + 24,
               Spill_Bytes => Spill_Bytes (Layout), Save_Bytes => 24,
-              Spill_Count => Natural (Spill_Bytes (Layout) / 8),
+              Spill_Count => Spill_Count (Layout),
               Instructions => Instruction_Count - Before_Emit,
               others => <>));
       end Emit_Routine;
