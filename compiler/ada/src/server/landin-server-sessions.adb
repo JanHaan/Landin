@@ -216,8 +216,10 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result)
          is
-            Now : String_Sets.Set;
-            Was : String_Sets.Set;
+            Now     : String_Sets.Set;
+            Was     : String_Sets.Set;
+            Buckets : array (1 .. Landin.Stages.Source_Count (Context)) of
+              Landin.Server.Answers.Diagnostic_Indexes.Vector;
          begin
             if Published.Contains (Key) then
                declare
@@ -233,17 +235,20 @@ package body Landin.Server.Sessions is
                end;
             end if;
 
-            --  Diagnostics with no source belong to no document.
+            --  Dispatch each report item once.  Source identities are the
+            --  one-based positions in the compilation's source set.
             for Index in 1 .. Answer.Found.Count loop
                declare
                   Item : constant Diag.Diagnostic := Answer.Found.Get (Index);
+                  Source : constant Landin.Source.Source_Id :=
+                    Diag.Source_Of (Diag.Primary (Item));
                begin
-                  if Diag.Source_Of (Diag.Primary (Item))
-                    = Landin.Source.No_Source
-                  then
+                  if Source = Landin.Source.No_Source then
                      Tell ((if Diag.Level (Item) = Diag.Error then 1 else 2),
                            Diag.Code (Item) & ": "
                            & Diag.Message (Diag.Primary (Item)));
+                  elsif Source <= Landin.Source.Source_Id (Buckets'Last) then
+                     Buckets (Positive (Source)).Append (Index);
                   end if;
                end;
             end loop;
@@ -262,7 +267,7 @@ package body Landin.Server.Sessions is
                      Version  => Landin.Server.Answers.Version_Of
                        (Store, Path),
                      Found    => Answer.Found,
-                     Source   => Id,
+                     Indexes  => Buckets (Positive (Id)),
                      Sources  => Landin.Stages.Sources (Context),
                      Store    => Store,
                      Unit     => Unit));

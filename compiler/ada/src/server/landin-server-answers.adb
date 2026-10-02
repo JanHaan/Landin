@@ -1,6 +1,5 @@
 with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Ordered_Maps;
-with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Landin.Server.Navigation;
@@ -19,9 +18,6 @@ package body Landin.Server.Answers is
 
    type Position_Maps is array (Landin.Source.Source_Id range <>) of
      Positions.Position_Map;
-
-   package Diagnostic_Indexes is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Positive);
 
    function Capabilities (Unit : Positions.Encoding) return String is
       Written : J.Builder;
@@ -382,7 +378,7 @@ package body Landin.Server.Answers is
      (URI     : String;
       Version : Long_Long_Integer;
       Found   : Landin.Diagnostics.Diagnostic_List;
-      Source  : Landin.Source.Source_Id;
+      Indexes : Diagnostic_Indexes.Vector;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
       Unit    : Positions.Encoding) return String
@@ -390,17 +386,9 @@ package body Landin.Server.Answers is
       Written : J.Builder;
       Maps    : Position_Maps
         (1 .. Landin.Source.Source_Id (Sources.Count));
-      Selected : Diagnostic_Indexes.Vector;
    begin
-      for Index in 1 .. Found.Count loop
-         declare
-            Item : constant Diag.Diagnostic := Found.Get (Index);
-         begin
-            if Diag.Source_Of (Diag.Primary (Item)) = Source then
-               Selected.Append (Index);
-               Register_Diagnostic (Maps, Item);
-            end if;
-         end;
+      for Index of Indexes loop
+         Register_Diagnostic (Maps, Found.Get (Index));
       end loop;
       Prepare_Maps (Maps, Sources, Unit);
       J.Begin_Object (Written);
@@ -418,7 +406,7 @@ package body Landin.Server.Answers is
       end if;
       J.Name (Written, "diagnostics");
       J.Begin_Array (Written);
-      for Index of Selected loop
+      for Index of Indexes loop
          declare
             Item : constant Diag.Diagnostic := Found.Get (Index);
          begin

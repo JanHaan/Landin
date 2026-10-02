@@ -7,6 +7,8 @@
 --  a fix carries the edits the stage built, and a type is spelt as the
 --  checker spells it.
 
+with Ada.Containers.Vectors;
+
 with Landin.Diagnostics;
 with Landin.Formatting;
 with Landin.Json;
@@ -33,13 +35,17 @@ package Landin.Server.Answers is
      (Store : Landin.Server.Documents.Store; Path : String)
       return Long_Long_Integer;
 
-   --  textDocument/publishDiagnostics for Source: every diagnostic of
-   --  Found whose primary label is in it.  Version -1 is left out.
+   --  Report positions grouped by primary source in publication order.
+   package Diagnostic_Indexes is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Positive);
+
+   --  textDocument/publishDiagnostics for the selected report positions.
+   --  Version -1 is left out.
    function Diagnostics
      (URI     : String;
       Version : Long_Long_Integer;
       Found   : Landin.Diagnostics.Diagnostic_List;
-      Source  : Landin.Source.Source_Id;
+      Indexes : Diagnostic_Indexes.Vector;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
       Unit    : Positions.Encoding) return String;
