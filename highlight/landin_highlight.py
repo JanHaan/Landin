@@ -126,7 +126,7 @@ class Scanner:
         self.raw = None       # open raw literal delimiter
 
     # -- words -----------------------------------------------------------
-    def word_class(self, word, before, after):
+    def word_class(self, word, text, start, end):
         if word in KEYWORDS:
             return "k"
         if word in TYPES or WIDTH.match(word):
@@ -139,12 +139,13 @@ class Scanner:
             return "t"
         if word in self.atoms:
             return "v"
-        if after.startswith("("):
+        if text.startswith("(", end):
             return "f"
-        if before.rstrip().endswith("."):
+        previous = start - 1
+        while previous >= 0 and text[previous].isspace():
+            previous -= 1
+        if previous >= 0 and text[previous] == ".":
             return "s"
-        if DECL_AFTER.match(after) and self._statement_start(before):
-            return "d"
         return None
 
     @staticmethod
@@ -166,6 +167,7 @@ class Scanner:
         a consumer cannot lose a character by not knowing a class.
         """
         pos = 0
+        declaration_checked = False
 
         if self.raw is not None:
             hit = text.find(self.raw)
@@ -231,7 +233,16 @@ class Scanner:
                 yield "n", body
                 pos = m.end()
             elif kind == "word":
-                yield self.word_class(body, text[:pos], text[m.end():]), body
+                cls = self.word_class(body, text, pos, m.end())
+                if cls is None and not declaration_checked:
+                    #  Once this word is in the prefix, _statement_start
+                    #  rejects every later name.  Check the declaration
+                    #  suffix and prefix at most once per line.
+                    declaration_checked = True
+                    if (DECL_AFTER.match(text[m.end():])
+                            and self._statement_start(text[:pos])):
+                        cls = "d"
+                yield cls, body
                 pos = m.end()
             elif kind == "op":
                 yield "o", body

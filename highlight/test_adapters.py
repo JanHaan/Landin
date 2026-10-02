@@ -85,6 +85,21 @@ def scanner_smoke(source: str) -> None:
     assert has("n", "0x2a")
 
 
+def scanner_declaration_smoke() -> None:
+    names = [f"x{i}" for i in range(2000)]
+    name_set = set(names)
+    line = ", ".join(names) + ": u32"
+    scanned = list(Scanner().scan(line))
+    assert "".join(piece for _, piece in scanned) == line
+    assert [(kind, piece) for kind, piece in scanned if piece in name_set] == [
+        ("d" if index == 0 else None, name)
+        for index, name in enumerate(names)
+    ]
+    assert ("t", "u32") in scanned
+    assert ("d", "value") in Scanner().scan("value := zeroed")
+    assert ("d", "value") not in Scanner().scan("other; value: u32")
+
+
 def pygments_smoke(source: str) -> None:
     try:
         from pygments.token import Comment, Keyword, Name, Number, String
@@ -127,6 +142,7 @@ def main() -> int:
 
     lexical = (ROOT / "tests/lexical.ldn").read_text(encoding="utf-8")
     scanner_smoke(lexical)
+    scanner_declaration_smoke()
     pygments_smoke(lexical)
     samples = {
         "storage.type.builtin.landin": "u23",
