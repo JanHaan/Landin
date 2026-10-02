@@ -34,11 +34,12 @@ exactly that relation.
                                      report gained help lines or warnings
 
 A change that adds to reports -- a fix a diagnostic offers, a warning a
-lint raises -- is held to adding and to nothing else.  Each entry also
-records `errors`, the report with every `  = help:` line and every whole
-`warning[...]` block removed, and `--report-only` requires that and every
-other field equal, except `stderr` itself, which it lists instead: the
-entries whose reports grew are named, and every other difference fails.
+lint raises -- is held to adding and to nothing else.  Each entry records
+`errors`, the report with every `  = help:` line and every whole
+`warning[...]` block removed, and `stderr_base64`, the raw report needed
+to check direction.  `--report-only` requires every other field equal and
+checks that the old report remains in order, with only new help lines or
+whole warning blocks inserted.  Entries whose reports grew are named.
 
     compare --layout-only A.json B.json
                                      require them to agree except where a
@@ -62,6 +63,8 @@ are compared on everything else; the level itself is recorded as `level`,
 and a manifest that has it is compared with one that does not as though it
 were absent only when it is the default.
 """
+import base64
+import binascii
 import concurrent.futures
 import hashlib
 import json
@@ -104,8 +107,11 @@ def text_digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def without_additions(report):
-    """A report with its help lines and warning blocks taken out.
+DIAGNOSTIC = re.compile(rb"(?:error|warning|note)\[L\d{4}\]: ")
+
+
+def report_parts(report):
+    """Return (bytes, may_be_added) units of a rendered report.
 
     A diagnostic's block begins with its level and code, `error[`,
     `warning[` or `note[`, at the start of a line; a warning's runs until
@@ -114,15 +120,54 @@ def without_additions(report):
     number is as wide as the gutter.  Help lines are indented, one per
     fix, after the notes.
     """
-    kept = []
-    in_warning = False
+    parts = []
+    warning = []
     for line in report.splitlines(keepends=True):
-        if re.match(rb"(?:error|warning|note)\[L\d{4}\]: ", line):
-            in_warning = line.startswith(b"warning[")
-        if in_warning or line.startswith(b"  = help: "):
+        if DIAGNOSTIC.match(line):
+            if warning:
+                parts.append((b"".join(warning), True))
+                warning = []
+            if line.startswith(b"warning["):
+                warning.append(line)
+                continue
+        if warning:
+            warning.append(line)
             continue
-        kept.append(line)
-    return b"".join(kept)
+        parts.append((line, line.startswith(b"  = help: ")))
+    if warning:
+        parts.append((b"".join(warning), True))
+    return parts
+
+
+def without_additions(report):
+    """A report with its help lines and warning blocks taken out."""
+    return b"".join(data for data, allowed in report_parts(report)
+                    if not allowed)
+
+
+def report_bytes(entry):
+    """Decode and verify a report; old digest-only manifests fail closed."""
+    try:
+        report = base64.b64decode(entry["stderr_base64"], validate=True)
+    except (KeyError, TypeError, ValueError, binascii.Error):
+        return None
+    if (text_digest(report) != entry.get("stderr") or
+            text_digest(without_additions(report)) != entry.get("errors")):
+        return None
+    return report
+
+
+def only_report_additions(old, new):
+    """Keep every old unit in order; skip only newly added allowed units."""
+    old_parts = report_parts(old)
+    new_parts = report_parts(new)
+    position = 0
+    for part in new_parts:
+        if position < len(old_parts) and part == old_parts[position]:
+            position += 1
+        elif not part[1]:
+            return False
+    return position == len(old_parts)
 
 
 #  What a change of space may move, taken out.  See the module header.
@@ -196,6 +241,7 @@ def run_one(refine, fixture, sources, target, variant, work):
         "status": result.returncode,
         "stdout": text_digest(result.stdout),
         "stderr": text_digest(result.stderr),
+        "stderr_base64": base64.b64encode(result.stderr).decode("ascii"),
         "errors": text_digest(without_additions(result.stderr)),
         "asm": digest(asm),
         "report": "absent" if built is None else text_digest(built),
@@ -281,9 +327,13 @@ def compare(first, second, report_only=False, layout_only=False):
         if a[key] != b[key]:
             fields = sorted(f for f in set(a[key]) | set(b[key])
                             if a[key].get(f) != b[key].get(f))
-            if report_only and fields == ["stderr"]:
-                grown.append(key)
-                continue
+            if report_only and fields == ["stderr", "stderr_base64"]:
+                old_report = report_bytes(a[key])
+                new_report = report_bytes(b[key])
+                if (old_report is not None and new_report is not None and
+                        only_report_additions(old_report, new_report)):
+                    grown.append(key)
+                    continue
             if layout_only and "layout" not in fields and all(
                     f in MOVED_BY_LAYOUT or f.startswith("file:")
                     for f in fields):
