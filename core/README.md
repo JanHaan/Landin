@@ -59,6 +59,13 @@ promise that every composition fits 32 KiB. `core/io`, `core/diag`, `core/heap`
 and the hosted C aliases in `core/c` are outside this consumer closure. Even
 unused hosted declarations in a selected module must meet target checks.
 
+`core/sort.sort` sorts a mutable initialized view in place with heapsort:
+worst-case O(n log n) comparisons, constant auxiliary storage, bounded call
+depth and no allocation. `core/sort.sort_selection` keeps selection sort as an
+explicit choice for tiny or swap-expensive views: exactly n(n-1)/2 comparisons
+and at most n-1 swaps. Both take the caller's strict ordering and neither
+promises stability.
+
 The [probe runner](../environments/cortex-m/freestanding.py) copies only its
 declared import closure and records every source hash. Each link accepts the
 compiler-generated object, pinned `thumb/v6-m/nofp/libgcc.a` and GNU-generated

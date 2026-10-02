@@ -2,9 +2,51 @@ public ordered: type = concept (item: type)
     less: (left: item, right: item) -> (yes: bool)
 end ordered
 
---  A bounded-stack, allocation-free comparison sort for initialized views.
+--  Restore the max-heap property in values[0..<count] below root.
+--  A parent has a child exactly when at < count / 2, so the child-index
+--  arithmetic cannot overflow even for a maximum-length view.
+sift_down: (item: type is ordered, values: []mut item,
+            root: usize, count: usize) -> none =
+    mut at := root
+    while at < count / 2 do
+        mut child: usize = at * 2 + 1
+        if child + 1 < count and item.less(values[child], values[child + 1]) then
+            inc child
+        end if
+        if not item.less(values[at], values[child]) then
+            return
+        end if
+        saved: item = values[at]
+        values[at] = values[child]
+        values[child] = saved
+        at = child
+    end while
+end sift_down
+
+--  In-place heapsort for initialized views. Worst-case O(n log n)
+--  comparisons, constant auxiliary storage and bounded call depth.
 --  The caller supplies a strict ordering; stability is not promised.
 public sort: (item: type is ordered, values: []mut item) -> none =
+    count: usize = lenof values
+    mut start: usize = count / 2
+    while start > 0 do
+        dec start
+        sift_down(values, start, count)
+    end while
+    mut remaining := count
+    zero: usize = 0
+    while remaining > 1 do
+        dec remaining
+        saved: item = values[zero]
+        values[zero] = values[remaining]
+        values[remaining] = saved
+        sift_down(values, zero, remaining)
+    end while
+end sort
+
+--  Selection sort for tiny or swap-expensive views. Exactly n(n-1)/2
+--  comparisons, at most n-1 swaps, constant storage and bounded call depth.
+public sort_selection: (item: type is ordered, values: []mut item) -> none =
     mut at: usize = 0
     while at < lenof values do
         mut least := at
@@ -22,4 +64,4 @@ public sort: (item: type is ordered, values: []mut item) -> none =
         end if
         inc at
     end while
-end sort
+end sort_selection
