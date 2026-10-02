@@ -950,7 +950,7 @@ package body Landin.Tests.Cortex_Suite is
       use type IR.Slot_Id;
       use type IR.Assembly_Direction;
    begin
-      for Mode in 1 .. 9 loop
+      for Mode in 1 .. 10 loop
          declare
             Work : Landin.Stages.Compilation :=
               Landin.Stages.Create (T.Cortex_M);
@@ -1056,13 +1056,20 @@ package body Landin.Tests.Cortex_Suite is
                            IR.Operand_At
                              (IR.Output, First.Name, "r8", Ty.U32,
                               First.Output));
-                     when others =>
+                     when 9 =>
                         --  A wider operand than one Cortex-M0 register.
                         IR.Testing_Support.Overwrite_Assembly_Operand
                           (Code.all, 1, Assembly_Value, 1,
                            IR.Operand_At
                              (IR.Output, First.Name, "", Ty.U64,
                               Other_Slot));
+                     when others =>
+                        --  An output may not replace the input parameter.
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name, "", Ty.U32,
+                              IR.Nth_Parameter (Code.all, 1, 1)));
                   end case;
                end;
                declare
@@ -1078,6 +1085,14 @@ package body Landin.Tests.Cortex_Suite is
                      Landin.Testing.Check
                        (Item, Found = IR.Verifier.Assembly_Register_Refused,
                         "the register table refuses it");
+                  elsif Mode = 10 then
+                     Landin.Testing.Check
+                       (Item, Found =
+                          IR.Verifier.Assembly_Output_To_A_Parameter,
+                        "an assembly output cannot replace a parameter");
+                     Landin.Testing.Check
+                       (Item, IR.Verifier.Check (Code.all).Kind = Found,
+                        "the target-neutral verifier also refuses it");
                   end if;
                end;
             end;

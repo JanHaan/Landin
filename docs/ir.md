@@ -492,7 +492,8 @@ before it; it defines no value, and lowering reads each output slot back
 after it, filling a multi-output block's anonymous result field by field.
 D230's shorthand is one `inout` entry at r0 with no name, and an operand-free
 or naked block has no entries. The verifier holds entries to their inputs and
-slots, names and registers to being distinct, and, given target facts, every
+slots, refuses outputs that name parameter slots, holds names and registers
+to being distinct, and, given target facts, every
 register to the target's table and every type to one register's width;
 `cortex ABI/assembly IR` corrupts each. Its fixed read, write, call and trap
 effects invalidate memory knowledge and preserve ordering through

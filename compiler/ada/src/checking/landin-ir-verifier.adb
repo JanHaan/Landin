@@ -206,6 +206,9 @@ package body Landin.IR.Verifier is
             when Assembly_Operand_Malformed =>
                "an assembly block's operands disagree with its inputs,"
                & " its output slots or [1630]'s forms",
+            when Assembly_Output_To_A_Parameter =>
+               "an assembly output writes a parameter, which [1900]"
+               & " does not permit",
             when Assembly_Register_Refused =>
                "an assembly block names a register [1990]'s table refuses"
                & " on the target",
@@ -365,6 +368,13 @@ package body Landin.IR.Verifier is
                    or else Type_Of (Of_Unit, Item, This.Output) /= This.Kind)
                then
                   return Assembly_Operand_Malformed;
+               end if;
+               if This.Output /= No_Slot then
+                  for P in 1 .. Parameter_Count (Of_Unit, Item) loop
+                     if Nth_Parameter (Of_Unit, Item, P) = This.Output then
+                        return Assembly_Output_To_A_Parameter;
+                     end if;
+                  end loop;
                end if;
                if This.Direction in Input | Both then
                   Inputs := Inputs + 1;

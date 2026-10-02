@@ -143,6 +143,7 @@ package Landin.IR.Verifier is
       Call_Failure_Slot_Disagrees,
       --  [1630]'s blocks.
       Assembly_Operand_Malformed,
+      Assembly_Output_To_A_Parameter,
       Assembly_Register_Refused,
       --  Leaving.
       Leave_Disagrees_With_Item,
