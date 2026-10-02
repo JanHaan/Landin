@@ -93,14 +93,38 @@ public main: () -> (code: i32) =
         0
     end
 
+    --  Repeated prefixes used to retry every offset with the old search.
+    mut long_storage: [4096]u8 = [of 97]
+    mut sought_storage: [257]u8 = [of 97]
+    sought_storage[256] = 98
+    long_view: []mut u8 = long_storage[0..<lenof long_storage]
+    sought_view: []mut u8 = sought_storage[0..<lenof sought_storage]
+    long_text: utf8 = text.from_bytes(long_view) else ""
+    sought_text: utf8 = text.from_bytes(sought_view) else ""
+    absent_after_prefixes: bool = not text.contains(long_text, sought_text)
+    long_storage[4095] = 98
+    found_at_end: bool = text.contains(long_text, sought_text)
+
     if lenof valid == 5 and lenof valid_bytes == 5
       and valid_bytes[0] == 65 and valid_bytes[4] == 0
       and lenof empty == 0 and text.eq(from_c, "C text")
       and text.eq("same", "same") and not text.eq("same", "other")
       and text.contains("", "") and text.contains("abc", "")
       and text.contains("banana", "ana")
+      and text.contains("abc", "b")
+      and not text.contains("", "a")
+      and not text.contains("a", "aa")
       and not text.contains("banana", "apple")
       and text.contains("A\u{2603}B", "\u{2603}")
+      and text.contains("ababababac", "ababac")
+      and text.contains("aaaaab", "aaab")
+      and text.contains("abcabcabx", "abcabx")
+      and text.contains("caacbcbcc", "bcbc")
+      and not text.contains("ababababab", "ababac")
+      and not text.contains("aaaaaa", "aaaab")
+      and text.contains("x\u{2603}y\u{2603}", "y\u{2603}")
+      and text.contains(valid, "\u{2603}\u{0}")
+      and absent_after_prefixes and found_at_end
       and rejected_stray and rejected_truncated and rejected_overlong
       and rejected_surrogate and rejected_high
       and zero == 0 and maximum == 4294967295

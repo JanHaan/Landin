@@ -16039,7 +16039,10 @@ uses the ordinary scan conversion and then the same byte validator.
 `eq` and `contains` compare exact encoded bytes without normalization,
 locale or grapheme policy; `contains` considers the empty sequence present.
 Shortest-form validity makes exact byte equality equivalent to equality of
-the represented scalar sequence.
+the represented scalar sequence. `contains` uses a Two-Way byte search:
+critical-factorization preprocessing and matching take worst-case time
+proportional to the combined byte lengths of source and sought, with constant
+scratch storage and no allocation.
 
 `to_u32` accepts one or more ASCII decimal digits, including zero and
 4294967295. Empty input and a nondigit report `invalid_number`; a value above

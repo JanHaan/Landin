@@ -182,6 +182,9 @@ public eq: (left: utf8, right: utf8) -> (same: bool) =
     same = true
 end eq
 
+--  Two-Way search uses a critical split of the sought bytes.  Its two
+--  lexicographic passes and the search each take linear time; only scalar
+--  counters are kept, so neither a table nor a caller allocator is needed.
 public contains: (source: utf8, sought: utf8) -> (yes: bool) =
     source_bytes: []u8 = bytes(source)
     sought_bytes: []u8 = bytes(sought)
@@ -194,20 +197,97 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
         return
     end if
 
-    mut start: usize = 0
-    last: usize = lenof source_bytes - lenof sought_bytes
-    while start <= last do
-        mut offset: usize = 0
-        while offset < lenof sought_bytes
-          and source_bytes[start + offset] == sought_bytes[offset]
+    sought_length: usize = lenof sought_bytes
+    mut cut: usize = 0
+    mut period: usize = 1
+    mut pass: usize = 0
+    while pass < 2 do
+        mut maximum: usize = 0
+        mut candidate: usize = 1
+        mut matched: usize = 0
+        mut local_period: usize = 1
+        while candidate < sought_length
+          and matched < sought_length - candidate
         do
-            inc offset
+            current: u8 = sought_bytes[candidate + matched]
+            best: u8 = sought_bytes[maximum + matched]
+            if (pass == 0 and current < best)
+              or (pass == 1 and best < current)
+            then
+                candidate += matched + 1
+                matched = 0
+                local_period = candidate - maximum
+            elsif current == best then
+                if matched + 1 == local_period then
+                    candidate += local_period
+                    matched = 0
+                else
+                    inc matched
+                end if
+            else
+                maximum = candidate
+                inc candidate
+                matched = 0
+                local_period = 1
+            end if
         end while
-        if offset == lenof sought_bytes then
-            yes = true
-            return
+        if pass == 0 or maximum >= cut then
+            cut = maximum
+            period = local_period
         end if
-        inc start
+        inc pass
+    end while
+
+    --  A period of the right half is a period of the whole sought value
+    --  precisely when the left half agrees with its shifted copy.
+    mut periodic: bool = cut <= sought_length - period
+    mut offset: usize = 0
+    while periodic and offset < cut do
+        if sought_bytes[offset] <> sought_bytes[offset + period] then
+            periodic = false
+        end if
+        inc offset
+    end while
+    if not periodic then
+        if cut > sought_length - cut then
+            period = cut + 1
+        else
+            period = sought_length - cut + 1
+        end if
+    end if
+
+    mut start: usize = 0
+    mut memory: usize = 0
+    last: usize = lenof source_bytes - sought_length
+    while start <= last do
+        mut index: usize = cut
+        if periodic and memory > index then
+            index = memory
+        end if
+        while index < sought_length
+          and sought_bytes[index] == source_bytes[start + index]
+        do
+            inc index
+        end while
+        if index < sought_length then
+            start += index - cut + 1
+            memory = 0
+        else
+            index = memory
+            while index < cut
+              and sought_bytes[index] == source_bytes[start + index]
+            do
+                inc index
+            end while
+            if index >= cut then
+                yes = true
+                return
+            end if
+            start += period
+            if periodic then
+                memory = sought_length - period
+            end if
+        end if
     end while
     yes = false
 end contains
