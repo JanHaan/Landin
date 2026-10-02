@@ -3994,25 +3994,35 @@ build/package orchestration is outside it.
 
 And this is where capabilities come from. Everything below
 is handed what it may do — an allocator, an Io, a
-diagnostics log — and the entry point is the one place
-where a root is minted rather than passed. So the whole of
-main is an argument list being filled. The hosted root imports
+diagnostics log — and the entry point is where host roots
+are minted rather than passed. The hosted root imports
 `core/io/hosted`; a caller-backed root needs only `core/io`.
+The derived hosted example's `main` delegates to `app.entry`,
+whose essential flow is:
 
 ```landin
-public main: () -> (code: i32) =
-    mut h := hosted.host()          -- out of nothing, once, here
-    mut w: any io.world = any(addr h)
-    args := copy_arguments(w)   -- application-owned representation
-    mut backing := heap.host()
-    mut program := region.new_region(addr backing)
+public entry: () -> (code: i32) =
+    mut host := hosted.host()
+    world: any io.world = any(addr host)
+    mut heap := heap.host()
+    mut program := region.new_region(addr heap)
     defer region.release_region(program)
-    stream := w.err()
-    mut logger := diag.to(addr w, addr stream)
-    mut d := any(addr logger)
-    code = run(w, program, d, args) else 1
-end main
+    stream: io.file = world.err()
+    mut logger := diag.to(addr world, addr stream)
+    log: any diag.log = any(addr logger)
+    kept: usize = run_logged(program, world, usize(4096), log) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    _ = kept
+    code = if log.failed() then 1 else 0 end if
+end entry
 ```
+
+The actual entry also reports `kept` and write failures before choosing its
+status. `build_logged`, called by `run_logged`, copies the world's arguments
+into the supplied program allocator before retaining configuration.
 
 `hosted.host()` acquires the real argument-table capability; it does not create or
 copy that storage. The first nonnegative-count, non-null-table startup call
@@ -4024,21 +4034,44 @@ published sequence starts at `argv[1]`; an ordinary C invocation with only its
 program name consequently gives Landin an empty user-argument sequence.
 
 Which is what makes the same run testable and portable
-without it knowing: hand it a different root and it does
-not learn the difference.
+without it knowing: hand it a different world and it does
+not learn the difference. The memory provider takes caller-owned file,
+argument, output and error storage; the test must supply an input path in
+its argument table for the application's configuration.
 
 ```landin
-test_drops_debug: () -> none =
-    mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
-    mut w: any io.world = any(addr h)
-    mut bytes: [4096]u8 = zeroed
-    mut backing := mem.arena_over(addr bytes[0], 4096)
-    mut scratch := region.new_region(addr backing)
-    defer region.release_region(scratch)
-    mut logger := diag.new_log(capacity: 32)
-    mut d := any(addr logger)
-    kept := run(w, scratch, d, []) else 0
-    assert(kept == 1)
+test_drops_debug: () -> (ok: bool) =
+    ok = false
+    source: []u8 = "DEBUG a\nERROR b\n"
+    mut data: [16]u8 = zeroed
+    for at in usize(0)..<lenof source do data[at] = source[at] end for
+    file: io.memory_file =
+      (name: "in.log", contents: data[0..<16], length: lenof source, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    level: []u8 = "--level"
+    threshold: []u8 = "ERROR"
+    path: []u8 = "in.log"
+    arguments: [3]io.argument = [
+      (data: addr level[0], length: lenof level),
+      (data: addr threshold[0], length: lenof threshold),
+      (data: addr path[0], length: lenof path)]
+    mut output: [128]u8 = zeroed
+    mut errors: [128]u8 = zeroed
+    mut memory := io.memory_world(files[0..<1], arguments[0..<3],
+                                  output[0..<128], errors[0..<128])
+    world: any io.world = any(addr memory)
+    mut backing := heap.host()
+    mut program := region.new_region(addr backing)
+    defer region.release_region(program)
+    mut logger := diag.new_log(capacity: 4)
+    log: any diag.log = any(addr logger)
+    kept: usize = app.run_logged(program, world, usize(4096), log) else (problem)
+        _ = problem
+        return
+    end
+    ok = kept == 1 and not files[0].opened
 end test_drops_debug
 ```
 
