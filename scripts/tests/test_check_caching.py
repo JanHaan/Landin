@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Lexical reuse must preserve offsets, refusals and grammar edits."""
+"""Check caches preserve offsets, refusals and changed inputs."""
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -46,6 +47,69 @@ class LexicalCache(unittest.TestCase):
                 with patch.object(CHECK, "lru_cache", side_effect=lambda **kw: lambda f: f):
                     uncached = CHECK.landin_tokens(text, signs, trees)
                 self.assertEqual(cached, uncached)
+
+
+class GrammarCorpusCache(unittest.TestCase):
+    def test_reuses_only_matching_source_grammar_and_checker_bytes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "spec.md").write_text("grammar one")
+            (root / "check.py").write_text("checker one")
+            case = root / "compiler/tests/fixtures/positive/sample"
+            case.mkdir(parents=True)
+            source = case / "program.ldn"
+            source.write_text("good")
+            calls = []
+
+            def recognises(rules, trees, tokens):
+                calls.append(tokens)
+                return tokens == "good"
+
+            with patch.object(CHECK, "ROOT", raw), \
+                 patch.object(CHECK, "__file__", str(root / "check.py")), \
+                 patch.object(CHECK, "read_grammar",
+                              return_value=({}, {"program": ()}, [])), \
+                 patch.object(CHECK, "grammar_signs", return_value=set()), \
+                 patch.object(CHECK, "landin_tokens",
+                              side_effect=lambda source, *_: (source, None)), \
+                 patch.object(CHECK, "grammar_recognises",
+                              side_effect=recognises), \
+                 patch.object(CHECK, "frontend_codes", return_value=set()), \
+                 patch.object(CHECK, "token_dump", return_value=None):
+                def faults():
+                    return [why for where, _, why
+                            in CHECK.check_grammar_corpus(True)
+                            if where.endswith("program.ldn")]
+
+                self.assertEqual(faults(), [])
+                self.assertEqual(faults(), [])
+                self.assertEqual(calls, ["good"])
+
+                meta = case / "fixture.meta"
+                meta.write_text("lex: wanted complaint\n")
+                self.assertTrue(any("scanner says" in why for why
+                                    in faults()))
+                self.assertEqual(len(calls), 1)
+                meta.unlink()
+
+                source.write_text("bad")
+                self.assertTrue(faults())
+                self.assertEqual(calls, ["good", "bad"])
+                self.assertTrue(faults())
+                self.assertEqual(len(calls), 2)
+
+                source.write_text("good")
+                self.assertEqual(faults(), [])
+                (root / "spec.md").write_text("grammar two")
+                self.assertEqual(faults(), [])
+                (root / "check.py").write_text("checker two")
+                self.assertEqual(faults(), [])
+                self.assertEqual(len(calls), 5)
+
+                (case / "other.ldn").write_text("bad")
+                self.assertTrue(any("other.ldn" in where for where, _, _
+                                    in CHECK.check_grammar_corpus(True)))
+                self.assertEqual(len(calls), 6)
 
 
 if __name__ == "__main__":

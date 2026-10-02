@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 
 #  The compiler's public parser limit is 128 nested constructs.  A negative
 #  fixture must cross it, and the independent grammar recognizer uses Python
@@ -2186,6 +2187,65 @@ def frontend_codes():
 
 
 
+def grammar_corpus_cache(tour):
+    """Load source verdicts only for this checker, grammar and interpreter.
+
+    The metadata and corpus directory walks stay live.  A source entry is
+    reused only when its bytes still match; timestamps cannot establish that.
+    """
+    with io.open(__file__, "rb") as stream:
+        checker_digest = hashlib.sha256(stream.read()).hexdigest()
+    with io.open(tour, "rb") as stream:
+        grammar_digest = hashlib.sha256(stream.read()).hexdigest()
+    identity = [checker_digest, grammar_digest, list(sys.version_info[:2])]
+    path = os.path.join(ROOT, ".scratch/check-grammar-corpus.json")
+    try:
+        with io.open(path, encoding="utf-8") as stream:
+            saved = json.load(stream)
+        if (saved.get("identity") == identity
+                and isinstance(saved.get("sources"), dict)):
+            return path, identity, saved["sources"]
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return path, identity, {}
+
+
+def grammar_source_verdict(path, where, signs, rules, trees, cached):
+    """Derive one source, reusing a verdict only for identical source bytes."""
+    with io.open(path, "rb") as stream:
+        source = stream.read()
+    digest = hashlib.sha256(source).hexdigest()
+    entry = cached.get(where)
+    if (isinstance(entry, list) and len(entry) == 3
+            and entry[0] == digest and type(entry[1]) is bool
+            and (entry[2] is None or isinstance(entry[2], str))):
+        return entry[1], entry[2]
+
+    tokens, complaint = landin_tokens(source.decode("latin-1"), signs, trees)
+    derives = tokens is not None and grammar_recognises(rules, trees, tokens)
+    cached[where] = [digest, derives, complaint]
+    return derives, complaint
+
+
+def save_grammar_corpus_cache(path, identity, sources):
+    """Publish a complete cache atomically; a read-only checkout still works."""
+    directory = os.path.dirname(path)
+    temporary = None
+    try:
+        os.makedirs(directory, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=directory, delete=False) as stream:
+            temporary = stream.name
+            json.dump({"identity": identity, "sources": sources}, stream)
+        os.replace(temporary, path)
+    except OSError:
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+
+
 def check_grammar_corpus(full_run):
     """The grammar derives every positive fixture and no negative one.
 
@@ -2209,6 +2269,7 @@ def check_grammar_corpus(full_run):
         return out
 
     signs = grammar_signs(trees)
+    cache_path, cache_identity, cached = grammar_corpus_cache(tour)
     fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
 
     #  The corpus is read as bytes, and this is what says so.  Python's
@@ -2296,11 +2357,9 @@ def check_grammar_corpus(full_run):
                 #  lone CR into LF, so a reader that used it could never
                 #  test the terminator rule [1750] stated, and its offsets
                 #  would be character offsets rather than byte offsets.
-                text = io.open(path, "rb").read().decode("latin-1")
-                tokens, complaint = landin_tokens(text, signs, trees)
                 try:
-                    derives = (tokens is not None
-                               and grammar_recognises(rules, trees, tokens))
+                    derives, complaint = grammar_source_verdict(
+                        path, where, signs, rules, trees, cached)
                 except LeftRecursion as rule:
                     out.append((where, 1,
                                 "the grammar's `%s` is left-recursive, which"
@@ -2346,10 +2405,9 @@ def check_grammar_corpus(full_run):
                                  if name.endswith(".ldn")):
                 path = os.path.join(directory, source)
                 where = os.path.relpath(path, ROOT)
-                text = io.open(path, "rb").read().decode("latin-1")
-                tokens, complaint = landin_tokens(text, signs, trees)
-                if tokens is None or not grammar_recognises(
-                        rules, trees, tokens):
+                derives, complaint = grammar_source_verdict(
+                    path, where, signs, rules, trees, cached)
+                if not derives:
                     out.append((where, 1,
                                 "the grammar does not derive this %s"
                                 " module: %s"
@@ -2417,6 +2475,7 @@ def check_grammar_corpus(full_run):
                         "the token dump is stale; regenerate it with "
                         "python3 check.py --tokens"))
 
+    save_grammar_corpus_cache(cache_path, cache_identity, cached)
     return out
 
 
