@@ -175,7 +175,7 @@ REGISTER_COLUMNS = ("Record", "Family", "What stands", "Activation",
                     "Completion", "Status")
 REGISTER_RECORD = re.compile(r"R551-\d\d|R730-\d\d|[A-F]\d|SR-\d\d")
 REGISTER_STATUS = re.compile(
-    r"open|limit|watch|scheduled (R\d+\.\d+)|retired: \S.*")
+    r"open|limit|watch|scheduled (R\d+\.\d+(?:, R\d+\.\d+)*)|retired: \S.*")
 #  A work item of either roadmap, or a record of the register that is
 #  spelled like no other identifier in the tree: the first roadmap's two
 #  debt ledgers and the records added since.  None may appear anywhere but
@@ -1453,11 +1453,11 @@ def check_roadmap(path):
 def register_problems(text, statuses):
     """Every register record is owned, explained and honestly scheduled.
 
-    A record waits for a trigger or names the item that takes it on.  The
-    item must be one of this roadmap's and must not be finished: a record
-    whose work is done leaves the register rather than claiming an owner
-    nobody is left to be.  Every family owns something, because a family
-    that owns nothing is a direction and not an owner.
+    A record waits for a trigger or names the items that take it on.  Each
+    item must be one of this roadmap's and must not be finished: completed
+    parts leave the owner list, and a record whose work is done leaves the
+    register.  Every family owns something, because a family that owns
+    nothing is a direction and not an owner.
     """
     lines = text.splitlines()
     rows = markdown_table(lines, REGISTER_HEADING, REGISTER_COLUMNS)
@@ -1495,14 +1495,20 @@ def register_problems(text, statuses):
         for column in ("Activation", "Completion"):
             if not row[column].strip(" .—-"):
                 out.append((line, "%s has no %s" % (record, column.lower())))
-        item = status.group(1)
-        if item:
-            if item not in statuses:
-                out.append((line, "%s is scheduled on %s, which is not a work"
-                            " item of this roadmap" % (record, item)))
-            elif statuses[item] == "complete":
-                out.append((line, "%s is still scheduled on finished %s"
-                            % (record, item)))
+        items = status.group(1)
+        if items:
+            seen_items = set()
+            for item in items.split(", "):
+                if item in seen_items:
+                    out.append((line, "%s repeats scheduled owner %s"
+                                % (record, item)))
+                seen_items.add(item)
+                if item not in statuses:
+                    out.append((line, "%s is scheduled on %s, which is not a work"
+                                " item of this roadmap" % (record, item)))
+                elif statuses[item] == "complete":
+                    out.append((line, "%s is still scheduled on finished %s"
+                                % (record, item)))
     for family in sorted(families - set(owned)):
         out.append((1, "family %s owns no open record" % family))
     return out

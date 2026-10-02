@@ -1016,6 +1016,28 @@ class RoadmapStructure(unittest.TestCase):
         self.assertTrue(any("still scheduled on finished " + SCHEDULED in why
                             for why in said))
 
+    def test_every_scheduled_owner_is_checked(self):
+        owners = re.search(r"\| scheduled (R\d+\.\d+(?:, R\d+\.\d+)+) \|",
+                           real_roadmap()).group(1)
+        later = owners.split(", ")[1]
+        said = roadmap_faults(once("| scheduled " + owners + " |",
+                                   "| scheduled " + owners.replace(
+                                       later, CLOSED, 1) + " |"))
+        self.assertTrue(any("scheduled on " + CLOSED in why for why in said))
+
+        said = roadmap_faults(restate(later, "planned", "complete"))
+        self.assertTrue(any("still scheduled on finished " + later in why
+                            for why in said))
+
+    def test_a_repeated_scheduled_owner_is_reported(self):
+        owners = re.search(r"\| scheduled (R\d+\.\d+(?:, R\d+\.\d+)+) \|",
+                           real_roadmap()).group(1)
+        first = owners.split(", ")[0]
+        said = roadmap_faults(once("| scheduled " + owners + " |",
+                                   "| scheduled " + owners + ", " + first + " |"))
+        self.assertTrue(any("repeats scheduled owner " + first in why
+                            for why in said))
+
     def test_a_record_without_an_activation_is_reported(self):
         said = roadmap_faults(once(
             "| A measured cleanup workload with unacceptable growth. |",
