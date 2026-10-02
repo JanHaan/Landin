@@ -3977,7 +3977,7 @@ hidden C entry
 incoming carriers before that no-argument source body begins.
 
 A C-owned `main` that drives exported Landin routines calls the same entry
-explicitly before `io.host` acquires an argument capability and before starting
+explicitly before `hosted.host()` acquires an argument capability and before starting
 a thread that may acquire one. It need not do so for startup-independent bridge
 work merely because `core/io` is linked, and no ordinary export or callback
 initializes or resets the root. Those views derive from the resulting world; a
@@ -4014,7 +4014,7 @@ public main: () -> (code: i32) =
 end main
 ```
 
-`io.host` acquires the real argument-table capability; it does not create or
+`hosted.host()` acquires the real argument-table capability; it does not create or
 copy that storage. The first nonnegative-count, non-null-table startup call
 establishes one exact `(argc, argv)` root. Repeating that exact pair is harmless;
 using the argument services before initialization or trying to replace either
