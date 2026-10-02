@@ -44,8 +44,8 @@ public main: () -> (code: i32) =
     map.insert(value, arena, key(5), 105) else 0
     map.insert(value, arena, key(6), 106) else 0
 
-    --  Collision-chain replacement allocates nothing. Deletion leaves the
-    --  pressure-producing tombstone, so inserting seven grows the map.
+    --  Collision-chain replacement allocates nothing. Key seven reuses the
+    --  tombstone left by deletion; key eight grows the table to sixteen slots.
     before_update: usize = mem.arena_used(arena)
     map.insert(value, arena, key(6), 166) else 0
     updated: bool = mem.arena_used(arena) == before_update and map.length(value) == 6
