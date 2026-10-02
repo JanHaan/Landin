@@ -591,6 +591,9 @@ package body Landin.Tests.Server_Suite is
          begin
             Landin.Testing.Check
               (Item, not P.Ready (Map), "an unprepared map is empty");
+            for Offset in reverse 0 .. Text'Length - 1 loop
+               P.Register (Map, Landin.Source.Byte_Offset (Offset));
+            end loop;
             P.Prepare (Map, Text (Text'First + 1 .. Text'Last), Unit);
             for Offset in 0 .. Text'Length - 1 loop
                Landin.Testing.Check
@@ -602,6 +605,9 @@ package body Landin.Tests.Server_Suite is
                      Landin.Source.Byte_Offset (Offset), Unit),
                   "every byte boundary matches the scalar conversion");
             end loop;
+            for Offset in 0 .. Text'Length loop
+               P.Register (Map, Landin.Source.Byte_Offset (Offset));
+            end loop;
             P.Prepare (Map, Text, Unit);
             for Offset in 0 .. Text'Length loop
                Landin.Testing.Check
@@ -612,17 +618,44 @@ package body Landin.Tests.Server_Suite is
                     (Text, Landin.Source.Byte_Offset (Offset), Unit),
                   "every endpoint matches after rebuilding the map");
             end loop;
+            P.Register (Map, 100);
+            P.Prepare (Map, Text, Unit);
             Landin.Testing.Check
               (Item,
                P.Position_Of (Map, 100) =
                P.Position_Of (Text, 100, Unit),
                "an offset past the text clamps to its end");
-            P.Prepare (Map, "", Unit);
-            Landin.Testing.Check
-              (Item, P.Ready (Map) and then P.Position_Of (Map, 0) = (0, 0),
-               "the empty text has one position");
+            declare
+               Empty : P.Position_Map;
+            begin
+               P.Register (Empty, 0);
+               P.Prepare (Empty, "", Unit);
+               Landin.Testing.Check
+                 (Item, P.Ready (Empty)
+                        and then P.Position_Of (Empty, 0) = (0, 0),
+                  "the empty text has one position");
+            end;
          end;
       end loop;
+      declare
+         --  The long line makes a byte-indexed map costly even with only
+         --  two reported endpoints.
+         Long_Text : constant String := [1 .. 4 * 1024 * 1024 => 'x'];
+         Map : P.Position_Map;
+      begin
+         P.Register (Map, 1);
+         P.Register (Map, Landin.Source.Byte_Offset (Long_Text'Length));
+         P.Prepare (Map, Long_Text, P.UTF_16);
+         Landin.Testing.Check
+           (Item, P.Endpoint_Count (Map) = 2,
+            "a large source stores only its requested endpoints");
+         Landin.Testing.Check
+           (Item, P.Position_Of (Map, 1) = (0, 1)
+                  and then P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Long_Text'Length)) =
+                    (0, Long_Text'Length),
+            "the long line's endpoints keep their columns");
+      end;
    end Positions_Count_What_Was_Agreed;
 
    ---------------------------------------------------------------------

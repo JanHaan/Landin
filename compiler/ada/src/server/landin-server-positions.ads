@@ -27,13 +27,15 @@ package Landin.Server.Positions is
       Character : Natural := 0;
    end record;
 
-   --  A batch's positions, indexed by byte offset.  Prepare scans Text once;
-   --  each endpoint lookup then takes constant time, including endpoints
-   --  inside a multibyte character or a CR LF terminator.
+   --  A batch holds only its requested endpoints.  Register them before
+   --  Prepare, which sorts them and scans Text once in offset order.
    type Position_Map is tagged private;
 
+   procedure Register
+     (Map : in out Position_Map; Offset : Landin.Source.Byte_Offset);
    procedure Prepare
      (Map : in out Position_Map; Text : String; Unit : Encoding);
+   function Endpoint_Count (Map : Position_Map) return Natural;
    function Ready (Map : Position_Map) return Boolean;
    function Position_Of
      (Map : Position_Map; Offset : Landin.Source.Byte_Offset)
@@ -53,11 +55,17 @@ package Landin.Server.Positions is
 
 private
 
-   package Position_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Natural, Element_Type => Position);
+   type Endpoint is record
+      Offset : Landin.Source.Byte_Offset;
+      At_Pos : Position;
+   end record;
+
+   package Endpoint_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Natural, Element_Type => Endpoint);
 
    type Position_Map is tagged record
-      Points : Position_Vectors.Vector;
+      Points : Endpoint_Vectors.Vector;
+      Built  : Boolean := False;
    end record;
 
 end Landin.Server.Positions;
