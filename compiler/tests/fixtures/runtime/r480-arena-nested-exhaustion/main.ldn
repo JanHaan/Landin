@@ -40,19 +40,19 @@ nested: (inout outer: mem.failing, inout inner: mem.failing)
     --  The outer provider has independent authority and still works.
     second := try mem.allocate(outer, usize(1), usize(1))
     defer mem.free(outer, second, usize(1))
-    ok = empty and outer.used == 2 and inner.used == 2
-      and inner.allocations == 2 and inner.frees == 2
+    ok = empty and mem.failing_used(outer) == 2 and mem.failing_used(inner) == 2
+      and mem.failing_allocations(inner) == 2 and mem.failing_frees(inner) == 2
 end nested
 
 public main: () -> (code: i32) =
     code = 1
     mut outer_bytes: [4]u8 = zeroed
     mut inner_bytes: [2]u8 = zeroed
-    mut outer := mem.fail_over(addr outer_bytes[0], 4, 4)
-    mut inner := mem.fail_over(addr inner_bytes[0], 2, 3)
+    mut outer := mem.fail_over_unchecked(addr outer_bytes[0], 4, 4)
+    mut inner := mem.fail_over_unchecked(addr inner_bytes[0], 2, 3)
     ok: bool = nested(outer, inner) else false
     return when not ok
-    return when outer.frees <> 2 or inner.remaining <> 1
+    return when mem.failing_frees(outer) <> 2 or mem.failing_remaining(inner) <> 1
     leave(outer, 0) else (problem)
         _ = problem
         return
@@ -60,8 +60,8 @@ public main: () -> (code: i32) =
     leave(outer, 1) else (problem)
         _ = problem
     end
-    if outer.used == 4 and outer.allocations == 4
-      and outer.frees == 4 and inner.used == 2
+    if mem.failing_used(outer) == 4 and mem.failing_allocations(outer) == 4
+      and mem.failing_frees(outer) == 4 and mem.failing_used(inner) == 2
     then
         code = 42
     end if

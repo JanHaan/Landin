@@ -26,7 +26,10 @@ no reference counting, no destructors. Allocation is an ordinary
 concept, so a container runs on a heap, in an arena, or on a fixed
 buffer with no dynamic allocation at all — and a deliberately failing
 allocator makes the out-of-memory paths testable, which almost nobody
-bothers with in C because it is too awkward.
+bothers with in C because it is too awkward. An ordinary arena or counted
+arena accepts only backing the caller may retain; a frame buffer requires
+the explicitly named unchecked constructor because allocator results carry
+no backing origin.
 
 **References** answer two independent questions in two places. `mut` on
 the binding says whether the name may be re-pointed. `mut` inside the
@@ -44,7 +47,9 @@ shortest-lived part. `escaping` marks a parameter the callee may keep;
 a `from` clause marks a returned reference as borrowing what it came
 from. Both are written rather than inferred, deliberately: inference
 across calls lets a distant body change a signature, and for `from`
-inference was shown to get the allocator wrong.
+inference was shown to get the allocator wrong. A checked arena constructor
+therefore rejects frame backing before its origin-erasing allocation path can
+hide that frame lifetime.
 
 **Errors** are atoms in a dedicated register, declared per function
 after `!`, with `fail`, `try` and an `else` clause on the call. A

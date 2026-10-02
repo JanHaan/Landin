@@ -34,7 +34,7 @@ public main: () -> (code: i32) =
     --  The first eight-slot table and its sixteen-slot replacement fit. The
     --  next bucket extent does not, even before its key and value extents.
     mut backing: [1000]u8 = zeroed
-    mut arena := mem.arena_over(addr backing[0], lenof backing)
+    mut arena := mem.arena_over_unchecked(addr backing[0], lenof backing)
     mut value := map.new_map(key: arena_key, item: i32)
 
     map.insert(value, arena, key(1), 101) else 0
@@ -46,9 +46,9 @@ public main: () -> (code: i32) =
 
     --  Collision-chain replacement allocates nothing. Deletion leaves the
     --  pressure-producing tombstone, so inserting seven grows the map.
-    before_update: usize = arena.used
+    before_update: usize = mem.arena_used(arena)
     map.insert(value, arena, key(6), 166) else 0
-    updated: bool = arena.used == before_update and map.length(value) == 6
+    updated: bool = mem.arena_used(arena) == before_update and map.length(value) == 6
                     and has(value, 6, 166)
     map.remove(value, key(1)) else 0
     map.insert(value, arena, key(7), 107) else 0
@@ -64,7 +64,7 @@ public main: () -> (code: i32) =
 
     --  Twelve-of-sixteen pressure requests capacity 32. Bounded arena
     --  exhaustion reports OOM before publication, preserving the old map.
-    before_failure: usize = arena.used
+    before_failure: usize = mem.arena_used(arena)
     mut exhausted: bool = false
     map.insert(value, arena, key(14), 114) else (problem)
         _ = problem
@@ -76,20 +76,20 @@ public main: () -> (code: i32) =
         fourteen_missing = true
         i32(0)
     end
-    preserved: bool = exhausted and arena.used == before_failure
+    preserved: bool = exhausted and mem.arena_used(arena) == before_failure
                       and map.length(value) == 12 and fourteen_missing
                       and has(value, 2, 102) and has(value, 6, 166)
                       and has(value, 13, 113)
 
     --  Arena free is deliberately a no-op. Release still drains and resets
     --  the public map composition to its logical empty state.
-    before_release: usize = arena.used
+    before_release: usize = mem.arena_used(arena)
     map.release_map(value, arena)
     released: bool = map.length(value) == 0
                      and mem.capacity(value.buckets) == 0
                      and mem.capacity(value.keys) == 0
                      and mem.capacity(value.values) == 0
-                     and arena.used == before_release
+                     and mem.arena_used(arena) == before_release
 
     if updated and grown and preserved and released then
         code = 42

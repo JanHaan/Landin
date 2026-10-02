@@ -517,7 +517,7 @@ map_operations: () -> (ok: bool) =
     discarded: map.entry(collision_key, i32) =
         (key: (identity: u64(0), home: u64(0)), item: i32(0))
     mut bytes: [2048]u8 = zeroed
-    mut provider := mem.arena_over(addr bytes[0], lenof bytes)
+    mut provider := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
     mut value := map.new_map(key: collision_key, item: i32)
     k1: collision_key = (identity: 1, home: 6)
     k2: collision_key = (identity: 2, home: 6)
@@ -560,7 +560,7 @@ map_operations: () -> (ok: bool) =
     map.remove(value, k3) else (problem) _ = problem return end
     removed: bool = map.length(value) == 6 and map_lacks(value, 3)
                     and map_has(value, 7, 107)
-    used_bytes: bool = provider.used > 0
+    used_bytes: bool = mem.arena_used(provider) > 0
     map.release_map(value, provider)
 
     --  Churn reaches the capacity-eight pressure threshold with three live

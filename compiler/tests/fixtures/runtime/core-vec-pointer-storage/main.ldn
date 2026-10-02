@@ -14,7 +14,7 @@ public main: () -> (code: i32) =
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 256
     allowance: usize = 2
-    mut state := mem.fail_over(base, extent, allowance)
+    mut state := mem.fail_over_unchecked(base, extent, allowance)
     mut values := vec.new_list(item: ptr node)
 
     vec.push(values, state, addr first) else 0
@@ -39,12 +39,12 @@ public main: () -> (code: i32) =
 
     if failed and vec.length(values) == 2 and vec.capacity(values) == wanted
       and left.val.value == 7 and right.val.value == 11
-      and removed_value == 24 and state.allocations == 2
-      and state.frees == 1
+      and removed_value == 24 and mem.failing_allocations(state) == 2
+      and mem.failing_frees(state) == 1
     then
         vec.release(values, state)
         if vec.length(values) == 0 and vec.capacity(values) == 0
-          and state.frees == 2
+          and mem.failing_frees(state) == 2
         then
             code = 42
         else

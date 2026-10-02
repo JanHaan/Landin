@@ -19,7 +19,7 @@ public main: () -> (code: i32) =
     middle: usize = 32767
     last: usize = total - 1
     allowance: usize = 14
-    mut state := mem.fail_over(addr backing[0], lenof backing, allowance)
+    mut state := mem.fail_over_unchecked(addr backing[0], lenof backing, allowance)
     mut values := vec.new_list(item: u32)
 
     for index in zero..<total do
@@ -29,8 +29,8 @@ public main: () -> (code: i32) =
     if not (vec.length(values) == total)
       or not (vec.capacity(values) == total)
       or not contents_ok(values, middle, last)
-      or not (state.allocations == allowance)
-      or not (state.frees == allowance - 1)
+      or not (mem.failing_allocations(state) == allowance)
+      or not (mem.failing_frees(state) == allowance - 1)
     then
         code = 1
         return
@@ -38,7 +38,7 @@ public main: () -> (code: i32) =
 
     vec.release(values, state)
     if vec.length(values) == 0 and vec.capacity(values) == 0
-      and state.frees == allowance
+      and mem.failing_frees(state) == allowance
     then
         code = 42
     else

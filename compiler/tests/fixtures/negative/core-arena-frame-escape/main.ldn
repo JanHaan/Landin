@@ -12,3 +12,23 @@ public main: () -> (code: i32) =
     code = 0
 end main
 
+counted: () -> none =
+    mut bytes: [32]u8 = zeroed
+    _ = mem.fail_over(addr bytes[0], 32, 1)
+end counted
+
+absent: atom
+saved: type = absent | ptr mut u8
+mut retained: saved = absent
+
+retain: (inout state: mem.arena) -> none ! mem.out_of_memory =
+    retained = try mem.new(state, u8(7))
+end retain
+
+helper_escape: () -> none =
+    mut bytes: [32]u8 = zeroed
+    mut state := mem.arena_over(addr bytes[0], 32)
+    retain(state) else (problem)
+        _ = problem
+    end
+end helper_escape

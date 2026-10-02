@@ -88,9 +88,9 @@ public main: () -> (code: i32) =
     mut backing: [1024]u64 = zeroed
     extent: usize = 8 * sizeof tree.node
     arena_base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over(arena_base, extent)
+    mut arena := mem.arena_over_unchecked(arena_base, extent)
     arena_ok: bool = exhaust(arena)
-    return when not arena_ok or arena.used <> extent
+    return when not arena_ok or mem.arena_used(arena) <> extent
     mut words: [2048]u64 = zeroed
     mut records: [1]pool.slot = zeroed
     slot_size: usize = 16 * sizeof tree.node

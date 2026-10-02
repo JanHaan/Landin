@@ -264,7 +264,7 @@ finite_regions: () -> (ok: bool) =
     ok = false
     mut backing: [128]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over(base, usize(1024))
+    mut arena := mem.arena_over_unchecked(base, usize(1024))
     mut outer := region.new_region(addr arena)
     mut inner := region.new_region(addr outer)
     one: usize = 1
@@ -272,17 +272,17 @@ finite_regions: () -> (ok: bool) =
     object: ptr mut u8 = mem.allocate(inner, one, align) else (problem) _ = problem
         return end
     object.val = 42
-    before: usize = arena.used
+    before: usize = mem.arena_used(arena)
     maximum: usize = 0 -% 1
     mut refused: bool = false
     _ = mem.allocate(inner, maximum, align) else (problem)
         refused = problem == mem.out_of_memory
         object
     end
-    return when not refused or arena.used <> before or object.val <> 42
+    return when not refused or mem.arena_used(arena) <> before or object.val <> 42
     region.release_region(inner)
     region.release_region(outer)
-    ok = arena.used == before
+    ok = mem.arena_used(arena) == before
 end finite_regions
 
 io_failures: () -> (ok: bool) =
@@ -426,11 +426,11 @@ metadata_exhaustion: () -> (ok: bool) =
     ok = false
     mut backing: [1]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
-    mut arena := mem.arena_over(base, usize(8))
+    mut arena := mem.arena_over_unchecked(base, usize(8))
     mut program := region.new_region(addr arena)
     --  An empty region releases without allocating and remains reusable.
     region.release_region(program)
-    return when arena.used <> 0
+    return when mem.arena_used(arena) <> 0
     mut refused: bool = false
     _ = mem.allocate(program, usize(1), usize(1)) else (problem)
         refused = problem == mem.out_of_memory
@@ -439,5 +439,5 @@ metadata_exhaustion: () -> (ok: bool) =
     --  The payload fitted; recording its extent did not. Region returned the
     --  payload to its parent, whose monotonic free deliberately keeps it used.
     region.release_region(program)
-    ok = refused and arena.used == 1
+    ok = refused and mem.arena_used(arena) == 1
 end metadata_exhaustion

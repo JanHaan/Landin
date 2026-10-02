@@ -3,6 +3,7 @@ import core/mem
 --  Every retained value is read while real module backing is still alive.
 --  No dangling dereference is used to demonstrate the untracked boundary.
 mut backing: [128]u8 = zeroed
+mut counted_backing: [8]u8 = zeroed
 absent: atom
 optional: type = absent | ptr mut u8
 mut saved: optional = absent
@@ -105,6 +106,7 @@ run: () -> (ok: bool) ! mem.out_of_memory =
 end run
 
 public main: () -> (code: i32) =
+    code = 1
     ok: bool = run() else false
     --  The helper's side effect survived run's provider handle and frame.
     --  The real backing still lives; nothing here dereferences dead storage.
@@ -112,5 +114,14 @@ public main: () -> (code: i32) =
         absent: false
         ptr (retained): retained.val == 37
     end match
-    code = if ok and matched then 42 else 1 end if
+    mut counted := mem.fail_over(addr counted_backing[0], 8, 1)
+    counted_block: ptr mut u8 =
+        mem.allocate(counted, usize(1), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    counted_block.val = 41
+    code = if ok and matched and counted_block.val == 41
+          and mem.failing_allocations(counted) == 1
+        then 42 else 1 end if
 end main

@@ -149,7 +149,7 @@ public main: () -> (code: i32) =
     mut host := heap.host()
     heap_ok: bool = series(host)
     mut arena_bytes: [16384]u8 = zeroed
-    mut arena := mem.arena_over(addr arena_bytes[0], 16384)
+    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 16384)
     arena_ok: bool = series(arena)
     mut pool_bytes: [4096]u8 = zeroed
     mut records: [6]pool.slot = zeroed
@@ -159,7 +159,7 @@ public main: () -> (code: i32) =
         return
     end
     fixed_ok: bool = series(fixed_state)
-    if heap_ok and arena_ok and fixed_ok and arena.used > 0
+    if heap_ok and arena_ok and fixed_ok and mem.arena_used(arena) > 0
       and pool.allocation_count(fixed_state) == 21
       and pool.free_count(fixed_state) == 21
       and pool.live(fixed_state) == 0 and pool.rejected_free_count(fixed_state) == 0

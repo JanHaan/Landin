@@ -11,13 +11,13 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
     mut values := vec.new_list(item: empty)
     maximum: usize = 0 -% 1
     try vec.reserve(values, state, maximum)
-    return when vec.capacity(values) <> maximum or state.used <> 0
-    return when state.allocations <> 1 or state.remaining <> 0
+    return when vec.capacity(values) <> maximum or mem.failing_used(state) <> 0
+    return when mem.failing_allocations(state) <> 1 or mem.failing_remaining(state) <> 0
     value: empty = zeroed
     try vec.push(values, state, value)
     return when vec.length(values) <> 1
     vec.release(values, state)
-    return when state.frees <> 1 or vec.capacity(values) <> 0
+    return when mem.failing_frees(state) <> 1 or vec.capacity(values) <> 0
     result = 42
 end exercise
 

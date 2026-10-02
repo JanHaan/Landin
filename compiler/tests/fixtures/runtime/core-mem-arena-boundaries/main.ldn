@@ -24,7 +24,7 @@ public main: () -> (code: i32) =
     raw_base: ptr mut u8 = addr bytes[0]
     misaligned_base: ptr mut u8 =
         ptr((usize(raw_base) + 7) / 8 * 8 + 1)
-    mut arena := mem.arena_over(misaligned_base, sixty_three)
+    mut arena := mem.arena_over_unchecked(misaligned_base, sixty_three)
 
     zero_unaligned: ptr mut u8 =
         mem.allocate(arena, zero, zero) else (problem)
@@ -40,7 +40,7 @@ public main: () -> (code: i32) =
 
     mut exact_bytes: [16]u8 = zeroed
     exact_base: ptr mut u8 = addr exact_bytes[0]
-    mut exact := mem.arena_over(exact_base, sixteen)
+    mut exact := mem.arena_over_unchecked(exact_base, sixteen)
     whole: ptr mut u8 = mem.allocate(exact, sixteen, one) else (problem)
         _ = problem
         return
@@ -51,7 +51,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut limited := mem.fail_over(misaligned_base, sixty_three, two)
+    mut limited := mem.fail_over_unchecked(misaligned_base, sixty_three, two)
     first: ptr mut u8 = mem.allocate(limited, one, eight) else (problem)
         _ = problem
         return
@@ -63,7 +63,7 @@ public main: () -> (code: i32) =
         return
     end
 
-    mut top := mem.arena_over(raw_base, maximum)
+    mut top := mem.arena_over_unchecked(raw_base, maximum)
     at_top: ptr mut u8 =
         mem.allocate(top, zero, maximum) else (problem)
         _ = problem
@@ -73,7 +73,7 @@ public main: () -> (code: i32) =
         mem.allocate(top, zero, two) else no_allocation
     past_top: allocation = mem.allocate(top, one, maximum) else no_allocation
 
-    mut limited_top := mem.fail_over(raw_base, maximum, two)
+    mut limited_top := mem.fail_over_unchecked(raw_base, maximum, two)
     limited_at_top: ptr mut u8 =
         mem.allocate(limited_top, zero, maximum) else (problem)
         _ = problem
@@ -82,34 +82,28 @@ public main: () -> (code: i32) =
     limited_rounding_past_top: allocation =
         mem.allocate(limited_top, zero, two) else no_allocation
 
-    mut wrapped := mem.arena_over(raw_base, maximum)
-    wrapped.used = maximum
-    wrapped_request: allocation =
-        mem.allocate(wrapped, zero, one) else no_allocation
-
     if usize(zero_unaligned) == usize(misaligned_base)
       and usize(aligned) % 8 == 0
-      and arena.used == usize(aligned) - usize(misaligned_base) + 3
+      and mem.arena_used(arena) == usize(aligned) - usize(misaligned_base) + 3
       and is_absent(impossible_alignment)
       and usize(whole) == usize(exact_base)
-      and exact.used == 16
+      and mem.arena_used(exact) == 16
       and is_absent(beyond)
       and usize(empty_at_end) == usize(exact_base) + 16
       and usize(first) % 8 == 0
-      and limited.used == usize(first) - usize(misaligned_base) + 1
+      and mem.failing_used(limited) == usize(first) - usize(misaligned_base) + 1
       and is_absent(size_boundary)
-      and usize(second) == usize(misaligned_base) + limited.used
-      and limited.remaining == 0 and limited.allocations == 2
+      and usize(second) == usize(misaligned_base) + mem.failing_used(limited)
+      and mem.failing_remaining(limited) == 0 and mem.failing_allocations(limited) == 2
       and usize(at_top) == maximum
-      and top.used == maximum - usize(raw_base)
+      and mem.arena_used(top) == maximum - usize(raw_base)
       and is_absent(rounding_past_top)
       and is_absent(past_top)
       and usize(limited_at_top) == maximum
       and is_absent(limited_rounding_past_top)
-      and limited_top.used == maximum - usize(raw_base)
-      and limited_top.remaining == 1
-      and limited_top.allocations == 1 and limited_top.frees == 0
-      and is_absent(wrapped_request) and wrapped.used == maximum
+      and mem.failing_used(limited_top) == maximum - usize(raw_base)
+      and mem.failing_remaining(limited_top) == 1
+      and mem.failing_allocations(limited_top) == 1 and mem.failing_frees(limited_top) == 0
     then
         code = 42
     else

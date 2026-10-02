@@ -93,7 +93,7 @@ public main: () -> (code: i32) =
     mut host := heap.host()
     heap_ok: bool = exercise(host)
     mut arena_bytes: [256]u8 = zeroed
-    mut arena := mem.arena_over(addr arena_bytes[0], 256)
+    mut arena := mem.arena_over_unchecked(addr arena_bytes[0], 256)
     arena_ok: bool = exercise(arena)
     mut pool_bytes: [128]u8 = zeroed
     mut records: [2]pool.slot = zeroed
@@ -104,7 +104,7 @@ public main: () -> (code: i32) =
     end
     fixed_ok: bool = exercise(fixed_state)
     if heap_ok and arena_ok and fixed_ok and evaluations == 6
-      and arena.used > 0 and pool.allocation_count(fixed_state) == 3
+      and mem.arena_used(arena) > 0 and pool.allocation_count(fixed_state) == 3
       and pool.free_count(fixed_state) == 3 and pool.live(fixed_state) == 0
       and pool.rejected_free_count(fixed_state) == 0
     then code = 42 end if

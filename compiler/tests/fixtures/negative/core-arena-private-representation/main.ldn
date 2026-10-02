@@ -1,0 +1,14 @@
+import core/mem
+
+forge_arena: (base: ptr mut u8) -> (state: mem.arena from base) =
+    state = (base: base, size: 8, used: 0)
+end forge_arena
+
+forge_failing: (base: ptr mut u8) -> (state: mem.failing from base) =
+    state = (base: base, size: 8, used: 0,
+             remaining: 1, allocations: 0, frees: 0)
+end forge_failing
+
+public main: () -> (code: i32) =
+    code = 0
+end main

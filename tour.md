@@ -1706,19 +1706,23 @@ diagnostics explain the change; a declared type or ordinary identifier named
 `arena` remains valid.
 
 `mem.arena_over(base, size)` supplies the backing address and byte capacity
-explicitly. The handle retains the base's origin. Allocation aligns the
+explicitly. Its `escaping base` parameter accepts backing that the caller may
+retain, including module storage and independently acquired storage; it
+rejects a frame array. The arena representation is private, so a struct
+literal cannot bypass that check. The handle retains the base's origin. Allocation aligns the
 absolute address and advances a monotonic offset; individual frees do nothing.
 A caller can supply a fixed array on a constrained target or explicitly
 acquired hosted storage, choosing the actual capacity rather than a hidden
 frame buffer. Overflow or an extent that does not fit reports
 `mem.out_of_memory` before changing the offset. A `mem.failing` provider adds
-an explicit successful-allocation budget [1360].
+an explicit successful-allocation budget [1360]. `mem.arena_used` and the
+`mem.failing_*` accessors report counters without exposing the private state.
 
 ```landin
 import core/mem
 
+mut backing: [1024]u8 = zeroed
 report: () -> (code: i32) =
-    mut backing: [1024]u8 = zeroed
     mut scratch := mem.arena_over(addr backing[0], 1024)
     code = 1
     first := mem.new(scratch, u8(7)) else (problem)
@@ -1744,13 +1748,17 @@ This library operation is not the withdrawn lexical escape guarantee.
 The allocator's independent no-`from` result permits both live allocations
 and useful helper results. It does not acquire a lexical frame origin when
 called inside a block. In particular, a helper can store an allocated result
-in module storage without returning it through that block. W7's former
-argument that every escape crosses the block boundary therefore does not
-establish the promised check. Borrowing the mutable allocator for each result
-would also prevent its next ordinary allocation [0790].
+in module storage without returning it through that block. A checked arena
+therefore cannot take frame backing. `mem.fail_over` follows the same rule.
+For a local buffer whose use the programmer can keep entirely within its
+frame, `mem.arena_over_unchecked` and `mem.fail_over_unchecked` make the
+lifetime opt-out explicit at construction. Their allocation results remain
+independent, even through helpers; the caller must ensure every result stops
+being used before the buffer ends. Borrowing the mutable allocator for each
+result would also prevent its next ordinary allocation [0790].
 
 The backing owner arranges its lifetime and explicit cleanup. A frame array
-ends with its frame; hosted allocations need explicit release, which `defer`
+used through an unchecked constructor ends with its frame; hosted allocations need explicit release, which `defer`
 can run on normal, failure, return and loop-transfer exits [1100]. Nested
 ordinary blocks and providers do not infer a shared region: disjoint backing
 has independent capacity, while overlapping backing and outstanding aliases
@@ -1758,7 +1766,9 @@ remain the caller's responsibility. Do not use results after backing ends or
 is reused. Direct and helper-returned pointers, aggregates, slices, `any` and
 callback state all obey the ordinary origin rules; none gains an arena-specific
 escape check. The explicit integer-to-pointer conversion inside allocation is
-[0470]'s existing non-guarantee, not proof of a longer lifetime. Tracked direct
+[0470]'s existing non-guarantee, not proof of a longer lifetime. The checked
+constructor prevents a tracked frame extent from reaching that conversion
+through the ordinary arena API. Tracked direct
 frame references and provider handles still cannot escape [0770] [0780].
 
 ### [0830] A view derived from a local borrows it
@@ -4066,6 +4076,7 @@ argument, output and error storage; the test must supply an input path in
 its argument table for the application's configuration.
 
 ```landin
+<<<<<<< HEAD
 test_drops_debug: () -> (ok: bool) =
     ok = false
     source: []u8 = "DEBUG a\nERROR b\n"
@@ -4098,6 +4109,20 @@ test_drops_debug: () -> (ok: bool) =
         return
     end
     ok = kept == 1 and not files[0].opened
+=======
+test_drops_debug: () -> none =
+    mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
+    mut w: any io.world = any(addr h)
+    mut bytes: [4096]u8 = zeroed
+    --  Keep every allocation within this test's frame.
+    mut backing := mem.arena_over_unchecked(addr bytes[0], 4096)
+    mut scratch := region.new_region(addr backing)
+    defer region.release_region(scratch)
+    mut logger := diag.new_log(capacity: 32)
+    mut d := any(addr logger)
+    kept := run(w, scratch, d, []) else 0
+    assert(kept == 1)
+>>>>>>> ef894283 (Require retainable arena backing)
 end test_drops_debug
 ```
 

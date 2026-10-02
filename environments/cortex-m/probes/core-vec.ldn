@@ -16,7 +16,7 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
         _ = problem
         failed = true
     end
-    return when not failed or state.allocations <> 1 or state.frees <> 0
+    return when not failed or mem.failing_allocations(state) <> 1 or mem.failing_frees(state) <> 0
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
     saved: u32 = begin
         view := vec.used(values)
@@ -29,12 +29,12 @@ exercise: () -> (result: u32) ! mem.out_of_memory =
         _ = problem
         failed = true
     end
-    return when not failed or state.allocations <> 1
+    return when not failed or mem.failing_allocations(state) <> 1
     return when vec.length(values) <> 2 or vec.capacity(values) <> 2
     vec.release(values, state)
-    return when state.frees <> 1 or vec.length(values) <> 0
+    return when mem.failing_frees(state) <> 1 or vec.length(values) <> 0
     vec.release(values, state)
-    return when state.frees <> 1
+    return when mem.failing_frees(state) <> 1
     result = 42
 end exercise
 

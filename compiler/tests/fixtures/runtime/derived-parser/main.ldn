@@ -141,7 +141,7 @@ public main: () -> (code: i32) =
     end if
     source: []u8 = source_bytes[0..<source_length]
 
-    mut first_arena := mem.arena_over(addr first_memory[0], 4096)
+    mut first_arena := mem.arena_over_unchecked(addr first_memory[0], 4096)
     mut collected := diag.new_log(capacity: 8)
     mut bounded_log: any diag.log = any(addr collected)
     mut tree := parser.empty()
@@ -155,7 +155,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut second_arena := mem.arena_over(addr second_memory[0], 4096)
+    mut second_arena := mem.arena_over_unchecked(addr second_memory[0], 4096)
     diagnostic_stream := world.err()
     mut immediate := diag.to(addr world, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
@@ -169,7 +169,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut tiny_arena := mem.arena_over(addr tiny_memory[0], 1)
+    mut tiny_arena := mem.arena_over_unchecked(addr tiny_memory[0], 1)
     mut quiet := diag.new_log(capacity: 1)
     mut quiet_log: any diag.log = any(addr quiet)
     mut missing_tree := parser.empty()
@@ -182,7 +182,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut third_arena := mem.arena_over(addr third_memory[0], 4096)
+    mut third_arena := mem.arena_over_unchecked(addr third_memory[0], 4096)
     mut broken := diag.to(addr world, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     mut interrupted_tree := parser.empty()

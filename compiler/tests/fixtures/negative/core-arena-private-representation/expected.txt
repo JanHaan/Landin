@@ -1,0 +1,20 @@
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/core-arena-private-representation/main.ldn:4:13
+  |
+4 |     state = (base: base, size: 8, used: 0)
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/mem/mem.ldn:189:1
+    |
+189 | arena_value: type = struct
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/core-arena-private-representation/main.ldn:8:13
+  |
+8 |     state = (base: base, size: 8, used: 0,
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/mem/mem.ldn:236:1
+    |
+236 | failing_value: type = struct
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields

@@ -10360,8 +10360,9 @@ that contract. The frontend has no privileged knowledge of `core/mem`. The
 named refusals remain migration diagnostics pointing to this decision, not
 promises to enable these forms later. Declared names spelled `arena` remain ordinary.
 
-The caller chooses backing and capacity on every target: a real array, static
-storage, or storage explicitly acquired from another provider. Target-sized
+The caller chooses backing and capacity on every target: a frame array through
+the explicit unchecked constructor, static storage, or storage explicitly
+acquired from another provider. Target-sized
 extents and checked request arithmetic determine exhaustion. A monotonic
 provider reports `out_of_memory` without changing state when the request does
 not fit; the counted provider can force the same edge. Nested ordinary scopes
@@ -10375,12 +10376,17 @@ Independent allocator results keep the existing no-`from` contract. It permits
 simultaneous allocations and helper results used by the caller, including
 pointer-containing aggregates, slices, erased values and callback state.
 The implementation's explicit integer-to-pointer conversion removes tracked
-origin under [0470]; this is a non-guarantee for both direct and helper calls.
-The helper may also retain that result in module storage without returning it
-through any caller boundary. Backing validity is still required for every use.
-An ordinary tracked frame pointer or arena handle retaining its base remains
-subject to the existing escape checks; these checks do not infer provenance
-through explicit unsafe conversions or impose a borrow on allocation results.
+origin under [0470]. A helper may retain its result in module storage without
+returning it through any caller boundary. Accordingly, `arena_over` and
+`fail_over` now require `escaping base`: an ordinary call cannot build either
+provider over tracked frame backing. Both representations are private, so a
+struct literal cannot evade this constructor rule. The explicitly named
+`arena_over_unchecked` and `fail_over_unchecked` allow local backing when the
+caller takes responsibility for all direct and helper-held results. Their
+handles still retain the base's origin. Backing validity, exact capacity and
+explicit release remain the caller's responsibility; neither constructor
+adds a lifetime borrow to allocation results. Explicit pointer-to-integer
+round trips remain [0470]'s separate opt-out.
 
 **Why not the alternatives:** W7's omitted module-store path is executable
 without returning a value, so checking only the caller block exit is
@@ -10389,8 +10395,9 @@ reject its next allocation and defeat the ordinary allocation idiom. A new
 region effect system across erased calls, callbacks and helper side effects
 would be a different semantic design, unsupported by the local origin model;
 pretending an unsafe integer conversion preserves that promise would be false.
-The existing explicit authority model handles the derived hosted application
-without any of those claims.
+Permitting frame backing in the ordinary constructor left the same hazard at
+every allocator call. Requiring retainable backing there, while preserving an
+explicit local opt-out, keeps the existing allocator contract honest.
 
 **Pinned by** `runtime/r480-arena-independent-results`,
 `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`,
@@ -12134,7 +12141,7 @@ classified failure boundary before the repository gate can pass.
 | `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | allocators report `core/mem.out_of_memory`, which a caller must handle or declare; arenas reject exhaustion and unrepresentable request arithmetic before mutation, vectors check extents and growth before provider calls and preserve the old list on failure, and heap refusal, finite pool exhaustion, injected refusal and delegated inner refusal use the same channel | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
-| `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: caller-supplied arena or pool storage may be invalid or cease to live after an origin-erasing pointer conversion; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; backing validity and exact capacities remain the caller's responsibility; D212 withdraws lexical-region guarantees and preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
+| `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: backing validity and exact capacities remain the caller's responsibility; checked arena and counted-arena constructors refuse tracked frame backing with L0314 and private representations prevent ordinary construction around that check; their unchecked constructors expose the lifetime opt-out; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; D212 preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-arena-private-representation`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
 | `allocation.reclamation` | static | 0430, 0470, 0790, 1360 | heap release and a pool free of a currently occupied exact address and extent return real live storage; pool reuse is lowest-index first, stale same-address/same-size identity is outside the guarantee, and counted free delegates once with a live count exact only for valid-free use | `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -13706,7 +13713,9 @@ concept constraint and a declared error set. A private
 member is distinguished from a missing one and related to its declaration.
 Public declarations may mention private identities, but those identities stay
 unnameable across the boundary, and a value carrying one does not expose that
-private type's fields. Variant cases inherit the containing type's
+private type's fields. A contextual struct literal for that private identity
+is likewise refused: otherwise a public alias could bypass its constructor.
+Variant cases inherit the containing type's
 visibility. A namespace itself is no runtime or type value. `public` on a
 conformance is refused; every unmarked conformance in the reached graph still
 enters the single D142 register.
@@ -13737,6 +13746,7 @@ identities and diagnostics host-dependent. All were declined.
 
 **Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
 `negative/core-mem-private-representation`,
+`negative/core-arena-private-representation`,
 `negative/core-text-frame-slice-escape`, `runtime/core-vec-pointer-storage`,
 and the parser, resolution, driver and hosted-entry cases.
 
@@ -15184,8 +15194,11 @@ handles retain `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is the explicit-authority replacement for [0820]'s formerly promised
-builtin forms. D212 withdraws both after D191 and D196 exposed the missing
-backing and escape semantics; the named refusals now report that disposition.
+builtin forms. Its checked constructors require retainable backing and its
+private representations prevent direct construction; `arena_over_unchecked`
+and `fail_over_unchecked` mark a local-backing lifetime opt-out. D212 withdraws
+both builtin forms after D191 and D196 exposed the missing backing and escape
+semantics; the named refusals now report that disposition.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
@@ -15599,8 +15612,8 @@ the reason the two tables are separate: the parser refuses a shape it can read
 off the tokens, and the checker refuses a name it had to resolve first.
 
 `arena` is not added to [1760]'s keyword rule, and that is the price paid for
-the shape gate. `core/mem` declares `public arena: type = struct` and closes
-it with `end arena`, `examples/config_parser` threads a parameter spelled
+the shape gate. `core/mem` declares `public arena: type = arena_value` over a
+private representation; `examples/config_parser` threads a parameter spelled
 `arena` through six functions, and [1760] promises that a program avoiding a
 construct never trips over its keyword. So the parser recognizes three tokens
 — `arena`, a name, `do` — and nothing else. `arena = x`, `arena(x)`,

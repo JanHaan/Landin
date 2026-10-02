@@ -14,7 +14,7 @@ public main: () -> (code: i32) =
     mut bytes: [64]u8 = zeroed
     base: ptr mut u8 = addr bytes[0]
     extent: usize = 64
-    mut bump := mem.arena_over(base, extent)
+    mut bump := mem.arena_over_unchecked(base, extent)
 
     three: usize = 3
     one: usize = 1
@@ -34,7 +34,7 @@ public main: () -> (code: i32) =
     limited_base: ptr mut u8 = addr limited_bytes[0]
     limited_extent: usize = 32
     allowance: usize = 1
-    mut limited := mem.fail_over(limited_base, limited_extent, allowance)
+    mut limited := mem.fail_over_unchecked(limited_base, limited_extent, allowance)
     accepted: ptr mut u8 = mem.allocate(limited, eight, eight) else (problem)
         _ = problem
         return
@@ -45,13 +45,13 @@ public main: () -> (code: i32) =
 
     if usize(first) == usize(base)
       and usize(second) % eight == 0
-      and bump.used == usize(second) - usize(base) + eight
+      and mem.arena_used(bump) == usize(second) - usize(base) + eight
       and is_absent(refused)
       and usize(accepted) % eight == 0
-      and limited.used == usize(accepted) - usize(limited_base) + eight
+      and mem.failing_used(limited) == usize(accepted) - usize(limited_base) + eight
       and is_absent(budget_refused)
-      and limited.allocations == 1 and limited.remaining == 0
-      and limited.frees == 1
+      and mem.failing_allocations(limited) == 1 and mem.failing_remaining(limited) == 0
+      and mem.failing_frees(limited) == 1
     then
         code = 42
     else

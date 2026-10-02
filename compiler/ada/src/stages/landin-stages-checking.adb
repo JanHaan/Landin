@@ -24053,6 +24053,35 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  A contextual literal must obey the same module boundary as a
+         --  field selection. Otherwise a public alias can be constructed
+         --  directly even though its nominal representation is private.
+         if Representation_Is_Private (Wrote, Syn.Source_Of (Of_Tree)) then
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Template_Declaration (Wrote);
+               Template_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+            begin
+               Name_Bad.Report
+                 (Item    => Name_Bad.Inaccessible_Name,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Literal),
+                  Message => "this type's representation is"
+                             & " module-internal",
+                  Note    => "D150: a private identity may cross"
+                             & " a public signature without"
+                             & " exposing its fields",
+                  Related => Syn.Origin
+                    (Template_Tree.all,
+                     Res.Node_Of (Meanings.all, Template)),
+                  Because => "declared without `public` here",
+                  Into    => Found);
+            end;
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            return;
+         end if;
+
          if Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
               = Ty.Ill_Typed
            or else not Construction_Values_Present (Of_Tree, Literal)

@@ -100,7 +100,8 @@ end poll
 
 public main: () -> (code: i32) =
     mut bytes: [256]u8 = zeroed
-    mut arena := mem.arena_over(addr bytes[0], lenof bytes)
+    --  This local backing requires manual lifetime discipline for results.
+    mut arena := mem.arena_over_unchecked(addr bytes[0], lenof bytes)
 
     mut kitchen: thermometer = (celsius: 21)
     mut hall: thermometer = (celsius: 19)

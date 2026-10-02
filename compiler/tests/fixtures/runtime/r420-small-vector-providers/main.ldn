@@ -38,12 +38,12 @@ end heap_path
 arena_path: () -> (ok: bool) =
     mut words: [32]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]))
-    mut state := mem.arena_over
+    mut state := mem.arena_over_unchecked
         (base, lenof words * sizeof u64)
     mut values := small.new(item: i32, inline_slots: 2)
     small.push(values, state, 21) else 0
     small.push(values, state, 22) else 0
-    mut inline_free: bool = state.used == 0
+    mut inline_free: bool = mem.arena_used(state) == 0
     small.push(values, state, 23) else 0
     small.push(values, state, 24) else 0
     small.push(values, state, 25) else 0
@@ -52,7 +52,7 @@ arena_path: () -> (ok: bool) =
         ok = inline_free and small.length(values) == 5
              and small.capacity(values) == 8
              and view[0] == 21 and view[2] == 23 and view[4] == 25
-             and state.used == 12 * sizeof i32
+             and mem.arena_used(state) == 12 * sizeof i32
     end
     small.release(values, state)
 end arena_path

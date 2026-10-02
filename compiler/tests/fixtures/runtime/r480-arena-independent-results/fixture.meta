@@ -1,6 +1,6 @@
 class: runtime
 profiles: specialization
-summary: D212 explicit arena authority permits simultaneous generic and erased allocations and helper side-effect retention without a lexical escape guarantee
+summary: D212 checked static backing permits simultaneous arena allocations, counted allocation and helper retention
 program: main.ldn
 root: ../../../../..
 status: 42

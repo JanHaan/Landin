@@ -175,12 +175,15 @@ builtin parameter type: this explicit allocator remains ordinary source,
 with no-`from` allocation results and manual backing lifetime. Prototype 4
 adds explicit bulk cleanup over a supplied provider; it does not make these
 results borrow the allocator or claim to detect helper-side-effect escapes.
+The later checked constructors require retainable backing, with explicitly
+named unchecked constructors for the local-buffer use shown in this sketch.
 
 ## core/mem  —  a bump allocator over borrowed storage
 
 The library names this allocator `mem.arena` and builds it with
 `mem.arena_over(base, size)` from a first byte and a length rather than a
-slice, returning it `from base`; prototypes 2 and 4, the tour and `core/mem`
+slice, returning it `from base`; the current representation is private and the
+checked constructor refuses tracked frame backing. Prototypes 2 and 4, the tour and `core/mem`
 all use that name. The sketch keeps `bump` and `bump_over` as its design
 record.
 

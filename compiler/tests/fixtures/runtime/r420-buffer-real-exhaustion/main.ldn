@@ -36,14 +36,14 @@ arena_case: () -> (ok: bool) =
     mut backing: [8]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr backing[0]))
     extent: usize = 8 * sizeof u64
-    mut state := mem.arena_over(base, extent)
+    mut state := mem.arena_over_unchecked(base, extent)
 
     before: usize = evaluations
     value: ptr mut node = mem.new(state, initial()) else (problem)
         _ = problem
         return
     end
-    return when state.used <> sizeof node
+    return when mem.arena_used(state) <> sizeof node
 
     rest: usize = extent - sizeof node
     mut keeper := mem.new_bytes(state, rest) else (problem)
@@ -56,7 +56,7 @@ arena_case: () -> (ok: bool) =
         view[47] = 9
     end
     --  The extent is exactly consumed and both live results are sound.
-    return when state.used <> extent or value.val.value <> 42
+    return when mem.arena_used(state) <> extent or value.val.value <> 42
       or value.val.next.val <> 37 or usize(value) % alignof node <> 0
 
     --  A zero-count buffer is still valid on an exhausted arena because it
@@ -70,7 +70,7 @@ arena_case: () -> (ok: bool) =
         lenof view == 0
     end
     mem.drop_bytes(state, empty)
-    return when not empty_ok or state.used <> extent
+    return when not empty_ok or mem.arena_used(state) <> extent
 
     --  A one-byte buffer is refused, and the refusal binds no descriptor.
     mut bytes_refused: bool = false
@@ -83,7 +83,7 @@ arena_case: () -> (ok: bool) =
         view := mem.bytes(keeper)
         lenof view == rest and view[0] == 5 and view[47] == 9
     end
-    return when not bytes_refused or not keeper_ok or state.used <> extent
+    return when not bytes_refused or not keeper_ok or mem.arena_used(state) <> extent
 
     --  A typed object is refused after its initial value was evaluated. The
     --  binding takes the failure arm, whose caller-supplied case is no_object;
@@ -94,7 +94,7 @@ arena_case: () -> (ok: bool) =
         no_object
     end
     return when not object_refused or not is_absent(absent)
-      or evaluations <> before + 2 or state.used <> extent
+      or evaluations <> before + 2 or mem.arena_used(state) <> extent
 
     --  Taken again after the object refusal, so the neighbouring buffer is
     --  checked intact after each of the two refusals rather than only the
@@ -108,7 +108,7 @@ arena_case: () -> (ok: bool) =
     mem.delete(state, value)
     mem.drop_bytes(state, keeper)
     --  The arena's free is a documented no-op, so the offset does not move.
-    ok = state.used == extent
+    ok = mem.arena_used(state) == extent
 end arena_case
 
 --  A two-slot pool at zero, one and full occupancy, exhausted by slot count
