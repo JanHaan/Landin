@@ -1,0 +1,173 @@
+stream_failed: atom
+
+fallible_iterable: type = concept
+    (t: type, cur: type, item_type: type, errors: type)
+    first: (s: t) -> (c: cur) ! errors
+    at_end: (s: t, c: cur) -> (yes: bool) ! errors
+    item: (s: t, c: cur) -> (v: item_type) ! errors
+    next: (s: t, c: cur) -> (c2: cur) ! errors
+end fallible_iterable
+
+stream: type = struct
+    mode: i32
+end stream
+
+first: (s: stream) -> (c: usize) ! stream_failed =
+    fail stream_failed when s.mode == 1
+    c = 0
+end first
+
+at_end: (s: stream, c: usize) -> (yes: bool) ! stream_failed =
+    fail stream_failed when s.mode == 2 and c == 1
+    yes = c == 2
+end at_end
+
+item: (s: stream, c: usize) -> (v: i32) ! stream_failed =
+    fail stream_failed when s.mode == 3 and c == 1
+    v = i32(c) + 1
+end item
+
+next: (s: stream, c: usize) -> (c2: usize) ! stream_failed =
+    fail stream_failed when s.mode == 4 and c == 0
+    c2 = c + 1
+end next
+
+stream is fallible_iterable
+    (cur: usize, item_type: i32, errors: stream_failed,
+     first: first, at_end: at_end, item: item, next: next)
+
+cell: type (t: type) = struct
+    value: t
+end cell
+
+cell_first: (t: type, s: cell(t)) -> (c: usize) ! stream_failed =
+    c = 0
+end cell_first
+
+cell_at_end: (t: type, s: cell(t), c: usize)
+             -> (yes: bool) ! stream_failed =
+    yes = c == 1
+end cell_at_end
+
+cell_item: (t: type, s: cell(t), c: usize)
+           -> (v: t) ! stream_failed =
+    v = s.value
+end cell_item
+
+cell_next: (t: type, s: cell(t), c: usize)
+           -> (c2: usize) ! stream_failed =
+    c2 = c + 1
+end cell_next
+
+(t: type) cell(t) is fallible_iterable
+    (cur: usize, item_type: t, errors: stream_failed,
+     first: cell_first, at_end: cell_at_end,
+     item: cell_item, next: cell_next)
+
+reader: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end reader
+
+badge: type = struct
+    value: i32
+end badge
+
+badge_read: (self: ptr badge) -> (value: i32) =
+    value = self.val.value
+end badge_read
+
+badge is reader (read: badge_read)
+
+erased_first: (s: any reader) -> (c: usize) ! stream_failed =
+    c = 0
+end erased_first
+
+erased_at_end: (s: any reader, c: usize)
+               -> (yes: bool) ! stream_failed =
+    yes = c == 2
+end erased_at_end
+
+erased_item: (s: any reader, c: usize)
+             -> (v: i32) ! stream_failed =
+    fail stream_failed when c == 1
+    v = s.read()
+end erased_item
+
+erased_next: (s: any reader, c: usize)
+             -> (c2: usize) ! stream_failed =
+    c2 = c + 1
+end erased_next
+
+any reader is fallible_iterable
+    (cur: usize, item_type: i32, errors: stream_failed,
+     first: erased_first, at_end: erased_at_end,
+     item: erased_item, next: erased_next)
+
+mut cleanups: i32 = 0
+mut completions: i32 = 0
+
+mark: () -> none = inc cleanups end mark
+
+walk: (mode: i32) -> (sum: i32) ! stream_failed =
+    sum = 0
+    source: stream = (mode: mode)
+    try for value in source do
+        defer mark()
+        sum += value
+    complete
+        inc completions
+    end for
+end walk
+
+walk_inferred: (mode: i32) -> (sum: i32) ! ... =
+    source: stream = (mode: mode)
+    sum = 0
+    scan: try for value in source do
+        sum += value
+    end scan
+end walk_inferred
+
+find_first: () -> (value: i32) ! stream_failed =
+    source: stream = (mode: 0)
+    value = try for item in source do
+        break with item
+    complete
+        break with -1
+    end for
+end find_first
+
+walk_cell: (source: cell(i32)) -> (sum: i32) ! stream_failed =
+    sum = 0
+    try for value in source do
+        sum += value
+    end for
+end walk_cell
+
+walk_erased: (source: any reader) -> (sum: i32) ! stream_failed =
+    sum = 0
+    try for value in source do
+        sum += value
+    end for
+end walk_erased
+
+public main: () -> (code: i32) =
+    success: i32 = walk(0) else (e) 99 end
+    first_error: i32 = walk(1) else (e) -1 end
+    head_error: i32 = walk(2) else (e) -1 end
+    item_error: i32 = walk(3) else (e) -1 end
+    step_error: i32 = walk(4) else (e) -1 end
+    inferred_error: i32 = walk_inferred(3) else (e) -1 end
+    picked: i32 = find_first() else (e) -1 end
+    boxed: cell(i32) = (value: 7)
+    generic_sum: i32 = walk_cell(boxed) else (e) -1 end
+    object: badge = (value: 11)
+    erased: any reader = any(addr object)
+    erased_error: i32 = walk_erased(erased) else (e) -1 end
+    code = if success == 3 and first_error == -1
+      and head_error == -1 and item_error == -1
+      and step_error == -1 and inferred_error == -1
+      and picked == 1 and generic_sum == 7
+      and erased_error == -1 and cleanups == 5
+      and completions == 1
+    then 42 else 1 end if
+end main

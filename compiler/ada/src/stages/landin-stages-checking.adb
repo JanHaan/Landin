@@ -1330,7 +1330,10 @@ package body Landin.Stages.Checking is
       function Select_Iterable_Conformance
         (Actual  : Type_Descriptor;
          Of_Tree : Syn.Tree;
-         Source  : Syn.Node_Id) return Landin.Checking.Conformance_Id;
+         Source  : Syn.Node_Id;
+         Fallible : Boolean := False;
+         Quiet_Missing : Boolean := False)
+         return Landin.Checking.Conformance_Id;
       procedure Check_Aggregate_Zeroed
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -16387,10 +16390,10 @@ package body Landin.Stages.Checking is
          function Parents_Hold return Boolean is
             Good : Boolean := True;
          begin
-            --  D180's associated Cur and Item identities are part of the
-            --  selected iterable key.  Its exact four-entry contract has no
-            --  parent or constrained formal to close here; ordinary direct
-            --  constraints retain the one-formal rule below.
+            --  The selected traversal key includes Cur and Item, and the
+            --  fallible form also includes Errors.  Neither four-entry
+            --  contract has a parent or constrained formal to close here;
+            --  ordinary direct constraints retain the one-formal rule below.
             if Landin.Checking.Actual_Count (Inputs) /= 0 then
                return True;
             end if;
@@ -17353,7 +17356,10 @@ package body Landin.Stages.Checking is
       function Select_Iterable_Conformance
         (Actual  : Type_Descriptor;
          Of_Tree : Syn.Tree;
-         Source  : Syn.Node_Id) return Landin.Checking.Conformance_Id
+         Source  : Syn.Node_Id;
+         Fallible : Boolean := False;
+         Quiet_Missing : Boolean := False)
+         return Landin.Checking.Conformance_Id
       is
          Concept : Landin.Checking.Concept_Id :=
            Landin.Checking.No_Concept;
@@ -17425,6 +17431,18 @@ package body Landin.Stages.Checking is
             Item : constant Type_Descriptor := Descriptor_For
               (Landin.Checking.Nth_Conformance_Input
                  (Types.all, Row, 2));
+            Error_Type : constant Type_Descriptor :=
+              (if Fallible then Descriptor_For
+                 (Landin.Checking.Nth_Conformance_Input
+                    (Types.all, Row, 3))
+               else (Kind => Ty.No_Value, others => <>));
+            Error_Form : constant Landin.Checking.Error_Set_Form :=
+              (if Fallible and then Error_Type.Kind = Ty.Atom_Value
+               then Landin.Checking.Concrete
+               else Landin.Checking.Infallible);
+            Errors : constant Landin.Checking.Atom_Set_Id :=
+              (if Error_Form = Landin.Checking.Concrete
+               then Error_Type.Atoms else Landin.Checking.No_Atom_Set);
             Site : constant Landin.Provenance.Origin :=
               Syn.Origin (Of_Tree, Source);
             Source_Part : constant Landin.Checking.Signature_Part :=
@@ -17445,33 +17463,36 @@ package body Landin.Stages.Checking is
                 (Types.all,
                  Landin.Checking.Signature_Part_Array'[1 => Source_Part],
                  Landin.Checking.Signature_Part_Array'[1 => Cursor_Part],
-                 Site);
+                 Site, Errors, Error_Form);
             At_End_Signature : constant Landin.Checking.Signature_Id :=
               Landin.Checking.Add_Signature
                 (Types.all,
                  Landin.Checking.Signature_Part_Array'
                    [Source_Part, Cursor_Part],
                  Landin.Checking.Signature_Part_Array'[1 => Bool_Part],
-                 Site);
+                 Site, Errors, Error_Form);
             Item_Signature : constant Landin.Checking.Signature_Id :=
               Landin.Checking.Add_Signature
                 (Types.all,
                  Landin.Checking.Signature_Part_Array'
                    [Source_Part, Cursor_Part],
                  Landin.Checking.Signature_Part_Array'[1 => Item_Part],
-                 Site);
+                 Site, Errors, Error_Form);
             Next_Signature : constant Landin.Checking.Signature_Id :=
               Landin.Checking.Add_Signature
                 (Types.all,
                  Landin.Checking.Signature_Part_Array'
                    [Source_Part, Cursor_Part],
                  Landin.Checking.Signature_Part_Array'[1 => Cursor_Part],
-                 Site);
+                 Site, Errors, Error_Form);
             Expected : constant array (Positive range 1 .. 4) of
               Landin.Checking.Signature_Id :=
                 [First_Signature, At_End_Signature,
                  Item_Signature, Next_Signature];
          begin
+            if Fallible and then Error_Type.Kind /= Ty.Atom_Value then
+               return False;
+            end if;
             for Position in Expected'Range loop
                declare
                   Got : constant Landin.Checking.Signature_Id :=
@@ -17505,7 +17526,7 @@ package body Landin.Stages.Checking is
                   if Landin.Checking.Conformance_Concept
                        (Types.all, Candidate) = Concept
                     and then Landin.Checking.Conformance_Input_Count
-                      (Types.all, Candidate) = 2
+                      (Types.all, Candidate) = (if Fallible then 3 else 2)
                     and then Type_Descriptors_Agree
                       (Descriptor_For
                          (Landin.Checking.Conformance_Target
@@ -17539,7 +17560,8 @@ package body Landin.Stages.Checking is
                        Res.Node_Of (Meanings.all, Declaration);
                   begin
                      if Spelled (Syn.Name (Concept_Tree.all, Concept_Node))
-                          = "iterable"
+                          = (if Fallible then "fallible_iterable"
+                             else "iterable")
                      then
                         Concept_Matches := Concept_Matches + 1;
                         Concept := Candidate;
@@ -17550,10 +17572,12 @@ package body Landin.Stages.Checking is
          end loop;
 
          if Concept = Landin.Checking.No_Concept then
-            Report
-              ("this type has no [1320] iterable conformance",
-               "[1150]: a struct or `any C` traversal uses the named"
-               & " iterable evidence");
+            if not Quiet_Missing then
+               Report
+                 ("this type has no [1320] iterable conformance",
+                  "[1150]: a struct or `any C` traversal uses the named"
+                  & " iterable evidence");
+            end if;
             return Landin.Checking.No_Conformance;
          elsif Concept_Matches > 1 then
             Report
@@ -17571,14 +17595,15 @@ package body Landin.Stages.Checking is
             Concept_Node : constant Syn.Node_Id :=
               Res.Node_Of (Meanings.all, Declaration);
             Names_Agree : Boolean :=
-              Syn.Concept_Formal_Count (Concept_Tree.all, Concept_Node) = 3
+              Syn.Concept_Formal_Count (Concept_Tree.all, Concept_Node)
+                = (if Fallible then 4 else 3)
               and then Syn.Concept_Entry_Count
                 (Concept_Tree.all, Concept_Node) = 4
               and then Syn.Concept_Parent_Count
                 (Concept_Tree.all, Concept_Node) = 0;
          begin
             if Names_Agree then
-               for Position in 1 .. 3 loop
+               for Position in 1 .. (if Fallible then 4 else 3) loop
                   declare
                      Formal : constant Syn.Node_Id :=
                        Syn.Nth_Concept_Formal
@@ -17695,7 +17720,9 @@ package body Landin.Stages.Checking is
                                 Res.Node_Of
                                   (Meanings.all, Concept_Declaration);
                            begin
-                              for Input_Position in 2 .. 3 loop
+                              for Input_Position in
+                                2 .. (if Fallible then 4 else 3)
+                              loop
                                  declare
                                     Formal : constant Syn.Node_Id :=
                                       Syn.Nth_Concept_Formal
@@ -17754,7 +17781,8 @@ package body Landin.Stages.Checking is
                            end;
 
                            if Valid
-                             and then Landin.Checking.Actual_Count (Inputs) = 2
+                             and then Landin.Checking.Actual_Count (Inputs)
+                               = (if Fallible then 3 else 2)
                            then
                               declare
                                  Accepted : constant Boolean :=
@@ -17778,10 +17806,12 @@ package body Landin.Stages.Checking is
          end if;
 
          if Matches = 0 then
-            Report
-              ("this type has no [1320] iterable conformance",
-               "[1150]: a struct or `any C` traversal selects one exact"
-               & " Cur and Item pair");
+            if not Quiet_Missing then
+               Report
+                 ("this type has no [1320] iterable conformance",
+                  "[1150]: a struct or `any C` traversal selects one exact"
+                  & " Cur and Item pair");
+            end if;
             return Landin.Checking.No_Conformance;
          elsif Matches > 1 then
             Report
@@ -17793,8 +17823,13 @@ package body Landin.Stages.Checking is
             Report
               ("this iterable evidence does not implement [1320]'s exact"
                & " call contract",
-               "D180: first, at_end, item and next are infallible in-value"
-               & " calls with one retained Cur and Item identity");
+               (if Fallible then
+                  "fallible_iterable: each provider declares its exact"
+                  & " shared error set"
+                else
+                  "D180: first, at_end, item and next are infallible"
+                  & " in-value calls with one retained Cur and Item"
+                  & " identity"));
             return Landin.Checking.No_Conformance;
          end if;
 
@@ -25745,17 +25780,25 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Source),
                         others  => <>));
                   Evidence : constant Landin.Checking.Conformance_Id :=
-                    Select_Iterable_Conformance
-                      (Actual, Of_Tree, Source);
+                    (if Syn.Traversal_Propagates (Of_Tree, Node)
+                     then Select_Iterable_Conformance
+                       (Actual, Of_Tree, Source,
+                        Fallible => True, Quiet_Missing => True)
+                     else Landin.Checking.No_Conformance);
+                  Selected : constant Landin.Checking.Conformance_Id :=
+                    (if Evidence /= Landin.Checking.No_Conformance
+                     then Evidence
+                     else Select_Iterable_Conformance
+                       (Actual, Of_Tree, Source));
                begin
-                  if Evidence /= Landin.Checking.No_Conformance then
+                  if Selected /= Landin.Checking.No_Conformance then
                      Item := Descriptor_For
                        (Landin.Checking.Nth_Conformance_Input
-                          (Types.all, Evidence, 2));
+                          (Types.all, Selected, 2));
                      Kind := Item.Kind;
                      Writable := False;
                      Landin.Checking.Note_Traversal_Evidence
-                       (Types.all, Of_Tree, Node, Evidence);
+                       (Types.all, Of_Tree, Node, Selected);
                   end if;
                end;
             elsif Decidable (Held) then
@@ -33471,6 +33514,48 @@ package body Landin.Stages.Checking is
                      end if;
                   end;
                   return;
+
+               when Syn.For_Statement =>
+                  if Syn.Traversal_Propagates (Of_Tree, Node) then
+                     declare
+                        Row : constant Landin.Checking.Conformance_Id :=
+                          Landin.Checking.Traversal_Evidence_Of
+                            (Types.all, Of_Tree, Node);
+                     begin
+                        if Row /= Landin.Checking.No_Conformance then
+                           for Position in 1 .. 4 loop
+                              declare
+                                 Instance : constant
+                                   Landin.Checking.Routine_Instance_Id :=
+                                     Landin.Checking
+                                       .Conformance_Provider_Instance
+                                         (Types.all, Row, Position);
+                                 Provider : constant Res.Declaration_Id :=
+                                   Landin.Checking
+                                     .Conformance_Provider_Declaration
+                                       (Types.all, Row, Position);
+                                 Signature : constant
+                                   Landin.Checking.Signature_Id :=
+                                     (if Instance /= Landin.Checking
+                                        .No_Routine_Instance
+                                      then Landin.Checking
+                                        .Routine_Signature_Of
+                                          (Types.all, Instance)
+                                      elsif Provider /= Res.No_Declaration
+                                      then Landin.Checking.Signature_Of
+                                        (Types.all, Provider)
+                                      else Landin.Checking.No_Signature);
+                              begin
+                                 if Signature /= Landin.Checking.No_Signature
+                                 then
+                                    Edges (Caller).Include
+                                      (Positive (Signature));
+                                 end if;
+                              end;
+                           end loop;
+                        end if;
+                     end;
+                  end if;
 
                when others =>
                   null;

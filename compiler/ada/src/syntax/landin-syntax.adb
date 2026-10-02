@@ -532,6 +532,10 @@ package body Landin.Syntax is
      (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Fill);
 
+   function Traversal_Propagates
+     (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Propagates);
+
    --  A function's return list is slot 1 and an arm's condition is slot 1, so
    --  both put what they run in slot 2.  A bare block has only the body in
    --  slot 1.  These positions are a private layout detail.

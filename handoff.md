@@ -47,7 +47,9 @@ across calls lets a distant body change a signature, and for `from`
 inference was shown to get the allocator wrong.
 
 **Errors** are atoms in a dedicated register, declared per function
-after `!`, with `fail`, `try` and an `else` clause on the call. No
+after `!`, with `fail`, `try` and an `else` clause on the call. A
+`try for` propagates a streaming iterator's declared per-step failure;
+the caller can handle it with that same call `else`. No
 exceptions, no unwinding, no catchable panics. And only half of what
 goes wrong belongs in that channel: the test is whether it can be
 determined from what you already hold. A syntax mistake is in the bytes

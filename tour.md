@@ -2173,9 +2173,9 @@ parse: (src: utf8, inout d: diagnostics)
 
 ```
 
-### [0960] Propagating: try, visible at the call site
+### [0960] Propagating: try, visible at the call or traversal site
 
-Propagating: try, visible at the call site.
+Propagating: try, visible at the call or traversal site.
 '...' means: plus whatever my callees can fail with. Not
 allowed where the set must be concrete: function pointers,
 concept entries [1260], anything exported to C — and
@@ -2202,6 +2202,11 @@ read_config: (path: utf8) -> (data: []u8) ! ... =
 end read_config
 
 ```
+
+`try for item in source do ... end for` propagates a declared failure
+from any traversal step. The enclosing function must declare or infer the
+provider error atoms. A caller can recover them with the ordinary `else`
+clause on that function call.
 
 ### [1030] Handling
 
@@ -2529,6 +2534,12 @@ named `iterable` concept. The source expression runs once. `first` produces
 one cursor; `at_end`, `item`, and (after fallthrough or `continue`) `next`
 then drive each iteration in that order. The optional `usize` index still
 begins at zero and advances with `next`.
+For a source whose traversal can fail, write `try for`. It first selects
+[1320]'s `fallible_iterable` evidence; an ordinary `iterable` is also accepted.
+Each provider failure leaves the loop through the declared error channel,
+running active `defer` and `undo` cleanup. A failure does not enter `complete`
+or call any later provider. The loop body can use `break` or `continue` as
+usual; `next` runs only after body fallthrough or `continue`.
 The exact `utf8`, `utf16`, and `cstring` identities have distinct intrinsic
 conformances to that same four-operation contract. Their cursor is a private `usize` byte or
 UTF-16-code-unit offset and their item is the decoded Unicode scalar as `u32`,
@@ -2972,6 +2983,23 @@ end iterable
 The conformance supplies `cur` and `item_type` as associated type inputs.
 Those identities and the four infallible signatures above are exact. Provider
 labels may be written in any order, but calls use concept declaration order.
+
+A streaming source supplies an error atom type as a third associated input:
+
+```landin
+fallible_iterable: type = concept
+    (t: type, cur: type, item_type: type, errors: type)
+    first:  (s: t) -> (c: cur) ! errors
+    at_end: (s: t, c: cur) -> (yes: bool) ! errors
+    item:   (s: t, c: cur) -> (v: item_type) ! errors
+    next:   (s: t, c: cur) -> (c2: cur) ! errors
+end fallible_iterable
+```
+
+The `errors` input is an atom set. All four signatures are exact and use
+that same set; a provider may declare an error it never raises. `try for`
+requires one unambiguous conformance. If both contracts are available, it
+selects `fallible_iterable`; plain `for` selects only `iterable`.
 The source is retained as a value for every call; `item` returns a fresh loop
 binding value rather than an alias into it. A provider result declared
 `from s` does not match this source-free requirement. Containers that expose

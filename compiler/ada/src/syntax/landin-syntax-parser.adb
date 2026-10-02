@@ -346,6 +346,7 @@ package body Landin.Syntax.Parser is
                Convention : Parameter_Convention := Implicit_In;
                Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
+               Propagates : Boolean := False;
                Recovers  : Node_Id := No_Node;
                Shares    : Boolean := False) return Node_Id;
 
@@ -485,7 +486,8 @@ package body Landin.Syntax.Parser is
               (Context : Frame;
                Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
                Label   : Landin.Source.Names.Name_Id :=
-                 Landin.Source.Names.No_Name) return Node_Id;
+                 Landin.Source.Names.No_Name;
+               Tried   : Boolean := False) return Node_Id;
             function Transfer_Target
               (Named : Landin.Source.Names.Name_Id) return Natural;
             function Parse_Loop_Transfer return Node_Id;
@@ -950,6 +952,7 @@ package body Landin.Syntax.Parser is
                Convention : Parameter_Convention := Implicit_In;
                Direction : Operand_Direction := Input_Operand;
                Fills     : Boolean := False;
+               Propagates : Boolean := False;
                Recovers  : Node_Id := No_Node;
                Shares    : Boolean := False) return Node_Id
             is
@@ -1004,6 +1007,7 @@ package body Landin.Syntax.Parser is
                    Convention => Convention,
                    Direction  => Direction,
                    Fill       => Fills,
+                   Propagates => Propagates,
                    Recovery   => Recovers));
 
                return Node_Id (Result.Items.Last_Index);
@@ -4418,7 +4422,10 @@ package body Landin.Syntax.Parser is
                Is_Label : constant Boolean :=
                  Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
-                 and then Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For;
+                 and then
+                   (Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                    or else (Ahead (2) = Tok.Kw_Try
+                      and then Ahead (3) = Tok.Kw_For));
                Declares : constant Boolean :=
                  Peek = Tok.Kw_Mut
                  or else
@@ -5621,8 +5628,10 @@ package body Landin.Syntax.Parser is
                   end if;
 
                   if Ahead (1) = Tok.Colon
-                    and then Ahead (2)
-                      in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                    and then
+                      (Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                       or else (Ahead (2) = Tok.Kw_Try
+                         and then Ahead (3) = Tok.Kw_For))
                   then
                      return False;
                   end if;
@@ -6036,9 +6045,11 @@ package body Landin.Syntax.Parser is
                      --  D225 reserves `begin`, so `name: begin` was never
                      --  a binding; the labelled block is a statement only.
                      if Ahead (1) = Tok.Colon
-                       and then Ahead (2)
-                         in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
-                            | Tok.Kw_Begin
+                       and then
+                         (Ahead (2) in Tok.Kw_Loop | Tok.Kw_While
+                            | Tok.Kw_For | Tok.Kw_Begin
+                          or else (Ahead (2) = Tok.Kw_Try
+                            and then Ahead (3) = Tok.Kw_For))
                      then
                         declare
                            Label : constant Landin.Source.Names.Name_Id :=
@@ -6048,9 +6059,13 @@ package body Landin.Syntax.Parser is
                         begin
                            Advance;
                            Advance;
-                           if Opener = Tok.Kw_For then
+                           if Opener = Tok.Kw_Try then
+                              Advance;
+                           end if;
+                           if Opener in Tok.Kw_For | Tok.Kw_Try then
                               return Parse_For
-                                (Context, Starts => Label_At, Label => Label);
+                                (Context, Starts => Label_At, Label => Label,
+                                 Tried => Opener = Tok.Kw_Try);
                            elsif Opener = Tok.Kw_Begin then
                               return Parse_Bare_Block
                                 (Context, Starts => Label_At, Label => Label);
@@ -6337,7 +6352,8 @@ package body Landin.Syntax.Parser is
               (Context : Frame;
                Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
                Label   : Landin.Source.Names.Name_Id :=
-                 Landin.Source.Names.No_Name) return Node_Id
+                 Landin.Source.Names.No_Name;
+               Tried   : Boolean := False) return Node_Id
             is
                Opened : constant Landin.Source.Span :=
                  (if Starts = Landin.Source.Empty_Span then Here else Starts);
@@ -6478,7 +6494,8 @@ package body Landin.Syntax.Parser is
                   Children =>
                     [Lower, Upper, Element, Index, Runs, Completed],
                   Named    => Label,
-                  Fills    => Inclusive);
+                  Fills    => Inclusive,
+                  Propagates => Tried);
             end Parse_For;
 
             --  The entry a transfer selects in this code address, or zero.
@@ -7261,6 +7278,15 @@ package body Landin.Syntax.Parser is
             function Parse_Unary return Node_Id is
             begin
                if Peek = Tok.Kw_Try then
+                  if Ahead (1) = Tok.Kw_For then
+                     declare
+                        At_Try : constant Landin.Source.Span := Here;
+                     begin
+                        Advance;
+                        return Parse_For
+                          (Active_Frame, Starts => At_Try, Tried => True);
+                     end;
+                  end if;
                   declare
                      At_Try : constant Landin.Source.Span := Here;
                      Operand : Node_Id;
@@ -7331,20 +7357,29 @@ package body Landin.Syntax.Parser is
                   return Parse_Bare_Block (Active_Frame);
                elsif Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
-                 and then Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                 and then
+                   (Ahead (2) in Tok.Kw_Loop | Tok.Kw_While | Tok.Kw_For
+                    or else (Ahead (2) = Tok.Kw_Try
+                      and then Ahead (3) = Tok.Kw_For))
                then
                   declare
                      Label : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
                      Label_At : constant Landin.Source.Span := Here;
                      Is_For : constant Boolean :=
-                       Ahead (2) = Tok.Kw_For;
+                       Ahead (2) in Tok.Kw_For | Tok.Kw_Try;
+                     Tried : constant Boolean :=
+                       Ahead (2) = Tok.Kw_Try;
                   begin
                      Advance;
                      Advance;
+                     if Tried then
+                        Advance;
+                     end if;
                      if Is_For then
                         return Parse_For
-                          (Active_Frame, Starts => Label_At, Label => Label);
+                          (Active_Frame, Starts => Label_At, Label => Label,
+                           Tried => Tried);
                      else
                         return Parse_Loop
                           (Active_Frame, Starts => Label_At, Label => Label);

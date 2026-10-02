@@ -1,0 +1,6 @@
+error[L0301]: this type has no [1320] iterable conformance
+  --> ../tests/fixtures/negative/for-fallible-requires-try/main.ldn:30:17
+   |
+30 |     for item in value do
+   |                 ^^^^^ this traversal source
+  = note: [1150]: a struct or `any C` traversal uses the named iterable evidence

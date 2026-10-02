@@ -588,6 +588,12 @@ test calls `at_end`; a false result calls `item` before entering the body.
 Fallthrough and `continue` run applicable cleanup and then call `next`; a
 `break` runs applicable cleanup and skips `next`. The optional immutable
 `usize` index begins at zero and advances with each `next` call.
+`try for` additionally admits the exact `fallible_iterable` concept with
+associated `Cur`, `Item`, and atom error set. Its four providers declare that
+same error set. A failed provider runs active failure cleanup and propagates
+its atom; it neither enters `complete` nor calls a later provider. When both
+conformances exist, `try for` selects `fallible_iterable`; ordinary `for`
+continues to select only `iterable`.
 
 The cursor keeps its complete type identity between calls. The element is an
 immutable copy of the exact `Item` result, not an alias into the source, and
@@ -671,10 +677,10 @@ while       ::= "while" condition "do" block
                 ("complete" block)? "end" "while"
               | identifier ":" "while" condition "do" block
                 ("complete" block)? "end" identifier
-for         ::= "for" identifier ("," identifier)? "in" expression
+for         ::= "try"? "for" identifier ("," identifier)? "in" expression
                 ((".." | "..<") expression)? "do" block
                 ("complete" block)? "end" "for"
-              | identifier ":" "for" identifier ("," identifier)?
+              | identifier ":" "try"? "for" identifier ("," identifier)?
                 "in" expression ((".." | "..<") expression)? "do" block
                 ("complete" block)? "end" identifier
 try         ::= "try" (call | labeled_application)
@@ -12134,7 +12140,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1070, 1080, 1090 | L0200 or L0201 at a condition-binding scope boundary; L0301 or L0302 at every condition, reachable join and exit | `negative/condition-declaration-body-shadowing`, `negative/condition-declaration-not-bool`, `negative/condition-declaration-out-of-scope`, `negative/if-expression-missing-else`, `runtime/condition-declarations`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1090, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, incomplete/inconsistent value exit, or a value given to a labelled bare block's break; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named loop or labelled block edge, or the nearest loop, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view`, `runtime/r720-labelled-block-transfers`, `negative/r720-labelled-block-break-value` |
+| `control.loops` | static | 1090, 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence or an untried fallible traversal, incomplete/inconsistent value exit, or a value given to a labelled bare block's break; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named loop or labelled block edge, or the nearest loop, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-fallible-requires-try`, `negative/for-fallible-undeclared-error`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-fallible-iteration`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view`, `runtime/r720-labelled-block-transfers`, `negative/r720-labelled-block-break-value` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction`, `runtime/r490-generic-inferred-recovery`, `runtime/r490-generic-recovery-frontier`, `runtime/r490-generic-union-alias`, `runtime/r490-generic-erased-recovery-views`, `negative/r490-generic-recovery-conflict`, `negative/r490-recovery-expanding-generic` |
@@ -12516,6 +12522,25 @@ remain label-addressed, while the retained provider table and calls remain in
 concept declaration order. Missing, multiple, malformed, or non-exact
 evidence is L0301.
 
+**Amended for fallible traversal:** the infallible contract above remains
+exact. `try for` first seeks one conformance to the unambiguous concept named
+`fallible_iterable`, with type formals `T`, `Cur`, `Item`, and `Errors` and the
+same four ordered entries. `Errors` is an atom set, and every entry declares
+that exact set after `!`. The provider result, cursor, permission, convention
+and origin rules above still apply. If no fallible conformance exists,
+`try for` may use an ordinary `iterable`; plain `for` cannot select a
+fallible conformance. Missing, ambiguous, malformed, or non-exact evidence
+is L0301.
+
+The source is still evaluated once. A failure from `first`, `at_end`, `item`
+or `next` propagates its original error atom after applicable `defer` and
+`undo` cleanup. It skips all later provider calls and never enters
+`complete`. A failure from `next` occurs after the body and its cleanup,
+before the next head. The enclosing function must declare or infer those
+atoms, and its caller may recover them through the ordinary call `else`.
+This makes the implicit provider calls visible at the loop site without
+changing ordinary call error handling.
+
 The source expression is evaluated once and copied into independent traversal
 storage. `first` runs once against that stored source. Each head calls
 `at_end`; false calls `item` and copies its result into the immutable element
@@ -12546,6 +12571,9 @@ associated-type identity, permit hidden result/input aliasing, contradict
 All were declined.
 
 **Pinned by** `runtime/for-iterable-evidence-traversal`,
+`runtime/for-fallible-iteration`,
+`negative/for-fallible-requires-try`,
+`negative/for-fallible-undeclared-error`,
 `negative/for-iterable-ambiguous-evidence`,
 `negative/for-iterable-item-read-only`,
 `negative/for-iterable-missing-conformance`, retained range and collection

@@ -994,6 +994,12 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = For_Statement;
 
+   --  `try for` propagates failures from its traversal providers.
+   function Traversal_Propagates
+     (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = For_Statement;
+
    --  D139's declaration conditional and its arms.  An arm's first slot is
    --  its condition, or No_Node for `else`; the remaining slots are ordinary
    --  declarations that configuration selects without mutating syntax.
@@ -1612,6 +1618,7 @@ private
       Convention : Parameter_Convention := Implicit_In;
       Direction  : Operand_Direction := Input_Operand;
       Fill       : Boolean := False;
+      Propagates : Boolean := False;
       Recovery   : Node_Id := No_Node;
    end record;
 

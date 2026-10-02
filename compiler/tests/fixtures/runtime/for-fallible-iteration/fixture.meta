@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: try for propagates errors from every iterable provider after running active cleanup
+program: main.ldn
+status: 42
+constructs: 0940, 0960, 1030, 1100, 1150, 1170, 1320
+targets: linux-x86-64, macos-arm64

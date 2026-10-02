@@ -1,0 +1,6 @@
+error[L0301]: this body can fail with an atom outside its declared error set
+  --> ../tests/fixtures/negative/for-fallible-undeclared-error/main.ldn:28:1
+   |
+28 | public main: () -> (code: i32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this declared signature
+  = note: [0940]: every failing path belongs to the function's `!` set

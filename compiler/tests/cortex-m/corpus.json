@@ -656,6 +656,9 @@
     "runtime/for-collection-traversal": {
       "mode": "execute"
     },
+    "runtime/for-fallible-iteration": {
+      "mode": "execute"
+    },
     "runtime/for-iterable-evidence-traversal": {
       "mode": "execute"
     },

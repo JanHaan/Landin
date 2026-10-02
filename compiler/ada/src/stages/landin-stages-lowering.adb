@@ -9802,6 +9802,16 @@ package body Landin.Stages.Lowering is
               Provider_Signature (Position);
             Signature : constant IR.Signature_Id :=
               Signature_For (Source_Signature);
+            Errors : constant IR.Atom_Set_Id :=
+              IR.Signature_Errors (Unit.all, Signature);
+            Failure_Slot : constant IR.Slot_Id :=
+              (if Errors = IR.No_Atom_Set then IR.No_Slot
+               else IR.Add_Slot
+                 (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+                  Atoms => Errors));
+            Success_Slot : constant IR.Slot_Id :=
+              (if Errors = IR.No_Atom_Set or else Is_Stored (Result_Part)
+               then IR.No_Slot else Add_Part_Slot (Result_Part));
             Table : constant IR.Value_Id := IR.Emit_Evidence_Address
               (Unit.all, Filling, Evidence_For (Traversal_Evidence), Site);
             Callee : constant IR.Value_Id := IR.Emit_Evidence_Function
@@ -9829,7 +9839,7 @@ package body Landin.Stages.Lowering is
                 then Ty.Usize
                 elsif Result_Part.Kind = Ty.Atom_Value then Ty.U32
                 else Ty.Scalar_Name (Result_Part.Kind)),
-               Site);
+               Site, Failure => Failure_Slot);
          begin
             IR.Add_Argument (Unit.all, Filling, Made, Callee);
             if Hidden /= IR.No_Value then
@@ -9838,6 +9848,43 @@ package body Landin.Stages.Lowering is
             IR.Add_Argument (Unit.all, Filling, Made, Source_Argument);
             if Cursor_Argument /= IR.No_Value then
                IR.Add_Argument (Unit.all, Filling, Made, Cursor_Argument);
+            end if;
+            if Failure_Slot /= IR.No_Slot then
+               if not Syn.Traversal_Propagates (Of_Tree, Node) then
+                  raise Landin.Compiler_Defect with
+                    "a failing traversal reached lowering without try";
+               end if;
+               if Success_Slot /= IR.No_Slot then
+                  IR.Emit_Store
+                    (Unit.all, Filling, Success_Slot, Made, Site);
+               end if;
+               declare
+                  Error : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Failure_Slot, Site);
+                  Failed : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+                  Succeeded : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+               begin
+                  IR.Emit_Branch
+                    (Unit.all, Filling,
+                     IR.Emit_Failure_Test
+                       (Unit.all, Filling, Error, Site),
+                     Failed, Succeeded, Site);
+                  IR.Leave_Block (Unit.all, Filling);
+                  Current := IR.No_Block;
+                  Open (Failed);
+                  Fail_Through_Cleanups
+                    (Of_Tree,
+                     IR.Emit_Load
+                       (Unit.all, Filling, Failure_Slot, Site),
+                     Site);
+                  Open (Succeeded);
+               end;
+               if Success_Slot /= IR.No_Slot then
+                  return IR.Emit_Load
+                    (Unit.all, Filling, Success_Slot, Site);
+               end if;
             end if;
             return Made;
          end Call_Entry;

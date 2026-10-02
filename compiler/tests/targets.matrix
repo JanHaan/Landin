@@ -308,6 +308,8 @@ negative/float-width-conversion-known-out-of-range | linux-x86-64, linux-arm64, 
 negative/for-any-element-read-only | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/for-array-element-read-only | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/for-collection-element-read-only | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
+negative/for-fallible-requires-try | linux-x86-64, macos-arm64, synthetic-32
+negative/for-fallible-undeclared-error | linux-x86-64, macos-arm64, synthetic-32
 negative/for-iterable-ambiguous-evidence | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/for-iterable-item-read-only | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 negative/for-iterable-missing-conformance | linux-x86-64, linux-arm64, macos-arm64, synthetic-32
@@ -1608,6 +1610,7 @@ runtime/float-width-conversions | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-aggregate-element-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-any-element-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-collection-traversal | linux-x86-64, linux-arm64, macos-arm64
+runtime/for-fallible-iteration | linux-x86-64, macos-arm64
 runtime/for-iterable-evidence-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-range-traversal | linux-x86-64, linux-arm64, macos-arm64
 runtime/for-value-block-statements | linux-x86-64, linux-arm64, macos-arm64

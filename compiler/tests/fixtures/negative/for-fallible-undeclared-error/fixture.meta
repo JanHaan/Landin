@@ -1,0 +1,9 @@
+class: negative
+summary: try for requires its provider errors in the enclosing function
+program: main.ldn
+codes: L0301
+constructs: 0940, 0960, 1150, 1320
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/for-fallible-undeclared-error/main.ldn
+status: 1
