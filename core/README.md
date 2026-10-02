@@ -66,6 +66,14 @@ explicit choice for tiny or swap-expensive views: exactly n(n-1)/2 comparisons
 and at most n-1 swaps. Both take the caller's strict ordering and neither
 promises stability.
 
+`core/region.new_region` grows its allocation ledger through the parent.
+`core/region.bounded_region` instead takes caller-owned initialized
+`region.allocation` records. One record is needed per live payload; a full
+ledger reports `out_of_memory` and returns the just-allocated payload to the
+parent. Release frees payloads in reverse order, resets the record count, and
+leaves the caller's ledger available for reuse. The caller keeps that storage
+alive through the region's last use.
+
 The [probe runner](../environments/cortex-m/freestanding.py) copies only its
 declared import closure and records every source hash. Each link accepts the
 compiler-generated object, pinned `thumb/v6-m/nofp/libgcc.a` and GNU-generated

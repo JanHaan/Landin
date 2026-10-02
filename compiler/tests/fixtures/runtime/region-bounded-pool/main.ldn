@@ -1,0 +1,57 @@
+import core/mem
+import core/pool
+import core/region
+
+bounded_pool: () -> (ok: bool) =
+    ok = false
+    mut backing: [6]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut slots: [3]pool.slot = zeroed
+    mut parent := pool.over(base, usize(48), usize(16), usize(3),
+                            usize(8), slots[0..<3])
+        else (problem) _ = problem
+        return
+    end
+    mut ledger: [2]region.allocation = zeroed
+    mut child := region.bounded_region(addr parent, ledger[0..<2])
+    region.release_region(child)
+    return when pool.allocation_count(parent) <> 0
+
+    first: ptr mut u8 = mem.allocate(child, usize(1), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    second: ptr mut u8 = mem.allocate(child, usize(16), usize(8)) else (problem)
+        _ = problem
+        return
+    end
+    first.val = 11
+    second.val = 22
+    return when pool.live(parent) <> 2 or pool.allocation_count(parent) <> 2
+
+    mut refused: bool = false
+    _ = mem.allocate(child, usize(1), usize(1)) else (problem)
+        refused = problem == mem.out_of_memory
+        first
+    end
+    return when not refused or pool.live(parent) <> 2
+      or pool.allocation_count(parent) <> 3 or pool.free_count(parent) <> 1
+      or first.val <> 11 or second.val <> 22
+
+    region.release_region(child)
+    return when pool.live(parent) <> 0 or pool.free_count(parent) <> 3
+      or pool.rejected_free_count(parent) <> 0
+
+    again: ptr mut u8 = mem.allocate(child, usize(1), usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    again.val = 33
+    region.release_region(child)
+    ok = pool.live(parent) == 0 and pool.allocation_count(parent) == 4
+      and pool.free_count(parent) == 4 and pool.rejected_free_count(parent) == 0
+end bounded_pool
+
+public main: () -> (code: i32) =
+    if bounded_pool() then code = 42 else code = 0 end if
+end main
