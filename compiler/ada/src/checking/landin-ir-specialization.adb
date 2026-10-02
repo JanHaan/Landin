@@ -32,6 +32,7 @@ package body Landin.IR.Specialization is
       Aliases : array (1 .. Natural (Into.Code.Length)) of Value_Id :=
         [others => No_Value];
       Changed : Boolean;
+      Rewritten : Boolean := False;
 
       procedure Expose (Item : Item_Id);
 
@@ -371,6 +372,7 @@ package body Landin.IR.Specialization is
                           (Held.Values.First + V, Code);
                         Decisions (I).Direct_Calls_Made :=
                           Decisions (I).Direct_Calls_Made + 1;
+                        Rewritten := True;
                      end;
                   end if;
                end loop;
@@ -387,7 +389,9 @@ package body Landin.IR.Specialization is
             Reports.Append (Report, Decisions (I));
          end if;
       end loop;
-      if Options.Specialize /= Landin.Optimization.Off then
+      --  The verified input has no unreachable blocks. Rebuild its vectors
+      --  only when a rewritten call leaves an unused callee operand behind.
+      if Rewritten then
          Rewriting.Compact
            (Into, [1 .. Natural (Into.Code.Length) => True]);
       end if;
