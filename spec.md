@@ -1396,7 +1396,7 @@ other struct identities remain distinct even when their shapes qualify.
 There is no parameter convention or `escaping` modifier. It remains an ordinary runtime ABI position after the
 compiler has filled it; source calls omit it, except for D192's named forwarding
 from another `caller` parameter. `caller` is a contextual word [1760] does not
-reserve, exactly as `unchecked` and `range` are, and it is the modifier only
+reserve, exactly as `range` is, and it is the modifier only
 where a second name follows it: a parameter of that name writes `:` next, so
 `caller: utf8`, `in caller: u8` and `escaping caller: ptr u8` all declare an
 ordinary parameter spelled `caller`.
