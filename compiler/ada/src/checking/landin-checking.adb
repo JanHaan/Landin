@@ -921,6 +921,9 @@ package body Landin.Checking is
       Include_Encodings : Boolean := False)
       return Ada.Containers.Hash_Type;
 
+   function Avalanche (Value : Ada.Containers.Hash_Type)
+     return Ada.Containers.Hash_Type;
+
    function Mix
      (Left, Right : Ada.Containers.Hash_Type)
       return Ada.Containers.Hash_Type
@@ -929,6 +932,20 @@ package body Landin.Checking is
    begin
       return Left * 31 xor Right;
    end Mix;
+
+   function Avalanche (Value : Ada.Containers.Hash_Type)
+     return Ada.Containers.Hash_Type
+   is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type := Value;
+   begin
+      --  Spread nearby declaration ids across the hash before the
+      --  commutative atom-set fold.  In particular, complementary ids must
+      --  not keep the same sum merely because their low bits complement.
+      Result := (Result xor Result / 2 ** 16) * 16#85EB_CA6B#;
+      Result := (Result xor Result / 2 ** 13) * 16#C2B2_AE35#;
+      return Result xor Result / 2 ** 16;
+   end Avalanche;
 
    function Atom_Set_Digest
      (Of_Table : Table; Atoms : Atom_Set_Id;
@@ -946,7 +963,7 @@ package body Landin.Checking is
       for Index in 1 .. Atom_Count (Of_Table, Atoms) loop
          declare
             Member : Ada.Containers.Hash_Type :=
-              Mix (16#9E37_79B9#, Ada.Containers.Hash_Type'Mod
+              Avalanche (Ada.Containers.Hash_Type'Mod
                 (Nth_Atom (Of_Table, Atoms, Index)));
          begin
             if Width /= 0 then

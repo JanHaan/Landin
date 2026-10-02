@@ -9651,7 +9651,7 @@ package body Landin.Tests.Checking_Suite is
       Src : Landin.Source.Source_Id;
       Text : US.Unbounded_String := US.To_Unbounded_String (Program);
    begin
-      for Index in 1 .. 128 loop
+      for Index in 1 .. 512 loop
          US.Append
            (Text, "key" & Image (Index) & ": type = i32" & LF);
       end loop;
@@ -9848,6 +9848,50 @@ package body Landin.Tests.Checking_Suite is
                         = Landin.Checking.No_Conformance,
                      "a different encoding map has no conformance");
                end;
+            end;
+
+            declare
+               Rows : array (1 .. 255) of Landin.Checking.Conformance_Id;
+            begin
+               --  Under the old member hash, each pair (1, 510),
+               --  (2, 509), ..., (255, 256) had the same digest.
+               for Index in Rows'Range loop
+                  declare
+                     Atoms : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all,
+                          [Landin.Provenance.Declaration_Id (Index),
+                           Landin.Provenance.Declaration_Id (511 - Index)]);
+                     Target : constant Landin.Checking.Actual_Key :=
+                       Landin.Checking.Atom_Set_Type_Actual
+                         (Types.all, Atoms);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept, Target, Empty)
+                          = Landin.Checking.No_Conformance,
+                        "a complementary atom pair misses");
+                     Rows (Index) := Landin.Checking.Add_Conformance
+                       (Types.all, Concept, Target, Empty, Empty, Src,
+                        Point_Node, Landin.Checking.Declared_Conformance);
+                  end;
+               end loop;
+               for Index in Rows'Range loop
+                  declare
+                     Reversed : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Add_Atom_Set
+                         (Types.all,
+                          [Landin.Provenance.Declaration_Id (511 - Index),
+                           Landin.Provenance.Declaration_Id (Index)]);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Landin.Checking.Find_Conformance
+                          (Types.all, Concept,
+                           Landin.Checking.Atom_Set_Type_Actual
+                             (Types.all, Reversed), Empty) = Rows (Index),
+                        "a reversed complementary pair finds its row");
+                  end;
+               end loop;
             end;
          end;
       end;
