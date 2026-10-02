@@ -13947,9 +13947,12 @@ contract an optimization has to keep.
 
 **The tour said** that hosted `main` follows the system C ABI, calls the
 no-argument form ordinary and keeps the C `argc` and `argv` form available
-[1650]. Its capability-root example has exactly
-`public main: () -> (code: i32)` [1660], but an example does not say which
-shape the first native slice must implement.
+[1650]. Its derived hosted capability example shows
+`public entry: () -> (code: i32)` acquiring the roots, with the application's
+`public main: () -> (code: i32)` delegating to it [1660]. D208 specifies how
+hosted startup initializes the argument root before that no-argument `main`
+begins. The example does not say which shape the first native slice must
+implement.
 
 **Chosen:** [1970]. The minimal Linux x86-64 path accepts one public
 no-argument `main` and returns its host status through the one named `i32`
