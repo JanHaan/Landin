@@ -263,20 +263,27 @@ install_at: (key: type is hashable, item: type,
     placed = true
 end install_at
 
---  Search for an existing key before considering growth. This probe changes
---  nothing for an absent key, including after tombstones, and a found update
---  needs no allocator regardless of table pressure.
-update_existing: (key: type is hashable, item: type,
-                  inout value: map(key, item), wanted: key,
-                  escaping replacement: item)
-                 -> (found: bool) ! mem.out_of_memory =
+--  Keep the absent key's placement position so insertion without a rebuild
+--  does not probe the same chain again. A dead bucket is usable only after
+--  checking the rest of the chain for an equal used key.
+insert_search: type = struct
+    updated: bool
+    slot_index: usize
+    was_dead: bool
+end insert_search
+
+search_for_insert: (key: type is hashable, item: type,
+                    inout value: map(key, item), wanted: key,
+                    escaping replacement: item)
+                   -> (result: insert_search) ! mem.out_of_memory =
     slots: usize = capacity(value)
     if slots == 0 then
-        found = false
+        result = (updated: false, slot_index: slots, was_dead: false)
         return
     end if
 
     mut at: usize = index_of(wanted, slots)
+    mut first_dead: usize = slots
     mut probed: usize = 0
     while probed < slots do
         record: bucket = (mem.get(value.buckets, at) else (problem)
@@ -284,10 +291,19 @@ update_existing: (key: type is hashable, item: type,
             fail mem.out_of_memory
         end)
         if record.state == slot_free then
-            found = false
+            if first_dead < slots then
+                result = (updated: false, slot_index: first_dead,
+                          was_dead: true)
+            else
+                result = (updated: false, slot_index: at, was_dead: false)
+            end if
             return
         end if
-        if record.state == slot_used then
+        if record.state == slot_dead then
+            if first_dead == slots then
+                first_dead = at
+            end if
+        elsif record.state == slot_used then
             existing: key = (mem.get(value.keys, record.dense_index)
                 else (problem)
                 _ = problem
@@ -299,15 +315,16 @@ update_existing: (key: type is hashable, item: type,
                 then
                     fail mem.out_of_memory
                 end if
-                found = true
+                result = (updated: true, slot_index: at, was_dead: false)
                 return
             end if
         end if
         at = next_index(at, slots)
         inc probed
     end while
-    found = false
-end update_existing
+    result = (updated: false, slot_index: first_dead,
+              was_dead: first_dead < slots)
+end search_for_insert
 
 --  The caller has already proved this key absent. Probes are still bounded
 --  if no free bucket exists, and the first tombstone wins only after the
@@ -465,8 +482,9 @@ public insert: (key: type is hashable, item: type,
                 inout value: map(key, item), inout state: provider,
                 escaping added_key: key, escaping added_value: item)
                -> none ! mem.out_of_memory =
-    updated: bool = try update_existing(value, added_key, added_value)
-    return when updated
+    position: insert_search = try search_for_insert
+        (value, added_key, added_value)
+    return when position.updated
 
     if crowded(value) then
         old_capacity: usize = capacity(value)
@@ -484,8 +502,13 @@ public insert: (key: type is hashable, item: type,
             end if
         end if
         try rehash(value, state, want)
+        inserted: bool = place_absent(value, added_key, added_value)
+        fail mem.out_of_memory when not inserted
+        return
     end if
-    inserted: bool = place_absent(value, added_key, added_value)
+    fail mem.out_of_memory when position.slot_index == capacity(value)
+    inserted: bool = install_at(value, position.slot_index, position.was_dead,
+                                added_key, added_value)
     fail mem.out_of_memory when not inserted
 end insert
 

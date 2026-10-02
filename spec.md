@@ -16058,10 +16058,13 @@ nonempty tombstone-free table doubles after a checked maximum bound. Lookup,
 removal, placement and migration each probe at most capacity
 records and wrap without adding one to the final index. Placement records the
 first dead bucket until a free bucket or the probe bound is reached. Insert
-first performs a separate read-only bounded search for an equal used key. If
-found, it replaces that dense value and returns before load pressure or any
-allocator call; if absent, it has changed no map state and may then rehash and
-place. Thus an update after a preceding tombstone changes one value without
+first performs a bounded search for an equal used key, remembering the first
+dead bucket and the first free bucket reached. If found, it replaces that
+dense value and returns before load pressure or any allocator call; if absent,
+it has changed no map state. Without a rebuild it inserts at the remembered
+bucket without probing again. When pressure requires a rebuild, it rehashes
+before probing the replacement table for placement. Thus an update after a
+preceding tombstone changes one value without
 changing length, duplicating the key or depending on allocation availability,
 and malformed full or all-dead records still terminate.
 `hash(K) % u64(capacity)` is evaluated before conversion to `usize`.
