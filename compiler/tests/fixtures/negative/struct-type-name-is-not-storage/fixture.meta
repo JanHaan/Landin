@@ -3,4 +3,4 @@ summary: D54 through D61 copy a whole struct from storage, and a struct type nam
 constructs: 0050, 0410, 0670, 0710, 1740, 1810
 program: program.ldn
 codes: L0301, L0301, L0301, L0301, L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

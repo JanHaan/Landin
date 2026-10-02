@@ -3,4 +3,4 @@ summary: an inferred module image folds every element in its first scalar contex
 constructs: 0050, 0190, 0290, 0320, 0520, 0530, 1740, 1820, 1940
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

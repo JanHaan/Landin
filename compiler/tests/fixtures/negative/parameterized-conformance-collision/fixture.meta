@@ -3,4 +3,4 @@ summary: alpha-renamed parameterized families collide even without a lookup
 program: main.ldn
 codes: L0317
 constructs: 1250, 1280
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

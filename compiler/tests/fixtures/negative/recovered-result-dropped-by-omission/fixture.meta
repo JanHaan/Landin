@@ -3,7 +3,7 @@ summary: [1020]/[1810] a recovery clause does not discard the successful result;
 constructs: 1020, 1030, 1810
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/recovered-result-dropped-by-omission/program.ldn
 status: 1

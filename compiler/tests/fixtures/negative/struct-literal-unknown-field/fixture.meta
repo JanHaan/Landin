@@ -3,4 +3,4 @@ summary: D64 resolves each struct literal label against its contextual nominal b
 constructs: 0670, 0710, 0750, 1810
 program: program.ldn
 codes: L0308
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

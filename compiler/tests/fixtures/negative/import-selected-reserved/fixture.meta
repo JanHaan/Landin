@@ -5,4 +5,4 @@ args: --root=../tests/fixtures/negative/import-selected-reserved/root ../tests/f
 codes: L0203
 status: 1
 constructs: 1440, 1450, 1480, 1560
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

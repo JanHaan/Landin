@@ -3,7 +3,7 @@ summary: a named IEEE special has the type named by its qualifier rather than a 
 constructs: 0210, 0240, 1880
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/float-special-width-mismatch/program.ldn
 status: 1

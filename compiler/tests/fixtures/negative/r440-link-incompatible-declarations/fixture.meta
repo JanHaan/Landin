@@ -3,4 +3,4 @@ summary: linking refuses incompatible C signatures sharing one external symbol
 program: program.ldn
 codes: L0301
 constructs: 1000, 1580, 1610
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

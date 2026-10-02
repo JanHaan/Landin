@@ -16,19 +16,27 @@ extern int r440_call_renamed(void);
 int r440_foreign_state(void) __asm__(OBJECT_NAME(".Llandin_host_argv"));
 int r440_foreign_state(void) { return 42; }
 
-/* This ordinary SysV wrapper gives the no-argument callback deliberately
+/* This ordinary wrapper gives the no-argument callback deliberately
    invalid argc/argv carriers. It is not an inline-asm call hidden from the
-   compiler's stack alignment or register allocation. */
-#if defined(__APPLE__)
+   compiler's stack alignment or register allocation.  Its instructions are
+   the architecture's, and its symbol spelling the object format's. */
+#if defined(__aarch64__)
 __asm__(".text\n"
-        "_r440_call_renamed:\n"
+#if !defined(__APPLE__)
+        ".type r440_call_renamed, %function\n"
+#endif
+        OBJECT_NAME("r440_call_renamed") ":\n"
         "stp x29, x30, [sp, #-16]!\n"
         "mov x29, sp\n"
         "mov w0, #-1\n"
         "mov x1, #0\n"
-        "bl _r440_renamed_main\n"
+        "bl " OBJECT_NAME("r440_renamed_main") "\n"
         "ldp x29, x30, [sp], #16\n"
-        "ret\n");
+        "ret\n"
+#if !defined(__APPLE__)
+        ".size r440_call_renamed, .-r440_call_renamed\n"
+#endif
+        );
 #else
 __asm__(".text\n"
         ".type r440_call_renamed, @function\n"

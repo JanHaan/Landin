@@ -1,7 +1,7 @@
 class: negative
 summary: D212 names the withdrawn arena type and ordinary allocator migration
 expect: expected.txt
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 args: ../tests/fixtures/negative/arena-type-not-enabled/program.ldn
 codes: L0304
 status: 1

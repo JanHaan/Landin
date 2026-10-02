@@ -665,10 +665,21 @@ about a construct no fixture can yet use.
 
 `targets` is required, and `check.py` holds each name to the targets
 [the target applicability register](registers.md#target-applicability-coverage)
-allows: the three product targets `linux-x86-64`, `macos-arm64` and
-`cortex-m`, and `synthetic-32`, the 32-bit model that preceded the Cortex-M
-backend. A name outside that list is refused, because that is how a fixture
-quietly stops applying to anything.
+allows: the four product targets `linux-x86-64`, `linux-arm64`, `macos-arm64`
+and `cortex-m`, and `synthetic-32`, the 32-bit model that preceded the
+Cortex-M backend. A name outside that list is refused, because that is how a
+fixture quietly stops applying to anything.
+
+`linux-arm64` is the Linux arm64 lane's own name and its driver name alike,
+so a fixture whose `args:` select `--target=linux-arm64` names it, and one
+that names it is run by that lane with the target its args choose, or the
+lane's own when they choose none. A runtime or ABI fixture the Linux x86-64
+lane runs names `linux-arm64` too, or has a record in
+[`linux-arm64/parity.json`](linux-arm64/parity.json) giving the reason it
+cannot and the counterpart that runs on arm64 instead; a record for a fixture
+the lane runs, or a counterpart it does not run, is refused. The hand-ordered
+file is edited by hand, as `darwin/parity.json` and `cortex-m/corpus.json`
+are.
 
 `expect` and `args` come as a pair. An expectation with no way to produce it
 is dead data that looks like coverage, and arguments with nothing to compare

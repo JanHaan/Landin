@@ -3,4 +3,4 @@ summary: passing an ordinary child requires its complete nested storage
 constructs: 0670, 0750, 1910, 1920
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

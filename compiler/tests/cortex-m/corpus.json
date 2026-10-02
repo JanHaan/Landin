@@ -1,6 +1,11 @@
 {
   "schema": 1,
   "fixtures": {
+    "abi/aapcs64-varargs-both-banks": {
+      "mode": "restriction",
+      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
+      "witness": "compiler/tests/fixtures/abi/aapcs64-varargs-both-banks/fixture.meta"
+    },
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -1223,6 +1228,13 @@
       "mode": "execute"
     },
     "runtime/r440-c-aliases": {
+      "mode": "refuse",
+      "codes": [
+        "L0324"
+      ],
+      "reason": "The inherited core/c module asserts its hosted LP64 target guard. Cortex-M0 enables no core/c surface, and the freestanding core slice has none."
+    },
+    "runtime/c-aliases-unsigned-char": {
       "mode": "refuse",
       "codes": [
         "L0324"

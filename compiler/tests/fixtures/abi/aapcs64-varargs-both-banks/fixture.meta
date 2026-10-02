@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: D256 assigns promoted C variadic tails to the next register of their bank, and to the stack only once both banks are exhausted
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600
+targets: linux-arm64

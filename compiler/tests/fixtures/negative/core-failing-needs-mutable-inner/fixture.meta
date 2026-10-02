@@ -1,7 +1,7 @@
 class: negative
 summary: a counted wrapper requires a writable pointer to its supplied inner provider
 expect: expected.txt
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 args: --root=../.. ../tests/fixtures/negative/core-failing-needs-mutable-inner
 codes: L0301
 status: 1

@@ -3,4 +3,4 @@ summary: a call-else pointer-union join retains a frame origin introduced only b
 program: program.ldn
 codes: L0314
 constructs: 0480, 0770, 0780, 0940
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32

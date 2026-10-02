@@ -3,4 +3,4 @@ summary: trailing field fill preserves array shapes boundary
 program: main.ldn
 codes: L0301
 constructs: 0520, 0720
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

@@ -2,6 +2,6 @@ class: runtime
 summary: indexed encoded arrays, per-union maps and full-width enum extraction
 program: program.ldn
 constructs: 0630, 0730, 0750
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 status: 42
 profiles: specialization

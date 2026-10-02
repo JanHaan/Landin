@@ -3,7 +3,7 @@ summary: D200 a comparison takes one register-sized value; a slice has no equali
 program: program.ldn
 codes: L0301
 constructs: 0350, 0430, 1890
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/slice-comparison-refused/program.ldn
 status: 1

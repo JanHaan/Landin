@@ -2,4 +2,4 @@ class: positive
 summary: [1820] '^' binds tighter than '|': 1 | 3 ^ 2 is 1, not 0
 constructs: 1820
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

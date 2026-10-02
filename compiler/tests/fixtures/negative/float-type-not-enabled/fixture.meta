@@ -3,4 +3,4 @@ summary: [0170] leaves f16 to Language evolution, so the checker refuses that wi
 constructs: 0170, 1790, 1830
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

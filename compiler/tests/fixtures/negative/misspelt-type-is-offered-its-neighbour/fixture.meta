@@ -4,4 +4,4 @@ program: program.ldn
 codes: L0201, L0201
 fixed: program.fixed
 constructs: 0120, 1790, 1860
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

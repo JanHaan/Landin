@@ -3,4 +3,4 @@ summary: alias normalization collides equal input keys for the same represented 
 program: main.ldn
 codes: L0317
 constructs: 0120, 1240, 1270, 1280, 1795
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

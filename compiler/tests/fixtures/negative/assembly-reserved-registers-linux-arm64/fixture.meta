@@ -1,0 +1,9 @@
+class: negative
+summary: D256 keeps x18 reserved on linux-arm64, so D248's arm64 register rules hold on both arm64 targets
+program: program.ldn
+expect: expected.txt
+args: --target=linux-arm64 ../tests/fixtures/negative/assembly-reserved-registers-linux-arm64/program.ldn
+codes: L0301, L0301, L0301, L0301
+status: 1
+constructs: 1630, 1990
+targets: linux-arm64

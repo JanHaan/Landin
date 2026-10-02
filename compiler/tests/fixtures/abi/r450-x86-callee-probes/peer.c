@@ -1,5 +1,12 @@
 #include <stdint.h>
 
+/* The probes are the architecture's; a symbol is the object format's. */
+#if defined(__APPLE__)
+#define OBJECT_NAME(name) "_" name
+#else
+#define OBJECT_NAME(name) name
+#endif
+
 struct large {
     uint8_t bytes[8199];
     uint64_t marker;
@@ -8,7 +15,7 @@ struct large {
 int64_t r450_step(int64_t x)
 {
     /* Force every volatile GP bank to be unavailable across this call. */
-#if defined(__APPLE__)
+#if defined(__aarch64__)
     __asm__ volatile ("" : : :
         "x0", "x1", "x2", "x3", "x4", "x5",
         "x6", "x7", "x8", "x9", "x10", "x11",
@@ -34,14 +41,15 @@ struct large r450_large(struct large value)
     return value;
 }
 
-/* This peer owns the Linux x86-64 host boundary deliberately.  Five pushes
- * leave the call site 16-byte aligned, and all original saves are restored
- * even when an observed Landin return is wrong. */
-#if defined(__APPLE__)
+/* This peer owns the host boundary deliberately.  On x86-64 five pushes
+ * leave the call site 16-byte aligned; on arm64 one frame holds every
+ * callee save.  All original saves are restored even when an observed
+ * Landin return is wrong. */
+#if defined(__aarch64__)
 __asm__(
     ".text\n"
-    ".globl _r450_registers\n"
-    "_r450_registers:\n"
+    ".globl " OBJECT_NAME("r450_registers") "\n"
+    OBJECT_NAME("r450_registers") ":\n"
     "stp x29, x30, [sp, #-160]!\n"
     "mov x29, sp\n"
     "stp x19, x20, [sp, #16]\n"
@@ -80,7 +88,7 @@ __asm__(
     "mov x9, #115\n"
     "fmov d15, x9\n"
     "mov x0, #10\n"
-    "bl _r450_loop\n"
+    "bl " OBJECT_NAME("r450_loop") "\n"
     "cmp x0, #145\n"
     "b.ne 1f\n"
     "cmp x19, #119\n"

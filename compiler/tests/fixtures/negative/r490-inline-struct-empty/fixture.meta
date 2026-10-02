@@ -3,4 +3,4 @@ summary: an inline declared struct needs at least one field just as the block fo
 program: main.ldn
 codes: L0101
 constructs: 0670, 1795
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

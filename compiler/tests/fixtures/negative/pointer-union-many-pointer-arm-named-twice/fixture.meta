@@ -3,7 +3,7 @@ summary: [0480]/[1870] the union has one pointer case, so a second `ptr` arm nam
 constructs: 0480, 1210
 program: program.ldn
 codes: L0311
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-pointer-arm-named-twice/program.ldn
 status: 1

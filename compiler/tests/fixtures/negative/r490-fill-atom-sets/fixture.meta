@@ -3,4 +3,4 @@ summary: one trailing fill requires identical atom-set descriptors
 program: main.ldn
 codes: L0301
 constructs: 0630, 0640, 0670, 0710, 0720
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

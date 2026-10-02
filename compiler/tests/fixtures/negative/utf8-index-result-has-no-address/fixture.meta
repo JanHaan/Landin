@@ -3,7 +3,7 @@ summary: a utf8 index decodes a codepoint value, which has no address to take
 constructs: 0380, 0430, 0600, 0610, 1050
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/utf8-index-result-has-no-address/program.ldn
 status: 1

@@ -3,7 +3,7 @@ summary: a public function signature writes a concrete error set
 constructs: 0090, 0940, 0960
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/inferred-errors-public/program.ldn
 status: 1

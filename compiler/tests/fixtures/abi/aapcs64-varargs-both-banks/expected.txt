@@ -1,0 +1,1 @@
+aapcs64 varargs ok

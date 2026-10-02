@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "differences": {
+    "runtime/fixed-conditional-runtime": {
+      "reason": "The unchanged source explicitly selects status 1 in its arm64 branch; the linux-arm64 lane does not run a fixture whose oracle is another architecture's branch.",
+      "counterpart": "end-to-end/feature-level-linux-arm64-armv8-1-a-has-lse"
+    },
+    "runtime/r440-c-aliases": {
+      "reason": "The standard AAPCS64's plain char is unsigned (D256), so the fixture's c_char = -1 is refused there. The counterpart pins the same aliases with c_char a u8.",
+      "counterpart": "runtime/c-aliases-unsigned-char"
+    },
+    "abi/r440-bindings-generated": {
+      "reason": "The committed bindings are generated for x86_64-pc-linux-gnu and assert compiler.c_sysv_lp64. The binding generator's linux-arm64 target regenerates and executes the same header and policy for the standard AAPCS64.",
+      "counterpart": "bindings/aarch64-unknown-linux-gnu"
+    },
+    "abi/r440-native-varargs": {
+      "reason": "SysV's al vector-register count is not an arm64 register. The counterpart keeps the promoted-tail values, direct and indirect calls and the C va_arg oracle, and observes where the standard places each argument.",
+      "counterpart": "abi/aapcs64-varargs-both-banks"
+    },
+    "abi/r440-sret-pointer-observation": {
+      "reason": "SysV returns the hidden destination in rax; AAPCS64 passes it in x8 with no returned-pointer obligation. Indirect results in both call directions are held by abi/r440-native-aggregates, which runs on linux-arm64.",
+      "counterpart": "abi/r440-native-aggregates"
+    }
+  }
+}

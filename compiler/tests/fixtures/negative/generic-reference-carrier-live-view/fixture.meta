@@ -3,4 +3,4 @@ summary: a generic carrier result remains live across movement of its source
 program: program.ldn
 constructs: 0570, 0750, 0790, 0800, 0830, 1290
 codes: L0315
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

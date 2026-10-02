@@ -3,4 +3,4 @@ summary: the C boundary rejects an unknown external convention with a complete s
 program: program.ldn
 codes: L0103
 constructs: 1580
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

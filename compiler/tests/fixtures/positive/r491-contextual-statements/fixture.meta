@@ -2,4 +2,4 @@ class: positive
 summary: longer control-word spellings and contextual arena remain legal names in ordinary and arm contexts
 program: main.ldn
 constructs: 0110, 0520, 1140, 1220, 1760, 1810
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

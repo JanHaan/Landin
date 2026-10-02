@@ -45,7 +45,9 @@ int main(void)
         if (selected != 9) {
             if (!WIFEXITED(status) || WEXITSTATUS(status) != 42) return 5;
         } else {
-#ifdef __APPLE__
+/* The arm64 backend traps with brk, SIGTRAP on Darwin and Linux alike;
+   x86-64 traps with ud2, SIGILL. */
+#if defined(__aarch64__)
             const int expected = SIGTRAP;
 #else
             const int expected = SIGILL;

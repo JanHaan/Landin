@@ -2,6 +2,6 @@ class: runtime
 summary: packed index bound
 program: program.ldn
 constructs: 0430, 0730, 1120
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 traps: yes
 profiles: specialization

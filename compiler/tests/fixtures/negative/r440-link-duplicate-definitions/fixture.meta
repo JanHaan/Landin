@@ -3,4 +3,4 @@ summary: linking refuses two definitions sharing one link symbol even when their
 program: program.ldn
 codes: L0301
 constructs: 1580, 1610
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

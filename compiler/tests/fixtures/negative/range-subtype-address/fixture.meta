@@ -3,4 +3,4 @@ summary: D188 the address of a constrained place is refused, because a write thr
 constructs: 0430, 0660
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

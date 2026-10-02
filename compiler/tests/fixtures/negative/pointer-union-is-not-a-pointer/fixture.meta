@@ -3,7 +3,7 @@ summary: D189 a plain pointer widens into the union and the union does not narro
 constructs: 0440, 0480, 1870
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-is-not-a-pointer/program.ldn
 status: 1

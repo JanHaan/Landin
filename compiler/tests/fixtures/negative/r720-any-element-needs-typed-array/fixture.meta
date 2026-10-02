@@ -3,7 +3,7 @@ summary: D25 infers no erased element; an `any` array names its concept in the w
 program: main.ldn
 codes: L0304
 constructs: 0520, 0530, 1370, 1830
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/r720-any-element-needs-typed-array/main.ldn
 status: 1

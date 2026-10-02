@@ -3,4 +3,4 @@ summary: contextual module array images are admitted, but an indexed scalar is n
 constructs: 0520, 1740
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

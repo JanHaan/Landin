@@ -3,4 +3,4 @@ summary: distinct type identities do not become values through discard-type-valu
 program: main.ldn
 codes: L0301
 constructs: 0650, 0700, 1795
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

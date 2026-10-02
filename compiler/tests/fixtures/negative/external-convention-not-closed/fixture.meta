@@ -3,4 +3,4 @@ summary: extern(c) closes immediately after its one supported convention
 program: program.ldn
 codes: L0103
 constructs: 1570, 1580, 1740, 1800, 1975
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

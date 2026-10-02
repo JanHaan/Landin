@@ -4,4 +4,4 @@ program: main.ldn
 status: 1
 codes: L0301
 constructs: 0940, 1030, 1290, 1300, 1310, 1380, 1390
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

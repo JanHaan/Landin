@@ -32,7 +32,9 @@ int main(void)
         if (mode < 6) {
             if (!WIFEXITED(status) || WEXITSTATUS(status) != 42) return 6;
         } else {
-#ifdef __APPLE__
+/* The arm64 backend traps with brk, SIGTRAP on Darwin and Linux alike;
+   x86-64 traps with ud2, SIGILL. */
+#if defined(__aarch64__)
             const int expected = SIGTRAP;
 #else
             const int expected = SIGILL;

@@ -3,4 +3,4 @@ summary: Untaken guarded continue cleanup cannot lend an empty proof to the curr
 constructs: 0480, 0770, 0790, 0970, 1100
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

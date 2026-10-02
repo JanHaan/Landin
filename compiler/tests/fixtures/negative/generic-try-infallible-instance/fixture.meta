@@ -3,4 +3,4 @@ summary: try refuses finalized infallible generic instances for deduced and reor
 constructs: 0960, 0980, 1290, 1920
 program: program.ldn
 codes: L0301, L0301
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32

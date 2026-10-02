@@ -2,4 +2,4 @@ class: positive
 summary: [1750] a CR not followed by LF ends a line
 constructs: 1750
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

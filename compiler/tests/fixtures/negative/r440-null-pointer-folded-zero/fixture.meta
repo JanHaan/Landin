@@ -3,4 +3,4 @@ summary: the shared constant folder is used to refuse a named arithmetic zero as
 program: program.ldn
 codes: L0301
 constructs: 0460, 0480, 1940
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32

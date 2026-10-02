@@ -3,4 +3,4 @@ summary: scalar float empty and nonempty array expression bodies still require f
 program: program.ldn
 codes: L0301, L0301, L0301, L0301
 constructs: 0590, 0880, 1080, 1880, 1910
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

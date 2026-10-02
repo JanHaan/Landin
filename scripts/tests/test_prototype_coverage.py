@@ -173,7 +173,8 @@ class Derivations(unittest.TestCase):
                 NEGATIVE, self.records[NEGATIVE][1])
         self.assertNotIn("synthetic-32", results)
         self.assertEqual(results,
-                         "linux-x86-64=refused, macos-arm64=refused")
+                         "linux-x86-64=refused, linux-arm64=refused,"
+                         " macos-arm64=refused")
 
     def test_a_recorded_cortex_refusal_is_reported_rather_than_dropped(self):
         """The hosted derivatives' Cortex verdict is a result, not a silence.
@@ -226,7 +227,8 @@ class Derivations(unittest.TestCase):
                 name, self.records[name][1])
             reached |= {one.split("=")[0]
                         for one in results.split(", ") if "=" in one}
-        self.assertEqual(reached, {"cortex-m", "linux-x86-64", "macos-arm64"})
+        self.assertEqual(reached, {"cortex-m", "linux-x86-64", "linux-arm64",
+                                   "macos-arm64"})
 
     #  ------------------------------------------------------- driver oracle
     def test_a_driver_oracle_the_runner_does_not_define_is_refused(self):

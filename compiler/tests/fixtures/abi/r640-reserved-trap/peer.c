@@ -24,7 +24,9 @@ int main(void) {
         int status;
         assert(waitpid(child, &status, 0) == child);
         assert(WIFSIGNALED(status));
-#ifdef __APPLE__
+/* The arm64 backend traps with brk, SIGTRAP on Darwin and Linux alike;
+   x86-64 traps with ud2, SIGILL. */
+#if defined(__aarch64__)
         assert(WTERMSIG(status) == SIGTRAP);
 #else
         assert(WTERMSIG(status) == SIGILL);

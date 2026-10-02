@@ -11,7 +11,7 @@
 #  unless it names it.  Under-claiming is the expected state
 #  of a list seeded from prose, and correcting it is work.
 #
-#  linux-x86-64, macos-arm64 and cortex-m are the strongest
+#  linux-x86-64, linux-arm64, macos-arm64 and cortex-m are the strongest
 #  claim a target's own records make: executed, compiled or
 #  refused.  Refusals are boundary, withdrawn or
 #  transferred, as their [1830] note says.  State, targets,
@@ -21,206 +21,206 @@
 #  States: 191 executed, 5 compiled, 2 transferred, 4 advisory.
 #  8 rows name an open owner; 0 have target gaps.
 #
-#  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
-0010 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
-0020 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Block comment. Nests properly
-0030 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Doc comment. Attaches to the declaration that follows
-0040 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Full form: name, type, value
-0050 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Type inferred from the value
-0060 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Mutable binding
-0070 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Two questions about a reference
-0080 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Declaration only
-0090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Exported from the module
-0100 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Several names may share one declaration
-0110 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Left of ':' is always the name being introduced
-0120 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Types are declared like any other value, with 'type'
-0130 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Order inside a module does not matter
-0140 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An inner scope may shadow an outer name
-0150 | tour | accepted emitted executed refused | executed | executed | executed | transferred | executed | all | none | Language evolution | Integers: u8 u16 u32 u64, i8 i16 i32 i64
-0160 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pointer-width integers: usize, isize
-0170 | tour | accepted emitted executed refused | executed | executed | executed | transferred | executed | all | none | Language evolution | Floating point: f32, f64
-0180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | bool, with true and false
-0190 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Integer literals are untyped
-0200 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | With no context, an integer literal defaults to i32
-0210 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Float literals are always recognisable as such
-0220 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Bases, separators, exponents
-0230 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Hex float literals express every representable value exactly
-0240 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | IEEE special values
-0250 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Character literal is a codepoint, typed u32
-0260 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Text literals are untyped too
-0270 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The escape set is closed and small
-0280 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Raw literals: N quotes on each side, N at least three
-0290 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Arithmetic
-0300 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Overflow traps
-0310 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | No implicit conversion
-0320 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Shifts fill with zeros beyond the width, for any amount
-0330 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Bitwise
-0340 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Logical: and, or, not
-0350 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Comparison
-0360 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Ranges
-0370 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | sizeof, alignof and lenof
-0380 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | addr takes an address
-0390 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Assignment is a statement
-0400 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | No `++` and no `--`
-0410 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Evaluation order is fixed
-0420 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The dot is not only field access
-0430 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pointer type, address, dereference
-0440 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A mut reference satisfies a plain one, never the reverse
-0450 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Permission is shallow
-0460 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Address literal
-0470 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Both directions between a pointer and an integer are the
-0480 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There is no null
-0490 | tour | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
-0500 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
-0510 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in
-0520 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Array: a value
-0530 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The length may be inferred from the literal
-0540 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | zeroed is the all-bits-zero image of a type
-0550 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The first of those two properties is also a concept
-0560 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Repetition, for static patterns that live in flash
-0570 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Slice: a view
-0580 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An empty slice still has a base
-0590 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fixed arrays are the vector type
-0600 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Text types are distinct views
-0610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the codepoint there
-0620 | tour | - | - | - | - | - | transferred | none | none | Language evolution | DEFERRED to a later version, kept here as a design record
-0630 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
-0640 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
-0650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Distinct type
-0660 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Range subtype: checked at assignment and conversion
-0670 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Struct, block form and inline form
-0680 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Struct with a variant part
-0690 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A case with no payload is written bare
-0700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Construction and conversion use the same form
-0710 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A struct literal is untyped
-0720 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | 'of' fills every field the literal did not name
-0730 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Companion tool and ecosystem | A register has three kinds of field
-0740 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Access behaviour is data, not keywords
-0750 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Fields keep the order you wrote them
-0760 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Attributes are prefix words, from a closed set
-0770 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There is no borrow checker and there are no lifetime
-0780 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Parameters are non-escaping by default
-0790 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The other direction
-0800 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The borrow of reaches across the call from there
-0810 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Integer-to-pointer conversion ends tracked derivation
-0820 | tour | accepted emitted executed refused | executed | executed | executed | withdrawn | executed | all | none | none | Arenas are ordinary allocators with explicit backing
-0830 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A view derived from a local borrows it
-0840 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Origins join to the shortest-lived part
-0850 | tour | accepted emitted executed refused | executed | executed | executed | withdrawn | executed | all | none | none | Volatile is exempt from the borrow rule and from every
-0860 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What this does not catch
-0870 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function is a value of a function type
-0880 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A single-expression body still takes an end
-0890 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Nothing returned
-0900 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Three parameter conventions
-0910 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | sink takes a place
-0920 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Multiple named returns
-0930 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Every named return must be assigned before return
-0940 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Errors: a declared set of atoms in one dedicated register
-0950 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Not everything that goes wrong belongs in that channel
-0960 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Propagating: try, visible at the call site
-0970 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Early exit
-0980 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calls: positional first, then named
-0990 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A return list is an anonymous struct
-1000 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function type is an ordinary type
-1010 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Anonymous functions
-1020 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Discarding a result must be explicit
-1030 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Handling
-1040 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A caller parameter is filled in by the compiler with the call site
-1050 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Branch
-1060 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Every construct has a one-line form
-1070 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A declaration is allowed in a condition
-1080 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A block has the value of its last expression
-1090 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Bare block, for scoping
-1100 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | defer runs at the end of its block, in reverse order
-1110 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | undo is the same machinery under a condition
-1120 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Checks may be switched off for a region, visibly
-1130 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Unconditional loop
-1140 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Conditional loop
-1150 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Traversal
-1160 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There is no marker on a loop binding
-1170 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | complete runs when the loop finished without break
-1180 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Labels use the ordinary name form
-1190 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | break carries a value with 'with'
-1200 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Because entries are registered where control reaches
-1210 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pattern matching
-1220 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A pattern binding carries a parameter convention
-1230 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A concept names a bundle of requirements on a type
-1240 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A conformance registers one type against one concept
-1250 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A conformance for a parameterised type binds its variables
-1260 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A concept entry's error set has to be concrete
-1270 | tour | accepted emitted refused | compiled | compiled | refused | - | compiled | all | none | none | The register is keyed by (type
-1280 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Conformances may be declared anywhere
-1290 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | A generic function takes the type as an ordinary parameter
-1300 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | At the call site the type is inferred from the arguments
-1310 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Evidence is the foundation; specialization is optional
-1320 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Traversal is a concept
-1330 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A range is not a concept
-1340 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Concepts compose
-1350 | tour | accepted emitted executed refused | executed | executed | executed | boundary | executed | all | none | none | Types take parameters through a declaration form of their
-1360 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Allocation is an ordinary concept
-1370 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | 'any C' is a value of some type satisfying concept C
-1380 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Building one is explicit
-1390 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calls go through the table
-1400 | tour | refused | refused | refused | refused | - | compiled | all | none | none | This is what generics cannot do
-1410 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A module is a directory
-1420 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An import path is a directory path, and nothing cleverer
-1430 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Alias, for collisions
-1440 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Pull selected names into scope, by name
-1450 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Imports are per file, so every file reads on its own
-1460 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Values at module level must be known at compile time
-1470 | tour | - | - | - | - | - | transferred | none | none | Companion tool and ecosystem | A package is a named collection of modules with a version
-1480 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Companion tool and ecosystem | The roots are the project
-1490 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | 'fixed' marks what is known at compile time
-1500 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Conditional compilation
-1510 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Compile-time assertion
-1520 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | A compile-time value parameter
-1530 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Your own build switches
-1540 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | There are no compile-time loops and no compile-time
-1550 | tour | - | - | - | - | - | advisory | none | none | none | Landin has its own native backends
-1560 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Three builtin modules are the way to the tools
-1570 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Calling conventions are a growing set of atoms behind one
-1580 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | hosted | none | none | Importing from C
-1590 | tour | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
-1600 | tour | accepted emitted executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
-1610 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A symbol name the language's identifiers cannot spell
-1620 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics are builtins
-1630 | tour | accepted emitted executed refused | executed | executed | executed | transferred | executed | all | none | Language evolution | Inline assembly, for what has no builtin
-1640 | tour | accepted emitted refused | compiled | compiled | executed | - | executed | cortex-m | none | none | Kept against section garbage collection, and placed
-1650 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Entry point
-1660 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | hosted | none | none | And this is where capabilities come from
-1670 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A failed check calls a fixed, never-returning symbol
-1680 | tour | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | Require a capability, do not track an effect
-1690 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | One mechanism, two readings, is better than two mechanisms
-1700 | tour | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Atoms are the same idea wherever they appear
-1710 | tour | - | - | - | - | - | advisory | none | none | none | How a new feature earns its place
-1720 | tour | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | What the language claims, at this version, plainly
-1730 | tour | accepted emitted | compiled | compiled | compiled | - | compiled | all | none | none | Check once, then carry the proof
-1740 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A source file is an import prelude and declarations in any order
-1750 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A source file is bytes
-1760 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Identifiers are lower case, and no identifier is a keyword
-1770 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's literals include characters, floats and text
-1780 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A comment ends a token, and its opener says which kind it is
-1790 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A binding names one thing, and says how much it may change
-1795 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Type aliases and declared identities
-1800 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A function is a value with a body, and its returns are named
-1810 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Statements do one thing each, and only exits carry 'when'
-1820 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Precedence, tightest first, and comparison does not chain
-1830 | spec | accepted emitted refused | compiled | compiled | refused | - | compiled | all | none | none | What is not enabled is refused, and named
-1840 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's scopes, outermost first
-1850 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | One scope gives one name to one thing
-1860 | spec | refused | refused | compiled | refused | - | compiled | all | none | none | A name that names nothing is refused
-1870 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | The kernel's types, and what each of them holds
-1880 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Where a literal's type comes from, and what a context is
-1890 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What each operator takes and what it gives
-1900 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What may be written, and what may not
-1910 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | Assigned before it is read
-1920 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What a call means
-1930 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | What may be discarded
-1940 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | A module value is known when the compiler reads it
-1950 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | all | none | none | An operand an operation cannot take
-1960 | spec | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | A trap stops at the operation
-1970 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | hosted | none | none | The first hosted path has one entry shape
-1975 | spec | accepted emitted executed refused | executed | executed | refused | - | executed | hosted | none | none | The selected hosted C boundaries
-1980 | spec | accepted emitted executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
-1990 | spec | accepted emitted executed refused | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
-2000 | spec | - | - | - | - | - | advisory | none | none | none | What a doc comment is about
+#  id | in | evidence | linux-x86-64 | linux-arm64 | macos-arm64 | cortex-m | refusals | state | targets | gaps | owner | title
+0010 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Line comment, to end of line
+0020 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Block comment. Nests properly
+0030 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Doc comment. Attaches to the declaration that follows
+0040 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Full form: name, type, value
+0050 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Type inferred from the value
+0060 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Mutable binding
+0070 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Two questions about a reference
+0080 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Declaration only
+0090 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Exported from the module
+0100 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Several names may share one declaration
+0110 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Left of ':' is always the name being introduced
+0120 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Types are declared like any other value, with 'type'
+0130 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Order inside a module does not matter
+0140 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An inner scope may shadow an outer name
+0150 | tour | accepted emitted executed refused | executed | executed | executed | executed | transferred | executed | all | none | Language evolution | Integers: u8 u16 u32 u64, i8 i16 i32 i64
+0160 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Pointer-width integers: usize, isize
+0170 | tour | accepted emitted executed refused | executed | executed | executed | executed | transferred | executed | all | none | Language evolution | Floating point: f32, f64
+0180 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | bool, with true and false
+0190 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Integer literals are untyped
+0200 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | With no context, an integer literal defaults to i32
+0210 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Float literals are always recognisable as such
+0220 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Bases, separators, exponents
+0230 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Hex float literals express every representable value exactly
+0240 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | IEEE special values
+0250 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Character literal is a codepoint, typed u32
+0260 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Text literals are untyped too
+0270 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The escape set is closed and small
+0280 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Raw literals: N quotes on each side, N at least three
+0290 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Arithmetic
+0300 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Overflow traps
+0310 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | No implicit conversion
+0320 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Shifts fill with zeros beyond the width, for any amount
+0330 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Bitwise
+0340 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Logical: and, or, not
+0350 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Comparison
+0360 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Ranges
+0370 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | sizeof, alignof and lenof
+0380 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | addr takes an address
+0390 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Assignment is a statement
+0400 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | No `++` and no `--`
+0410 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Evaluation order is fixed
+0420 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The dot is not only field access
+0430 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Pointer type, address, dereference
+0440 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A mut reference satisfies a plain one, never the reverse
+0450 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Permission is shallow
+0460 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Address literal
+0470 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Both directions between a pointer and an integer are the
+0480 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | There is no null
+0490 | tour | - | - | - | - | - | - | advisory | none | none | none | Pointers are a system tool
+0500 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Three operations sit between pointers and slices
+0510 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | slice_from is where uninitialised storage is smuggled in
+0520 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Array: a value
+0530 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The length may be inferred from the literal
+0540 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | zeroed is the all-bits-zero image of a type
+0550 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The first of those two properties is also a concept
+0560 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Repetition, for static patterns that live in flash
+0570 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Slice: a view
+0580 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An empty slice still has a base
+0590 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Fixed arrays are the vector type
+0600 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Text types are distinct views
+0610 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Indexing utf8 by an integer yields the codepoint there
+0620 | tour | - | - | - | - | - | - | transferred | none | none | Language evolution | DEFERRED to a later version, kept here as a design record
+0630 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Atoms: one declaration, one value, its own type
+0640 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An enumeration is a union of atoms
+0650 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Distinct type
+0660 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Range subtype: checked at assignment and conversion
+0670 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Struct, block form and inline form
+0680 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Struct with a variant part
+0690 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A case with no payload is written bare
+0700 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Construction and conversion use the same form
+0710 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A struct literal is untyped
+0720 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | 'of' fills every field the literal did not name
+0730 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | Companion tool and ecosystem | A register has three kinds of field
+0740 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Access behaviour is data, not keywords
+0750 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Fields keep the order you wrote them
+0760 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Attributes are prefix words, from a closed set
+0770 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | There is no borrow checker and there are no lifetime
+0780 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Parameters are non-escaping by default
+0790 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The other direction
+0800 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The borrow of reaches across the call from there
+0810 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Integer-to-pointer conversion ends tracked derivation
+0820 | tour | accepted emitted executed refused | executed | executed | executed | executed | withdrawn | executed | all | none | none | Arenas are ordinary allocators with explicit backing
+0830 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A view derived from a local borrows it
+0840 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Origins join to the shortest-lived part
+0850 | tour | accepted emitted executed refused | executed | executed | executed | executed | withdrawn | executed | all | none | none | Volatile is exempt from the borrow rule and from every
+0860 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | What this does not catch
+0870 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A function is a value of a function type
+0880 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A single-expression body still takes an end
+0890 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Nothing returned
+0900 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Three parameter conventions
+0910 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | sink takes a place
+0920 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Multiple named returns
+0930 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Every named return must be assigned before return
+0940 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Errors: a declared set of atoms in one dedicated register
+0950 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Not everything that goes wrong belongs in that channel
+0960 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Propagating: try, visible at the call site
+0970 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Early exit
+0980 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Calls: positional first, then named
+0990 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A return list is an anonymous struct
+1000 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A function type is an ordinary type
+1010 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Anonymous functions
+1020 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Discarding a result must be explicit
+1030 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Handling
+1040 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A caller parameter is filled in by the compiler with the call site
+1050 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Branch
+1060 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Every construct has a one-line form
+1070 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A declaration is allowed in a condition
+1080 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A block has the value of its last expression
+1090 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Bare block, for scoping
+1100 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | defer runs at the end of its block, in reverse order
+1110 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | undo is the same machinery under a condition
+1120 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Checks may be switched off for a region, visibly
+1130 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Unconditional loop
+1140 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Conditional loop
+1150 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Traversal
+1160 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | There is no marker on a loop binding
+1170 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | complete runs when the loop finished without break
+1180 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Labels use the ordinary name form
+1190 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | break carries a value with 'with'
+1200 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Because entries are registered where control reaches
+1210 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Pattern matching
+1220 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A pattern binding carries a parameter convention
+1230 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A concept names a bundle of requirements on a type
+1240 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A conformance registers one type against one concept
+1250 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A conformance for a parameterised type binds its variables
+1260 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A concept entry's error set has to be concrete
+1270 | tour | accepted emitted refused | compiled | compiled | compiled | refused | - | compiled | all | none | none | The register is keyed by (type
+1280 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Conformances may be declared anywhere
+1290 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | A generic function takes the type as an ordinary parameter
+1300 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | At the call site the type is inferred from the arguments
+1310 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Evidence is the foundation; specialization is optional
+1320 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Traversal is a concept
+1330 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A range is not a concept
+1340 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Concepts compose
+1350 | tour | accepted emitted executed refused | executed | executed | executed | executed | boundary | executed | all | none | none | Types take parameters through a declaration form of their
+1360 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Allocation is an ordinary concept
+1370 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | 'any C' is a value of some type satisfying concept C
+1380 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Building one is explicit
+1390 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Calls go through the table
+1400 | tour | refused | refused | refused | refused | refused | - | compiled | all | none | none | This is what generics cannot do
+1410 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A module is a directory
+1420 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An import path is a directory path, and nothing cleverer
+1430 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Alias, for collisions
+1440 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Pull selected names into scope, by name
+1450 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Imports are per file, so every file reads on its own
+1460 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Values at module level must be known at compile time
+1470 | tour | - | - | - | - | - | - | transferred | none | none | Companion tool and ecosystem | A package is a named collection of modules with a version
+1480 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | Companion tool and ecosystem | The roots are the project
+1490 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | 'fixed' marks what is known at compile time
+1500 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Conditional compilation
+1510 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Compile-time assertion
+1520 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | A compile-time value parameter
+1530 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Your own build switches
+1540 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | There are no compile-time loops and no compile-time
+1550 | tour | - | - | - | - | - | - | advisory | none | none | none | Landin has its own native backends
+1560 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Three builtin modules are the way to the tools
+1570 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Calling conventions are a growing set of atoms behind one
+1580 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | Importing from C
+1590 | tour | accepted emitted executed refused | executed | executed | executed | refused | - | executed | hosted | none | none | Linking a static library
+1600 | tour | accepted emitted executed | executed | executed | executed | - | - | executed | hosted | none | none | Exporting to C
+1610 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A symbol name the language's identifiers cannot spell
+1620 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | Broader standard library | Atomics are builtins
+1630 | tour | accepted emitted executed refused | executed | executed | executed | executed | transferred | executed | all | none | Language evolution | Inline assembly, for what has no builtin
+1640 | tour | accepted emitted refused | compiled | compiled | compiled | executed | - | executed | cortex-m | none | none | Kept against section garbage collection, and placed
+1650 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Entry point
+1660 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | And this is where capabilities come from
+1670 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A failed check calls a fixed, never-returning symbol
+1680 | tour | accepted emitted executed refused | executed | executed | executed | refused | - | executed | hosted | none | none | Require a capability, do not track an effect
+1690 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | One mechanism, two readings, is better than two mechanisms
+1700 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Atoms are the same idea wherever they appear
+1710 | tour | - | - | - | - | - | - | advisory | none | none | none | How a new feature earns its place
+1720 | tour | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | What the language claims, at this version, plainly
+1730 | tour | accepted emitted | compiled | compiled | compiled | compiled | - | compiled | all | none | none | Check once, then carry the proof
+1740 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A source file is an import prelude and declarations in any order
+1750 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A source file is bytes
+1760 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Identifiers are lower case, and no identifier is a keyword
+1770 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The kernel's literals include characters, floats and text
+1780 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A comment ends a token, and its opener says which kind it is
+1790 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A binding names one thing, and says how much it may change
+1795 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Type aliases and declared identities
+1800 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A function is a value with a body, and its returns are named
+1810 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Statements do one thing each, and only exits carry 'when'
+1820 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Precedence, tightest first, and comparison does not chain
+1830 | spec | accepted emitted refused | compiled | compiled | compiled | refused | - | compiled | all | none | none | What is not enabled is refused, and named
+1840 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The kernel's scopes, outermost first
+1850 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | One scope gives one name to one thing
+1860 | spec | refused | refused | refused | compiled | refused | - | compiled | all | none | none | A name that names nothing is refused
+1870 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | The kernel's types, and what each of them holds
+1880 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Where a literal's type comes from, and what a context is
+1890 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | What each operator takes and what it gives
+1900 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | What may be written, and what may not
+1910 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Assigned before it is read
+1920 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | What a call means
+1930 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | What may be discarded
+1940 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A module value is known when the compiler reads it
+1950 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | An operand an operation cannot take
+1960 | spec | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | A trap stops at the operation
+1970 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | hosted | none | none | The first hosted path has one entry shape
+1975 | spec | accepted emitted executed refused | executed | executed | executed | refused | - | executed | hosted | none | none | The selected hosted C boundaries
+1980 | spec | accepted emitted executed | executed | executed | executed | executed | - | executed | all | none | none | Declared errors are an orthogonal payload-free atom outcome
+1990 | spec | accepted emitted executed refused | executed | executed | executed | executed | - | executed | cortex-m | none | none | Firmware and machine directives have explicit target contracts
+2000 | spec | - | - | - | - | - | - | advisory | none | none | none | What a doc comment is about

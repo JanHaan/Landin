@@ -3,4 +3,4 @@ summary: traversal cannot replace an any element through a read-only slice
 program: program.ldn
 codes: L0303
 constructs: 1150, 1160, 1370
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

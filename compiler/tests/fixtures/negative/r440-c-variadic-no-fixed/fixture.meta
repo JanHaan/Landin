@@ -3,4 +3,4 @@ summary: a native C variadic declaration requires at least one fixed parameter
 program: program.ldn
 codes: L0103
 constructs: 1580
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

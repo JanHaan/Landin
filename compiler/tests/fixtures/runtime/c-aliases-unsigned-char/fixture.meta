@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D256 gives the standard AAPCS64 an unsigned plain char, so core/c's c_char is a u8 there while every other alias keeps its LP64 width
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0120, 0370, 0700, 1420, 1500, 1510, 1795
+targets: linux-arm64

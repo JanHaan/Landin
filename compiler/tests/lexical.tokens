@@ -33772,6 +33772,79 @@ file negative/assembly-reserved-registers-cortex/program.ldn tokens 57
   210 211 )
   212 215 end
   216 217 f
+file negative/assembly-reserved-registers-linux-arm64/program.ldn tokens 72
+  0 1 f
+  1 2 :
+  3 4 (
+  4 9 value
+  9 10 :
+  11 14 u64
+  14 15 )
+  16 18 ->
+  19 23 none
+  24 25 =
+  30 39 assembler
+  39 40 .
+  40 45 block
+  45 46 (
+  46 59 "mov x9, {v}"
+  59 60 ,
+  61 63 in
+  64 65 v
+  65 66 :
+  67 70 u64
+  71 73 at
+  74 77 x18
+  78 79 =
+  80 85 value
+  85 86 )
+  91 100 assembler
+  100 101 .
+  101 106 block
+  106 107 (
+  107 121 "mov x29, {v}"
+  121 122 ,
+  123 125 in
+  126 127 v
+  127 128 :
+  129 132 u64
+  133 135 at
+  136 143 general
+  144 145 =
+  146 151 value
+  151 152 )
+  157 166 assembler
+  166 167 .
+  167 172 block
+  172 173 (
+  173 187 "mov x19, {v}"
+  187 188 ,
+  189 191 in
+  192 193 v
+  193 194 :
+  195 198 u64
+  199 201 at
+  202 209 general
+  210 211 =
+  212 217 value
+  217 218 )
+  223 232 assembler
+  232 233 .
+  233 238 block
+  238 239 (
+  239 253 "fmov d8, {v}"
+  253 254 ,
+  255 257 in
+  258 259 v
+  259 260 :
+  261 264 u64
+  265 267 at
+  268 275 general
+  276 277 =
+  278 283 value
+  283 284 )
+  285 288 end
+  289 290 f
 file negative/assembly-reserved-registers-x86-64/program.ldn tokens 57
   0 1 f
   1 2 :

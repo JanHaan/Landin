@@ -3,7 +3,7 @@ summary: [0480]/[1870] a union of several atoms still holds at most one pointer 
 constructs: 0480, 0640
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-two-pointers/program.ldn
 status: 1

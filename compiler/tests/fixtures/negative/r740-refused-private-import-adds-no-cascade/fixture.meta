@@ -5,4 +5,4 @@ args: --root=../tests/fixtures/negative/r740-refused-private-import-adds-no-casc
 codes: L0202
 status: 1
 constructs: 1410, 1440, 1450, 1860
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

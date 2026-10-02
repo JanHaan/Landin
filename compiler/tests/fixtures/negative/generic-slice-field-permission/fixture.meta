@@ -3,7 +3,7 @@ summary: a concrete generic slice field cannot acquire write permission from a r
 program: program.ldn
 constructs: 0440, 0570, 0750, 0790, 1290
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-slice-field-permission/program.ldn
 status: 1

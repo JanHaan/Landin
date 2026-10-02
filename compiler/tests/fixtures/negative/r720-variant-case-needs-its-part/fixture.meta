@@ -3,7 +3,7 @@ summary: D76 writes a case into its variant part; an inferred binding gives a ca
 program: main.ldn
 codes: L0304
 constructs: 0680, 0690, 1830
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/r720-variant-case-needs-its-part/main.ldn
 status: 1

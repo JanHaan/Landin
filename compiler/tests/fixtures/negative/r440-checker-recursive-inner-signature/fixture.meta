@@ -3,4 +3,4 @@ summary: An inner callback array element keeps C convention in its structural id
 program: program.ldn
 codes: L0301
 constructs: 0520, 1000, 1580
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

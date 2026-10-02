@@ -3,4 +3,4 @@ summary: An empty sibling does not excuse a present optional result deriving fro
 constructs: 0480, 0790
 program: program.ldn
 codes: L0316
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

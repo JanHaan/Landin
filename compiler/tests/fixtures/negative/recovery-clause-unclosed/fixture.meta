@@ -3,4 +3,4 @@ summary: a bound call-site recovery clause has its own end
 constructs: 1030
 program: program.ldn
 codes: L0104, L0104
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32

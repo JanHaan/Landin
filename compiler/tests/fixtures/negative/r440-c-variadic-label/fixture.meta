@@ -3,4 +3,4 @@ summary: the C boundary explicitly refuses labels even for the fixed prefix of a
 program: program.ldn
 codes: L0301
 constructs: 0980, 1580
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

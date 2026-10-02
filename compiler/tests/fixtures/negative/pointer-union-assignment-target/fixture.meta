@@ -3,7 +3,7 @@ summary: D189 `.val` names no referent on the assignment side either, so a union
 constructs: 0430, 0480
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-assignment-target/program.ldn
 status: 1

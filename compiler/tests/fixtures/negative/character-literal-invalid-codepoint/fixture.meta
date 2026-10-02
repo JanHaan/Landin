@@ -3,4 +3,4 @@ summary: D163 refuses an escape outside the Unicode scalar range
 constructs: 0250, 0270, 1770
 program: program.ldn
 codes: L0322
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

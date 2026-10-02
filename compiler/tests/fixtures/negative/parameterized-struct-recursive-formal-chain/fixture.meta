@@ -2,5 +2,5 @@ class: negative
 summary: symbolic obligations survive more than one used-formal wrapper
 constructs: 0670, 0710, 1350, 1795
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 codes: L0313

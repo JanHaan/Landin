@@ -3,4 +3,4 @@ summary: D188 a literal outside a range subtype's bounds is refused where it is 
 constructs: 0660, 1880
 program: program.ldn
 codes: L0300
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

@@ -313,6 +313,6 @@ model used before the Cortex-M backend existed.
 | Scope | Targets |
 | --- | --- |
 | `prototype-1` | cortex-m |
-| `prototype-2` | linux-x86-64, macos-arm64 |
-| `prototype-3` | linux-x86-64, macos-arm64, cortex-m, synthetic-32 |
-| `prototype-4` | linux-x86-64, macos-arm64 |
+| `prototype-2` | linux-x86-64, linux-arm64, macos-arm64 |
+| `prototype-3` | linux-x86-64, linux-arm64, macos-arm64, cortex-m, synthetic-32 |
+| `prototype-4` | linux-x86-64, linux-arm64, macos-arm64 |

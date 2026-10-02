@@ -3,4 +3,4 @@ summary: calls evaluated inside an indirect callee retain their error obligation
 program: program.ldn
 codes: L0301
 constructs: 0940, 0960, 1030
-targets: linux-x86-64, synthetic-32
+targets: linux-x86-64, linux-arm64, synthetic-32

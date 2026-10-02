@@ -5,4 +5,4 @@ args: --root=../.. ../tests/fixtures/negative/core-memory-reader-consumed
 status: 1
 codes: L0302
 constructs: 0790, 0830, 0910, 0940, 1390, 1660
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

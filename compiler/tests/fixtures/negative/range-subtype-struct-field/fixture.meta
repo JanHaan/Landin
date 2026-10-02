@@ -3,4 +3,4 @@ summary: D188 a struct field of a range subtype is refused with the other compos
 constructs: 0660, 0670
 program: program.ldn
 codes: L0304
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

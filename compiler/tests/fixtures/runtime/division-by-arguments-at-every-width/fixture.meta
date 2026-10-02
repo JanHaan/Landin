@@ -4,5 +4,5 @@ summary: quotients and remainders of operands known only at run time round towar
 constructs: 0300, 1800, 1890, 1920
 program: main.ldn
 status: 42
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 levels: armv7-m

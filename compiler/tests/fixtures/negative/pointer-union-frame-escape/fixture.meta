@@ -3,4 +3,4 @@ summary: D189 the empty case contributes no origin, so a union built from a fram
 constructs: 0480, 0770, 0780, 1210
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

@@ -3,4 +3,4 @@ summary: an aggregate call destination must be filled on every path through a br
 constructs: 0670, 1050, 1910, 1920
 program: program.ldn
 codes: L0302
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

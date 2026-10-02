@@ -2,7 +2,7 @@ class: negative
 summary: [1070] a condition binding whose inferred type is not bool is a plain type error
 constructs: 1070, 1890
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 codes: L0301
 expect: expected.txt
 args: ../tests/fixtures/negative/condition-declaration-not-bool/program.ldn

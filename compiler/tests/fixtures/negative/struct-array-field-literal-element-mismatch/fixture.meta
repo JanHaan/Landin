@@ -3,7 +3,7 @@ summary: D52 requires every field literal element to have the destination type
 constructs: 0410, 0520, 0670, 0750, 1740, 1770, 1820, 1900
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/struct-array-field-literal-element-mismatch/program.ldn
 status: 1

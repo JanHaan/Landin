@@ -3,4 +3,4 @@ summary: a C variadic call permits extra variadic actuals but still requires the
 program: program.ldn
 codes: L0301
 constructs: 1580, 1920
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

@@ -329,7 +329,8 @@ class Inventory(unittest.TestCase):
         #  The compiler's identity is run on Darwin by the diagnostics
         #  runner, and exits 0 on both hosts.
         self.assertEqual(claims["end-to-end/refine-identity"],
-                         {"linux-x86-64": "compiled", "macos-arm64": "compiled"})
+                         {"linux-x86-64": "compiled", "linux-arm64": "compiled",
+                          "macos-arm64": "compiled"})
         altered = {name: dict(held) for name, held in claims.items()}
         del altered["end-to-end/refine-identity"]["macos-arm64"]
         del altered["runtime/derived-parser"]["linux-x86-64"]
@@ -341,6 +342,26 @@ class Inventory(unittest.TestCase):
         self.assertIn("runtime/derived-parser claims linux-x86-64 and no "
                       "record places it", messages)
         self.assertEqual(len(messages), 2)
+
+    def test_linux_arm64_leaves_the_x86_corpus_only_by_record(self):
+        """A runtime or ABI fixture leaves the arm64 lane by a reasoned record."""
+        self.assertEqual(CHECK.arm64_linux_problems(), [])
+        records = CHECK.fixture_records()
+        name = "runtime/add-exits-with-its-sum"
+        meta, fields = records[name]
+        dropped = dict(records)
+        dropped[name] = (meta, dict(fields, targets="linux-x86-64, macos-arm64"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: dropped):
+            self.refused([m for _, _, m in CHECK.arm64_linux_problems()],
+                         "neither names linux-arm64 nor has a record")
+        selected = dict(records)
+        selected[name] = (meta, dict(fields, targets="linux-x86-64",
+                                     args="--target=linux-arm64 main.ldn"))
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: selected):
+            self.refused([m for _, _, m in CHECK.arm64_linux_problems()],
+                         "selects --target=linux-arm64 and does not name")
 
     def test_a_probe_may_only_attribute_what_a_runner_runs(self):
         titles = CHECK.construct_titles() or ()

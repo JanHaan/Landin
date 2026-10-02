@@ -4,4 +4,4 @@ summary: unchecked preserves the always-on guard against dynamically zero bare-p
 program: main.ldn
 constructs: 0400, 0470, 1580, 1960
 traps: yes
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

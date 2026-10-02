@@ -3,4 +3,4 @@ summary: a frame origin copied through a second binding is still a frame origin 
 program: program.ldn
 codes: L0314
 constructs: 0430, 0770, 0790, 1800, 1810
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

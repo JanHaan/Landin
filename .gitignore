@@ -13,3 +13,7 @@ highlight/nvim/parser/*.so
 highlight/nvim/parser/*.dylib
 highlight/nvim/parser/*.dll
 *.egg-info/
+
+#  QEMU user emulation writes a core file for every program that traps,
+#  and a cross lane runs the trap fixtures; none is ever a source.
+qemu_*.core

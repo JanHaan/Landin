@@ -3,4 +3,4 @@ summary: An untaken break with value does not execute the value's mutation befor
 constructs: 0480, 0770, 0790, 1190
 program: program.ldn
 codes: L0314
-targets: linux-x86-64, macos-arm64, synthetic-32
+targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32

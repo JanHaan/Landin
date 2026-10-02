@@ -3,7 +3,7 @@ summary: D18 requires an index to be usize and performs no implicit conversion f
 constructs: 0160, 0520, 0570, 1890
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/index-is-not-usize/program.ldn
 status: 1

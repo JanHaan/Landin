@@ -3,4 +3,4 @@ summary: the C boundary refuses a slice descriptor as a native C parameter
 program: program.ldn
 codes: L0301
 constructs: 0570, 1580
-targets: linux-x86-64
+targets: linux-x86-64, linux-arm64

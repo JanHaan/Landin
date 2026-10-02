@@ -3,4 +3,4 @@ summary: suppressing a scalar result origin does not suppress generic escaping a
 program: program.ldn
 codes: L0314
 constructs: 0570, 0770, 0780, 0790, 1290, 1920
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

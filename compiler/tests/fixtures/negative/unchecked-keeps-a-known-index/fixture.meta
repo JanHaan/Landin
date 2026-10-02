@@ -3,4 +3,4 @@ summary: D187 a region removes no static refusal, so [1950]'s known index outsid
 constructs: 0520, 0570, 1120, 1950
 program: program.ldn
 codes: L0306
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

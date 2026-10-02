@@ -3,4 +3,4 @@ summary: D61 inferred and typed module struct image links cannot work their valu
 constructs: 0050, 0670, 0710, 1740, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

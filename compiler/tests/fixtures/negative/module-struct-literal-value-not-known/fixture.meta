@@ -3,4 +3,4 @@ summary: D66 requires every scalar field of a module struct literal to be known 
 constructs: 0190, 0670, 0710, 0720, 1460, 1810, 1920, 1940
 program: program.ldn
 codes: L0305
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

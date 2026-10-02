@@ -3,7 +3,7 @@ summary: the exact conversion matrix does not admit a mutable byte view directly
 constructs: 0310, 0600, 0660
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/text-conversion-mutable-source/program.ldn
 status: 1

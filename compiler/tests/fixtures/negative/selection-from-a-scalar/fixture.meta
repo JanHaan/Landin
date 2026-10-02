@@ -3,7 +3,7 @@ summary: [1820] selects a field of a struct [0670], and a scalar has none to sel
 constructs: 0420, 1820
 program: program.ldn
 codes: L0301
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/selection-from-a-scalar/program.ldn
 status: 1

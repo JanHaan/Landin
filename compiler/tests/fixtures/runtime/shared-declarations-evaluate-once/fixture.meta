@@ -6,4 +6,4 @@ summary: a shared declaration evaluates its value once for the first name, copie
 constructs: 0060, 0100, 0670, 0680, 0790, 0900, 1790, 1795, 1800
 program: main.ldn
 status: 42
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

@@ -2,4 +2,4 @@ class: positive
 summary: [1800] one expression fills the named return
 constructs: 0880, 1800
 program: program.ldn
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

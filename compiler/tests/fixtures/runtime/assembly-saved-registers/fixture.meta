@@ -4,4 +4,4 @@ summary: D248's declared callee-saved registers are saved by their routine, so a
 constructs: 1630, 1990
 program: main.ldn
 status: 42
-targets: linux-x86-64, macos-arm64
+targets: linux-x86-64, linux-arm64, macos-arm64

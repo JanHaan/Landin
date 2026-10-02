@@ -3656,9 +3656,9 @@ def construct_evidence():
 #  roadmap ends on; synthetic-32 is the model that preceded Cortex-M and
 #  applies to no construct.  A scope names the targets a construct must be accounted for
 #  on, and a state says what kind of evidence can account for it.
-PRODUCT_TARGETS = ("linux-x86-64", "macos-arm64", "cortex-m")
+PRODUCT_TARGETS = ("linux-x86-64", "linux-arm64", "macos-arm64", "cortex-m")
 TARGET_SCOPES = {"all": PRODUCT_TARGETS,
-                 "hosted": ("linux-x86-64", "macos-arm64"),
+                 "hosted": ("linux-x86-64", "linux-arm64", "macos-arm64"),
                  "cortex-m": ("cortex-m",),
                  "none": ()}
 INVENTORY_HEADING = "## Construct inventory"
@@ -3759,6 +3759,69 @@ CORTEX_TARGET_FLAG = "--target=cortex-m0"
 def selects_cortex_target(fields):
     """Whether a fixture's own arguments compile it for Cortex-M0."""
     return CORTEX_TARGET_FLAG in (fields.get("args", "") or "").split()
+
+
+#  Linux arm64's label and its driver name are one spelling, so the tie is
+#  read directly: a fixture whose args select it names it, and one that
+#  names it selects it or selects nothing and takes the lane's own host.
+ARM64_LINUX_TARGET_FLAG = "--target=linux-arm64"
+ARM64_LINUX_PARITY = "compiler/tests/linux-arm64/parity.json"
+
+
+def arm64_linux_problems():
+    """linux-arm64's coverage is the Linux x86-64 corpus's, or a record says why.
+
+    The lane runs every fixture that names it, so what it covers is decided
+    by which fixtures carry the label.  A fixture the x86-64 lane runs,
+    whose args choose no other target, either names linux-arm64 or is a
+    difference in compiler/tests/linux-arm64/parity.json with a reason and a
+    counterpart that exists and names the lane: a fixture cannot leave the
+    lane silently.  A record that names a fixture the lane runs, or names
+    no fixture at all, is stale.  And a fixture that selects linux-arm64 in
+    its own args names it.
+    """
+    out = []
+    path = os.path.join(ROOT, ARM64_LINUX_PARITY)
+    if not os.path.exists(path):
+        return [(ARM64_LINUX_PARITY, 1, "the linux-arm64 dispositions are absent")]
+    records = json.load(io.open(path, encoding="utf-8")).get("differences", {})
+    fixtures = fixture_records()
+
+    def targets_of(fields):
+        return [one.strip() for one in fields.get("targets", "").split(",")]
+
+    for name, (meta, fields) in sorted(fixtures.items()):
+        kind = name.split("/")[0]
+        if kind not in ("runtime", "abi", "positive", "negative", "end-to-end"):
+            continue
+        named = targets_of(fields)
+        args = (fields.get("args", "") or "").split()
+        relative = os.path.relpath(meta, ROOT)
+        if ARM64_LINUX_TARGET_FLAG in args and "linux-arm64" not in named:
+            out.append((relative, 1, "%s selects %s and does not name"
+                        " linux-arm64" % (name, ARM64_LINUX_TARGET_FLAG)))
+        if kind in ("runtime", "abi") and "linux-x86-64" in named \
+                and "linux-arm64" not in named and name not in records:
+            out.append((relative, 1, "%s runs on linux-x86-64 and neither"
+                        " names linux-arm64 nor has a record in %s"
+                        % (name, ARM64_LINUX_PARITY)))
+    for name, record in sorted(records.items()):
+        if name not in fixtures:
+            out.append((ARM64_LINUX_PARITY, 1, "%s names no fixture" % name))
+            continue
+        if "linux-arm64" in targets_of(fixtures[name][1]):
+            out.append((ARM64_LINUX_PARITY, 1, "%s names linux-arm64, so"
+                        " it needs no record" % name))
+        if not record.get("reason"):
+            out.append((ARM64_LINUX_PARITY, 1, "%s gives no reason" % name))
+        counterpart = record.get("counterpart", "")
+        if counterpart.startswith("bindings/"):
+            continue
+        if counterpart not in fixtures or "linux-arm64" not in targets_of(
+                fixtures[counterpart][1]):
+            out.append((ARM64_LINUX_PARITY, 1, "%s's counterpart %s is not a"
+                        " fixture linux-arm64 runs" % (name, counterpart)))
+    return out
 
 
 def cortex_target_problems():
@@ -3917,7 +3980,8 @@ def fixture_target_claims():
     corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
     driver_path = os.path.join(ROOT, "compiler/tests/driver/fixture.json")
     if not all(os.path.exists(path)
-               for path in (parity_path, corpus_path, driver_path)):
+               for path in (parity_path, corpus_path, driver_path,
+                            os.path.join(ROOT, ARM64_LINUX_PARITY))):
         return None
     parity = json.load(io.open(parity_path, encoding="utf-8"))
     corpus = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
@@ -3936,8 +4000,12 @@ def fixture_target_claims():
         kind = name.split("/")[0]
         targets = listed(fields.get("targets", ""))
         if kind in ("runtime", "abi"):
-            if "linux-x86-64" in targets:
-                claim(name, "linux-x86-64", "executed")
+            #  The test program runs a hosted lane's runtime and ABI
+            #  fixtures on its own host; linux-arm64 is the lane the
+            #  ubuntu-24.04-arm jobs run.
+            for lane in ("linux-x86-64", "linux-arm64"):
+                if lane in targets:
+                    claim(name, lane, "executed")
             change = parity["differences"].get(name, {})
             if "replacement" in change or (
                     "macos-arm64" in targets and "limit" not in change):
@@ -3953,8 +4021,11 @@ def fixture_target_claims():
             refused = kind == "negative" or (
                 kind == "end-to-end" and fields.get("status", "1") != "0")
             verdict = "refused" if refused else "compiled"
-            if "linux-x86-64" in targets:
-                claim(name, "linux-x86-64", verdict)
+            #  The Linux lanes take a source verdict directly; which args
+            #  may accompany linux-arm64 is arm64_linux_problems' concern.
+            for lane in ("linux-x86-64", "linux-arm64"):
+                if lane in targets:
+                    claim(name, lane, verdict)
             #  Darwin's source verdicts are its positive, negative and
             #  end-to-end fixtures with a program or arguments, which
             #  compiler/tests/darwin/diagnostics.py runs; the manifest may
@@ -4331,7 +4402,7 @@ def construct_matrix():
              "#  unless it names it.  Under-claiming is the expected state",
              "#  of a list seeded from prose, and correcting it is work.",
              "#",
-             "#  linux-x86-64, macos-arm64 and cortex-m are the strongest",
+             "#  linux-x86-64, linux-arm64, macos-arm64 and cortex-m are the strongest",
              "#  claim a target's own records make: executed, compiled or",
              "#  refused.  Refusals are boundary, withdrawn or",
              "#  transferred, as their [1830] note says.  State, targets,",
@@ -4345,7 +4416,7 @@ def construct_matrix():
              "#  %d rows name an open owner; %d have target gaps."
              % (owned, gapped),
              "#",
-             "#  id | in | evidence | linux-x86-64 | macos-arm64 | cortex-m |"
+             "#  id | in | evidence | linux-x86-64 | linux-arm64 | macos-arm64 | cortex-m |"
              " refusals | state | targets | gaps | owner | title"]
     return "\n".join(lines + body) + "\n"
 
@@ -4359,6 +4430,7 @@ def check_matrix(full_run):
     out = inventory_problems(inputs) if inputs is not None else [
         (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
+    out += arm64_linux_problems()
     out += unplaced_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
     recorded = os.path.join(ROOT, "compiler/tests/constructs.matrix")
@@ -5081,7 +5153,7 @@ def check_coverage_registers(full_run):
             out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
-    known_targets = {"linux-x86-64", "macos-arm64", "cortex-m",
+    known_targets = {"linux-x86-64", "linux-arm64", "macos-arm64", "cortex-m",
                      "synthetic-32"}
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
