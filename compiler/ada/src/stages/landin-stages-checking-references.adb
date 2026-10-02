@@ -59,6 +59,28 @@ package body Landin.Stages.Checking.References is
       Parameters : constant Positive := Positive'Max
         (1, Syn.Parameter_Count (Of_Tree, Function_Node));
 
+      --  Signatures do not change during this function's flow analysis.
+      --  Compute the loop bound's result width only if a loop needs it.
+      Cached_Fact_Width : Natural := 0;
+
+      function Fact_Width return Positive;
+
+      function Fact_Width return Positive is
+         Width : Natural := 0;
+      begin
+         if Cached_Fact_Width = 0 then
+            for Id in 1 .. Landin.Checking.Signature_Count (Types.all) loop
+               Width := Natural'Max
+                 (Width, Landin.Checking.Signature_Result_Count
+                    (Types.all, Landin.Checking.Signature_Id (Id)));
+            end loop;
+            --  Union, captured storage, result positions and one possible
+            --  loss of positional detail at a join.
+            Cached_Fact_Width := Width + 3;
+         end if;
+         return Cached_Fact_Width;
+      end Fact_Width;
+
       --  The declarations this function can name, numbered 1 .. N in the
       --  order of their program identities: its own parameters, returns
       --  and locals, and every module or imported name its body refers
@@ -3398,23 +3420,6 @@ package body Landin.Stages.Checking.References is
                     not null access Landin.Diagnostics.Diagnostic_List := Sink;
                   Passes : Natural := 0;
                   Converged : Boolean := False;
-
-                  function Fact_Width return Positive;
-
-                  function Fact_Width return Positive is
-                     Width : Natural := 0;
-                  begin
-                     for Id in 1 .. Landin.Checking.Signature_Count
-                       (Types.all)
-                     loop
-                        Width := Natural'Max
-                          (Width, Landin.Checking.Signature_Result_Count
-                             (Types.all, Landin.Checking.Signature_Id (Id)));
-                     end loop;
-                     --  Union, captured storage, result positions and one
-                     --  possible loss of positional detail at a join.
-                     return Width + 3;
-                  end Fact_Width;
 
                   --  Each source bit grows once; the presence chain has two
                   --  upward steps.  The frame witness can descend through
