@@ -1,5 +1,6 @@
 import core/diag
 import core/io
+import core/io/hosted
 import core/text
 
 message_a: [2]u8 = [65, 10]
@@ -117,7 +118,7 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut host := io.host()
+    mut host := hosted.host()
     diagnostic_stream := io.err(host)
     world: any io.world = any(addr host)
     mut immediate := diag.to(addr world, addr diagnostic_stream)
@@ -146,7 +147,7 @@ public main: () -> (code: i32) =
     end if
 
     first_argument: usize = 0
-    argument_source: ptr io.system = addr host
+    argument_source: ptr hosted.system = addr host
     path := io.argument_at(argument_source, first_argument)
       else (argument_failure)
         _ = argument_failure

@@ -54,10 +54,13 @@ exclusive-access primitives or VTOR. Ordinary DMA buffers remain slices.
 
 `core/failing`, `core/region`, `core/small`, `core/map`, `core/tree`, `core/sort`
 and `core/text` contain reusable target-neutral code. Existing tests and the
-Cortex-M0 corpus's image-limit dispositions remain authoritative; absence of hosted imports does not
-promise that every composition fits 32 KiB. `core/io`, `core/diag`, `core/heap`
-and the hosted C aliases in `core/c` are outside this consumer closure. Even
-unused hosted declarations in a selected module must meet target checks.
+Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
+of hosted imports does not promise that every composition fits 32 KiB.
+`core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
+caller backing, and its `io.world` interface can be selected on Cortex-M0. The
+`core/io/hosted` provider, `core/heap` and the hosted C aliases in `core/c`
+remain outside this consumer closure. Even unused hosted declarations in a
+selected module must meet target checks.
 
 `core/sort.sort` sorts a mutable initialized view in place with heapsort:
 worst-case O(n log n) comparisons, constant auxiliary storage, bounded call

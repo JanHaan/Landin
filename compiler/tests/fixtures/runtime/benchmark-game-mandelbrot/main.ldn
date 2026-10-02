@@ -1,6 +1,7 @@
 --  The Benchmark Game correctness image is 200 by 200.  Each membership bit
 --  is packed most-significant first and written in binary PBM format.
 import core/io
+import core/io/hosted
 
 in_set: (pixel_x: usize, pixel_y: usize, size: usize)
         -> (member: bool) =
@@ -24,7 +25,7 @@ in_set: (pixel_x: usize, pixel_y: usize, size: usize)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (inout host: io.system) -> (members: u32) ! io.io_failed =
+render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
     bytes_per_row: usize = size / 8
     bits_per_byte: usize = 8
@@ -53,7 +54,7 @@ render: (inout host: io.system) -> (members: u32) ! io.io_failed =
 end render
 
 public main: () -> (code: i32) =
-    mut host := io.host()
+    mut host := hosted.host()
     members := render(host) else (problem)
         _ = problem
         code = 1

@@ -1793,9 +1793,9 @@ ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
 for already absent backing; a successful release clears backing to its atom.
 
 Foreign failure detail is ordinary explicit state. After a documented libc
-failure indication, `core/io` captures errno before any other host call and
+failure indication, `core/io/hosted` captures errno before any other host call and
 retains the exact terminal value in its system provider, exposed by
-`io.last_errno`. Safe interrupted open/read/write attempts may retry; completed
+`hosted.last_errno`. Safe interrupted open/read/write attempts may retry; completed
 read/write progress is never replayed. Close consumes the handle even on
 failure and is never blindly retried, including EINTR. These facts neither add
 payloads to error atoms nor make errno a process-global Landin variable.
@@ -1806,7 +1806,7 @@ platform symbol prefix) whenever
 hosted bridge support is retained. An executable's selected no-argument Landin
 entry calls it with the actual incoming C carriers before its source body runs.
 A C-owned startup that drives public C-convention Landin routines calls it
-explicitly before `io.host` can mint an argument-table capability and before
+explicitly before `hosted.host()` can mint an argument-table capability and before
 starting any thread that may do so. Merely importing `core/io` does not perform
 initialization, and startup-independent bridge services may run without it.
 Ordinary exports and callbacks never initialize, replace or reset this state.
@@ -1825,8 +1825,8 @@ on an out-of-range index or null entry.
 The remaining repository-owned runtime bridge exposes fixed wrappers for
 `strlen`, read-only and write-create-truncate `open`, `read`, `write`, `close`,
 `errno`, and hosted heap allocation and release; those wrappers call libc. This
-is a compiler/runtime ABI used by `core/io` and `core/heap`, not a set of
-privileged language operations. `core/io` turns descriptors and
+is a compiler/runtime ABI used by `core/io/hosted` and `core/heap`, not a set of
+privileged language operations. `core/io/hosted` turns descriptors and
 pointer-and-length argument views into ordinary values, maps foreseeable host
 failures onto declared atoms, and threads its `world(provider)` concept as the
 authority for opening files and touching streams [1660] [1680]. Direct Linux
@@ -12122,9 +12122,9 @@ classified failure boundary before the repository gate can pass.
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0301 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, and L0301 refuses an assembly expression, incompatible declarations, multiple definitions or treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
-| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `io.host`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
+| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `hosted.host()`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io/hosted` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -14076,7 +14076,7 @@ at [1660] to pass host authority explicitly. Prototype 2's diagnostic sink and
 prototype 4's replaceable world both need detail without a second error system.
 
 **Chosen:** [1975]'s immediate errno capture, explicit system state and
-`io.last_errno` preserve the exact terminal libc detail while ordinary
+`hosted.last_errno` preserve the exact terminal libc detail while ordinary
 `not_found`, `no_access` and `io_failed` remain payload-free atoms. A successful
 operation clears the remembered detail; a local refusal invents no errno.
 Interrupted open/read/write attempts retry only under the selected platform's
@@ -14105,7 +14105,7 @@ Landin exports, when the argument root exists, or how long its backing lives.
 **Chosen:** [1975]'s compiler/runtime ABI emits the global hidden ELF entry
 `void _landin_host_initialize_arguments(int argc, char **argv);` with hosted
 bridge support. The ordinary no-argument Landin `main` calls it before its body;
-a C-owned startup calls it with its real carriers before `io.host` or any thread
+a C-owned startup calls it with its real carriers before `hosted.host()` or any thread
 that may acquire the argument capability. Exports and callbacks never call it
 implicitly. Startup-independent bridge operations need no argument root, and
 retaining `core/io` alone does not initialize one.
@@ -15234,6 +15234,14 @@ Close maps a nonzero libc result to `io_failed`. On an otherwise successful
 path that failure is observable; when close is a reached `undo` while another
 declared failure is already propagating, D133 preserves the primary atom and
 cleanup cannot replace it.
+
+The `core/io` module contains the target-neutral `world` concept, adapters and
+caller-backed `memory` provider. The libc-backed `system` provider and its
+`extern(c)` bridge live in `core/io/hosted`; hosted roots import that module
+explicitly and call `hosted.host()`. Selecting `core/io` alone does not select
+foreign declarations, so the same world API can be used by Cortex-M0
+consumers. The hosted provider still conforms to `io.world`, and the bridge
+and errno contract above remain unchanged.
 
 The bounded `core/io.memory` provider implements the same capability from
 caller-supplied file descriptors, content buffers, argument descriptors and

@@ -3996,11 +3996,12 @@ And this is where capabilities come from. Everything below
 is handed what it may do — an allocator, an Io, a
 diagnostics log — and the entry point is the one place
 where a root is minted rather than passed. So the whole of
-main is an argument list being filled.
+main is an argument list being filled. The hosted root imports
+`core/io/hosted`; a caller-backed root needs only `core/io`.
 
 ```landin
 public main: () -> (code: i32) =
-    mut h := io.host()          -- out of nothing, once, here
+    mut h := hosted.host()          -- out of nothing, once, here
     mut w: any io.world = any(addr h)
     args := copy_arguments(w)   -- application-owned representation
     mut backing := heap.host()
@@ -4049,7 +4050,7 @@ is threaded generically because it sits in hot loops. Same
 machinery, [1690], chosen per case.
 
 The system provider captures errno immediately after a libc failure and keeps
-the exact terminal value in explicit state, available through `io.last_errno`.
+the exact terminal value in explicit state, available through `hosted.last_errno`.
 Success clears it; a local refusal fabricates no host errno. Open/read/write
 retry EINTR only when the selected host guarantees that attempt made no
 progress. Positive partial transfers are preserved; a write continues from its

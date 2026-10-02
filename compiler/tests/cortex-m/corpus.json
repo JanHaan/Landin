@@ -1106,25 +1106,22 @@
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-memory-delivery": {
-      "mode": "refuse",
-      "codes": [
-        "L0301"
-      ],
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
     "runtime/r420-memory-world": {
-      "mode": "refuse",
-      "codes": [
-        "L0301"
-      ],
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
+    },
+    "runtime/r420-memory-world-cortex": {
+      "mode": "execute"
     },
     "runtime/r420-memory-world-boundaries": {
-      "mode": "refuse",
-      "codes": [
-        "L0301"
-      ],
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
     "runtime/r420-object-buffer-providers": {
       "mode": "refuse",
@@ -1272,11 +1269,9 @@
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r440-io-partial-progress": {
-      "mode": "refuse",
-      "codes": [
-        "L0301"
-      ],
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Caller-backed I/O selects core/io without hosted declarations. Each profile attempts execution; only a measured stack, flash or RAM limit can exclude its image."
     },
     "runtime/r440-optional-origin-edges": {
       "mode": "execute"

@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: caller-backed memory provider uses the shared io.world write API on Cortex-M
+program: main.ldn
+root: ../../../../..
+constructs: 0790, 0940, 0960, 1370, 1390, 1660
+status: 42
+targets: linux-x86-64, linux-arm64, macos-arm64, cortex-m

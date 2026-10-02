@@ -135,6 +135,7 @@ Fixture source: `compiler/tests/fixtures/runtime/fizzbuzz/main.ldn`.
 --  The classifier stays independent of presentation; the hosted entry prints
 --  the traditional lines and checks the complete tally for one through 100.
 import core/io
+import core/io/hosted
 
 fizz, buzz, fizz_buzz, number: atom
 fizzbuzz_kind: type = fizz | buzz | fizz_buzz | number
@@ -167,7 +168,7 @@ tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
     end match
 end tally
 
-write_number: (inout host: io.system, stream: io.file, value: u32)
+write_number: (inout host: hosted.system, stream: io.file, value: u32)
               -> none ! io.io_failed =
     mut digits: [3]u8 = zeroed
     mut start: usize = lenof digits
@@ -183,7 +184,7 @@ write_number: (inout host: io.system, stream: io.file, value: u32)
     try io.write(host, stream, "\n")
 end write_number
 
-write_line: (inout host: io.system, stream: io.file,
+write_line: (inout host: hosted.system, stream: io.file,
              kind: fizzbuzz_kind, value: u32) -> none ! io.io_failed =
     match kind
         fizz: try io.write(host, stream, "Fizz\n")
@@ -193,7 +194,7 @@ write_line: (inout host: io.system, stream: io.file,
     end match
 end write_line
 
-run: (inout host: io.system) -> (result: counts) ! io.io_failed =
+run: (inout host: hosted.system) -> (result: counts) ! io.io_failed =
     result = zeroed
     stream: io.file = io.out(host)
     first: u32 = 1
@@ -206,7 +207,7 @@ run: (inout host: io.system) -> (result: counts) ! io.io_failed =
 end run
 
 public main: () -> (code: i32) =
-    mut host := io.host()
+    mut host := hosted.host()
     result := run(host) else (problem)
         _ = problem
         code = 1
@@ -577,6 +578,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/m
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
+import core/io/hosted
 
 score: type = struct
     checksum: i32
@@ -647,7 +649,7 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (inout host: io.system, stream: io.file, value: u32)
+write_u32: (inout host: hosted.system, stream: io.file, value: u32)
            -> none ! io.io_failed =
     mut digits: [10]u8 = zeroed
     mut start: usize = lenof digits
@@ -662,7 +664,7 @@ write_u32: (inout host: io.system, stream: io.file, value: u32)
     try io.write(host, stream, output)
 end write_u32
 
-write_score: (inout host: io.system, value: score)
+write_score: (inout host: hosted.system, value: score)
              -> none ! io.io_failed =
     stream: io.file = io.out(host)
     try write_u32(host, stream, u32(value.checksum))
@@ -673,7 +675,7 @@ end write_score
 
 public main: () -> (code: i32) =
     value: score = fannkuch()
-    mut host := io.host()
+    mut host := hosted.host()
     write_score(host, value) else (problem)
         _ = problem
         code = 1
@@ -704,6 +706,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.
 --  The Benchmark Game correctness image is 200 by 200.  Each membership bit
 --  is packed most-significant first and written in binary PBM format.
 import core/io
+import core/io/hosted
 
 in_set: (pixel_x: usize, pixel_y: usize, size: usize)
         -> (member: bool) =
@@ -727,7 +730,7 @@ in_set: (pixel_x: usize, pixel_y: usize, size: usize)
     member = real_squared + imaginary_squared <= 4.0
 end in_set
 
-render: (inout host: io.system) -> (members: u32) ! io.io_failed =
+render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
     size: usize = 200
     bytes_per_row: usize = size / 8
     bits_per_byte: usize = 8
@@ -756,7 +759,7 @@ render: (inout host: io.system) -> (members: u32) ! io.io_failed =
 end render
 
 public main: () -> (code: i32) =
-    mut host := io.host()
+    mut host := hosted.host()
     members := render(host) else (problem)
         _ = problem
         code = 1
@@ -788,6 +791,7 @@ Fixture source: `compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn`.
 --  The official correctness input is 1000.  The probability search remains
 --  linear and the naïve LCG advances once for every random nucleotide.
 import core/io
+import core/io/hosted
 
 alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
 iub_symbols: []u8 = "acgtBDHKMNRSVWY"
@@ -836,7 +840,7 @@ select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
     end for
 end select_symbol
 
-write_repeated: (inout host: io.system, stream: io.file,
+write_repeated: (inout host: hosted.system, stream: io.file,
                  source: []u8, count: usize) -> none ! io.io_failed =
     mut line: [60]u8 = zeroed
     mut emitted: usize = 0
@@ -859,7 +863,7 @@ write_repeated: (inout host: io.system, stream: io.file,
     end while
 end write_repeated
 
-write_random: (inout host: io.system, stream: io.file, symbols: []u8,
+write_random: (inout host: hosted.system, stream: io.file, symbols: []u8,
                cumulative: []f64, inout seed: u32, count: usize)
               -> none ! io.io_failed =
     mut line: [60]u8 = zeroed
@@ -879,7 +883,7 @@ write_random: (inout host: io.system, stream: io.file, symbols: []u8,
     end while
 end write_random
 
-run: (inout host: io.system) -> (final_seed: u32) ! io.io_failed =
+run: (inout host: hosted.system) -> (final_seed: u32) ! io.io_failed =
     sample_size: usize = 1000
     stream: io.file = io.out(host)
     mut seed: u32 = 42
@@ -904,7 +908,7 @@ run: (inout host: io.system) -> (final_seed: u32) ! io.io_failed =
 end run
 
 public main: () -> (code: i32) =
-    mut host := io.host()
+    mut host := hosted.host()
     final_seed := run(host) else (problem)
         _ = problem
         code = 1

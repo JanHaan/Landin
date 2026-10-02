@@ -1,0 +1,27 @@
+import core/io
+
+mut backing: [1]u8 = zeroed
+mut output: [4]u8 = zeroed
+mut errors: [1]u8 = zeroed
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "unused"
+    file: io.memory_file =
+      (name: name, contents: backing[0..<1], length: 0, cursor: 0,
+       readable: true, writable: true, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: []io.argument = []
+    mut state := io.memory_world(files[0..<1], no_arguments,
+                                 output[0..<4], errors[0..<1])
+    stream: io.file = io.out(state)
+    io.write(state, stream, "ok") else (problem)
+        _ = problem
+        return
+    end
+    bytes: []u8 = io.written(state)
+    if lenof bytes == 2 and bytes[0] == 111 and bytes[1] == 107
+      and output[2] == 0
+    then code = 42 end if
+end main
