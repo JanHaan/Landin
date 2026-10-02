@@ -20,7 +20,12 @@ package body Landin.Diagnostics.Explanations is
                & " that would overwrite a source or another output, or `re"
                & "fine explain` with a code no catalogue row holds. `refin"
                & "e --help` lists the options. The status is 2, which says"
-               & " the request and not a program was wrong.",
+               & " the request and not a program was wrong."
+               & LF
+               & LF
+               & "Give `--target=` only once. Repeating it is a misuse eve"
+               & "n when both names are the same; the driver does not choo"
+               & "se between target selections.",
             when Catalogue.Unreadable_Source =>
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",

@@ -744,6 +744,10 @@ package body Landin.Driver is
             Rejected.Append (Name);
          end if;
       end loop;
+      if Natural (Targets.Length) > 1 then
+         Unknowns.Append ("--target given more than once");
+         Bad_Use := True;
+      end if;
 
       --  A level is a level of the family the target selected, so it is
       --  resolved after the target, and a level named for another family

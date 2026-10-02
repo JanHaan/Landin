@@ -856,6 +856,42 @@ package body Landin.Tests.Driver_Suite is
          "a refused target is not announced as selected");
    end Targets_Are_Selected_By_Name;
 
+   procedure Repeated_Target_Is_Misuse
+     (Item : in out Landin.Testing.Context);
+
+   procedure Repeated_Target_Is_Misuse
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      procedure Check_Repeated (First, Second : String);
+
+      procedure Check_Repeated (First, Second : String) is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("--target=" & First, "--target=" & Second),
+              Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "repeated targets are misuse: " & First & ", " & Second);
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report),
+                            "error[L0002]: unknown option: "
+                            & "--target given more than once"),
+            "the repeated target has an option diagnostic");
+         Landin.Testing.Check
+           (Item, not Contains (Unbounded.To_String (Result.Output),
+                               "target:"),
+            "a repeated target is not announced as selected");
+      end Check_Repeated;
+   begin
+      Check_Repeated ("linux-x86-64", "darwin-arm64");
+      Check_Repeated ("darwin-arm64", "linux-x86-64");
+      Check_Repeated ("linux-x86-64", "linux-x86-64");
+   end Repeated_Target_Is_Misuse;
+
    --  D255: a level is resolved after the target and within its family,
    --  the default level changes no tool invocation, and a selected level
    --  reaches both the toolchain and the build report.
@@ -4129,6 +4165,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "targets are selected by name",
          Targets_Are_Selected_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "driver", "repeated target is misuse",
+         Repeated_Target_Is_Misuse'Access);
       Landin.Testing.Register
         (Into, "driver", "a level is selected within its family",
          A_Level_Is_Selected_Within_Its_Family'Access);

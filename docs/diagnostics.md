@@ -35,6 +35,9 @@ that would overwrite a source or another output, or `refine explain` with a
 code no catalogue row holds. `refine --help` lists the options. The status is
 2, which says the request and not a program was wrong.
 
+Give `--target=` only once. Repeating it is a misuse even when both names
+are the same; the driver does not choose between target selections.
+
 ### L0003
 
 A source named on the command line is missing or cannot be read. Check the
