@@ -1,7 +1,6 @@
 with Ada.Containers;
 with Ada.Strings.Unbounded;
 with Landin.Backend.Work_Arrays;
-with Landin.IR.Shape_Measurement;
 
 package body Landin.Backend is
 
@@ -64,7 +63,8 @@ package body Landin.Backend is
      (Of_Unit : Landin.IR.Unit;
       Shape : Landin.IR.Field_Shape;
       Path  : Landin.IR.Path_Step_Array;
-      Facts : Landin.Targets.Target_Facts)
+      Facts : Landin.Targets.Target_Facts;
+      Cache : in out IR.Shape_Measurement.Layout_Cache)
       return Landin.Targets.Byte_Count
    is
       Reached : Landin.IR.Field_Shape := Shape;
@@ -93,7 +93,9 @@ package body Landin.Backend is
          elsif Step.Case_Index = 0 then
             declare
                Plan : constant Landin.Targets.Layouts.Plan :=
-                 Aggregate_Layout (Of_Unit, Reached, Facts);
+                 IR.Shape_Measurement.Cached_Aggregate_Layout
+                   (Cache, Of_Unit, Reached, Facts,
+                    Targets.Maximum_Object_Size (Facts));
             begin
                Total := Total + Plan.Offsets (Positive (Step.Field));
                Reached := Landin.IR.Nth_Aggregate_Field
@@ -368,8 +370,15 @@ package body Landin.Backend is
               * Element_Size;
          end;
       else
-         Offset := Slot_Layout (Of_Unit, Item, Slot, Facts).Offsets
-           (Positive (Field));
+         declare
+            First : constant Natural := Of_Frame.Slot_Fields (Positive (Slot));
+         begin
+            Offset := (if First = 0
+                       then Slot_Layout (Of_Unit, Item, Slot, Facts).Offsets
+                         (Positive (Field))
+                       else Of_Frame.Field_Offsets
+                         (First + Positive (Field) - 1));
+         end;
       end if;
       return Slot_Offset (Of_Frame, Slot) - Offset;
    end Field_Offset;
@@ -431,10 +440,24 @@ package body Landin.Backend is
             Slot : constant IR.Slot_Id := IR.Slot_Id (Index);
          begin
             Built.Slot_Homes.Append (Slots (Index));
+            Built.Slot_Fields.Append (0);
             if not Slots (Index) then
                Built.Slots.Append (0);
             elsif IR.Is_Aggregate (Of_Unit, Item, Slot)
-              or else IR.Is_Array (Of_Unit, Item, Slot)
+            then
+               declare
+                  Placed_Fields : constant Layout.Plan :=
+                    Slot_Layout (Of_Unit, Item, Slot, Facts);
+               begin
+                  Built.Slot_Fields.Replace_Element
+                    (Index, Natural (Built.Field_Offsets.Length) + 1);
+                  for Offset of Placed_Fields.Offsets loop
+                     Built.Field_Offsets.Append (Offset);
+                  end loop;
+                  Built.Slots.Append
+                    (Placed (Placed_Fields.Size, Placed_Fields.Alignment));
+               end;
+            elsif IR.Is_Array (Of_Unit, Item, Slot)
             then
                declare
                   Size : Targets.Byte_Count;

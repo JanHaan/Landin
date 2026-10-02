@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 with Landin.Provenance;
 with Landin.Layouts;
+with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
@@ -995,6 +996,7 @@ package body Landin.Backend.Arm64 is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Layout : constant Frame := Routine_Frame
            (Of_Unit, Item, Facts, 16#7fff_ffff#);
          Saves : constant Saved_Set := Declared (Of_Unit, Item);
@@ -1614,7 +1616,8 @@ package body Landin.Backend.Arm64 is
            (Shape : Landin.IR.Field_Shape;
             Path  : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count
-           is (Landin.Backend.Path_Offset (Of_Unit, Shape, Path, Facts));
+           is (Landin.Backend.Path_Offset
+                 (Of_Unit, Shape, Path, Facts, Path_Layouts));
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.

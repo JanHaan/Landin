@@ -7,6 +7,7 @@ with Landin.Syntax.Forest;
 with Landin.Targets.Layouts;
 with Landin.Types;
 with Landin.Layouts;
+with Landin.IR.Shape_Measurement;
 
 package body Landin.Backend.Dwarf is
 
@@ -610,6 +611,7 @@ package body Landin.Backend.Dwarf is
       procedure Routine (Item : Item_Id) is
          Availability : Debug_Locations.Analysis :=
            Debug_Locations.Prepare (Of_Unit, Item);
+         Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Plan : constant Placement :=
            Make (Of_Unit, Item, Facts, Options);
          Frame_Plan : constant Frame :=
@@ -717,7 +719,7 @@ package body Landin.Backend.Dwarf is
                                  Offset := Landin.Backend.Path_Offset
                                    (Of_Unit, Shape,
                                     [1 => (Part_Position (Alias.Field), 0)],
-                                    Facts);
+                                    Facts, Path_Layouts);
                                  Shape := Array_Element_Shape
                                    (Of_Unit, Shape);
                               end if;
@@ -769,13 +771,14 @@ package body Landin.Backend.Dwarf is
                                    [1 => (Part_Position (Alias.Field), 0)];
                               begin
                                  Offset := Landin.Backend.Path_Offset
-                                   (Of_Unit, Shape, Base, Facts);
+                                   (Of_Unit, Shape, Base, Facts,
+                                    Path_Layouts);
                                  Shape := Shape_At (Of_Unit, Shape, Base);
                               end;
                            end if;
                      end case;
                      Offset := Offset + Landin.Backend.Path_Offset
-                       (Of_Unit, Shape, Path, Facts);
+                       (Of_Unit, Shape, Path, Facts, Path_Layouts);
                      Shape := Shape_At (Of_Unit, Shape, Path);
                      if Offset > 0 and then US.Length (Expr) > 0 then
                         US.Append (Expr, HT & ".byte 0x23" & LF

@@ -1,4 +1,3 @@
-with Ada.Containers.Hashed_Maps;
 with Landin.Targets.Packed;
 
 package body Landin.IR.Shape_Measurement is
@@ -7,13 +6,6 @@ package body Landin.IR.Shape_Measurement is
    package Layout renames Landin.Targets.Layouts;
    use type Targets.Byte_Count;
    use type Ada.Containers.Hash_Type;
-
-   type Shape_Key is record
-      Shape : Field_Shape;
-      Nominal_Position : Natural;
-   end record;
-
-   function Hash (Key : Shape_Key) return Ada.Containers.Hash_Type;
 
    function Hash (Key : Shape_Key) return Ada.Containers.Hash_Type is
       Result : Ada.Containers.Hash_Type := 0;
@@ -39,20 +31,8 @@ package body Landin.IR.Shape_Measurement is
       return Result;
    end Hash;
 
-   type Cached_Extent is record
-      Ready : Boolean := False;
-      Value : Layout.Field_Extent := (0, 1);
-   end record;
-
-   package Extent_Maps is new Ada.Containers.Hashed_Maps
-     (Key_Type => Shape_Key, Element_Type => Cached_Extent,
-      Hash => Hash, Equivalent_Keys => "=");
-
-   --  Every public query owns one memo. Unit, target and limit stay fixed
-   --  throughout its recursive calls; no result survives the query.
-   type Memo is record
-      Values : Extent_Maps.Map;
-   end record;
+   --  Ordinary public queries own one memo and discard it on return. The
+   --  caller-owned layout cache keeps its memo for one fixed query group.
 
    function Extent
      (Cache : in out Memo;
@@ -282,6 +262,32 @@ package body Landin.IR.Shape_Measurement is
       return Aggregate_Layout
         (Cache, Of_Unit, Shape, Facts, Maximum);
    end Aggregate_Layout;
+
+   function Cached_Aggregate_Layout
+     (Cache : in out Layout_Cache;
+      Of_Unit : Unit; Shape : Field_Shape;
+      Facts : Landin.Targets.Target_Facts;
+      Maximum : Landin.Targets.Byte_Count) return Layout.Plan
+   is
+      Key : constant Shape_Key :=
+        (Shape => Shape,
+         Nominal_Position =>
+           (if Holds (Of_Unit, Shape.Nominal)
+            then Nominal_Identities.Position (Of_Unit, Shape.Nominal)
+            else 0));
+      Position : constant Layout_Maps.Cursor := Cache.Plans.Find (Key);
+   begin
+      if Layout_Maps.Has_Element (Position) then
+         return Layout_Maps.Element (Position);
+      end if;
+      declare
+         Placed : constant Layout.Plan := Aggregate_Layout
+           (Cache.Extents, Of_Unit, Shape, Facts, Maximum);
+      begin
+         Cache.Plans.Insert (Key, Placed);
+         return Placed;
+      end;
+   end Cached_Aggregate_Layout;
 
    function Case_Layout
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive;

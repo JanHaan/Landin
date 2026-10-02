@@ -4,6 +4,7 @@ with Landin.Backend;
 with Landin.Backend.C_ABI;
 with Landin.Backend.X86_64;
 with Landin.IR;
+with Landin.IR.Shape_Measurement;
 with Landin.Layouts;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -114,6 +115,7 @@ package body Landin.Tests.Backend_Plans_Suite is
               Backend.Nominal_Layout (Unit, Nominal, Facts);
             Frame : constant Backend.Frame :=
               Backend.Laid_Out (Unit, Routine, Facts);
+            Path_Layouts : IR.Shape_Measurement.Layout_Cache;
             Size : Targets.Byte_Count;
             Alignment : Targets.Byte_Alignment;
          begin
@@ -155,6 +157,16 @@ package body Landin.Tests.Backend_Plans_Suite is
                      Facts) = Backend.Slot_Offset (Frame, Slot)
                        - Plan.Offsets (Field),
                   "slot addressing subtracts physical source-field offset");
+            end loop;
+            for Repeat in 1 .. 2 loop
+               Landin.Testing.Check
+                 (Item, Backend.Path_Offset
+                    (Unit, Shape, [1 => (2, 0)], Facts, Path_Layouts)
+                    = Plan.Offsets (2)
+                  and then Backend.Path_Offset
+                    (Unit, Shape, [1 => (3, 0)], Facts, Path_Layouts)
+                    = Plan.Offsets (3),
+                  "repeated path steps reuse the target's placement");
             end loop;
             Backend.Aggregate_Extent
               (Unit, Routine, Array_Slot, Facts, Size, Alignment);

@@ -35,6 +35,7 @@ private with Ada.Containers.Vectors;
 private with Ada.Strings.Hash;
 
 with Landin.IR;
+with Landin.IR.Shape_Measurement;
 with Landin.Targets;
 with Landin.Layouts;
 with Landin.Source.Names;
@@ -171,11 +172,14 @@ package Landin.Backend is
 
    --  The common physical interpretation of an immutable subobject path.
    --  Machine addresses and off-target debug locations use the same walk.
+   --  Reuse aggregate plans across paths in one immutable unit and target.
+   --  Keep Cache local to an emission of that unit/target.
    function Path_Offset
      (Of_Unit : Landin.IR.Unit;
       Shape : Landin.IR.Field_Shape;
       Path : Landin.IR.Path_Step_Array;
-      Facts : Landin.Targets.Target_Facts)
+      Facts : Landin.Targets.Target_Facts;
+      Cache : in out Landin.IR.Shape_Measurement.Layout_Cache)
       return Landin.Targets.Byte_Count;
 
    function Nominal_Layout
@@ -345,14 +349,18 @@ private
    end record;
 
    type Frame is record
-      Slots       : Offset_Vectors.Vector;
-      Values      : Offset_Vectors.Vector;
-      Slot_Homes  : Home_Vectors.Vector;
-      Spills      : Offset_Vectors.Vector;
-      Saves       : Offset_Vectors.Vector;
-      Spill_Total : Landin.Targets.Byte_Count := 0;
-      Save_Total  : Landin.Targets.Byte_Count := 0;
-      Size        : Landin.Targets.Byte_Count := 0;
+      Slots         : Offset_Vectors.Vector;
+      --  One-based start of a placed aggregate slot's source offsets;
+      --  zero for a scalar, array or slot without a home.
+      Slot_Fields   : Code_Vectors.Vector;
+      Field_Offsets : Offset_Vectors.Vector;
+      Values        : Offset_Vectors.Vector;
+      Slot_Homes    : Home_Vectors.Vector;
+      Spills        : Offset_Vectors.Vector;
+      Saves         : Offset_Vectors.Vector;
+      Spill_Total   : Landin.Targets.Byte_Count := 0;
+      Save_Total    : Landin.Targets.Byte_Count := 0;
+      Size          : Landin.Targets.Byte_Count := 0;
    end record;
 
 end Landin.Backend;
