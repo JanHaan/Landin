@@ -17445,9 +17445,21 @@ package body Landin.Stages.Checking is
                then Error_Type.Atoms else Landin.Checking.No_Atom_Set);
             Site : constant Landin.Provenance.Origin :=
               Syn.Origin (Of_Tree, Source);
+            Source_Reference : constant Landin.Checking.Reference_Id :=
+              Landin.Checking.Add_Reference
+                (Types.all,
+                 (Kind     => Ty.Pointer_Value,
+                  Mutable  => False,
+                  View     => Ty.Ordinary_View,
+                  Referent => Actual.Kind,
+                  Nominal  => Actual.Nominal,
+                  Concept  => Actual.Concept,
+                  others   => <>));
             Source_Part : constant Landin.Checking.Signature_Part :=
               Signature_Part_For
-                (Actual, Landin.Source.Names.No_Name, Site);
+                ((Kind => Ty.Pointer_Value,
+                  Reference => Source_Reference, others => <>),
+                 Landin.Source.Names.No_Name, Site);
             Cursor_Part : constant Landin.Checking.Signature_Part :=
               Signature_Part_For
                 (Cursor, Landin.Source.Names.No_Name, Site);
@@ -17824,12 +17836,11 @@ package body Landin.Stages.Checking is
               ("this iterable evidence does not implement [1320]'s exact"
                & " call contract",
                (if Fallible then
-                  "fallible_iterable: each provider declares its exact"
-                  & " shared error set"
+                  "fallible_iterable: each provider takes a read-only"
+                  & " source pointer and declares its exact shared error set"
                 else
-                  "D180: first, at_end, item and next are infallible"
-                  & " in-value calls with one retained Cur and Item"
-                  & " identity"));
+                  "D180: providers are infallible calls taking a read-only"
+                  & " source pointer, with one Cur and Item identity"));
             return Landin.Checking.No_Conformance;
          end if;
 

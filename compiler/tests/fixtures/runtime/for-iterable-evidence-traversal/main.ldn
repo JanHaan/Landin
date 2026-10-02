@@ -1,8 +1,8 @@
 iterable: type = concept (t: type, cur: type, item_type: type)
-    first:  (s: t) -> (c: cur)
-    at_end: (s: t, c: cur) -> (yes: bool)
-    item:   (s: t, c: cur) -> (v: item_type)
-    next:   (s: t, c: cur) -> (c2: cur)
+    first:  (s: ptr t) -> (c: cur)
+    at_end: (s: ptr t, c: cur) -> (yes: bool)
+    item:   (s: ptr t, c: cur) -> (v: item_type)
+    next:   (s: ptr t, c: cur) -> (c2: cur)
 end iterable
 
 token: type = struct
@@ -12,6 +12,7 @@ end token
 bag: type = struct
     low: i32
     count: usize
+    padding: [2048]u8
 end bag
 
 cursor: type = struct
@@ -23,19 +24,19 @@ cell: type (t: type) = struct
     count: usize
 end cell
 
-cell_first: (t: type, s: cell(t)) -> (c: usize) =
+cell_first: (t: type, s: ptr cell(t)) -> (c: usize) =
     c = 0
 end cell_first
 
-cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: bool) =
-    yes = c == s.count
+cell_at_end: (t: type, s: ptr cell(t), c: usize) -> (yes: bool) =
+    yes = c == s.val.count
 end cell_at_end
 
-cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =
-    v = s.value
+cell_item: (t: type, s: ptr cell(t), c: usize) -> (v: t) =
+    v = s.val.value
 end cell_item
 
-cell_next: (t: type, s: cell(t), c: usize) -> (c2: usize) =
+cell_next: (t: type, s: ptr cell(t), c: usize) -> (c2: usize) =
     c2 = c + 1
 end cell_next
 
@@ -107,25 +108,26 @@ mut cleanups: usize = 0
 
 make_bag: () -> (value: bag) =
     inc bag_sources
-    value = (low: 10, count: 3)
+    value = (low: 10, count: 3, padding: zeroed)
 end make_bag
 
-bag_first: (s: bag) -> (c: cursor) =
+bag_first: (s: ptr bag) -> (c: cursor) =
     inc bag_firsts
     c = (position: 0)
 end bag_first
 
-bag_at_end: (s: bag, c: cursor) -> (yes: bool) =
+bag_at_end: (s: ptr bag, c: cursor) -> (yes: bool) =
     inc bag_tests
-    yes = c.position == s.count
+    yes = c.position == s.val.count
 end bag_at_end
 
-bag_item: (s: bag, c: cursor) -> (v: token) =
+bag_item: (s: ptr bag, c: cursor) -> (v: token) =
     inc bag_items
-    v = (value: s.low + i32(c.position))
+    v = (value: s.val.low + i32(c.position)
+                + i32(s.val.padding[2047]))
 end bag_item
 
-bag_next: (s: bag, c: cursor) -> (c2: cursor) =
+bag_next: (s: ptr bag, c: cursor) -> (c2: cursor) =
     inc bag_nexts
     c2 = (position: c.position + 1)
 end bag_next
@@ -139,22 +141,22 @@ counted: (value: any sequence) -> (result: any sequence from value) =
     result = value
 end counted
 
-any_first: (s: any sequence) -> (c: usize) =
+any_first: (s: ptr any sequence) -> (c: usize) =
     inc any_firsts
     c = 0
 end any_first
 
-any_at_end: (s: any sequence, c: usize) -> (yes: bool) =
+any_at_end: (s: ptr any sequence, c: usize) -> (yes: bool) =
     inc any_tests
-    yes = c == s.length()
+    yes = c == s.val.length()
 end any_at_end
 
-any_item: (s: any sequence, c: usize) -> (v: any marker) =
+any_item: (s: ptr any sequence, c: usize) -> (v: any marker) =
     inc any_items
-    v = s.at(c)
+    v = s.val.at(c)
 end any_item
 
-any_next: (s: any sequence, c: usize) -> (c2: usize) =
+any_next: (s: ptr any sequence, c: usize) -> (c2: usize) =
     inc any_nexts
     c2 = c + 1
 end any_next

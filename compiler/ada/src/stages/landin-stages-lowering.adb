@@ -9800,6 +9800,9 @@ package body Landin.Stages.Lowering is
          is
             Source_Signature : constant Landin.Checking.Signature_Id :=
               Provider_Signature (Position);
+            Source_Part : constant Landin.Checking.Signature_Part :=
+              Landin.Checking.Nth_Signature_Parameter
+                (Types.all, Source_Signature, 1);
             Signature : constant IR.Signature_Id :=
               Signature_For (Source_Signature);
             Errors : constant IR.Atom_Set_Id :=
@@ -9824,7 +9827,7 @@ package body Landin.Stages.Lowering is
                   (Kind => IR.Frame_Slot, Slot => Destination), Site)
                else IR.No_Value);
             Source_Argument : constant IR.Value_Id :=
-              IR.Emit_Storage_Address
+              IR.Emit_Place_Address
                 (Unit.all, Filling,
                  (Kind => IR.Frame_Slot, Slot => Source_Slot), Site);
             Cursor_Argument : constant IR.Value_Id :=
@@ -9841,6 +9844,9 @@ package body Landin.Stages.Lowering is
                 else Ty.Scalar_Name (Result_Part.Kind)),
                Site, Failure => Failure_Slot);
          begin
+            IR.Set_Pointee
+              (Unit.all, Filling, Source_Argument,
+               Pointee_For (Source_Part.Reference));
             IR.Add_Argument (Unit.all, Filling, Made, Callee);
             if Hidden /= IR.No_Value then
                IR.Add_Argument (Unit.all, Filling, Made, Hidden);
@@ -10648,7 +10654,8 @@ package body Landin.Stages.Lowering is
                  Provider_Signature (1);
                Made : IR.Value_Id;
             begin
-               --  D180: retain one source value for every evidence call.
+               --  D180: retain one source value and pass its address to
+               --  every evidence call.
                --  A struct and an `any C` both use their ordinary stored
                --  copy shape; the latter remains a data/evidence pair and
                --  is never interpreted as a slice base and length.

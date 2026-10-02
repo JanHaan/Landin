@@ -1,8 +1,8 @@
 iterable: type = concept (t: type, cur: type, item_type: type)
-    first:  (s: t) -> (c: cur)
-    at_end: (s: t, c: cur) -> (yes: bool)
-    item:   (s: t, c: cur) -> (v: item_type)
-    next:   (s: t, c: cur) -> (c2: cur)
+    first:  (s: ptr t) -> (c: cur)
+    at_end: (s: ptr t, c: cur) -> (yes: bool)
+    item:   (s: ptr t, c: cur) -> (v: item_type)
+    next:   (s: ptr t, c: cur) -> (c2: cur)
 end iterable
 
 bag: type = struct

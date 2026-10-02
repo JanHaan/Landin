@@ -2972,10 +2972,10 @@ Traversal is a concept. This is what 'for x in s' uses.
 
 ```landin
 iterable: type = concept (t: type, cur: type, item_type: type)
-    first:  (s: t) -> (c: cur)
-    at_end: (s: t, c: cur) -> (yes: bool)
-    item:   (s: t, c: cur) -> (v: item_type)
-    next:   (s: t, c: cur) -> (c2: cur)
+    first:  (s: ptr t) -> (c: cur)
+    at_end: (s: ptr t, c: cur) -> (yes: bool)
+    item:   (s: ptr t, c: cur) -> (v: item_type)
+    next:   (s: ptr t, c: cur) -> (c2: cur)
 end iterable
 
 ```
@@ -2989,10 +2989,10 @@ A streaming source supplies an error atom type as a third associated input:
 ```landin
 fallible_iterable: type = concept
     (t: type, cur: type, item_type: type, errors: type)
-    first:  (s: t) -> (c: cur) ! errors
-    at_end: (s: t, c: cur) -> (yes: bool) ! errors
-    item:   (s: t, c: cur) -> (v: item_type) ! errors
-    next:   (s: t, c: cur) -> (c2: cur) ! errors
+    first:  (s: ptr t) -> (c: cur) ! errors
+    at_end: (s: ptr t, c: cur) -> (yes: bool) ! errors
+    item:   (s: ptr t, c: cur) -> (v: item_type) ! errors
+    next:   (s: ptr t, c: cur) -> (c2: cur) ! errors
 end fallible_iterable
 ```
 
@@ -3000,8 +3000,10 @@ The `errors` input is an atom set. All four signatures are exact and use
 that same set; a provider may declare an error it never raises. `try for`
 requires one unambiguous conformance. If both contracts are available, it
 selects `fallible_iterable`; plain `for` selects only `iterable`.
-The source is retained as a value for every call; `item` returns a fresh loop
-binding value rather than an alias into it. A provider result declared
+The source expression is evaluated once and retained as a private value. Each
+provider receives a read-only pointer to that value, so a large struct is
+copied once for traversal rather than on every call. `item` returns a fresh
+loop binding value rather than an alias into it. A provider result declared
 `from s` does not match this source-free requirement. Containers that expose
 storage-derived references can instead return an initialized slice view and
 use the built-in slice traversal, as `for value in vec.used(list)` does.

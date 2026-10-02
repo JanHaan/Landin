@@ -12542,7 +12542,10 @@ This makes the implicit provider calls visible at the loop site without
 changing ordinary call error handling.
 
 The source expression is evaluated once and copied into independent traversal
-storage. `first` runs once against that stored source. Each head calls
+storage. Every provider receives a read-only `ptr T` to that same stored value;
+there is no further source-sized copy at provider entry. The pointer is
+non-escaping under [0780], and providers cannot write through it. `first`
+runs once against that stored source. Each head calls
 `at_end`; false calls `item` and copies its result into the immutable element
 binding. Body fallthrough or `continue` runs applicable cleanup, calls `next`,
 copies the returned cursor into the retained cursor, advances the optional
@@ -12556,19 +12559,22 @@ storage, so a provider never receives an aliased input/output cursor. An
 Because [1320]'s `item` result has no `from`, its binding has no source-derived
 origin; an implementation returning such a reference must satisfy the
 ordinary exact result-origin rule at its own declaration. Assigning to the
-copied binding is L0303. The stored source is passed as [1320]'s ordinary
-in-value parameter, so no traversal call obtains a new write permission.
+copied binding is L0303. The stored source is passed as [1320]'s read-only
+pointer parameter, so no traversal call obtains a new write permission.
 Ranges and direct array/slice traversal retain D159--D160 and D178--D179
 unchanged. In particular, an `any C` source remains a data/evidence pair for C
-through every provider call and is never decoded as a slice.
+through every provider call and is never decoded as a slice. Its pointer
+refers to the retained two-word erased value, not the represented object.
 
-**The alternatives:** choose the first conformance in source order, derive
+**The alternatives:** pass the source by value on every call, choose the first
+conformance in source order, derive
 Cur or Item from provider bodies, share an aggregate cursor's result and input
 storage, make Item an alias, call `next` before cleanup, or reinterpret `any`
 as a slice. Those choices respectively make declaration order semantic, lose
 associated-type identity, permit hidden result/input aliasing, contradict
 [1160], move effects across a loop edge, or confuse unrelated representations.
-All were declined.
+All were declined. Repeated by-value calls require source-sized callee copies
+on each loop step even when providers only inspect the source.
 
 **Pinned by** `runtime/for-iterable-evidence-traversal`,
 `runtime/for-fallible-iteration`,
