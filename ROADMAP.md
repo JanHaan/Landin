@@ -790,11 +790,25 @@ other four.
 Status: planned
 Depends on: R14.10
 
-A stack switch on every target, specified with a register decision. This takes
-on the stackful-fibre part of R551-35.
+A stack switch on every target, specified with a register decision. The caller
+supplies each fibre's writable stack backing, directly from a fixed buffer or
+through an explicit allocator capability; creating a fibre does not require
+an implicit heap allocation. The caller owns that backing while the fibre can
+run or resume and reclaims it only after the fibre has finished and no switch
+can reach it. Specify the backing's size, alignment, creation-failure and
+release rules with the switch interface. This takes on the stackful-fibre
+part of R551-35.
 
 Exit evidence: fibres switching on every target with debugger backtraces
-through a switch, and the single-core freestanding answer specified.
+through a switch, and the single-core freestanding answer specified. On the
+retained 32 KiB flash, 16 KiB RAM Cortex-M0 profile with its 4 KiB main-stack
+reservation, run a stack-switch consumer using fixed caller-supplied backing.
+Report its linked flash size, static RAM with fibre buffers identified, the
+main-stack reservation, each fibre's backing size and peak simultaneous
+backing, plus the total reserved RAM without double counting and the fit
+verdict against that profile. A switch that only fits a larger device profile
+does not complete this item; the measurement is for this consumer, not a
+general bound on stack depth.
 
 ### R14.30 — A second Io
 
@@ -820,6 +834,7 @@ oracles.
 ### R14 gate
 
 - Prototype 5's derived programs run.
+- R14.20's retained-profile stack-backing and capacity evidence is recorded.
 
 ## R15 — Windows
 
