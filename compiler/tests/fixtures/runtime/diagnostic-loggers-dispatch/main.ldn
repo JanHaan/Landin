@@ -6,6 +6,50 @@ message_a: [2]u8 = [65, 10]
 message_b: [2]u8 = [66, 10]
 message_c: [2]u8 = [67, 10]
 
+same_bytes: (actual: []u8, expected: []u8) -> (same: bool) =
+    same = false
+    return when lenof actual <> lenof expected
+    mut at: usize = 0
+    while at < lenof expected do
+        return when actual[at] <> expected[at]
+        inc at
+    end while
+    same = true
+end same_bytes
+
+check_position_writes: () -> (ok: bool) =
+    ok = false
+    files: []mut io.memory_file = []
+    arguments: []io.argument = []
+    mut output: [1]u8 = zeroed
+    mut errors: [80]u8 = zeroed
+    mut memory := io.memory_world(files, arguments, output[0..<1],
+                                  errors[0..<lenof errors])
+    destination: io.file = io.err(memory)
+    world: any io.world = any(addr memory)
+    mut stream := diag.to(addr world, addr destination)
+    logger: any diag.log = any(addr stream)
+    logger.note(text.at(message_a[0..<2], 0), diag.warning, "A")
+      else (problem)
+        _ = problem
+        return
+    end
+    logger.note(text.at(message_b[0..<2], 1234567890), diag.error, "B")
+      else (problem)
+        _ = problem
+        return
+    end
+    largest: usize = 0 -% 1
+    logger.note(text.at(message_c[0..<2], largest), diag.warning, "C")
+      else (problem)
+        _ = problem
+        return
+    end
+    bytes: []u8 = io.written_errors(memory)
+    ok = memory.write_calls == 12 and
+         same_bytes(bytes, "W:0:AE:1234567890:BW:18446744073709551615:C")
+end check_position_writes
+
 emit_notes: (inout logger: any diag.log) -> none ! io.io_failed =
     first: text.position = text.first(message_a[0..<2])
     second: text.position = text.next(first)
@@ -83,6 +127,9 @@ public main: () -> (code: i32) =
         return
     end
     if not streaming_log.failed() then
+        return
+    end if
+    if not check_position_writes() then
         return
     end if
 
