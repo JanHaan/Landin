@@ -109,14 +109,18 @@ not know is ignored.
 ## Past a syntax error
 
 `refine` stops after the parse when a source does not parse. The server does
-too, with one exception, D253's: when every error lies inside the bodies of
-routines whose name and signature parsed, those bodies are stood in for and
-the rest of the module is checked. So while a body is half written, a type
-error in the routine below it is still reported, and hover and definitions
-work everywhere else. Nothing is reported inside the broken body except its
-own syntax errors, and no warning is given until it parses. Any other syntax
-error, such as one in a signature, a type or a binding, leaves the module
-reported exactly as `refine` reports it.
+too, with one exception, D253's: when every syntax error lies inside an
+eligible module routine body, the server checks the rest of the module using
+stand-ins for those bodies. The routine's name and signature must have parsed.
+Its body is ineligible if it belongs to a generic or a routine with an
+inferred error set, is not closed by the `end` the parser matched, contains a
+line beginning in column one, or is too short to hold the stand-in. While an
+eligible body is half written, a type error in the routine below it is still
+reported, and hover and definitions work everywhere else. Nothing is reported
+inside the broken body except its own syntax errors, and no warning is given
+until it parses. Any error outside an eligible body, such as one in a
+signature, a type or a binding, leaves the module reported exactly as `refine`
+reports it.
 
 ## Positions
 
