@@ -583,10 +583,13 @@ Depends on: R11.20
 
 The hosted layer and platform driver for FreeBSD x86-64 and arm64, emitted
 from Linux and run in FreeBSD virtual machines on Linux runners, one for each
-architecture.
+architecture. R11.30 also owns source debugging on both architectures:
+scripted debugger sessions must check source-line stops, frames, local values
+and unwinding.
 
-Exit evidence: separate gate verdicts for the runtime corpus executed in the
-FreeBSD x86-64 and FreeBSD arm64 virtual machines.
+Exit evidence: separate gate verdicts for the runtime corpus and scripted
+source-debugger sessions in the FreeBSD x86-64 and FreeBSD arm64 virtual
+machines.
 
 ### R11.40 — RISC-V rv64 Linux
 
@@ -625,6 +628,8 @@ derive or refuse as decided.
 - Linux arm64, FreeBSD x86-64, FreeBSD arm64 and rv64 Linux each run the
   corpus in the gate, with a separate verdict for each architecture.
 - A conversion names its type as written, without an alias.
+- FreeBSD x86-64 and FreeBSD arm64 each pass scripted source-debugger
+  sessions in the gate, with a separate verdict for each architecture.
 
 ## R12 — Microcontrollers
 
