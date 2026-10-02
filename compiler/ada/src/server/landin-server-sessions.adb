@@ -37,7 +37,6 @@ package body Landin.Server.Sessions is
    Invalid_Params       : constant := -32602;
    Internal_Error       : constant := -32603;
    Not_Initialized      : constant := -32002;
-   Request_Cancelled    : constant := -32800;
 
    package String_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
@@ -77,7 +76,6 @@ package body Landin.Server.Sessions is
       Published : Text_Maps.Map;
       --  Candidate directories of imports missing at the last report.
       Missing   : Text_Maps.Map;
-      Cancelled : String_Sets.Set;
 
       procedure Send (Item : String);
 
@@ -645,14 +643,6 @@ package body Landin.Server.Sessions is
                   end if;
                end;
             end if;
-         elsif Method = "$/cancelRequest" then
-            declare
-               Id : constant J.Value := J.Member (Message, Params, "id");
-            begin
-               if J.Is_Present (Id) then
-                  Cancelled.Include (Id_Text (Message, Id));
-               end if;
-            end;
          end if;
       end Notification;
 
@@ -667,11 +657,6 @@ package body Landin.Server.Sessions is
          Answer_Id : constant String := Id_Text (Message, Id);
          URI       : constant String := Document_URI (Message, Params);
       begin
-         if Cancelled.Contains (Answer_Id) then
-            Cancelled.Exclude (Answer_Id);
-            Refuse (Answer_Id, Request_Cancelled, "the request was cancelled");
-            return;
-         end if;
          if Method = "initialize" then
             if Started then
                Refuse (Answer_Id, Invalid_Request, "already initialized");

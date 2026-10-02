@@ -106,9 +106,10 @@ a routine body that does not parse, both answer nothing.
 
 Anything else is refused as the protocol says: a request the server does not
 offer with MethodNotFound, one before `initialize` with ServerNotInitialized,
-one after `shutdown` with InvalidRequest, and one `$/cancelRequest` named
-before it was answered with RequestCancelled. A notification the server does
-not know is ignored.
+and one after `shutdown` with InvalidRequest. The server answers each request
+before reading the next message, so it ignores `$/cancelRequest` notifications;
+a late cancellation cannot affect a later request that reuses the ID. A
+notification the server does not know is ignored.
 
 ## Past a syntax error
 
