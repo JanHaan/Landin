@@ -16052,9 +16052,13 @@ Equality and hash results for every stored key remain stable until removal,
 including when the key contains a pointer or reference: mutation of anything
 reached through it must not change either result while the key is stored.
 
-The starting capacity is eight. On absent-key insertion pressure, a table with
-tombstones rehashes at the same capacity, reclaiming its dead entries; a
-nonempty tombstone-free table doubles after a checked maximum bound. Lookup,
+The starting capacity is eight. An absent-key insertion into a table with
+tombstones reuses the first dead bucket in its probe chain, or a free bucket
+when reached first. Even when every bucket has been occupied, at least one
+dead bucket is available and the bounded probe finds it. This uses no new
+extent and keeps the three initialized prefixes within capacity. A
+tombstone-free table doubles on insertion pressure after a checked maximum
+bound. Lookup,
 removal, placement and migration each probe at most capacity
 records and wrap without adding one to the final index. Placement records the
 first dead bucket until a free bucket or the probe bound is reached. Insert
@@ -16069,8 +16073,8 @@ changing length, duplicating the key or depending on allocation availability,
 and malformed full or all-dead records still terminate.
 `hash(K) % u64(capacity)` is evaluated before conversion to `usize`.
 
-Growth pressure has the meaning
-`(length + tombstones + 1) * 4 > capacity * 3`, but computes the occupied count
+For a tombstone-free table, growth pressure has the meaning
+`(length + 1) * 4 > capacity * 3`, but computes the occupied count
 only after proving both additions against capacity and computes the three-quarter
 threshold from quotient and remainder. Neither side can overflow. Before the
 first provider effect, rehash checks the bucket, K and V byte products. It then
@@ -16079,10 +16083,8 @@ registering failure-only cleanup after each acquisition. All migration remains
 private. Any failure releases every acquired replacement and leaves the old map
 untouched. After migration, only infallible drain, exact free and field
 publication steps remain. The success path frees each old extent once; release
-frees each current extent once and resets the map to its empty shape.
-Same-capacity compaction follows this exact three-acquisition transaction,
-including all three refusal and rollback positions; it is not in-place
-migration with partially published state.
+frees each current extent once and resets the map to its empty shape. Growth
+retains all three refusal and rollback positions.
 
 **Why dense prefixes:** they use D151's existing honest raw-storage state
 machine without pretending sparse K/V slots contain values. A dead bucket's
@@ -16090,11 +16092,11 @@ still-initialized K/V entry follows the language's manual element-resource
 contract, and its stable dense index makes tombstone reuse infallible after the
 ordinary invariant checks. The entry is exposed by the public composition; it
 is not claimed to be private. Three independent extents preserve Z19's actual
-failure pressure and D197's six-live-slot allocator case. Compaction keeps
-capacity and metadata bounded under churn rather than doubling solely to
-retire tombstones. It temporarily needs three replacement extents, just like
-growth; that explicit allocator cost preserves failure atomicity on small
-as well as hosted targets. Enumeration uses one position rather than a
+failure pressure and D197's six-live-slot allocator case. Reusing dead buckets
+keeps capacity and metadata bounded under churn without repeatedly acquiring
+replacement extents. A table may retain dead entries until growth or release;
+absent lookups still probe at most capacity buckets. Growth retains the
+three-acquisition transaction and its failure atomicity. Enumeration uses one position rather than a
 snapshot allocation or per-map generation metadata.
 
 **The alternatives:** sparse initialized K/V slices recreate Z8's false type
@@ -16115,10 +16117,11 @@ target-accidental. All are declined.
 collision wrap, churn, rehash, full and all-dead bounded probes, failure at
 acquisitions one/two/three with zero/one/two rollback frees, reclaiming-provider
 retry, exact old/new frees and final zero live allocations. At six-of-eight
-pressure with a preceding tombstone, an existing-key replacement under a zero
-allocation budget leaves provider attempts and map length unchanged. The
-complete derivative additionally pins same-capacity compaction, each of its
-three allocation refusals and retries, and live-only scalar and pointer entry
+pressure, an existing-key replacement under a zero allocation budget leaves
+provider attempts and map length unchanged. Repeated remove/insert churn on an
+arena leaves its used byte count unchanged. The complete derivative additionally
+pins dead-bucket reuse without arena growth, all three growth allocation
+refusals and retries, and live-only scalar and pointer entry
 walks, including empty and repeatedly exhausted cursors. The two entry
 negatives preserve live-map and exact-source refusals.
 

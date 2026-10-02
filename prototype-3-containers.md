@@ -674,13 +674,12 @@ end get
 
 ```
 
-Grow at three quarters and count tombstones, so a map that is
-churned rather than filled still rehashes.
+The sketch below counts tombstones toward the three-quarter threshold. The
+executable map instead reuses available dead or free buckets during churn.
 
-The executable D198 map distinguishes that rehash from capacity growth:
-absent-key pressure with tombstones compacts at the same capacity, using the
-same three fallible acquisitions and publication-last rollback transaction.
-Only a tombstone-free crowded table doubles. Its `entries()` cursor and
+The executable D198 map grows only when a tombstone-free table is crowded. Its
+growth uses three fallible acquisitions and a publication-last rollback
+transaction. Its `entries()` cursor and
 `next_entry` operation enumerate live key/value pairs rather than the raw
 dense prefix, which still contains removed values. Reference-bearing entries
 remain `from map`; a scalar copy retains no view. Cursors are manual positions:

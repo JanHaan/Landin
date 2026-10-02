@@ -564,8 +564,8 @@ map_operations: () -> (ok: bool) =
     map.release_map(value, provider)
 
     --  Churn reaches the capacity-eight pressure threshold with three live
-    --  entries and three tombstones. The next absent insert compacts in place
-    --  rather than doubling, then bounded enumeration yields each survivor.
+    --  entries and three tombstones. The next absent insert reuses a dead
+    --  bucket without allocating; enumeration still yields each survivor.
     mut compact := map.new_map(key: collision_key, item: i32)
     map.insert(compact, provider, k1, 11) else (problem) _ = problem return end
     map.insert(compact, provider, k2, 22) else (problem) _ = problem return end
@@ -578,6 +578,7 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k3) else (problem) _ = problem return end
     before_capacity: usize = map.capacity(compact)
     before_tombstones: usize = compact.tombstones
+    before_used: usize = provider.used
 
     --  Enumerate while dead buckets still precede and follow live buckets. A
     --  scan that mistakes any non-free bucket for a live entry changes both
@@ -613,9 +614,11 @@ map_operations: () -> (ok: bool) =
                                           and tombstone_exhausted and tombstone_exhausted_again
 
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
-    compacted: bool = before_capacity == 8 and before_tombstones == 3
+    reused_without_growth: bool = before_capacity == 8
+                      and before_tombstones == 3
                       and map.capacity(compact) == before_capacity
-                      and compact.tombstones == 0
+                      and provider.used == before_used
+                      and compact.tombstones == 2
                       and map.length(compact) == 4
                       and map_lacks(compact, 1) and map_lacks(compact, 2)
                       and map_lacks(compact, 3) and map_has(compact, 7, 77)
@@ -652,7 +655,8 @@ map_operations: () -> (ok: bool) =
     map.release_map(compact, provider)
 
     ok = updated and reused_tombstone and rehashed and removed and used_bytes
-         and enumerated_through_tombstones and compacted and enumerated
+         and enumerated_through_tombstones and reused_without_growth
+         and enumerated
          and map.length(value) == 0 and map.length(compact) == 0
 end map_operations
 
@@ -685,12 +689,9 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     map.insert(value, state, k4, 44) else (problem) _ = problem return end
     map.insert(value, state, k5, 55) else (problem) _ = problem return end
     map.insert(value, state, k6, 66) else (problem) _ = problem return end
-    map.remove(value, k1) else (problem) _ = problem return end
-    map.remove(value, k2) else (problem) _ = problem return end
-    map.remove(value, k3) else (problem) _ = problem return end
-    initial: bool = map.length(value) == 3
+    initial: bool = map.length(value) == 6
                     and map.capacity(value) == 8
-                    and value.tombstones == 3
+                    and value.tombstones == 0
                     and failing.attempts(state) == 3
                     and failing.delegated(state) == 3
                     and failing.successes(state) == 3
@@ -705,12 +706,12 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
         _ = problem
         failed = true
     end
-    preserved: bool = failed and map.length(value) == 3
+    preserved: bool = failed and map.length(value) == 6
                       and map.capacity(value) == 8
-                      and value.tombstones == 3
-                      and map_lacks(value, 1)
-                      and map_lacks(value, 2)
-                      and map_lacks(value, 3)
+                      and value.tombstones == 0
+                      and map_has(value, 1, 11)
+                      and map_has(value, 2, 22)
+                      and map_has(value, 3, 33)
                       and map_has(value, 4, 44)
                       and map_has(value, 5, 55)
                       and map_has(value, 6, 66)
@@ -729,12 +730,12 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     end
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
-    retried: bool = map.length(value) == 4
-                    and map.capacity(value) == 8
+    retried: bool = map.length(value) == 7
+                    and map.capacity(value) == 16
                     and value.tombstones == 0
-                    and map_lacks(value, 1)
-                    and map_lacks(value, 2)
-                    and map_lacks(value, 3)
+                    and map_has(value, 1, 11)
+                    and map_has(value, 2, 22)
+                    and map_has(value, 3, 33)
                     and map_has(value, 4, 44)
                     and map_has(value, 5, 55)
                     and map_has(value, 7, 77)

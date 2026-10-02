@@ -3215,14 +3215,14 @@ prefix. These are semantic caller obligations, not compiler proofs.
 
 Every lookup, removal and insertion probe is bounded by capacity, including a
 full or all-tombstone table. Insertion first searches for an equal key and
-updates its dense value without consulting the allocator, even when a preceding
-tombstone makes the table crowded. Only an absent key considers pressure;
+updates its dense value without consulting the allocator, even with a preceding
+tombstone. Only an absent key considers pressure;
 placement then remembers the first tombstone until it reaches a free bucket or
 the probe bound. Hashes are reduced modulo capacity as `u64` before conversion
-to `usize`, and load pressure counts tombstones with checked-equivalent
-arithmetic that cannot overflow. Under absent-key pressure a table containing
-tombstones compacts at the same capacity; a tombstone-free table grows instead.
-Both paths use the same transaction. Rehash preflights all byte extents, acquires
+to `usize`, and load pressure uses checked-equivalent arithmetic that cannot
+overflow. An absent key reuses an available dead or free bucket while
+tombstones remain, without allocation. A crowded tombstone-free table grows.
+Growth rehash preflights all byte extents, acquires
 bucket, key and value storage in that order, migrates only used records into a
 private replacement, and publishes only after every fallible step. Failure of
 acquisition one, two or three consequently releases zero, one or two

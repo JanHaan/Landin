@@ -189,7 +189,8 @@ end next_index
 
 --  This is equivalent to `(count + tombstones + 1) * 4 > slots * 3`
 --  without overflowing either addition or multiplication. Corrupt counters
---  conservatively request a rebuild rather than wrapping to "not crowded".
+--  conservatively report pressure rather than wrapping to "not crowded".
+--  Insert consults this only when no tombstones remain.
 crowded: (key: type is hashable, item: type,
           value: map(key, item)) -> (yes: bool) =
     slots: usize = capacity(value)
@@ -486,20 +487,17 @@ public insert: (key: type is hashable, item: type,
         (value, added_key, added_value)
     return when position.updated
 
-    if crowded(value) then
+    --  A dead bucket can be reused without extending either dense prefix.
+    --  Even at full physical occupancy, the bounded placement probe finds
+    --  one. Rebuilding on tombstone pressure would allocate three extents
+    --  for every steady-size remove/insert cycle on an arena.
+    if value.tombstones == 0 and crowded(value) then
         old_capacity: usize = capacity(value)
         mut want: usize = 8
         if old_capacity > 0 then
-            if value.tombstones > 0 then
-                --  Dead buckets already supply enough physical room. Rebuild
-                --  at the same capacity so churn compacts instead of causing
-                --  unbounded geometric growth.
-                want = old_capacity
-            else
-                maximum: usize = 0 -% 1
-                fail mem.out_of_memory when old_capacity > maximum / 2
-                want = old_capacity * 2
-            end if
+            maximum: usize = 0 -% 1
+            fail mem.out_of_memory when old_capacity > maximum / 2
+            want = old_capacity * 2
         end if
         try rehash(value, state, want)
         inserted: bool = place_absent(value, added_key, added_value)

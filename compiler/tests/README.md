@@ -943,7 +943,7 @@ section and Z finding to the ordinary `core` modules, executable paths and
 negative corpus. The runtime entry requires every path to succeed before
 returning 42, with no stdout or stderr: list growth and sorting, direct fixed
 array mutation, nested-array field ranges, initialized raw storage, vector and
-small-vector failure/retry, map collisions/compaction/enumeration, each of the
+small-vector failure/retry, map collisions/reuse/enumeration, each of the
 three map acquisition failures, tree traversal and heterogeneous dispatch.
 Providers remain explicit capabilities and cleanup is observable; no
 fixture-private replacement container library or implicit resource ownership

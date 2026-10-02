@@ -87,25 +87,16 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
                         and pool.free_count(inner) == 0
                         and pool.live(inner) == 3
 
-    --  Six occupied records are already at the 8-slot pressure threshold.
-    --  Removing the first colliding key leaves a preceding tombstone but does
-    --  not reduce pressure. With no allocation budget, replacing the last key
-    --  must still search, update, and return without consulting the provider.
-    map.remove(value, k1) else 0
+    --  An existing-key update at the six-of-eight threshold needs no growth.
     zero: usize = 0
     failing.permit(state, zero)
     map.insert(value, state, k6, addr n7) else (problem)
         _ = problem
         initial = false
     end
-    mut first_missing: bool = false
-    _ = map.get(value, k1) else (problem)
-        _ = problem
-        first_missing = true
-    end
-    updated_without_allocation: bool = map.length(value) == 5
+    updated_without_allocation: bool = map.length(value) == 6
                                        and has(value, k6, 77)
-                                       and first_missing
+                                       and has(value, k1, 11)
                                        and failing.attempts(state) == 3
                                        and failing.injected_failures(state) == 0
                                        and failing.frees(state) == 0
@@ -120,7 +111,7 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
 
     --  No old allocation was released, every acquired replacement was, and
     --  all old logical contents remain observable after each failure stage.
-    mut preserved: bool = failed and map.length(value) == 5
+    mut preserved: bool = failed and map.length(value) == 6
                           and has(value, k2, 22) and has(value, k3, 33)
                           and has(value, k6, 77)
                           and failing.frees(state) == rollback_frees
@@ -142,7 +133,9 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
         _ = problem
         preserved = false
     end
-    retried: bool = map.length(value) == 6 and has(value, k2, 22)
+    retried: bool = map.length(value) == 7
+                   and map.capacity(value) == 16
+                   and has(value, k2, 22)
                    and has(value, k4, 44) and has(value, k7, 77)
                    and failing.frees(state) == rollback_frees + 3
                    and failing.live(state) == 3
@@ -170,9 +163,47 @@ failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
          and retried and counts and released
 end failure_case
 
+churn_case: () -> (ok: bool) =
+    mut words: [64]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut state := mem.arena_over(base, lenof words * sizeof u64)
+    mut value := map.new_map(key: u64, item: ptr node)
+    map.insert(value, state, u64(1), addr n1) else 0
+    map.insert(value, state, u64(2), addr n2) else 0
+    map.insert(value, state, u64(3), addr n3) else 0
+    map.insert(value, state, u64(4), addr n4) else 0
+    map.insert(value, state, u64(5), addr n5) else 0
+    map.insert(value, state, u64(6), addr n6) else 0
+    before: usize = state.used
+    mut departing: u64 = 1
+    mut arriving: u64 = 7
+    mut cycles: usize = 0
+    mut intact: bool = true
+    while cycles < 32 do
+        map.remove(value, departing) else (problem)
+            _ = problem
+            intact = false
+        end
+        map.insert(value, state, arriving, addr n7) else (problem)
+            _ = problem
+            intact = false
+        end
+        intact = intact and state.used == before
+                 and map.capacity(value) == 8
+                 and map.length(value) == 6
+                 and has(value, arriving, 77)
+                 and has(value, 6, 66)
+        departing = arriving
+        inc arriving
+        inc cycles
+    end while
+    map.release_map(value, state)
+    ok = intact and state.used == before and map.length(value) == 0
+end churn_case
+
 public main: () -> (code: i32) =
     if failure_case(0, 0) and failure_case(1, 1)
-      and failure_case(2, 2)
+      and failure_case(2, 2) and churn_case()
     then
         code = 42
     else

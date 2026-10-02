@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: each map replacement allocation failure rolls back exactly and a reclaiming provider retries
+summary: map growth rolls back each allocation failure and arena churn reuses buckets without allocation
 program: main.ldn
 root: ../../../../..
 status: 42
