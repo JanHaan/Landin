@@ -39,8 +39,9 @@ Give `--target=` only once. Repeating it is a misuse even when both names
 are the same; the driver does not choose between target selections.
 
 `--toolchain=NAME` and `--linker=NAME` require `--emit=exe`: checking and
-assembly emission do not run a linker. Each selection must have a nonempty
-value and may be given only once.
+assembly emission do not run a linker. They are also incompatible with
+`--help` and `--identify`, which do not compile. Each selection must have a
+nonempty value and may be given only once.
 
 ### L0003
 

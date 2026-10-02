@@ -735,7 +735,8 @@ package body Landin.Driver is
       --  Compilation controls do not modify informational actions, and a
       --  build report describes an emitted artifact, not a checking request.
       if ((Optimize_Seen or Specialize_Seen or Report_Seen
-           or Debug_Seen or Panic_Map or Stage_Report_Seen)
+           or Debug_Seen or Panic_Map or Stage_Report_Seen
+           or Toolchain_Seen or Linker_Seen)
           and then (Wants_Usage or Wants_Identity))
         or else ((Report_Seen or Debug_Seen or Firmware_Seen or Panic_Map)
                  and then Emit = Emit_Nothing)

@@ -1146,6 +1146,12 @@ package body Landin.Tests.Driver_Suite is
                    Landin.Driver.Status_Misuse, "requires --emit=exe");
             Check (Help, First, "--linker=missing",
                    Landin.Driver.Status_Misuse, "requires --emit=exe");
+            Check (Help, First, "--toolchain=missing",
+                   Landin.Driver.Status_Misuse,
+                   "incompatible compilation action", "--emit=exe");
+            Check (Help, First, "--linker=missing",
+                   Landin.Driver.Status_Misuse,
+                   "incompatible compilation action", "--emit=exe");
             Check (Help, First, "--target=synthetic-32",
                    Landin.Driver.Status_Success);
             Check (Help, First, "--build-mode=release",

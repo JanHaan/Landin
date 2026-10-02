@@ -30,8 +30,9 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "`--toolchain=NAME` and `--linker=NAME` require `--emit=e"
                & "xe`: checking and assembly emission do not run a linker."
-               & " Each selection must have a nonempty value and may be gi"
-               & "ven only once.",
+               & " They are also incompatible with `--help` and `--identif"
+               & "y`, which do not compile. Each selection must have a non"
+               & "empty value and may be given only once.",
             when Catalogue.Unreadable_Source =>
                "A source named on the command line is missing or cannot "
                & "be read. Check the path and its permissions.",
