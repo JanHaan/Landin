@@ -22,11 +22,16 @@ with Landin.Server.Sessions;
 with Landin.Server.Transport;
 with Landin.Json;
 with Landin.Source;
+with Landin.Source.Names;
+with Landin.Source.Sets;
 with Landin.Stages;
 with Landin.Targets;
 with Landin.Testing.Fakes;
 with Landin.Testing.Sessions;
 with Landin.Testing.Fixtures;
+with Landin.Tokens;
+with Landin.Tokens.Lexer;
+with Landin.Tokens.Spacing;
 
 package body Landin.Tests.Server_Suite is
 
@@ -858,10 +863,23 @@ package body Landin.Tests.Server_Suite is
    is
       package N renames Landin.Server.Navigation;
 
-      function Doc (Text : String) return String
-        is (N.Doc_Comment
-              (Text, Landin.Source.Byte_Offset
-                 (Ada.Strings.Fixed.Index (Text, "f:") - Text'First)));
+      function Doc (Text : String) return String;
+
+      function Doc (Text : String) return String is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Spaces  : Landin.Tokens.Spacing.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Id      : constant Landin.Source.Source_Id :=
+           Sources.Add ("doc-comment-test", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Tokens.Spacing.Add (Spaces, Stream);
+         return N.Doc_Comment
+           (Text, Landin.Source.Byte_Offset
+              (Ada.Strings.Fixed.Index (Text, "f:") - Text'First),
+            Spaces, Id);
+      end Doc;
    begin
       Landin.Testing.Check_Equal
         (Item, Doc ("--- one" & LF & "---two" & LF & "f: u8 = 0" & LF),
@@ -880,6 +898,14 @@ package body Landin.Tests.Server_Suite is
         (Item, Doc ("--- kept" & LF & "--( block )--" & LF & "f: u8 = 0"),
          "", "a block comment ends it too");
       Landin.Testing.Check_Equal
+        (Item, Doc ("--(" & LF & "--- not documentation )--" & LF
+                    & "f: u8 = 0"),
+         "", "a doc-looking line inside a block comment is not a doc");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("--(" & LF & "--- not documentation )--" & LF
+                    & "--- real documentation" & LF & "f: u8 = 0"),
+         "real documentation", "a doc after a block comment still attaches");
+      Landin.Testing.Check_Equal
         (Item, Doc ("x: u8 = 0 --- trailing" & LF & "f: u8 = 0" & LF), "",
          "a doc comment after code is about nothing");
       Landin.Testing.Check_Equal
@@ -887,6 +913,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check_Equal
         (Item, Doc ("---" & LF & "f: u8 = 0" & LF), "",
          "an empty doc comment says nothing");
+      Landin.Testing.Check_Equal
+        (Item, Doc ("---( lexical doc" & LF & "f: u8 = 0" & LF),
+         "( lexical doc", "a parenthesis after the opener is doc text");
    end Doc_Comments_Are_The_Run_Above;
 
    --  A source refused before the checker ran has no names or types, so

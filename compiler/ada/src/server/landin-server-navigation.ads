@@ -11,6 +11,7 @@
 with Landin.Server.Analysis;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Tokens.Spacing;
 
 package Landin.Server.Navigation is
 
@@ -45,10 +46,13 @@ package Landin.Server.Navigation is
       Source  : Landin.Source.Source_Id;
       Offset  : Landin.Source.Byte_Offset) return Description;
 
-   --  The doc comment [2000] above the line Offset is on in Text, its
-   --  `---` and one blank after it gone, lines joined with LF.
+   --  The lexical doc comment [2000] above the line Offset is on in Text,
+   --  its `---` and one blank after it gone, lines joined with LF.
    function Doc_Comment
-     (Text : String; Offset : Landin.Source.Byte_Offset) return String;
+     (Text   : String;
+      Offset : Landin.Source.Byte_Offset;
+      Spaces : Landin.Tokens.Spacing.Table;
+      Source : Landin.Source.Source_Id) return String;
 
 private
 

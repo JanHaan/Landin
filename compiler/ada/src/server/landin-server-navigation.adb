@@ -7,12 +7,14 @@ with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Tokens;
 with Landin.Types;
 
 package body Landin.Server.Navigation is
 
    package Res renames Landin.Resolution;
    package Syn renames Landin.Syntax;
+   package Tok renames Landin.Tokens;
    package Ty renames Landin.Types;
    package Unbounded renames Ada.Strings.Unbounded;
 
@@ -25,10 +27,14 @@ package body Landin.Server.Navigation is
    use type Landin.Source.Byte_Offset;
    use type Res.Verdict;
    use type Syn.Node_Id;
+   use type Tok.Space_Kind;
    use type Ty.Type_Kind;
 
    function Doc_Comment
-     (Text : String; Offset : Landin.Source.Byte_Offset) return String
+     (Text   : String;
+      Offset : Landin.Source.Byte_Offset;
+      Spaces : Tok.Spacing.Table;
+      Source : Landin.Source.Source_Id) return String
    is
       --  Text is read as one-based for these indices.
       Bytes : constant String (1 .. Text'Length) := Text;
@@ -66,8 +72,32 @@ package body Landin.Server.Navigation is
                Lead := Lead + 1;
             end loop;
             exit when Lead + 2 > Stop
-              or else Bytes (Lead .. Lead + 2) /= "---"
-              or else (Lead + 3 <= Stop and then Bytes (Lead + 3) = '(');
+              or else Bytes (Lead .. Lead + 2) /= "---";
+            --  A block comment or literal may contain a line that looks
+            --  like a doc comment.  Only a lexical Doc_Comment attaches.
+            declare
+               On_Line : constant Tok.Space_Range := Tok.Spacing.Within
+                 (Spaces, Source,
+                  (Landin.Source.Byte_Offset (Lead - 1),
+                   Landin.Source.Byte_Offset (Stop)));
+               Is_Doc : Boolean := False;
+            begin
+               for Index in On_Line.First .. On_Line.Last loop
+                  declare
+                     Piece : constant Tok.Space := Tok.Spacing.Nth_Space
+                       (Spaces, Source, Index);
+                  begin
+                     if Tok.Where (Piece).First
+                       = Landin.Source.Byte_Offset (Lead - 1)
+                       and then Tok.Kind (Piece) = Tok.Doc_Comment
+                     then
+                        Is_Doc := True;
+                        exit;
+                     end if;
+                  end;
+               end loop;
+               exit when not Is_Doc;
+            end;
             declare
                From : constant Positive :=
                  (if Lead + 3 <= Stop and then Bytes (Lead + 3) = ' '
@@ -362,7 +392,8 @@ package body Landin.Server.Navigation is
          end if;
       end;
       declare
-         Doc : constant String := Doc_Comment (Text, Extent.First);
+         Doc : constant String := Doc_Comment
+           (Text, Extent.First, Landin.Stages.Spacing (Context).all, Home);
          Markdown : constant String :=
            "```landin" & ASCII.LF & Unbounded.To_String (Shown) & ASCII.LF
            & "```" & (if Doc = "" then "" else ASCII.LF & ASCII.LF & Doc);
