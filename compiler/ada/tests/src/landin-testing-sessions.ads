@@ -32,9 +32,14 @@ package Landin.Testing.Sessions is
       Recorded : Ada.Strings.Unbounded.Unbounded_String;
       --  What the server logged, for a person reading a failure.
       Log      : Ada.Strings.Unbounded.Unbounded_String;
+      Analyses : Natural := 0;
    end record;
 
    --  Run the session in Directory, read through the real filesystem.
-   function Run (Directory : String) return Outcome;
+   --  With navigation omitted, the same edits still publish diagnostics.
+   --  Its analysis count is a baseline for checking query reuse.
+   function Run
+     (Directory : String; Include_Navigation : Boolean := True)
+     return Outcome;
 
 end Landin.Testing.Sessions;

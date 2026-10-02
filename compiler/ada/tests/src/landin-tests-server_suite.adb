@@ -919,6 +919,38 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check (Item, Ran > 0, "the sessions were found");
    end Every_Session_Runs_As_Written;
 
+   --  The same analyses are needed for diagnostics whether or not
+   --  navigation follows them.  No query should repeat one.
+   procedure Navigation_Reuses_Checked_Modules
+     (Item : in out Landin.Testing.Context);
+
+   procedure Navigation_Reuses_Checked_Modules
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Index in 1 .. 2 loop
+         declare
+            Name : constant String :=
+              (if Index = 1 then "hover" else "code-actions");
+            Directory : constant String :=
+              Sessions_Root & "/" & Name;
+            With_Queries : constant Landin.Testing.Sessions.Outcome :=
+              Landin.Testing.Sessions.Run (Directory);
+            Without_Queries : constant Landin.Testing.Sessions.Outcome :=
+              Landin.Testing.Sessions.Run
+                (Directory, Include_Navigation => False);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (With_Queries.Problem), "", Name);
+            Landin.Testing.Check (Item, Without_Queries.Analyses > 0,
+                                  Name & " analyses its source");
+            Landin.Testing.Check
+              (Item, With_Queries.Analyses = Without_Queries.Analyses,
+               Name & " queries cause no additional analyses");
+         end;
+      end loop;
+   end Navigation_Reuses_Checked_Modules;
+
    procedure Record_Sessions (Wrote : out Boolean) is
       Real    : Landin.Platform.Native.Native_Filesystem;
       Entries : Landin.Platform.Path_List;
@@ -1095,6 +1127,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "root URIs accept trailing slashes",
          Root_URIs_Accept_Trailing_Slashes'Access);
+      Landin.Testing.Register
+        (Into, "server", "navigation reuses checked modules",
+         Navigation_Reuses_Checked_Modules'Access);
       Landin.Testing.Register
         (Into, "server", "doc comments are the run above",
          Doc_Comments_Are_The_Run_Above'Access);

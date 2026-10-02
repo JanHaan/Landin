@@ -124,7 +124,9 @@ package body Landin.Testing.Sessions is
       return Result;
    end Messages;
 
-   function Run (Directory : String) return Outcome is
+   function Run
+     (Directory : String; Include_Navigation : Boolean := True)
+     return Outcome is
       Real     : Landin.Platform.Native.Native_Filesystem;
       Host     : aliased Landin.Testing.Fakes.Fake_Filesystem;
       Channel  : Landin.Testing.Fakes.Fake_Channel;
@@ -137,6 +139,13 @@ package body Landin.Testing.Sessions is
       Content  : Unbounded.Unbounded_String;
       Read     : Landin.Platform.Read_Status;
       Pauses   : Offset_Vectors.Vector;
+
+      procedure Count_Analysis;
+
+      procedure Count_Analysis is
+      begin
+         Answer.Analyses := Answer.Analyses + 1;
+      end Count_Analysis;
 
       procedure Problem (Text : String);
 
@@ -173,7 +182,17 @@ package body Landin.Testing.Sessions is
       end if;
 
       for Line of Lines loop
-         if Starts (Line, "-> ") then
+         if Starts (Line, "-> ")
+           and then not Include_Navigation
+           and then (Ada.Strings.Fixed.Index
+             (Line, """method"":""textDocument/hover""") > 0
+             or else Ada.Strings.Fixed.Index
+               (Line, """method"":""textDocument/definition""") > 0
+             or else Ada.Strings.Fixed.Index
+               (Line, """method"":""textDocument/codeAction""") > 0)
+         then
+            null;
+         elsif Starts (Line, "-> ") then
             Unbounded.Append
               (Script, Landin.Server.Transport.Framed (After (Line, "-> ")));
          elsif Starts (Line, "raw: ") then
@@ -204,7 +223,9 @@ package body Landin.Testing.Sessions is
       declare
          Status : Landin.Server.Sessions.Exit_Status;
       begin
-         Landin.Server.Sessions.Serve (Channel, Host'Unchecked_Access, Status);
+         Landin.Server.Sessions.Serve
+           (Channel, Host'Unchecked_Access, Status,
+            On_Analysis => Count_Analysis'Access);
          Answer.Log := Unbounded.To_Unbounded_String
            (Landin.Testing.Fakes.Logged (Channel));
          declare

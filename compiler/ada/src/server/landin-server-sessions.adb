@@ -1,7 +1,9 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Indefinite_Ordered_Sets;
+with Ada.Finalization;
 with Ada.Exceptions;
 with Ada.Strings.Unbounded;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Configuration;
 with Landin.Diagnostics;
@@ -44,10 +46,72 @@ package body Landin.Server.Sessions is
    package Text_Maps is new Ada.Containers.Indefinite_Ordered_Maps
      (Key_Type => String, Element_Type => String);
 
+   package Caches is
+      subtype Compilation_Access is Landin.Server.Analysis.Compilation_Access;
+      type Cached_Analysis is record
+         Context : Compilation_Access;
+         Answer  : Landin.Server.Analysis.Result;
+      end record;
+      type Analysis_Access is access Cached_Analysis;
+      package Analysis_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => Analysis_Access);
+      type Analysis_Cache is new Ada.Finalization.Limited_Controlled
+      with record
+         Entries : Analysis_Maps.Map;
+      end record;
+
+      procedure Drop (Item : in out Analysis_Access);
+      procedure Remove (Cache : in out Analysis_Cache; Key : String);
+      procedure Clear (Cache : in out Analysis_Cache);
+      overriding procedure Finalize (Cache : in out Analysis_Cache);
+   end Caches;
+
+   package body Caches is
+      procedure Free_Context (Context : in out Compilation_Access)
+        renames Landin.Server.Analysis.Release;
+      procedure Free_Entry is new Ada.Unchecked_Deallocation
+        (Cached_Analysis, Analysis_Access);
+
+      procedure Drop (Item : in out Analysis_Access) is
+      begin
+         if Item /= null then
+            Free_Context (Item.Context);
+            Free_Entry (Item);
+         end if;
+      end Drop;
+
+      procedure Remove (Cache : in out Analysis_Cache; Key : String) is
+      begin
+         if Cache.Entries.Contains (Key) then
+            declare
+               Item : Analysis_Access := Cache.Entries.Element (Key);
+            begin
+               Cache.Entries.Delete (Key);
+               Drop (Item);
+            end;
+         end if;
+      end Remove;
+
+      procedure Clear (Cache : in out Analysis_Cache) is
+      begin
+         while not Cache.Entries.Is_Empty loop
+            Remove (Cache, Cache.Entries.First_Key);
+         end loop;
+      end Clear;
+
+      overriding procedure Finalize (Cache : in out Analysis_Cache) is
+      begin
+         Clear (Cache);
+      end Finalize;
+   end Caches;
+
+   use Caches;
+
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
       Host    : not null access constant Landin.Platform.Filesystem'Class;
-      Status  : out Exit_Status)
+      Status  : out Exit_Status;
+      On_Analysis : access procedure := null)
    is
       From      : Landin.Server.Transport.Reader;
       Store     : Landin.Server.Documents.Store (Host);
@@ -76,6 +140,8 @@ package body Landin.Server.Sessions is
       Published : Text_Maps.Map;
       --  Candidate directories of imports missing at the last report.
       Missing   : Text_Maps.Map;
+      Cancelled : String_Sets.Set;
+      Cached    : Analysis_Cache;
 
       procedure Send (Item : String);
 
@@ -176,8 +242,7 @@ package body Landin.Server.Sessions is
       --  Analysis
       ------------------------------------------------------------------
 
-      --  Analyse the module of URI, then call Visit with the compilation
-      --  before it is freed.
+      --  Keep checked modules until a document changes or closes.
       procedure With_Analysis
         (URI   : String;
          Visit : not null access procedure
@@ -190,12 +255,39 @@ package body Landin.Server.Sessions is
            (Context : in out Landin.Stages.Compilation;
             Answer  : Landin.Server.Analysis.Result))
       is
-         Asked   : Landin.Server.Analysis.Request :=
-           Landin.Server.Documents.Request_For (Store, URI);
+         Key : constant String :=
+           Landin.Server.Documents.Module_Key (Store, URI);
+         Item : Analysis_Access;
+         New_Entry : Boolean := False;
       begin
-         Asked.Options := Options;
-         Landin.Server.Analysis.Analyse
-           (Facts, Level, Store.Held, Asked, Visit);
+         if Cached.Entries.Contains (Key) then
+            Item := Cached.Entries.Element (Key);
+         else
+            Item := new Cached_Analysis;
+            New_Entry := True;
+            declare
+               Asked : Landin.Server.Analysis.Request :=
+                 Landin.Server.Documents.Request_For (Store, URI);
+            begin
+               Asked.Options := Options;
+               if On_Analysis /= null then
+                  On_Analysis.all;
+               end if;
+               Landin.Server.Analysis.Analyse
+                 (Facts, Level, Store.Held, Asked, Item.Context, Item.Answer);
+            end;
+            Cached.Entries.Insert (Key, Item);
+            New_Entry := False;
+         end if;
+         Visit (Item.Context.all, Item.Answer);
+      exception
+         when others =>
+            if New_Entry then
+               Drop (Item);
+            else
+               Remove (Cached, Key);
+            end if;
+            raise;
       end With_Analysis;
 
       --  Publish every source of the module of URI.
@@ -313,6 +405,7 @@ package body Landin.Server.Sessions is
                Key : constant String := Stale.First_Element;
             begin
                Stale.Delete_First;
+               Remove (Cached, Key);
                for Held of Store.Open loop
                   if Landin.Server.Documents.Module_Key
                        (Store, Unbounded.To_String (Held.URI)) = Key
@@ -333,6 +426,7 @@ package body Landin.Server.Sessions is
          Path : constant String :=
            Landin.Server.Documents.Held_Path (Store, URI);
       begin
+         Clear (Cached);
          Stale.Include (Key);
          --  A change to a file another module imports makes that module
          --  stale too: every open module that reported on this path.
@@ -607,6 +701,7 @@ package body Landin.Server.Sessions is
                     Landin.Server.Documents.Held_Path (Store, URI);
                   Others_Open : Boolean := False;
                begin
+                  Clear (Cached);
                   Landin.Server.Documents.Close (Store, URI);
                   for Held of Store.Open loop
                      if Landin.Server.Documents.Module_Key

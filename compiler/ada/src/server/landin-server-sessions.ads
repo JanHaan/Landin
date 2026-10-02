@@ -21,7 +21,8 @@
 --  When to analyse: after every change, but never while more input is
 --  already waiting, so a burst of edits is analysed once.  A request is
 --  answered from the documents as they stood when it arrived, analysing
---  first if they changed.  One compilation is alive at a time.
+--  first if they changed.  Checked modules remain available for queries
+--  until an open document changes.
 
 with Landin.Platform;
 
@@ -33,9 +34,11 @@ package Landin.Server.Sessions is
    subtype Exit_Status is Natural range 0 .. 1;
 
    --  Serve one editor over Channel, reading files through Host.
+   --  On_Analysis observes each whole-program check, for the test harness.
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
       Host    : not null access constant Landin.Platform.Filesystem'Class;
-      Status  : out Exit_Status);
+      Status  : out Exit_Status;
+      On_Analysis : access procedure := null);
 
 end Landin.Server.Sessions;

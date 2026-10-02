@@ -1,5 +1,6 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Strings.Fixed;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -43,15 +44,25 @@ package body Landin.Server.Analysis is
          or else not Landin.Checking.Is_Prepared
                (Landin.Stages.Types (Context).all));
 
+   procedure Free is new Ada.Unchecked_Deallocation
+     (Landin.Stages.Compilation, Compilation_Access);
+
+   procedure Release (Context : in out Compilation_Access) is
+   begin
+      Free (Context);
+   end Release;
+
    procedure Analyse
      (For_Target : Landin.Targets.Target_Facts;
       At_Level   : Landin.Targets.Levels.Feature_Level;
       Host    : Landin.Platform.Filesystem'Class;
       Asked   : Request;
-      Visit   : not null access procedure
-        (Context : in out Landin.Stages.Compilation; Answer : Result);
+      Context : out Compilation_Access;
+      Answer  : out Result;
       Watch_Syntax : access procedure (Name : String) := null)
    is
+      Original_Owner : Compilation_Access := null;
+      Stand_In_Owner : Compilation_Access := null;
       Plans    : Plan_Maps.Map;
       Original_Names : Name_Vectors.Vector;
       Original_Report : Diag.Diagnostic_List;
@@ -108,7 +119,6 @@ package body Landin.Server.Analysis is
       procedure Finish (Context : in out Landin.Stages.Compilation);
 
       procedure Finish (Context : in out Landin.Stages.Compilation) is
-         Answer : Result;
          Panic  : Landin.Panics.Plan;
       begin
          if Landin.Stages.Source_Count (Context) > 0
@@ -202,13 +212,15 @@ package body Landin.Server.Analysis is
             end loop;
             Answer.Found := Diag.Sorted (Merged);
          end;
-         Visit (Context, Answer);
       end Finish;
 
    begin
+      Context := null;
+      Answer := (others => <>);
+      Original_Owner := new Landin.Stages.Compilation'
+        (Landin.Stages.Create (For_Target, At_Level));
       declare
-         Original : aliased Landin.Stages.Compilation :=
-           Landin.Stages.Create (For_Target, At_Level);
+         Original : Landin.Stages.Compilation renames Original_Owner.all;
       begin
          Apply_Options (Original);
          Load (Original, Host);
@@ -288,9 +300,13 @@ package body Landin.Server.Analysis is
          if Standing then
             declare
                Stand_In : Landin.Platform.Overlays.Overlay (Host'Access);
-               Context : Landin.Stages.Compilation :=
-                 Landin.Stages.Create (For_Target, At_Level);
             begin
+               Stand_In_Owner := new Landin.Stages.Compilation'
+                 (Landin.Stages.Create (For_Target, At_Level));
+               declare
+                  Context : Landin.Stages.Compilation renames
+                    Stand_In_Owner.all;
+               begin
                for Position in Plans.Iterate loop
                   Stand_In.Hold
                     (Plan_Maps.Key (Position),
@@ -302,11 +318,45 @@ package body Landin.Server.Analysis is
                  (Landin.Stages.Identities (Original).all,
                   Landin.Stages.Identities (Context).all);
                Apply_Options (Context);
-               Load (Context, Stand_In, Original'Access);
+               Load (Context, Stand_In, Original_Owner);
                Finish (Context);
+               end;
             end;
          end if;
       end;
+      if Standing then
+         Release (Original_Owner);
+         Context := Stand_In_Owner;
+      else
+         Context := Original_Owner;
+      end if;
+   exception
+      when others =>
+         Release (Original_Owner);
+         Release (Stand_In_Owner);
+         raise;
+   end Analyse;
+
+   procedure Analyse
+     (For_Target : Landin.Targets.Target_Facts;
+      At_Level   : Landin.Targets.Levels.Feature_Level;
+      Host    : Landin.Platform.Filesystem'Class;
+      Asked   : Request;
+      Visit   : not null access procedure
+        (Context : in out Landin.Stages.Compilation; Answer : Result);
+      Watch_Syntax : access procedure (Name : String) := null)
+   is
+      Context : Compilation_Access := null;
+      Answer : Result;
+   begin
+      Analyse
+        (For_Target, At_Level, Host, Asked, Context, Answer, Watch_Syntax);
+      Visit (Context.all, Answer);
+      Release (Context);
+   exception
+      when others =>
+         Release (Context);
+         raise;
    end Analyse;
 
    function Is_Held

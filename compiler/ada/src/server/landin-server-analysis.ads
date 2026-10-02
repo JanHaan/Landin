@@ -15,7 +15,9 @@
 --  what the stand-in says there is not what the source says.  A module with
 --  any other syntax error is reported exactly as `refine` reports it.
 --
---  A compilation lives only for the visit.  Nothing here keeps a table
+--  The caller may retain the checked compilation until invalidation.
+--  The temporary original is released after syntax transfer; nothing here
+--  keeps a table
 --  between two analyses.
 
 with Ada.Containers.Indefinite_Vectors;
@@ -58,6 +60,19 @@ package Landin.Server.Analysis is
       --  Directories an unresolved import could appear in under the roots.
       Missing_Directories : Landin.Platform.Path_List;
    end record;
+
+   type Compilation_Access is access Landin.Stages.Compilation;
+   procedure Release (Context : in out Compilation_Access);
+
+   --  Ownership passes to the caller, who must release the result.
+   procedure Analyse
+     (For_Target : Landin.Targets.Target_Facts;
+      At_Level   : Landin.Targets.Levels.Feature_Level;
+      Host    : Landin.Platform.Filesystem'Class;
+      Asked   : Request;
+      Context : out Compilation_Access;
+      Answer  : out Result;
+      Watch_Syntax : access procedure (Name : String) := null);
 
    --  Visit the checked compilation before it is freed.  A broken body may
    --  require a second compilation with stand-ins; a sound source uses the

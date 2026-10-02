@@ -142,12 +142,20 @@ A position past the end of its line is the line's end.
 
 After every change, but only once the editor has stopped sending: a burst of
 edits is analysed once, when no more input is waiting, and a request is
-answered from the documents as they stand when it arrives. A sound entry
-source is parsed once per analysis, even if another source has a broken body.
-The stand-in compilation takes unchanged syntax trees and spacing from the
-first, then parses the stand-in source. Both compilations end before the next
-analysis, so a long session holds no more memory than a short one; the
-`memory` suite holds a session of twenty edits to that.
+answered from the documents as they stand when it arrives. Checked modules
+stay available for hover, definition and code actions, even when queries
+alternate between open modules. An open, change or close discards the checked
+modules; diagnostics then rebuild those affected, and later queries rebuild
+any others they need. The cache holds at most one compilation per open module,
+and discards all of them when the session ends. This is a compilation-count
+bound, not a fixed byte limit: separate entries may duplicate imports.
+
+A sound entry source is parsed once per analysis, even if another source has
+a broken body. The stand-in compilation takes unchanged syntax trees and
+spacing from the original, then parses the stand-in source. The original
+is released after transfer; the checked result may remain cached. The
+transfer temporarily holds both compilations and increases peak memory.
+The `memory` suite checks repeated sessions and edits for accumulation.
 
 ## Limits
 
