@@ -1181,6 +1181,73 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Assembly_IR (Item : in out Landin.Testing.Context);
 
+   procedure Literal_Pooling (Item : in out Landin.Testing.Context);
+
+   procedure Literal_Pooling (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("pool.ldn", "mut datum: u32 = 1 "
+        & "f: () -> (r: u32) = "
+        & "r = datum + datum + datum end f "
+        & "g: () -> (r: u32) = "
+        & "r = 305419896 r = 305419896 end g");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("pool.s");
+      Args.Append ("pool.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            Landin.Testing.Check_Equal
+              (Item, Ada.Strings.Fixed.Count
+                (Host.Written ("pool.s"), ".word datum"), 1,
+               "three datum references share one forward literal");
+            Landin.Testing.Check_Equal
+              (Item, Ada.Strings.Fixed.Count
+                (Host.Written ("pool.s"), ".word 305419896"), 1,
+               "repeated non-encodable constants share one literal");
+         end if;
+      end;
+      declare
+         Source : U.Unbounded_String := U.To_Unbounded_String
+           ("mut datum: u32 = 1 f: () -> (r: u32) = r = 0 ");
+         Long_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Long_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         for Index in 1 .. 40 loop
+            U.Append (Source, "r = r + datum ");
+         end loop;
+         U.Append (Source, "end f");
+         Long_Host.Add_File ("pool.ldn", U.To_String (Source));
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Long_Host, Long_Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               declare
+                  Words : constant Natural := Ada.Strings.Fixed.Count
+                    (Long_Host.Written ("pool.s"), ".word datum");
+               begin
+                  Landin.Testing.Check
+                    (Item, Words in 2 .. 20,
+                     "long code flushes reachable pools and reuses words");
+               end;
+            end if;
+         end;
+      end;
+   end Literal_Pooling;
+
    --  [1630]'s one instruction, from D230's shorthand and from the named
    --  form, and the verifier's refusal of each way it can be malformed.
    --  Mode 8 is the per-target evidence: a register [1990]'s Cortex-M0
@@ -1336,6 +1403,8 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "source-debug contract", Source_Debugging'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "assembly IR", Assembly_IR'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "literal pooling", Literal_Pooling'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register

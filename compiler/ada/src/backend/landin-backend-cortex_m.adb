@@ -333,11 +333,25 @@ package body Landin.Backend.Cortex_M is
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
       Instruction_Count : Natural := 0;
+      type Literal_Entry is record
+         Name : Unbounded.Unbounded_String;
+         Label : Unbounded.Unbounded_String;
+      end record;
+      package Literal_Vectors is new Ada.Containers.Vectors
+        (Positive, Literal_Entry);
+      Literals : Literal_Vectors.Vector;
+      Pool_Active : Boolean := False;
+      Pool_Flushing : Boolean := False;
+      --  Four bytes per instruction is an upper bound on these Thumb
+      --  instructions.  Keep well below the M0 literal-load limit of 1020
+      --  bytes, including alignment and at most 32 pool words.
+      Pool_Distance : Natural := 0;
       pragma Unreferenced (Options);
 
       function Fresh return String;
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
+      procedure Flush_Literals;
       procedure Immediate (Register : String; Value : Pattern);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Add_Offset
@@ -364,10 +378,33 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit (Instruction : String) is
       begin
+         if Pool_Active and then not Pool_Flushing
+           and then not Literals.Is_Empty
+         then
+            if Pool_Distance >= 512 then
+               Flush_Literals;
+            elsif Instruction'Length > 0
+              and then Instruction (Instruction'First) = '.'
+            then
+               if Instruction = ".balign 4"
+                 or else Ada.Strings.Fixed.Index (Instruction, ".word ") = 1
+               then
+                  Pool_Distance := Pool_Distance + 4;
+               elsif Ada.Strings.Fixed.Index (Instruction, ".cfi_") /= 1
+               then
+                  Flush_Literals;
+               end if;
+            end if;
+         end if;
          if Instruction'Length > 0
            and then Instruction (Instruction'First) /= '.'
          then
             Instruction_Count := Instruction_Count + 1;
+            if Pool_Active and then not Pool_Flushing
+              and then not Literals.Is_Empty
+            then
+               Pool_Distance := Pool_Distance + 4;
+            end if;
          end if;
          Put (Character'Val (9) & Instruction);
       end Emit;
@@ -377,19 +414,72 @@ package body Landin.Backend.Cortex_M is
             when '0' => "r1", when '2' => "r3", when '4' => "r5",
             when others => raise Compiler_Defect with "invalid word pair");
 
-      --  Every literal is adjacent to its load and skipped in execution.
-      --  No pool-distance assumption depends on cleanup expansion or layout.
+      --  A branch keeps literal words out of fallthrough control flow.  The
+      --  oldest load is at most 512 bytes back, and 32 words plus alignment
+      --  keep even the last entry within the 1020-byte M0 forward reach.
+      procedure Flush_Literals is
+      begin
+         if Literals.Is_Empty then
+            return;
+         end if;
+         declare
+            Done : constant String := Fresh;
+         begin
+            Pool_Flushing := True;
+            Emit ("b " & Done);
+            Emit (".balign 4");
+            for Literal of Literals loop
+               Put (Unbounded.To_String (Literal.Label) & ":");
+               Emit (".word " & Unbounded.To_String (Literal.Name));
+            end loop;
+            Put (Done & ":");
+            Literals.Clear;
+            Pool_Distance := 0;
+            Pool_Flushing := False;
+         end;
+      end Flush_Literals;
+
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
          pragma Unreferenced (Imported);
-         Id : constant String := Fresh;
       begin
-         Emit ("ldr " & Register & ", " & Id);
-         Emit ("b " & Id & "_end");
-         Emit (".balign 4");
-         Put (Id & ":");
-         Emit (".word " & Name);
-         Put (Id & "_end:");
+         if Pool_Active then
+            if Pool_Distance >= 512 then
+               Flush_Literals;
+            end if;
+            for Literal of Literals loop
+               if Unbounded.To_String (Literal.Name) = Name then
+                  Emit ("ldr " & Register & ", "
+                    & Unbounded.To_String (Literal.Label));
+                  return;
+               end if;
+            end loop;
+            if Natural (Literals.Length) = 32 then
+               Flush_Literals;
+            end if;
+            declare
+               Id : constant String := Fresh;
+            begin
+               Literals.Append
+                 (Literal_Entry'
+                   (Name => Unbounded.To_Unbounded_String (Name),
+                    Label => Unbounded.To_Unbounded_String (Id)));
+               Emit ("ldr " & Register & ", " & Id);
+            end;
+         else
+            --  Startup code is emitted by a separate producer; this path
+            --  also keeps a load safe if Address is used outside a routine.
+            declare
+               Id : constant String := Fresh;
+            begin
+               Emit ("ldr " & Register & ", " & Id);
+               Emit ("b " & Id & "_end");
+               Emit (".balign 4");
+               Put (Id & ":");
+               Emit (".word " & Name);
+               Put (Id & "_end:");
+            end;
+         end if;
       end Address;
 
       procedure Immediate (Register : String; Value : Pattern) is
@@ -456,6 +546,7 @@ package body Landin.Backend.Cortex_M is
       procedure Emit_Verbatim (Text : String) is
          Start : Natural := Text'First;
       begin
+         Flush_Literals;
          for Index in Text'First .. Text'Last + 1 loop
             if Index > Text'Last or else Text (Index) = LF then
                declare
@@ -3138,6 +3229,7 @@ package body Landin.Backend.Cortex_M is
                 (Item => Item, others => <>));
             return;
          end if;
+         Pool_Active := True;
          Emit ("push {r4, r5, r6, r7}");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 16");
@@ -3244,6 +3336,8 @@ package body Landin.Backend.Cortex_M is
          end loop;
          Put (Hard_Trap & ":");
          Emit ("udf #1");
+         Flush_Literals;
+         Pool_Active := False;
          if Debug /= null then
             Put (Dwarf.Label_Name (Debug_Prefix, "end", Item) & ":");
             Emit (".cfi_endproc");
