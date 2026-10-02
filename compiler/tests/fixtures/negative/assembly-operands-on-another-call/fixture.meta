@@ -3,7 +3,7 @@ summary: The grammar derives D248's operands after any call's arguments, and the
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-operands-on-another-call/program.ldn
-codes: L0301, L0301
+codes: L0330, L0330
 status: 1
 constructs: 1630, 1820
 targets: cortex-m

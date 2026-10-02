@@ -1,4 +1,4 @@
-error[L0301]: this array has no all-bits-zero value
+error[L0328]: this array has no all-bits-zero value
   --> ../tests/fixtures/negative/array-any-zeroed/main.ldn:8:23
   |
 8 |     value: [1]any a = zeroed

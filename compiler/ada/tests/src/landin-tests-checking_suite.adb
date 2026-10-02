@@ -11172,11 +11172,11 @@ package body Landin.Tests.Checking_Suite is
       Check_C_Boundary_Source
         (Item, Callbacks & "use: () -> none =" & LF
          & "    values: [2][2]handler = zeroed" & LF & "end use" & LF,
-         "this array has no all-bits-zero value");
+         "this array has no all-bits-zero value", "L0328");
       Check_C_Boundary_Source
         (Item, "use: () -> none =" & LF
          & "    values: [2][2]ptr u8 = zeroed" & LF & "end use" & LF,
-         "this array has no all-bits-zero value");
+         "this array has no all-bits-zero value", "L0328");
       Check_C_Boundary_Source
         (Item, Callbacks
          & "wrapper: type = struct" & LF
@@ -11185,7 +11185,8 @@ package body Landin.Tests.Checking_Suite is
          & "use: () -> none =" & LF
          & "    value: wrapper = wrapper(tag: 0, of zeroed)" & LF
          & "end use" & LF,
-         "`of zeroed` cannot fill field `values`, which has no zero image");
+         "`of zeroed` cannot fill field `values`, which has no zero image",
+         "L0328");
       Check_C_Boundary_Source
         (Item, "use: () -> none =" & LF
          & "    values: [2][2]i32 = [[1, 2], [3]]" & LF & "end use" & LF,

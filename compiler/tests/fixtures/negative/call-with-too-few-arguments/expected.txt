@@ -1,4 +1,4 @@
-error[L0301]: this call gives 1 argument and the function takes 2 arguments
+error[L0327]: this call gives 1 argument and the function takes 2 arguments
   --> ../tests/fixtures/negative/call-with-too-few-arguments/program.ldn:2:21
   |
 2 | f: () -> (r: i32) = add(1) end f

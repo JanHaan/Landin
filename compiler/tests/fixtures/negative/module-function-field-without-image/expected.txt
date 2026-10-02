@@ -1,4 +1,4 @@
-error[L0301]: this module value needs an explicit initial value
+error[L0328]: this module value needs an explicit initial value
   --> ../tests/fixtures/negative/module-function-field-without-image/program.ldn:6:1
   |
 6 | mut state: box

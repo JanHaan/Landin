@@ -49,6 +49,13 @@
 --  `landin.ads` forbids.  A later reader should not spend the band before
 --  reading that argument.
 
+--  L0301 predates several checker rules and still covers distinct semantic
+--  refusals. Its historical enum name does not define its public meaning:
+--  every occurrence has a note naming the particular rule, and its
+--  explanation tells readers to use that note with the primary message.
+--  Rules with a stable shared meaning can move to a more precise code without
+--  reusing L0301 or changing the meaning of its remaining reports.
+
 package Landin.Diagnostics.Catalogue is
 
    type Code_Name is
@@ -153,6 +160,10 @@ package Landin.Diagnostics.Catalogue is
       --  needed, and a band records where a code was born, so no band of
       --  its own says that a number is a warning.
       Mutable_Never_Written,
+      Call_Argument_Count,
+      Zero_Image_Unavailable,
+      Error_Contract_Violated,
+      Assembly_Operand_Outside_Block,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -232,6 +243,10 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Raw_Literal          => "L0323",
             when Size_Limit_Exceeded            => "L0325",
             when Mutable_Never_Written          => "L0326",
+            when Call_Argument_Count          => "L0327",
+            when Zero_Image_Unavailable         => "L0328",
+            when Error_Contract_Violated        => "L0329",
+            when Assembly_Operand_Outside_Block => "L0330",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -263,6 +278,8 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Size_Limit_Exceeded => Error,
+            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+               => Error,
             --  A warning never refuses a program; see Fixes below.
             when Mutable_Never_Written => Warning,
             when No_Toolchain .. Panic_Contract_Invalid => Error);
@@ -297,6 +314,8 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => Live,
+            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+               => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable | Image_Materialization_Limit
@@ -375,7 +394,8 @@ package Landin.Diagnostics.Catalogue is
                "a compile-time magnitude its context or target does not"
                & " hold",
             when Type_Mismatch         =>
-               "[1890]: two types that must agree and do not",
+               "a checker requirement on type, value, operation or form"
+               & " is not met",
             when Not_Definitely_Assigned =>
                "[1910]: a name read on a path that does not assign it",
             when Immutable_Target      =>
@@ -435,6 +455,15 @@ package Landin.Diagnostics.Catalogue is
                & " routine or fields a struct holds",
             when Mutable_Never_Written =>
                "D251: a local declared `mut` that nothing writes",
+            when Call_Argument_Count =>
+               "[1920]: runtime arguments fill the parameters exactly once",
+            when Zero_Image_Unavailable =>
+               "[0540]: a zeroed value requires a complete zero image",
+            when Error_Contract_Violated =>
+               "[0940]/[0960]: failures obey the declared error set and"
+               & " call handling",
+            when Assembly_Operand_Outside_Block =>
+               "[1630]: only assembler.block accepts assembly operands",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -488,6 +517,8 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => True,
+            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+               => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
             --  in an empty file or a source-free fallback.
@@ -526,6 +557,8 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range
                .. Mutable_Never_Written =>
                True,
+            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+               => True,
             when No_Toolchain .. Panic_Contract_Invalid => False);
 
    --  The admitted secondary-label interval. Every code except L0300,
@@ -565,6 +598,9 @@ package Landin.Diagnostics.Catalogue is
             --  annotation to point at. Maximum_Secondaries admits the
             --  template expression for a substitution-dependent fold.
             when Type_Mismatch         => 1,
+            when Call_Argument_Count | Zero_Image_Unavailable
+               | Error_Contract_Violated
+               | Assembly_Operand_Outside_Block => 1,
             when Immutable_Target      => 1,
             when Not_Definitely_Assigned => 1,
             when Field_Named_Twice     => 1,
@@ -619,6 +655,9 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => 1,
             when Literal_Out_Of_Range  => 1,
             when Type_Mismatch         => 1,
+            when Call_Argument_Count | Zero_Image_Unavailable
+               | Error_Contract_Violated
+               | Assembly_Operand_Outside_Block => 1,
             when Not_Definitely_Assigned => 1,
             when Immutable_Target      => 1,
             --  [1830]'s two facts, the same two L0010 carries: which

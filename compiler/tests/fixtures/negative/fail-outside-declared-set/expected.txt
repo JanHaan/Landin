@@ -1,4 +1,4 @@
-error[L0301]: this body can fail with an atom outside its declared error set
+error[L0329]: this body can fail with an atom outside its declared error set
   --> ../tests/fixtures/negative/fail-outside-declared-set/program.ldn:3:1
   |
 3 | f: () -> none ! missing =

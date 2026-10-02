@@ -1,4 +1,4 @@
-error[L0301]: this type does not permit a zeroed initializer
+error[L0328]: this type does not permit a zeroed initializer
   --> ../tests/fixtures/negative/pointer-union-many-zeroed/program.ldn:6:9
   |
 6 |     m = zeroed

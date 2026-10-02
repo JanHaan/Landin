@@ -320,10 +320,17 @@ over: u8 = 300
 
 ### L0301
 
-Two types that must agree do not [1890]. The second label shows where the
-requirement was stated. When the disagreement is a named argument no
-parameter carries [0980], the diagnostic offers the parameter label near it as
-a likely fix.
+L0301 is a broad checker refusal, not a promise that two types disagree. The
+checker found an unmet requirement on a type, value, operation, or source
+form. Read the diagnostic's first sentence and rule note together:
+they identify the exact condition. L0301 covers type and shape identity
+[0710], admitted operands [1890], generic deduction [1300], valid aggregate
+and match forms [0720] [0480], reference permissions [0440], control-flow
+values [1190], conversions [0310], and interoperation contracts [1580].
+Change the reported expression or declaration to meet the specific condition
+in its note. A second label, when present, identifies the source of the
+requirement. For a misspelt named argument [0980], the diagnostic may offer
+the intended parameter label as a likely fix.
 
 ```landin
 v: i32 = 1
@@ -600,6 +607,62 @@ count_up: () -> (total: u32) =
     mut step: u32 = 2
     total = step + 1
 end count_up
+```
+
+### L0327
+
+A call gives too many or too few runtime arguments, or omits a named required
+parameter [1920]. Supply every runtime parameter exactly once, using its name
+when earlier arguments are named. The second label points to the signature or
+missing parameter.
+
+```landin
+add: (a: i32, b: i32) -> (r: i32) = a + b end add
+f: () -> (r: i32) = add(a: 1) end f
+```
+
+### L0328
+
+`zeroed` or an implicit module initializer requires an all-bits-zero value
+for the complete type [0540]. A pointer, function address, atom set without a
+zero identity, or aggregate containing one has no such value. Supply an
+explicit initializer that constructs a valid value, or use a type with a zero
+image.
+
+```landin
+node: type = struct
+    value: i32
+end node
+bad: () -> none =
+    value: [3]ptr node = zeroed
+end bad
+```
+
+### L0329
+
+A failing path must belong to the function's declared error set [0940], and a
+call to a failing function must handle the outcome with `else` or propagate it
+with `try` [0960]/[1030]. Add the atom to the error set, handle it, or use
+`try` in a function allowed to propagate it.
+
+```landin
+missing, denied: atom
+f: () -> none ! missing =
+    fail denied
+end f
+```
+
+### L0330
+
+Only `assembler.block` accepts assembly operands [1630]. A regular call takes
+ordinary arguments; move the operands to an assembly block or pass values in
+the callee's declared parameter form.
+
+```landin
+record: (first: u32, second: u32) -> none = end record
+f: (value: u32) -> none =
+    record(1, in x: u32 at r0 = value)
+end f
 ```
 
 ## The backend and its toolchain

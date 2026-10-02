@@ -1,4 +1,4 @@
-error[L0301]: this call gives 1 argument and the function takes 0 arguments
+error[L0327]: this call gives 1 argument and the function takes 0 arguments
   --> ../tests/fixtures/negative/caller-parameter-positional/program.ldn:12:5
    |
 12 |     observe(zeroed)

@@ -1,4 +1,4 @@
-error[L0301]: this failing call is neither tried nor recovered with `else`
+error[L0329]: this failing call is neither tried nor recovered with `else`
   --> ../tests/fixtures/negative/generic-inferred-error-unhandled/program.ldn:9:14
   |
 9 |     result = stop(42)

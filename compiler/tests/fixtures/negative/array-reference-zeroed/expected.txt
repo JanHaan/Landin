@@ -1,4 +1,4 @@
-error[L0301]: this array has no all-bits-zero value
+error[L0328]: this array has no all-bits-zero value
   --> ../tests/fixtures/negative/array-reference-zeroed/main.ldn:5:26
   |
 5 |     value: [3]ptr node = zeroed

@@ -171,11 +171,20 @@ package body Landin.Diagnostics.Explanations is
                & "context gives it [1880], or the target cannot hold it. W"
                & "rite a smaller value or give the context a wider type.",
             when Catalogue.Type_Mismatch =>
-               "Two types that must agree do not [1890]. The second labe"
-               & "l shows where the requirement was stated. When the disag"
-               & "reement is a named argument no parameter carries [0980],"
-               & " the diagnostic offers the parameter label near it as a "
-               & "likely fix.",
+               "L0301 is a broad checker refusal, not a promise that two"
+               & " types disagree. The checker found an unmet requirement "
+               & "on a type, value, operation, or source form. Read the di"
+               & "agnostic's first sentence and rule note together: they i"
+               & "dentify the exact condition. L0301 covers type and shape"
+               & " identity [0710], admitted operands [1890], generic dedu"
+               & "ction [1300], valid aggregate and match forms [0720] [04"
+               & "80], reference permissions [0440], control-flow values ["
+               & "1190], conversions [0310], and interoperation contracts "
+               & "[1580]. Change the reported expression or declaration to"
+               & " meet the specific condition in its note. A second label"
+               & ", when present, identifies the source of the requirement"
+               & ". For a misspelt named argument [0980], the diagnostic m"
+               & "ay offer the intended parameter label as a likely fix.",
             when Catalogue.Not_Definitely_Assigned =>
                "A name is read on a path that does not assign it first ["
                & "1910]. Assign it on every path before the read, or give "
@@ -274,6 +283,30 @@ package body Landin.Diagnostics.Explanations is
                & "(D251). A shared declaration is warned about only when n"
                & "one of its names is written, and a module binding never "
                & "is, since a linked routine or a debugger may write it.",
+            when Catalogue.Call_Argument_Count =>
+               "A call gives too many or too few runtime arguments, or o"
+               & "mits a named required parameter [1920]. Supply every run"
+               & "time parameter exactly once, using its name when earlier"
+               & " arguments are named. The second label points to the sig"
+               & "nature or missing parameter.",
+            when Catalogue.Zero_Image_Unavailable =>
+               "`zeroed` or an implicit module initializer requires an a"
+               & "ll-bits-zero value for the complete type [0540]. A point"
+               & "er, function address, atom set without a zero identity, "
+               & "or aggregate containing one has no such value. Supply an"
+               & " explicit initializer that constructs a valid value, or "
+               & "use a type with a zero image.",
+            when Catalogue.Error_Contract_Violated =>
+               "A failing path must belong to the function's declared er"
+               & "ror set [0940], and a call to a failing function must ha"
+               & "ndle the outcome with `else` or propagate it with `try` "
+               & "[0960]/[1030]. Add the atom to the error set, handle it,"
+               & " or use `try` in a function allowed to propagate it.",
+            when Catalogue.Assembly_Operand_Outside_Block =>
+               "Only `assembler.block` accepts assembly operands [1630]."
+               & " A regular call takes ordinary arguments; move the opera"
+               & "nds to an assembly block or pass values in the callee's "
+               & "declared parameter form.",
             when Catalogue.No_Toolchain =>
                "No assembler and linker for the selected target were fou"
                & "nd on this host [1550]. The note names the program looke"
@@ -609,6 +642,42 @@ package body Landin.Diagnostics.Explanations is
                & "    total = step + 1"
                & LF
                & "end count_up"
+               & LF,
+            when Catalogue.Call_Argument_Count =>
+               "add: (a: i32, b: i32) -> (r: i32) = a + b end add"
+               & LF
+               & "f: () -> (r: i32) = add(a: 1) end f"
+               & LF,
+            when Catalogue.Zero_Image_Unavailable =>
+               "node: type = struct"
+               & LF
+               & "    value: i32"
+               & LF
+               & "end node"
+               & LF
+               & "bad: () -> none ="
+               & LF
+               & "    value: [3]ptr node = zeroed"
+               & LF
+               & "end bad"
+               & LF,
+            when Catalogue.Error_Contract_Violated =>
+               "missing, denied: atom"
+               & LF
+               & "f: () -> none ! missing ="
+               & LF
+               & "    fail denied"
+               & LF
+               & "end f"
+               & LF,
+            when Catalogue.Assembly_Operand_Outside_Block =>
+               "record: (first: u32, second: u32) -> none = end record"
+               & LF
+               & "f: (value: u32) -> none ="
+               & LF
+               & "    record(1, in x: u32 at r0 = value)"
+               & LF
+               & "end f"
                & LF,
             when Catalogue.No_Toolchain =>
                "",

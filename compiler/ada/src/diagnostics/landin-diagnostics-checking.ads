@@ -86,7 +86,11 @@ package Landin.Diagnostics.Checking is
       Unsatisfied_Constraint,
       Compiler_Conformance_Reserved,
       Size_Limit_Exceeded,
-      Mutable_Never_Written);
+      Mutable_Never_Written,
+      Call_Argument_Count,
+      Zero_Image_Unavailable,
+      Error_Contract_Violated,
+      Assembly_Operand_Outside_Block);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -136,7 +140,15 @@ package Landin.Diagnostics.Checking is
             when Size_Limit_Exceeded =>
                Catalogue.Size_Limit_Exceeded,
             when Mutable_Never_Written =>
-               Catalogue.Mutable_Never_Written);
+               Catalogue.Mutable_Never_Written,
+            when Call_Argument_Count =>
+               Catalogue.Call_Argument_Count,
+            when Zero_Image_Unavailable =>
+               Catalogue.Zero_Image_Unavailable,
+            when Error_Contract_Violated =>
+               Catalogue.Error_Contract_Violated,
+            when Assembly_Operand_Outside_Block =>
+               Catalogue.Assembly_Operand_Outside_Block);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

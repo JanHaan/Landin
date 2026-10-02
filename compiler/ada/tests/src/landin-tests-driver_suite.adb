@@ -2730,7 +2730,7 @@ package body Landin.Tests.Driver_Suite is
                & "pick: () -> (index: usize) ! problem = fail bad end pick"
                & LF & "caller: () -> (result: i32) = handlers["
                & (if Tried then "try " else "") & "pick()](1) end caller",
-               "L0301", 1, Executable);
+               "L0329", 1, Executable);
          end loop;
          declare
             Source : Unbounded.Unbounded_String :=
@@ -3183,28 +3183,28 @@ package body Landin.Tests.Driver_Suite is
             "L0300", 1, Executable);
          Check
            ("mut p: ptr i32",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("mut text: cstring",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("mut items: []i32",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("mut items: []mut u8",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("mut text: utf8",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("mut text: utf16",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("address: type = ptr i32 mut p: address",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("view: type = []i32 mut items: view",
-            "L0301", 1, Executable);
+            "L0328", 1, Executable);
          Check
            ("f: () -> none = for n in true ..< 2 do v := n end for end f",
             "L0301", 1, Executable);
@@ -3901,7 +3901,7 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0506  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 65,
+        (Item, Occurrences (Listed, "" & LF), 69,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,

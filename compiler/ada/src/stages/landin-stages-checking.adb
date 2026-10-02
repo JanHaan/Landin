@@ -9597,7 +9597,7 @@ package body Landin.Stages.Checking is
                        (Template_Tree.all, Function_Node, Position);
                   begin
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Call_Argument_Count,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call does not fill parameter `"
@@ -13071,7 +13071,7 @@ package body Landin.Stages.Checking is
             if Syn.Kind (Of_Tree, Node) = Syn.Call or else Variadic then
                if Written_Count /= Wanted then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Call_Argument_Count,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "this call gives "
@@ -13275,7 +13275,7 @@ package body Landin.Stages.Checking is
                          (Types.all, Signature, Position);
                   begin
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Call_Argument_Count,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message => "this call does not fill parameter `"
@@ -18294,7 +18294,7 @@ package body Landin.Stages.Checking is
          end if;
          if not Has_Zero_Image (Wrote) then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this type does not permit a zeroed initializer",
@@ -18334,7 +18334,7 @@ package body Landin.Stages.Checking is
              others => <>))
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this array has no all-bits-zero value",
@@ -20618,7 +20618,7 @@ package body Landin.Stages.Checking is
                         = Syn.Assembly_Operand
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Assembly_Operand_Outside_Block,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where
                              (Of_Tree,
@@ -23012,7 +23012,7 @@ package body Landin.Stages.Checking is
                                = Syn.Zeroed_Literal
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Zero_Image_Unavailable,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Given),
                                  Message => "a function-valued"
@@ -23353,7 +23353,7 @@ package body Landin.Stages.Checking is
                            begin
                               if not Zeroable then
                                  Bad.Report
-                                   (Item    => Bad.Type_Mismatch,
+                                   (Item    => Bad.Zero_Image_Unavailable,
                                     Source  => Syn.Source_Of (Of_Tree),
                                     Where   => Syn.Where (Of_Tree, Fill),
                                     Message => "`of zeroed` cannot fill a"
@@ -23888,7 +23888,7 @@ package body Landin.Stages.Checking is
                          = Syn.Zeroed_Literal
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Zero_Image_Unavailable,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Value),
                            Message => "a function-valued field has no"
@@ -24187,7 +24187,7 @@ package body Landin.Stages.Checking is
                     and then not Field_Has_Zero_Image (Wrote, Which)
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Zero_Image_Unavailable,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Fill),
                         Message => "`of zeroed` cannot fill field `"
@@ -29482,7 +29482,7 @@ package body Landin.Stages.Checking is
                in Ty.Pointer_Value | Ty.Slice_Value
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "a module reference binding needs an explicit"
@@ -29562,7 +29562,7 @@ package body Landin.Stages.Checking is
                     Declaration_At (Syn.Source_Of (Of_Tree), Node))))
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this module array needs an explicit initial"
@@ -29592,7 +29592,7 @@ package body Landin.Stages.Checking is
                  Declaration_At (Syn.Source_Of (Of_Tree), Node)))
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this module value needs an explicit initial"
@@ -33879,7 +33879,7 @@ package body Landin.Stages.Checking is
                for Atom of Required (Signature) loop
                   if not Effects (Signature).Contains (Atom) then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Error_Contract_Violated,
                         Source  => Landin.Checking.Signature_Origin
                           (Types.all,
                            Landin.Checking.Signature_Id (Signature)).Source,
@@ -33911,7 +33911,7 @@ package body Landin.Stages.Checking is
                     Tree_For (Issues (Index).Source);
                begin
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Error_Contract_Violated,
                      Source  => Issues (Index).Source,
                      Where   => Syn.Where
                        (Of_Tree.all, Issues (Index).Node),
