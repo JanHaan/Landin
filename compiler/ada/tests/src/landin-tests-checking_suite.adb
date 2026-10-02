@@ -9734,6 +9734,47 @@ package body Landin.Tests.Checking_Suite is
                   Landin.Checking.Scalar_Type_Actual (Landin.Types.U32),
                   Inputs) = Landin.Checking.No_Conformance,
                "a different normalized target has no conformance");
+            declare
+               First : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U8, others => <>));
+               Equal_Copy : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U8, others => <>));
+               Different : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Add_Reference
+                   (Types.all,
+                    (Kind => Landin.Types.Pointer_Value,
+                     Referent => Landin.Types.U16, others => <>));
+               First_Row : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept,
+                    Landin.Checking.Reference_Type_Actual
+                      (Types.all, First), Empty, Empty, Src, Point_Node,
+                    Landin.Checking.Declared_Conformance);
+               Different_Row : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Add_Conformance
+                   (Types.all, Concept,
+                    Landin.Checking.Reference_Type_Actual
+                      (Types.all, Different), Empty, Empty, Src, Point_Node,
+                    Landin.Checking.Declared_Conformance);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Find_Conformance
+                    (Types.all, Concept,
+                     Landin.Checking.Reference_Type_Actual
+                       (Types.all, Equal_Copy), Empty) = First_Row
+                  and then Landin.Checking.Find_Conformance
+                    (Types.all, Concept,
+                     Landin.Checking.Reference_Type_Actual
+                       (Types.all, Different), Empty) = Different_Row,
+                  "structurally equal keys find their original row");
+            end;
          end;
       end;
    end Conformance_Register_Uses_Normalized_Keys;

@@ -2535,6 +2535,27 @@ private
    package Conformance_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Conformance_Record);
 
+   --  A digest narrows lookup to rows that may share the whole-program key.
+   --  Structural actuals still use Actuals_Agree for the final comparison.
+   type Conformance_Bucket_Key is record
+      Concept : Concept_Id;
+      Target  : Ada.Containers.Hash_Type;
+      Inputs  : Ada.Containers.Hash_Type;
+   end record;
+
+   function Hash (Key : Conformance_Bucket_Key)
+     return Ada.Containers.Hash_Type;
+
+   package Conformance_Position_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Positive);
+
+   package Conformance_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Conformance_Bucket_Key,
+      Element_Type    => Conformance_Position_Vectors.Vector,
+      Hash            => Hash,
+      Equivalent_Keys => "=",
+      "="             => Conformance_Position_Vectors."=");
+
    type Conformance_Provider is record
       Declaration : Declaration_Id := No_Declaration;
       Instance    : Routine_Instance_Id := No_Routine_Instance;
@@ -2814,6 +2835,7 @@ private
       Routine_Evidence : Routine_Evidence_Vectors.Vector;
       Concepts : Concept_Vectors.Vector;
       Conformances : Conformance_Vectors.Vector;
+      Conformance_Buckets : Conformance_Maps.Map;
       Conformance_Actuals : Actual_Key_Vectors.Vector;
       Conformance_Providers : Conformance_Provider_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;
