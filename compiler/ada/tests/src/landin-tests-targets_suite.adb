@@ -6,7 +6,7 @@ with Landin.Evidence;
 with Landin.Hosted;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Hosted_ABI;
-with Landin.Backend.Darwin_ABI;
+with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.Toolchain;
 with Landin.IR;
 with Landin.Platform.Native;
@@ -1143,7 +1143,7 @@ package body Landin.Tests.Targets_Suite is
    procedure Darwin_Transport (Item : in out Landin.Testing.Context);
 
    procedure Darwin_Transport (Item : in out Landin.Testing.Context) is
-      package ABI renames Landin.Backend.Darwin_ABI;
+      package ABI renames Landin.Backend.AAPCS64_ABI;
       Unit : Landin.IR.Unit;
       Parameters : Landin.IR.Signature_Part_Array (1 .. 11) :=
         [others => (Kind => Landin.Types.I8, others => <>)];

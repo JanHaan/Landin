@@ -1,12 +1,20 @@
 with Landin.Types;
 
-package body Landin.Backend.Darwin_ABI is
+package body Landin.Backend.AAPCS64_ABI is
 
    use type Landin.IR.Opcode;
    use type Landin.IR.Parameter_Convention;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.C_ABI_Kind;
    use type Landin.Types.Type_Kind;
+
+   function Is_AAPCS64 (Facts : Landin.Targets.Target_Facts) return Boolean
+     is (Landin.Targets.C_ABI_Of (Facts)
+           = Landin.Targets.Darwin_AAPCS64_LP64);
+
+   function Is_Apple (Facts : Landin.Targets.Target_Facts) return Boolean
+     is (Landin.Targets.C_ABI_Of (Facts)
+           = Landin.Targets.Darwin_AAPCS64_LP64);
 
    function Classify
      (Of_Unit : Landin.IR.Unit;
@@ -38,7 +46,7 @@ package body Landin.Backend.Darwin_ABI is
                end if;
             when Landin.IR.Aggregate_Field_Shape =>
                if not Landin.IR.Has_C_Layout (Of_Unit, Shape.Nominal) then
-                  raise Compiler_Defect with "non-C Darwin aggregate";
+                  raise Compiler_Defect with "non-C arm64 aggregate";
                end if;
                for Index in 1 .. Landin.IR.Aggregate_Field_Count
                  (Of_Unit, Shape)
@@ -57,14 +65,12 @@ package body Landin.Backend.Darwin_ABI is
                   exit when not Homogeneous;
                end loop;
             when Landin.IR.Variant_Field_Shape =>
-               raise Compiler_Defect with "variant in Darwin C signature";
+               raise Compiler_Defect with "variant in arm64 C signature";
          end case;
       end Visit;
    begin
-      if Landin.Targets.C_ABI_Of (Facts)
-        /= Landin.Targets.Darwin_AAPCS64_LP64
-      then
-         raise Compiler_Defect with "Darwin C ABI needs Darwin facts";
+      if not Is_AAPCS64 (Facts) then
+         raise Compiler_Defect with "arm64 C ABI needs an AAPCS64 target";
       end if;
       if Part.Kind = Landin.Types.No_Value then
          return Answer;
@@ -100,7 +106,7 @@ package body Landin.Backend.Darwin_ABI is
             Field_Extent
               (Of_Unit, Shape, Facts, Answer.Size, Answer.Alignment);
             if Answer.Size = 0 then
-               raise Compiler_Defect with "empty Darwin C aggregate";
+               raise Compiler_Defect with "empty arm64 C aggregate";
             end if;
             Visit (Shape);
             if Homogeneous and then Members > 0 then
@@ -114,7 +120,7 @@ package body Landin.Backend.Darwin_ABI is
             end if;
          end;
       else
-         raise Compiler_Defect with "unsupported Darwin C carrier";
+         raise Compiler_Defect with "unsupported arm64 C carrier";
       end if;
       if Answer.Count = 0 then
          Answer.Count := 1;
@@ -137,6 +143,7 @@ package body Landin.Backend.Darwin_ABI is
    is
       Answer : Plan (Parameters'Length);
       Stack_End : Landin.Targets.Byte_Count := 0;
+      Apple : constant Boolean := Is_Apple (Facts);
    begin
       Answer.Result.Shape := Classify (Of_Unit, Result, Facts);
       --  The indirect result pointer is x8 and consumes no argument register.
@@ -147,7 +154,8 @@ package body Landin.Backend.Darwin_ABI is
       for Index in Answer.Arguments'Range loop
          declare
             Item : Location renames Answer.Arguments (Index);
-            Variadic : constant Boolean := Index > Fixed_Count;
+            --  Only Apple's tail differs from a named argument.
+            Variadic : constant Boolean := Apple and then Index > Fixed_Count;
             Bytes : Landin.Targets.Byte_Count;
             Alignment : Landin.Targets.Byte_Alignment;
          begin
@@ -182,11 +190,14 @@ package body Landin.Backend.Darwin_ABI is
             --  Apple packs scalars and HFAs at natural size, but stage B
             --  still rounds any other composite to whole eightbytes, and
             --  C.14 aligns it to at least eight: clang puts a three-byte
-            --  struct in an eight-byte slot.
+            --  struct in an eight-byte slot.  The standard's C.16 gives
+            --  every stack argument a whole number of eightbytes aligned to
+            --  at least eight.
             if Item.On_Stack and then not Variadic
-              and then Item.Shape.Aggregate
-              and then not Item.Shape.Indirect
-              and then Item.Shape.Float_Bytes = 0
+              and then (not Apple
+                        or else (Item.Shape.Aggregate
+                                 and then not Item.Shape.Indirect
+                                 and then Item.Shape.Float_Bytes = 0))
             then
                Alignment := Landin.Targets.Byte_Alignment'Max (8, Alignment);
                Bytes := Stack_Align (Bytes, 8, Maximum);
@@ -264,4 +275,4 @@ package body Landin.Backend.Darwin_ABI is
          Facts, Maximum);
    end Signature_Plan;
 
-end Landin.Backend.Darwin_ABI;
+end Landin.Backend.AAPCS64_ABI;

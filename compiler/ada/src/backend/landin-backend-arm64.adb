@@ -8,11 +8,18 @@ with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Hosted;
 with Landin.Targets.Capabilities;
-with Landin.Backend.Darwin_ABI;
+with Landin.Backend.AAPCS64_ABI;
+with Landin.Backend.Arm64.Platform;
+with Landin.Backend.ELF;
+with Landin.Backend.Hosted_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
 package body Landin.Backend.Arm64 is
+
+   package ELF_Spelling renames Landin.Backend.ELF;
+   use type Landin.Targets.Capabilities.Object_Format;
+   use type Landin.Targets.Capabilities.Backend_Kind;
 
    package Unbounded renames Ada.Strings.Unbounded;
    use type Landin.Source.Names.Name_Id;
@@ -45,6 +52,9 @@ package body Landin.Backend.Arm64 is
    --  same reason.
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
+
+   function Image (Value : Natural) return String
+     is (Trimmed (Natural'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -220,8 +230,13 @@ package body Landin.Backend.Arm64 is
         & (if Indirect then HT & ".byte 0x06" & LF else "");
    end Debug_Slot;
 
-   function Debug_Sections is new Landin.Backend.Dwarf.Sections
+   --  One encoder, instantiated once per object format, since the section
+   --  names and the compilation unit's addressing are generic constants.
+   function Mach_O_Debug_Sections is new Landin.Backend.Dwarf.Sections
      (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, True);
+
+   function ELF_Debug_Sections is new Landin.Backend.Dwarf.Sections
+     (Frame, Debug_Plan, Debug_Frame, Debug_Slot, 29, False);
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
@@ -244,7 +259,7 @@ package body Landin.Backend.Arm64 is
         and then Landin.IR.Signature_Uses_C_ABI
           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
       then
-         if Darwin_ABI.Signature_Plan
+         if AAPCS64_ABI.Signature_Plan
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts,
             Limit - 16).Stack_Bytes > Limit - 16
          then
@@ -271,8 +286,8 @@ package body Landin.Backend.Arm64 is
                begin
                   if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature) then
                      declare
-                        Plan : constant Darwin_ABI.Plan :=
-                          Darwin_ABI.Call_Plan
+                        Plan : constant AAPCS64_ABI.Plan :=
+                          AAPCS64_ABI.Call_Plan
                             (Of_Unit, Item, Value, Facts, Limit);
                         Bytes : Landin.Targets.Byte_Count := Plan.Stack_Bytes;
                      begin
@@ -321,6 +336,12 @@ package body Landin.Backend.Arm64 is
       --  rather than an exclusive-monitor retry loop.
       Has_LSE : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Lse);
+      --  Instruction selection is one; the object format and the hosted
+      --  system decide only the text around it.
+      Format : constant Platform.Arm64_Format :=
+        Landin.Targets.Capabilities.Object_Format_Of (Facts);
+      System : constant Hosted_ABI.Hosted_System :=
+        Landin.Targets.Capabilities.Hosted_System_Of (Facts);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -347,6 +368,16 @@ package body Landin.Backend.Arm64 is
       begin
          Unbounded.Append (Out_Text, Line & LF);
       end Put;
+
+      --  A platform directive, which on some object formats is nothing.
+      procedure Platform_Directive (Text : String);
+
+      procedure Platform_Directive (Text : String) is
+      begin
+         if Text /= "" then
+            Put (Character'Val (9) & Text);
+         end if;
+      end Platform_Directive;
 
       procedure Emit (Instruction : String) is
          Space : constant Natural :=
@@ -393,11 +424,6 @@ package body Landin.Backend.Arm64 is
          end if;
       end Emit;
 
-      function Fresh return String is
-      begin
-         Serial := Serial + 1;
-         return "Llandin_step_" & Trimmed (Natural'Image (Serial));
-      end Fresh;
 
       procedure Immediate (Register : String; Value : Pattern) is
       begin
@@ -425,14 +451,14 @@ package body Landin.Backend.Arm64 is
       procedure Address (Register, Name : String; Imported : Boolean := False)
       is
       begin
-         Emit ("adrp " & Register & ", " & Name
-               & (if Imported then "@GOTPAGE" else "@PAGE"));
+         Emit ("adrp " & Register & ", "
+               & Platform.Page (Format, Name, Imported));
          if Imported then
             Emit ("ldr " & Register & ", [" & Register & ", "
-                  & Name & "@GOTPAGEOFF]");
+                  & Platform.Page_Offset (Format, Name, Imported) & "]");
          else
             Emit ("add " & Register & ", " & Register & ", "
-                  & Name & "@PAGEOFF");
+                  & Platform.Page_Offset (Format, Name, Imported));
          end if;
       end Address;
 
@@ -547,7 +573,7 @@ package body Landin.Backend.Arm64 is
             or else Spelling = "read"
             or else Spelling = "write"
             or else Spelling = "close"
-            or else Spelling = "__error");
+            or else Spelling = Hosted_ABI.Errno_Function (System));
 
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
@@ -556,12 +582,15 @@ package body Landin.Backend.Arm64 is
             or else Landin.IR.Is_External (Of_Unit, Item));
 
       --  Pick a disjoint prefix for generated local labels. External source
-      --  identities receive Darwin's underscore at the rendering seam.
+      --  identities receive the object format's prefix at the rendering
+      --  seam: none on ELF, where an explicit spelling may begin with `.L`,
+      --  and Darwin's underscore on Mach-O, where none can begin with `L`.
       function Unused_Local_Prefix return String;
 
       function Unused_Local_Prefix return String is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String ("L");
+           Unbounded.To_Unbounded_String
+             (Platform.Local_Prefix_Seed (Format));
          Collides : Boolean;
       begin
          loop
@@ -598,6 +627,19 @@ package body Landin.Backend.Arm64 is
       end Unused_Local_Prefix;
 
       Local_Prefix : constant String := Unused_Local_Prefix;
+
+      --  Branch-reach steps were always `L` on Mach-O, which no external
+      --  name can collide with; on ELF they take the checked local prefix.
+      Step_Prefix : constant String :=
+        (if Format = Landin.Targets.Capabilities.Mach_O then "L"
+         else Local_Prefix);
+
+      function Fresh return String is
+      begin
+         Serial := Serial + 1;
+         return Step_Prefix & "landin_step_"
+           & Trimmed (Natural'Image (Serial));
+      end Fresh;
 
       --  Linker identity, not assembly syntax.  This is also available before
       --  allocation, when discovery decides which runtime names to reserve.
@@ -1579,13 +1621,13 @@ package body Landin.Backend.Arm64 is
          --  Transfer a classified chunk at x13. Byte replay avoids reading
          --  beyond a short aggregate and preserves both ABI register banks.
          procedure C_Chunk
-           (Place : Darwin_ABI.Location; Chunk : Positive; Store : Boolean);
+           (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean);
          procedure C_Entry;
          procedure C_Call (Value : Landin.IR.Value_Id);
          procedure C_Result (Value : Landin.IR.Value_Id);
 
          procedure C_Chunk
-           (Place : Darwin_ABI.Location; Chunk : Positive; Store : Boolean)
+           (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean)
          is
             Stride : constant Landin.Targets.Byte_Count :=
               (if Place.Shape.Float_Bytes > 0
@@ -1628,7 +1670,7 @@ package body Landin.Backend.Arm64 is
          end C_Chunk;
 
          procedure C_Entry is
-            Plan : constant Darwin_ABI.Plan := Darwin_ABI.Signature_Plan
+            Plan : constant AAPCS64_ABI.Plan := AAPCS64_ABI.Signature_Plan
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
@@ -1645,7 +1687,7 @@ package body Landin.Backend.Arm64 is
             end if;
             for Index in Plan.Arguments'Range loop
                declare
-                  Place : Darwin_ABI.Location renames Plan.Arguments (Index);
+                  Place : AAPCS64_ABI.Location renames Plan.Arguments (Index);
                   Slot : constant Landin.IR.Slot_Id :=
                     Landin.IR.Nth_Parameter (Of_Unit, Item, Index + Hidden);
                begin
@@ -1675,8 +1717,8 @@ package body Landin.Backend.Arm64 is
          procedure C_Call (Value : Landin.IR.Value_Id) is
             Indirect : constant Boolean :=
               Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Indirect_Call;
-            Plan : constant Darwin_ABI.Plan :=
-              Darwin_ABI.Call_Plan (Of_Unit, Item, Value, Facts);
+            Plan : constant AAPCS64_ABI.Plan :=
+              AAPCS64_ABI.Call_Plan (Of_Unit, Item, Value, Facts);
             Hidden : constant Natural :=
               (if Plan.Result.Shape.Aggregate then 1 else 0);
             Offset : constant Natural := (if Indirect then 1 else 0);
@@ -1702,7 +1744,7 @@ package body Landin.Backend.Arm64 is
             Reserve (Bytes);
             for Index in Plan.Arguments'Range loop
                declare
-                  Place : Darwin_ABI.Location renames Plan.Arguments (Index);
+                  Place : AAPCS64_ABI.Location renames Plan.Arguments (Index);
                begin
                   if Place.Shape.Indirect then
                      Load_Value (Argument (Index), "x10");
@@ -1779,7 +1821,7 @@ package body Landin.Backend.Arm64 is
          end C_Call;
 
          procedure C_Result (Value : Landin.IR.Value_Id) is
-            Plan : constant Darwin_ABI.Plan := Darwin_ABI.Signature_Plan
+            Plan : constant AAPCS64_ABI.Plan := AAPCS64_ABI.Signature_Plan
               (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
          begin
             if Plan.Result.Shape.Size = 0 then
@@ -2938,6 +2980,7 @@ package body Landin.Backend.Arm64 is
             Emit (".globl " & Symbol (Item));
          end if;
          Emit (".p2align 2");
+         Platform_Directive (Platform.Begin_Function (Format, Symbol (Item)));
          Put (Symbol (Item) & ":");
          if Debug /= null then
             Put (Dwarf.Label_Name (Local_Prefix, "begin", Item) & ":");
@@ -3051,6 +3094,7 @@ package body Landin.Backend.Arm64 is
             Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
             Emit (".cfi_endproc");
          end if;
+         Platform_Directive (Platform.End_Function (Format, Symbol (Item)));
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Extent (Layout), others => <>));
@@ -3582,6 +3626,14 @@ package body Landin.Backend.Arm64 is
                when Landin.Targets.Byte_8 => ".quad");
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
+      procedure End_Object (Item : Landin.IR.Item_Id);
+
+      --  An object's size runs from its label to here.
+      procedure End_Object (Item : Landin.IR.Item_Id) is
+      begin
+         Platform_Directive (Platform.End_Object
+           (Format, Symbol (Item), ".-" & Symbol (Item)));
+      end End_Object;
 
       procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id);
 
@@ -3996,11 +4048,13 @@ package body Landin.Backend.Arm64 is
          Put
            (Character'Val (9) & ".balign "
             & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
+         Platform_Directive (Platform.Begin_Object (Format, Symbol (Item)));
          Put (Symbol (Item) & ":");
          if not Is_Array
            and then Landin.IR.Layout_Of (Of_Unit, Item) = Landin.Layouts.Packed
          then
             Emit_Packed ((others => <>), (others => <>), Top => True);
+            End_Object (Item);
             return;
          end if;
 
@@ -4039,6 +4093,7 @@ package body Landin.Backend.Arm64 is
          if Size > Written then
             Emit_Zero (Size - Written);
          end if;
+         End_Object (Item);
       end Emit_Recursive_Image_Datum;
 
       --  Whether a module value has an absent zero image, and so is storage
@@ -4092,9 +4147,26 @@ package body Landin.Backend.Arm64 is
          if Is_Public_Item (Item) then
             Emit (".globl " & Symbol (Item));
          end if;
-         Emit (".zerofill __DATA,__bss," & Symbol (Item) & ","
-           & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
-           & Trimmed (Natural'Image (Power)));
+         case Format is
+            when Landin.Targets.Capabilities.Mach_O =>
+               Emit (".zerofill __DATA,__bss," & Symbol (Item) & ","
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Size)) & ","
+                 & Trimmed (Natural'Image (Power)));
+            when Landin.Targets.Capabilities.ELF =>
+               --  The whole datum is one switch into `.bss` and back, so the
+               --  writable run around it keeps its section.
+               Emit (ELF_Spelling.Zero_Section);
+               Emit (".balign "
+                 & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
+               Emit (ELF_Spelling.Object_Type (Symbol (Item)));
+               Put (Symbol (Item) & ":");
+               Emit (".zero "
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
+               Emit (ELF_Spelling.Size
+                 (Symbol (Item),
+                  Trimmed (Landin.Targets.Byte_Count'Image (Size))));
+               Emit (ELF_Spelling.Data_Section);
+         end case;
       end Emit_Reserved;
 
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
@@ -4147,6 +4219,7 @@ package body Landin.Backend.Arm64 is
                  & Trimmed
                      (Landin.Targets.Byte_Alignment'Image
                         (Landin.Targets.Alignment_Of (Facts, Held))));
+            Platform_Directive (Platform.Begin_Object (Format, Symbol (Item)));
             Put (Symbol (Item) & ":");
 
             if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
@@ -4194,7 +4267,7 @@ package body Landin.Backend.Arm64 is
                                (Of_Unit, Item, Position))));
                end loop;
             end if;
-
+            End_Object (Item);
          end;
       end Emit_Array_Image_Datum;
 
@@ -4212,6 +4285,7 @@ package body Landin.Backend.Arm64 is
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
          Put (Character'Val (9) & ".balign 8");
+         Platform_Directive (Platform.Begin_Object (Format, Symbol (Item)));
          Put (Symbol (Item) & ":");
          declare
             Offset : constant Landin.Targets.Byte_Count :=
@@ -4234,6 +4308,7 @@ package body Landin.Backend.Arm64 is
             & Trimmed
                 (Landin.IR.Element_Total'Image
                    (Landin.IR.Slice_Image_Length (Of_Unit, Item))));
+         End_Object (Item);
       end Emit_Slice_Image_Datum;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
@@ -4261,8 +4336,10 @@ package body Landin.Backend.Arm64 is
               & Trimmed
                   (Landin.Targets.Byte_Alignment'Image
                      (Landin.Targets.Alignment_Of (Facts, Held))));
+         Platform_Directive (Platform.Begin_Object (Format, Symbol (Item)));
          Put (Symbol (Item) & ":");
          Emit (Directive (Held) & " " & Written);
+         End_Object (Item);
       end Emit_Datum;
 
       procedure Runtime;
@@ -4272,19 +4349,35 @@ package body Landin.Backend.Arm64 is
          Argc : constant String := Local_Prefix & "host_argc";
          Invalid : constant String := Local_Prefix & "host_invalid";
          Open_Frame : Boolean := False;
+         --  A bridge ends where the next one starts, since its failure
+         --  paths follow its last return.
+         Open_Bridge : Host_Helper := No_Host_Helper;
+         procedure Close_Bridge;
          procedure Start (Helper : Host_Helper);
          procedure Finish;
          procedure Tail (Name : String);
 
-         procedure Start (Helper : Host_Helper) is
+         procedure Close_Bridge is
          begin
             if Debug /= null and then Open_Frame then
                Emit (".cfi_endproc");
             end if;
+            if Open_Bridge /= No_Host_Helper then
+               Platform_Directive (Platform.End_Function
+                 (Format, Bridge_Symbol (Open_Bridge)));
+            end if;
+         end Close_Bridge;
+
+         procedure Start (Helper : Host_Helper) is
+         begin
+            Close_Bridge;
             Emit (".p2align 2");
             Emit (".globl " & Bridge_Symbol (Helper));
-            Emit (".private_extern " & Bridge_Symbol (Helper));
+            Emit (Platform.Private_Extern (Format, Bridge_Symbol (Helper)));
+            Platform_Directive (Platform.Begin_Function
+              (Format, Bridge_Symbol (Helper)));
             Put (Bridge_Symbol (Helper) & ":");
+            Open_Bridge := Helper;
             if Debug /= null then
                Emit (".loc 1 0 0 is_stmt 0");
                Emit (".cfi_startproc");
@@ -4322,7 +4415,8 @@ package body Landin.Backend.Arm64 is
 
          procedure Tail (Name : String) is
          begin
-            Emit ("bl _" & Name);
+            Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+              (Facts, Name));
             Finish;
          end Tail;
       begin
@@ -4399,15 +4493,23 @@ package body Landin.Backend.Arm64 is
          Emit ("mov w1, #0");
          Tail ("open");
          Start (Open_Write);
-         --  Darwin O_WRONLY | O_CREAT | O_TRUNC, mode 0666 on the
-         --  variadic stack; libc applies the process umask.
-         Emit ("mov w1, #1537");
-         Emit ("sub sp, sp, #16");
-         Emit ("mov w9, #438");
-         Emit ("str x9, [sp]");
+         --  O_WRONLY | O_CREAT | O_TRUNC, and the mode 0666 that libc's
+         --  umask filters, as open's first unnamed argument: on Apple's
+         --  variadic stack, and in the next register under the standard.
+         Emit ("mov w1, #" & Image (Hosted_ABI.Create_For_Writing (System)));
+         if Landin.Targets.C_ABI_Of (Facts)
+           = Landin.Targets.Darwin_AAPCS64_LP64
+         then
+            Emit ("sub sp, sp, #16");
+            Emit ("mov w9, #" & Image (Hosted_ABI.Created_File_Mode));
+            Emit ("str x9, [sp]");
+         else
+            Emit ("mov w2, #" & Image (Hosted_ABI.Created_File_Mode));
+         end if;
          Tail ("open");
          Start (Errno_Value);
-         Emit ("bl ___error");
+         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, Hosted_ABI.Errno_Function (System)));
          Emit ("ldr w0, [x0]");
          Finish;
          Start (Heap_Allocate);
@@ -4421,7 +4523,8 @@ package body Landin.Backend.Arm64 is
          Emit ("tbnz x0, #63, " & Local_Prefix & "heap_failed");
          Emit ("sub sp, sp, #16");
          Emit ("str x1, [sp]");
-         Emit ("bl _malloc");
+         Emit ("bl " & Landin.Targets.Capabilities.Link_Symbol
+           (Facts, "malloc"));
          Emit ("cbz x0, " & Local_Prefix & "heap_failed");
          Emit ("ldr x1, [sp]");
          Emit ("add x9, x0, #8");
@@ -4440,9 +4543,7 @@ package body Landin.Backend.Arm64 is
          Start (Heap_Release);
          Emit ("ldur x0, [x0, #-8]");
          Tail ("free");
-         if Debug /= null then
-            Emit (".cfi_endproc");
-         end if;
+         Close_Bridge;
          Emit (".data");
          Emit (".balign 8");
          Put (Argv & ":");
@@ -4452,11 +4553,12 @@ package body Landin.Backend.Arm64 is
       end Runtime;
 
    begin
-      if Facts /= Landin.Targets.Darwin_Arm64
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+          /= Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
         or else not Landin.Targets.Levels.Belongs_To (Level, Facts)
       then
          raise Compiler_Defect with
-           "arm64 emission needs Darwin";
+           "arm64 emission needs an arm64 description";
       end if;
       --  The default level names nothing, as before levels existed; a
       --  higher one names its architecture so the assembler admits exactly
@@ -4480,13 +4582,23 @@ package body Landin.Backend.Arm64 is
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item
       then
-         Emit (".zerofill __DATA,__bss," & Local_Prefix
-           & "landin_panic_active,4,2");
+         case Format is
+            when Landin.Targets.Capabilities.Mach_O =>
+               Emit (".zerofill __DATA,__bss," & Local_Prefix
+                 & "landin_panic_active,4,2");
+            when Landin.Targets.Capabilities.ELF =>
+               Emit (ELF_Spelling.Push_Panic_Flag_Section);
+               Emit (".balign 4");
+               Put (Local_Prefix & "landin_panic_active:");
+               Emit (".zero 4");
+               Emit (ELF_Spelling.Pop_Section);
+         end case;
       end if;
       Emit (".text");
       if Debug /= null then
          Unbounded.Append (Out_Text, Dwarf.Preamble
-           (Debug.all, Local_Prefix, Mach_O => True));
+           (Debug.all, Local_Prefix,
+            Mach_O => Format = Landin.Targets.Capabilities.Mach_O));
       end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
@@ -4505,7 +4617,7 @@ package body Landin.Backend.Arm64 is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
-                  Emit (".section __TEXT,__const");
+                  Emit (Platform.Read_Only_Section (Format));
                   Emit_Array_Image_Datum (Item);
                else
                   Emit (".data");
@@ -4545,7 +4657,7 @@ package body Landin.Backend.Arm64 is
          end;
       end loop;
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Emit (".section __DATA_CONST,__const");
+         Emit (Platform.Relocated_Read_Only_Section (Format));
          for Index in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
             declare
                Id : constant Landin.IR.Evidence_Id := Landin.IR.Evidence_Id
@@ -4575,11 +4687,18 @@ package body Landin.Backend.Arm64 is
          Runtime;
       end if;
       if Debug /= null then
-         Unbounded.Append (Out_Text, Debug_Sections
-           (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-            Local_Prefix, Symbol'Access));
+         Unbounded.Append (Out_Text,
+           (case Format is
+               when Landin.Targets.Capabilities.Mach_O =>
+                  Mach_O_Debug_Sections
+                    (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
+                     Local_Prefix, Symbol'Access),
+               when Landin.Targets.Capabilities.ELF =>
+                  ELF_Debug_Sections
+                    (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
+                     Local_Prefix, Symbol'Access)));
       end if;
-      Emit (".subsections_via_symbols");
+      Emit (Platform.Trailer (Format));
       Assembly := Out_Text;
    end Emit;
 

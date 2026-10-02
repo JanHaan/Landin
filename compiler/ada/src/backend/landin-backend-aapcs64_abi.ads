@@ -1,8 +1,20 @@
---  Apple arm64 C transport. ABI placement never enters neutral IR.
+--  arm64 C transport: the Procedure Call Standard for the Arm 64-bit
+--  Architecture, and Apple's variant of it.  ABI placement never enters
+--  neutral IR.
+--
+--  Both conventions share the eight integer and eight vector argument
+--  registers, homogeneous floating aggregates of one to four members, the
+--  sixteen-byte bound above which a composite is passed by reference to a
+--  caller's copy, and the indirect result address in x8.  Apple differs in
+--  two places: every unnamed argument of a variadic call goes on the stack
+--  in an eight-byte slot, and a named scalar or homogeneous floating
+--  aggregate on the stack takes its natural size and alignment rather than
+--  a whole eight-byte slot.  The convention comes from the description's C
+--  ABI, never from its architecture.
 with Landin.IR;
 with Landin.Targets;
 
-package Landin.Backend.Darwin_ABI is
+package Landin.Backend.AAPCS64_ABI is
 
    type Carrier_Class is (No_Class, Integer_Class, Float_Class);
    type Class_Run is array (Positive range 1 .. 4) of Carrier_Class;
@@ -66,4 +78,4 @@ package Landin.Backend.Darwin_ABI is
       Maximum : Landin.Targets.Byte_Count :=
         Landin.Targets.Byte_Count'Last) return Plan;
 
-end Landin.Backend.Darwin_ABI;
+end Landin.Backend.AAPCS64_ABI;
