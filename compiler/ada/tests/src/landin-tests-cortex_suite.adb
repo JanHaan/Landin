@@ -784,6 +784,62 @@ package body Landin.Tests.Cortex_Suite is
    end Source_Debugging;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context);
+   procedure Local_Branches (Item : in out Landin.Testing.Context);
+
+   procedure Local_Branches (Item : in out Landin.Testing.Context) is
+   begin
+      for Long_Body in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Source : U.Unbounded_String := U.To_Unbounded_String
+              ("main: (x: u32) -> (r: u32) = r = 1 "
+               & "if x == 0 then ");
+         begin
+            if Long_Body then
+               for N in 1 .. 80 loop
+                  U.Append (Source, "r = r + x ");
+               end loop;
+            else
+               U.Append (Source, "r = 3 ");
+            end if;
+            U.Append (Source, "else r = 2 end if end main");
+            Host.Add_File ("p.ldn", U.To_String (Source));
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  U.To_String (Result.Report));
+               if Result.Status = Landin.Driver.Status_Success then
+                  declare
+                     Assembly : constant String := Host.Written ("p.s");
+                  begin
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Assembly, Character'Val (9) & "bne L1_2") > 0,
+                        "near conditional branch is direct");
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Assembly, Character'Val (9)
+                           & (if Long_Body then
+                                "bne L1_2" & LF & Character'Val (9)
+                                & "ldr r7, "
+                              else "b L1_3" & LF & "L1_2:")) > 0,
+                        "near edge is direct; distant edge uses long jump");
+                  end;
+               end if;
+            end;
+         end;
+      end loop;
+   end Local_Branches;
 
    procedure Backend_Boundaries (Item : in out Landin.Testing.Context) is
    begin
@@ -1288,6 +1344,8 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "firmware path", Firmware_Path'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "backend boundaries", Backend_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "local branches", Local_Branches'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "layout and transport contract", Contract'Access);
       Landin.Testing.Register

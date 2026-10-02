@@ -930,6 +930,17 @@ package body Landin.Backend.Cortex_M is
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
          Before_Emit : constant Natural := Instruction_Count;
+         Routine_Start : constant Positive := Unbounded.Length (Out_Text) + 1;
+         type Branch_Site is record
+            First, Last : Positive;
+            Target, Condition : Unbounded.Unbounded_String;
+         end record;
+         package Branch_Vectors is new Ada.Containers.Vectors
+           (Positive, Branch_Site);
+         package Position_Vectors is new Ada.Containers.Vectors
+           (Positive, Positive);
+         Sites : Branch_Vectors.Vector;
+         Assembly_Barriers : Position_Vectors.Vector;
          Layout : constant Frame := Allocated_Frame
            (Of_Unit, Item, Facts, 16#FFFF_FFC0#);
          Result : constant Landin.Types.Type_Kind :=
@@ -1004,10 +1015,12 @@ package body Landin.Backend.Cortex_M is
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Branch (Condition, Target : String);
          procedure Jump (Target : String);
+         procedure Long_Jump (Target : String);
+         procedure Shorten_Local_Branches;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
 
-         procedure Jump (Target : String) is
+         procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
          begin
             Emit ("ldr r7, " & Id);
@@ -1015,9 +1028,19 @@ package body Landin.Backend.Cortex_M is
             Emit (".balign 4");
             Put (Id & ":");
             Emit (".word " & Target & " + 1");
+         end Long_Jump;
+
+         procedure Jump (Target : String) is
+            First : constant Positive := Unbounded.Length (Out_Text) + 1;
+         begin
+            Long_Jump (Target);
+            Sites.Append (Branch_Site'(First, Unbounded.Length (Out_Text),
+                           Unbounded.To_Unbounded_String (Target),
+                           Unbounded.Null_Unbounded_String));
          end Jump;
 
          procedure Branch (Condition, Target : String) is
+            First : constant Positive := Unbounded.Length (Out_Text) + 1;
             Skip : constant String := Fresh;
             Inverse : constant String :=
               (if Condition = "eq" then "ne"
@@ -1035,9 +1058,72 @@ package body Landin.Backend.Cortex_M is
                else raise Compiler_Defect with "invalid ARM condition");
          begin
             Emit ("b" & Inverse & " " & Skip);
-            Jump (Target);
+            Long_Jump (Target);
             Put (Skip & ":");
+            Sites.Append (Branch_Site'(First, Unbounded.Length (Out_Text),
+                           Unbounded.To_Unbounded_String (Target),
+                           Unbounded.To_Unbounded_String (Condition)));
          end Branch;
+
+         --  Each ordinary Thumb instruction occupies at most four bytes;
+         --  the compiler's in-routine data and alignment lines also occupy
+         --  at most four. Four bytes per source line, plus room for both
+         --  endpoints, bounds the span before branches are shortened. Do not
+         --  cross an inline-assembly or literal-pool boundary, whose size is
+         --  not known here. The assembler remains the final range check.
+         procedure Shorten_Local_Branches is
+            Text : constant String := Unbounded.To_String (Out_Text);
+         begin
+            if Sites.Is_Empty then
+               return;
+            end if;
+            for Index in reverse Sites.First_Index .. Sites.Last_Index loop
+               declare
+                  Site : constant Branch_Site := Sites (Index);
+                  Name : constant String :=
+                    Unbounded.To_String (Site.Target);
+                  Destination : constant Natural := Ada.Strings.Fixed.Index
+                    (Text (Routine_Start .. Text'Last), LF & Name & ":" & LF);
+               begin
+                  if Destination /= 0 then
+                     declare
+                        Low : constant Positive :=
+                          Positive'Min (Site.First, Destination);
+                        High : constant Natural :=
+                          Natural'Max (Site.First, Destination);
+                        Span : constant String := Text (Low .. High);
+                        Bound : constant Natural :=
+                          4 * Ada.Strings.Fixed.Count
+                            (Span, String'(1 => LF)) + 8;
+                        Crosses_Assembly : Boolean := False;
+                     begin
+                        for Barrier of Assembly_Barriers loop
+                           if Barrier in Low .. High then
+                              Crosses_Assembly := True;
+                              exit;
+                           end if;
+                        end loop;
+                        if not Crosses_Assembly
+                          and then Ada.Strings.Fixed.Index
+                            (Span, ".ltorg") = 0
+                          and then Bound <
+                            (if Unbounded.Length (Site.Condition) = 0
+                             then 2_000 else 240)
+                        then
+                           Unbounded.Replace_Slice
+                             (Out_Text, Site.First, Site.Last,
+                              Character'Val (9) & "b"
+                              & Unbounded.To_String (Site.Condition)
+                              & " " & Name & LF);
+                           Instruction_Count := Instruction_Count -
+                             (if Unbounded.Length (Site.Condition) = 0
+                              then 1 else 2);
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end Shorten_Local_Branches;
 
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0") is
@@ -1624,6 +1710,7 @@ package body Landin.Backend.Cortex_M is
                   Waiting (Number (Index)) := True;
                end if;
             end loop;
+            Assembly_Barriers.Append (Unbounded.Length (Out_Text) + 1);
             Emit_Verbatim (Landin.Backend.Assembly_Text
               (Of_Unit, Item, Value, Names, Facts));
             if (for all Held of Waiting => Held) then
@@ -3162,6 +3249,7 @@ package body Landin.Backend.Cortex_M is
             Emit (".cfi_endproc");
          end if;
          Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+         Shorten_Local_Branches;
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Homes + 24,
