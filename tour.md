@@ -355,7 +355,7 @@ text is meant, so a literal can never be invalid UTF-8.
 ```landin
 line  := "col\tsep\n"
 smile := "\u{1F600}"
-byte  := "\xFF"          -- []u8 context only
+byte: []u8 = "\xFF"      -- byte escapes require []u8 context
 
 ```
 
@@ -415,7 +415,7 @@ Shifts fill with zeros beyond the width, for any amount.
 Signed >> keeps the sign. One form only.
 
 ```landin
-z := 1 << 40     -- 0 in a u32 context
+z: u32 = 1 << 40 -- 0 in a u32 context
 
 ```
 
