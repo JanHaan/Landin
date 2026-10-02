@@ -12928,9 +12928,10 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions remain
-deferred; D138 and D139 separately define generic routine instances and fixed
-conditional module declarations.
+forwarded fixed formals. Parameterized atom unions are enabled under D135's
+structural-set and alias-substitution rules; its later hosted-parity audit
+superseded this decision's earlier deferral. D138 and D139 separately define
+generic routine instances and fixed conditional module declarations.
 
 An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance
