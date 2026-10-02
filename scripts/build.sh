@@ -168,6 +168,12 @@ cd "$LANDIN_ADA_DIR"
 gprbuild -p -P refine.gpr --config="$Configuration" "$@" || exit
 gprbuild -p -P landin_tests.gpr --config="$Configuration" "$@" || exit
 
+Finished="$(landin_manifest)" || exit
+if [ "$Finished" != "$Current" ]; then
+    echo "landin: sources changed during build; leaving build unverified" >&2
+    exit 1
+fi
+
 printf '%s\n' "$Current" > "$Manifest.tmp"
 mv -f "$Manifest.tmp" "$Manifest"
 

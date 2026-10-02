@@ -220,6 +220,10 @@ with (root / "calls").open("a") as stream:
 configs = [arg.split("=", 1)[1] for arg in sys.argv[1:]
            if arg.startswith("--config=")]
 assert len(configs) == 1 and pathlib.Path(configs[0]).is_file()
+project = sys.argv[sys.argv.index("-P") + 1]
+if os.environ.get("FAKE_EDIT_ON_PROJECT") == project:
+    source = root / "compiler/ada/src/main.adb"
+    source.write_text(source.read_text() + "edited during build\\n")
 build = pathlib.Path(os.environ["LANDIN_BUILD_DIR"])
 (build / "bin").mkdir(parents=True, exist_ok=True)
 for name in ("refine", "landin_tests"):
@@ -320,6 +324,26 @@ path.write_text("-- generated at " + str(path) + "\\n"
                     self.assertIn("rebuilding from clean", result.stdout)
                     self.assertFalse(marker.exists())
                     self.assertNotEqual(self.manifest.read_text(), old)
+
+    def test_source_edit_during_either_project_does_not_publish_manifest(self):
+        for incremental in ("yes", "no"):
+            for project in ("refine.gpr", "landin_tests.gpr"):
+                with self.subTest(incremental=incremental, project=project):
+                    extra = {"LANDIN_BUILD_INCREMENTAL": incremental}
+                    first = self.run_build(extra=extra)
+                    self.assertEqual(first.returncode, 0, first.stderr)
+                    changed = self.run_build(
+                        "-j1", extra={**extra, "FAKE_EDIT_ON_PROJECT": project})
+                    self.assertEqual(changed.returncode, 1, changed.stderr)
+                    self.assertIn("sources changed during build", changed.stderr)
+                    self.assertFalse(self.manifest.exists())
+                    marker = self.build / "stale-object"
+                    marker.write_text("old object")
+                    retried = self.run_build(extra=extra)
+                    self.assertEqual(retried.returncode, 0, retried.stderr)
+                    self.assertIn("last build did not finish", retried.stdout)
+                    self.assertFalse(marker.exists())
+                    self.assertTrue(self.manifest.is_file())
 
     def test_failed_configuration_keeps_successful_build(self):
         result = self.run_build()
