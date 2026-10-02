@@ -17,7 +17,9 @@ with Landin.Server.Analysis;
 with Landin.Server.Holes;
 with Landin.Server.Navigation;
 with Landin.Server.Positions;
+with Landin.Server.Sessions;
 with Landin.Server.Transport;
+with Landin.Json;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Targets;
@@ -590,6 +592,102 @@ package body Landin.Tests.Server_Suite is
 
    Sessions_Root : constant String := "../tests/server";
 
+   --  Add the previously absent directory after the first report, before
+   --  the editor opens its source.
+   procedure Opening_A_Missing_Import_Refreshes_Its_Importer
+     (Item : in out Landin.Testing.Context);
+
+   procedure Opening_A_Missing_Import_Refreshes_Its_Importer
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+      type Opening_Channel is new Landin.Testing.Fakes.Fake_Channel
+      with record
+         Files : access Landin.Testing.Fakes.Fake_Filesystem;
+         Created : Boolean := False;
+      end record;
+
+      overriding procedure Read
+        (Channel : in out Opening_Channel;
+         Into : out String;
+         Last : out Natural);
+
+      overriding procedure Read
+        (Channel : in out Opening_Channel;
+         Into : out String;
+         Last : out Natural)
+      is
+      begin
+         if not Channel.Created
+           and then Ada.Strings.Fixed.Index
+             (Landin.Testing.Fakes.Output
+                (Landin.Testing.Fakes.Fake_Channel (Channel)),
+              """code"":""L0006""") > 0
+         then
+            Channel.Files.Add_Directory ("/workspace/lib");
+            Channel.Files.Add_Directory ("/workspace/lib/numbers");
+            Channel.Files.Add_File
+              ("/workspace/lib/numbers/numbers.ldn", "");
+            Channel.Created := True;
+         end if;
+         Landin.Testing.Fakes.Read
+           (Landin.Testing.Fakes.Fake_Channel (Channel), Into, Last);
+      end Read;
+
+      Channel : Opening_Channel := (Landin.Testing.Fakes.Fake_Channel
+        with Files => Host'Access, Created => False);
+      Script : Unbounded.Unbounded_String;
+      Status : Landin.Server.Sessions.Exit_Status;
+      Main_URI : constant String := "file:///workspace/app/main.ldn";
+      Import_URI : constant String :=
+        "file:///workspace/lib/numbers/numbers.ldn";
+
+      procedure Send (Message : String);
+
+      procedure Send (Message : String) is
+      begin
+         Unbounded.Append (Script, Transport.Framed (Message));
+      end Send;
+   begin
+      Host.Add_Directory ("/workspace");
+      Host.Add_Directory ("/workspace/app");
+      Host.Add_File ("/workspace/app/main.ldn", "import lib/numbers" & LF);
+
+      Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+            & """params"":{""capabilities"":{},""initializationOptions"":"
+            & "{""roots"":[""file:///workspace""]}}}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (Main_URI)
+            & ",""version"":1,""text"":"
+            & Landin.Json.Quoted ("import lib/numbers" & LF) & "}}}");
+      Channel.Pause_At
+        (Unbounded.Length (Script));
+      Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+            & """params"":{""textDocument"":{""uri"":"
+            & Landin.Json.Quoted (Import_URI)
+            & ",""version"":1,""text"":""""}}}");
+      Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+      Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+      Channel.Script_Unbounded (Script);
+      Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+      declare
+         Output : constant String :=
+           Landin.Testing.Fakes.Output
+             (Landin.Testing.Fakes.Fake_Channel (Channel));
+      begin
+         Landin.Testing.Check
+           (Item, Status = 0 and then Channel.Created
+            and then Ada.Strings.Fixed.Count
+              (Output, """uri"":" & Landin.Json.Quoted (Main_URI)
+                       & ",""version"":1") = 2
+            and then Ada.Strings.Fixed.Count
+              (Output, """code"":""L0006""") = 1,
+            "opening a missing import republishes the importer without L0006: "
+            & Output);
+      end;
+   end Opening_A_Missing_Import_Refreshes_Its_Importer;
+
    --  Every session under compiler/tests/server runs as its transcript
    --  says, read through the real filesystem, which is this case's
    --  deliberate exception; the server itself sees only the fake.
@@ -753,6 +851,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "every session runs as written",
          Every_Session_Runs_As_Written'Access);
+      Landin.Testing.Register
+        (Into, "server", "opening a missing import refreshes its importer",
+         Opening_A_Missing_Import_Refreshes_Its_Importer'Access);
       Landin.Testing.Register
         (Into, "server", "doc comments are the run above",
          Doc_Comments_Are_The_Run_Above'Access);

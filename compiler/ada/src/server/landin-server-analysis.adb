@@ -144,6 +144,7 @@ package body Landin.Server.Analysis is
       Entry_Directory : constant String :=
         Unbounded.To_String (Asked.Entry_Directory);
       Standing : Boolean := False;
+      Missing : aliased Landin.Platform.Path_List;
    begin
       Answer := (others => <>);
       for Option of Asked.Options loop
@@ -200,7 +201,8 @@ package body Landin.Server.Analysis is
 
          if Rooted then
             Landin.Driver.Loading.Load_Reachable_Program
-              (Context, Stand_In, Asked.Roots, Entry_Directory);
+              (Context, Stand_In, Asked.Roots, Entry_Directory,
+               Missing'Access);
          else
             Landin.Driver.Loading.Load_Files (Context, Stand_In, Asked.Files);
          end if;
@@ -213,6 +215,7 @@ package body Landin.Server.Analysis is
             Answer.Checked := not Has_Frontend_Error (Context);
          end if;
       end;
+      Answer.Missing_Directories := Missing;
 
       --  Each source's held regions, by its identity in this compilation.
       for Index in 1 .. Landin.Stages.Source_Count (Context) loop

@@ -53,6 +53,8 @@ package Landin.Server.Analysis is
       --  Whether the stages ran past syntax, so names and types may be
       --  asked of the compilation.
       Checked : Boolean := False;
+      --  Directories an unresolved import could appear in under the roots.
+      Missing_Directories : Landin.Platform.Path_List;
    end record;
 
    --  Load and check Asked into Context, a compilation nothing else has

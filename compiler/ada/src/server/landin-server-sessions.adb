@@ -75,6 +75,8 @@ package body Landin.Server.Sessions is
       --  Every path each module's last report published to, so a path it
       --  no longer reports on is cleared.
       Published : Text_Maps.Map;
+      --  Candidate directories of imports missing at the last report.
+      Missing   : Text_Maps.Map;
       Cancelled : String_Sets.Set;
 
       procedure Send (Item : String);
@@ -249,11 +251,16 @@ package body Landin.Server.Sessions is
             end loop;
             declare
                Kept : Unbounded.Unbounded_String;
+               Absent : Unbounded.Unbounded_String;
             begin
                for Path of Now loop
                   Unbounded.Append (Kept, Path & ASCII.LF);
                end loop;
+               for Path of Answer.Missing_Directories loop
+                  Unbounded.Append (Absent, Path & ASCII.LF);
+               end loop;
                Published.Include (Key, Unbounded.To_String (Kept));
+               Missing.Include (Key, Unbounded.To_String (Absent));
             end;
          end Visit;
       begin
@@ -295,6 +302,8 @@ package body Landin.Server.Sessions is
       procedure Mark_Stale (URI : String) is
          Key : constant String :=
            Landin.Server.Documents.Module_Key (Store, URI);
+         Path : constant String :=
+           Landin.Server.Documents.Held_Path (Store, URI);
       begin
          Stale.Include (Key);
          --  A change to a file another module imports makes that module
@@ -304,8 +313,19 @@ package body Landin.Server.Sessions is
                  (Unbounded.To_Unbounded_String
                     (ASCII.LF & Text_Maps.Element (Position)),
                   ASCII.LF
-                  & Landin.Server.Documents.Held_Path (Store, URI)
+                  & Path
                   & ASCII.LF) > 0
+            then
+               Stale.Include (Text_Maps.Key (Position));
+            end if;
+         end loop;
+         --  A source opened in a formerly absent import directory makes
+         --  that import available even though no source was published there.
+         for Position in Missing.Iterate loop
+            if Unbounded.Index
+                 (Unbounded.To_Unbounded_String
+                    (ASCII.LF & Text_Maps.Element (Position)),
+                  ASCII.LF & Key & ASCII.LF) > 0
             then
                Stale.Include (Text_Maps.Key (Position));
             end if;
@@ -585,6 +605,7 @@ package body Landin.Server.Sessions is
                            end loop;
                         end;
                         Published.Delete (Key);
+                        Missing.Exclude (Key);
                      else
                         Send (Landin.Server.Answers.Cleared (URI));
                      end if;
