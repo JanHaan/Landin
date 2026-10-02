@@ -462,9 +462,11 @@ Depends on: R10.10, R10.30, R10.40
 
 A language server linked against the compiler library, over standard input
 and output: diagnostics, definitions, hover types, formatting and the edits of
-R10.30 as code actions. Analysis continues past a syntax error as far as the
-parser recovers. Whether it is `refine lsp` or its own executable is decided
-here.
+R10.30 as code actions. When syntax errors are confined to eligible routine
+bodies, analysis checks the rest of the module using stand-ins for those
+bodies. An error elsewhere stops further analysis even if the parser recovers
+later declarations. Whether it is `refine lsp` or its own executable is
+decided here.
 
 Exit evidence: scripted sessions in the gate for each capability, and a
 bounded run over mutated corpus sources that never crashes the server, which
