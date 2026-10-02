@@ -51,7 +51,8 @@ choose:
 ```
 
 `target` is any name `--target=` takes: `linux-x86-64`, the default,
-`darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one mapping.
+`linux-arm64`, `darwin-arm64`, `cortex-m0` or `synthetic-32`. Both read one
+mapping.
 `level` is a CPU feature level of that target's family, read after it as
 `refine` reads it, and the target's default when absent. An
 option is named in lowercase letters, digits and underscores. A value the

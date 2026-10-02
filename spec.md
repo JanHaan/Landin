@@ -1673,17 +1673,21 @@ actuals, static images and indirect calls. Neither matching machine widths nor
 `layout(c)` makes a Landin function a C callback. Function values are code
 addresses; `ptr handler` instead addresses a stored function value.
 
-The selected hosted ABIs are Linux x86-64 SysV AMD64 LP64 and Darwin arm64
-AAPCS64 with Apple's platform differences, both with signed plain C `char`.
-`compiler.c_sysv_lp64` and `compiler.c_darwin_lp64` are their respective fixed
-bool configuration facts, not guesses from pointer width or architecture
-spelling. The ordinary `core/c` aliases assert either supported fact before
-exposing `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`,
+The selected hosted ABIs are Linux x86-64 SysV AMD64 LP64, Darwin arm64
+AAPCS64 with Apple's platform differences, both with signed plain C `char`,
+and Linux arm64's standard AAPCS64 LP64, whose plain `char` is unsigned.
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
+are their respective fixed bool configuration facts, each true for its own ABI
+alone, not guesses from pointer width or architecture spelling. The ordinary
+`core/c` aliases assert one supported fact before exposing `c_char`, `c_schar`,
+`c_uchar`, `c_short`, `c_ushort`,
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
 `usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
-C `char` is numeric `i8`, not a Unicode scalar. A described target's ABI identity
+C `char` is the selected ABI's plain `char`, a numeric byte and not a Unicode
+scalar: `i8` under SysV and Darwin, `u8` under the standard AAPCS64; `c_schar`
+and `c_uchar` keep their signedness everywhere. A described target's ABI identity
 and widths do not imply that its C boundary is implemented. C signature,
 record-layout and variadic-call capabilities are selected explicitly; neither
 `core/c` nor generated bindings may infer them from LP64 alone.
@@ -1731,6 +1735,15 @@ consuming an ordinary argument register. Copies stay within the object extent.
 Every Landin routine preserves a frame record through x29; x18 is reserved.
 These physical rules do not enter target-neutral IR or change source cleanup.
 
+The standard AAPCS64 shares Darwin's banks, homogeneous floating aggregates,
+sixteen-byte indirect bound, narrow-integer extension, results and x8. It
+differs in two places. Every stack argument, scalar or aggregate, occupies its
+size rounded up to whole eight-byte slots and is aligned to at least eight,
+as C.16 requires. An unnamed variadic argument is assigned exactly as a named
+one of its promoted type would be, to the next register of its bank and to
+the stack only when that bank is exhausted. x18 stays reserved there too, so
+one register rule holds wherever `compiler.arch == arm64`.
+
 
 A final `, ...` after at least one fixed parameter marks a variadic C
 signature. It is not [0960]'s `! ...`. Variadic calls use only positional
@@ -1741,7 +1754,8 @@ Outgoing direct and indirect calls promote unnamed f32 to f64 and bool/narrow
 integers to C int; untyped integer and floating literals take i32 and f64
 respectively. Other admitted tail identities remain unchanged. SysV calls
 supply the ABI's SSE-register count; Darwin places every promoted unnamed
-argument in an eight-byte stack slot. Fixed arguments retain their declared
+argument in an eight-byte stack slot; the standard AAPCS64 assigns them as
+named arguments. Fixed arguments retain their declared
 types. Variadic C function values may be stored and called in Landin, but a C
 callback parameter, result or record field must have a fixed signature.
 A native Landin definition that
@@ -13769,8 +13783,10 @@ range violations are errors. `--build-mode=debug|release` supplies a separate
 request fact, default debug; it does not change runtime checks or optimization.
 `compiler.arch` retains D139's constructor-selected architecture;
 `compiler.word_size` counts bits and `compiler.byte_order` is `little` or `big`.
-D255 adds `compiler.feature.NAME`, a bool for each feature of the selected
-CPU feature level. These facts are fixed configuration values. Word size is eight times
+D204, D226 and D256 add the C ABI bools `compiler.c_sysv_lp64`,
+`compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`, and D255 adds
+`compiler.feature.NAME`, a bool for each feature of the selected CPU feature
+level. These facts are fixed configuration values. Word size is eight times
 `sizeof usize`, including on a synthetic 32-bit target hosted by a 64-bit
 compiler.
 
@@ -14003,7 +14019,8 @@ model, recursive aggregate classes or target guard on C scalar aliases.
 
 **Chosen:** [1975]'s Linux SysV AMD64 LP64 matrix, signed C char, recursive
 nonempty C structs and separate INTEGER/SSE banks define this boundary.
-`compiler.c_sysv_lp64` (and D226’s `compiler.c_darwin_lp64`) is a fixed bool supplied by the selected ABI;
+`compiler.c_sysv_lp64` (and D226’s `compiler.c_darwin_lp64` and D256's
+`compiler.c_aapcs64_lp64`) is a fixed bool supplied by the selected ABI;
 `core/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
 Register exhaustion rolls an aggregate wholly onto the stack; MEMORY results
 use the C hidden destination. The internal Landin convention is unchanged.
@@ -14900,6 +14917,46 @@ by `compiler.feature.bmi2` and runs at both x86-64 levels,
 `runtime/division-by-arguments-at-every-width`,
 `runtime/a-zero-divisor-traps` and `runtime/signed-division-overflow-traps`,
 which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.
+
+### D256 — Linux arm64 is the standard AAPCS64, a third C ABI with unsigned plain char
+
+**From** [1500], [1580] and [1975].
+
+**The discrepancy:** [1975] selected two hosted C ABIs, both with signed
+plain `char`, and `core/c` made `c_char` an `i8`. Linux on arm64 uses the
+standard Procedure Call Standard for the Arm 64-bit Architecture, which is
+neither: Apple's variant puts every unnamed argument on the stack and packs
+named stack scalars at their natural size, the standard does neither, and its
+plain `char` is unsigned. A second arm64 description could not reuse
+`compiler.c_darwin_lp64` without making that fact mean "arm64".
+
+**Chosen:** `linux-arm64` selects the standard AAPCS64 LP64, whose fixed bool
+is `compiler.c_aapcs64_lp64`. It is false on every other target, and
+`compiler.c_darwin_lp64` is false on `linux-arm64`, so each C fact still names
+exactly one ABI and `compiler.arch == arm64` is what the two arm64 targets
+share. [1975] states the transport: Darwin's banks, homogeneous floating
+aggregates, sixteen-byte indirect bound and x8 result, with unnamed arguments
+assigned as named ones are and every stack argument in whole eight-byte slots.
+`core/c`'s `c_char` is the selected ABI's plain `char`, `u8` under
+`compiler.c_aapcs64_lp64` and `i8` otherwise, chosen by a `fixed if` on that
+fact. x18 stays reserved, so one register rule, and one rule for assembly
+blocks, holds for `compiler.arch == arm64`. Both arm64 targets share D255's
+arm64 levels, so `compiler.feature.lse` means the same on each.
+
+**The alternatives:** reusing `compiler.c_darwin_lp64` for both arm64 targets,
+which misplaces variadic and stack arguments on Linux. One fact true on both
+with a separate Apple fact beside it, which changes what an existing fact
+means to every program that already reads it. A `compiler.os` fact, when the
+transport is decided by the ABI and FreeBSD's arm64 shares this one. Keeping
+`c_char` an `i8`, which disagrees with every header compiled for the target.
+Allocating x18 on Linux, which AAPCS64 permits and which would make an
+assembly block's register rules depend on the operating system.
+
+**Pinned by** `targets/descriptions do not follow the host`,
+`targets/backends are stated per target`, `targets/target contracts`,
+`targets/levels are stated per family`, `toolchain/file operands keep their
+identity`, `driver/fixed facts come from the target`, and
+`end-to-end/refine-identity`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

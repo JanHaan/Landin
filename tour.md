@@ -3499,8 +3499,10 @@ end if
 The compiler exposes `compiler.arch`, whose compiler-owned values are
 `x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
-(`debug` or `release`), plus `compiler.c_sysv_lp64` and
-`compiler.c_darwin_lp64`, bools identifying the selected C ABI rather than inferring it from pointer width.
+(`debug` or `release`), plus `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`
+and `compiler.c_aapcs64_lp64`, bools identifying the selected C ABI rather
+than inferring it from pointer width or architecture: Linux and Apple
+arm64 share `compiler.arch == arm64` and answer differently here.
 A build also assumes a CPU feature level of its target, selected with
 `--level=` and defaulting to the oldest processor of the architecture, and
 `compiler.feature.NAME` is a bool saying whether that level has the feature
@@ -3695,9 +3697,10 @@ Importing from C. `refine` reads Landin, not headers. The bootstrap supplies a
 separate deterministic clang-AST generator for declarations and explicit C
 adapters, with policy for facts a header does not say: nullability, ownership,
 `from`, retention and incoming-varargs extraction. That policy is not a
-handwritten replacement signature. [1975] defines the selected Linux x86-64
-SysV AMD64 LP64 boundary; the normative rules alone are not treated as
-evidence that the boundary or its code generation is complete.
+handwritten replacement signature. [1975] defines the selected boundaries,
+Linux x86-64 SysV AMD64 LP64, Apple's arm64 variant of AAPCS64 and Linux
+arm64's standard AAPCS64; the normative rules alone are not treated as
+evidence that a boundary or its code generation is complete.
 
 A C pointer may be null and a Landin pointer may not. A foreign declaration
 that permits absence therefore names [0480]'s one-atom pointer union, which
@@ -3718,8 +3721,11 @@ allocator backing uses a named union, not a fake `ptr(1)` allocation.
 
 The ordinary `core/c` aliases name C's signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
-`compiler.c_sysv_lp64 or compiler.c_darwin_lp64` admits the two explicitly
-supported hosted ABIs. Equal pointer widths alone do not admit another ABI. Plain `c_char` is signed numeric i8, not a Unicode scalar.
+`compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64`
+admits the three explicitly supported hosted ABIs. Equal pointer widths alone
+do not admit another ABI. Plain `c_char` is the ABI's plain `char`, a numeric
+byte and not a Unicode scalar: `i8` under SysV and Apple's ABI, `u8` under
+the standard AAPCS64 that Linux arm64 uses.
 
 C-compatible values include integers, bool, pointers, f32/f64, C function
 values and recursive nonempty `layout(c)` structs, including nested struct,

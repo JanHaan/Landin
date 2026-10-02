@@ -5,6 +5,7 @@ with Landin.Targets.Capabilities;
 package body Landin.Backend.Toolchain is
 
    use type Landin.Targets.Capabilities.Backend_Kind;
+   use type Landin.Targets.Capabilities.Hosted_System;
    use type Landin.Targets.Levels.Feature_Level;
 
    package Levels renames Landin.Targets.Levels;
@@ -346,8 +347,8 @@ package body Landin.Backend.Toolchain is
       --  of libc and startup linkage. Repeats matter to archive resolution.
       for Library of Libraries loop
          Landin.Platform.Add
-           (List, (if Landin.Targets.Capabilities.Backend_For (Facts)
-                     = Landin.Targets.Capabilities.Linux_X86_64_ELF
+           (List, (if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                     = Landin.Targets.Capabilities.Linux
                    then "-l:lib" & Library & ".a"
                    else File_Operand (Library)));
       end loop;
@@ -359,8 +360,8 @@ package body Landin.Backend.Toolchain is
       end if;
 
       if Build_Id /= "" and then
-        Landin.Targets.Capabilities.Backend_For (Facts)
-          = Landin.Targets.Capabilities.Linux_X86_64_ELF
+        Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+          = Landin.Targets.Capabilities.Linux
       then
          Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
       end if;
@@ -379,6 +380,12 @@ package body Landin.Backend.Toolchain is
          if not Is_Default (Level, Facts) then
             Landin.Platform.Add (List, "-Wl,-z," & Levels.Name (Level));
          end if;
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Linux_Arm64_ELF
+      then
+         --  The GNU assembler takes Arm's own level names.  An arm64
+         --  executable carries no level note for the loader to check.
+         Landin.Platform.Add (List, "-Wa,-march=" & Levels.Name (Level));
       end if;
 
       return List;

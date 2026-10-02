@@ -37,7 +37,8 @@ package Landin.Targets.Capabilities is
    function Link_Symbol (Facts : Target_Facts; Name : String) return String;
 
    type Backend_Kind is
-     (No_Backend, Linux_X86_64_ELF, Darwin_Arm64_Mach_O, Cortex_M0_ELF);
+     (No_Backend, Linux_X86_64_ELF, Darwin_Arm64_Mach_O, Linux_Arm64_ELF,
+      Cortex_M0_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 
@@ -54,9 +55,10 @@ package Landin.Targets.Capabilities is
    --  under, so that the backend can find an assembler and linker by the
    --  convention every GNU toolchain already follows: cross tools carry the
    --  `--target` argument as a prefix, which is why the pinned GNAT appears
-   --  as `x86_64-pc-linux-gnu-gcc` on Linux and
-   --  `aarch64-apple-darwin24.6.0-gcc` on this macOS host.  Both were
-   --  measured in their own environment rather than recalled.
+   --  as `x86_64-pc-linux-gnu-gcc` on Linux x86-64,
+   --  `aarch64-linux-gnu-gcc` on Linux arm64 and
+   --  `aarch64-apple-darwin24.6.0-gcc` on this macOS host.  Each was
+   --  measured in its own environment rather than recalled.
    --
    --  One spelling, carried verbatim, and deliberately not canonicalised.
    --  The same machine is `x86_64-pc-linux-gnu` to the pinned GNAT,

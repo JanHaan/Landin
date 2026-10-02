@@ -50,6 +50,11 @@ package Landin.Targets is
    --  support.
    function Darwin_Arm64 return Target_Facts;
 
+   --  Linux on arm64: Darwin's widths and alignments, with the standard
+   --  AAPCS64 rather than Apple's variant of it, so the two compare
+   --  unequal and select different C transport and object formats.
+   function Linux_Arm64 return Target_Facts;
+
    --  ARMv6-M Thumb, base AAPCS soft-float. Layout/ABI planning only;
    --  capability queries deliberately refuse code generation and C use.
    function Cortex_M return Target_Facts;
@@ -62,8 +67,11 @@ package Landin.Targets is
 
    function Architecture_Of (Facts : Target_Facts) return Architecture;
 
+   --  Named by convention rather than operating system: the standard
+   --  AAPCS64 is Linux's and FreeBSD's alike, and Apple's is a variant.
    type C_ABI_Kind is
-     (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, Arm_AAPCS32_Soft);
+     (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, AAPCS64_LP64,
+      Arm_AAPCS32_Soft);
 
    function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
 

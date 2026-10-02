@@ -10,7 +10,8 @@ package body Landin.Backend.AAPCS64_ABI is
 
    function Is_AAPCS64 (Facts : Landin.Targets.Target_Facts) return Boolean
      is (Landin.Targets.C_ABI_Of (Facts)
-           = Landin.Targets.Darwin_AAPCS64_LP64);
+           in Landin.Targets.Darwin_AAPCS64_LP64
+            | Landin.Targets.AAPCS64_LP64);
 
    function Is_Apple (Facts : Landin.Targets.Target_Facts) return Boolean
      is (Landin.Targets.C_ABI_Of (Facts)

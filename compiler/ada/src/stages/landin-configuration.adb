@@ -173,7 +173,7 @@ package body Landin.Configuration is
            & " is a module-only fixed directive";
       elsif Namespace = "compiler" and then Member
         in "arch" | "word_size" | "byte_order" | "build_mode"
-         | "c_sysv_lp64" | "c_darwin_lp64"
+         | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
       then
          return "D202: compiler." & Member
            & " is available only in fixed configuration expressions";

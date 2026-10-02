@@ -9,7 +9,8 @@ package body Landin.Backend.Dispatch is
      (case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.Linux_X86_64_ELF =>
             "signed 32-bit offsets this backend addresses",
-         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
+         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+           | Landin.Targets.Capabilities.Linux_Arm64_ELF =>
             "signed 32-bit frame budget of the arm64 backend",
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             "32-bit address budget of the Cortex-M backend",
@@ -26,7 +27,8 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Linux_X86_64_ELF =>
             return Landin.Backend.X86_64.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
-         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
+         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+           | Landin.Targets.Capabilities.Linux_Arm64_ELF =>
             return Landin.Backend.Arm64.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
@@ -58,7 +60,8 @@ package body Landin.Backend.Dispatch is
             Landin.Backend.X86_64.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug, Panic, Level);
-         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O =>
+         when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+           | Landin.Targets.Capabilities.Linux_Arm64_ELF =>
             Landin.Backend.Arm64.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug, Panic, Level);

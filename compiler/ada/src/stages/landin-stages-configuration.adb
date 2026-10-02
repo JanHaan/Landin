@@ -297,7 +297,9 @@ package body Landin.Stages.Configuration is
                   --  unnamed one is not typed as the nearest fact there is.
                   if Is_Feature_Fact (Of_Tree, Node) then
                      return Truth;
-                  elsif Word in "c_sysv_lp64" | "c_darwin_lp64" then
+                  elsif Word in "c_sysv_lp64" | "c_darwin_lp64"
+                              | "c_aapcs64_lp64"
+                  then
                      return Truth;
                   elsif Word = "word_size" then
                      return Number;
@@ -369,6 +371,7 @@ package body Landin.Stages.Configuration is
                  or else Spelled (Syn.Name (Of_Tree, Node))
                    not in "arch" | "word_size" | "byte_order"
                         | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
+                        | "c_aapcs64_lp64"
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
@@ -519,6 +522,10 @@ package body Landin.Stages.Configuration is
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.Darwin_AAPCS64_LP64);
+                  elsif Word = "c_aapcs64_lp64" then
+                     return Boolean_Result
+                       (Landin.Targets.C_ABI_Of (Target (Context))
+                          = Landin.Targets.AAPCS64_LP64);
                   elsif Word = "word_size" then
                      return (Kind => Number, Integer_Value => Ty.Folded
                        (Landin.Targets.Pointer_Width (Target (Context))));

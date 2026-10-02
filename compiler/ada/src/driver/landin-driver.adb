@@ -91,13 +91,16 @@ package body Landin.Driver is
       & "language frontend: scanner, parser, names, types, definite assignment"
       & LF
       & "target-neutral IR: lowered and verified" & LF
-      & "backends: linux-x86-64, darwin-arm64 and cortex-m0 assembly" & LF
+      & "backends: linux-x86-64, linux-arm64, darwin-arm64 and cortex-m0"
+      & " assembly" & LF
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF
-      & "targets described: linux-x86-64, darwin-arm64, cortex-m0, "
-      & "synthetic-32" & LF
+      & "targets described: linux-x86-64, linux-arm64, darwin-arm64, "
+      & "cortex-m0, synthetic-32" & LF
       & "levels of linux-x86-64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_X86_64) & LF
+      & "levels of linux-arm64: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_Arm64) & LF
       & "levels of darwin-arm64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Darwin_Arm64) & LF
       & "levels of cortex-m0: "
@@ -159,9 +162,9 @@ package body Landin.Driver is
       & LF
       & "The toolchain is found by the target's GNU triplet, so"
       & LF
-      & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc unless --toolchain"
+      & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc and linux-arm64"
       & LF
-      & "names another." & LF);
+      & "aarch64-linux-gnu-gcc unless --toolchain names another." & LF);
 
    ---------------------------------------------------------------------
    --  Explain

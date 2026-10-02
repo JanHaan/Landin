@@ -19,6 +19,7 @@ with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Levels;
 
 package body Landin.Tests.Toolchain_Suite is
 
@@ -83,6 +84,13 @@ package body Landin.Tests.Toolchain_Suite is
            (Landin.Targets.Linux_X86_64, ""),
          "x86_64-pc-linux-gnu-gcc",
          "the driver is the triplet with the GNU convention's suffix");
+
+      Landin.Testing.Check_Equal
+        (Item,
+         Landin.Backend.Toolchain.Driver_For
+           (Landin.Targets.Linux_Arm64, ""),
+         "aarch64-linux-gnu-gcc",
+         "Linux arm64's driver is the name the pinned aarch64 GNAT has");
 
       Landin.Testing.Check_Equal
         (Item,
@@ -279,6 +287,33 @@ package body Landin.Tests.Toolchain_Suite is
       Check ("sub dir/-notes.s", "sub dir/@notes",
              "sub dir/-notes.s", "sub dir/@notes");
       Check ("notes.s", "notes", "notes.s", "notes");
+
+      --  Linux arm64 takes the Linux archive spelling and build identity,
+      --  and holds its assembler to the level, the baseline included.
+      declare
+         Args : constant Landin.Platform.Path_List :=
+           Landin.Backend.Toolchain.Link_Arguments
+             ("main.s", "main", "", "a1b2", Libraries,
+              Landin.Targets.Linux_Arm64,
+              Level => Landin.Targets.Levels.Level_Named
+                (Landin.Targets.Linux_Arm64, "armv8.1-a"));
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined (Args),
+            "main.s" & LF & "-l:libsupport.a" & LF
+            & "-l:libsupport.a" & LF & "-o" & LF & "main" & LF
+            & "-Wl,--build-id=0xa1b2" & LF
+            & "-Wa,-march=armv8.1-a" & LF,
+            "Linux arm64 links as Linux and assembles at its level");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined
+              (Landin.Backend.Toolchain.Link_Arguments
+                 ("main.s", "main", "",
+                  Facts => Landin.Targets.Linux_Arm64)),
+            "main.s" & LF & "-o" & LF & "main" & LF
+            & "-Wa,-march=armv8-a" & LF,
+            "the arm64 baseline is named to the assembler too");
+      end;
    end File_Operands_Keep_Their_Identity;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

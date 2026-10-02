@@ -105,6 +105,13 @@ package body Landin.Tests.Targets_Suite is
          and then C_ABI_Of (Darwin_Arm64) = Darwin_AAPCS64_LP64,
          "Darwin is a distinct architecture and ABI despite equal widths");
       Check_Description
+        (Item, Linux_Arm64, "linux-arm64", 64, 8, 16, 16, 8);
+      Landin.Testing.Check
+        (Item, Architecture_Of (Linux_Arm64) = Arm64
+         and then C_ABI_Of (Linux_Arm64) = AAPCS64_LP64
+         and then Linux_Arm64 /= Darwin_Arm64,
+         "Linux arm64 shares Darwin's architecture, not its C ABI");
+      Check_Description
         (Item, Synthetic_32, "synthetic-32",
          Pointer_Bits  => 32,
          Pointer_Align => 4,
@@ -153,6 +160,14 @@ package body Landin.Tests.Targets_Suite is
         (Item,
          Capabilities.Backend_For (Synthetic_32) = Capabilities.No_Backend,
          "synthetic-32 has no backend");
+      Landin.Testing.Check
+        (Item,
+         Capabilities.Backend_For (Linux_Arm64) =
+           Capabilities.Linux_Arm64_ELF
+         and then Capabilities.Backend_For (Darwin_Arm64) =
+           Capabilities.Darwin_Arm64_Mach_O
+         and then Capabilities.Triplet (Linux_Arm64) = "aarch64-linux-gnu",
+         "each arm64 description has its own backend kind and triplet");
    end Backends_Are_Stated_Per_Target;
 
    --  The driver and the server select through one mapping, so each
@@ -168,6 +183,7 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check
         (Item,
          Selection.Described ("linux-x86-64") = Linux_X86_64
+           and then Selection.Described ("linux-arm64") = Linux_Arm64
            and then Selection.Described ("darwin-arm64") = Darwin_Arm64
            and then Selection.Described ("cortex-m0") = Cortex_M
            and then Selection.Described ("synthetic-32") = Synthetic_32,
@@ -186,6 +202,8 @@ package body Landin.Tests.Targets_Suite is
          not Selection.Is_Described ("x86_64-pc-linux-gnu")
            and then not Selection.Is_Described ("cortex-m")
            and then not Selection.Is_Described ("macos-arm64")
+           and then not Selection.Is_Described ("aarch64-linux-gnu")
+           and then not Selection.Is_Described ("linux-aarch64")
            and then not Selection.Is_Described ("Linux-x86-64")
            and then not Selection.Is_Described (""),
          "a triplet, a fixture label or another spelling selects nothing");
@@ -275,6 +293,16 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, Holds (Darwin_Arm64, "armv8.1-a"), "lse crc32 rdm",
          "Armv8.1-A makes LSE, CRC32 and RDM mandatory");
+      --  A family is the architecture's, so both arm64 descriptions select
+      --  the same levels with the same features and default.
+      Landin.Testing.Check
+        (Item, L.Levels_Of (Linux_Arm64) = L.Levels_Of (Darwin_Arm64)
+         and then L.Name (L.Default_Level (Linux_Arm64)) = "armv8-a"
+         and then Holds (Linux_Arm64, "armv8.1-a")
+                    = Holds (Darwin_Arm64, "armv8.1-a")
+         and then L.Belongs_To
+                    (L.Level_Named (Darwin_Arm64, "armv8.1-a"), Linux_Arm64),
+         "both arm64 descriptions share one level family");
       Landin.Testing.Check_Equal
         (Item, Holds (Cortex_M, "armv6-m"), "",
          "Armv6-M holds no level feature");
@@ -1096,7 +1124,16 @@ package body Landin.Tests.Targets_Suite is
            = Landin.Hosted.No_Host_Helper,
          "helper membership is exact, not a prefix namespace");
       Landin.Testing.Check
+        (Item, C.C_Signatures (Linux_Arm64)
+         and then C.C_Records (Linux_Arm64)
+         and then C.C_Variadic_Calls (Linux_Arm64)
+         and then C.Object_Format_Of (Linux_Arm64) = C.ELF
+         and then C.Debug_Format_Of (Linux_Arm64) = C.ELF_DWARF
+         and then C.Link_Symbol (Linux_Arm64, "_entry") = "_entry",
+         "Linux arm64 implements C, ELF code and ELF DWARF");
+      Landin.Testing.Check
         (Item, C.Hosted_System_Of (Linux_X86_64) = C.Linux
+           and then C.Hosted_System_Of (Linux_Arm64) = C.Linux
            and then C.Hosted_System_Of (Darwin_Arm64) = C.Darwin
            and then C.Hosted_System_Of (Cortex_M) = C.No_Hosted_System
            and then C.Hosted_System_Of (Synthetic_32) = C.No_Hosted_System,

@@ -36,6 +36,17 @@ package body Landin.Targets is
       Keeps_Frame      => True,
       Widest_Alignment => 16);
 
+   function Linux_Arm64 return Target_Facts is
+     (Label            => Padded ("linux-arm64"),
+      Machine          => Arm64,
+      C_ABI            => AAPCS64_LP64,
+      Pointer          => 64,
+      Pointer_Align    => 8,
+      Stack_Align      => 16,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 16);
+
    function Cortex_M return Target_Facts is
      (Label            => Padded ("cortex-m0"),
       Machine          => Cortex_M0,

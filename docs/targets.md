@@ -7,9 +7,12 @@ explains the package boundaries, not a second work list.
 |---|---|
 | pointer width, alignment, byte order, architecture, intended C ABI | `Landin.Targets` |
 | implemented C signatures, records and variadic calls | `Landin.Targets.Capabilities` |
-| object format, symbol prefix, available backend/debug format and triplet | `Landin.Targets.Capabilities` |
+| object format, symbol prefix, available backend/debug format, hosted system and triplet | `Landin.Targets.Capabilities` |
 | source-level C subset eligibility | checking, using capability queries |
-| physical C transport | backend ABI planner; separate SysV, Darwin and Cortex-M planners |
+| physical C transport | backend ABI planner; separate SysV, AAPCS64 (the standard and Apple's variant) and Cortex-M planners |
+| arm64 object-format spelling | `Landin.Backend.Arm64.Platform` |
+| ELF directive spelling shared by ELF backends | `Landin.Backend.ELF` |
+| each hosted system's libc spelling under the runtime bridge | `Landin.Backend.Hosted_ABI` |
 | frame preflight and emission selection | `Landin.Backend.Dispatch` |
 | assembly, local labels, libc dependencies, register/frame placement and DWARF | concrete backend |
 | logical hosted helper identities | `Landin.Hosted`, shared by checker and backend |
@@ -17,10 +20,13 @@ explains the package boundaries, not a second work list.
 | C alias identities | ordinary `core/c`, guarded by the selected ABI fact |
 | actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
 
-The Linux and Darwin descriptions both use 64-bit pointers, eight-byte pointer
-alignment, sixteen-byte stack alignment and little-endian storage. Equal widths
-do not imply equal calling conventions. Darwin enables C signatures, C records,
-variadic calls and native Mach-O emission. `--target=darwin-arm64 --emit=exe`
+The Linux x86-64, Linux arm64 and Darwin descriptions all use 64-bit pointers,
+eight-byte pointer alignment, sixteen-byte stack alignment and little-endian
+storage. Equal widths do not imply equal calling conventions, and an equal
+architecture does not either: `linux-arm64` and `darwin-arm64` are both
+`compiler.arch == arm64` and select different C ABIs, object formats and
+hosted systems. Darwin enables C signatures, C records, variadic calls and
+native Mach-O emission. `--target=darwin-arm64 --emit=exe`
 selects `/usr/bin/clang -arch arm64`; `--toolchain=PATH` explicitly overrides
 the driver. The default target remains Linux. `--debug=full` selects native DWARF and
 dSYM packaging on Darwin; the synthetic target has no debug capability.
@@ -69,8 +75,35 @@ does not escape the platform prefix. The same mapping applies to explicit
 native names, C imports/exports and compiler-owned hosted helpers. Local labels
 are allocated separately. Existing ELF spelling and golden records remain valid.
 
-`core/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64`. Each fact
-identifies its own implemented ABI, not LP64 generally. Generated bindings
+## Linux arm64
+
+`--target=linux-arm64` is the arm64 backend's second description. Instruction
+selection, frames, the native Landin convention and the levels are Darwin's;
+what differs is chosen by three questions, each asked of the description
+rather than by comparing it with Darwin's:
+
+| question | Darwin arm64 | Linux arm64 |
+|---|---|---|
+| object format (`Object_Format_Of`) | Mach-O: `@PAGE`/`@PAGEOFF`, `@GOTPAGE`, `__TEXT,__const`, `__DATA_CONST,__const`, `.zerofill`, `.private_extern`, `.subsections_via_symbols`, `L` labels, the underscore prefix, dSYM DWARF | ELF: `:lo12:`, `:got:`/`:got_lo12:`, `.rodata`, `.data.rel.ro.local`, `.bss`, `.hidden`, `.type`/`.size`, `.note.GNU-stack`, `.L` labels, no prefix, ELF DWARF |
+| C ABI (`C_ABI_Of`) | Apple's AAPCS64: variadic tails on the stack, named stack scalars and HFAs packed | the standard AAPCS64: variadic arguments assigned as named ones, every stack argument in whole eight-byte slots |
+| hosted system (`Hosted_System_Of`) | `__error`, `open` flags `0x601` | `__errno_location`, `open` flags 577 |
+
+The driver is `aarch64-linux-gnu-gcc`, the name the pinned aarch64 GNAT
+installs, and the program links as a position-independent executable, the
+driver's default, which the arm64 addressing already is. Linux's archive
+spelling and build identity apply as on x86-64. The assembler is held to the
+level at every level with `-Wa,-march=`, the baseline's `armv8-a` included;
+an arm64 executable carries no level note. x18 is never allocated and stays
+reserved for assembly blocks, as on Darwin. The bridge, the hosted entry and
+the panic edges are Darwin's instructions with the Linux libc spellings; the
+write-open bridge passes its mode in w2 rather than on Apple's variadic stack.
+
+## C aliases and generated bindings
+
+`core/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or
+compiler.c_aapcs64_lp64`, and its `c_char` is `u8` under the standard AAPCS64
+and `i8` otherwise. Each fact identifies its own implemented ABI, not LP64
+generally. Generated bindings
 assert the selected fact. The generator supports `x86_64-pc-linux-gnu` and the
 pinned `arm64-apple-macos26.0.0` deployment triple, independently probing Clang's
 triple, macros and data model. The native Apple corpus regenerates all binding
@@ -89,6 +122,7 @@ ABI, is the same at every level of a family.
 | target | default | other levels | what a higher level selects | its tool arguments |
 |---|---|---|---|---|
 | `linux-x86-64` | `x86-64-v1` | `x86-64-v2`, `x86-64-v3`, `x86-64-v4` | BMI2 `shlx`/`shrx`/`sarx` for a variable 32- or 64-bit shift from v3 | `-Wa,-march=generic64` with the level's extensions, at every level; `-Wl,-z,x86-64-vN` above the baseline |
+| `linux-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly above the baseline; `-Wa,-march=` with the level at every level |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldaddal`/`swpal`/`casal` for atomic read-modify-write | `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | `.arch` in the assembly, `-march=` for the assembler and linker |
 | `synthetic-32` | none | none | nothing | none |

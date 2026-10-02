@@ -24,6 +24,10 @@ to the same path under WORK.  Tier 2 of the determinism contract holds under
 exactly that relation.
 
     emit REFINE ROOT WORK OUT.json   write this compiler's manifest
+    emit --targets=A,B REFINE ROOT WORK OUT.json
+                                     for those targets only, so a compiler
+                                     that predates a target is compared on
+                                     the ones it has
     compare A.json B.json            require the two to agree
     compare --report-only A.json B.json
                                      require them to agree except where a
@@ -68,7 +72,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TARGETS = ("linux-x86-64", "darwin-arm64", "cortex-m0")
+TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0")
 CLASSES = ("positive", "negative", "runtime", "abi", "end-to-end")
 
 
@@ -210,7 +214,7 @@ def run_one(refine, fixture, sources, target, variant, work):
     return entry
 
 
-def emit(refine, root, work, out):
+def emit(refine, root, work, out, targets=TARGETS):
     refine = Path(refine).resolve()
     root = Path(root).resolve()
     work = Path(work).resolve()
@@ -228,7 +232,7 @@ def emit(refine, root, work, out):
             sources = operands(meta)
             variants = ("plain",) if klass == "negative" else (
                 "plain", "debug")
-            for target in TARGETS:
+            for target in targets:
                 for variant in variants:
                     jobs.append((fixture, sources, target, variant))
     manifest = {}
@@ -253,8 +257,8 @@ def emit(refine, root, work, out):
 
 #  The level a compilation assumes when none is selected, which is the only
 #  one a manifest compiles at and so the only one it may treat as absent.
-DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "darwin-arm64": "armv8-a",
-                 "cortex-m0": "armv6-m"}
+DEFAULT_LEVEL = {"linux-x86-64": "x86-64-v1", "linux-arm64": "armv8-a",
+                 "darwin-arm64": "armv8-a", "cortex-m0": "armv6-m"}
 
 #  What a change of space may move, per field; `layout` stands for them.
 MOVED_BY_LAYOUT = {"asm", "report"}
@@ -308,14 +312,23 @@ def compare(first, second, report_only=False, layout_only=False):
 def main(argv):
     if len(argv) == 6 and argv[1] == "emit":
         return emit(*argv[2:])
+    if len(argv) == 7 and argv[1] == "emit" and argv[2].startswith(
+            "--targets="):
+        chosen = tuple(argv[2][len("--targets="):].split(","))
+        unknown = [t for t in chosen if t not in TARGETS]
+        if unknown or not chosen:
+            print("driver_manifest.py: unknown target %s"
+                  % ", ".join(unknown or ["(none)"]), file=sys.stderr)
+            return 2
+        return emit(*argv[3:], targets=chosen)
     if len(argv) == 4 and argv[1] == "compare":
         return compare(argv[2], argv[3])
     if len(argv) == 5 and argv[1:3] == ["compare", "--report-only"]:
         return compare(argv[3], argv[4], report_only=True)
     if len(argv) == 5 and argv[1:3] == ["compare", "--layout-only"]:
         return compare(argv[3], argv[4], layout_only=True)
-    print("usage: driver_manifest.py emit REFINE ROOT WORK OUT.json",
-          file=sys.stderr)
+    print("usage: driver_manifest.py emit [--targets=A,B] REFINE ROOT WORK"
+          " OUT.json", file=sys.stderr)
     print("       driver_manifest.py compare [--report-only | --layout-only]"
           " A.json B.json", file=sys.stderr)
     return 2
