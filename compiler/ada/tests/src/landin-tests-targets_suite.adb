@@ -5,6 +5,7 @@ with Landin.Backend;
 with Landin.Evidence;
 with Landin.Hosted;
 with Landin.Backend.C_ABI;
+with Landin.Backend.Hosted_ABI;
 with Landin.Backend.Darwin_ABI;
 with Landin.Backend.Toolchain;
 with Landin.IR;
@@ -1040,6 +1041,7 @@ package body Landin.Tests.Targets_Suite is
       use type C.Object_Format;
       use type C.Debug_Format;
       use type Landin.Hosted.Host_Helper;
+      use type C.Hosted_System;
       Unit : Landin.IR.Unit;
    begin
       Landin.Testing.Check
@@ -1093,6 +1095,22 @@ package body Landin.Tests.Targets_Suite is
         (Item, Landin.Hosted.Helper_Of ("_landin_host_unknown")
            = Landin.Hosted.No_Host_Helper,
          "helper membership is exact, not a prefix namespace");
+      Landin.Testing.Check
+        (Item, C.Hosted_System_Of (Linux_X86_64) = C.Linux
+           and then C.Hosted_System_Of (Darwin_Arm64) = C.Darwin
+           and then C.Hosted_System_Of (Cortex_M) = C.No_Hosted_System
+           and then C.Hosted_System_Of (Synthetic_32) = C.No_Hosted_System,
+         "a hosted system is stated per target, and freestanding has none");
+      Landin.Testing.Check
+        (Item, Landin.Backend.Hosted_ABI.Errno_Function (C.Linux)
+             = "__errno_location"
+           and then Landin.Backend.Hosted_ABI.Errno_Function (C.Darwin)
+             = "__error"
+           and then Landin.Backend.Hosted_ABI.Create_For_Writing (C.Linux)
+             = 577
+           and then Landin.Backend.Hosted_ABI.Create_For_Writing (C.Darwin)
+             = 1537,
+         "each system's libc spells errno and write-open its own way");
       declare
          Ignored : Landin.Backend.C_ABI.Classification;
       begin

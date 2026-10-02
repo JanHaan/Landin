@@ -88,6 +88,12 @@ package body Landin.Targets.Capabilities is
       end if;
    end Backend_For;
 
+   function Hosted_System_Of (Facts : Target_Facts) return Hosted_System is
+     (case Backend_For (Facts) is
+         when Linux_X86_64_ELF => Linux,
+         when Darwin_Arm64_Mach_O => Darwin,
+         when Cortex_M0_ELF | No_Backend => No_Hosted_System);
+
    function Triplet (Facts : Target_Facts) return String is
    begin
       if Facts = Linux_X86_64 then

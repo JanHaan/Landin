@@ -10,6 +10,8 @@ with Landin.Hosted;
 with Landin.Targets.Capabilities;
 
 with Landin.Backend.C_ABI;
+with Landin.Backend.ELF;
+with Landin.Backend.Hosted_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.Backend.X86_64.Allocation;
 with Landin.Backend.X86_64.Dwarf;
@@ -56,6 +58,9 @@ package body Landin.Backend.X86_64 is
    --  same reason.
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
+
+   function Image (Value : Natural) return String
+     is (Trimmed (Natural'Image (Value)));
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -339,6 +344,11 @@ package body Landin.Backend.X86_64 is
       --  shift at 32 or 64 bits needs neither %cl nor its operand loaded.
       Has_BMI2 : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Bmi2);
+      --  This renderer always spells Linux ELF, synthetic-32's layout probe
+      --  included, so its libc is Linux's whatever width it lays out for.
+      System : constant Hosted_ABI.Hosted_System :=
+        Landin.Targets.Capabilities.Hosted_System_Of
+          (Landin.Targets.Linux_X86_64);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -445,7 +455,7 @@ package body Landin.Backend.X86_64 is
             or else Spelling = "read"
             or else Spelling = "write"
             or else Spelling = "close"
-            or else Spelling = "__errno_location");
+            or else Spelling = Hosted_ABI.Errno_Function (System));
 
       function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
@@ -461,7 +471,7 @@ package body Landin.Backend.X86_64 is
 
       function Unused_Local_Prefix return String is
          Candidate : Unbounded.Unbounded_String :=
-           Unbounded.To_Unbounded_String (".L");
+           Unbounded.To_Unbounded_String (ELF.Local_Prefix);
          Collides : Boolean;
       begin
          loop
@@ -4953,8 +4963,7 @@ package body Landin.Backend.X86_64 is
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
-         Put (Character'Val (9) & ".type " & Symbol (Item)
-              & ", @function");
+         Put (Character'Val (9) & ELF.Function_Type (Symbol (Item)));
          Put (Symbol (Item) & ":");
          Machine.Start
            (Streams (Positive (Item)), Shareable (Positive (Item)));
@@ -5193,8 +5202,7 @@ package body Landin.Backend.X86_64 is
             Counts.Register_Count := Allocation.Save_Count (Allocation_Plan);
             Counts.Spill_Count := Allocation_Plan.Spill_Homes;
          end;
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", .-"
-              & Symbol (Item));
+         Put (Character'Val (9) & ELF.Size_To_Here (Symbol (Item)));
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs
@@ -6134,7 +6142,7 @@ package body Landin.Backend.X86_64 is
          if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
          Put
            (Character'Val (9) & ".align "
             & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
@@ -6182,8 +6190,9 @@ package body Landin.Backend.X86_64 is
             Emit_Zero (Size - Written);
          end if;
          Put
-           (Character'Val (9) & ".size " & Symbol (Item) & ", "
-            & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
+           (Character'Val (9) & ELF.Size
+              (Symbol (Item),
+               Trimmed (Landin.Targets.Byte_Count'Image (Size))));
       end Emit_Recursive_Image_Datum;
 
       --  Whether a module value has an absent zero image, and so is storage
@@ -6234,12 +6243,12 @@ package body Landin.Backend.X86_64 is
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
          Put (Character'Val (9) & ".align "
               & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Put (Symbol (Item) & ":");
          Emit (".zero " & Bytes);
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+         Put (Character'Val (9) & ELF.Size (Symbol (Item), Bytes));
       end Emit_Reserved;
 
       --  [0520]'s array: the element repeated, so its extent is one
@@ -6298,7 +6307,7 @@ package body Landin.Backend.X86_64 is
                Put (Character'Val (9) & ".globl " & Symbol (Item));
             end if;
 
-            Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+            Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
             Put (Character'Val (9) & ".align "
                  & Trimmed
                      (Landin.Targets.Byte_Alignment'Image
@@ -6351,7 +6360,7 @@ package body Landin.Backend.X86_64 is
                end loop;
             end if;
 
-            Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+            Put (Character'Val (9) & ELF.Size (Symbol (Item), Bytes));
          end;
       end Emit_Array_Image_Datum;
 
@@ -6368,7 +6377,7 @@ package body Landin.Backend.X86_64 is
          if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
          Put (Character'Val (9) & ".align 8");
          Put (Symbol (Item) & ":");
          declare
@@ -6392,7 +6401,7 @@ package body Landin.Backend.X86_64 is
             & Trimmed
                 (Landin.IR.Element_Total'Image
                    (Landin.IR.Slice_Image_Length (Of_Unit, Item))));
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", 16");
+         Put (Character'Val (9) & ELF.Size (Symbol (Item), "16"));
       end Emit_Slice_Image_Datum;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
@@ -6418,15 +6427,31 @@ package body Landin.Backend.X86_64 is
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ELF.Object_Type (Symbol (Item)));
          Put (Character'Val (9) & ".align "
               & Trimmed
                   (Landin.Targets.Byte_Alignment'Image
                      (Landin.Targets.Alignment_Of (Facts, Held))));
          Put (Symbol (Item) & ":");
          Emit (Directive (Held) & " " & Written);
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+         Put (Character'Val (9) & ELF.Size (Symbol (Item), Bytes));
       end Emit_Datum;
+
+      --  Each bridge is one ELF function: typed before its label and sized
+      --  from it to its last instruction.
+      procedure Begin_Bridge (Helper : Host_Helper);
+      procedure End_Bridge (Helper : Host_Helper);
+
+      procedure Begin_Bridge (Helper : Host_Helper) is
+      begin
+         Put (Character'Val (9) & ELF.Function_Type (Bridge_Symbol (Helper)));
+         Put (Bridge_Symbol (Helper) & ":");
+      end Begin_Bridge;
+
+      procedure End_Bridge (Helper : Host_Helper) is
+      begin
+         Put (Character'Val (9) & ELF.Size_To_Here (Bridge_Symbol (Helper)));
+      end End_Bridge;
 
       Any_Written  : Boolean := False;
       Any_Reserved : Boolean := False;
@@ -6665,7 +6690,7 @@ package body Landin.Backend.X86_64 is
                   if Is_Public_Item (Item) then
                      Emit (".globl " & Symbol (Item));
                   end if;
-                  Emit (".type " & Symbol (Item) & ", @function");
+                  Emit (ELF.Function_Type (Symbol (Item)));
                   Emit
                     (".set " & Symbol (Item) & ", "
                      & Symbol (Shared_With (Index)));
@@ -6690,7 +6715,7 @@ package body Landin.Backend.X86_64 is
       --  reference the checker should have refused faults instead of
       --  silently changing every reader's literal.
       if Any_Read_Only then
-         Put (Character'Val (9) & ".section .rodata");
+         Put (Character'Val (9) & ELF.Read_Only_Section);
 
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
@@ -6707,7 +6732,7 @@ package body Landin.Backend.X86_64 is
       end if;
 
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
-         Put (Character'Val (9) & ".section .data.rel.ro.local,""aw""");
+         Put (Character'Val (9) & ELF.Relocated_Read_Only_Section);
          for Position in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
             declare
                Evidence : constant Landin.IR.Evidence_Id :=
@@ -6749,7 +6774,7 @@ package body Landin.Backend.X86_64 is
       --  objects it holds.  Written first and reserved second, in the order
       --  the declarations were made inside each.
       if Any_Written then
-         Put (Character'Val (9) & ".data");
+         Put (Character'Val (9) & ELF.Data_Section);
 
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
@@ -6779,7 +6804,7 @@ package body Landin.Backend.X86_64 is
       end if;
 
       if Any_Reserved then
-         Put (Character'Val (9) & ".bss");
+         Put (Character'Val (9) & ELF.Zero_Section);
 
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
             declare
@@ -6829,11 +6854,8 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".globl " & Bridge_Symbol (Initialize_Arguments));
          Put (Character'Val (9)
-              & ".hidden " & Bridge_Symbol (Initialize_Arguments));
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Initialize_Arguments)
-              & ", @function");
-         Put (Bridge_Symbol (Initialize_Arguments) & ":");
+              & ELF.Hidden (Bridge_Symbol (Initialize_Arguments)));
+         Begin_Bridge (Initialize_Arguments);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("jne " & Local_Prefix & "landin_host_arguments_initialized");
          Emit ("testl %edi, %edi");
@@ -6863,13 +6885,9 @@ package body Landin.Backend.X86_64 is
             Emit ("call " & Symbol (Landin.Panics.Handler (Panic.all)));
          end if;
          Emit ("ud2");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Initialize_Arguments) & ", "
-              & ".-" & Bridge_Symbol (Initialize_Arguments));
+         End_Bridge (Initialize_Arguments);
 
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Argument_Count) & ", @function");
-         Put (Bridge_Symbol (Argument_Count) & ":");
+         Begin_Bridge (Argument_Count);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -6878,29 +6896,21 @@ package body Landin.Backend.X86_64 is
          Emit ("xorl %eax, %eax");
          Put (Local_Prefix & "landin_host_count_ready:");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Argument_Count) & ", "
-              & ".-" & Bridge_Symbol (Argument_Count));
+         End_Bridge (Argument_Count);
 
          --  Publish the user-argument table itself so core/io can retain the
          --  real backing capability in its system value.  Indexed results
          --  then derive from that stored table instead of from hidden global
          --  state; argv[0] remains outside the published table.
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Argument_Table) & ", @function");
-         Put (Bridge_Symbol (Argument_Table) & ":");
+         Begin_Bridge (Argument_Table);
          Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
          Emit ("testq %rax, %rax");
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("addq $8, %rax");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Argument_Table) & ", "
-              & ".-" & Bridge_Symbol (Argument_Table));
+         End_Bridge (Argument_Table);
 
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Argument_At) & ", @function");
-         Put (Bridge_Symbol (Argument_At) & ":");
+         Begin_Bridge (Argument_At);
          Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
          Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
@@ -6913,98 +6923,63 @@ package body Landin.Backend.X86_64 is
          Emit ("testq %rax, %rax");
          Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Argument_At) & ", "
-              & ".-" & Bridge_Symbol (Argument_At));
+         End_Bridge (Argument_At);
 
          --  Keep the established one-index helper above for the existing
          --  foreign-C boundary fixtures.  The capability-aware variant has a
          --  distinct symbol and derives its result from the explicit table.
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Argument_At_From) & ", @function");
-         Put (Bridge_Symbol (Argument_At_From) & ":");
+         Begin_Bridge (Argument_At_From);
          Emit ("movq (%rdi,%rsi,8), %rax");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Argument_At_From) & ", "
-              & ".-" & Bridge_Symbol (Argument_At_From));
+         End_Bridge (Argument_At_From);
 
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Text_Length) & ", @function");
-         Put (Bridge_Symbol (Text_Length) & ":");
+         Begin_Bridge (Text_Length);
          Emit ("jmp strlen");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Text_Length) & ", "
-              & ".-" & Bridge_Symbol (Text_Length));
+         End_Bridge (Text_Length);
 
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Open_Read) & ", @function");
-         Put (Bridge_Symbol (Open_Read) & ":");
+         Begin_Bridge (Open_Read);
          Emit ("xorl %esi, %esi");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Open_Read) & ", "
-              & ".-" & Bridge_Symbol (Open_Read));
+         End_Bridge (Open_Read);
 
          --  A fixed Landin signature fronts libc's variadic open.  Linux
          --  O_WRONLY | O_CREAT | O_TRUNC is 577; 0666 is filtered by the
          --  process umask.  Clearing eax satisfies the SysV variadic ABI.
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Open_Write) & ", @function");
-         Put (Bridge_Symbol (Open_Write) & ":");
-         Emit ("movl $577, %esi");
-         Emit ("movl $438, %edx");
+         Begin_Bridge (Open_Write);
+         Emit ("movl $" & Image (Hosted_ABI.Create_For_Writing (System))
+               & ", %esi");
+         Emit ("movl $" & Image (Hosted_ABI.Created_File_Mode) & ", %edx");
          Emit ("xorl %eax, %eax");
          Emit ("jmp open");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Open_Write) & ", "
-              & ".-" & Bridge_Symbol (Open_Write));
+         End_Bridge (Open_Write);
 
-         Put (Character'Val (9) & ".type " & Bridge_Symbol (Read_Bytes)
-              & ", @function");
-         Put (Bridge_Symbol (Read_Bytes) & ":");
+         Begin_Bridge (Read_Bytes);
          Emit ("jmp read");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Read_Bytes) & ", .-"
-              & Bridge_Symbol (Read_Bytes));
+         End_Bridge (Read_Bytes);
 
-         Put (Character'Val (9) & ".type " & Bridge_Symbol (Write_Bytes)
-              & ", @function");
-         Put (Bridge_Symbol (Write_Bytes) & ":");
+         Begin_Bridge (Write_Bytes);
          Emit ("jmp write");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Write_Bytes) & ", .-"
-              & Bridge_Symbol (Write_Bytes));
+         End_Bridge (Write_Bytes);
 
-         Put (Character'Val (9) & ".type " & Bridge_Symbol (Close_File)
-              & ", @function");
-         Put (Bridge_Symbol (Close_File) & ":");
+         Begin_Bridge (Close_File);
          Emit ("jmp close");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Close_File) & ", .-"
-              & Bridge_Symbol (Close_File));
+         End_Bridge (Close_File);
 
-         Put (Character'Val (9) & ".type " & Bridge_Symbol (Errno_Value)
-              & ", @function");
-         Put (Bridge_Symbol (Errno_Value) & ":");
+         Begin_Bridge (Errno_Value);
          Emit ("subq $8, %rsp");
-         Emit ("call __errno_location");
+         Emit ("call " & Hosted_ABI.Errno_Function (System));
          Emit ("movl (%rax), %eax");
          Emit ("addq $8, %rsp");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Errno_Value) & ", .-"
-              & Bridge_Symbol (Errno_Value));
+         End_Bridge (Errno_Value);
 
          --  core/heap keeps allocation behind the same fixed scalar/pointer
          --  bridge as hosted I/O.  Over-allocation leaves one pointer word
          --  immediately before the aligned result so release can recover
          --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks
          --  are host-width work here, never constants in target-neutral IR.
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Heap_Allocate) & ", @function");
-         Put (Bridge_Symbol (Heap_Allocate) & ":");
+         Begin_Bridge (Heap_Allocate);
          Emit ("cmpq $1, %rsi");
          Emit ("ja " & Local_Prefix & "landin_host_heap_alignment_ready");
          Emit ("movl $1, %esi");
@@ -7044,18 +7019,12 @@ package body Landin.Backend.X86_64 is
          Put (Local_Prefix & "landin_host_heap_failed:");
          Emit ("xorl %eax, %eax");
          Emit ("ret");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Heap_Allocate) & ", "
-              & ".-" & Bridge_Symbol (Heap_Allocate));
+         End_Bridge (Heap_Allocate);
 
-         Put (Character'Val (9)
-              & ".type " & Bridge_Symbol (Heap_Release) & ", @function");
-         Put (Bridge_Symbol (Heap_Release) & ":");
+         Begin_Bridge (Heap_Release);
          Emit ("movq -8(%rdi), %rdi");
          Emit ("jmp free");
-         Put (Character'Val (9)
-              & ".size " & Bridge_Symbol (Heap_Release) & ", "
-              & ".-" & Bridge_Symbol (Heap_Release));
+         End_Bridge (Heap_Release);
       end if;
 
       if Host_Bridge_Needed then
@@ -7063,7 +7032,7 @@ package body Landin.Backend.X86_64 is
          --  A program may own a multi-gigabyte zero-image datum in .bss;
          --  placing these cells after that section would put RIP-relative
          --  entry accesses outside x86-64's signed displacement.
-         Put (Character'Val (9) & ".data");
+         Put (Character'Val (9) & ELF.Data_Section);
          Put (Character'Val (9) & ".balign 8");
          Put (Local_Prefix & "landin_host_argv:");
          Emit (".zero 8");
@@ -7077,18 +7046,15 @@ package body Landin.Backend.X86_64 is
            (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
             Local_Prefix, Symbol'Access));
       end if;
-      --  An executable stack is inherited when nothing says otherwise,
-      --  and nothing this compiler emits needs one.
-      Put (Character'Val (9)
-           & ".section .note.GNU-stack,"""",@progbits");
+      Put (Character'Val (9) & ELF.No_Executable_Stack);
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item
       then
-         Emit (".pushsection .bss.landin_panic,""aw"",@nobits");
+         Emit (ELF.Push_Panic_Flag_Section);
          Emit (".balign 4");
          Put (Local_Prefix & "landin_panic_active:");
          Emit (".zero 4");
-         Emit (".popsection");
+         Emit (ELF.Pop_Section);
       end if;
       Assembly := Out_Text;
    end Emit;
