@@ -869,6 +869,43 @@ package body Landin.Tests.Lexer_Suite is
          Landin.Tokens.Kind (Stream, 7) = Landin.Tokens.Identifier,
          "and the scan carries on at the next byte");
 
+      Lex_Text ("@""ok""@'x'", Sources, Names, Stream);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Tokens.Fault_Count (Stream), 2,
+         "unknown bytes before quotes do not unclose the literals");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Unknown_Bytes
+         and then Landin.Tokens.Kind (Stream, 2)
+           = Landin.Tokens.Text_Literal
+         and then Landin.Tokens.Kind (Stream, 3)
+           = Landin.Tokens.Unknown_Bytes
+         and then Landin.Tokens.Kind (Stream, 4)
+           = Landin.Tokens.Character_Literal,
+         "each quote starts its own literal token");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Where (Stream, 1).First = 0
+         and then Landin.Tokens.Where (Stream, 1).Last = 1
+         and then Landin.Tokens.Where (Stream, 2).First = 1
+         and then Landin.Tokens.Where (Stream, 2).Last = 5
+         and then Landin.Tokens.Where (Stream, 3).First = 5
+         and then Landin.Tokens.Where (Stream, 3).Last = 6
+         and then Landin.Tokens.Where (Stream, 4).First = 6
+         and then Landin.Tokens.Where (Stream, 4).Last = 9,
+         "unknown-byte spans stop before either opening quote");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Where (Landin.Tokens.Nth_Fault (Stream, 1)).First
+           = 0
+         and then Landin.Tokens.Where
+           (Landin.Tokens.Nth_Fault (Stream, 1)).Last = 1
+         and then Landin.Tokens.Where
+           (Landin.Tokens.Nth_Fault (Stream, 2)).First = 5
+         and then Landin.Tokens.Where
+           (Landin.Tokens.Nth_Fault (Stream, 2)).Last = 6,
+         "unknown-byte faults cover only the unspellable bytes");
+
       declare
          Wanted : Landin.Tokens.Kind_Set :=
            [others => False];

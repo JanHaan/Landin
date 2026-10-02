@@ -767,7 +767,9 @@ package body Landin.Tokens.Lexer is
                           or else Text (Position) = CR
                           or else Is_Lower (Text (Position))
                           or else Is_Digit (Text (Position))
-                          or else Text (Position) = '_';
+                          or else Text (Position) = '_'
+                          or else Text (Position) = '"'
+                          or else Text (Position) = ''';
                         declare
                            Ahead_Length : Natural;
                            Ahead_Kind   : constant Token_Kind :=
