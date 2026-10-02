@@ -47,6 +47,54 @@ package body Landin.Server.Positions is
            when UTF_8  => Bytes,
            when UTF_16 => (if Bytes = 4 then 2 else 1));
 
+   procedure Prepare
+     (Map : in out Position_Map; Text : String; Unit : Encoding)
+   is
+      At_Byte : Natural := Text'First;
+      At_Pos  : Position;
+   begin
+      Map.Points.Clear;
+      Map.Points.Append (At_Pos);
+      while At_Byte <= Text'Last loop
+         if Text (At_Byte) = ASCII.LF
+           or else (Text (At_Byte) = ASCII.CR
+                    and then (At_Byte = Text'Last
+                              or else Text (At_Byte + 1) /= ASCII.LF))
+         then
+            At_Pos.Line := At_Pos.Line + 1;
+            At_Pos.Character := 0;
+            Map.Points.Append (At_Pos);
+            At_Byte := At_Byte + 1;
+         elsif Text (At_Byte) = ASCII.CR then
+            --  The LF, rather than the CR, advances a CR LF line.
+            Map.Points.Append (At_Pos);
+            At_Byte := At_Byte + 1;
+         else
+            declare
+               Size : constant Positive := Width (Text, At_Byte);
+            begin
+               --  An endpoint inside a UTF-8 character names its first
+               --  byte, so all interior boundaries keep the old column.
+               for Byte in 1 .. Size - 1 loop
+                  Map.Points.Append (At_Pos);
+               end loop;
+               At_Pos.Character := At_Pos.Character + Units (Size, Unit);
+               Map.Points.Append (At_Pos);
+               At_Byte := At_Byte + Size;
+            end;
+         end if;
+      end loop;
+   end Prepare;
+
+   function Ready (Map : Position_Map) return Boolean
+     is (not Map.Points.Is_Empty);
+
+   function Position_Of
+     (Map : Position_Map; Offset : Landin.Source.Byte_Offset)
+      return Position
+     is (Map.Points.Element
+           (Natural'Min (Natural (Offset), Map.Points.Last_Index)));
+
    --  The index of the first byte of Line, and of the byte after it ends
    --  (its terminator excluded), in Text's own indexing.
    procedure Line_Bounds

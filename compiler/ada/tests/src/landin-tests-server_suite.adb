@@ -585,6 +585,44 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Check
         (Item, P.Position_Of ("ab", 2, P.UTF_16) = (0, 2),
          "the end of a file with no final line end");
+      for Unit in P.Encoding loop
+         declare
+            Map : P.Position_Map;
+         begin
+            Landin.Testing.Check
+              (Item, not P.Ready (Map), "an unprepared map is empty");
+            P.Prepare (Map, Text (Text'First + 1 .. Text'Last), Unit);
+            for Offset in 0 .. Text'Length - 1 loop
+               Landin.Testing.Check
+                 (Item,
+                  P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Offset)) =
+                  P.Position_Of
+                    (Text (Text'First + 1 .. Text'Last),
+                     Landin.Source.Byte_Offset (Offset), Unit),
+                  "every byte boundary matches the scalar conversion");
+            end loop;
+            P.Prepare (Map, Text, Unit);
+            for Offset in 0 .. Text'Length loop
+               Landin.Testing.Check
+                 (Item,
+                  P.Position_Of
+                    (Map, Landin.Source.Byte_Offset (Offset)) =
+                  P.Position_Of
+                    (Text, Landin.Source.Byte_Offset (Offset), Unit),
+                  "every endpoint matches after rebuilding the map");
+            end loop;
+            Landin.Testing.Check
+              (Item,
+               P.Position_Of (Map, 100) =
+               P.Position_Of (Text, 100, Unit),
+               "an offset past the text clamps to its end");
+            P.Prepare (Map, "", Unit);
+            Landin.Testing.Check
+              (Item, P.Ready (Map) and then P.Position_Of (Map, 0) = (0, 0),
+               "the empty text has one position");
+         end;
+      end loop;
    end Positions_Count_What_Was_Agreed;
 
    ---------------------------------------------------------------------

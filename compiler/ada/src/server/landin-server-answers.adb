@@ -16,6 +16,9 @@ package body Landin.Server.Answers is
    use type Landin.Source.Source_Id;
    use type Landin.Server.Navigation.Place;
 
+   type Position_Maps is array (Landin.Source.Source_Id range <>) of
+     Positions.Position_Map;
+
    function Capabilities (Unit : Positions.Encoding) return String is
       Written : J.Builder;
    begin
@@ -72,21 +75,19 @@ package body Landin.Server.Answers is
    --  A range over Text, as the editor counts it.
    procedure Write_Range
      (Written : in out J.Builder;
-      Text    : String;
-      Where   : Landin.Source.Span;
-      Unit    : Positions.Encoding);
+      Map     : Positions.Position_Map;
+      Where   : Landin.Source.Span);
 
    procedure Write_Range
      (Written : in out J.Builder;
-      Text    : String;
-      Where   : Landin.Source.Span;
-      Unit    : Positions.Encoding)
+      Map     : Positions.Position_Map;
+      Where   : Landin.Source.Span)
    is
       procedure Write_Position (Offset : Landin.Source.Byte_Offset);
 
       procedure Write_Position (Offset : Landin.Source.Byte_Offset) is
          At_Position : constant Positions.Position :=
-           Positions.Position_Of (Text, Offset, Unit);
+           Positions.Position_Of (Map, Offset);
       begin
          J.Begin_Object (Written);
          J.Name (Written, "line");
@@ -115,9 +116,35 @@ package body Landin.Server.Answers is
       Source  : Landin.Source.Source_Id) return String
      is (Landin.Source.Name (Sources.Get (Source).Element.all));
 
+   --  Build a source's map only if this response actually writes a range
+   --  from it.  Related labels and edits can name other sources.
+   procedure Write_Source_Range
+     (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
+      Sources : not null access constant Landin.Source.Sets.Source_Set;
+      Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Unit    : Positions.Encoding);
+
+   procedure Write_Source_Range
+     (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
+      Sources : not null access constant Landin.Source.Sets.Source_Set;
+      Source  : Landin.Source.Source_Id;
+      Where   : Landin.Source.Span;
+      Unit    : Positions.Encoding)
+   is
+   begin
+      if not Positions.Ready (Maps (Source)) then
+         Positions.Prepare (Maps (Source), Text_Of (Sources, Source), Unit);
+      end if;
+      Write_Range (Written, Maps (Source), Where);
+   end Write_Source_Range;
+
    --  Every edit of One, grouped by document, as a WorkspaceEdit.
    procedure Write_Edit
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       One     : Diag.Fix;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
@@ -125,6 +152,7 @@ package body Landin.Server.Answers is
 
    procedure Write_Edit
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       One     : Diag.Fix;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
@@ -158,9 +186,8 @@ package body Landin.Server.Answers is
                then
                   J.Begin_Object (Written);
                   J.Name (Written, "range");
-                  Write_Range
-                    (Written,
-                     Text_Of (Sources, Diag.Source_Of (Change)),
+                  Write_Source_Range
+                    (Written, Maps, Sources, Diag.Source_Of (Change),
                      Diag.Span_Of (Change), Unit);
                   J.Name (Written, "newText");
                   J.Write_String (Written, Diag.Replacement (Change));
@@ -177,6 +204,7 @@ package body Landin.Server.Answers is
    --  One Diagnostic, its range and related information in Sources.
    procedure Write_Diagnostic
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       Item    : Diag.Diagnostic;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
@@ -185,6 +213,7 @@ package body Landin.Server.Answers is
 
    procedure Write_Diagnostic
      (Written : in out J.Builder;
+      Maps    : in out Position_Maps;
       Item    : Diag.Diagnostic;
       Sources : not null access constant Landin.Source.Sets.Source_Set;
       Store   : Landin.Server.Documents.Store;
@@ -201,8 +230,8 @@ package body Landin.Server.Answers is
       end loop;
       J.Begin_Object (Written);
       J.Name (Written, "range");
-      Write_Range
-        (Written, Text_Of (Sources, Diag.Source_Of (Primary)),
+      Write_Source_Range
+        (Written, Maps, Sources, Diag.Source_Of (Primary),
          Diag.Span_Of (Primary), Unit);
       J.Name (Written, "severity");
       J.Write_Integer
@@ -241,8 +270,8 @@ package body Landin.Server.Answers is
                     (Written, Landin.Server.Documents.URI_For
                        (Store, Name_Of (Sources, Source)));
                   J.Name (Written, "range");
-                  Write_Range
-                    (Written, Text_Of (Sources, Source),
+                  Write_Source_Range
+                    (Written, Maps, Sources, Source,
                      Diag.Span_Of (Extra), Unit);
                   J.End_Object (Written);
                   J.Name (Written, "message");
@@ -266,6 +295,8 @@ package body Landin.Server.Answers is
       Unit    : Positions.Encoding) return String
    is
       Written : J.Builder;
+      Maps    : Position_Maps
+        (1 .. Landin.Source.Source_Id (Sources.Count));
    begin
       J.Begin_Object (Written);
       J.Name (Written, "jsonrpc");
@@ -288,7 +319,7 @@ package body Landin.Server.Answers is
          begin
             if Diag.Source_Of (Diag.Primary (Item)) = Source then
                Write_Diagnostic
-                 (Written, Item, Sources, Store, Unit, Explanations);
+                 (Written, Maps, Item, Sources, Store, Unit, Explanations);
             end if;
          end;
       end loop;
@@ -309,15 +340,19 @@ package body Landin.Server.Answers is
    is
       use type Landin.Formatting.Verdict;
       Written : J.Builder;
+      Map     : Positions.Position_Map;
    begin
       if Laid.Outcome = Landin.Formatting.Refused then
          return "null";
+      end if;
+      if not Laid.Edits.Is_Empty then
+         Positions.Prepare (Map, Text, Unit);
       end if;
       J.Begin_Array (Written);
       for Change of Laid.Edits loop
          J.Begin_Object (Written);
          J.Name (Written, "range");
-         Write_Range (Written, Text, Diag.Span_Of (Change), Unit);
+         Write_Range (Written, Map, Diag.Span_Of (Change));
          J.Name (Written, "newText");
          J.Write_String (Written, Diag.Replacement (Change));
          J.End_Object (Written);
@@ -403,15 +438,16 @@ package body Landin.Server.Answers is
    is
       Sources : constant not null access constant
         Landin.Source.Sets.Source_Set := Landin.Stages.Sources (Context);
+      Map : Positions.Position_Map;
    begin
+      Positions.Prepare (Map, Text_Of (Sources, Where.Source), Unit);
       J.Begin_Object (Written);
       J.Name (Written, "uri");
       J.Write_String
         (Written, Landin.Server.Documents.URI_For
            (Store, Name_Of (Sources, Where.Source)));
       J.Name (Written, "range");
-      Write_Range
-        (Written, Text_Of (Sources, Where.Source), Where.Where, Unit);
+      Write_Range (Written, Map, Where.Where);
       J.End_Object (Written);
    end Write_Location;
 
@@ -439,6 +475,8 @@ package body Landin.Server.Answers is
         Landin.Source.Sets.Source_Set := Landin.Stages.Sources (Context);
       Asked   : constant J.Value := J.Member (Message, Params, "range");
       Written : J.Builder;
+      Maps    : Position_Maps
+        (1 .. Landin.Source.Source_Id (Sources.Count));
    begin
       if Source = Landin.Source.No_Source then
          return "[]";
@@ -477,14 +515,15 @@ package body Landin.Server.Answers is
                         J.Name (Written, "diagnostics");
                         J.Begin_Array (Written);
                         Write_Diagnostic
-                          (Written, Item, Sources, Store, Unit,
+                          (Written, Maps, Item, Sources, Store, Unit,
                            Explanations);
                         J.End_Array (Written);
                         J.Name (Written, "isPreferred");
                         J.Write_Boolean
                           (Written, Diag.Level (One) = Diag.Exact);
                         J.Name (Written, "edit");
-                        Write_Edit (Written, One, Sources, Store, Unit);
+                        Write_Edit
+                          (Written, Maps, One, Sources, Store, Unit);
                         J.End_Object (Written);
                      end;
                   end loop;
@@ -525,6 +564,7 @@ package body Landin.Server.Answers is
             Offset : constant Integer :=
               Offset_Asked (Message, Params, Text, "position", Unit);
             Written : J.Builder;
+            Map : Positions.Position_Map;
          begin
             if Offset < 0 then
                return "null";
@@ -560,7 +600,8 @@ package body Landin.Server.Answers is
                   J.Write_String (Written, Said.Text);
                   J.End_Object (Written);
                   J.Name (Written, "range");
-                  Write_Range (Written, Text, Said.Range_Of.Where, Unit);
+                  Positions.Prepare (Map, Text, Unit);
+                  Write_Range (Written, Map, Said.Range_Of.Where);
                   J.End_Object (Written);
                   return J.Result (Written);
                end;
