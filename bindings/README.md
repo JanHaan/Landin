@@ -259,11 +259,17 @@ positions are refused with a request for an explicitly annotated named typedef;
 nesting cannot bypass that policy. Both direct pointer-returning callbacks and
 pointers to prototyped function typedefs are normalized structurally. The Landin
 type is an `extern(c)` callable.
-When `nullable` is true, generated C-owned cells provide allocate/release,
-clear/set/present/access/invoke APIs. They store a function pointer in its real
-C type and never cast code pointers to data pointers. `access` traps if the
-cell is empty; `invoke` instead reports `false` and writes a result through an
-explicit output pointer only when present.
+When `nullable` is true, generated cells provide allocate/release,
+size/alignment/initialize, and clear/set/present/access/invoke APIs. A caller
+can request `size` bytes with `alignment` from its own allocator or fixed
+buffer, then pass that storage to `initialize` before using the cell. An
+allocation failure is handled by the caller before initialization. The caller
+owns this storage and must keep it alive while C may use the cell; `release`
+is only for cells returned by `allocate`. `initialize` resets a cell to empty
+and can be called again on live storage. The cells store a function pointer in
+its real C type and never cast code pointers to data pointers. `access` traps
+if the cell is empty; `invoke` instead reports `false` and writes a result
+through an explicit output pointer only when present.
 
 A nullable callback position in a selected function must name a callback entry
 with `nullable: true`. Its adapter accepts a cell and passes the cell's actual
@@ -390,8 +396,9 @@ Current deliberate limits are visible rather than completion shortcuts:
   function-pointer typedef;
 - selected array globals are refused; scalar, pointer, callback, enum, native
   record, and opaque record globals have adapters;
-- generated C-owned cells use `calloc`/`free`; allocator substitution and
-  synchronization are caller integration concerns;
+- generated cell `allocate`/`release` use `calloc`/`free`; callers can instead
+  use `size`/`alignment`/`initialize` with their own storage. Synchronization
+  remains a caller integration concern;
 - export entries verify native signatures and generate C declarations/metadata,
   but the Landin definition remains application source;
 - policy records manual ownership and emits `escaping`/`from`; it cannot infer a

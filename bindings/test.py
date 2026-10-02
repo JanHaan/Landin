@@ -340,6 +340,9 @@ class GeneratorTests(unittest.TestCase):
         self.assertIn("bits_object_signed_bits_set", text)
         self.assertIn("callback_cell_clear", text)
         self.assertIn("callback_cell_invoke", text)
+        self.assertIn("callback_cell_initialize", text)
+        self.assertIn("callback_cell_size", text)
+        self.assertIn("callback_cell_alignment", text)
         self.assertIn("borrowed_pointer_result_optional", text)
         self.assertIn("from base", text)
         self.assertNotIn("[16]u8", text)
@@ -463,6 +466,19 @@ int main(void)
     if (!landin_r440_test_callback_cell_present(cell) ||
         landin_r440_test_callback_cell_access(cell)(10) != 13) return 11;
     landin_r440_test_callback_cell_release(cell);
+
+    union { callback align; unsigned char bytes[64]; } fixed_cell;
+    if (landin_r440_test_callback_cell_size() > sizeof(fixed_cell.bytes) ||
+        landin_r440_test_callback_cell_alignment() != _Alignof(callback)) return 17;
+    cell = fixed_cell.bytes;
+    landin_r440_test_callback_cell_initialize(cell);
+    if (landin_r440_test_callback_cell_present(cell) ||
+        landin_r440_test_callback_cell_invoke(cell, 8, &callback_result)) return 18;
+    landin_r440_test_callback_cell_set(cell, plus_three);
+    if (!landin_r440_test_callback_cell_invoke(cell, 8, &callback_result) ||
+        callback_result != 11) return 19;
+    landin_r440_test_callback_cell_initialize(cell);
+    if (landin_r440_test_callback_cell_present(cell)) return 20;
 
     landin_r440_test_global_counter_write(31);
     if (landin_r440_test_global_counter_read() != 31 ||

@@ -59,6 +59,12 @@ public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_release") binding_borrow_callback_cell_release: (cell: ptr mut u8) -> none
 
+public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_initialize") binding_borrow_callback_cell_initialize: (cell: ptr mut u8) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_size") binding_borrow_callback_cell_size: () -> (size: usize)
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_alignment") binding_borrow_callback_cell_alignment: () -> (alignment: usize)
+
 public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_clear") binding_borrow_callback_cell_clear: (cell: ptr mut u8) -> none
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell_set") binding_borrow_callback_cell_set: (cell: ptr mut u8, escaping value: binding_borrow_callback) -> none
@@ -72,6 +78,12 @@ public extern(c) link(symbol: "landin_r440_bindings_binding_borrow_callback_cell
 public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_allocate") binding_callback_cell_allocate: () -> (cell: r440_bindings_binding_callback_cell_optional)
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_release") binding_callback_cell_release: (cell: ptr mut u8) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_initialize") binding_callback_cell_initialize: (cell: ptr mut u8) -> none
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_size") binding_callback_cell_size: () -> (size: usize)
+
+public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_alignment") binding_callback_cell_alignment: () -> (alignment: usize)
 
 public extern(c) link(symbol: "landin_r440_bindings_binding_callback_cell_clear") binding_callback_cell_clear: (cell: ptr mut u8) -> none
 
