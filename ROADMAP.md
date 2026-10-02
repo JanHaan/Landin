@@ -576,9 +576,28 @@ Exit evidence: the corpus and GDB sessions on RISC-V hardware in the gate,
 through the RISE project's runners, with QEMU user emulation as the fallback
 if that service goes away.
 
+### R11.50 — Convert to a written type
+
+Status: planned
+Depends on: none
+
+A conversion is a type applied to a value [0310], but only a name can stand
+in front of its `(`, so converting `utf8` to its byte view needs an alias
+such as `byte_view: type = []u8` or `core/text.bytes`. Let a type expression
+stand there, so that `[]u8(text)` is the conversion that alias spells. The
+grammar must decide what `[` and `ptr` begin, since `[]` is also the empty
+slice, `[4, 5]` an array literal and `ptr(...)` the pointer conversion, and the
+admitted conversions stay exactly those an alias reaches today.
+
+Exit evidence: `spec.md`'s grammar and a register decision, every conversion
+an alias reaches spelled with its type expression in positive and runtime
+fixtures on every target, and the ambiguous prefixes pinned by fixtures that
+derive or refuse as decided.
+
 ### R11 gate
 
 - Linux arm64, FreeBSD and rv64 Linux run the corpus in the gate.
+- A conversion names its type as written, without an alias.
 
 ## R12 — Microcontrollers
 
