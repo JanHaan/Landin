@@ -23,6 +23,7 @@ package body Landin.Backend.Cortex_M is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Scalar_Size;
    use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
@@ -32,6 +33,7 @@ package body Landin.Backend.Cortex_M is
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
+   use type Landin.IR.Storage_Kind;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -367,6 +369,7 @@ package body Landin.Backend.Cortex_M is
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
       procedure Release (Bytes : Landin.Targets.Byte_Count);
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
+      procedure Copy_Two_Words;
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
       function High (Register : String) return String;
       procedure Frame_Address_Through
@@ -623,6 +626,16 @@ package body Landin.Backend.Cortex_M is
          Emit ("subs r4, #1");
          Emit ("bne " & Id);
       end Copy_Bytes;
+
+      --  Only for proven disjoint, word-aligned eight-byte ranges.  The
+      --  ordinary byte loop retains the forward-copy behavior for aliases.
+      procedure Copy_Two_Words is
+      begin
+         Emit ("ldr r4, [r2]");
+         Emit ("str r4, [r0]");
+         Emit ("ldr r4, [r2, #4]");
+         Emit ("str r4, [r0, #4]");
+      end Copy_Two_Words;
 
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count) is
          Id : constant String := Fresh;
@@ -1506,6 +1519,13 @@ package body Landin.Backend.Cortex_M is
             Field  : Natural;
             Nested : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count;
+         function Root_Word_Aligned
+           (Place : Landin.IR.Storage) return Boolean;
+         function Same_Root
+           (Left, Right : Landin.IR.Storage) return Boolean;
+         function Disjoint_Roots
+           (Left, Right : Landin.IR.Storage;
+            Bytes : Landin.Targets.Byte_Count) return Boolean;
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
@@ -1836,6 +1856,67 @@ package body Landin.Backend.Cortex_M is
                   end;
             end case;
          end Whole_Clear_Extent;
+
+         --  These are whole-array roots.  Module array alignment comes from
+         --  its emitted .balign; frame offsets are relative to aligned r11.
+         function Root_Word_Aligned (Place : Landin.IR.Storage)
+           return Boolean is
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Root_Shape_Of (Place, 0), Facts,
+                     Size, Alignment);
+                  return Alignment >= 4;
+               when Landin.IR.Frame_Slot =>
+                  return Slot_Offset (Layout, Place.Slot) mod 4 = 0;
+               when Landin.IR.Runtime_Address =>
+                  return False;
+            end case;
+         end Root_Word_Aligned;
+
+         function Same_Root
+           (Left, Right : Landin.IR.Storage) return Boolean is
+         begin
+            if Left.Kind /= Right.Kind then
+               return False;
+            end if;
+            case Left.Kind is
+               when Landin.IR.Module_Datum =>
+                  return Left.Datum = Right.Datum;
+               when Landin.IR.Frame_Slot =>
+                  return Left.Slot = Right.Slot;
+               when Landin.IR.Runtime_Address =>
+                  return False;
+            end case;
+         end Same_Root;
+
+         function Disjoint_Roots
+           (Left, Right : Landin.IR.Storage;
+            Bytes : Landin.Targets.Byte_Count) return Boolean is
+         begin
+            if Left.Kind = Landin.IR.Runtime_Address
+              or else Right.Kind = Landin.IR.Runtime_Address
+            then
+               return False;
+            elsif Left.Kind /= Right.Kind then
+               return True;
+            elsif Left.Kind = Landin.IR.Module_Datum then
+               return Left.Datum /= Right.Datum;
+            else
+               declare
+                  A : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Left.Slot);
+                  B : constant Landin.Targets.Byte_Count :=
+                    Slot_Offset (Layout, Right.Slot);
+               begin
+                  return (if A >= B then A - B >= Bytes
+                          else B - A >= Bytes);
+               end;
+            end if;
+         end Disjoint_Roots;
 
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
@@ -2950,6 +3031,8 @@ package body Landin.Backend.Cortex_M is
                   declare
                      Source : constant Landin.IR.Storage :=
                        Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Field : constant Natural :=
                        Landin.IR.Source_Field_Of (Of_Unit, Item, Value);
                      Nested : constant Landin.IR.Path_Step_Array :=
@@ -2965,7 +3048,7 @@ package body Landin.Backend.Cortex_M is
                           Bytes, Alignment);
                      end if;
                      Storage_Address
-                       (Landin.IR.Destination_Of (Of_Unit, Item, Value),
+                       (Destination,
                         Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
                           "r0",
                         (if Op = Landin.IR.Copy_Array then
@@ -2976,7 +3059,34 @@ package body Landin.Backend.Cortex_M is
                              (Of_Unit, Item, Value) else 0),
                         Landin.IR.Path_Of (Of_Unit, Item, Value));
                      Storage_Address (Source, Field, "r2", Nested => Nested);
-                     Copy_Bytes (Bytes);
+                     if Op = Landin.IR.Copy_Array
+                       and then Bytes = 8
+                       and then Field = 0 and then Nested'Length = 0
+                       and then Landin.IR.Element_Field_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Variant_Case_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Variant_Payload_Field_Of
+                         (Of_Unit, Item, Value) = 0
+                       and then Landin.IR.Path_Of
+                         (Of_Unit, Item, Value)'Length = 0
+                       and then Source.Kind /= Landin.IR.Runtime_Address
+                       and then Destination.Kind /= Landin.IR.Runtime_Address
+                     then
+                        if Same_Root (Source, Destination) then
+                           null;
+                        elsif Root_Word_Aligned (Source)
+                          and then Root_Word_Aligned (Destination)
+                          and then Disjoint_Roots
+                            (Source, Destination, Bytes)
+                        then
+                           Copy_Two_Words;
+                        else
+                           Copy_Bytes (Bytes);
+                        end if;
+                     else
+                        Copy_Bytes (Bytes);
+                     end if;
                   end;
                when Landin.IR.Clear_Array | Landin.IR.Select_Variant =>
                   declare
