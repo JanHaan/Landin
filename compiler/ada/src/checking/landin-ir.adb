@@ -436,17 +436,54 @@ package body Landin.IR is
    function Pointee_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Pointees.Length));
 
+   function Hash (Key : Pointee_Key) return Ada.Containers.Hash_Type is
+      use type Ada.Containers.Hash_Type;
+      Result : Ada.Containers.Hash_Type := 0;
+      Shape : Field_Shape renames Key.Shape;
+
+      procedure Mix (Value : Ada.Containers.Hash_Type);
+
+      procedure Mix (Value : Ada.Containers.Hash_Type) is
+      begin
+         Result := (Result xor Value) * 16_777_619;
+      end Mix;
+   begin
+      --  Hash every component used by Field_Shape's predefined equality.
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.First));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Bits));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Packing.Storage));
+      Mix (Field_Shape_Kind'Pos (Shape.Kind));
+      Mix (Landin.Types.Scalar_Name'Pos (Shape.Element));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Length));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Cases));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Payloads_First));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Signature));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Atoms));
+      Mix (Ada.Containers.Hash_Type'Mod (Shape.Pointee));
+      Mix (Ada.Containers.Hash_Type'Mod (Key.Nominal_Position));
+      return Result;
+   end Hash;
+
    function Add_Pointee
      (Into : in out Unit; Shape : Field_Shape) return Pointee_Id
    is
+      Key : constant Pointee_Key :=
+        (Shape => Shape,
+         Nominal_Position =>
+           (if Shape.Nominal = No_Nominal_Type then 0
+            else Nominal_Identities.Position (Into, Shape.Nominal)));
+      Found : constant Pointee_Maps.Cursor := Into.Pointee_Ids.Find (Key);
    begin
-      for Index in 1 .. Pointee_Count (Into) loop
-         if Into.Pointees (Index) = Shape then
-            return Pointee_Id (Index);
-         end if;
-      end loop;
+      if Pointee_Maps.Has_Element (Found) then
+         return Pointee_Maps.Element (Found);
+      end if;
       Into.Pointees.Append (Shape);
-      return Pointee_Id (Into.Pointees.Last_Index);
+      declare
+         Id : constant Pointee_Id := Pointee_Id (Into.Pointees.Last_Index);
+      begin
+         Into.Pointee_Ids.Insert (Key, Id);
+         return Id;
+      end;
    end Add_Pointee;
 
    function Pointee_Shape

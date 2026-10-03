@@ -4235,6 +4235,19 @@ private
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
 
+   type Pointee_Key is record
+      Shape : Field_Shape;
+      Nominal_Position : Natural;
+   end record;
+
+   function Hash (Key : Pointee_Key) return Ada.Containers.Hash_Type;
+
+   package Pointee_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Pointee_Key,
+      Element_Type    => Pointee_Id,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
+
    package Case_Run_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Case_Run);
@@ -4282,6 +4295,7 @@ private
       Nominal_Shapes : Nominal_Shape_Vectors.Vector;
       Nominal_Fields : Field_Shape_Vectors.Vector;
       Pointees   : Field_Shape_Vectors.Vector;
+      Pointee_Ids : Pointee_Maps.Map;
       Atom_Sets  : Atom_Set_Vectors.Vector;
       Atoms      : Atom_Vectors.Vector;
       Encodings  : Encoding_Vectors.Vector;

@@ -37,6 +37,7 @@ package body Landin.Tests.IR_Suite is
    use type IR.Field_Shape;
    use type IR.Field_Shape_Kind;
    use type IR.Nominal_Type_Id;
+   use type IR.Pointee_Id;
    use type IR.Signature_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
@@ -1875,6 +1876,50 @@ package body Landin.Tests.IR_Suite is
       end;
    end Recursive_Array_Images_Keep_Separate_Roots;
 
+   procedure Pointee_Interning_Keeps_Stable_Ids
+     (Item : in out Landin.Testing.Context);
+
+   procedure Pointee_Interning_Keeps_Stable_Ids
+     (Item : in out Landin.Testing.Context)
+   is
+      Unit : IR.Unit;
+      First, Middle, Last : IR.Pointee_Id := IR.No_Pointee;
+      Shape : IR.Field_Shape;
+   begin
+      for Index in 1 .. 128 loop
+         Shape := IR.Make_Array_Shape
+           (Unit, IR.Element_Total (Index),
+            (Element => Landin.Types.U8, others => <>));
+         declare
+            Id : constant IR.Pointee_Id := IR.Add_Pointee (Unit, Shape);
+         begin
+            if Index = 1 then
+               First := Id;
+            elsif Index = 64 then
+               Middle := Id;
+            elsif Index = 128 then
+               Last := Id;
+            end if;
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, IR.Pointee_Count (Unit) = 128
+           and then First = 1 and then Middle = 64 and then Last = 128,
+         "distinct reached shapes retain insertion-order IDs");
+      for Index in 1 .. 128 loop
+         Shape := IR.Make_Array_Shape
+           (Unit, IR.Element_Total (Index),
+            (Element => Landin.Types.U8, others => <>));
+         Landin.Testing.Check
+           (Item, IR.Add_Pointee (Unit, Shape) = IR.Pointee_Id (Index),
+            "repeated reached shape keeps its ID");
+      end loop;
+      Landin.Testing.Check
+        (Item, IR.Pointee_Count (Unit) = 128
+           and then IR.Pointee_Shape (Unit, Middle).Length = 64,
+         "repeated shapes do not append pointees");
+   end Pointee_Interning_Keeps_Stable_Ids;
+
    procedure Pointer_Shapes_Survive_Storage
      (Item : in out Landin.Testing.Context);
 
@@ -2205,6 +2250,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "detailed dumps retain pointer metadata",
          Detailed_Dumps_Retain_Pointer_Metadata'Access);
+      Landin.Testing.Register
+        (Into, "ir", "pointee interning keeps stable ids",
+         Pointee_Interning_Keeps_Stable_Ids'Access);
       Landin.Testing.Register
         (Into, "ir", "pointer shapes survive storage",
          Pointer_Shapes_Survive_Storage'Access);
