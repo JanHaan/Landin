@@ -6762,9 +6762,11 @@ put into IR.
 The backend replays those shapes through the same target placement used for
 measurement and reserves the complete padded object in zeroed storage. Scalar
 field operations use the resulting target offset. On x86-64, a nonzero offset
-in any aggregate containing an array field is formed from the symbol address
-and a full-width register constant, so D18-sized fields cannot create an
-unencodable symbol-plus-displacement relocation.
+in any aggregate containing an array field is added to the symbol address:
+an offset fitting a signed 32-bit arithmetic immediate uses an immediate add,
+while a larger offset uses a full-width register constant and register add.
+Neither case asks the assembler to encode a symbol-plus-displacement memory
+operand whose relocation a D18-sized field could put out of range.
 
 **Why module state first:** it already has D10's complete image and needs only
 one compact datum description. Enabling the same type in a frame would require

@@ -2142,6 +2142,51 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Field_Is_Read_At_Its_Own_Offset;
 
+   --  D46 still forms an array-bearing module field address from the
+   --  symbol, but a small nonzero offset needs no constant register.
+   procedure A_Field_After_A_Small_Array_Uses_An_Immediate
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Field_After_A_Small_Array_Uses_An_Immediate
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]usize" & LF
+         & "    count: u32" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "read: () -> none =" & LF
+         & "    value: u32 = state.count" & LF
+         & "end read" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, HT & "leaq state(%rip), %rcx" & LF
+               & HT & "addq $24, %rcx" & LF
+               & HT & "movl (%rcx), %eax"),
+            "the small field offset is added directly before its load");
+         Landin.Testing.Check
+           (Item,
+            not Contains (Text, HT & "movabsq $24, %rdx")
+              and then not Contains (Text, HT & "movq $24, %rdx"),
+            "the field offset is not loaded into a scratch register");
+      end;
+   end A_Field_After_A_Small_Array_Uses_An_Immediate;
+
    --  D46 can put a scalar sibling beyond the signed displacement of an
    --  x86-64 memory operand.  Like D18's far array element, the backend
    --  must form that address in registers rather than ask the assembler
@@ -7839,6 +7884,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a field after a small array uses an immediate",
+         A_Field_After_A_Small_Array_Uses_An_Immediate'Access);
       Landin.Testing.Register
         (Into, "backend", "a field after a wide array uses registers",
          A_Field_After_A_Wide_Array_Uses_A_Register_Address'Access);
