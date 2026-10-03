@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;
+with Ada.Containers.Hashed_Sets;
 with Landin.Backend.Firmware;
 with Landin.Backend.Dwarf;
 with Landin.Provenance;
@@ -710,6 +711,31 @@ package body Landin.Backend.Cortex_M is
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
 
+      package Section_Sets is new Ada.Containers.Hashed_Sets
+        (Element_Type        => Landin.Source.Names.Name_Id,
+         Hash                => Landin.Source.Names.Hash,
+         Equivalent_Elements => Landin.Source.Names."=");
+      Retained_Sections : Section_Sets.Set;
+
+      --  A later item may retain a section selected by an earlier item.
+      procedure Collect_Retained_Sections;
+      procedure Collect_Retained_Sections is
+      begin
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Attr : constant Landin.Machine.Placement :=
+                 Landin.IR.Placement_Of
+                   (Of_Unit, Landin.IR.Item_Id (Index));
+            begin
+               if Attr.Keep
+                 and then Attr.Section /= Landin.Source.Names.No_Name
+               then
+                  Retained_Sections.Include (Attr.Section);
+               end if;
+            end;
+         end loop;
+      end Collect_Retained_Sections;
+
       function Is_C_Item (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
             and then Landin.IR.Signature_Uses_C_ABI
@@ -1026,23 +1052,12 @@ package body Landin.Backend.Cortex_M is
            (if Attr.Section = Landin.Source.Names.No_Name
             then Prefix & "landin_" & Trimmed (Item'Image)
             else Landin.Source.Names.Spelling (Names, Attr.Section));
-         Retained : Boolean := Attr.Keep;
+         Retained : constant Boolean := Attr.Keep or else
+           (Attr.Section /= Landin.Source.Names.No_Name
+            and then Retained_Sections.Contains (Attr.Section));
          BSS : constant Boolean :=
            Ada.Strings.Fixed.Index (Name, ".bss.") = Name'First;
       begin
-         if Attr.Section /= Landin.Source.Names.No_Name then
-            for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
-               declare
-                  Other : constant Landin.Machine.Placement :=
-                    Landin.IR.Placement_Of
-                      (Of_Unit, Landin.IR.Item_Id (Index));
-               begin
-                  if Other.Section = Attr.Section then
-                     Retained := Retained or else Other.Keep;
-                  end if;
-               end;
-            end loop;
-         end if;
          Emit (".section " & Name & ",""" & Flags
            & (if Retained then "R" else "") & """,%"
            & (if BSS then "nobits" else "progbits"));
@@ -4989,6 +5004,7 @@ package body Landin.Backend.Cortex_M is
       then
          raise Compiler_Defect with "Cortex emission needs an M profile";
       end if;
+      Collect_Retained_Sections;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item

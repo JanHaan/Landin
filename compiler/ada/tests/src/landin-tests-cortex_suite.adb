@@ -1582,11 +1582,16 @@ package body Landin.Tests.Cortex_Suite is
              & "_ = assembler.block(""nop"", 0) end h",
            when 48 => "h: (x: u32) -> none = "
              & "_ = assembler.block(text: ""nop"", operand: x) end h",
+           when 49 => "link(section: "".rodata.shared"") "
+             & "first: u8 = 1 "
+             & "link(section: "".rodata.shared"", keep) "
+             & "second: u8 = 2 "
+             & "link(section: "".rodata.third"") third: u8 = 3",
            when others => "link(vector: 11) extern(interrupt) h: () -> none"
              & " = end h");
       end Program;
    begin
-      for Case_Number in 1 .. 48 loop
+      for Case_Number in 1 .. 49 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1611,15 +1616,35 @@ package body Landin.Tests.Cortex_Suite is
                Landin.Testing.Check_Equal
                  (Item, Result.Status,
                   --  26: a hosted operand-free block lowers like any other.
-                  (if Case_Number in 1 | 26 | 38 | 45
+                  (if Case_Number in 1 | 26 | 38 | 45 | 49
                    then Landin.Driver.Status_Success
                    else Landin.Driver.Status_Reported),
                   "machine contract case" & Case_Number'Image & ": "
                     & U.To_String (Result.Report));
-               if Case_Number not in 1 | 26 | 38 | 45 then
+               if Case_Number not in 1 | 26 | 38 | 45 | 49 then
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
                      "invalid machine constructs refuse before emission");
+               elsif Case_Number = 49 then
+                  declare
+                     Assembly : U.Unbounded_String;
+                     Status : Landin.Platform.Read_Status;
+                  begin
+                     Host.Read_File ("p.s", Assembly, Status);
+                     Landin.Testing.Check
+                       (Item, Status = Landin.Platform.Read_Ok,
+                        "shared-section assembly is written");
+                     Landin.Testing.Check_Equal
+                       (Item, Ada.Strings.Fixed.Count
+                         (U.To_String (Assembly),
+                          ".section .rodata.shared,""aR"",%progbits"),
+                        2, "later keep retains both shared-section items");
+                     Landin.Testing.Check_Equal
+                       (Item, Ada.Strings.Fixed.Count
+                         (U.To_String (Assembly),
+                          ".section .rodata.third,""a"",%progbits"),
+                        1, "unrelated explicit section remains unretained");
+                  end;
                end if;
                Landin.Testing.Check_Equal
                  (Item, Tools.Run_Count, 0, "assembly checks run no tool");
