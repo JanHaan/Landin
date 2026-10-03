@@ -55,6 +55,20 @@ class ProbeFailures(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             hook_addresses('00000000 <empty>:\n  0: 4770 bx lr\n')
 
+    def test_library_source_anchor_tracks_lines_and_refuses_ambiguity(self):
+        from source_debug import source_line
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            source = root / 'library.ldn'
+            source.write_text('-- added helper\n\n    selected statement\n')
+            self.assertEqual(source_line(run, 'library.ldn', 'selected statement'), 3)
+            with self.assertRaises(RuntimeError):
+                source_line(run, 'library.ldn', 'missing statement')
+            source.write_text('selected statement\nselected statement\n')
+            with self.assertRaises(RuntimeError):
+                source_line(run, 'library.ldn', 'selected statement')
+
     def test_debug_selector_rejects_malformed_elf(self):
         import source_debug
         from cortex_debug import Image

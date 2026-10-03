@@ -5,7 +5,7 @@ import sys
 
 from driver import HERE, build, machine
 from firmware import execute
-from run import Run, oracle
+from run import Run, oracle, require
 
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
 from cortex_debug import Image, verify
@@ -106,11 +106,24 @@ def application(run, elf):
         'assert v("*(unsigned*)&app_state") == 3','end','bt'])
 
 
+def source_line(run, path, statement):
+    """Locate an unambiguous executable anchor in the verified source copy."""
+    lines = (run.out / path).read_text().splitlines()
+    matches = [number for number, text in enumerate(lines, 1)
+               if text.strip() == statement]
+    require(len(matches) == 1, 'missing or ambiguous source anchor: ' + path)
+    return matches[0]
+
+
 def library(run, elf, kind):
     checked(run, elf)
     if kind in ('pool','vec'):
-        name, path, line = (('allocate','source/core/mem/mem.ldn',34) if kind == 'pool'
-                            else ('reserve','source/core/vec/vec.ldn',94))
+        name, path, statement = (
+            ('allocate', 'source/core/mem/mem.ldn',
+             'block = try provider.alloc(state, size, alignment)') if kind == 'pool'
+            else ('reserve', 'source/core/vec/vec.ldn',
+                  'old_count: usize = mem.initialized(value.values)'))
+        line = source_line(run, path, statement)
         commands = [f'break {path}:{line}', 'continue', 'python',
             f'frame({name!r},{path!r},{line})',
             f'chain([{name!r},"exercise","start","_landin_firmware_reset"])',
