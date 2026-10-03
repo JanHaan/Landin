@@ -6941,6 +6941,59 @@ package body Landin.Tests.Backend_Suite is
          "every division guard is kept at both levels");
    end A_Level_Selects_Its_Instructions;
 
+   procedure Cortex_Wrapping_Products_Use_Low_Word
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Wrapping_Products_Use_Low_Word
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+      Source : constant String :=
+        "public products: (a: u8, b: u8, c: i8, d: i8,"
+        & " e: u16, f: u16, g: i16, h: i16,"
+        & " i: u32, j: u32, k: i32, l: i32,"
+        & " m: u64, n: u64) ->"
+        & " (p: u8, q: i8, r: u16, s: i16, t: u32,"
+        & " u: i32, v: u64, w: u32) =" & LF
+        & "    p = a *% b" & LF
+        & "    q = c *% d" & LF
+        & "    r = e *% f" & LF
+        & "    s = g *% h" & LF
+        & "    t = i *% j" & LF
+        & "    u = k *% l" & LF
+        & "    v = m *% n" & LF
+        & "    w = i * j" & LF
+        & "end products" & LF;
+   begin
+      Lower (Work, Source, Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "parameterized products lower");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Targets.Cortex_M,
+         Landin.Optimization.Reference_Options, Assembly, Report);
+      declare
+         Text : constant String :=
+           Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "muls r0, r2, r0"), 6,
+            "narrow wrapping products use Thumb multiplication");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, "bl __aeabi_lmul"), 2,
+            "wide wrapping and checked products keep the helper");
+      end;
+   end Cortex_Wrapping_Products_Use_Low_Word;
+
    --  [1630] on x86-64: the text as written with `{name}` filled, each
    --  input extended into its register before it and each output stored
    --  after it; a declared callee-saved register saved and restored with
@@ -7213,6 +7266,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a level selects its instructions",
          A_Level_Selects_Its_Instructions'Access);
+      Landin.Testing.Register
+        (Into, "backend", "Cortex wrapping products use low word",
+         Cortex_Wrapping_Products_Use_Low_Word'Access);
       Landin.Testing.Register
         (Into, "backend", "imported function addresses use the GOT",
          Imported_Function_Addresses_Use_The_GOT'Access);

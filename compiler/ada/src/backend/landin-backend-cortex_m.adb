@@ -2522,6 +2522,12 @@ package body Landin.Backend.Cortex_M is
                         end if;
                         Emit ("bl __aeabi_" & (if Wide then "d" else "f")
                           & (if Multiply then "mul" else "div"));
+                     elsif Op = Landin.IR.Wrapping_Multiply
+                       and then not Wide
+                     then
+                        --  The low word is the whole wrapping result.  Thumb
+                        --  MULS uses only low registers and writes that word.
+                        Emit ("muls r0, r2, r0");
                      elsif Multiply then
                         if not Wide then
                            if Signed then
