@@ -322,8 +322,10 @@ over: u8 = 300
 
 A value's type is not the one its context or operation requires [1890], and
 no conversion is implied [0310]. This includes a literal that its context
-cannot type [1880] [0210] [0260], an operator given an operand class it does
-not admit, a struct of another nominal type [0710], an array of another length
+cannot type [1880] [0210] [0260], an expression with no value type where one
+is needed, a type-qualified name its type does not have [0240], an operation
+such as indexing, slicing, selection or a call applied to a value whose type
+has none [1820], an operator given an operand class it does not admit, a struct of another nominal type [0710], an array of another length
 or element type, a function of another signature [1000], or a reference of
 another permission [0440]. The second label shows where the requirement was
 stated. Change the value, or convert it explicitly where a conversion exists.
@@ -716,7 +718,7 @@ end main
 A `match` arm does not fit its subject [1210]. A subject is an atom set, a
 variant part or a pointer union. Each arm names a case or atom of that
 subject at most once (D77) [0640] [0480]. A `ptr` arm matches only a pointer
-union and binds one pointer. Atom arms bind no payload [0630]. A wildcard arm
+union and binds one read-only pointer [1220]. Atom arms bind no payload [0630]. A wildcard arm
 comes last and binds nothing. Variant payload names are positional and
 complete (D78). Rewrite the arm in the form its subject admits, or compare
 numbers with `if` and `elsif`.
@@ -769,7 +771,8 @@ end bad
 
 A packed image or its layout is used outside [0730]'s rules. Packed fields
 have explicit, disjoint bit positions within one unsigned image, and an
-encoded union has distinct atoms and encodings. A packed field has no address
+encoded union has distinct atoms and encodings. A packed width such as `u2`
+is a field representation, not an ordinary value type. A packed field has no address
 of its own, cannot be passed `inout`, and cannot be sliced; the image is not
 a scalar operand (D228). Correct the layout, or work through the containing
 image and its fields.
@@ -812,8 +815,7 @@ a scalar type or a `type` declaration, and a type name is not a runtime value
 [1795]. A type alias is applied with its exact positional arguments [1350]. A
 union holds atoms and at most one pointer type [0640]; a range subtype
 restricts an integer type [0660]; a fixed-array bound is an integer count
-(D136); `any` names a concept with runtime entries [1370]. Correct the
-declaration or name a type.
+(D136). Correct the declaration or name a type.
 
 ```landin
 bytes: type (t: type, fixed n: u32) = [n]t
@@ -837,8 +839,9 @@ duplicated: type = (value: i32, value: bool) -> none
 A generic call cannot deduce and instantiate one concrete routine (D138).
 Deduction matches each runtime argument against its written parameter
 pattern; it never uses the return context, conversions or constraints, and
-repeated deductions must agree. A generic template has no function value
-until it is called. Recursion that keeps changing the actual tuple never ends,
+repeated deductions must agree, and the deduced actuals must give a
+concrete, enabled signature whose fixed values fit their formals. A generic
+template has no function value until it is called. Recursion that keeps changing the actual tuple never ends,
 and a circular error-set dependency cannot be resolved (D215). Give the type
 argument explicitly, pass arguments that agree, or call a concrete routine.
 
@@ -852,7 +855,8 @@ public main: () -> (code: i32) = phantom(7) end main
 
 A concept or conformance declaration is not well formed [1230]-[1270]. A
 concept is parameterized by types and names each entry once. Composition is
-finite. Every entry fixes one concrete error set. A conformance names a
+finite, and a static entry name is unique across the concept closure (D221).
+Every entry fixes one concrete error set. A conformance names a
 declared concept, supplies each input and entry once by label, and provides
 each entry with a function of exactly the required signature. A parameterized
 conformance applies its complete binder. Correct the declaration against the
@@ -869,10 +873,12 @@ end right
 ### L0342
 
 An `any` value or its dispatch is used outside the erased contract [1370]
-[1380] [1390] (D145-D147). `any C` erases a pointer, never a value; every
-entry takes the erased `self` pointer first; an entry is called directly and
-is not a bound value; a concrete pointer selects exactly one conformance; and
-a module `any` binding has no implicit null pair. Pass a pointer, write the
+[1380] [1390] (D145-D147). `any C` names a concept with runtime entries,
+each dispatch name unique across its closure, and erases a pointer, never a
+value; every entry takes the erased `self` pointer first; an entry is called
+directly and is not a bound value; a concrete pointer selects exactly one
+conformance, and the closed program has a runtime table for it; and a module
+`any` binding has no implicit null pair. Pass a pointer, write the
 `any C` context, or adjust the concept's entries.
 
 ### L0343

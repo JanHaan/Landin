@@ -174,13 +174,17 @@ package body Landin.Diagnostics.Explanations is
                "A value's type is not the one its context or operation r"
                & "equires [1890], and no conversion is implied [0310]. Thi"
                & "s includes a literal that its context cannot type [1880]"
-               & " [0210] [0260], an operator given an operand class it do"
-               & "es not admit, a struct of another nominal type [0710], a"
-               & "n array of another length or element type, a function of"
-               & " another signature [1000], or a reference of another per"
-               & "mission [0440]. The second label shows where the require"
-               & "ment was stated. Change the value, or convert it explici"
-               & "tly where a conversion exists.",
+               & " [0210] [0260], an expression with no value type where o"
+               & "ne is needed, a type-qualified name its type does not ha"
+               & "ve [0240], an operation such as indexing, slicing, selec"
+               & "tion or a call applied to a value whose type has none [1"
+               & "820], an operator given an operand class it does not adm"
+               & "it, a struct of another nominal type [0710], an array of"
+               & " another length or element type, a function of another s"
+               & "ignature [1000], or a reference of another permission [0"
+               & "440]. The second label shows where the requirement was s"
+               & "tated. Change the value, or convert it explicitly where "
+               & "a conversion exists.",
             when Catalogue.Not_Definitely_Assigned =>
                "A name is read on a path that does not assign it first ["
                & "1910]. Assign it on every path before the read, or give "
@@ -348,11 +352,11 @@ package body Landin.Diagnostics.Explanations is
                & " is an atom set, a variant part or a pointer union. Each"
                & " arm names a case or atom of that subject at most once ("
                & "D77) [0640] [0480]. A `ptr` arm matches only a pointer u"
-               & "nion and binds one pointer. Atom arms bind no payload [0"
-               & "630]. A wildcard arm comes last and binds nothing. Varia"
-               & "nt payload names are positional and complete (D78). Rewr"
-               & "ite the arm in the form its subject admits, or compare n"
-               & "umbers with `if` and `elsif`.",
+               & "nion and binds one read-only pointer [1220]. Atom arms b"
+               & "ind no payload [0630]. A wildcard arm comes last and bin"
+               & "ds nothing. Variant payload names are positional and com"
+               & "plete (D78). Rewrite the arm in the form its subject adm"
+               & "its, or compare numbers with `if` and `elsif`.",
             when Catalogue.Aggregate_Form =>
                "A struct, variant or array value is built or used outsid"
                & "e its admitted form [0700] [0720]. A construction applie"
@@ -375,11 +379,12 @@ package body Landin.Diagnostics.Explanations is
                "A packed image or its layout is used outside [0730]'s ru"
                & "les. Packed fields have explicit, disjoint bit positions"
                & " within one unsigned image, and an encoded union has dis"
-               & "tinct atoms and encodings. A packed field has no address"
-               & " of its own, cannot be passed `inout`, and cannot be sli"
-               & "ced; the image is not a scalar operand (D228). Correct t"
-               & "he layout, or work through the containing image and its "
-               & "fields.",
+               & "tinct atoms and encodings. A packed width such as `u2` i"
+               & "s a field representation, not an ordinary value type. A "
+               & "packed field has no address of its own, cannot be passed"
+               & " `inout`, and cannot be sliced; the image is not a scala"
+               & "r operand (D228). Correct the layout, or work through th"
+               & "e containing image and its fields.",
             when Catalogue.Place_Required =>
                "An operation that needs a distinct addressable place was"
                & " given something else. `addr` takes a storage place [043"
@@ -395,9 +400,8 @@ package body Landin.Diagnostics.Explanations is
                & "pe alias is applied with its exact positional arguments "
                & "[1350]. A union holds atoms and at most one pointer type"
                & " [0640]; a range subtype restricts an integer type [0660"
-               & "]; a fixed-array bound is an integer count (D136); `any`"
-               & " names a concept with runtime entries [1370]. Correct th"
-               & "e declaration or name a type.",
+               & "]; a fixed-array bound is an integer count (D136). Corre"
+               & "ct the declaration or name a type.",
             when Catalogue.Signature_Form =>
                "A written signature is not well formed. A function type "
                & "gives each parameter a distinct label [0980] and each re"
@@ -411,31 +415,37 @@ package body Landin.Diagnostics.Explanations is
                & "e routine (D138). Deduction matches each runtime argumen"
                & "t against its written parameter pattern; it never uses t"
                & "he return context, conversions or constraints, and repea"
-               & "ted deductions must agree. A generic template has no fun"
-               & "ction value until it is called. Recursion that keeps cha"
-               & "nging the actual tuple never ends, and a circular error-"
-               & "set dependency cannot be resolved (D215). Give the type "
-               & "argument explicitly, pass arguments that agree, or call "
-               & "a concrete routine.",
+               & "ted deductions must agree, and the deduced actuals must "
+               & "give a concrete, enabled signature whose fixed values fi"
+               & "t their formals. A generic template has no function valu"
+               & "e until it is called. Recursion that keeps changing the "
+               & "actual tuple never ends, and a circular error-set depend"
+               & "ency cannot be resolved (D215). Give the type argument e"
+               & "xplicitly, pass arguments that agree, or call a concrete"
+               & " routine.",
             when Catalogue.Conformance_Form =>
                "A concept or conformance declaration is not well formed "
                & "[1230]-[1270]. A concept is parameterized by types and n"
-               & "ames each entry once. Composition is finite. Every entry"
-               & " fixes one concrete error set. A conformance names a dec"
-               & "lared concept, supplies each input and entry once by lab"
-               & "el, and provides each entry with a function of exactly t"
-               & "he required signature. A parameterized conformance appli"
-               & "es its complete binder. Correct the declaration against "
-               & "the concept it names.",
+               & "ames each entry once. Composition is finite, and a stati"
+               & "c entry name is unique across the concept closure (D221)"
+               & ". Every entry fixes one concrete error set. A conformanc"
+               & "e names a declared concept, supplies each input and entr"
+               & "y once by label, and provides each entry with a function"
+               & " of exactly the required signature. A parameterized conf"
+               & "ormance applies its complete binder. Correct the declara"
+               & "tion against the concept it names.",
             when Catalogue.Erased_Contract =>
                "An `any` value or its dispatch is used outside the erase"
-               & "d contract [1370] [1380] [1390] (D145-D147). `any C` era"
-               & "ses a pointer, never a value; every entry takes the eras"
-               & "ed `self` pointer first; an entry is called directly and"
-               & " is not a bound value; a concrete pointer selects exactl"
-               & "y one conformance; and a module `any` binding has no imp"
-               & "licit null pair. Pass a pointer, write the `any C` conte"
-               & "xt, or adjust the concept's entries.",
+               & "d contract [1370] [1380] [1390] (D145-D147). `any C` nam"
+               & "es a concept with runtime entries, each dispatch name un"
+               & "ique across its closure, and erases a pointer, never a v"
+               & "alue; every entry takes the erased `self` pointer first;"
+               & " an entry is called directly and is not a bound value; a"
+               & " concrete pointer selects exactly one conformance, and t"
+               & "he closed program has a runtime table for it; and a modu"
+               & "le `any` binding has no implicit null pair. Pass a point"
+               & "er, write the `any C` context, or adjust the concept's e"
+               & "ntries.",
             when Catalogue.Noreturn_Contract =>
                "A noreturn routine breaks its contract [0890]. A noretur"
                & "n signature is ordinary and infallible, and every reacha"
