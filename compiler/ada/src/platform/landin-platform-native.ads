@@ -57,6 +57,11 @@ package Landin.Platform.Native is
       From, To : String;
       Status : out Move_Status);
 
+   overriding procedure Lock_Output
+     (Host : Native_Filesystem; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Native_Filesystem; Handle : Integer);
+
    overriding procedure List_Directory
      (Host    : Native_Filesystem;
       Path    : String;

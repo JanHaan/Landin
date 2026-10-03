@@ -120,6 +120,22 @@ package body Landin.Platform.Overlays is
       Status := Not_Movable;
    end Move_File;
 
+   overriding procedure Lock_Output
+     (Host : Overlay; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Handle := -1;
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Overlay; Handle : Integer)
+   is
+      pragma Unreferenced (Host, Handle);
+   begin
+      null;
+   end Unlock_Output;
+
    --  The host's listing with every held entry of the same directory
    --  merged into its sorted place, once.
    overriding procedure List_Directory

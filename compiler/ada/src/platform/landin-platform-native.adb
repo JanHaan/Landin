@@ -280,19 +280,16 @@ package body Landin.Platform.Native is
       Status : out Remove_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Unlink_File (Name : Interfaces.C.char_array)
+        return Interfaces.C.int
+        with Import, Convention => C, External_Name => "landin_unlink_file";
+      Result : Interfaces.C.int;
    begin
-      if not Directories.Exists (Path) then
-         Status := Already_Absent;
-      elsif Directories.Kind (Path) = Directories.Directory then
-         Status := Not_Removable;
-      else
-         Directories.Delete_File (Path);
-         Status := Removed;
-      end if;
-   exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
-         | Ada.IO_Exceptions.Device_Error =>
-         Status := Not_Removable;
+      Result := Unlink_File (Interfaces.C.To_C (Path));
+      Status := (if Result = 1 then Removed
+                 elsif Result = 0 then Already_Absent
+                 else Not_Removable);
    end Remove_File;
 
    overriding procedure Move_File
@@ -301,22 +298,43 @@ package body Landin.Platform.Native is
       Status : out Move_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Move_No_Replace
+        (Source, Destination : Interfaces.C.char_array)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_move_file_noreplace";
+      Result : Interfaces.C.int;
    begin
-      if not Directories.Exists (From) then
-         Status := Move_Source_Absent;
-      elsif Directories.Exists (To)
-        or else Directories.Kind (From) = Directories.Directory
-      then
-         Status := Not_Movable;
-      else
-         Directories.Rename (From, To);
-         Status := Moved;
-      end if;
-   exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
-         | Ada.IO_Exceptions.Device_Error =>
-         Status := Not_Movable;
+      Result := Move_No_Replace
+        (Interfaces.C.To_C (From), Interfaces.C.To_C (To));
+      Status := (if Result = 1 then Moved
+                 elsif Result = 0 then Move_Source_Absent
+                 else Not_Movable);
    end Move_File;
+
+   overriding procedure Lock_Output
+     (Host : Native_Filesystem; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Host);
+      function Lock_Directory (Name : Interfaces.C.char_array)
+        return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_lock_output_directory";
+   begin
+      Handle := Integer (Lock_Directory (Interfaces.C.To_C (Path)));
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Native_Filesystem; Handle : Integer)
+   is
+      pragma Unreferenced (Host);
+      procedure Unlock_Directory (Value : Interfaces.C.int)
+        with Import, Convention => C,
+             External_Name => "landin_unlock_output_directory";
+   begin
+      Unlock_Directory (Interfaces.C.int (Handle));
+   end Unlock_Output;
 
    ---------------------------------------------------------------------
    --  List_Directory

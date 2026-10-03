@@ -308,4 +308,12 @@ package body Landin.Platform.Native.Tools is
       return Files.Exists (Path) and then not Files.Is_Directory (Path);
    end Output_Produced;
 
+   overriding procedure Prepare_Output
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
+   is
+      pragma Unreferenced (Host, Files, Path);
+   begin
+      null;
+   end Prepare_Output;
+
 end Landin.Platform.Native.Tools;

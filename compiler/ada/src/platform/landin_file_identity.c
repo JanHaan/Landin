@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #ifdef __APPLE__
@@ -52,6 +53,71 @@ int landin_directory_access_denied(const char *path)
     }
     denied = errno == EACCES || errno == EPERM;
     return denied;
+}
+
+/* A directory lock has no replaceable lock-file inode. All cooperating
+   compiler invocations naming a destination in this directory serialize
+   backup, tool run, verification and recovery. The descriptor closes on
+   process death. */
+int landin_lock_output_directory(const char *path)
+{
+    char copy[PATH_MAX], resolved[PATH_MAX], *slash;
+    const char *parent;
+    int fd;
+    if (!*path || strlen(path) >= sizeof(copy))
+        return -1;
+    strcpy(copy, path);
+    slash = strrchr(copy, '/');
+    if (slash) {
+        *slash = '\0';
+        parent = slash == copy ? "/" : copy;
+    } else {
+        parent = ".";
+    }
+    if (!realpath(parent, resolved))
+        return -1;
+    fd = open(resolved, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    while (flock(fd, LOCK_EX) != 0) {
+        if (errno == EINTR)
+            continue;
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+void landin_unlock_output_directory(int fd)
+{
+    if (fd >= 0)
+        close(fd);
+}
+
+/* link creates the destination only if no entry is present, including a
+   dangling symlink. Both names are beside one another, so no cross-device
+   move is needed. Return 1 on success, 0 for missing source, -1 otherwise. */
+int landin_move_file_noreplace(const char *from, const char *to)
+{
+    struct stat source;
+    if (lstat(from, &source) != 0)
+        return errno == ENOENT ? 0 : -1;
+    if (S_ISDIR(source.st_mode))
+        return -1;
+    if (link(from, to) != 0)
+        return -1;
+    if (unlink(from) != 0) {
+        unlink(to);
+        return -1;
+    }
+    return 1;
+}
+
+int landin_unlink_file(const char *path)
+{
+    if (unlink(path) == 0)
+        return 1;
+    return errno == ENOENT ? 0 : -1;
 }
 
 struct destination {

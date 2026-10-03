@@ -88,7 +88,7 @@ L0346  Live     [1580]: a C boundary signature, layout or variadic call the C AB
 L0347  Live     [1610]/[1640]: a link symbol, helper import or placement outside its contract
 L0348  Live     [1150]/D180: a for source is a range, a traversable value or one exact iterable conformance
 L0500  Live     [1550]: no assembler and linker for the target on this host
-L0501  Live     [1550]: the platform assembler or linker refused what was emitted
+L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
 L0502  Live     [1970] [1990]: a missing or invalid hosted main or explicitly selected firmware entry
 L0503  Retired  retired: the register-only internal calling limit
 L0504  Live     a verified frame outside x86-64's signed displacement encoding

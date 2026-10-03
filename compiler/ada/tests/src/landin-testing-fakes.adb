@@ -4,6 +4,7 @@ package body Landin.Testing.Fakes is
 
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
+   use type Landin.Platform.Termination;
 
    overriding procedure Finalize (Owner : in out Store_Owner) is
       procedure Free is new Ada.Unchecked_Deallocation (Store, Store_Access);
@@ -329,6 +330,22 @@ package body Landin.Testing.Fakes is
       end if;
    end Move_File;
 
+   overriding procedure Lock_Output
+     (Host : Fake_Filesystem; Path : String; Handle : out Integer)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Handle := 0;
+   end Lock_Output;
+
+   overriding procedure Unlock_Output
+     (Host : Fake_Filesystem; Handle : Integer)
+   is
+      pragma Unreferenced (Host, Handle);
+   begin
+      null;
+   end Unlock_Output;
+
    ---------------------------------------------------------------------
    --  List_Directory
    --
@@ -560,6 +577,64 @@ package body Landin.Testing.Fakes is
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,
             Capture   => Capture));
+      if Host.State.Data.Output_Store /= null then
+         if Host.State.Data.Produces_Output
+           and then Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 0
+         then
+            declare
+               Store_Value : constant Store_Access :=
+                 Host.State.Data.Output_Store;
+               Path : constant String :=
+                 Unbounded.To_String (Host.State.Data.Output_Path);
+               Item : constant File_Entry :=
+                 (Unbounded.To_Unbounded_String (Path),
+                  Unbounded.To_Unbounded_String ("fake executable"), A_File);
+               Found : Natural := 0;
+            begin
+               for Index in 1 .. Natural (Store_Value.Files.Length) loop
+                  if Unbounded.To_String
+                    (Store_Value.Files.Element (Index).Path) = Path
+                  then
+                     Found := Index;
+                     exit;
+                  end if;
+               end loop;
+               if Store_Value.Refuses_Write
+                 or else (Found /= 0
+                   and then Store_Value.Files.Element (Found).Kind =
+                     A_Directory)
+               then
+                  null;
+               elsif Found = 0 then
+                  Store_Value.Files.Append (Item);
+               else
+                  Store_Value.Files.Replace_Element (Found, Item);
+               end if;
+               if not Store_Value.Refuses_Write
+                 and then (Found = 0
+                   or else Store_Value.Files.Element (Found).Kind /=
+                     A_Directory)
+               then
+                  Found := 0;
+                  for Index in 1 .. Natural (Store_Value.Items.Length) loop
+                     if Unbounded.To_String
+                       (Store_Value.Items.Element (Index).Path) = Path
+                     then
+                        Found := Index;
+                        exit;
+                     end if;
+                  end loop;
+                  if Found = 0 then
+                     Store_Value.Items.Append (Item);
+                  else
+                     Store_Value.Items.Replace_Element (Found, Item);
+                  end if;
+               end if;
+            end;
+         end if;
+         Host.State.Data.Output_Store := null;
+      end if;
    end Run;
 
    procedure Set_Output_Produced
@@ -573,14 +648,19 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
       Path : String) return Boolean
    is
-      Written : Landin.Platform.Write_Status;
+      pragma Unreferenced (Host);
    begin
-      if not Host.State.Data.Produces_Output then
-         return False;
-      end if;
-      Files.Write_File (Path, "fake executable", Written);
-      return Written = Landin.Platform.Write_Ok;
+      return Files.Exists (Path) and then not Files.Is_Directory (Path);
    end Output_Produced;
+
+   overriding procedure Prepare_Output
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String)
+   is
+   begin
+      Host.State.Data.Output_Store := Fake_Filesystem (Files).Writes.Data;
+      Host.State.Data.Output_Path := Unbounded.To_Unbounded_String (Path);
+   end Prepare_Output;
 
    ---------------------------------------------------------------------
    --  Channel

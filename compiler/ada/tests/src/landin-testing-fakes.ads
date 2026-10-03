@@ -84,6 +84,11 @@ package Landin.Testing.Fakes is
       From, To : String;
       Status : out Landin.Platform.Move_Status);
 
+   overriding procedure Lock_Output
+     (Host : Fake_Filesystem; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Fake_Filesystem; Handle : Integer);
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -181,6 +186,10 @@ package Landin.Testing.Fakes is
    overriding function Output_Produced
      (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
       Path : String) return Boolean;
+
+   overriding procedure Prepare_Output
+     (Host : Fake_Tool_Runner; Files : Landin.Platform.Filesystem'Class;
+      Path : String);
 
    --  Which capture mode the last run asked for, so a caller that must
    --  keep the streams apart can be held to it.
@@ -300,6 +309,8 @@ private
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
       Produces_Output : Boolean := True;
+      Output_Store : Store_Access := null;
+      Output_Path : Unbounded.Unbounded_String;
       Script      : Result_Vectors.Vector;
       Raises      : Boolean := False;
       Run_Exception : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity;

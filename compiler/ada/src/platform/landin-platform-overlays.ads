@@ -76,6 +76,11 @@ package Landin.Platform.Overlays is
       From, To : String;
       Status : out Move_Status);
 
+   overriding procedure Lock_Output
+     (Host : Overlay; Path : String; Handle : out Integer);
+   overriding procedure Unlock_Output
+     (Host : Overlay; Handle : Integer);
+
    overriding procedure List_Directory
      (Host    : Overlay;
       Path    : String;

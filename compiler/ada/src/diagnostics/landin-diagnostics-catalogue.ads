@@ -581,8 +581,8 @@ package Landin.Diagnostics.Catalogue is
                "[1550]: the requested output cannot be made with the"
                & " target, settings or available toolchain",
             when Toolchain_Failed      =>
-               "[1550]: the platform assembler or linker refused what"
-               & " was emitted",
+               "[1550]: assembler or linker refusal, or executable"
+               & " output lifecycle failure",
             when Entry_Point_Missing   =>
                "[1970] [1990]: a missing or invalid hosted main or"
                & " explicitly selected firmware entry",

@@ -1477,6 +1477,17 @@ package body Landin.Driver is
                Prepared : Boolean := False;
                Removed : Landin.Platform.Remove_Status;
                Moved : Landin.Platform.Move_Status;
+               Lock_Handle : Integer := -1;
+
+               procedure Release_Lock;
+
+               procedure Release_Lock is
+               begin
+                  if Lock_Handle >= 0 then
+                     Host.Unlock_Output (Lock_Handle);
+                     Lock_Handle := -1;
+                  end if;
+               end Release_Lock;
 
                procedure Restore_Output;
 
@@ -1488,8 +1499,12 @@ package body Landin.Driver is
                   Host.Remove_File (Target_Path, Removed);
                   if Removed = Landin.Platform.Not_Removable then
                      Note_Failure
-                       (Code_Toolchain_Failed,
-                        "cannot clear failed executable: " & Target_Path);
+                        (Code_Toolchain_Failed,
+                        "cannot clear failed executable: " & Target_Path
+                        & (if Unbounded.Length (Backup) > 0
+                           then "; prior executable retained at "
+                             & Unbounded.To_String (Backup)
+                           else ""));
                   elsif Unbounded.Length (Backup) > 0 then
                      Host.Move_File
                        (Unbounded.To_String (Backup), Target_Path, Moved);
@@ -1562,6 +1577,15 @@ package body Landin.Driver is
                      return;
                   end if;
 
+                  Host.Lock_Output (Target_Path, Lock_Handle);
+                  if Lock_Handle < 0 then
+                     Note_Failure
+                       (Code_Toolchain_Failed,
+                        "cannot lock executable destination: "
+                        & Target_Path);
+                     return;
+                  end if;
+
                   --  A zero-exit tool must produce a new pathname for this
                   --  invocation. Keep the old file aside until that is
                   --  established, even when the new bytes are identical.
@@ -1607,6 +1631,7 @@ package body Landin.Driver is
                           (Code_Toolchain_Failed,
                            "cannot preserve prior executable: "
                            & Target_Path);
+                        Release_Lock;
                         return;
                      end if;
                   else
@@ -1616,10 +1641,12 @@ package body Landin.Driver is
                           (Code_Toolchain_Failed,
                            "cannot clear executable output: "
                            & Target_Path);
+                        Release_Lock;
                         return;
                      end if;
                   end if;
                   Prepared := True;
+                  Tools.Prepare_Output (Host, Target_Path);
                   Tools.Run
                     (Program   => Driver,
                      Arguments =>
@@ -1688,6 +1715,15 @@ package body Landin.Driver is
                      Driver & " reported success but produced no executable"
                      & " at " & Target_Path & LF
                      & Unbounded.To_String (Ran.Output));
+               elsif Unbounded.Length (Backup) > 0
+                 and then Host.Same_File
+                   (Target_Path, Unbounded.To_String (Backup))
+               then
+                  Restore_Output;
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " left executable output aliasing its prior"
+                     & " backup at " & Target_Path);
                elsif Unbounded.Length (Backup) > 0 then
                   Host.Remove_File (Unbounded.To_String (Backup), Removed);
                   if Removed = Landin.Platform.Not_Removable then
@@ -1697,6 +1733,11 @@ package body Landin.Driver is
                         & Unbounded.To_String (Backup));
                   end if;
                end if;
+               Release_Lock;
+            exception
+               when others =>
+                  Release_Lock;
+                  raise;
             end;
             Write_Build_Report;
          end Emit_Requested;

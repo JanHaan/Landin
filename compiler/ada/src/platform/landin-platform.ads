@@ -109,6 +109,13 @@ package Landin.Platform is
       From, To : String;
       Status : out Move_Status) is abstract;
 
+   --  Serialize executable publication in the destination directory.
+   --  The handle remains held through tool execution and recovery.
+   procedure Lock_Output
+     (Host : Filesystem; Path : String; Handle : out Integer) is abstract;
+   procedure Unlock_Output
+     (Host : Filesystem; Handle : Integer) is abstract;
+
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.
    procedure List_Directory
@@ -165,6 +172,11 @@ package Landin.Platform is
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
+
+   --  Tell a test runner which output its next Run may create. Native tools
+   --  use their -o argument; this seam keeps fake production inside Run.
+   procedure Prepare_Output
+     (Host : Tool_Runner; Files : Filesystem'Class; Path : String) is abstract;
 
    --  Answer whether a successful run left the named output as a file.
    --  The caller clears that path before Run, so this is evidence from this

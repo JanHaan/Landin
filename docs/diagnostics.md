@@ -1091,8 +1091,10 @@ configuration, or select or install a toolchain as the note directs.
 
 ### L0501
 
-The platform assembler or linker refused what the compiler emitted [1550]. The
-tool's own output follows the diagnostic.
+Executable emission failed [1550]. The assembler or linker may have refused
+the emitted code, or the requested output could not be produced, verified, or
+restored. The note describes the failure, names paths needed for recovery,
+and includes tool output when available.
 
 ### L0502
 

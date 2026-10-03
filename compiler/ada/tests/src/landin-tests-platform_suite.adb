@@ -18,6 +18,7 @@ package body Landin.Tests.Platform_Suite is
 
    use type Landin.Platform.Capture_Mode;
    use type Landin.Platform.List_Status;
+   use type Landin.Platform.Move_Status;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Remove_Status;
    use type Landin.Platform.Termination;
@@ -800,6 +801,112 @@ package body Landin.Tests.Platform_Suite is
          "the native adapter preserves directories");
    end Native_File_Removal_Is_Bounded;
 
+   --  Native no-replace moves inspect directory entries, not targets followed
+   --  through symlinks. The same check is needed at backup reservation.
+   procedure Native_Backup_Move_Does_Not_Replace_Entries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Backup_Move_Does_Not_Replace_Entries
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Interfaces.C.int;
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Source : constant String := Scratch & "/backup-source";
+      Backup : constant String := Scratch & "/backup-candidate";
+      Soft_Alias : constant String := Scratch & "/backup-soft-alias";
+      Hard_Alias : constant String := Scratch & "/backup-hard-alias";
+      Written : Landin.Platform.Write_Status;
+      Removed : Landin.Platform.Remove_Status;
+      Moved : Landin.Platform.Move_Status;
+      function Make_Link
+        (Target, Name : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "symlink";
+      function Make_Hard_Link
+        (Target, Name : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C, External_Name => "link";
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      Host.Remove_File (Source, Removed);
+      Host.Remove_File (Backup, Removed);
+      Host.Remove_File (Soft_Alias, Removed);
+      Host.Remove_File (Hard_Alias, Removed);
+      Host.Write_File (Source, "prior", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok,
+         "a prior output is available");
+      Landin.Testing.Check
+        (Item, Make_Link
+           (Interfaces.C.To_C ("absent-target"),
+            Interfaces.C.To_C (Backup)) = 0,
+         "a dangling candidate entry was installed");
+      Host.Move_File (Source, Backup, Moved);
+      Landin.Testing.Check
+        (Item, Moved = Landin.Platform.Not_Movable
+         and then Host.Exists (Source),
+         "backup reservation does not replace a dangling symlink");
+      Host.Remove_File (Backup, Removed);
+      Landin.Testing.Check
+        (Item, Removed = Landin.Platform.Removed,
+         "the dangling symlink remained for explicit cleanup");
+      Host.Move_File (Source, Backup, Moved);
+      Landin.Testing.Check
+        (Item, Moved = Landin.Platform.Moved
+         and then Host.Exists (Backup)
+         and then not Host.Exists (Source),
+         "an unoccupied candidate is reserved and moved");
+      Landin.Testing.Check
+        (Item, Make_Link
+           (Interfaces.C.To_C (Ada.Directories.Full_Name (Backup)),
+            Interfaces.C.To_C (Soft_Alias)) = 0
+         and then Make_Hard_Link
+           (Interfaces.C.To_C (Backup),
+            Interfaces.C.To_C (Hard_Alias)) = 0,
+         "a tool can leave both forms of backup alias");
+      Landin.Testing.Check
+        (Item, Host.Same_File (Soft_Alias, Backup)
+         and then Host.Same_File (Hard_Alias, Backup),
+         "both aliases are detectable before backup cleanup");
+      Host.Remove_File (Soft_Alias, Removed);
+      Host.Remove_File (Hard_Alias, Removed);
+      Host.Remove_File (Backup, Removed);
+   end Native_Backup_Move_Does_Not_Replace_Entries;
+
+   procedure Fake_Output_Is_Written_During_Run
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fake_Output_Is_Written_During_Run
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Runner : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Result : Landin.Platform.Tool_Result;
+   begin
+      Runner.Prepare_Output (Host, "program");
+      Runner.Run ("fake", Landin.Platform.No_Arguments, Result);
+      Landin.Testing.Check
+        (Item, Host.Exists ("program"),
+         "the fake creates output before Run returns");
+      Landin.Testing.Check
+        (Item, Runner.Output_Produced (Host, "program")
+         and then Host.Exists ("program"),
+         "verification only observes the existing output");
+      Runner.Set_Result (1, "link refused");
+      Runner.Prepare_Output (Host, "failed");
+      Runner.Run ("fake", Landin.Platform.No_Arguments, Result);
+      Landin.Testing.Check
+        (Item, not Host.Exists ("failed")
+         and then not Runner.Output_Produced (Host, "failed"),
+         "a failed run creates no output at either boundary");
+      Runner.Set_Result (0, "");
+      Runner.Set_Output_Produced (False);
+      Runner.Prepare_Output (Host, "omitted");
+      Runner.Run ("fake", Landin.Platform.No_Arguments, Result);
+      Landin.Testing.Check
+        (Item, not Host.Exists ("omitted")
+         and then not Runner.Output_Produced (Host, "omitted"),
+         "a zero-exit omission remains absent through verification");
+   end Fake_Output_Is_Written_During_Run;
+
    procedure Fake_Writes_Are_Recorded
      (Item : in out Landin.Testing.Context);
 
@@ -1271,6 +1378,12 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native file removal is bounded",
          Native_File_Removal_Is_Bounded'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native backup move preserves entries",
+         Native_Backup_Move_Does_Not_Replace_Entries'Access);
+      Landin.Testing.Register
+        (Into, "platform", "fake output is written during run",
+         Fake_Output_Is_Written_During_Run'Access);
       Landin.Testing.Register
         (Into, "platform", "native file failures are outcomes",
          Native_File_Failures_Are_Outcomes'Access);

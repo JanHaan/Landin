@@ -587,9 +587,11 @@ package body Landin.Diagnostics.Explanations is
                & "hain=` only helps when a toolchain is absent or unavaila"
                & "ble.",
             when Catalogue.Toolchain_Failed =>
-               "The platform assembler or linker refused what the compil"
-               & "er emitted [1550]. The tool's own output follows the dia"
-               & "gnostic.",
+               "Executable emission failed [1550]. The assembler or link"
+               & "er may have refused the emitted code, or the requested o"
+               & "utput could not be produced, verified, or restored. The "
+               & "note describes the failure, names paths needed for recov"
+               & "ery, and includes tool output when available.",
             when Catalogue.Entry_Point_Missing =>
                "`--emit=exe` needs an entry: a hosted `main` of the one "
                & "shape [1970] in the entry module, or the firmware routin"

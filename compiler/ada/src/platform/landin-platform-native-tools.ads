@@ -33,6 +33,9 @@ package Landin.Platform.Native.Tools is
      (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
       return Boolean;
 
+   overriding procedure Prepare_Output
+     (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String);
+
 private
 
    type Native_Tool_Runner is limited new Tool_Runner with record
