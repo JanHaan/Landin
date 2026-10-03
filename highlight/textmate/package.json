@@ -71,7 +71,7 @@
           "type": "string",
           "default": "",
           "scope": "window",
-          "description": "Compiler target for editor analysis, as in --target=; empty uses refine's default (linux-x86-64)."
+          "description": "Compiler target for editor analysis, as in --target=; empty uses refine's own host."
         },
         "landin.server.level": {
           "type": "string",

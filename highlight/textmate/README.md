@@ -27,7 +27,7 @@ feature level can contain:
 }
 ```
 
-An empty target selects `linux-x86-64`; an empty level selects that target's
+An empty target selects the compiler's own host; an empty level selects that target's
 default level. Build options must be declared in a source file reached by the
 build. For example, `option enabled: bool = true` can be overridden with
 `"landin.server.options": { "enabled": "false" }`. Option names use lowercase
