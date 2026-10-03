@@ -1701,6 +1701,65 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Assembly_IR;
 
+   procedure Shared_Returns (Item : in out Landin.Testing.Context);
+
+   procedure Shared_Returns (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("p.ldn",
+        "bad: atom "
+        & "pair: type = struct value: u32 end pair "
+        & "scalar: (x: u32) -> (r: u32) ! bad = "
+        & "r = x return when x == 0 fail bad when x == 1 "
+        & "r = x + 1 end scalar "
+        & "aggregate: (x: u32) -> (r: pair) = "
+        & "r = pair(value: x) return when x == 0 "
+        & "r = pair(value: x + 1) end aggregate "
+        & "single: () -> none = end single");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--optimize=size");
+      Args.Append ("--debug=lines");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            U.To_String (Result.Report));
+         if Result.Status = Landin.Driver.Status_Success then
+            declare
+               Text : constant String := Host.Written ("p.s");
+               function Count (Part : String) return Natural
+                 is (Ada.Strings.Fixed.Count (Text, Part));
+            begin
+               Landin.Testing.Check
+                 (Item, Count ("_return:") = 2
+                    and then Count ("b .Lcm_i") >= 5,
+                  "five scalar, aggregate, and failure exits share two"
+                  & " return blocks");
+               Landin.Testing.Check
+                 (Item, Count ("mov sp, r6") = 3
+                    and then Count ("bx lr") = 3,
+                  "single exit stays inline and shared exits restore once");
+               Landin.Testing.Check
+                 (Item, Count ("mov r12, r0") = 1
+                    and then Count ("mov r12, r4") = 5,
+                  "failure carrier and successful return preparations differ");
+               Landin.Testing.Check
+                 (Item, Count (".cfi_remember_state") = 3
+                    and then Count (".cfi_restore_state") = 3,
+                  "each teardown restores its framed debug CFI state");
+            end;
+         end if;
+      end;
+   end Shared_Returns;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1714,6 +1773,8 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "assembly IR", Assembly_IR'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "literal pooling", Literal_Pooling'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "shared returns", Shared_Returns'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register

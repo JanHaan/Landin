@@ -1055,6 +1055,8 @@ package body Landin.Backend.Cortex_M is
          Homes : constant Landin.Targets.Byte_Count :=
            Extent (Layout) + Home_Bytes;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
+         Return_Label : constant String := Label (Item, 1) & "_return";
+         Exit_Count : Natural := 0;
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          Ordinary : constant Boolean := Landin.IR.Signature_Machine
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
@@ -1120,6 +1122,7 @@ package body Landin.Backend.Cortex_M is
          procedure Shorten_Local_Branches;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
+         procedure Return_From_Routine;
 
          procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
@@ -1440,6 +1443,18 @@ package body Landin.Backend.Cortex_M is
                Emit (".cfi_restore_state");
             end if;
          end Epilogue;
+
+         procedure Return_From_Routine is
+         begin
+            if Exit_Count > 1 then
+               --  The literal follows bx, so its PC-relative load is always
+               --  in range, even across large or opaque assembly blocks.
+               --  r7 is restored by the shared epilogue before returning.
+               Jump (Return_Label);
+            else
+               Epilogue;
+            end if;
+         end Return_From_Routine;
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -3282,7 +3297,7 @@ package body Landin.Backend.Cortex_M is
                   end if;
                   Emit ("movs r4, #0");
                   Emit ("mov r12, r4");
-                  Epilogue;
+                  Return_From_Routine;
                when Landin.IR.Halt =>
                   if Panic = null or else Landin.Panics.Handler (Panic.all)
                     = Landin.IR.No_Item
@@ -3295,10 +3310,27 @@ package body Landin.Backend.Cortex_M is
                when Landin.IR.Fail =>
                   Load_Value (Operand (1));
                   Emit ("mov r12, r0");
-                  Epilogue;
+                  Return_From_Routine;
             end case;
          end Instruction;
       begin
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Item, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value
+                      (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               begin
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    in Landin.IR.Leave | Landin.IR.Fail
+                  then
+                     Exit_Count := Exit_Count + 1;
+                  end if;
+               end;
+            end loop;
+         end loop;
          Select_Section (Item, ".text.", "ax");
          Emit (".globl " & Symbol (Item));
          Emit (".balign 2");
@@ -3457,6 +3489,10 @@ package body Landin.Backend.Cortex_M is
          end loop;
          Put (Hard_Trap & ":");
          Emit ("udf #1");
+         if Exit_Count > 1 then
+            Put (Return_Label & ":");
+            Epilogue;
+         end if;
          Flush_Literals;
          Pool_Active := False;
          if Debug /= null then
