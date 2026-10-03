@@ -2837,6 +2837,8 @@ private
       --  row whose key has no exact spelling.
       Conformance_Index : Conformance_Maps.Map;
       Unspelled_Conformances : Conformance_Position_Vectors.Vector;
+      --  A set added after the latest conformance cannot occur in any row.
+      Conformance_Atom_Set_Limit : Natural := 0;
       Conformance_Actuals : Actual_Key_Vectors.Vector;
       Conformance_Providers : Conformance_Provider_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;

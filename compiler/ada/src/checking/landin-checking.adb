@@ -646,6 +646,8 @@ package body Landin.Checking is
       Inputs   : Actual_Tuple;
       Into     : in out Key_Spelling);
 
+   procedure Rebuild_Conformance_Index (Into : in out Table);
+
    function Row_Agrees
      (Of_Table : Table;
       Position : Positive;
@@ -764,9 +766,39 @@ package body Landin.Checking is
               (Key.Words, Into.Conformances.Last_Index);
          end if;
       end;
+      Into.Conformance_Atom_Set_Limit := Natural (Into.Atom_Sets.Length);
       return Conformance_Identities.Nth
         (Into, Into.Conformances.Last_Index);
    end Add_Conformance;
+
+   --  Set_Encodings can change a spelled target or input, including an atom
+   --  set nested in an array shape.  Reinsert rows in order so that a new
+   --  collision still selects the earliest row, just like the original scan.
+   procedure Rebuild_Conformance_Index (Into : in out Table) is
+   begin
+      Into.Conformance_Index.Clear;
+      Into.Unspelled_Conformances.Clear;
+      for Position in 1 .. Natural (Into.Conformances.Length) loop
+         declare
+            Held   : constant Conformance_Record :=
+              Into.Conformances (Position);
+            Inputs : Actual_Tuple := Empty_Actuals;
+            Key    : Key_Spelling;
+         begin
+            for Index in 1 .. Held.Inputs.Count loop
+               Inputs.Members.Append
+                 (Into.Conformance_Actuals (Held.Inputs.First + Index));
+            end loop;
+            Spell_Conformance
+              (Into, Held.Concept, Held.Target, Inputs, Key);
+            if not Key.Exact then
+               Into.Unspelled_Conformances.Append (Position);
+            elsif not Into.Conformance_Index.Contains (Key.Words) then
+               Into.Conformance_Index.Insert (Key.Words, Position);
+            end if;
+         end;
+      end loop;
+   end Rebuild_Conformance_Index;
 
    function Conformance_Concept
      (Of_Table : Table; Id : Conformance_Id) return Concept_Id
@@ -1813,6 +1845,9 @@ package body Landin.Checking is
       for Value of Values loop
          Into.Encodings.Append (Value);
       end loop;
+      if Natural (Set_Id) <= Into.Conformance_Atom_Set_Limit then
+         Rebuild_Conformance_Index (Into);
+      end if;
    end Set_Encodings;
 
    function Encoding_Width
@@ -3529,10 +3564,9 @@ package body Landin.Checking is
    --  order is not part of the key.  Where agreement is not decided by
    --  structure alone -- an inferred error set, which agrees only with its
    --  own signature, an atom set listing one atom twice, or a descriptor
-   --  the table does not hold -- the key has no exact spelling.  Every
-   --  fact written is fixed once its key can be made: an inferred
-   --  signature is never written, and an encoded union receives its
-   --  encodings when its set is added, before any key can name it.
+   --  the table does not hold -- the key has no exact spelling.  Inferred
+   --  signatures remain unspelled until finalized.  Set_Encodings rebuilds
+   --  this index when a held atom set gains its encoding map.
    procedure Spell_Conformance
      (Of_Table : Table;
       Concept  : Concept_Id;

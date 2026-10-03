@@ -9783,6 +9783,58 @@ package body Landin.Tests.Checking_Suite is
             end;
 
             declare
+               use Landin.Checking;
+               Member : constant Landin.Provenance.Declaration_Id :=
+                 Landin.Provenance.Declaration_Id
+                   (Declaration_Limit (Types.all));
+               Atoms : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Encoded_Copy : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Plain_Copy : constant Atom_Set_Id :=
+                 Add_Atom_Set (Types.all, [Point, Member]);
+               Target : constant Actual_Key :=
+                 Atom_Set_Type_Actual (Types.all, Atoms);
+               Encoded_Target : constant Actual_Key :=
+                 Atom_Set_Type_Actual (Types.all, Encoded_Copy);
+               Nested : constant Actual_Key :=
+                 Fixed_Array_Type_Actual
+                   (Types.all, 3,
+                    (Element => Landin.Types.U32, Atoms => Atoms,
+                     others => <>));
+               Inputs : Actual_Tuple := Empty_Actuals;
+               First_Row, Later_Row, Nested_Row : Conformance_Id;
+            begin
+               Append_Actual (Inputs, Fixed_Actual (987654));
+               First_Row := Add_Conformance
+                 (Types.all, Concept, Target, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Nested_Row := Add_Conformance
+                 (Types.all, Concept, Nested, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Set_Encodings (Types.all, Encoded_Copy, [0, 1], 2);
+               Later_Row := Add_Conformance
+                 (Types.all, Concept, Encoded_Target, Inputs, Empty, Src,
+                  Point_Node, Declared_Conformance);
+               Set_Encodings (Types.all, Atoms, [0, 1], 2);
+               Landin.Testing.Check
+                 (Item,
+                  Find_Conformance
+                    (Types.all, Concept, Target, Inputs) = First_Row
+                  and then Find_Conformance
+                    (Types.all, Concept, Encoded_Target, Inputs) = First_Row
+                  and then Find_Conformance
+                    (Types.all, Concept, Nested, Inputs) = Nested_Row
+                  and then Find_Conformance
+                    (Types.all, Concept,
+                     Atom_Set_Type_Actual (Types.all, Plain_Copy), Inputs)
+                       = No_Conformance
+                  and then Later_Row /= First_Row,
+                  "encoding an indexed set preserves nested keys and"
+                  & " the earliest row");
+            end;
+
+            declare
                Rows : array (1 .. 128) of Landin.Checking.Conformance_Id;
                First_Member : constant Natural :=
                  Landin.Checking.Declaration_Limit (Types.all) - 128;
