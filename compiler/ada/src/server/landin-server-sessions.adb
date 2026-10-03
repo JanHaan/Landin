@@ -31,6 +31,7 @@ package body Landin.Server.Sessions is
    use type Landin.Server.Transport.Status;
    use type Diag.Severity;
    use type Landin.Source.Source_Id;
+   use type Landin.Server.Documents.Document;
 
    --  JSON-RPC's and the protocol's error codes.
    Parse_Error          : constant := -32700;
@@ -106,6 +107,8 @@ package body Landin.Server.Sessions is
    end Caches;
 
    use Caches;
+   package Path_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+     (Key_Type => String, Element_Type => Landin.Server.Documents.Document);
 
    procedure Serve
      (Channel : in out Landin.Platform.Channel'Class;
@@ -308,7 +311,31 @@ package body Landin.Server.Sessions is
             Was     : String_Sets.Set;
             Buckets : array (1 .. Landin.Stages.Source_Count (Context)) of
               Landin.Server.Answers.Diagnostic_Indexes.Vector;
+            By_Path : Path_Maps.Map;
+
+            function URI_At (Path : String) return String;
+
+            function URI_At (Path : String) return String is
+               Position : constant Path_Maps.Cursor := By_Path.Find (Path);
+            begin
+               return (if Path_Maps.Has_Element (Position)
+                       then Unbounded.To_String
+                         (Path_Maps.Element (Position).URI)
+                       else Landin.Server.Documents.URI_Of (Path));
+            end URI_At;
          begin
+            --  The URI map iterates in key order.  Its first document at a
+            --  path is the one URI_For and Version_Of would both select.
+            for Held of Store.Open loop
+               declare
+                  Path : constant String := Unbounded.To_String (Held.Path);
+               begin
+                  if not By_Path.Contains (Path) then
+                     By_Path.Insert (Path, Held);
+                  end if;
+               end;
+            end loop;
+
             if Published.Contains (Key) then
                declare
                   Earlier : constant String := Published.Element (Key);
@@ -348,12 +375,20 @@ package body Landin.Server.Sessions is
                   Snap : Landin.Source.Snapshot renames
                     Landin.Stages.Source (Context, Id).Element.all;
                   Path : constant String := Landin.Source.Name (Snap);
+                  Position : constant Path_Maps.Cursor := By_Path.Find (Path);
+                  URI : constant String :=
+                    (if Path_Maps.Has_Element (Position)
+                     then Unbounded.To_String
+                       (Path_Maps.Element (Position).URI)
+                     else Landin.Server.Documents.URI_Of (Path));
+                  Version : constant Long_Long_Integer :=
+                    (if Path_Maps.Has_Element (Position)
+                     then Path_Maps.Element (Position).Version else -1);
                begin
                   Now.Include (Path);
                   Send (Landin.Server.Answers.Diagnostics
-                    (URI      => Landin.Server.Documents.URI_For (Store, Path),
-                     Version  => Landin.Server.Answers.Version_Of
-                       (Store, Path),
+                    (URI      => URI,
+                     Version  => Version,
                      Found    => Answer.Found,
                      Indexes  => Buckets (Positive (Id)),
                      Sources  => Landin.Stages.Sources (Context),
