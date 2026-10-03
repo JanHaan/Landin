@@ -1,5 +1,6 @@
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Vectors;
+with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 with Landin.Layouts;
 with Landin.IR.Shape_Measurement;
@@ -31,6 +32,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.Optimization.Objective;
    use type Allocation.Location_Kind;
    use type Dwarf.Plan_Access;
+   use type Dwarf.Frame_Access;
    use type Landin.Backend.C_ABI.Eightbyte_Class;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
@@ -364,14 +366,31 @@ package body Landin.Backend.X86_64 is
       Streams : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Machine.Stream;
       Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
         Landin.Build_Reports.Routine_Statistics;
-      Saved_Plans : array (Bodies'Range) of Dwarf.Plan_Access :=
-        [others => null];
-      Saved_Frames : array (Bodies'Range) of Dwarf.Frame_Access :=
-        [others => null];
+      type Plan_Array is array (Positive range <>) of Dwarf.Plan_Access;
+      type Frame_Array is array (Positive range <>) of Dwarf.Frame_Access;
       procedure Free_Plan is new Ada.Unchecked_Deallocation
         (Allocation.Plan, Dwarf.Plan_Access);
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Dwarf.Frame_Access);
+      type Retained_Facts (Last : Natural) is
+        new Ada.Finalization.Limited_Controlled with record
+         Plans : Plan_Array (1 .. Last) := [others => null];
+         Frames : Frame_Array (1 .. Last) := [others => null];
+      end record;
+      overriding procedure Finalize (Owned : in out Retained_Facts);
+      overriding procedure Finalize (Owned : in out Retained_Facts) is
+      begin
+         for Index in Owned.Plans'Range loop
+            --  Frame_For can fail after the plan has been retained.
+            if Owned.Frames (Index) /= null then
+               Free_Frame (Owned.Frames (Index));
+            end if;
+            if Owned.Plans (Index) /= null then
+               Free_Plan (Owned.Plans (Index));
+            end if;
+         end loop;
+      end Finalize;
+      Saved : Retained_Facts (Bodies'Length);
       Capturing : Landin.IR.Item_Id := Landin.IR.No_Item;
       --  The emission unit is immutable. One retained-reference traversal
       --  excludes exposed routines before final-body equality comparisons.
@@ -381,9 +400,9 @@ package body Landin.Backend.X86_64 is
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id);
 
       function Cached_Plan (Item : Landin.IR.Item_Id)
-        return Dwarf.Plan_Access is (Saved_Plans (Positive (Item)));
+        return Dwarf.Plan_Access is (Saved.Plans (Positive (Item)));
       function Cached_Frame (Item : Landin.IR.Item_Id)
-        return Dwarf.Frame_Access is (Saved_Frames (Positive (Item)));
+        return Dwarf.Frame_Access is (Saved.Frames (Positive (Item)));
 
       procedure Exclude_Exposed (Item : Landin.IR.Item_Id) is
       begin
@@ -6583,14 +6602,14 @@ package body Landin.Backend.X86_64 is
                      Emit_Routine (Item, Plan, Layout);
                   end;
                else
-                  Saved_Plans (Index) := new Allocation.Plan'
+                  Saved.Plans (Index) := new Allocation.Plan'
                     (Allocation.Make (Of_Unit, Item, Facts, Options));
-                  Saved_Frames (Index) := new Frame'
+                  Saved.Frames (Index) := new Frame'
                     (Allocation.Frame_For
-                       (Of_Unit, Item, Facts, Saved_Plans (Index).all,
+                       (Of_Unit, Item, Facts, Saved.Plans (Index).all,
                         Options));
                   Emit_Routine
-                    (Item, Saved_Plans (Index).all, Saved_Frames (Index).all);
+                    (Item, Saved.Plans (Index).all, Saved.Frames (Index).all);
                end if;
                Bodies (Index) := Out_Text;
             end if;
@@ -7125,12 +7144,6 @@ package body Landin.Backend.X86_64 is
            (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
             Local_Prefix, Symbol'Access, Cached_Plan'Access,
             Cached_Frame'Access));
-         for Index in Saved_Plans'Range loop
-            if Saved_Plans (Index) /= null then
-               Free_Plan (Saved_Plans (Index));
-               Free_Frame (Saved_Frames (Index));
-            end if;
-         end loop;
       end if;
       Put (Character'Val (9) & ELF.No_Executable_Stack);
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
