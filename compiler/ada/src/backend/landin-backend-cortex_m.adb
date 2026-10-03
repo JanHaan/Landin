@@ -375,6 +375,7 @@ package body Landin.Backend.Cortex_M is
       --  bytes, including alignment and at most 32 pool words.
       Pool_Distance : Natural := 0;
       Pool_Generation : Natural := 0;
+      Emission_Line : Natural := 0;
       pragma Unreferenced (Options);
 
       function Fresh return String;
@@ -406,6 +407,7 @@ package body Landin.Backend.Cortex_M is
       procedure Put (Line : String) is
       begin
          Unbounded.Append (Out_Text, Line & LF);
+         Emission_Line := Emission_Line + 1;
       end Put;
 
       procedure Emit (Instruction : String) is
@@ -1126,6 +1128,9 @@ package body Landin.Backend.Cortex_M is
          package Edge_Vectors is new Ada.Containers.Vectors
            (Positive, Panic_Edge);
          Edges : Edge_Vectors.Vector;
+         Home_Ready : Boolean := False;
+         Home_Line : Natural := 0;
+         Home_Offset : Landin.Targets.Byte_Count := 0;
 
          function Trap (Reason : Landin.Panics.Kind) return String;
          function Trap return String;
@@ -1172,6 +1177,9 @@ package body Landin.Backend.Cortex_M is
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
+         procedure Scalar_Memory
+           (Store : Boolean; Size : Held_Size;
+            Offset : Landin.Targets.Byte_Count; Register : String);
          procedure Branch (Condition, Target : String);
          procedure Jump (Target : String);
          procedure Long_Jump (Target : String);
@@ -1393,12 +1401,47 @@ package body Landin.Backend.Cortex_M is
                Unbounded.Append (Out_Text, Rewritten);
             end if;
          end Shorten_Local_Branches;
+         --  r6 is available across adjacent scalar accesses.  Any emitted
+         --  line between them may change it or introduce another entry path,
+         --  so only reuse the address when the previous access ended the
+         --  output.  A nearby home needs at most one immediate adjustment.
+         procedure Scalar_Memory
+           (Store : Boolean; Size : Held_Size;
+            Offset : Landin.Targets.Byte_Count; Register : String) is
+         begin
+            if Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Offset = Home_Offset
+            then
+               null;
+            elsif Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Offset > Home_Offset
+              and then Offset - Home_Offset <= 255
+            then
+               Emit ("subs r6, #" & Trimmed
+                 (Landin.Targets.Byte_Count'Image (Offset - Home_Offset)));
+            elsif Home_Ready and then Home_Line = Emission_Line
+              and then Register /= "r6"
+              and then Home_Offset > Offset
+              and then Home_Offset - Offset <= 255
+            then
+               Emit ("adds r6, #" & Trimmed
+                 (Landin.Targets.Byte_Count'Image (Home_Offset - Offset)));
+            else
+               Frame_Address (Offset);
+            end if;
+            Memory (Store, Size, Register, "r6");
+            Home_Ready := Register /= "r6";
+            Home_Line := Emission_Line;
+            Home_Offset := Offset;
+         end Scalar_Memory;
 
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0") is
          begin
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (False, Size_Of_Value (Value), Register, "r6");
+            Scalar_Memory (False, Size_Of_Value (Value),
+              Value_Offset (Layout, Value), Register);
          end Load_Value;
 
          procedure Store_Value
@@ -1432,26 +1475,24 @@ package body Landin.Backend.Cortex_M is
                   Put (Done & ":");
                end;
             end if;
-            Frame_Address (Value_Offset (Layout, Value));
-            Memory (True, Size_Of_Value (Value), Register, "r6");
+            Scalar_Memory (True, Size_Of_Value (Value),
+              Value_Offset (Layout, Value), Register);
          end Store_Value;
 
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (False, Size_Of
+            Scalar_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "r6");
+              Slot_Offset (Layout, Slot), Register);
          end Load_Slot;
 
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
-            Frame_Address (Slot_Offset (Layout, Slot));
-            Memory (True, Size_Of
+            Scalar_Memory (True, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, "r6");
+              Slot_Offset (Layout, Slot), Register);
          end Store_Slot;
 
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind)

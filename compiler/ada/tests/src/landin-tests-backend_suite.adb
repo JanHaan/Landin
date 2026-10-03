@@ -7620,8 +7620,47 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Small_Call_Offsets_Use_Immediates;
 
+   procedure Cortex_Scalar_Homes_Reuse_Adjacent_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Scalar_Homes_Reuse_Adjacent_Address
+     (Item : in out Landin.Testing.Context) is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower (Work,
+        "public f: () -> (r: u8) =" & LF
+        & "    a: u8 = 7" & LF
+        & "    r = a" & LF
+        & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Cortex_M.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "strb r0, [r6]" & LF
+             & HT & "ldrb r0, [r6]" & LF),
+            "adjacent accesses to one home reuse its address");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ldrb r0, [r6]" & LF
+             & HT & "adds r6, #14" & LF & HT & "strb r0, [r6]" & LF),
+            "a nearby home needs one address adjustment");
+      end;
+   end Cortex_Scalar_Homes_Reuse_Adjacent_Address;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "Cortex scalar homes reuse adjacent address", Cortex_Scalar_Homes_Reuse_Adjacent_Address'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 small call offsets use immediates", Arm64_Small_Call_Offsets_Use_Immediates'Access);
       Landin.Testing.Register
