@@ -19,11 +19,54 @@ package body Landin.Tests.Fixes_Suite is
    package Unbounded renames Ada.Strings.Unbounded;
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Source.Source_Id;
 
    Corpus : constant String := "../tests/fixtures";
 
    function Trimmed (Text : String) return String
      is (Ada.Strings.Fixed.Trim (Text, Ada.Strings.Both));
+
+   --  An edit outside the compilation's named sources would be dropped by
+   --  Applied, so the gate must refuse the whole alternative before a retry.
+   function Edits_Name_Loaded_Sources
+     (Selected : Diag.Fix; Loaded : Natural) return Boolean;
+
+   function Edits_Name_Loaded_Sources
+     (Selected : Diag.Fix; Loaded : Natural) return Boolean is
+   begin
+      if Diag.Edit_Count (Selected) = 0 then
+         return False;
+      end if;
+      for Index in 1 .. Diag.Edit_Count (Selected) loop
+         declare
+            Source : constant Landin.Source.Source_Id :=
+              Diag.Source_Of (Diag.Nth_Edit (Selected, Index));
+         begin
+            if Source = Landin.Source.No_Source
+              or else Source > Landin.Source.Source_Id (Loaded)
+            then
+               return False;
+            end if;
+         end;
+      end loop;
+      return True;
+   end Edits_Name_Loaded_Sources;
+
+   function Edits_In_Source
+     (Selected : Diag.Fix; Source : Landin.Source.Source_Id) return Natural;
+
+   function Edits_In_Source
+     (Selected : Diag.Fix; Source : Landin.Source.Source_Id) return Natural
+   is
+      Result : Natural := 0;
+   begin
+      for Index in 1 .. Diag.Edit_Count (Selected) loop
+         if Diag.Source_Of (Diag.Nth_Edit (Selected, Index)) = Source then
+            Result := Result + 1;
+         end if;
+      end loop;
+      return Result;
+   end Edits_In_Source;
 
    --  The codes a report carries, whatever their level, in its order and
    --  spelled as a fixture's `codes:` spells them.
@@ -124,6 +167,26 @@ package body Landin.Tests.Fixes_Suite is
          "the third fix also reaches the applied text");
       Landin.Testing.Check
         (Item, not Clashed, "the third fix does not clash");
+
+      declare
+         Mixed : Diag.Fix := Diag.Make_Fix
+           (Diag.Respell, Diag.Likely, "two sources");
+         Escaped : Diag.Fix := Diag.Make_Fix
+           (Diag.Respell, Diag.Likely, "unloaded source");
+      begin
+         Diag.Add_Edit (Mixed, Diag.Make_Edit (1, (0, 2), "xy"));
+         Diag.Add_Edit (Mixed, Diag.Make_Edit (2, (0, 2), "xy"));
+         Diag.Add_Edit (Escaped, Diag.Make_Edit (2, (0, 2), "xy"));
+         Landin.Testing.Check
+           (Item, not Edits_Name_Loaded_Sources (Mixed, 1),
+            "one unloaded source rejects a multi-source alternative");
+         Landin.Testing.Check
+           (Item, not Edits_Name_Loaded_Sources (Escaped, 1),
+            "an alternative editing only an unloaded source is rejected");
+         Landin.Testing.Check
+           (Item, Edits_Name_Loaded_Sources (Mixed, 2),
+            "a multi-source alternative accepts both loaded sources");
+      end;
    end Fixes_Apply_From_The_End;
 
    --  Every fixture that pins a fix: its program is compiled, the first
@@ -271,10 +334,29 @@ package body Landin.Tests.Fixes_Suite is
                     Label & (if Choice_Diagnostic = 0 then "" else
                       " diagnostic" & Natural'Image (Choice_Diagnostic)
                       & " fix" & Positive'Image (Choice_Fix));
+                  Selected : constant Diag.Fix :=
+                    (if Choice_Diagnostic = 0 then
+                       Diag.Make_Fix (Diag.Respell, Diag.Likely, "")
+                     else Diag.Nth_Fix
+                       (Diag.Get (Ran.Found, Choice_Diagnostic),
+                        Choice_Fix));
                   Fixed_Host : Landin.Platform.Overlays.Overlay (Real'Access);
                   Fixed_Fake : Landin.Testing.Fakes.Fake_Filesystem;
                   Goldens    : Natural := 0;
+                  Selected_Applied : Natural := 0;
                begin
+                  if Choice_Diagnostic /= 0 then
+                     Landin.Testing.Check
+                       (Item, Edits_Name_Loaded_Sources
+                          (Selected, Natural (Ran.Named.Length)),
+                        Description & ": every edit names a loaded source");
+                     if not Edits_Name_Loaded_Sources
+                       (Selected, Natural (Ran.Named.Length))
+                     then
+                        return;
+                     end if;
+                  end if;
+
                   for Index in 1 .. Natural (Ran.Named.Length) loop
                      declare
                         Path   : constant String := Ran.Named.Element (Index);
@@ -292,6 +374,13 @@ package body Landin.Tests.Fixes_Suite is
                           (Item, not Clashed,
                            Description & ": the fixes of " & Path
                            & " do not clash");
+                        if Clashed then
+                           return;
+                        end if;
+                        if Choice_Diagnostic /= 0 then
+                           Selected_Applied := Selected_Applied
+                             + Edits_In_Source (Selected, Id);
+                        end if;
 
                         if Choice_Diagnostic = 0 and then Golden /= "" then
                            Goldens := Goldens + 1;
@@ -319,6 +408,16 @@ package body Landin.Tests.Fixes_Suite is
                        (Item, Goldens > 0,
                         Label & ": `fixed` names the result of a source the"
                         & " compilation read");
+                  else
+                     Landin.Testing.Check
+                       (Item, Selected_Applied = Diag.Edit_Count (Selected)
+                        and then Selected_Applied > 0,
+                        Description & ": every selected edit was applied");
+                     if Selected_Applied /= Diag.Edit_Count (Selected)
+                       or else Selected_Applied = 0
+                     then
+                        return;
+                     end if;
                   end if;
 
                   if Rooted then
