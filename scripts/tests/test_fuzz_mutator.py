@@ -78,13 +78,15 @@ class Mutator(unittest.TestCase):
             (fixtures / "abi" / "empty").mkdir()
             (fixtures / "abi" / "a" / "peer.c").write_text("C companion")
             (root / "reproducers").mkdir()
-            (root / "reproducers" / "hit.ldn").write_text("reproducer")
+            (root / "reproducers" / "z_hit.ldn").write_text("last")
+            (root / "reproducers" / "a_hit.ldn").write_text("first")
             with patch.object(fuzz, "FIXTURES", fixtures), \
                     patch.object(fuzz, "HERE", root):
                 self.assertEqual(fuzz.seeds(), [
                     (kind + "/a", kind + "\ufffd")
                     for kind in ("positive", "negative", "runtime", "abi")
-                ] + [("reproducers/hit.ldn", "reproducer")])
+                ] + [("reproducers/a_hit.ldn", "first"),
+                     ("reproducers/z_hit.ldn", "last")])
 
 
 if __name__ == "__main__":
