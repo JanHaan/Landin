@@ -737,7 +737,7 @@ render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
     bits_per_byte: usize = 8
     first: usize = 0
     stream: io.file = io.out(host)
-    mut byte: [1]u8 = zeroed
+    mut row_bytes: [25]u8 = zeroed
     members = 0
 
     try io.write(host, stream, "P4\n200 200\n")
@@ -752,10 +752,10 @@ render: (inout host: hosted.system) -> (members: u32) ! io.io_failed =
                     inc members
                 end if
             end for
-            byte[0] = packed
-            output: []u8 = byte[0..<lenof byte]
-            try io.write(host, stream, output)
+            row_bytes[byte_column] = packed
         end for
+        output: []u8 = row_bytes[0..<lenof row_bytes]
+        try io.write(host, stream, output)
     end for
 end render
 
