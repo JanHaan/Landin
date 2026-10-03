@@ -44,14 +44,16 @@ consumed before its next refill. Count delivery classifies that borrowed line
 without copying it. For text delivery, `process` copies each kept line into an
 owned message and appends one LF before calling an ordinary erased destination.
 The message keeps its completed delivery cursor across failure. Text delivery
-writes one byte per `world.write` call: the repository system and memory
-providers cannot report failure after completing that one byte. The caller
-retries once, from the recorded cursor; a second failure terminates the run.
-This deliberately favors a precise retry contract over throughput. A future
-provider must honor the same one-byte success/failure contract to participate
-in this delivery policy. Count output and diagnostics retain their existing
-write-all behavior and report failure without blindly retrying an unknown
-prefix. These policies claim neither transactional files nor durable delivery.
+uses `world.write_some` on the remaining suffix. Each successful attempt
+returns its positive byte count, even for a short write, and advances the
+cursor by exactly that count. The system provider bounds each request to
+64 KiB. A failed attempt transfers no bytes; interrupted system calls are
+retried inside the provider. The caller retries once from the
+recorded cursor; a second failure terminates the run. A future provider must
+honor this progress contract to participate in text delivery. Count output
+and diagnostics retain their write-all behavior and report failure without
+blindly retrying an unknown prefix. These policies claim neither transactional
+files nor durable delivery.
 
 The root supplies a heap capability to ordinary `core/region`; every run
 allocation, including region bookkeeping, uses that supplied authority.

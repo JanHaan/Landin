@@ -48,6 +48,7 @@ public main: () -> (code: i32) =
     mut memory := io.memory_world(files[0..<2], arguments[0..<9],
                                   output[0..<128], errors[0..<128])
     memory.read_limit = 2
+    memory.write_limit = 2
     memory.fail_write_at = 4
     world: any io.world = any(addr memory)
     mut heap := heap.host()
@@ -59,7 +60,7 @@ public main: () -> (code: i32) =
     return when kept <> 1 or files[1].length <> lenof expected
       or files[0].opened or files[1].opened
       or not app.equal(destination[0..<lenof expected], expected)
-      or memory.close_calls <> 2
+      or memory.close_calls <> 2 or memory.write_calls <> 7
     code = 2
     return when not long_lines()
     code = 3
@@ -266,7 +267,6 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     files: []mut io.memory_file = []
     args: []io.argument = []
     mut world_state := io.memory_world(files, args, out[0..<800], err[0..<1])
-    world_state.fail_write_at = 350
     world: any io.world = any(addr world_state)
     mut host := heap.host()
     maximum: usize = 100
@@ -278,14 +278,28 @@ messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
     app.append(counted, pending, copied) else (problem) _ = problem
         return end
     source[0] = 255
+    --  The ordinary successful path emits the entire message in one call.
+    app.deliver(pending, world, world.out()) else (problem) _ = problem
+        return end
+    return when pending.delivered <> 700 or world_state.output_used <> 700
+      or world_state.write_calls <> 1
+    for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
+    pending.delivered = 0
+    world_state.output_used = 0
+    world_state.write_calls = 0
+    world_state.write_limit = 128
+    world_state.fail_write_at = 4
+    --  Three short writes commit 384 bytes before failure; retry resumes
+    --  from that cursor and preserves the exact output order.
     mut failed: bool = false
     app.deliver(pending, world, world.out()) else (problem)
         failed = problem == io.io_failed
     end
-    return when not failed or pending.delivered <> 349 or world_state.output_used <> 349
+    return when not failed or pending.delivered <> 384 or world_state.output_used <> 384
     app.deliver(pending, world, world.out()) else (problem) _ = problem
         return end
     return when pending.delivered <> 700 or world_state.output_used <> 700
+      or world_state.write_calls <> 7
     for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
     zero: usize = 0
     failing.permit(counted, zero)
@@ -359,7 +373,7 @@ io_failures: () -> (ok: bool) =
         return when not refused or files[0].opened or files[1].opened
           or failing.live(counted) <> 0
         if scenario == 3 then
-            return when files[1].length <> 3 or world_state.write_calls <> 5
+            return when files[1].length <> 3 or world_state.write_calls <> 3
               or not app.equal(destination[0..<3], "DEB")
         end if
         if scenario == 4 then return when world_state.open_calls <> 0 end if

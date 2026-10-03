@@ -38,10 +38,11 @@ Text mode assembles an owned message with explicit allocator authority before
 dispatch and writes through its cursor. Count mode skips message preparation,
 classifies the borrowed line, and updates fixed counters. Both providers are
 selected dynamically and reached through their evidence pairs. `world.write`
-returns no byte count on failure, so retrying a multi-byte call could duplicate
-an unknown committed prefix. One-byte delivery makes progress knowable for
-these providers. A failed call commits zero bytes; a successful call commits
-one. This is a library/provider contract, not a compiler effect guarantee.
+returns no byte count on failure, so retrying that multi-byte call could
+duplicate an unknown committed prefix. `world.write_some` instead returns the
+positive count of each successful attempt, including short writes. Its failed
+attempts commit zero bytes, and the text cursor advances after each success.
+This is a library/provider contract, not a compiler effect guarantee.
 The application retries once; direct message users may explicitly retry later
 while keeping the same message and stream alive. Diagnostic and count writes
 have no resumable cursor and terminate on failure.
@@ -60,9 +61,10 @@ have no resumable cursor and terminate on failure.
 | `prototype-3-containers.md` | It directly reuses initialized allocation, vector growth/retention, explicit heap/arena providers, and `core/failing` accounting. The complete container support program is `examples/derived_containers/workload/workload.ldn`, pinned by `runtime/derived-containers`; its derivation records Z1-Z19. |
 
 `runtime/derived-hosted-memory` starts with runtime-selected level, match, and
-sample filters plus a text destination. It checks exact output despite a
-partial-prefix delivery failure. Further cases cover a 9998-byte line with
-one-byte reads, trailing and final unterminated lines, empty input, copied
+sample filters plus a text destination. It checks exact output and fewer
+provider calls on success and despite a partial-prefix delivery failure.
+Further cases cover a 9998-byte line with one-byte reads, trailing and final
+unterminated lines, empty input, copied
 configuration after argument mutation, arbitrary binary message copying and
 retry, transactional append exhaustion, nested regions over explicit finite
 backing, exact metadata-exhaustion consumption on a monotonic parent, allocation-failure sweeps including metadata failures, and terminal

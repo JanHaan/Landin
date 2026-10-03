@@ -2,9 +2,9 @@ import core/io
 import core/mem
 import core/vec
 
---  A message owns copied arbitrary bytes. Its cursor commits only successful
---  one-byte writes. For the repository world providers, a failed one-byte
---  write has transferred zero bytes. Retry never repeats a committed prefix.
+--  A message owns copied arbitrary bytes. Its cursor commits the exact
+--  positive count from each write attempt. A failed write_some attempt
+--  transfers zero bytes, so retry never repeats a committed prefix.
 public message: type = struct
     bytes: vec.list(u8)
     delivered: usize
@@ -27,8 +27,8 @@ public deliver: (inout value: message, world: any io.world, stream: io.file)
                 -> none ! io.io_failed =
     while value.delivered < vec.length(value.bytes) do
         bytes := vec.used(value.bytes)
-        try world.write(stream, bytes[value.delivered..<value.delivered + 1])
-        inc value.delivered
+        count: usize = try world.write_some(stream, bytes[value.delivered..<vec.length(value.bytes)])
+        value.delivered += count
     end while
 end deliver
 public clear_message: (inout value: message) -> none =

@@ -32,6 +32,11 @@ public world: type = concept (provider: type)
           -> (count: usize) ! io_failed
     write: (self: ptr mut provider, opened: file, bytes: []u8)
            -> none ! io_failed
+    --  One attempt returns its positive progress; empty input returns zero.
+    --  A failed nonempty attempt transfers no bytes, so a caller can retry
+    --  its uncommitted suffix.
+    write_some: (self: ptr mut provider, opened: file, bytes: []u8)
+                -> (count: usize) ! io_failed
     out: (self: ptr provider) -> (stream: file)
     err: (self: ptr provider) -> (stream: file)
     argument_count: (self: ptr provider) -> (count: usize)
@@ -66,6 +71,11 @@ public write: (provider: type is world, inout state: provider,
                opened: file, bytes: []u8) -> none ! io_failed =
     try provider.write(addr state, opened, bytes)
 end write
+
+public write_some: (provider: type is world, inout state: provider,
+                    opened: file, bytes: []u8) -> (count: usize) ! io_failed =
+    count = try provider.write_some(addr state, opened, bytes)
+end write_some
 
 public out: (provider: type is world, state: provider) -> (stream: file) =
     stream = provider.out(addr state)

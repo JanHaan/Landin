@@ -170,6 +170,35 @@ system_write: (self: ptr mut system, opened: io.file, bytes: []u8)
     try write_all(self, i32(opened), bytes)
 end system_write
 
+system_write_some: (self: ptr mut system, opened: io.file, bytes: []u8)
+                   -> (count: usize) ! io.io_failed =
+    self.val.failure_errno = 0
+    if lenof bytes == 0 then
+        count = 0
+        return
+    end if
+    failed: usize = 0 -% 1
+    base: ptr u8 = addr bytes[0]
+    --  Keep a single host request within a representable, bounded extent;
+    --  the caller can send the remaining suffix after this progress.
+    mut requested: usize = lenof bytes
+    if requested > 65536 then requested = 65536 end if
+    loop do
+        count = _landin_host_write(i32(opened), base, requested)
+        if count <> failed then
+            fail io.io_failed when count == 0 or count > requested
+            return
+        end if
+        --  EINTR transfers nothing on this attempt. A positive short write
+        --  returns immediately so its exact prefix reaches the caller.
+        number: i32 = _landin_host_errno()
+        if number <> linux_eintr then
+            self.val.failure_errno = number
+            fail io.io_failed
+        end if
+    end loop
+end system_write_some
+
 system_out: (self: ptr system) -> (stream: io.file) =
     _ = self.val.argument_length
     stream = io.file(1)
@@ -201,7 +230,8 @@ end system_argument
 system is io.world
     (open_read: system_open_read, open_write: system_open_write,
      close: system_close,
-     read: system_read, write: system_write, out: system_out,
+     read: system_read, write: system_write,
+     write_some: system_write_some, out: system_out,
      err: system_err, argument_count: system_argument_count,
      argument: system_argument)
 

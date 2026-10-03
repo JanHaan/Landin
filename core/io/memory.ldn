@@ -135,57 +135,66 @@ memory_read: (self: ptr mut memory, opened: file, into: []mut u8)
     current.val.cursor += count
 end memory_read
 
+memory_write_some: (self: ptr mut memory, opened: file, bytes: []u8)
+                   -> (count: usize) ! io_failed =
+    if lenof bytes == 0 then
+        count = 0
+        return
+    end if
+    inc self.val.write_calls
+    fail io_failed when self.val.write_calls == self.val.fail_write_at
+      or self.val.write_limit == 0
+    count = lenof bytes
+    if count > self.val.write_limit then count = self.val.write_limit end if
+    if i32(opened) == 1 then
+        fail io_failed when not self.val.output_open
+          or self.val.output_used > memory_bytes_count(self.val.output)
+        available: usize = memory_bytes_count(self.val.output) - self.val.output_used
+        fail io_failed when available == 0
+        if count > available then count = available end if
+        mut n: usize = 0
+        while n < count do
+            self.val.output[self.val.output_used + n] = bytes[n]
+            inc n
+        end while
+        self.val.output_used += count
+    elsif i32(opened) == 2 then
+        fail io_failed when not self.val.errors_open
+          or self.val.errors_used > memory_bytes_count(self.val.errors)
+        available: usize = memory_bytes_count(self.val.errors) - self.val.errors_used
+        fail io_failed when available == 0
+        if count > available then count = available end if
+        mut n: usize = 0
+        while n < count do
+            self.val.errors[self.val.errors_used + n] = bytes[n]
+            inc n
+        end while
+        self.val.errors_used += count
+    else
+        fail io_failed when i32(opened) < 3
+        index: usize = usize(i32(opened) - 3)
+        fail io_failed when index >= memory_file_count(self.val.files)
+        current: ptr mut memory_file = addr self.val.files[index]
+        fail io_failed when not current.val.opened or not current.val.writing
+          or current.val.length > memory_bytes_count(current.val.contents)
+        available: usize = memory_bytes_count(current.val.contents) - current.val.length
+        fail io_failed when available == 0
+        if count > available then count = available end if
+        mut n: usize = 0
+        while n < count do
+            current.val.contents[current.val.length + n] = bytes[n]
+            inc n
+        end while
+        current.val.length += count
+        current.val.cursor = current.val.length
+    end if
+end memory_write_some
+
 memory_write: (self: ptr mut memory, opened: file, bytes: []u8)
               -> none ! io_failed =
     mut at: usize = 0
     while at < lenof bytes do
-        inc self.val.write_calls
-        fail io_failed when self.val.write_calls == self.val.fail_write_at
-          or self.val.write_limit == 0
-        mut count: usize = lenof bytes - at
-        if count > self.val.write_limit then count = self.val.write_limit end if
-        if i32(opened) == 1 then
-            fail io_failed when not self.val.output_open
-              or self.val.output_used > memory_bytes_count(self.val.output)
-            available: usize = memory_bytes_count(self.val.output) - self.val.output_used
-            fail io_failed when available == 0
-            if count > available then count = available end if
-            mut n: usize = 0
-            while n < count do
-                self.val.output[self.val.output_used + n] = bytes[at + n]
-                inc n
-            end while
-            self.val.output_used += count
-        elsif i32(opened) == 2 then
-            fail io_failed when not self.val.errors_open
-              or self.val.errors_used > memory_bytes_count(self.val.errors)
-            available: usize = memory_bytes_count(self.val.errors) - self.val.errors_used
-            fail io_failed when available == 0
-            if count > available then count = available end if
-            mut n: usize = 0
-            while n < count do
-                self.val.errors[self.val.errors_used + n] = bytes[at + n]
-                inc n
-            end while
-            self.val.errors_used += count
-        else
-            fail io_failed when i32(opened) < 3
-            index: usize = usize(i32(opened) - 3)
-            fail io_failed when index >= memory_file_count(self.val.files)
-            current: ptr mut memory_file = addr self.val.files[index]
-            fail io_failed when not current.val.opened or not current.val.writing
-              or current.val.length > memory_bytes_count(current.val.contents)
-            available: usize = memory_bytes_count(current.val.contents) - current.val.length
-            fail io_failed when available == 0
-            if count > available then count = available end if
-            mut n: usize = 0
-            while n < count do
-                current.val.contents[current.val.length + n] = bytes[at + n]
-                inc n
-            end while
-            current.val.length += count
-            current.val.cursor = current.val.length
-        end if
+        count: usize = try memory_write_some(self, opened, bytes[at..<lenof bytes])
         at += count
     end while
 end memory_write
@@ -210,6 +219,7 @@ end memory_argument
 memory is world
     (open_read: memory_open_read, open_write: memory_open_write,
      close: memory_close, read: memory_read, write: memory_write,
+     write_some: memory_write_some,
      out: memory_out, err: memory_err,
      argument_count: memory_argument_count, argument: memory_argument)
 
