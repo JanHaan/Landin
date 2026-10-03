@@ -1367,6 +1367,49 @@ package body Landin.Tests.Cortex_Suite is
             end if;
          end;
       end;
+      declare
+         Jump_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Jump_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         --  The pool limit falls between a long jump's label and its
+         --  address word. A flush there would load instructions into r7.
+         Jump_Host.Add_File ("pool.ldn", "mut state: [3]u32 = [7, 8, 9] "
+           & "public main: () -> (code: i32) = "
+           & "mut local: [4]u64 = [10, 20, 30, 40] "
+           & "state = zeroed local = zeroed "
+           & "if state[0] == 0 and state[2] == 0 "
+           & "and local[0] == 0 and local[3] == 0 then "
+           & "code = 42 else code = 1 end if end main");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Jump_Host, Jump_Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               declare
+                  Code : constant String := Jump_Host.Written ("pool.s");
+                  Cursor : Positive := Code'First;
+                  Found, Last : Natural;
+               begin
+                  loop
+                     Found := Ada.Strings.Fixed.Index
+                       (Code, "ldr r7, Lcm_step_", From => Cursor);
+                     exit when Found = 0;
+                     Last := Ada.Strings.Fixed.Index
+                       (Code, String'(1 => LF), From => Found);
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                         (Code, Code (Found + 8 .. Last - 1) & ":" & LF
+                           & Character'Val (9) & ".word ") > 0,
+                        "a long jump label remains attached to its word");
+                     Cursor := Last + 1;
+                  end loop;
+               end;
+            end if;
+         end;
+      end;
    end Literal_Pooling;
 
    --  [1630]'s one instruction, from D230's shorthand and from the named
