@@ -5073,6 +5073,81 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Remainder_Handles_Minimum_Modulo_Minus_One;
 
+   procedure Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide
+     (Item : in out Landin.Testing.Context)
+   is
+      Powers : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Other : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Minus_One : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Powers,
+         "q: (x: i64) -> (r: i64) =" & LF
+         & "    r = x / -8" & LF & "end q" & LF
+         & "m: (x: i64) -> (r: i64) =" & LF
+         & "    r = x % 8" & LF & "end m" & LF
+         & "u: (x: u64) -> (r: u64) =" & LF
+         & "    r = x / 8" & LF & "end u" & LF
+         & "v: (x: u64) -> (r: u64) =" & LF
+         & "    r = x % 9223372036854775808" & LF & "end v" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Powers);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "sarq $3, %rax")
+              and then Contains (Text, HT & "shrq $3, %rax")
+              and then Contains (Text, HT & "andq %rdx, %rax")
+              and then not Contains (Text, HT & "divq ")
+              and then not Contains (Text, HT & "idivq ")
+              and then not Contains (Text, HT & "cmpq $0, "),
+            "power-of-two divisors use shifts without divide or zero checks");
+      end;
+
+      Lower
+        (Other,
+         "q: (x: u64) -> (r: u64) =" & LF
+         & "    r = x / 10" & LF & "end q" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Other);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "divq ")
+              and then not Contains (Text, HT & "cmpq $0, "),
+            "other fixed divisors omit the impossible zero check");
+      end;
+
+      Lower
+        (Minus_One,
+         "q: (x: i64) -> (r: i64) =" & LF
+         & "    r = x / -1" & LF & "end q" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Minus_One);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movabsq $9223372036854775808, %rdx")
+              and then Contains (Text, HT & "cmpq %rdx, %rax")
+              and then Contains (Text, HT & "ud2")
+              and then not Contains (Text, HT & "idivq "),
+            "fixed minus one keeps the signed overflow trap");
+      end;
+   end Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide;
+
    --  One-operand `mul` forms a full unsigned product in the implicit
    --  accumulator pair.  Carry is clear exactly when its high half is zero,
    --  so the successful edge alone may store the low byte.
@@ -7858,6 +7933,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed remainder handles minimum modulo minus one",
          Signed_Remainder_Handles_Minimum_Modulo_Minus_One'Access);
+      Landin.Testing.Register
+        (Into, "backend", "fixed divisors avoid unneeded checks and divide",
+         Fixed_Divisors_Avoid_Unneeded_Checks_And_Divide'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned multiply uses the full product",
          Unsigned_Multiply_Uses_The_Full_Product'Access);

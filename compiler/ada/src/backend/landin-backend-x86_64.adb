@@ -4513,14 +4513,144 @@ package body Landin.Backend.X86_64 is
                         Minimum_Pattern : constant Landin.Types.Magnitude :=
                           2 ** Natural
                             (Landin.Types.Width (Integer_Kind, Facts) - 1);
+                        Fixed : constant Boolean := Landin.IR.Op_Of
+                          (Of_Unit, Item, Operand (2)) = Landin.IR.Number;
+                        Magnitude : constant Landin.Types.Magnitude :=
+                          (if Fixed then Landin.IR.Number_Of
+                             (Of_Unit, Item, Operand (2)) else 0);
+                        Negative : constant Boolean :=
+                          Fixed and then Landin.IR.Is_Negated
+                            (Of_Unit, Item, Operand (2));
+                        Data_Register : constant String :=
+                          (case Held is
+                              when Landin.Targets.Byte_1 => "%dl",
+                              when Landin.Targets.Byte_2 => "%dx",
+                              when Landin.Targets.Byte_4 => "%edx",
+                              when Landin.Targets.Byte_8 => "%rdx");
+                        Counter_Register : constant String :=
+                          (case Held is
+                              when Landin.Targets.Byte_1 => "%cl",
+                              when Landin.Targets.Byte_2 => "%cx",
+                              when Landin.Targets.Byte_4 => "%ecx",
+                              when Landin.Targets.Byte_8 => "%rcx");
+                        Power : Landin.Types.Magnitude := Magnitude;
+                        Shift : Natural := 0;
                      begin
-                        Emit ("cmp" & Suffix (Held) & " $0, "
-                              & Value_Operand (Operand (2)));
-                        Emit ("jne " & Nonzero);
-                        Emit_Panic;
-                        Put (Nonzero & ":");
+                        --  A known nonzero divisor needs neither runtime
+                        --  guard.  For a power of two, avoid the divide
+                        --  instruction as well.  Signed division biases a
+                        --  negative numerator before shifting so that its
+                        --  quotient truncates toward zero.
+                        if Magnitude /= 0 then
+                           while Power mod 2 = 0 loop
+                              Power := Power / 2;
+                              Shift := Shift + 1;
+                           end loop;
+                        end if;
+                        if Fixed and then Magnitude /= 0
+                          and then Power = 1
+                        then
+                           if Op = Landin.IR.Remainder and then Shift = 0
+                           then
+                              Emit ("mov" & Suffix (Held) & " $0, "
+                                    & Value_Operand (Value));
+                              return;
+                           end if;
+                           Load_Value (Operand (1));
+                           if Signed and then Negative and then Shift = 0
+                           then
+                              Emit ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Minimum_Pattern))
+                                    & ", %rdx");
+                              Emit ("cmp" & Suffix (Held) & " "
+                                    & Data_Register & ", "
+                                    & Accumulator (Held));
+                              Emit ("jne " & Divide);
+                              Emit_Panic;
+                              Put (Divide & ":");
+                           end if;
+                           if not Signed and then
+                             Op = Landin.IR.Remainder
+                           then
+                              if Shift <= 31 then
+                                 Emit ("and" & Suffix (Held) & " $"
+                                       & Trimmed
+                                           (Landin.Types.Magnitude'Image
+                                              (Magnitude - 1)) & ", "
+                                       & Accumulator (Held));
+                              else
+                                 Emit ("movabsq $"
+                                       & Trimmed
+                                           (Landin.Types.Magnitude'Image
+                                              (Magnitude - 1))
+                                       & ", %rdx");
+                                 Emit ("andq %rdx, %rax");
+                              end if;
+                              Store_Value (Value, Accumulator (Held));
+                              return;
+                           end if;
+                           if Signed and then
+                             Op = Landin.IR.Remainder
+                           then
+                              Emit ("mov" & Suffix (Held) & " "
+                                    & Accumulator (Held) & ", "
+                                    & Counter_Register);
+                           end if;
+                           if Shift > 0 then
+                              if Signed then
+                                 Emit ("mov" & Suffix (Held) & " "
+                                       & Accumulator (Held) & ", "
+                                       & Data_Register);
+                                 Emit ("sar" & Suffix (Held) & " $"
+                                       & Trimmed (Natural'Image
+                                           (Natural (Landin.Types.Width
+                                              (Integer_Kind, Facts)) - 1))
+                                       & ", " & Data_Register);
+                                 Emit ("shr" & Suffix (Held) & " $"
+                                       & Trimmed (Natural'Image
+                                           (Natural (Landin.Types.Width
+                                              (Integer_Kind, Facts)) - Shift))
+                                       & ", " & Data_Register);
+                                 Emit ("add" & Suffix (Held) & " "
+                                       & Data_Register & ", "
+                                       & Accumulator (Held));
+                              end if;
+                              Emit ((if Signed then "sar" else "shr")
+                                    & Suffix (Held) & " $"
+                                    & Trimmed (Natural'Image (Shift)) & ", "
+                                    & Accumulator (Held));
+                           end if;
+                           if Op = Landin.IR.Remainder then
+                              --  x - trunc(x / |d|) * |d| has the sign of x,
+                              --  regardless of the divisor's sign.
+                              Emit ("shl" & Suffix (Held) & " $"
+                                    & Trimmed (Natural'Image (Shift)) & ", "
+                                    & Accumulator (Held));
+                              Emit ("sub" & Suffix (Held) & " "
+                                    & Accumulator (Held) & ", "
+                                    & Counter_Register);
+                              Store_Value (Value, Counter_Register);
+                           else
+                              if Negative then
+                                 Emit ("neg" & Suffix (Held) & " "
+                                       & Accumulator (Held));
+                              end if;
+                              Store_Value (Value, Accumulator (Held));
+                           end if;
+                           return;
+                        end if;
 
-                        if Signed then
+                        if not Fixed or else Magnitude = 0 then
+                           Emit ("cmp" & Suffix (Held) & " $0, "
+                                 & Value_Operand (Operand (2)));
+                           Emit ("jne " & Nonzero);
+                           Emit_Panic;
+                           Put (Nonzero & ":");
+                        end if;
+
+                        if Signed and then not Fixed then
                            Emit ("cmp" & Suffix (Held) & " $-1, "
                                  & Value_Operand (Operand (2)));
                            Emit ("jne " & Divide);

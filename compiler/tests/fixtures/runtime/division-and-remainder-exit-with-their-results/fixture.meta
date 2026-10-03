@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: division and remainder produce signed and unsigned results at every width
+summary: fixed and dynamic division and remainder produce signed and unsigned results at every width
 constructs: 0290, 1770, 1800, 1950
 program: main.ldn
 status: 42
