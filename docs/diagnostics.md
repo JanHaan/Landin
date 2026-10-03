@@ -18,6 +18,50 @@ what the rule itself requires.
 A retired code is never raised. Its section says so and what retired it, so
 its number is never read as belonging to another rule.
 
+## Migrating diagnostic consumers
+
+Checker diagnostics now distinguish refusal families that previously shared
+L0301, L0305 or L0300. This reclassification does not change which programs
+are accepted. Update scripts, editor filters and stored expectations that
+match these codes according to the rule they intend to identify:
+
+| Previous code | Rule | Current code |
+| --- | --- | --- |
+| L0301 | Value type disagreement | L0301 |
+| L0301 | Call arguments and static formals | L0327 |
+| L0301 | Zero image or zeroed context | L0328 |
+| L0301 | Error contract | L0329 |
+| L0301 | Assembly block contract | L0330 |
+| L0301 | Result use | L0331 |
+| L0301 | Control values | L0332 |
+| L0301 | Match-arm form | L0333 |
+| L0301 | Aggregate form | L0334 |
+| L0301 | Pointer-union reads | L0335 |
+| L0301 | Packed images | L0336 |
+| L0301 | Required places | L0337 |
+| L0301 | Type declarations and positions | L0338 |
+| L0301 | Signature form | L0339 |
+| L0301 | Generic deduction | L0340 |
+| L0301 | Concept and conformance form | L0341 |
+| L0301 | Erased dispatch contract | L0342 |
+| L0301 | Noreturn contract | L0343 |
+| L0301 | Memory intrinsics | L0344 |
+| L0301 | Machine entries | L0345 |
+| L0301 | C boundary | L0346 |
+| L0301 | Linkage and placement | L0347 |
+| L0301 | Traversal source contract | L0348 |
+| L0305 | Invalid option declaration | L0390 |
+| L0305 | Invalid tool directive | L0391 |
+| L0305 | Fixed-value failure or required function initial image | L0305 |
+| L0300 | Known register image violates reserved-bit policy | L0398 |
+| L0300 | Numeric or target-width overflow | L0300 |
+
+There is no single replacement or compatibility alias for an old catch-all
+code. Use the individual explanations below to select the relevant families.
+The reclassified reports retain their messages, source locations and notes.
+The named-argument spelling fix follows its report to L0327; an editor should
+consume the offered edit rather than assume it belongs to L0301.
+
 ## The driver
 
 ### L0001
