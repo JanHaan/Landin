@@ -1,0 +1,142 @@
+==================
+Fallible traversal and labeled completion
+==================
+
+visit: () -> () ! io_failed =
+    try for value, index in source do
+        use(value, index)
+    complete
+        finish()
+    end for
+    scan: try for value in source do
+        break scan
+    complete
+        finish()
+    end scan
+end visit
+
+---
+
+(source_file
+  (public_declaration
+    (function_declaration
+      (identifier)
+      (declared_signature
+        (arrow)
+        (returns)
+        (errors
+          (declaration_reference
+            (identifier))))
+      (block
+        (for_statement
+          (identifier)
+          (identifier)
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))
+          (block
+            (logical_or_expression
+              (logical_and_expression
+                (comparison_expression
+                  (alternation_expression
+                    (exclusion_expression
+                      (conjunction_expression
+                        (shift_expression
+                          (sum_expression
+                            (product_expression
+                              (unary_expression
+                                (call_expression
+                                  (indexed_expression
+                                    (identifier))
+                                  (arguments
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (indexed_expression
+                                                          (identifier))))))))))))
+                                    (logical_or_expression
+                                      (logical_and_expression
+                                        (comparison_expression
+                                          (alternation_expression
+                                            (exclusion_expression
+                                              (conjunction_expression
+                                                (shift_expression
+                                                  (sum_expression
+                                                    (product_expression
+                                                      (unary_expression
+                                                        (indexed_expression
+                                                          (identifier)))))))))))))))))))))))))
+          (block
+            (logical_or_expression
+              (logical_and_expression
+                (comparison_expression
+                  (alternation_expression
+                    (exclusion_expression
+                      (conjunction_expression
+                        (shift_expression
+                          (sum_expression
+                            (product_expression
+                              (unary_expression
+                                (call_expression
+                                  (indexed_expression
+                                    (identifier)))))))))))))))
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (for_statement
+                              (identifier)
+                              (identifier)
+                              (logical_or_expression
+                                (logical_and_expression
+                                  (comparison_expression
+                                    (alternation_expression
+                                      (exclusion_expression
+                                        (conjunction_expression
+                                          (shift_expression
+                                            (sum_expression
+                                              (product_expression
+                                                (unary_expression
+                                                  (indexed_expression
+                                                    (identifier))))))))))))
+                              (block
+                                (break_statement
+                                  (identifier)))
+                              (block
+                                (logical_or_expression
+                                  (logical_and_expression
+                                    (comparison_expression
+                                      (alternation_expression
+                                        (exclusion_expression
+                                          (conjunction_expression
+                                            (shift_expression
+                                              (sum_expression
+                                                (product_expression
+                                                  (unary_expression
+                                                    (call_expression
+                                                      (indexed_expression
+                                                        (identifier))))))))))))))
+                              (identifier)))))))))))))
+      (identifier))))

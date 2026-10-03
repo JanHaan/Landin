@@ -469,10 +469,10 @@ module.exports = grammar({
           'end', field('end_label', $.identifier)),
     ),
     for_statement: $ => choice(
-      seq('for', $._traversal, 'do', optional($.block),
+      seq(optional('try'), 'for', $._traversal, 'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
           'end', 'for'),
-      seq(field('label', $.identifier), ':', 'for', $._traversal, 'do', optional($.block),
+      seq(field('label', $.identifier), ':', optional('try'), 'for', $._traversal, 'do', optional($.block),
           optional(seq('complete', optional(field('completion', $.block)))),
           'end', field('end_label', $.identifier)),
     ),
