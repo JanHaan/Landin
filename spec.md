@@ -15799,10 +15799,11 @@ zero-size contract, or choose the libc operation behind it.
 **Chosen:** `core/heap` is a hosted module separate from the freestanding
 `core/mem` protocol and caller-backed providers. Its `system` type conforms to
 `mem.allocator`, and `host()` mints the otherwise stateless capability. The
-module declares only two [1975] runtime routines: `(usize, usize) -> ptr mut
-u8` allocation and `ptr mut u8 -> none` release. A null allocation result is
-interpreted as `mem.out_of_memory`; no foreign error or ownership type crosses
-the seam.
+module declares only two [1975] runtime routines: `(usize, usize) ->
+allocation` allocation, where `allocation: type = no_allocation | ptr mut u8`
+and `no_allocation` is an atom, and `ptr mut u8 -> none` release. The
+`no_allocation` arm maps to `mem.out_of_memory`; the pointer arm carries a
+non-null allocation. No foreign error or ownership type crosses the seam.
 
 Every `usize` alignment is accepted. Zero and one request no stricter than
 byte alignment; every greater value returns an address whose integer value is
@@ -15817,12 +15818,12 @@ wrappers and is not required by libc.
 The shim checks both additions and refuses a total above `PTRDIFF_MAX` before
 calling `malloc`. This makes the maximum admitted request depend on alignment:
 `size + sizeof(ptr) + alignment - 1` must be representable and no greater than
-the host's `PTRDIFF_MAX`. A null `malloc` result takes the same declared
-`out_of_memory` path. Pointer-word width, the `PTRDIFF_MAX` test and hidden
-header layout are selected-backend facts in the runtime shim, not constants or
-structures in target-neutral IR. The public module therefore contains no host
-pointer-width arithmetic and creates no general C ABI, foreign-ownership,
-nullable-pointer or syscall surface.
+the host's `PTRDIFF_MAX`. A null `malloc` result becomes `no_allocation` in
+the bridge and takes the declared `out_of_memory` path. Pointer-word width,
+the `PTRDIFF_MAX` test and hidden header layout are selected-backend facts in
+the runtime shim, not constants or structures in target-neutral IR. The public
+module therefore contains no host pointer-width arithmetic and creates no
+general C ABI, foreign-ownership, nullable-pointer or syscall surface.
 
 **The alternatives:** `aligned_alloc` and `posix_memalign` were considered.
 Both restrict alignment to powers of two, `posix_memalign` additionally needs
