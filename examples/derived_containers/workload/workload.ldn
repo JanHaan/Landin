@@ -615,13 +615,13 @@ map_operations: () -> (ok: bool) =
 
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
     reused_without_growth: bool = before_capacity == 8
-                      and before_tombstones == 3
-                      and map.capacity(compact) == before_capacity
-                      and mem.arena_used(provider) == before_used
-                      and compact.tombstones == 2
-                      and map.length(compact) == 4
-                      and map_lacks(compact, 1) and map_lacks(compact, 2)
-                      and map_lacks(compact, 3) and map_has(compact, 7, 77)
+                                  and before_tombstones == 3
+                                  and map.capacity(compact) == before_capacity
+                                  and mem.arena_used(provider) == before_used
+                                  and compact.tombstones == 2
+                                  and map.length(compact) == 4
+                                  and map_lacks(compact, 1) and map_lacks(compact, 2)
+                                  and map_lacks(compact, 3) and map_has(compact, 7, 77)
 
     mut position := map.entries()
     mut enumeration_count: usize = 0
