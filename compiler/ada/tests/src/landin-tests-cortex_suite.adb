@@ -1342,6 +1342,31 @@ package body Landin.Tests.Cortex_Suite is
             end if;
          end;
       end;
+      declare
+         Boundary_Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Boundary_Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         --  The pending datum literal reaches its distance bound inside a
+         --  shortenable branch. Replacing that branch must retain the pool.
+         Boundary_Host.Add_File ("pool.ldn", "mut datum: u32 = 1 "
+           & "f: (x: u32) -> (r: u32) = r = datum unchecked begin "
+           & "r = r + x r = r + x end unchecked "
+           & "if x == 0 then r = 3 else r = 2 end if end f");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Boundary_Host, Boundary_Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+            if Result.Status = Landin.Driver.Status_Success then
+               Landin.Testing.Check_Equal
+                 (Item, Ada.Strings.Fixed.Count
+                   (Boundary_Host.Written ("pool.s"), ".word datum"), 1,
+                  "shortening a branch preserves its inserted literal pool");
+            end if;
+         end;
+      end;
    end Literal_Pooling;
 
    --  [1630]'s one instruction, from D230's shorthand and from the named

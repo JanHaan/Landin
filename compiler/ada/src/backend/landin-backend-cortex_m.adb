@@ -346,6 +346,7 @@ package body Landin.Backend.Cortex_M is
       --  instructions.  Keep well below the M0 literal-load limit of 1020
       --  bytes, including alignment and at most 32 pool words.
       Pool_Distance : Natural := 0;
+      Pool_Generation : Natural := 0;
       pragma Unreferenced (Options);
 
       function Fresh return String;
@@ -426,6 +427,7 @@ package body Landin.Backend.Cortex_M is
             Done : constant String := Fresh;
          begin
             Pool_Flushing := True;
+            Pool_Generation := Pool_Generation + 1;
             Emit ("b " & Done);
             Emit (".balign 4");
             for Literal of Literals loop
@@ -1123,15 +1125,23 @@ package body Landin.Backend.Cortex_M is
 
          procedure Jump (Target : String) is
             First : constant Positive := Unbounded.Length (Out_Text) + 1;
+            Generation : constant Natural := Pool_Generation;
          begin
             Long_Jump (Target);
-            Sites.Append (Branch_Site'(First, Unbounded.Length (Out_Text),
-                           Unbounded.To_Unbounded_String (Target),
-                           Unbounded.Null_Unbounded_String));
+            --  A distance-triggered pool may have been inserted in this
+            --  sequence. Its literals serve earlier loads, so retain the
+            --  complete sequence when shortening would also erase them.
+            if Generation = Pool_Generation then
+               Sites.Append
+                 (Branch_Site'(First, Unbounded.Length (Out_Text),
+                   Unbounded.To_Unbounded_String (Target),
+                   Unbounded.Null_Unbounded_String));
+            end if;
          end Jump;
 
          procedure Branch (Condition, Target : String) is
             First : constant Positive := Unbounded.Length (Out_Text) + 1;
+            Generation : constant Natural := Pool_Generation;
             Skip : constant String := Fresh;
             Inverse : constant String :=
               (if Condition = "eq" then "ne"
@@ -1151,9 +1161,12 @@ package body Landin.Backend.Cortex_M is
             Emit ("b" & Inverse & " " & Skip);
             Long_Jump (Target);
             Put (Skip & ":");
-            Sites.Append (Branch_Site'(First, Unbounded.Length (Out_Text),
-                           Unbounded.To_Unbounded_String (Target),
-                           Unbounded.To_Unbounded_String (Condition)));
+            if Generation = Pool_Generation then
+               Sites.Append
+                 (Branch_Site'(First, Unbounded.Length (Out_Text),
+                   Unbounded.To_Unbounded_String (Target),
+                   Unbounded.To_Unbounded_String (Condition)));
+            end if;
          end Branch;
 
          --  Each ordinary Thumb instruction occupies at most four bytes;
