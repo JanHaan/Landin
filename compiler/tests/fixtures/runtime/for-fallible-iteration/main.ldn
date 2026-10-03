@@ -2,33 +2,33 @@ stream_failed: atom
 
 fallible_iterable: type = concept
     (t: type, cur: type, item_type: type, errors: type)
-    first: (s: t) -> (c: cur) ! errors
-    at_end: (s: t, c: cur) -> (yes: bool) ! errors
-    item: (s: t, c: cur) -> (v: item_type) ! errors
-    next: (s: t, c: cur) -> (c2: cur) ! errors
+    first: (s: ptr t) -> (c: cur) ! errors
+    at_end: (s: ptr t, c: cur) -> (yes: bool) ! errors
+    item: (s: ptr t, c: cur) -> (v: item_type) ! errors
+    next: (s: ptr t, c: cur) -> (c2: cur) ! errors
 end fallible_iterable
 
 stream: type = struct
     mode: i32
 end stream
 
-first: (s: stream) -> (c: usize) ! stream_failed =
-    fail stream_failed when s.mode == 1
+first: (s: ptr stream) -> (c: usize) ! stream_failed =
+    fail stream_failed when s.val.mode == 1
     c = 0
 end first
 
-at_end: (s: stream, c: usize) -> (yes: bool) ! stream_failed =
-    fail stream_failed when s.mode == 2 and c == 1
+at_end: (s: ptr stream, c: usize) -> (yes: bool) ! stream_failed =
+    fail stream_failed when s.val.mode == 2 and c == 1
     yes = c == 2
 end at_end
 
-item: (s: stream, c: usize) -> (v: i32) ! stream_failed =
-    fail stream_failed when s.mode == 3 and c == 1
+item: (s: ptr stream, c: usize) -> (v: i32) ! stream_failed =
+    fail stream_failed when s.val.mode == 3 and c == 1
     v = i32(c) + 1
 end item
 
-next: (s: stream, c: usize) -> (c2: usize) ! stream_failed =
-    fail stream_failed when s.mode == 4 and c == 0
+next: (s: ptr stream, c: usize) -> (c2: usize) ! stream_failed =
+    fail stream_failed when s.val.mode == 4 and c == 0
     c2 = c + 1
 end next
 
@@ -40,21 +40,21 @@ cell: type (t: type) = struct
     value: t
 end cell
 
-cell_first: (t: type, s: cell(t)) -> (c: usize) ! stream_failed =
+cell_first: (t: type, s: ptr cell(t)) -> (c: usize) ! stream_failed =
     c = 0
 end cell_first
 
-cell_at_end: (t: type, s: cell(t), c: usize)
+cell_at_end: (t: type, s: ptr cell(t), c: usize)
              -> (yes: bool) ! stream_failed =
     yes = c == 1
 end cell_at_end
 
-cell_item: (t: type, s: cell(t), c: usize)
+cell_item: (t: type, s: ptr cell(t), c: usize)
            -> (v: t) ! stream_failed =
-    v = s.value
+    v = s.val.value
 end cell_item
 
-cell_next: (t: type, s: cell(t), c: usize)
+cell_next: (t: type, s: ptr cell(t), c: usize)
            -> (c2: usize) ! stream_failed =
     c2 = c + 1
 end cell_next
@@ -78,22 +78,22 @@ end badge_read
 
 badge is reader (read: badge_read)
 
-erased_first: (s: any reader) -> (c: usize) ! stream_failed =
+erased_first: (s: ptr any reader) -> (c: usize) ! stream_failed =
     c = 0
 end erased_first
 
-erased_at_end: (s: any reader, c: usize)
+erased_at_end: (s: ptr any reader, c: usize)
                -> (yes: bool) ! stream_failed =
     yes = c == 2
 end erased_at_end
 
-erased_item: (s: any reader, c: usize)
+erased_item: (s: ptr any reader, c: usize)
              -> (v: i32) ! stream_failed =
     fail stream_failed when c == 1
-    v = s.read()
+    v = s.val.read()
 end erased_item
 
-erased_next: (s: any reader, c: usize)
+erased_next: (s: ptr any reader, c: usize)
              -> (c2: usize) ! stream_failed =
     c2 = c + 1
 end erased_next

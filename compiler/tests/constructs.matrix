@@ -117,7 +117,7 @@
 0930 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Every named return must be assigned before return
 0940 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Errors: a declared set of atoms in one dedicated register
 0950 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Not everything that goes wrong belongs in that channel
-0960 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Propagating: try, visible at the call site
+0960 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Propagating: try, visible at the call or traversal site
 0970 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Early exit
 0980 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | Calls: positional first, then named
 0990 | tour | accepted emitted executed refused | executed | executed | executed | executed | - | executed | all | none | none | A return list is an anonymous struct
