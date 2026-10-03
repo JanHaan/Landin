@@ -1314,8 +1314,9 @@ live after these consumptions, so a provable sink/`inout` overlap is refused
 in either argument order. A nested argument call that consumes a pending place
 requires a subsequent assignment before the outer call can enter. D223 pins
 this timing independently of argument-value capture and D149's `inout` rules.
-Every read requires a later assignment on every arriving path, and a part sunk
-out of an `inout` parameter must be assigned again on every return edge [0910].
+A consumed place may be read only after it has been assigned again on every
+arriving path where it was consumed. A part sunk out of an `inout` parameter
+must be assigned again on every return edge [0910].
 Reading an enclosing aggregate reads its consumed parts too; assigning that
 aggregate restores those parts. Other fields and other known array elements
 remain independent. The `inout` obligation includes failure propagation:
