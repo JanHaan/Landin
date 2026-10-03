@@ -25,6 +25,8 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Stages;
+with Landin.Syntax;
+with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Levels;
 with Landin.Testing.Fakes;
@@ -1056,6 +1058,79 @@ package body Landin.Tests.Server_Suite is
    procedure Queries_Of_A_Refused_Module_Answer_Nothing
      (Item : in out Landin.Testing.Context);
 
+   procedure Cursor_Lookup_Keeps_The_Post_Order_Choice
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cursor_Lookup_Keeps_The_Post_Order_Choice
+     (Item : in out Landin.Testing.Context)
+   is
+      package Syn renames Landin.Syntax;
+      use type Syn.Node_Id;
+
+      Text : constant String :=
+        "f: (x: u8) -> (y: u8) =" & LF
+        & "    y = x" & LF
+        & "end f" & LF
+        & "g: () -> (z: u8) =" & LF
+        & "    z = f (2)" & LF
+        & "end g" & LF
+        & "missing, denied: atom" & LF
+        & "problems: type = missing | denied" & LF
+        & "fallible: (x: u8) -> (y: u8) ! problems =" & LF
+        & "    fail missing when x == 0" & LF
+        & "    y = x" & LF
+        & "end fallible" & LF
+        & "h: () -> (v: u8) =" & LF
+        & "    v = fallible (1) else 0" & LF
+        & "end h" & LF;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+   begin
+      Host.Add_File ("/w/m.ldn", Text);
+      declare
+         Context : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Answer  : Landin.Server.Analysis.Result;
+      begin
+         Landin.Server.Analysis.Analyse
+           (Context, Host, One_File ("/w/m.ldn"), Answer);
+         Landin.Testing.Check (Item, Answer.Checked, "source is checked");
+         declare
+            Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Context).all, 1);
+         begin
+            for Offset in Landin.Source.Byte_Offset range 0 .. Text'Length
+            loop
+               declare
+                  Expected : Syn.Node_Id := Syn.No_Node;
+                  Length   : Landin.Source.Byte_Offset :=
+                    Landin.Source.Byte_Offset'Last;
+               begin
+                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Tree.all)
+                  loop
+                     declare
+                        Where : constant Landin.Source.Span :=
+                          Syn.Where (Tree.all, Node);
+                     begin
+                        if Offset >= Where.First and then Offset < Where.Last
+                          and then Where.Last - Where.First < Length
+                          and then not Syn.Is_Error (Syn.Kind (Tree.all, Node))
+                        then
+                           Expected := Node;
+                           Length := Where.Last - Where.First;
+                        end if;
+                     end;
+                  end loop;
+                  Landin.Testing.Check
+                    (Item, Landin.Server.Navigation.Node_At
+                             (Tree.all, Offset) = Expected,
+                     "same node at byte" & Offset'Image);
+               end;
+            end loop;
+         end;
+      end;
+   end Cursor_Lookup_Keeps_The_Post_Order_Choice;
+
    procedure Queries_Of_A_Refused_Module_Answer_Nothing
      (Item : in out Landin.Testing.Context)
    is
@@ -1143,6 +1218,9 @@ package body Landin.Tests.Server_Suite is
       Landin.Testing.Register
         (Into, "server", "queries of a refused module answer nothing",
          Queries_Of_A_Refused_Module_Answer_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "server", "cursor lookup keeps the post order choice",
+         Cursor_Lookup_Keeps_The_Post_Order_Choice'Access);
    end Register;
 
 end Landin.Tests.Server_Suite;

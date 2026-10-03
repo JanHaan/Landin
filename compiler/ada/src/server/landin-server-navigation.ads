@@ -11,6 +11,7 @@
 with Landin.Server.Analysis;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Syntax;
 with Landin.Tokens.Spacing;
 
 package Landin.Server.Navigation is
@@ -21,6 +22,12 @@ package Landin.Server.Navigation is
    end record;
 
    No_Place : constant Place;
+
+   --  The shortest non-error node containing Offset, with the earliest
+   --  post-order node winning when extents have the same length.
+   function Node_At
+     (Of_Tree : Landin.Syntax.Tree; Offset : Landin.Source.Byte_Offset)
+      return Landin.Syntax.Node_Id;
 
    --  Where the name at Offset in Source is declared: the declared name's
    --  own span.  No_Place for anything but a bound name, a declaring name
