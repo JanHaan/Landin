@@ -3770,11 +3770,24 @@ package body Landin.Backend.Cortex_M is
                   Add_Offset ("r6", 24 + Arg.Stack_At);
                end if;
                if Aggregate then
-                  Emit ("ldr r2, [r6]");
-                  Frame_Address (Slot_Offset (Layout, Slot), "r0");
-                  Copy_Bytes (Whole_Clear_Extent
-                    ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                      Landin.IR.No_Path_Steps));
+                  declare
+                     Zero_Label : constant String := Fresh;
+                     Done_Label : constant String := Fresh;
+                     Bytes : constant Landin.Targets.Byte_Count :=
+                       Whole_Clear_Extent
+                         ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                           Landin.IR.No_Path_Steps);
+                  begin
+                     Emit ("ldr r2, [r6]");
+                     Frame_Address (Slot_Offset (Layout, Slot), "r0");
+                     Emit ("cmp r2, #0");
+                     Branch ("eq", Zero_Label);
+                     Copy_Bytes (Bytes);
+                     Jump (Done_Label);
+                     Put (Zero_Label & ":");
+                     Zero_Bytes (Bytes);
+                     Put (Done_Label & ":");
+                  end;
                else
                   Memory (False, Size_Of
                     (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),

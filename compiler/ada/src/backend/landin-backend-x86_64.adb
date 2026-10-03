@@ -5317,6 +5317,9 @@ package body Landin.Backend.X86_64 is
                      declare
                         Bytes : Landin.Targets.Byte_Count;
                         Alignment : Landin.Targets.Byte_Alignment;
+                        Zero_Label : constant String := Label (Item, 1)
+                          & "_zero_arg_" & Trimmed (Natural'Image (Index));
+                        Done_Label : constant String := Zero_Label & "_done";
                      begin
                         if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
                            Landin.Backend.Aggregate_Extent
@@ -5332,6 +5335,8 @@ package body Landin.Backend.X86_64 is
                         Storage_Address
                           ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
                            0, "%rdi");
+                        Emit ("testq %rsi, %rsi");
+                        Emit ("jz " & Zero_Label);
                         Emit
                           ("movabsq $"
                            & Trimmed
@@ -5339,6 +5344,17 @@ package body Landin.Backend.X86_64 is
                            & ", %rcx");
                         Emit ("cld");
                         Emit ("rep movsb");
+                        Emit ("jmp " & Done_Label);
+                        Put (Zero_Label & ":");
+                        Emit ("xorl %eax, %eax");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep stosb");
+                        Put (Done_Label & ":");
                      end;
                   end if;
                end;

@@ -3305,10 +3305,22 @@ package body Landin.Backend.Arm64 is
                      Emit ("ldr x10, [x10]");
                   end if;
                   if Aggregate then
-                     Frame_Address (Slot_Offset (Layout, Slot), "x9");
-                     Copy_Bytes (Whole_Clear_Extent
-                       ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                         Landin.IR.No_Path_Steps));
+                     declare
+                        Zero_Label : constant String := Fresh;
+                        Done_Label : constant String := Fresh;
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
+                             Landin.IR.No_Path_Steps);
+                     begin
+                        Frame_Address (Slot_Offset (Layout, Slot), "x9");
+                        Emit ("cbz x10, " & Zero_Label);
+                        Copy_Bytes (Bytes);
+                        Emit ("b " & Done_Label);
+                        Put (Zero_Label & ":");
+                        Zero_Bytes (Bytes);
+                        Put (Done_Label & ":");
+                     end;
                   else
                      Store_Slot (Slot, "x10");
                   end if;

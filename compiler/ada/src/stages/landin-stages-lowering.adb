@@ -5334,6 +5334,16 @@ package body Landin.Stages.Lowering is
                               Site_Of (Of_Tree, Argument));
                         end if;
                      end;
+                  elsif Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
+                    and then not IR.Signature_Uses_C_ABI
+                      (Unit.all, Signature)
+                  then
+                     --  D97: zero is an internal aggregate carrier.  The
+                     --  callee clears its own slot at entry; no caller
+                     --  aggregate storage is needed for this value.
+                     Given (Formal_Position) := IR.Emit_Number
+                       (Unit.all, Filling, Ty.Usize, 0, False,
+                        Site_Of (Of_Tree, Argument));
                   elsif Syn.Kind (Of_Tree, Argument)
                           in Syn.Zeroed_Literal | Syn.Array_Literal
                              | Syn.Array_Repetition
@@ -5494,7 +5504,14 @@ package body Landin.Stages.Lowering is
                   end;
                end if;
 
-               if Has_Runtime_After (Written) then
+               if Has_Runtime_After (Written)
+                 and then not
+                   (Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
+                    and then Parameter.Kind in
+                      Ty.Aggregate | Ty.Fixed_Array
+                    and then not IR.Signature_Uses_C_ABI
+                      (Unit.all, Signature))
+               then
                   --  Every saved storage carrier retains its full shape.
                   --  A scalar usize slot loses that proof on reload, even
                   --  for an ordinary direct call with a later argument.

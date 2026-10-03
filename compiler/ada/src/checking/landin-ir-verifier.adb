@@ -2471,6 +2471,20 @@ package body Landin.IR.Verifier is
          Fields : Aggregate_Source := (others => <>);
          Length : Element_Total;
       begin
+         if Parameter > 0
+           and then Op = Number
+           and then not Signature_Uses_C_ABI (Of_Unit, Signature)
+           and then Number_Of (Of_Unit, Item, Value) = 0
+           and then not Is_Negated (Of_Unit, Item, Value)
+           and then Result_Of (Of_Unit, Item, Value)
+             = Landin.Types.Usize
+         then
+            --  D97's zero carrier is valid only for an internal shaped
+            --  parameter.  The callee supplies the target-specific extent.
+            return Nth_Signature_Parameter
+              (Of_Unit, Signature, Parameter).Kind in
+                Landin.Types.Aggregate | Landin.Types.Fixed_Array;
+         end if;
          case Op is
             when Load =>
                if not Is_Address

@@ -10603,9 +10603,10 @@ One aggregate occupies one position in the existing internal argument run. The
 caller forms a target-neutral `Storage_Address` carrier; the first six
 positions use integer registers and later positions use D86's eight-byte stack
 slots. The carrier is not a Landin pointer and cannot be named by source. The
-callee preserves every incoming aggregate carrier before copying, derives the
-complete padded extent from its selected target, and copies the bytes into a
-fresh aggregate parameter slot before the body runs. Reads therefore use
+callee preserves every incoming aggregate carrier, derives the complete padded
+extent from its selected target, and copies an addressed source into a fresh
+aggregate parameter slot before the body runs. D97 clears that slot directly
+for a direct `zeroed` argument. Reads therefore use
 ordinary field and array operations against independent by-value storage.
 
 **Why an internal address and defensive copy:** flattening fields would make
@@ -10637,7 +10638,8 @@ expression remains refused as an argument.
 The array occupies one existing internal ABI position. The caller emits D94's
 unspellable target-neutral storage-address carrier. The callee preserves that
 carrier with the struct carriers, derives `length * target element size`, and
-copies those bytes into a fresh shaped array parameter slot before running.
+copies those bytes into a fresh shaped array parameter slot before running;
+D97 clears that slot directly for a direct `zeroed` argument.
 Register and stack positions therefore have one convention for scalar,
 ordinary-struct and fixed-array source parameters while their frame storage
 retains the distinct neutral shape each operation needs.
@@ -10687,32 +10689,37 @@ does not create an aggregate expression value.
 seams; `negative/nested-storage-argument-unassigned`; the generated token and
 IR records; and `runtime/nested-storage-arguments` on Linux x86-64.
 
-### D97 — `zeroed` may directly fill an aggregate argument temporary
+### D97 — `zeroed` may directly initialize aggregate parameter storage
 
 **The tour said** that `zeroed` takes its type from context [0540]. D94/D95
 provided shaped by-value parameter storage, but required the caller to name
 existing storage even when the all-zero value needed no source object.
 
-**Chosen:** `zeroed` may appear directly where a flat ordinary-struct or
-fixed-array parameter supplies its complete type. The caller allocates a fresh
-shaped temporary, clears its complete target-derived extent with the existing
-compact clear operation, and passes its `Storage_Address` through the same
-one-position internal convention. The callee still performs the ordinary
-by-value copy before its body runs.
+**Chosen:** `zeroed` may appear directly where a supported struct or
+fixed-array parameter supplies its complete type. For the internal convention,
+the caller passes a zero carrier in the aggregate's ordinary register or stack
+position, without allocating aggregate storage. At entry the callee recognizes
+that carrier and clears the complete target-derived extent of its own shaped
+parameter slot before the body runs. A nonzero carrier still names existing
+storage and is copied into that slot. This zero carrier is not a source pointer,
+and it is never used for a C ABI call or an aggregate result destination. A
+permitted C ABI aggregate argument keeps its existing caller materialization
+and C classification.
 
-The temporary and clear are target-neutral in verified IR: an ordinary struct
-carries its field shapes and an array carries length and scalar element. Only
-the backend derives padding, widths and byte extent. `zeroed` does not become a
-general aggregate expression, and nested or variant-bearing parameter types
-remain outside this rule.
+The zero carrier is target-neutral in verified IR, where only a direct all-zero
+internal aggregate argument may use it. The parameter's existing struct field
+shapes or array length and scalar element give the backend the padded extent.
+`zeroed` does not become a general aggregate expression. D102 and D104 also
+allow this carrier for their contextual variant-bearing and nested struct
+arguments, whose complete parameter shapes determine the clear extent.
 
-**Why retain both temporary and callee copy:** special-casing an all-zero ABI
-argument would create a second convention and would make its behavior depend
-on whether the caller wrote equivalent named zero storage. Materializing the
-contextual value through existing storage keeps argument order, register/stack
-placement and by-value independence identical.
+**Why clear in the callee:** an all-zero value has no source storage or
+initializer effects to preserve. The zero carrier keeps argument order and
+register/stack placement identical to other arguments, while clearing the
+callee's own slot gives it the same independent by-value storage. A named
+zeroed local remains an ordinary nonzero storage carrier and is copied.
 
-**The alternative:** require a named `zeroed` local before the call, or give the callee the job of zeroing. A temporary the caller clears keeps the callee's by-value copy uniform, and a named local for one zero value is noise the tour never asks for.
+**The alternative:** require a named `zeroed` local before the call, or clear a fresh caller temporary and copy it into the callee. Both spend a caller extent and a whole-object copy for a value whose complete image is known without either operation.
 
 **Pinned by** the checker, lowering, verifier and backend public seams; the
 generated token and IR records; and `runtime/nested-storage-arguments` on
@@ -10856,7 +10863,8 @@ label remains a separate slice.
 
 The aggregate parameter slot retains the variant tag type, source-order cases
 and compact payload-field runs. D94 transports one storage address and copies
-the complete target-derived padded struct extent before the body; tag matching
+the complete target-derived padded struct extent for a storage source; D97's
+direct `zeroed` carrier clears that extent in the callee instead. Tag matching
 and payload aliases then operate on the independent callee slot exactly as on
 any local aggregate.
 
@@ -10919,9 +10927,10 @@ construction with an ordinary-child label remains separate.
 
 The parameter slot retains an `Aggregate_Field_Shape` whose compact payload run
 is the child's declaration-order scalar and array leaves. D94's caller carrier
-still occupies one ABI position and the callee copies the complete recursively
-placed padded extent before running. Child field and element reads then reuse
-D88/D89's neutral parent/child identities.
+still occupies one ABI position: the callee copies a storage source's complete
+recursively placed padded extent or clears it for D97's direct `zeroed` carrier.
+Child field and element reads then reuse D88/D89's neutral parent/child
+identities.
 
 **Why preserve one slot:** splitting the child into ABI operands would erase
 its nominal boundary and make operand count depend on composition. The existing

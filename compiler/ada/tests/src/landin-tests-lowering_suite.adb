@@ -5274,7 +5274,7 @@ package body Landin.Tests.Lowering_Suite is
          Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 2);
          Array_Parameter : constant IR.Slot_Id :=
            IR.Nth_Parameter (Unit, 3, 1);
-         Addresses, Calls, Clears, Fills : Natural := 0;
+         Addresses, Calls, Clears, Fills, Zero_Carriers : Natural := 0;
       begin
          Landin.Testing.Check
            (Item,
@@ -5298,6 +5298,20 @@ package body Landin.Tests.Lowering_Suite is
                   Landin.Testing.Check
                     (Item, IR.Operand_Count (Unit, 2, Value) in 1 | 2,
                      "each aggregate occupies one source argument position");
+                  declare
+                     Position : constant Positive :=
+                       (if IR.Callee_Of (Unit, 2, Value) = 1 then 2 else 1);
+                     Argument : constant IR.Value_Id :=
+                       IR.Nth_Operand (Unit, 2, Value, Position);
+                  begin
+                     if IR.Op_Of (Unit, 2, Argument) = IR.Number
+                       and then IR.Result_Of (Unit, 2, Argument)
+                         = Landin.Types.Usize
+                       and then IR.Number_Of (Unit, 2, Argument) = 0
+                     then
+                        Zero_Carriers := Zero_Carriers + 1;
+                     end if;
+                  end;
                elsif IR.Op_Of (Unit, 2, Value) = IR.Clear_Array then
                   Clears := Clears + 1;
                elsif IR.Op_Of (Unit, 2, Value) = IR.Fill_Array then
@@ -5307,9 +5321,9 @@ package body Landin.Tests.Lowering_Suite is
          end loop;
          Landin.Testing.Check
            (Item,
-            Addresses = 11 and then Calls = 11 and then Clears = 2
-              and then Fills = 3,
-            "contextual arguments use compact shaped caller temporaries");
+            Addresses = 9 and then Calls = 11 and then Clears = 0
+              and then Fills = 3 and then Zero_Carriers = 2,
+            "only direct zeroed arguments avoid caller storage and clears");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the internal aggregate carrier");

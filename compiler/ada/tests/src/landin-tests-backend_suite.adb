@@ -1080,6 +1080,63 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Aggregate_Arguments_Are_Copied_In_The_Callee;
 
+   --  D97's direct zero carrier consumes one ABI position, including a
+   --  stack position, without putting an 8 KiB array in the caller frame.
+   procedure Direct_Zeroed_Arguments_Clear_Only_Callee_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Direct_Zeroed_Arguments_Clear_Only_Callee_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "first: (data: [8192]u8, n: i32) -> (r: i32) =" & LF
+         & "    r = n" & LF
+         & "end first" & LF
+         & "seventh: (a: i32, b: i32, c: i32, d: i32, e: i32,"
+         & " f: i32, data: [8192]u8) -> (r: i32) =" & LF
+         & "    r = a + f" & LF
+         & "end seventh" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = first(zeroed, 1)"
+         & " + seventh(1, 2, 3, 4, 5, 6, zeroed)" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both direct zeroed arguments are accepted");
+      declare
+         Text : constant String := Emitted (Work);
+         Main_Start : constant Natural := Index (Text, "main:" & LF);
+      begin
+         Landin.Testing.Check
+           (Item, Main_Start > 0, "the caller is emitted");
+         if Main_Start > 0 then
+            declare
+               Main_Text : constant String := Text (Main_Start .. Text'Last);
+            begin
+               Landin.Testing.Check
+                 (Item, not Contains (Main_Text, "$8192")
+                  and then not Contains (Main_Text, "-8192(%rbp)"),
+                  "the caller has no whole-array temporary");
+            end;
+         end if;
+         Landin.Testing.Check
+           (Item, Occurrences (Text, HT & "rep stosb" & LF) = 2
+            and then Occurrences (Text, HT & "rep movsb" & LF) = 2,
+            "both callee slots select clear or copy from their carrier");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "pushq 16(%rbp)" & LF)
+            and then Contains (Text, HT & "testq %rsi, %rsi" & LF),
+            "a stack aggregate retains its one-position carrier");
+      end;
+   end Direct_Zeroed_Arguments_Clear_Only_Callee_Storage;
+
    --  A datum's block describes a value and is not code [1940], so it
    --  becomes an initialized object in `.data` at its own alignment rather
    --  than instructions anything runs.
@@ -7986,6 +8043,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "aggregate arguments are copied in the callee",
          Aggregate_Arguments_Are_Copied_In_The_Callee'Access);
+      Landin.Testing.Register
+        (Into, "backend", "direct zeroed arguments clear callee storage",
+         Direct_Zeroed_Arguments_Clear_Only_Callee_Storage'Access);
       Landin.Testing.Register
         (Into, "backend", "narrow external arguments are extended",
          Narrow_External_Arguments_Are_Extended'Access);
