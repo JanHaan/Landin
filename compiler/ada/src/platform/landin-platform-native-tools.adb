@@ -197,6 +197,7 @@ package body Landin.Platform.Native.Tools is
          Deadline : constant Ada.Real_Time.Time :=
            Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
          Reaped : Interfaces.C.int := 0;
+         Wait_Interval : Duration := 0.001;
       begin
          if Start_Tool
            (List, Interfaces.C.int (FD),
@@ -231,7 +232,10 @@ package body Landin.Platform.Native.Tools is
                Exceeded_Limit := True;
                exit;
             end if;
-            delay 0.02;
+            --  Check shortly after spawning: a tool that exits just after
+            --  the first poll should not wait for the long-running cadence.
+            delay Wait_Interval;
+            Wait_Interval := Duration'Min (Wait_Interval * 2, 0.02);
          end loop;
 
          if Reaped < 0 then

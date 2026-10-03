@@ -551,6 +551,8 @@ package body Landin.Tests.Platform_Suite is
       Result : Landin.Platform.Tool_Result;
       Exiting : Landin.Platform.Path_List :=
         Landin.Platform.Arguments ("-c");
+      Shortly_Exiting : Landin.Platform.Path_List :=
+        Landin.Platform.Arguments ("-c");
       Sleeping : Landin.Platform.Path_List :=
         Landin.Platform.Arguments ("-c");
    begin
@@ -562,6 +564,15 @@ package body Landin.Tests.Platform_Suite is
            and then Result.Exit_Code = 7
            and then Unbounded.To_String (Result.Output) = "out" & ASCII.LF,
          "an ordinary exit reports its own status and output");
+
+      Landin.Platform.Add (Shortly_Exiting, "sleep 0.005; echo ready; exit 9");
+      Runner.Run ("sh", Shortly_Exiting, Result);
+      Landin.Testing.Check
+        (Item,
+         Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 9
+           and then Unbounded.To_String (Result.Output) = "ready" & ASCII.LF,
+         "a child exiting shortly after spawn reports completion");
 
       Landin.Platform.Native.Tools.Set_Limit (Runner, 0.2);
       Landin.Platform.Add (Sleeping, "sleep 2");
