@@ -53,10 +53,13 @@ sixteen-byte aligned and x18 is unused. Native Landin calls use eight integer
 bit carriers then stack slots, address-based aggregate transport and a separate
 w8 declared-error carrier. The backend emits already verified cleanup edges.
 Stack growth touches each 4 KiB page. Frame/incoming/outgoing/copy preflight
-retains a signed-2-GiB budget. Conditional branches expand through adjacent
-inverted branches; the baseline still requires direct branches to fit the
-architecture's 128-MiB reach. The recorded broader resource/scaling
-limitations remain; this adds no recovery guarantee for arbitrary exhaustion.
+retains a signed-2-GiB budget. Conditional transfers to local labels use one
+direct branch when conservative byte accounting proves the target is in range
+(±32 KiB for test-bit branches, ±1 MiB for other conditional branches).
+Distant or unproven targets retain an adjacent inverted conditional branch
+followed by `b`; that branch still requires the architecture's 128-MiB reach.
+The recorded broader resource/scaling limitations remain; this adds no
+recovery guarantee for arbitrary exhaustion.
 
 Darwin's minimal hosted bridge supplies argument access, malloc-backed aligned
 allocation, open/read/write/close and immediate errno capture through `__error`.
