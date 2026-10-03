@@ -140,6 +140,7 @@ package body Landin.Driver is
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
+      & "  -o=PATH             write to a path beginning with -" & LF
       & "  --toolchain=NAME    driver to run with --emit=exe" & LF
       & "  --linker=NAME       pass -fuse-ld=NAME with --emit=exe" & LF
       & "  --firmware-entry=NAME  Cortex entry-module routine, no results"
@@ -508,6 +509,7 @@ package body Landin.Driver is
       Wants_Identity : Boolean := False;
       Emit      : Emit_Kind := Emit_Nothing;
       Output    : Unbounded.Unbounded_String;
+      Output_Problem : Unbounded.Unbounded_String;
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
       Toolchain_Seen, Linker_Seen : Boolean := False;
@@ -564,8 +566,8 @@ package body Landin.Driver is
       --  success.
       --
       --  An index and not a cursor, because `-o` takes the argument after
-      --  it.  Every other option carries its value with an `=`, which is
-      --  the shape `--target=` set and every later option kept.
+      --  it.  `-o=PATH` keeps a leading dash in a literal path unambiguous.
+      --  Every other option carries its value with an `=`.
       while Index <= Natural (Arguments.Length) loop
          declare
             Argument : constant String := Arguments.Element (Index);
@@ -715,6 +717,15 @@ package body Landin.Driver is
                   end if;
                end;
 
+            elsif Starts_With (Argument, "-o=") then
+               if Output_Seen or else After (Argument, "-o=") = "" then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Output_Seen := True;
+               Output := Unbounded.To_Unbounded_String
+                 (After (Argument, "-o="));
+
             elsif Argument = "-o" then
                if Output_Seen then
                   Unknowns.Append (Argument);
@@ -726,6 +737,11 @@ package body Landin.Driver is
                --  reading of a request that is simply unfinished.
                if Index = Natural (Arguments.Length) then
                   Unknowns.Append (Argument);
+                  Bad_Use := True;
+               elsif Starts_With (Arguments.Element (Index + 1), "-") then
+                  Output_Problem := Unbounded.To_Unbounded_String
+                    ("-o needs a path before " & Arguments.Element
+                       (Index + 1));
                   Bad_Use := True;
                else
                   Index := Index + 1;
@@ -755,7 +771,9 @@ package body Landin.Driver is
                  and then Emit = Emit_Nothing)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
-        or else (Output_Seen and then
+        or else (Output_Seen
+                 and then Unbounded.Length (Output_Problem) = 0
+                 and then
                  (Emit = Emit_Nothing or Unbounded.Length (Output) = 0))
       then
          Unknowns.Append ("incompatible compilation action");
@@ -1863,6 +1881,11 @@ package body Landin.Driver is
             end if;
          end if;
 
+         if Unbounded.Length (Output_Problem) > 0 then
+            Note_Failure
+              (Code_Unknown_Option, Unbounded.To_String (Output_Problem));
+         end if;
+
          --  A request to emit with nothing to compile exited zero and
          --  wrote nothing, which a script read as success.  An empty root
          --  named the filesystem root and searched it.
@@ -1978,6 +2001,7 @@ package body Landin.Driver is
             --  worth emitting, and a file written from one would be a
             --  plausible artefact of a failed compilation.
             if Emit /= Emit_Nothing
+              and then not Bad_Use
               and then not Landin.Stages.Failed (Context)
             then
                Stage_Began;

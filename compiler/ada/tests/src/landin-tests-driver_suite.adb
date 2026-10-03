@@ -2434,6 +2434,89 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Dangling_Output_Is_Misuse;
 
+   procedure An_Option_Cannot_Be_An_Output_Path
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Option_Cannot_Be_An_Output_Path
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Case_Number in 1 .. 2 loop
+         declare
+            Option : constant String :=
+              (if Case_Number = 1 then "--target=cortex-m0"
+               else "--help");
+            Host   : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args   : Landin.Platform.Path_List :=
+              Arguments_Of ("--emit=asm");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Args.Append ("-o");
+            Args.Append (Option);
+            Args.Append ("main.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Misuse,
+                  "an option after -o is misuse");
+               Landin.Testing.Check
+                 (Item, Contains (Report, "L0002")
+                  and then Contains (Report, "-o needs a path before "
+                                     & Option),
+                  "the diagnostic identifies the missing output path");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0,
+                  "a rejected output operand emits no artifact");
+            end;
+         end;
+      end loop;
+   end An_Option_Cannot_Be_An_Output_Path;
+
+   procedure Dash_Leading_Output_Paths_Are_Explicit
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dash_Leading_Output_Paths_Are_Explicit
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Form in 1 .. 2 loop
+         declare
+            Host  : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args  : Landin.Platform.Path_List :=
+              Arguments_Of ("--emit=asm");
+            Path  : constant String :=
+              (if Form = 1 then "--target=cortex-m0"
+               else "./-artifact.s");
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            if Form = 1 then
+               Args.Append ("-o=" & Path);
+            else
+               Args.Append ("-o");
+               Args.Append (Path);
+            end if;
+            Args.Append ("main.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  "an explicit dash-leading path is accepted");
+               Landin.Testing.Check
+                 (Item, Contains (Host.Written (Path), "main:"),
+                  "assembly is written to the literal path");
+            end;
+         end;
+      end loop;
+   end Dash_Leading_Output_Paths_Are_Explicit;
+
    --  Output failure is injected through the platform seam: native
    --  permissions are host policy and cannot make a deterministic case.
    procedure An_Unwritable_Output_Is_Reported
@@ -4716,6 +4799,12 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a dangling output is misuse",
          A_Dangling_Output_Is_Misuse'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an option cannot be an output path",
+         An_Option_Cannot_Be_An_Output_Path'Access);
+      Landin.Testing.Register
+        (Into, "driver", "dash-leading output paths are explicit",
+         Dash_Leading_Output_Paths_Are_Explicit'Access);
       Landin.Testing.Register
         (Into, "driver", "an unwritable output is reported",
          An_Unwritable_Output_Is_Reported'Access);
