@@ -14,7 +14,9 @@
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -31,6 +33,7 @@
 
 int landin_same_file(const char *left, const char *right);
 int landin_same_existing_file(const char *left, const char *right);
+int landin_existing_file_key(const char *path, char *key, size_t length);
 int landin_names_alias(const char *left_name, const char *right_name,
                        int rules);
 int landin_directory_access_denied(const char *path);
@@ -261,4 +264,18 @@ int landin_same_existing_file(const char *left, const char *right)
     if (stat(left, &a) != 0 || stat(right, &b) != 0)
         return -1;
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+}
+
+/* One stat per input. The textual form keeps the host's dev_t/ino_t layout
+   out of the Ada ABI; a failed lookup yields no key. */
+int landin_existing_file_key(const char *path, char *key, size_t length)
+{
+    struct stat found;
+    int written;
+
+    if (stat(path, &found) != 0)
+        return -1;
+    written = snprintf(key, length, "%jx:%jx",
+                       (uintmax_t)found.st_dev, (uintmax_t)found.st_ino);
+    return written >= 0 && (size_t)written < length ? 0 : -1;
 }

@@ -47,6 +47,9 @@ package Landin.Testing.Fakes is
    overriding function Same_File
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
 
+   overriding function Existing_File_Key
+     (Host : Fake_Filesystem; Path : String) return String;
+
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
 

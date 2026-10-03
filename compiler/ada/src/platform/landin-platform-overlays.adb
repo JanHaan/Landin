@@ -52,6 +52,10 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Left, Right : String) return Boolean
      is (Left = Right or else Host.Under.Same_File (Left, Right));
 
+   overriding function Existing_File_Key
+     (Host : Overlay; Path : String) return String
+     is (Host.Under.Existing_File_Key (Path));
+
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean
      is (not Host.Held.Contains (Path)

@@ -1,4 +1,5 @@
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Containers.Indefinite_Ordered_Sets;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
@@ -28,6 +29,9 @@ package body Landin.Driver.Loading is
 
    package Module_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
+
+   package Path_Sets is new Ada.Containers.Indefinite_Ordered_Sets
+     (Element_Type => String);
 
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
      Landin.Diagnostics.Catalogue.Code
@@ -64,42 +68,71 @@ package body Landin.Driver.Loading is
       Host    : Landin.Platform.Filesystem'Class;
       Paths   : Landin.Platform.Path_List)
    is
-      Loaded : Landin.Platform.Path_List;
+      Loaded    : Landin.Platform.Path_List;
+      Unkeyed   : Landin.Platform.Path_List;
+      Spellings : Path_Sets.Set;
+      Keys      : Path_Sets.Set;
+
+      function Already_Loaded (Path, Key : String) return Boolean;
+
+      function Already_Loaded (Path, Key : String) return Boolean is
+      begin
+         if Key /= "" then
+            if Keys.Contains (Key) then
+               return True;
+            end if;
+            --  A host that could not key an earlier successful read may
+            --  still prove this path aliases it by pairwise comparison.
+            return (for some Previous of Unkeyed =>
+                      Host.Same_File (Path, Previous));
+         end if;
+         return (for some Previous of Loaded =>
+                   Host.Same_File (Path, Previous));
+      end Already_Loaded;
    begin
       for Path of Paths loop
-         --  Preserve the first successful spelling and snapshot.
-         --  Uncertain identities still take the ordinary read path.
-         if not (for some Previous of Loaded =>
-                   Path = Previous
-                   or else Host.Same_File (Path, Previous))
-         then
+         if not Spellings.Contains (Path) then
             declare
-               Content : Unbounded.Unbounded_String;
-               Status  : Landin.Platform.Read_Status;
+               Key : constant String := Host.Existing_File_Key (Path);
             begin
-               Host.Read_File (Path, Content, Status);
+               --  Preserve the first successful spelling and snapshot.
+               --  Uncertain identities still take the ordinary read path.
+               if not Already_Loaded (Path, Key) then
+                  declare
+                     Content : Unbounded.Unbounded_String;
+                     Status  : Landin.Platform.Read_Status;
+                  begin
+                     Host.Read_File (Path, Content, Status);
 
-               case Status is
-                  when Landin.Platform.Read_Ok =>
-                     declare
-                        Id : constant Landin.Source.Source_Id :=
-                          Landin.Stages.Add_Source
-                            (Context, Path,
-                             Unbounded.To_String (Content));
-                        pragma Unreferenced (Id);
-                     begin
-                        Loaded.Append (Path);
-                     end;
+                     case Status is
+                        when Landin.Platform.Read_Ok =>
+                           declare
+                              Id : constant Landin.Source.Source_Id :=
+                                Landin.Stages.Add_Source
+                                  (Context, Path,
+                                   Unbounded.To_String (Content));
+                              pragma Unreferenced (Id);
+                           begin
+                              Loaded.Append (Path);
+                              Spellings.Include (Path);
+                              if Key = "" then
+                                 Unkeyed.Append (Path);
+                              else
+                                 Keys.Include (Key);
+                              end if;
+                           end;
 
-                  when Landin.Platform.Not_Found =>
-                     Note_Failure
-                       (Context, "source not found: " & Path);
+                        when Landin.Platform.Not_Found =>
+                           Note_Failure
+                             (Context, "source not found: " & Path);
 
-                  when Landin.Platform.Not_Readable =>
-                     Note_Failure
-                       (Context,
-                        "source not readable: " & Path);
-               end case;
+                        when Landin.Platform.Not_Readable =>
+                           Note_Failure
+                             (Context,
+                              "source not readable: " & Path);
+                     end case;
+                  end;
+               end if;
             end;
          end if;
       end loop;

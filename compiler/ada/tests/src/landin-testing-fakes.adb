@@ -141,6 +141,15 @@ package body Landin.Testing.Fakes is
      is (Host.Exists (Left) and then Host.Exists (Right)
          and then Host.Paths_Overlap (Left, Right));
 
+   overriding function Existing_File_Key
+     (Host : Fake_Filesystem; Path : String) return String
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      --  Declared alias pairs do not provide a complete equivalence class.
+      return "";
+   end Existing_File_Key;
+
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
    begin

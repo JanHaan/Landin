@@ -42,6 +42,9 @@ package Landin.Platform.Overlays is
    overriding function Same_File
      (Host : Overlay; Left, Right : String) return Boolean;
 
+   overriding function Existing_File_Key
+     (Host : Overlay; Path : String) return String;
+
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean;
 

@@ -1127,6 +1127,19 @@ package body Landin.Tests.Platform_Suite is
          and then Host.Same_File (Original, Root & "/parent/source.ldn"),
          "existing input aliases require positive host identity");
       Landin.Testing.Check
+        (Item, Host.Existing_File_Key (Original) /= ""
+         and then Host.Existing_File_Key (Original)
+           = Host.Existing_File_Key (Root & "/hard.json")
+         and then Host.Existing_File_Key (Original)
+           = Host.Existing_File_Key (Root & "/symbolic.json")
+         and then Host.Existing_File_Key (Original)
+           /= Host.Existing_File_Key (Root & "/copy.ldn")
+         and then Host.Existing_File_Key (Root & "/absent.ldn") = ""
+         and then Host.Existing_File_Key (Original & "/") = ""
+         and then Host.Existing_File_Key
+           (Original & Character'Val (0) & "ignored") = "",
+         "one lookup keys aliases and leaves unknown paths unkeyed");
+      Landin.Testing.Check
         (Item, not Host.Same_File (Original, Root & "/copy.ldn")
          and then not Host.Same_File (Original, Original & "/")
          and then not Host.Same_File (Original, Root & "/absent.ldn")

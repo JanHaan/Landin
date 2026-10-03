@@ -48,6 +48,31 @@ package body Landin.Platform.Native is
         (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) = 1;
    end Same_File;
 
+   overriding function Existing_File_Key
+     (Host : Native_Filesystem; Path : String) return String
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Key_Of
+        (Name   : Interfaces.C.char_array;
+         Key    : out Interfaces.C.char_array;
+         Length : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_existing_file_key";
+      Buffer_Size : constant Interfaces.C.size_t := 128;
+      Buffer : Interfaces.C.char_array (0 .. 127);
+   begin
+      if Path = ""
+        or else (for some Byte of Path => Byte = Character'Val (0))
+      then
+         return "";
+      end if;
+      if Key_Of (Interfaces.C.To_C (Path), Buffer, Buffer_Size) /= 0 then
+         return "";
+      end if;
+      return Interfaces.C.To_Ada (Buffer);
+   end Existing_File_Key;
+
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean
    is

@@ -54,6 +54,13 @@ package Landin.Platform is
    function Same_File
      (Host : Filesystem; Left, Right : String) return Boolean is abstract;
 
+   --  A stable key for a proven existing object, equal for every spelling
+   --  of that object and different for distinct objects. Empty means the
+   --  host cannot establish a key; callers then use Same_File. The key is
+   --  only meaningful within one host and one stable namespace.
+   function Existing_File_Key (Host : Filesystem; Path : String)
+     return String is abstract;
+
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
 
