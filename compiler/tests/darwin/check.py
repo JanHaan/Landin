@@ -185,6 +185,13 @@ def main(argv=None):
             meta = dict(line.split(": ", 1) for line in (base / "fixture.meta").read_text().splitlines()
                         if ": " in line and not line.startswith("#"))
             meta.setdefault("stream", "merged")
+            #  A fixture that does not name macOS arm64 is another lane's,
+            #  as compiler/tests/README.md says of every target; one with a
+            #  replacement or overlay below still names it or is replaced.
+            if (args.parity and name not in differences
+                    and "macos-arm64" not in [t.strip() for t in
+                                              meta.get("targets", "").split(",")]):
+                continue
             if args.parity and name in differences:
                 if "replacement" in differences[name]:
                     continue
