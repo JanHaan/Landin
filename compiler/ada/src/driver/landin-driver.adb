@@ -1,5 +1,7 @@
+with Ada.Containers.Indefinite_Hashed_Sets;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
+with Ada.Strings.Hash;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
@@ -40,6 +42,11 @@ package body Landin.Driver is
    use type Landin.Targets.Architecture;
 
    package Unbounded renames Ada.Strings.Unbounded;
+
+   package Path_Sets is new Ada.Containers.Indefinite_Hashed_Sets
+     (Element_Type        => String,
+      Hash                => Ada.Strings.Hash,
+      Equivalent_Elements => "=");
 
    LF : constant Character := Character'Val (10);
 
@@ -296,6 +303,7 @@ package body Landin.Driver is
       Found   : Landin.Diagnostics.Diagnostic_List;
       Sources : Landin.Source.Sets.Source_Set;
       Named   : Landin.Platform.Path_List;
+      Seen    : Path_Sets.Set;
       Check   : Boolean := False;
       Misused : Boolean := False;
 
@@ -372,11 +380,12 @@ package body Landin.Driver is
                Misused := True;
                Refuse (Code_Unknown_Option,
                        "fmt formats files, not directories: " & Argument);
-            elsif Named.Contains (Argument) then
+            elsif Seen.Contains (Argument) then
                Misused := True;
                Refuse (Code_Unknown_Option,
                        "fmt is given one source twice: " & Argument);
             else
+               Seen.Insert (Argument);
                Named.Append (Argument);
             end if;
          end;

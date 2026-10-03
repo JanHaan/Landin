@@ -4442,6 +4442,47 @@ package body Landin.Tests.Driver_Suite is
                             "source not found: ./fmt"),
             "a source called fmt is named by a path");
       end;
+
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+      begin
+         Host.Add_File ("path.ldn", Laid_Out);
+         Host.Add_File ("./path.ldn", Laid_Out);
+         Host.Add_File ("alias.ldn", Laid_Out);
+         Host.Add_Alias ("path.ldn", "./path.ldn");
+         Host.Add_Alias ("path.ldn", "alias.ldn");
+         declare
+            Checked : constant Landin.Driver.Outcome := Run
+              (Host, Words (["--check", "path.ldn", "./path.ldn",
+                             "alias.ldn"]));
+         begin
+            Landin.Testing.Check
+              (Item, Checked.Status = Landin.Driver.Status_Success
+                     and then Natural (Checked.Named.Length) = 3
+                     and then Checked.Named.Element (1) = "path.ldn"
+                     and then Checked.Named.Element (2) = "./path.ldn"
+                     and then Checked.Named.Element (3) = "alias.ldn",
+               "distinct spellings and aliases keep their input order");
+         end;
+         declare
+            Refused : constant Landin.Driver.Outcome := Run
+              (Host, Words (["path.ldn", "./path.ldn", "path.ldn",
+                             "--wat", "path.ldn"]));
+            Report : constant String :=
+              Unbounded.To_String (Refused.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Refused.Status = Landin.Driver.Status_Misuse
+                     and then Landin.Diagnostics.Count (Refused.Found) = 3
+                     and then Contains
+                       (Report, "fmt is given one source twice: path.ldn")
+                     and then Contains
+                       (Report, "fmt takes no option but --check, once: --wat")
+                     and then Refused.Named.Is_Empty
+                     and then Host.Write_Count = 0,
+               "exact repeats and options report every misuse before I/O");
+         end;
+      end;
    end Fmt_Is_A_Subcommand;
 
    --  `refine lsp` and `refine lsp --stdio` start a server, which refine
