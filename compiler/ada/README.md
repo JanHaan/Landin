@@ -872,12 +872,16 @@ the hidden caller destination.
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
 `Landin.Backend.Toolchain` names, so a constant-return `main` runs and exits
-with its own `code`. The assembly half is host-independent by the rule that
-nothing outside `Landin.Targets` may ask the host anything: emitting for
-`linux-x86-64` produces identical assembly text on macOS and on Linux. The finishing
-half is not, and says so — a host without the target's triplet-prefixed
-driver reports `L0500` rather than reaching for whatever `gcc` names, which
-on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
+with its own `code`. Without `--debug`, equivalent closures emit identical
+assembly text for a given target on macOS and Linux, including when emitting
+for `linux-x86-64`. With `--debug=full` or `--debug=lines`, assembly identity
+also requires the compilation directory and source spelling to be fixed:
+DWARF records them in `comp_dir` and `.file` (see
+[Deterministic artifacts](../../docs/targets.md#deterministic-artifacts)).
+The finishing half is host-dependent, and says so — a host without the
+target's triplet-prefixed driver reports `L0500` rather than reaching for
+whatever `gcc` names. On macOS, that could hand ELF-only assembly to a
+toolchain that emits Mach-O.
 The supported Linux finishing path is the triplet-selected GNU driver and
 its assembler/linker. A named driver override must accept that target's
 emitted assembly and argument conventions; selecting an executable does not
