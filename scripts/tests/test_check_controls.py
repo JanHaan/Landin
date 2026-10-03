@@ -1086,6 +1086,35 @@ class RoadmapStructure(unittest.TestCase):
             said = checker.check_roadmap_citations(True)
         self.assertEqual(said, [])
 
+    def test_scope_blocked_work_does_not_hold_up_independent_work(self):
+        from check_controls import tree
+        with tree(copied=ROADMAP_INPUTS) as root:
+            target = root / "ROADMAP.md"
+            text = target.read_text()
+            current = None
+            future = False
+            lines = []
+            for line in text.splitlines():
+                heading = checker.ROADMAP_WORK.match(line)
+                if heading:
+                    current = heading.group(1)
+                    if heading.group(3) == "Measure generated code":
+                        future = True
+                        expected = current + " — " + heading.group(3)
+                if (not future and line.startswith("Status:")
+                        and line != "Status: blocked"):
+                    line = "Status: complete"
+                lines.append(line)
+            target.write_text("\n".join(lines) + "\n")
+            for name in ("README.md", "handoff.md"):
+                page = root / name
+                content = page.read_text()
+                content = content.replace(
+                    POINTER, "**Next roadmap item: " + expected
+                    + " (planned).**")
+                page.write_text(content)
+            self.assertEqual(checker.check_project_status(True), [])
+
     def test_a_pointer_that_disagrees_with_the_roadmap_is_reported(self):
         from check_controls import tree
         with tree(copied=ROADMAP_INPUTS) as root:

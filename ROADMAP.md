@@ -820,7 +820,8 @@ general bound on stack depth.
 Status: planned
 Depends on: R14.20, R13.30
 
-An event-driven Io that runs fibres over epoll and kqueue.
+An event-driven Io that runs fibres over epoll on Linux and kqueue on
+Darwin/FreeBSD. Windows is outside this item's scope.
 
 Exit evidence: prototype 5's derived server running on the hosted targets over
 both implementations of Io, unchanged.
