@@ -1,16 +1,22 @@
 import core/mem
 import core/vec
 
-allocation: type = struct
+public allocation: type = struct
     address: usize
     extent: usize
 end allocation
+
+bounded_ledger: type = struct
+    values: []mut allocation
+    used: usize
+end bounded_ledger
 
 region_value: type (provider: type) = struct
     parent: ptr mut provider
     allocations: variant
         empty |
-        recorded: (values: vec.list(allocation))
+        recorded: (values: vec.list(allocation)) |
+        bounded: (values: bounded_ledger)
     end allocations
 end region_value
 
@@ -20,6 +26,15 @@ public new_region: (provider: type is mem.allocator, parent: ptr mut provider)
                    -> (value: region(provider) from parent) =
     value = (parent: parent, allocations: empty)
 end new_region
+
+--  The caller reserves one initialized record per simultaneously live payload.
+--  No ledger request is sent to the parent in this form.
+public bounded_region: (provider: type is mem.allocator,
+                        parent: ptr mut provider, records: []mut allocation)
+                       -> (value: region(provider) from parent, records) =
+    value = (parent: parent,
+             allocations: bounded(values: (values: records, used: 0)))
+end bounded_region
 
 region_alloc: (provider: type is mem.allocator,
                inout state: region(provider), size: usize, alignment: usize)
@@ -46,6 +61,12 @@ record_allocation: (provider: type is mem.allocator,
         recorded(inout records): begin
             try vec.push(records, state.parent.val, record)
         end
+        bounded(inout records): begin
+            values: []mut allocation = records.values
+            fail mem.out_of_memory when records.used == lenof values
+            records.values[records.used] = record
+            inc records.used
+        end
     end match
 end record_allocation
 
@@ -67,9 +88,25 @@ public release_region: (provider: type is mem.allocator,
     match state.allocations
         empty: return
         recorded(inout records): release_records(state.parent, records)
+        bounded(inout records): begin
+            release_bounded(state.parent, records.values, records.used)
+            records.used = 0
+            return
+        end
     end match
     state.allocations = empty
 end release_region
+
+release_bounded: (provider: type is mem.allocator, parent: ptr mut provider,
+                  records: []mut allocation, used: usize) -> none =
+    mut remaining: usize = used
+    while remaining > 0 do
+        dec remaining
+        record: allocation = records[remaining]
+        block: ptr mut u8 = ptr(record.address)
+        mem.free(parent.val, block, record.extent)
+    end while
+end release_bounded
 
 --  Keep the ledger view and parent capability as separate parameters while
 --  freeing payloads; the payload alias does not expose the whole region.

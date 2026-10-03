@@ -1,5 +1,6 @@
 import core/diag
 import core/io
+import core/io/hosted
 import core/mem
 import core/text
 import examples/config_parser/parser
@@ -113,7 +114,7 @@ end notes_are_expected
 
 public main: () -> (code: i32) =
     code = 1
-    mut host := io.host()
+    mut host := hosted.host()
     world: any io.world = any(addr host)
     first_argument: usize = 0
     source_argument := world.argument(first_argument) else (problem)

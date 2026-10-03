@@ -14,7 +14,7 @@ allocator is hidden in a container or selected implicitly by the target.
 |---|---|
 | `core/mem` | `allocator`, `allocate`/`free`, caller-backed `arena` and `failing`, typed `storage`, `new`/`delete` and byte buffers. Requests and capacities use target `usize`. Raw backing and lifetime belong to the caller. |
 | `core/vec` | `list`, `new_list`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth copies privately, rolls back on failure and publishes a complete replacement last. |
-| `core/pool` | A provider over caller bytes and initialized slot metadata. Exact frees reclaim aligned slots for lowest-index reuse. No backing allocation or fallback heap. |
+| `core/pool` | A provider over caller bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. No backing allocation or fallback heap. |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/cpu` | Cortex-M0 PRIMASK save/disable/restore, mask observation, WFI and compiler/device/completion barriers. A target assertion refuses import on other targets. |
 
@@ -54,10 +54,28 @@ exclusive-access primitives or VTOR. Ordinary DMA buffers remain slices.
 
 `core/failing`, `core/region`, `core/small`, `core/map`, `core/tree`, `core/sort`
 and `core/text` contain reusable target-neutral code. Existing tests and the
-Cortex-M0 corpus's image-limit dispositions remain authoritative; absence of hosted imports does not
-promise that every composition fits 32 KiB. `core/io`, `core/diag`, `core/heap`
-and the hosted C aliases in `core/c` are outside this consumer closure. Even
-unused hosted declarations in a selected module must meet target checks.
+Cortex-M0 corpus's image-limit dispositions remain authoritative; absence
+of hosted imports does not promise that every composition fits 32 KiB.
+`core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
+caller backing, and its `io.world` interface can be selected on Cortex-M0. The
+`core/io/hosted` provider, `core/heap` and the hosted C aliases in `core/c`
+remain outside this consumer closure. Even unused hosted declarations in a
+selected module must meet target checks.
+
+`core/sort.sort` sorts a mutable initialized view in place with heapsort:
+worst-case O(n log n) comparisons, constant auxiliary storage, bounded call
+depth and no allocation. `core/sort.sort_selection` keeps selection sort as an
+explicit choice for tiny or swap-expensive views: exactly n(n-1)/2 comparisons
+and at most n-1 swaps. Both take the caller's strict ordering and neither
+promises stability.
+
+`core/region.new_region` grows its allocation ledger through the parent.
+`core/region.bounded_region` instead takes caller-owned initialized
+`region.allocation` records. One record is needed per live payload; a full
+ledger reports `out_of_memory` and returns the just-allocated payload to the
+parent. Release frees payloads in reverse order, resets the record count, and
+leaves the caller's ledger available for reuse. The caller keeps that storage
+alive through the region's last use.
 
 The [probe runner](../environments/cortex-m/freestanding.py) copies only its
 declared import closure and records every source hash. Each link accepts the

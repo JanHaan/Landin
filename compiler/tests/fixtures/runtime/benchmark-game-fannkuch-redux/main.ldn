@@ -1,6 +1,7 @@
 --  A direct single-threaded implementation of the Benchmark Game workload.
 --  Its correctness input is seven; the larger performance input is not a gate.
 import core/io
+import core/io/hosted
 
 score: type = struct
     checksum: i32
@@ -71,7 +72,7 @@ fannkuch: () -> (result: score) =
     end loop
 end fannkuch
 
-write_u32: (inout host: io.system, stream: io.file, value: u32)
+write_u32: (inout host: hosted.system, stream: io.file, value: u32)
            -> none ! io.io_failed =
     mut digits: [10]u8 = zeroed
     mut start: usize = lenof digits
@@ -86,7 +87,7 @@ write_u32: (inout host: io.system, stream: io.file, value: u32)
     try io.write(host, stream, output)
 end write_u32
 
-write_score: (inout host: io.system, value: score)
+write_score: (inout host: hosted.system, value: score)
              -> none ! io.io_failed =
     stream: io.file = io.out(host)
     try write_u32(host, stream, u32(value.checksum))
@@ -97,7 +98,7 @@ end write_score
 
 public main: () -> (code: i32) =
     value: score = fannkuch()
-    mut host := io.host()
+    mut host := hosted.host()
     write_score(host, value) else (problem)
         _ = problem
         code = 1

@@ -3,6 +3,7 @@
 --  scripts return values and checks every offered address, extent and byte.
 
 import core/io
+import core/io/hosted
 
 extern(c) r440_errno_select: (scenario: i32) -> none
 extern(c) r440_errno_check: (scenario: i32) -> (fault: i32)
@@ -15,7 +16,7 @@ payload: [6]u8 = [10, 20, 30, 40, 50, 60]
 
 public main: () -> (code: i32) =
     code = 1
-    mut state: io.system = io.host()
+    mut state: hosted.system = hosted.host()
 
     --  A read-only open retries EINTR with the identical path and flags.  The
     --  successful retry leaves no stale detail, and its fake handle is closed.
@@ -24,7 +25,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when io.last_errno(state) <> 0
+    return when hosted.last_errno(state) <> 0
     io.close(state, read_file) else (problem)
         _ = problem
         return
@@ -39,7 +40,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when io.last_errno(state) <> 0
+    return when hosted.last_errno(state) <> 0
     io.close(state, write_file) else (problem)
         _ = problem
         return
@@ -67,7 +68,7 @@ public main: () -> (code: i32) =
         end
     return when eof_count <> 0 or received[0] <> 65 or received[1] <> 66
       or received[2] <> 67 or received[3] <> 0
-      or io.last_errno(state) <> 0 or r440_errno_check(3) <> 0
+      or hosted.last_errno(state) <> 0 or r440_errno_check(3) <> 0
 
     --  A completed prefix advances exactly once.  EINTR retries only the same
     --  remaining suffix, and subsequent short success advances within it.
@@ -78,7 +79,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when io.last_errno(state) <> 0 or r440_errno_check(4) <> 0
+    return when hosted.last_errno(state) <> 0 or r440_errno_check(4) <> 0
 
     --  close is not retry-safe.  EINTR is terminal, its detail is four, and C
     --  must observe exactly one call even though the consumed handle may be gone.
@@ -87,7 +88,7 @@ public main: () -> (code: i32) =
     close_stream: io.file = io.out(state)
     mut close_failed: bool = false
     io.close(state, close_stream) else (problem)
-        close_failed = problem == io.io_failed and io.last_errno(state) == 4
+        close_failed = problem == io.io_failed and hosted.last_errno(state) == 4
     end
     return when not close_failed or r440_errno_check(5) <> 0
 
@@ -101,7 +102,7 @@ public main: () -> (code: i32) =
     terminal_count: usize = io.read
         (state, terminal_stream, terminal_bytes[0..<2]) else (problem)
             terminal_failed = problem == io.io_failed
-              and io.last_errno(state) == 5
+              and hosted.last_errno(state) == 5
             0
         end
     return when not terminal_failed or terminal_count <> 0
@@ -116,14 +117,14 @@ public main: () -> (code: i32) =
     zero_stream: io.file = io.out(state)
     mut zero_failed: bool = false
     io.write(state, zero_stream, payload[0..<6]) else (problem)
-        zero_failed = problem == io.io_failed and io.last_errno(state) == 0
+        zero_failed = problem == io.io_failed and hosted.last_errno(state) == 0
     end
     return when not zero_failed
     io.write(state, zero_stream, payload[0..<0]) else (problem)
         _ = problem
         return
     end
-    return when io.last_errno(state) <> 0 or r440_errno_check(7) <> 0
+    return when hosted.last_errno(state) <> 0 or r440_errno_check(7) <> 0
 
     --  Capture the terminal write detail before cleanup.  The successful close
     --  deliberately dirties C errno and clears provider detail; the copied EIO
@@ -135,7 +136,7 @@ public main: () -> (code: i32) =
     mut write_failed: bool = false
     io.write(state, cleanup_stream, payload[0..<6]) else (problem)
         if problem == io.io_failed then
-            original = io.last_errno(state)
+            original = hosted.last_errno(state)
             r440_errno_record(original)
             write_failed = true
         end if
@@ -145,7 +146,7 @@ public main: () -> (code: i32) =
         _ = problem
         return
     end
-    return when original <> 5 or io.last_errno(state) <> 0
+    return when original <> 5 or hosted.last_errno(state) <> 0
       or r440_errno_check(8) <> 0
 
     code = 42

@@ -7,6 +7,9 @@
 int landin_binding_receive_handler(int count, int i1, int i2, int i3, int i4, double d1, double d2, double d3, double d4, double d5, double d6, double d7, double d8, double d9, double d10, long l1, long l2);
 void * landin_r440_bindings_binding_borrow_callback_cell_allocate(void);
 void landin_r440_bindings_binding_borrow_callback_cell_release(void *cell_);
+void landin_r440_bindings_binding_borrow_callback_cell_initialize(void *cell_);
+__SIZE_TYPE__ landin_r440_bindings_binding_borrow_callback_cell_size(void);
+__SIZE_TYPE__ landin_r440_bindings_binding_borrow_callback_cell_alignment(void);
 void landin_r440_bindings_binding_borrow_callback_cell_clear(void *cell_);
 void landin_r440_bindings_binding_borrow_callback_cell_set(void *cell_, binding_borrow_callback value_);
 _Bool landin_r440_bindings_binding_borrow_callback_cell_present(const void *cell_);
@@ -14,6 +17,9 @@ binding_borrow_callback landin_r440_bindings_binding_borrow_callback_cell_access
 _Bool landin_r440_bindings_binding_borrow_callback_cell_invoke(const void *cell_, const int *argument_1, const int **result);
 void * landin_r440_bindings_binding_callback_cell_allocate(void);
 void landin_r440_bindings_binding_callback_cell_release(void *cell_);
+void landin_r440_bindings_binding_callback_cell_initialize(void *cell_);
+__SIZE_TYPE__ landin_r440_bindings_binding_callback_cell_size(void);
+__SIZE_TYPE__ landin_r440_bindings_binding_callback_cell_alignment(void);
 void landin_r440_bindings_binding_callback_cell_clear(void *cell_);
 void landin_r440_bindings_binding_callback_cell_set(void *cell_, binding_callback value_);
 _Bool landin_r440_bindings_binding_callback_cell_present(const void *cell_);

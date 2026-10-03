@@ -1,10 +1,11 @@
 import core/io
+import core/io/hosted
 import core/diag
 import core/heap
 import core/region
 
 public entry: () -> (code: i32) =
-    mut host := io.host()
+    mut host := hosted.host()
     world: any io.world = any(addr host)
     mut heap := heap.host()
     mut program := region.new_region(addr heap)

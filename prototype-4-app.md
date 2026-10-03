@@ -79,7 +79,7 @@ contracts. The complete derived hosted application is
 `config` and the command-line root to their executable sources and support.
 
 At the system boundary D207 keeps errno in the explicit provider state,
-readable through `io.last_errno`, rather than adding payloads to these atoms.
+readable through `hosted.last_errno`, rather than adding payloads to these atoms.
 Capture follows the failing libc operation before another host call. Safe
 no-progress EINTR attempts may retry open/read/write, preserving completed
 transfers; close consumes its handle once even when it fails and is not
@@ -655,11 +655,11 @@ end on_progress
 Hosted entry. The sketch names its argument adapter `io.args`; the complete
 derivative uses the supplied world's `argument_count` and `argument` entries,
 then copies their bytes through `io.copy_argument` into initialized storage.
-Its hosted `entry` routine is the only place that acquires the heap and system
-world. No uninitialized view constructor is implied.
+Its hosted `entry` routine imports `core/io/hosted` and is the only place
+that acquires the heap and system world. No uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
-    mut h := io.host()
+    mut h := hosted.host()
     mut w := any(addr h)
 
     begin
@@ -761,7 +761,7 @@ W1  RESOLVED at 0.0.13, and it did more than fill a gap: it made an
 existing principle honest. [1680] said a function given no
 allocator cannot allocate, enforced by nothing more exotic than
 an argument list. That claimed more than the language delivers,
-because any function can reach for a root — io.host() here, or
+because any function can reach for a root — hosted.host() here, or
 ptr(0x4002_0000) in a driver. So the principle now says it
 exactly: below a root the argument list is the whole
 enforcement, the roots are two and both nameable, and at those
@@ -780,7 +780,7 @@ The original finding, for the record.
 
 Where a capability comes from. Every capability here is passed in
 from somewhere — the allocator, the Io, the diagnostics sink.
-Follow the chain up and it ends at main, where io.host() mints one
+Follow the chain up and it ends at main, where hosted.host() mints one
 out of nothing. That call is the whole testability story of the
 language in a single line, and the tour never mentions it.
 

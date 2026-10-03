@@ -1,6 +1,7 @@
 import core/io
+import core/io/hosted
 
-bad: (inout state: io.system, opened: io.file)
+bad: (inout state: hosted.system, opened: io.file)
      -> none ! io.io_failed =
     mut byte: [1]u8 = zeroed
     try io.close(state, opened)

@@ -1,5 +1,6 @@
 import core/panic
 import core/io
+import core/io/hosted
 
 extern(c) record: (kind: u32, site: u32) -> none
 extern(c) finish: () -> noreturn
@@ -43,7 +44,7 @@ public extern(c) run_path: (mode: u32, value: i32) -> none =
     elsif mode == 6 then
         wrongly_returns()
     elsif mode == 10 then
-        _ = io.host()
+        _ = hosted.host()
     elsif mode == 11 then
         address: ptr u32 = ptr(usize(value))
         _ = address.val

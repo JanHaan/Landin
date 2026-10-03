@@ -1,9 +1,10 @@
 import core/io
+import core/io/hosted
 
-extern(c) c_replace_root: (state: ptr io.system) -> none
+extern(c) c_replace_root: (state: ptr hosted.system) -> none
 
 public extern(c) l_root: () -> (count: usize) =
-    state: io.system = io.host()
+    state: hosted.system = hosted.host()
     c_replace_root(addr state)
     count = io.argument_count(state)
 end l_root

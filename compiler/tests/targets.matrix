@@ -1745,6 +1745,7 @@ runtime/r420-map-reference-providers | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-delivery | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-world | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-memory-world-boundaries | linux-x86-64, linux-arm64, macos-arm64
+runtime/r420-memory-world-cortex | linux-x86-64, linux-arm64, macos-arm64, cortex-m
 runtime/r420-object-buffer-providers | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-pool-provider | linux-x86-64, linux-arm64, macos-arm64
 runtime/r420-reader-cleanup | linux-x86-64, linux-arm64, macos-arm64
@@ -1907,6 +1908,7 @@ runtime/reference-place-assignment-order | linux-x86-64, linux-arm64, macos-arm6
 runtime/reference-place-bounds-before-rhs | linux-x86-64, linux-arm64, macos-arm64
 runtime/reference-place-update-recovery | linux-x86-64, linux-arm64, macos-arm64
 runtime/reference-place-updates | linux-x86-64, linux-arm64, macos-arm64
+runtime/region-bounded-pool | linux-x86-64, linux-arm64, macos-arm64
 runtime/run-length-encoding | linux-x86-64, linux-arm64, macos-arm64
 runtime/scalar-selection-copies | linux-x86-64, linux-arm64, macos-arm64
 runtime/scalar-subobject-zeroed-assignment-clears-values | linux-x86-64, linux-arm64, macos-arm64

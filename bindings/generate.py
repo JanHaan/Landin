@@ -1853,6 +1853,9 @@ class Generator:
 
         allocate = self.c_symbol(c_name, "cell_allocate")
         release = self.c_symbol(c_name, "cell_release")
+        initialize = self.c_symbol(c_name, "cell_initialize")
+        size_name = self.c_symbol(c_name, "cell_size")
+        align_name = self.c_symbol(c_name, "cell_alignment")
         clear = self.c_symbol(c_name, "cell_clear")
         set_name = self.c_symbol(c_name, "cell_set")
         present = self.c_symbol(c_name, "cell_present")
@@ -1865,6 +1868,12 @@ class Generator:
         self.add_c_function("void *", allocate, [],
                             [f"return calloc(1, sizeof(struct {struct_name}));"])
         self.add_c_function("void", release, [f"void *{cell}"], [f"free({cell});"])
+        self.add_c_function("void", initialize, [f"void *{cell}"],
+                            [f"((struct {struct_name} *){cell})->value = 0;"])
+        self.add_c_function("__SIZE_TYPE__", size_name, [],
+                            [f"return sizeof(struct {struct_name});"])
+        self.add_c_function("__SIZE_TYPE__", align_name, [],
+                            [f"return _Alignof(struct {struct_name});"])
         self.add_c_function("void", clear, [f"void *{cell}"],
                             [f"((struct {struct_name} *){cell})->value = 0;"])
         self.add_c_function("void", set_name, [f"void *{cell}", f"{c_name} {value}"],
@@ -1907,6 +1916,9 @@ class Generator:
         declarations = [
             self.ldn_extern(allocate, f"{stem}_allocate", [], f"(cell: {optional.name})"),
             self.ldn_extern(release, f"{stem}_release", ["cell: ptr mut u8"], "none"),
+            self.ldn_extern(initialize, f"{stem}_initialize", ["cell: ptr mut u8"], "none"),
+            self.ldn_extern(size_name, f"{stem}_size", [], "(size: usize)"),
+            self.ldn_extern(align_name, f"{stem}_alignment", [], "(alignment: usize)"),
             self.ldn_extern(clear, f"{stem}_clear", ["cell: ptr mut u8"], "none"),
             self.ldn_extern(set_name, f"{stem}_set", ["cell: ptr mut u8", f"escaping value: {l_name}"], "none"),
             self.ldn_extern(present, f"{stem}_present", ["cell: ptr u8"], "(present: bool)"),
@@ -1914,8 +1926,9 @@ class Generator:
             self.ldn_extern(invoke, f"{stem}_invoke", ldn_invoke_params, "(invoked: bool)"),
         ]
         self.ldn_declarations.extend(declarations)
-        return {"allocate": allocate, "release": release, "clear": clear, "set": set_name,
-                "present": present, "access": access, "invoke": invoke}
+        return {"allocate": allocate, "release": release, "initialize": initialize,
+                "size": size_name, "alignment": align_name, "clear": clear,
+                "set": set_name, "present": present, "access": access, "invoke": invoke}
 
     def add_c_function(self, result: str, name: str, parameters: list[str], body: list[str]) -> None:
         self.c_functions.append(CFunction(result, name, parameters, body))

@@ -1,12 +1,14 @@
 --  A caller-backed reclaiming allocator.  Unlike core/mem's arena, every
---  successful allocation owns one uniform slot which free can return to the
---  lowest-index-first scan.  No operation imports or falls back to a heap.
+--  successful allocation owns one uniform slot. Free indices form a min heap
+--  in caller-supplied metadata for lowest-index reuse. No operation imports
+--  or falls back to a backing allocator.
 
 import core/mem
 
 public slot: type = struct
     occupied: bool
     size: usize
+    free_index: usize
 end slot
 
 fixed_pool: type = struct
@@ -18,6 +20,7 @@ fixed_pool: type = struct
     slot_alignment: usize
     first_offset: usize
     stride: usize
+    free_count: usize
     allocations: usize
     frees: usize
     live_count: usize
@@ -105,7 +108,8 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
 
     mut index: usize = 0
     while index < slot_count do
-        bookkeeping[index] = (occupied: false, size: 0)
+        bookkeeping[index] = (occupied: false, size: 0,
+                              free_index: index)
         inc index
     end while
 
@@ -113,7 +117,7 @@ public over: (base: ptr mut u8, extent: usize, slot_size: usize,
              slot_count: slot_count,
              bookkeeping: bookkeeping,
              slot_alignment: normalized_alignment,
-             first_offset: offset, stride: step,
+             first_offset: offset, stride: step, free_count: slot_count,
              allocations: 0, frees: 0, live_count: 0,
              rejected_frees: 0)
 end over
@@ -126,12 +130,30 @@ pool_alloc: (inout state: fixed_pool,
         fail mem.out_of_memory when state.slot_alignment % alignment <> 0
     end if
 
-    mut index: usize = 0
-    while index < state.slot_count do
-        break when not state.bookkeeping[index].occupied
-        inc index
-    end while
-    fail mem.out_of_memory when index == state.slot_count
+    fail mem.out_of_memory when state.free_count == 0
+    index: usize = state.bookkeeping[0].free_index
+    dec state.free_count
+    if state.free_count > 0 then
+        last: usize = state.bookkeeping[state.free_count].free_index
+        mut position: usize = 0
+        while position < state.free_count / 2 do
+            child: usize = position * 2 + 1
+            mut smallest: usize = child
+            if child + 1 < state.free_count
+              and state.bookkeeping[child + 1].free_index
+                  < state.bookkeeping[child].free_index
+            then
+                smallest = child + 1
+            end if
+            if last <= state.bookkeeping[smallest].free_index then
+                break
+            end if
+            state.bookkeeping[position].free_index =
+                state.bookkeeping[smallest].free_index
+            position = smallest
+        end while
+        state.bookkeeping[position].free_index = last
+    end if
     distance: usize = index * state.stride
     address: usize = usize(state.base) + state.first_offset + distance
     block = ptr(address)
@@ -143,29 +165,48 @@ end pool_alloc
 
 pool_free: (inout state: fixed_pool,
             block: ptr mut u8, size: usize) -> none =
-    mut accepted: bool = false
-    mut at: usize = 0
-    while at < state.slot_count do
-        distance: usize = at * state.stride
-        address: usize = usize(state.base) + state.first_offset + distance
-        if usize(block) == address then
-            if state.bookkeeping[at].occupied
-              and state.bookkeeping[at].size == size
-            then
-                state.bookkeeping[at].occupied = false
-                state.bookkeeping[at].size = 0
-                accepted = true
-            end if
+    if state.slot_count == 0 then
+        inc state.rejected_frees
+        return
+    end if
+    first_address: usize = usize(state.base) + state.first_offset
+    address: usize = usize(block)
+    if address < first_address then
+        inc state.rejected_frees
+        return
+    end if
+    distance: usize = address - first_address
+    if distance % state.stride <> 0 then
+        inc state.rejected_frees
+        return
+    end if
+    index: usize = distance / state.stride
+    if index >= state.slot_count then
+        inc state.rejected_frees
+        return
+    end if
+    if not state.bookkeeping[index].occupied
+      or state.bookkeeping[index].size <> size then
+        inc state.rejected_frees
+        return
+    end if
+
+    state.bookkeeping[index].occupied = false
+    state.bookkeeping[index].size = 0
+    mut position: usize = state.free_count
+    while position > 0 do
+        parent: usize = (position - 1) / 2
+        if state.bookkeeping[parent].free_index <= index then
             break
         end if
-        inc at
+        state.bookkeeping[position].free_index =
+            state.bookkeeping[parent].free_index
+        position = parent
     end while
-    if accepted then
-        inc state.frees
-        dec state.live_count
-    else
-        inc state.rejected_frees
-    end if
+    state.bookkeeping[position].free_index = index
+    inc state.free_count
+    inc state.frees
+    dec state.live_count
 end pool_free
 
 fixed_pool is mem.allocator (alloc: pool_alloc, free: pool_free)

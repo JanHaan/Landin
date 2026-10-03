@@ -207,6 +207,29 @@ int main(void)
     }
     landin_r440_bindings_binding_callback_cell_release(cell);
 
+    union { binding_callback align; unsigned char bytes[64]; } fixed_cell;
+    if (landin_r440_bindings_binding_callback_cell_size() >
+            sizeof(fixed_cell.bytes) ||
+        landin_r440_bindings_binding_callback_cell_alignment() !=
+            _Alignof(binding_callback)) {
+        return 26;
+    }
+    cell = fixed_cell.bytes;
+    landin_r440_bindings_binding_callback_cell_initialize(cell);
+    if (landin_r440_bindings_binding_callback_cell_present(cell)) {
+        return 27;
+    }
+    landin_r440_bindings_binding_callback_cell_set(cell, plus_three);
+    if (!landin_r440_bindings_binding_callback_cell_invoke(
+            cell, 8, &callback_result) || callback_result != 11 ||
+        landin_r440_bindings_binding_call_optional_call(cell, 10) != 13) {
+        return 28;
+    }
+    landin_r440_bindings_binding_callback_cell_initialize(cell);
+    if (landin_r440_bindings_binding_callback_cell_present(cell)) {
+        return 29;
+    }
+
     int *main_tls_address =
         landin_r440_bindings_binding_tls_counter_address();
     if (*main_tls_address != 17) {

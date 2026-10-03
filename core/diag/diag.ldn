@@ -119,57 +119,21 @@ public streaming: type = streaming_value
 warning_prefix: [2]u8 = [87, 58]
 error_prefix: [2]u8 = [69, 58]
 separator: [1]u8 = [58]
-digit_0: [1]u8 = [48]
-digit_1: [1]u8 = [49]
-digit_2: [1]u8 = [50]
-digit_3: [1]u8 = [51]
-digit_4: [1]u8 = [52]
-digit_5: [1]u8 = [53]
-digit_6: [1]u8 = [54]
-digit_7: [1]u8 = [55]
-digit_8: [1]u8 = [56]
-digit_9: [1]u8 = [57]
-
-write_digit: (state: any io.world, where_to: io.file, digit: usize)
-             -> none ! io.io_failed =
-    if digit == 0 then
-        try state.write(where_to, digit_0[0..<1])
-    end if
-    if digit == 1 then
-        try state.write(where_to, digit_1[0..<1])
-    end if
-    if digit == 2 then
-        try state.write(where_to, digit_2[0..<1])
-    end if
-    if digit == 3 then
-        try state.write(where_to, digit_3[0..<1])
-    end if
-    if digit == 4 then
-        try state.write(where_to, digit_4[0..<1])
-    end if
-    if digit == 5 then
-        try state.write(where_to, digit_5[0..<1])
-    end if
-    if digit == 6 then
-        try state.write(where_to, digit_6[0..<1])
-    end if
-    if digit == 7 then
-        try state.write(where_to, digit_7[0..<1])
-    end if
-    if digit == 8 then
-        try state.write(where_to, digit_8[0..<1])
-    end if
-    if digit == 9 then
-        try state.write(where_to, digit_9[0..<1])
-    end if
-end write_digit
 
 write_position: (state: any io.world, where_to: io.file, value: usize)
                 -> none ! io.io_failed =
-    if value >= 10 then
-        try write_position(state, where_to, value / 10)
-    end if
-    try write_digit(state, where_to, value % 10)
+    --  Twenty bytes hold every decimal digit of a 64-bit usize.  Build
+    --  backwards so the provider receives exactly one position slice.
+    mut digits: [20]u8 = zeroed
+    mut start: usize = lenof digits
+    mut remaining: usize = value
+    loop do
+        dec start
+        digits[start] = u8(remaining % 10) + 48
+        remaining /= 10
+        break when remaining == 0
+    end loop
+    try state.write(where_to, digits[start..<lenof digits])
 end write_position
 
 public to: (state: ptr any io.world, where_to: ptr io.file)

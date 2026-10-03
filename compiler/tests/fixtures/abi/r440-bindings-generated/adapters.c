@@ -34,6 +34,21 @@ void landin_r440_bindings_binding_borrow_callback_cell_release(void *cell_)
     free(cell_);
 }
 
+void landin_r440_bindings_binding_borrow_callback_cell_initialize(void *cell_)
+{
+    ((struct landin_r440_bindings_binding_borrow_callback_cell_type *)cell_)->value = 0;
+}
+
+__SIZE_TYPE__ landin_r440_bindings_binding_borrow_callback_cell_size(void)
+{
+    return sizeof(struct landin_r440_bindings_binding_borrow_callback_cell_type);
+}
+
+__SIZE_TYPE__ landin_r440_bindings_binding_borrow_callback_cell_alignment(void)
+{
+    return _Alignof(struct landin_r440_bindings_binding_borrow_callback_cell_type);
+}
+
 void landin_r440_bindings_binding_borrow_callback_cell_clear(void *cell_)
 {
     ((struct landin_r440_bindings_binding_borrow_callback_cell_type *)cell_)->value = 0;
@@ -71,6 +86,21 @@ void * landin_r440_bindings_binding_callback_cell_allocate(void)
 void landin_r440_bindings_binding_callback_cell_release(void *cell_)
 {
     free(cell_);
+}
+
+void landin_r440_bindings_binding_callback_cell_initialize(void *cell_)
+{
+    ((struct landin_r440_bindings_binding_callback_cell_type *)cell_)->value = 0;
+}
+
+__SIZE_TYPE__ landin_r440_bindings_binding_callback_cell_size(void)
+{
+    return sizeof(struct landin_r440_bindings_binding_callback_cell_type);
+}
+
+__SIZE_TYPE__ landin_r440_bindings_binding_callback_cell_alignment(void)
+{
+    return _Alignof(struct landin_r440_bindings_binding_callback_cell_type);
 }
 
 void landin_r440_bindings_binding_callback_cell_clear(void *cell_)
