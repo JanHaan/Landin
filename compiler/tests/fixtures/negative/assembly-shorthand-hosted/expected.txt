@@ -1,4 +1,4 @@
-error[L0301]: the positional u32 shorthand names Cortex-M0's r0; write a named operand
+error[L0330]: the positional u32 shorthand names Cortex-M0's r0; write a named operand
   --> ../tests/fixtures/negative/assembly-shorthand-hosted/program.ldn:2:9
   |
 2 |     r = assembler.block("addl $7, %eax", value)

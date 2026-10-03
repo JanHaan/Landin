@@ -1,7 +1,7 @@
 class: negative
 summary: a break naming a labelled bare block cannot carry a value because the block is a statement
 program: program.ldn
-codes: L0301
+codes: L0332
 constructs: 1090, 1180, 1190
 targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt

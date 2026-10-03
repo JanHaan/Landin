@@ -12,7 +12,7 @@ error[L0304]: a counted repetition infers only a scalar element
   |                  ^^^^^
   = note: the tour describes it at [0520]
   = note: this is a recorded source-form boundary
-error[L0301]: this hands back nothing, so it cannot supply an array element type
+error[L0331]: this hands back nothing, so it cannot supply an array element type
   --> ../tests/fixtures/negative/r491-inferred-repetition-refusals/main.ldn:13:18
    |
 13 |     row := [2 of noop()]

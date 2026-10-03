@@ -1,4 +1,4 @@
-error[L0301]: this iterable evidence does not implement [1320]'s exact call contract
+error[L0348]: this iterable evidence does not implement [1320]'s exact call contract
   --> ../tests/fixtures/negative/r491-iterable-contract/main.ldn:16:20
    |
 16 |     for element in source do

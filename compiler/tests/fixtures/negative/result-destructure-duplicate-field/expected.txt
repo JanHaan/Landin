@@ -1,4 +1,4 @@
-error[L0301]: this returned field is bound twice
+error[L0331]: this returned field is bound twice
   --> ../tests/fixtures/negative/result-destructure-duplicate-field/program.ldn:6:19
   |
 6 |     (left: first, left: second) := pair()

@@ -2,7 +2,7 @@ class: negative
 summary: destructuring requires an anonymous multiple-result aggregate
 constructs: 0920, 0990, 1810, 1920
 program: program.ldn
-codes: L0301
+codes: L0331
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/result-destructure-needs-multiple/program.ldn

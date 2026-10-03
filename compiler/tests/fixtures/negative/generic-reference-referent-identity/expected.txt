@@ -1,4 +1,4 @@
-error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+error[L0340]: this argument deduces a different type descriptor for repeated formal `t`
   --> ../tests/fixtures/negative/generic-reference-referent-identity/program.ldn:10:16
    |
 10 |     same(left, right)

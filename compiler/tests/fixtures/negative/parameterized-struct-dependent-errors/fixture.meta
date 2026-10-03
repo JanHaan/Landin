@@ -3,4 +3,4 @@ summary: atom-array shapes are admitted but each module value needs an atom init
 constructs: 0520, 0640, 0670, 1350, 1795
 program: program.ldn
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301, L0301
+codes: L0328, L0328

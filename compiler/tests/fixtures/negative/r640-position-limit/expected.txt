@@ -1,4 +1,4 @@
-error[L0301]: bit positions must form an ascending range within 0..63
+error[L0336]: bit positions must form an ascending range within 0..63
   --> ../tests/fixtures/negative/r640-position-limit/program.ldn:2:5
   |
 2 |     value: bool at 64

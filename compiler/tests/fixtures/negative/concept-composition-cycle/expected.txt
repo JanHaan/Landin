@@ -1,4 +1,4 @@
-error[L0301]: this concept composition returns to a concept already being composed
+error[L0341]: this concept composition returns to a concept already being composed
   --> ../tests/fixtures/negative/concept-composition-cycle/main.ldn:4:36
   |
 4 | right: type = concept (t: type) is left

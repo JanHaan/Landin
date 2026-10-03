@@ -1,4 +1,4 @@
-error[L0301]: a packed field requires `at`
+error[L0336]: a packed field requires `at`
   --> ../tests/fixtures/negative/r640-missing-position/program.ldn:2:5
   |
 2 |     value: u8

@@ -1,4 +1,4 @@
-error[L0301]: a packed field has no independent address for an inout parameter
+error[L0336]: a packed field has no independent address for an inout parameter
   --> ../tests/fixtures/negative/r640-inout/program.ldn:7:9
   |
 7 |     set(x.value)

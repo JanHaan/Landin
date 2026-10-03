@@ -1,4 +1,4 @@
-error[L0301]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+error[L0337]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
   --> ../tests/fixtures/negative/sink-through-dereference/program.ldn:6:13
   |
 6 |     consume(pointer.val)

@@ -3,7 +3,7 @@ summary: D248's discarded output declares one register it overwrites, so it cann
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-discard-names-register/program.ldn
-codes: L0301
+codes: L0330
 status: 1
 constructs: 1020, 1630
 targets: cortex-m

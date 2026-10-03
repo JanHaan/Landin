@@ -1,4 +1,4 @@
-error[L0301]: register contract forbids this read
+error[L0344]: register contract forbids this read
   --> ../tests/fixtures/negative/r640-register-no-read/program.ldn:8:9
   |
 8 |     _ = compiler.register_read(p, compiler.no_read)

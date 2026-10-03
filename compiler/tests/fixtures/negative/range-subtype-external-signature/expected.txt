@@ -1,4 +1,4 @@
-error[L0301]: this signature is not representable by the selected target's native C ABI
+error[L0346]: this signature is not representable by the selected target's native C ABI
   --> ../tests/fixtures/negative/range-subtype-external-signature/program.ldn:3:1
   |
 3 | extern (c) clamp: (v: percent) -> (r: percent)

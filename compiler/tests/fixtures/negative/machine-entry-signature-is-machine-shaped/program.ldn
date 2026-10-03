@@ -1,0 +1,3 @@
+--  [1570]: the machine convention takes the Cortex-M0 machine-entry shape,
+--  a nongeneric `() -> none` signature without errors.
+extern(interrupt) tick: (count: u32) -> none = end tick

@@ -1,4 +1,4 @@
-error[L0301]: a discarded output names the register it overwrites
+error[L0330]: a discarded output names the register it overwrites
   --> ../tests/fixtures/negative/assembly-discard-names-register/program.ldn:2:45
   |
 2 |     assembler.block("movs r1, #1", out _ at general)

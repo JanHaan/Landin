@@ -1,4 +1,4 @@
-error[L0301]: the bit range must hold a whole number of packed array elements
+error[L0336]: the bit range must hold a whole number of packed array elements
   --> ../tests/fixtures/negative/r640-array-span/program.ldn:2:5
   |
 2 |     value: [3]u2 at 0..4

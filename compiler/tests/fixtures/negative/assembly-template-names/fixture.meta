@@ -3,7 +3,7 @@ summary: D248's text names operands as {name}: an unknown slot, a stray brace, a
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-template-names/program.ldn
-codes: L0301, L0301, L0301, L0301
+codes: L0330, L0330, L0330, L0330
 status: 1
 constructs: 1630
 targets: cortex-m

@@ -3,7 +3,7 @@ summary: The synthetic target has no registers, so D248 refuses every assembly b
 program: program.ldn
 expect: expected.txt
 args: --target=synthetic-32 ../tests/fixtures/negative/assembly-synthetic-target/program.ldn
-codes: L0301
+codes: L0330
 status: 1
 constructs: 1630, 1990
 targets: synthetic-32

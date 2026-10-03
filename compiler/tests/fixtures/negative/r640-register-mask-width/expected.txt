@@ -1,4 +1,4 @@
-error[L0301]: register mask must fit its carrier
+error[L0344]: register mask must fit its carrier
   --> ../tests/fixtures/negative/r640-register-mask-width/program.ldn:8:5
   |
 8 |     compiler.register_write(p, 0, compiler.normal_write, compiler.write_zero, 0x1_0000_0000)

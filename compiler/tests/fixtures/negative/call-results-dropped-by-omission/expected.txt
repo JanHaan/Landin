@@ -1,4 +1,4 @@
-error[L0301]: this hands back a result, and a call standing alone would drop it; discard it with `_ =`
+error[L0331]: this hands back a result, and a call standing alone would drop it; discard it with `_ =`
   --> ../tests/fixtures/negative/call-results-dropped-by-omission/program.ldn:6:5
   |
 6 |     split()

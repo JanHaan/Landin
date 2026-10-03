@@ -3,7 +3,7 @@ summary: [1930] discarding is for a result, and a call of a function returning n
 constructs: 1020, 1930
 program: program.ldn
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301
+codes: L0331
 expect: expected.txt
 args: ../tests/fixtures/negative/discard-of-nothing/program.ldn
 status: 1

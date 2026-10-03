@@ -3,7 +3,7 @@ summary: D248 never names arm64's frame, link or platform register or its callee
 program: program.ldn
 expect: expected.txt
 args: --target=darwin-arm64 ../tests/fixtures/negative/assembly-reserved-registers-arm64/program.ldn
-codes: L0301, L0301, L0301, L0301
+codes: L0330, L0330, L0330, L0330
 status: 1
 constructs: 1630, 1990
 targets: macos-arm64

@@ -1,4 +1,4 @@
-error[L0301]: this call cannot fail, so it has no error for `else` to handle
+error[L0329]: this call cannot fail, so it has no error for `else` to handle
   --> ../tests/fixtures/negative/recover-infallible-call/program.ldn:6:20
   |
 6 |     value = leaf() else 2

@@ -350,11 +350,11 @@ def failures(parent, refine):
         ('bounded-materialization', 'link(keep) image: [8388609]u8 = [of 1]', 'L0505', '8 MiB'),
         ('missing-symbol', 'link(keep) extern(naked) h: () -> none = assembler.block("bl missing_firmware_symbol") end h', 'L0501', 'missing_firmware_symbol'),
         ('unsupported-encoding', 'link(keep) h: () -> none = assembler.block("ldr r0, [r1, #4096]") end h', 'L0501', 'firmware assembly failed'),
-        ('reserved-instruction', 'h: () -> none = assembler.block("ldrex r0, [r1]") end h', 'L0301', 'M0 instructions'),
-        ('misplaced-vector', 'link(section: ".isr_vector", keep) image: [48]u32 = zeroed', 'L0301', 'placement'),
-        ('owned-reset-vector', 'link(vector: 1) extern(interrupt) h: () -> none = end h', 'L0301', 'placement'),
+        ('reserved-instruction', 'h: () -> none = assembler.block("ldrex r0, [r1]") end h', 'L0330', 'M0 instructions'),
+        ('misplaced-vector', 'link(section: ".isr_vector", keep) image: [48]u32 = zeroed', 'L0347', 'placement'),
+        ('owned-reset-vector', 'link(vector: 1) extern(interrupt) h: () -> none = end h', 'L0347', 'placement'),
         ('invalid-entry', 'start: (value: u32) -> none = end start', 'L0502', 'firmware-entry'),
-        ('reserved-symbol', 'link(symbol: "_landin_firmware_reset") value: u32 = 1', 'L0301', 'datum symbol'),
+        ('reserved-symbol', 'link(symbol: "_landin_firmware_reset") value: u32 = 1', 'L0347', 'datum symbol'),
     ]
     for name, program, code, detail in cases:
         out = parent.out / name

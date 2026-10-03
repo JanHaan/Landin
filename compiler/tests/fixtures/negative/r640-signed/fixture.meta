@@ -3,7 +3,7 @@ summary: packed representation refusal signed
 program: program.ldn
 constructs: 0730, 0750
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301
+codes: L0336
 args: ../tests/fixtures/negative/r640-signed/program.ldn
 expect: expected.txt
 status: 1

@@ -1,10 +1,10 @@
-error[L0301]: this block asks `general` for 8 registers, and cortex-m0 has 7 left for it
+error[L0330]: this block asks `general` for 8 registers, and cortex-m0 has 7 left for it
   --> ../tests/fixtures/negative/assembly-general-exhausted/program.ldn:2:5
   |
 2 |     assembler.block("adds {a}, {b}\nadds {c}, {d}\nadds {e}, {g}\nadds {h}, {i}",
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1990]: `general` chooses from the registers the block does not otherwise name
-error[L0301]: this block asks `general` for 8 registers, and cortex-m0 has 7 left for it
+error[L0330]: this block asks `general` for 8 registers, and cortex-m0 has 7 left for it
   --> ../tests/fixtures/negative/assembly-general-exhausted/program.ldn:10:5
    |
 10 |     assembler.block("movs r1, #0\nadds {a}, {b}\nadds {c}, {d}\nadds {e}, {g}\nadds {h}, {i}",

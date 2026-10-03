@@ -1,4 +1,4 @@
-error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+error[L0340]: this argument deduces a different type descriptor for repeated formal `t`
   --> ../tests/fixtures/negative/generic-routine-inferred-module-conflict/program.ldn:5:23
   |
 5 | result := same(small, wide)

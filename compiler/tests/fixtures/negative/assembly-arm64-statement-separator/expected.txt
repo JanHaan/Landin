@@ -1,4 +1,4 @@
-error[L0301]: assembly directives, comments and statement separators refuse
+error[L0330]: assembly directives, comments and statement separators refuse
   --> ../tests/fixtures/negative/assembly-arm64-statement-separator/program.ldn:2:5
   |
 2 |     assembler.block("nop %% b somewhere")

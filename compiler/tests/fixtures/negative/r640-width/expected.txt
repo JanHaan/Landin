@@ -1,4 +1,4 @@
-error[L0301]: this bit range does not fit the field's value type
+error[L0336]: this bit range does not fit the field's value type
   --> ../tests/fixtures/negative/r640-width/program.ldn:2:5
   |
 2 |     value: u4 at 0..4

@@ -3,7 +3,7 @@ summary: packed representation refusal missing-position
 program: program.ldn
 constructs: 0730, 0750
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301
+codes: L0336
 args: ../tests/fixtures/negative/r640-missing-position/program.ldn
 expect: expected.txt
 status: 1

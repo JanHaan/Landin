@@ -1,4 +1,4 @@
-error[L0301]: this conformance function does not have the concept entry's signature
+error[L0341]: this conformance function does not have the concept entry's signature
   --> ../tests/fixtures/negative/any-provider-result-source-mismatch/main.ldn:20:1
    |
 20 | receiver is lender (take: take_receiver)

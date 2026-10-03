@@ -3,7 +3,7 @@ summary: the report [1580]'s refused categories actually make is a C-signature t
 program: program.ldn
 expect: expected.txt
 args: ../tests/fixtures/negative/r740-c-category-boundary/program.ldn
-codes: L0301
+codes: L0346
 status: 1
 constructs: 0520, 1580
 targets: linux-x86-64, linux-arm64, macos-arm64

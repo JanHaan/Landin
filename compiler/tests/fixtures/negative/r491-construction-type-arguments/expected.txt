@@ -1,4 +1,4 @@
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:8:21
   |
 8 | module_field := box(first: ptr u8, second: 0)
@@ -8,7 +8,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 8 | module_field := box(first: ptr u8, second: 0)
   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:9:35
   |
 9 | module_case: choice = (kind: pair(first: ptr u8, second: 0))
@@ -18,7 +18,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 9 | module_case: choice = (kind: pair(first: ptr u8, second: 0))
   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:10:32
    |
 10 | module_generic := integer_cell(value: ptr u8)
@@ -28,7 +28,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 10 | module_generic := integer_cell(value: ptr u8)
    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:13:28
    |
 13 |     local_field: box = box(first: []u8, second: 0)
@@ -38,7 +38,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 13 |     local_field: box = box(first: []u8, second: 0)
    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:14:38
    |
 14 |     local_case: choice = (kind: pair(first: ptr u8, second: 0))
@@ -48,7 +48,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 14 |     local_case: choice = (kind: pair(first: ptr u8, second: 0))
    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:15:35
    |
 15 |     local_generic := integer_cell(value: ptr u8)
@@ -58,7 +58,7 @@ error[L0301]: a construction field or fill requires a value, not a type argument
 15 |     local_generic := integer_cell(value: ptr u8)
    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the constructed value
   = note: [0720]: a stored field is initialized by a value; static type arguments fill type formals
-error[L0301]: a construction field or fill requires a value, not a type argument
+error[L0334]: a construction field or fill requires a value, not a type argument
   --> ../tests/fixtures/negative/r491-construction-type-arguments/main.ldn:17:23
    |
 17 |     value.kind = pair(first: ptr u8, second: 0)

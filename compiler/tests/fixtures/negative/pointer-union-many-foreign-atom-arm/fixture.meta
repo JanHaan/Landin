@@ -2,7 +2,7 @@ class: negative
 summary: [0480]/[1870] an arm may name only an atom the matched union holds
 constructs: 0480, 0640, 1210
 program: program.ldn
-codes: L0301
+codes: L0333
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-foreign-atom-arm/program.ldn

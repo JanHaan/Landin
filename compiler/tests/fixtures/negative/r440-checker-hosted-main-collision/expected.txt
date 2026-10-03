@@ -1,4 +1,4 @@
-error[L0301]: link symbol `main` collides with the selected native hosted entry
+error[L0347]: link symbol `main` collides with the selected native hosted entry
   --> ../tests/fixtures/negative/r440-checker-hosted-main-collision/program.ldn:4:24
   |
 4 | extern(c) link(symbol: "main") foreign: () -> (value: i32)

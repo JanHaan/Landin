@@ -281,21 +281,21 @@
     "runtime/benchmark-game-fannkuch-redux": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/benchmark-game-fasta": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/benchmark-game-mandelbrot": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -385,7 +385,7 @@
     "runtime/core-io-erased-system": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -401,14 +401,14 @@
     "runtime/core-mem-initialized-objects": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-initialized-prefix": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -416,7 +416,7 @@
       "mode": "refuse",
       "codes": [
         "L0300",
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -428,14 +428,14 @@
     "runtime/core-mem-reference-prefix": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-mem-zero-prefix": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -450,21 +450,21 @@
     "runtime/core-tree-count-overflow": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-tree-indices": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-tree-provider-failures": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -474,28 +474,28 @@
     "runtime/core-vec-used-references": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/core-vec-used-sort": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/cstring-first-nul-validation": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/cstring-traversal-invalid-traps": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -520,7 +520,7 @@
     "runtime/defer-does-not-unwind-traps": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -537,20 +537,20 @@
       "mode": "refuse",
       "reason": "The complete hosted derivative imports core/heap, whose allocator/releaser require extern(c); the freestanding core slice has no such provider. This is not an emulator execution verdict.",
       "codes": [
-        "L0301"
+        "L0346"
       ]
     },
     "runtime/derived-hosted-memory": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/derived-parser": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -560,7 +560,7 @@
     "runtime/diagnostic-loggers-dispatch": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -610,7 +610,7 @@
     "runtime/fizzbuzz": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -747,14 +747,14 @@
       "mode": "refuse",
       "codes": [
         "L0300",
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/hosted-io-reads-parser-input": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -963,7 +963,7 @@
     "runtime/narrow-extern-argument-is-extended": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1054,7 +1054,7 @@
     "runtime/r420-argument-text-worlds": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1069,7 +1069,7 @@
     "runtime/r420-failing-providers": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1097,14 +1097,14 @@
     "runtime/r420-map-operations": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-map-reference-providers": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1131,7 +1131,7 @@
     "runtime/r420-object-buffer-providers": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1143,14 +1143,14 @@
     "runtime/r420-reader-cleanup": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-reference-provider-matrix": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1160,7 +1160,7 @@
     "runtime/r420-small-aggregate": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1177,14 +1177,14 @@
     "runtime/r420-small-vector-providers": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r420-stateful-filter-list": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1222,7 +1222,7 @@
     "runtime/r430-static-library": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1246,7 +1246,7 @@
     "runtime/r440-callback-pointer-witness": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1269,7 +1269,7 @@
     "runtime/r440-errno-detail": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1346,7 +1346,7 @@
     "runtime/r450-optimal-layout-composition": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1391,7 +1391,7 @@
     "runtime/r480-arena-independent-results": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1410,14 +1410,14 @@
     "runtime/r480-hosted-count": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
     "runtime/r480-hosted-text": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },
@@ -1567,7 +1567,7 @@
     "runtime/r630-memory-scalars": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0344"
       ],
       "reason": "D227 and the Cortex-M0 target capabilities refuse M0 RMW and eight-byte memory intrinsics; backend-memory.ldn executes every admitted width/order instead."
     },
@@ -1910,7 +1910,7 @@
     "runtime/undo-does-not-unwind-traps": {
       "mode": "refuse",
       "codes": [
-        "L0301"
+        "L0346"
       ],
       "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
     },

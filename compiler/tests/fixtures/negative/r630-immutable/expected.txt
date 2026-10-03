@@ -1,4 +1,4 @@
-error[L0301]: memory write needs mutable permission
+error[L0344]: memory write needs mutable permission
   --> ../tests/fixtures/negative/r630-immutable/program.ldn:5:5
   |
 5 |     compiler.atomic_store(addr immutable, 1, compiler.release)

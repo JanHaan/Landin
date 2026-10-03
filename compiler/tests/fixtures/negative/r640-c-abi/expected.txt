@@ -1,4 +1,4 @@
-error[L0301]: this signature is not representable by the selected target's native C ABI
+error[L0346]: this signature is not representable by the selected target's native C ABI
   --> ../tests/fixtures/negative/r640-c-abi/program.ldn:4:1
   |
 4 | extern(c) consume: (value: image) -> none

@@ -320,21 +320,17 @@ over: u8 = 300
 
 ### L0301
 
-L0301 is a broad checker refusal, not a promise that two types disagree. The
-checker found an unmet requirement on a type, value, operation, or source
-form. Read the diagnostic's first sentence and rule note together:
-they identify the exact condition. L0301 covers type and shape identity
-[0710], admitted operands [1890], generic deduction [1300], valid aggregate
-and match forms [0720] [0480], reference permissions [0440], control-flow
-values [1190], conversions [0310], and interoperation contracts [1580].
-Change the reported expression or declaration to meet the specific condition
-in its note. A second label, when present, identifies the source of the
-requirement. For a misspelt named argument [0980], the diagnostic may offer
-the intended parameter label as a likely fix.
+A value's type is not the one its context or operation requires [1890], and
+no conversion is implied [0310]. This includes a literal that its context
+cannot type [1880] [0210] [0260], an operator given an operand class it does
+not admit, a struct of another nominal type [0710], an array of another length
+or element type, a function of another signature [1000], or a reference of
+another permission [0440]. The second label shows where the requirement was
+stated. Change the value, or convert it explicitly where a conversion exists.
 
 ```landin
-v: i32 = 1
-n: v = 2
+flag: bool = true
+count: u8 = flag
 ```
 
 ### L0302
@@ -611,10 +607,16 @@ end count_up
 
 ### L0327
 
-A call gives too many or too few runtime arguments, or omits a named required
-parameter [1920]. Supply every runtime parameter exactly once, using its name
-when earlier arguments are named. The second label points to the signature or
-missing parameter.
+A call's arguments do not match what the callee takes [1920]. A runtime
+argument is missing, extra or given twice; a named argument names no
+parameter [0980]; a `caller` parameter is filled other than by forwarding
+another one (D186); a static argument is given where the callee has no static
+formal [1300], or a static formal is used as a runtime value [1290]; a generic
+call gives a different number of arguments than its template (D138); or a
+conversion is not given exactly one value [0700]. Supply every parameter
+exactly once, in the callee's declared form. The second label points to the
+signature or parameter. When a named argument names no parameter, the
+diagnostic offers the parameter label near it as a likely fix.
 
 ```landin
 add: (a: i32, b: i32) -> (r: i32) = a + b end add
@@ -623,11 +625,14 @@ f: () -> (r: i32) = add(a: 1) end f
 
 ### L0328
 
-`zeroed` or an implicit module initializer requires an all-bits-zero value
-for the complete type [0540]. A pointer, function address, atom set without a
-zero identity, or aggregate containing one has no such value. Supply an
-explicit initializer that constructs a valid value, or use a type with a zero
-image.
+`zeroed` or an implicit initializer has no complete zero image to supply
+[0540]. `zeroed`, an implicit module initializer, and a module atom binding
+without an initializer [0630] each need the destination type's all-bits-zero
+image. A pointer, function address, atom set without a zero identity, or
+aggregate containing one has no such image, and `zeroed` nested in an
+expression or used as an operand has no destination to take its type from.
+Give an explicit initializer that constructs a valid value, use a type with a
+zero image, or write `zeroed` as the whole value of a typed destination.
 
 ```landin
 node: type = struct
@@ -640,10 +645,13 @@ end bad
 
 ### L0329
 
-A failing path must belong to the function's declared error set [0940], and a
-call to a failing function must handle the outcome with `else` or propagate it
-with `try` [0960]/[1030]. Add the atom to the error set, handle it, or use
-`try` in a function allowed to propagate it.
+A failure does not follow the declared error contract [0940] [0960] [1030].
+`fail` carries exactly one atom of the function's declared error set. A call
+to a failing function handles the outcome with `else` or propagates it with
+`try`, and neither form applies to a call that cannot fail. A public or
+first-class signature writes a concrete error set instead of `! ...`. Add the
+atom to the error set, handle or propagate the call, or remove the handling
+from an infallible call.
 
 ```landin
 missing, denied: atom
@@ -654,15 +662,295 @@ end f
 
 ### L0330
 
-Only `assembler.block` accepts assembly operands [1630]. A regular call takes
-ordinary arguments; move the operands to an assembly block or pass values in
-the callee's declared parameter form.
+An assembly block, operand or template breaks [1630]'s block contract or
+[1990]'s register rules. Only `assembler.block` accepts operands. Each
+operand is one integer register, named by its target-wide name or chosen with
+`general`, and never a stack, frame, link or reserved register. Every `{name}`
+in the template names one operand. A naked body is exactly one block. Change
+the operand, register or template as the note says, or move the operands
+into an assembly block.
 
 ```landin
 record: (first: u32, second: u32) -> none = end record
 f: (value: u32) -> none =
     record(1, in x: u32 at r0 = value)
 end f
+```
+
+### L0331
+
+A call's result is used in a way its signature does not allow. A result that
+is handed back must be used or discarded with `_ =` [1020], and a call that
+returns none has no value to use, infer from, or discard [1920] [1930].
+Destructuring binds the names of a multiple result, each at most once [0990].
+Discard the result explicitly, use a call that returns one, or bind the
+result names the signature declares.
+
+```landin
+double: (x: i32) -> (r: i32) = r = x * 2 end double
+f: () -> none =
+    double(5)
+end f
+```
+
+### L0332
+
+A control expression does not produce its value on every exit [1190] (D124).
+Every `break` out of a loop used as an expression carries `with`, and a
+finite loop leaves through `break with` when it completes. Every fallthrough
+path of a value-producing `if` or block produces the value. A labelled bare
+block or a statement loop takes no value. Add the missing value, or use the
+construct as a statement.
+
+```landin
+public main: () -> (code: i32) =
+    code = loop do
+        break when true
+        break with 1
+    end loop
+end main
+```
+
+### L0333
+
+A `match` arm does not fit its subject [1210]. A subject is an atom set, a
+variant part or a pointer union. Each arm names a case or atom of that
+subject at most once (D77) [0640] [0480]. A `ptr` arm matches only a pointer
+union and binds one pointer. Atom arms bind no payload [0630]. A wildcard arm
+comes last and binds nothing. Variant payload names are positional and
+complete (D78). Rewrite the arm in the form its subject admits, or compare
+numbers with `if` and `elsif`.
+
+```landin
+f: (n: u32) -> none =
+    match n
+        _: _ = 1
+    end match
+end f
+```
+
+### L0334
+
+A struct, variant or array value is built or used outside its admitted form
+[0700] [0720]. A construction applies a struct type to labelled field values,
+and its fill supplies one value for the omitted fields. A variant case is
+written where its part is the destination [0690] (D76). A whole struct or
+array is copied, passed, returned or discarded whole [0670] [0520]. A
+repetition prefix leaves a suffix to fill (D36). Write the value in the form
+the note names, at a position that takes it.
+
+```landin
+record: type = struct
+    first: bool
+end record
+f: () -> none = value: record = (first: true, of false) end f
+```
+
+### L0335
+
+A union of atoms and one pointer is used as a pointer before it is matched
+[0480]. Match it first: the `ptr` arm binds the pointer, and each atom arm
+names the empty case. A pointer case is constructed only from a pointer, and
+a known zero address is reserved for the union's empty atom [0460]. Match the
+union, or construct it from an atom or a pointer.
+
+```landin
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+bad: () -> (value: u32) =
+    mut cell: u32 = 1
+    m: maybe_ptr = addr cell
+    value = m.val
+end bad
+```
+
+### L0336
+
+A packed image or its layout is used outside [0730]'s rules. Packed fields
+have explicit, disjoint bit positions within one unsigned image, and an
+encoded union has distinct atoms and encodings. A packed field has no address
+of its own, cannot be passed `inout`, and cannot be sliced; the image is not
+a scalar operand (D228). Correct the layout, or work through the containing
+image and its fields.
+
+```landin
+image: type = layout(packed) struct
+    value: u2 at 0..1
+end image
+f: () -> none =
+    mut x: image = zeroed
+    _ = addr x.value
+end f
+```
+
+### L0337
+
+An operation that needs a distinct addressable place was given something
+else. `addr` takes a storage place [0430], not a computed value such as a
+utf8 index result [0610]. Two `inout` arguments cannot be one place [0900],
+and a `sink` argument is a place rooted in a binding [0910]. Store the value
+in a binding first, or pass two different places.
+
+```landin
+replace: (inout left: u32, inout right: u32) -> none =
+    left = 1
+    right = 2
+end replace
+
+public main: () -> (code: i32) =
+    mut value: u32 = 0
+    replace(value, value)
+    code = 0
+end main
+```
+
+### L0338
+
+A type position or type declaration is not well formed. A type position names
+a scalar type or a `type` declaration, and a type name is not a runtime value
+[1795]. A type alias is applied with its exact positional arguments [1350]. A
+union holds atoms and at most one pointer type [0640]; a range subtype
+restricts an integer type [0660]; a fixed-array bound is an integer count
+(D136); `any` names a concept with runtime entries [1370]. Correct the
+declaration or name a type.
+
+```landin
+bytes: type (t: type, fixed n: u32) = [n]t
+bad: type = bytes(u8)
+```
+
+### L0339
+
+A written signature is not well formed. A function type gives each parameter
+a distinct label [0980] and each result a distinct name [0990]. A `from`
+clause names borrowed runtime parameters, once each, on a result that holds a
+reference [0790]. A `caller` parameter has the exact source-position struct
+(D192). Rename or remove the duplicate, or correct the clause.
+
+```landin
+duplicated: type = (value: i32, value: bool) -> none
+```
+
+### L0340
+
+A generic call cannot deduce and instantiate one concrete routine (D138).
+Deduction matches each runtime argument against its written parameter
+pattern; it never uses the return context, conversions or constraints, and
+repeated deductions must agree. A generic template has no function value
+until it is called. Recursion that keeps changing the actual tuple never ends,
+and a circular error-set dependency cannot be resolved (D215). Give the type
+argument explicitly, pass arguments that agree, or call a concrete routine.
+
+```landin
+phantom: (t: type, value: i32) -> (result: i32) = value end phantom
+
+public main: () -> (code: i32) = phantom(7) end main
+```
+
+### L0341
+
+A concept or conformance declaration is not well formed [1230]-[1270]. A
+concept is parameterized by types and names each entry once. Composition is
+finite. Every entry fixes one concrete error set. A conformance names a
+declared concept, supplies each input and entry once by label, and provides
+each entry with a function of exactly the required signature. A parameterized
+conformance applies its complete binder. Correct the declaration against the
+concept it names.
+
+```landin
+left: type = concept (t: type) is right
+end left
+
+right: type = concept (t: type) is left
+end right
+```
+
+### L0342
+
+An `any` value or its dispatch is used outside the erased contract [1370]
+[1380] [1390] (D145-D147). `any C` erases a pointer, never a value; every
+entry takes the erased `self` pointer first; an entry is called directly and
+is not a bound value; a concrete pointer selects exactly one conformance; and
+a module `any` binding has no implicit null pair. Pass a pointer, write the
+`any C` context, or adjust the concept's entries.
+
+### L0343
+
+A noreturn routine breaks its contract [0890]. A noreturn signature is
+ordinary and infallible, and every reachable path of its body diverges.
+Remove the error set, or end every path in a call that does not return.
+
+```landin
+stop: () -> noreturn =
+end stop
+```
+
+### L0344
+
+A memory intrinsic is used outside its explicit contract [1620] (D227).
+Each operation takes the operand types, permissions and memory orderings its
+contract lists, the target must support it, and an intrinsic cannot fail.
+Use an ordering and operand the operation admits on this target.
+
+### L0345
+
+An interrupt or naked routine is used outside its machine-entry contract
+[1570]. The machine convention is Cortex-M0's and takes a nongeneric
+`() -> none` signature without errors. A naked body is one assembly block. A
+machine entry is entered by its vector and is never called as a routine.
+Correct the signature or body, or call an ordinary routine instead.
+
+```landin
+extern(interrupt) tick: (count: u32) -> none = end tick
+```
+
+### L0346
+
+A C boundary declaration or call is something the C ABI cannot carry
+[1580]. A C signature is infallible and nongeneric, with scalars, pointers,
+fixed C callbacks or `layout(c)` structs, and at most one result. A
+`layout(c)` struct holds only C representations. A variadic call takes
+positional scalar, pointer or callback arguments. Pass a pointer to an
+aggregate, or change the type to one C represents.
+
+```landin
+extern(c) collect: (count: i32, ...) -> none
+bad: () -> none =
+    collect(count: 1)
+end bad
+```
+
+### L0347
+
+A link symbol, helper import or firmware placement breaks [1610]'s or
+[1640]'s contract. A link symbol denotes one compatible function and at most
+one definition. A compiler-owned helper import keeps its source types,
+permissions and nullability. Only the entry module's hosted `main` takes the
+`main` symbol. Cortex data symbols and sections use the spellings,
+alignments and vectors [1640] lists. Rename the symbol or correct the
+declaration.
+
+```landin
+extern(c) link(symbol: "foreign_entry+8") bad: () -> none
+```
+
+### L0348
+
+A `for` source is not something the loop can traverse [1150]. A range
+traversal runs over integers, an array or slice is walked by element, and a
+struct or `any C` source selects one exact iterable conformance with one
+`Cur` and `Item` pair (D180). An ordinary pointer is not a `cstring` (D184).
+Traverse an integer range or a traversable value, or declare one iterable
+conformance.
+
+```landin
+public main: () -> (code: i32) =
+    code = 1
+    for item in false..true do
+        _ = 0
+    end for
+end main
 ```
 
 ## The backend and its toolchain

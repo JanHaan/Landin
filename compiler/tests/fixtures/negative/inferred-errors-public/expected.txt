@@ -1,4 +1,4 @@
-error[L0301]: `! ...` is private routine inference, not a concrete function type
+error[L0329]: `! ...` is private routine inference, not a concrete function type
   --> ../tests/fixtures/negative/inferred-errors-public/program.ldn:3:22
   |
 3 | public f: () -> none ! ... =

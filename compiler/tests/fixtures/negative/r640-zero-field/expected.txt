@@ -1,4 +1,4 @@
-error[L0301]: `zeroed` is not valid in this value context
+error[L0328]: `zeroed` is not valid in this value context
   --> ../tests/fixtures/negative/r640-zero-field/program.ldn:10:19
    |
 10 |     value.field = zeroed

@@ -1,4 +1,4 @@
-error[L0301]: compiler-owned helper `_landin_host_initialize_arguments` requires escaping argv
+error[L0347]: compiler-owned helper `_landin_host_initialize_arguments` requires escaping argv
   --> ../tests/fixtures/negative/r440-checker-helper-initializer-retention/program.ldn:1:24
   |
 1 | extern(c) link(symbol: "_landin_host_initialize_arguments") bridge: (argc: i32, argv: ptr ptr u8) -> none

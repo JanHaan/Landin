@@ -1,7 +1,7 @@
 class: negative
 summary: static concept entry lookup refuses distinct inherited declarations
 program: program.ldn
-codes: L0301
+codes: L0341
 constructs: 1230, 1240, 1280, 1300, 1310, 1800
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

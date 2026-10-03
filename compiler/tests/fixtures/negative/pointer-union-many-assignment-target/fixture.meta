@@ -2,7 +2,7 @@ class: negative
 summary: [0480]/[1870] `.val` names no referent on the assignment side of a union of several atoms and a pointer either
 constructs: 0430, 0480
 program: program.ldn
-codes: L0301
+codes: L0335
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt
 args: ../tests/fixtures/negative/pointer-union-many-assignment-target/program.ldn

@@ -1,7 +1,7 @@
 class: negative
 summary: A forced main import collides with the genuinely selected native entry
 program: program.ldn
-codes: L0301
+codes: L0347
 constructs: 1610, 1975
 targets: linux-x86-64, linux-arm64
 args: ../tests/fixtures/negative/r440-checker-hosted-main-collision/program.ldn

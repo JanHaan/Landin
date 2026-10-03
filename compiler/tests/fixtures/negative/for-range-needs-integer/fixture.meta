@@ -1,7 +1,7 @@
 class: negative
 summary: a for range rejects noninteger endpoints
 program: program.ldn
-codes: L0301
+codes: L0348
 constructs: 1150, 1890
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

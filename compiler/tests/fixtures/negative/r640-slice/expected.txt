@@ -1,4 +1,4 @@
-error[L0301]: packed elements have no slice stride
+error[L0336]: packed elements have no slice stride
   --> ../tests/fixtures/negative/r640-slice/program.ldn:6:9
   |
 6 |     _ = x.value[0..<4]

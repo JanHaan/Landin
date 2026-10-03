@@ -1,7 +1,7 @@
 class: negative
 summary: Proven pointer lower bounds reject unconditional unused two-pointer unions through nested aliases, while a union of several atoms and a pointer is no longer a violation
 program: main.ldn
-codes: L0301, L0301
+codes: L0338, L0338
 constructs: 0480, 0630, 0640, 1350, 1795
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

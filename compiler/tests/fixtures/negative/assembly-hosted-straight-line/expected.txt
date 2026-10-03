@@ -1,16 +1,16 @@
-error[L0301]: ordinary assembly is straight-line and transfers no control
+error[L0330]: ordinary assembly is straight-line and transfers no control
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:2:5
   |
 2 |     assembler.block("jmp 1f", in v: u64 at rax = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
-error[L0301]: ordinary assembly is straight-line and defines no label
+error[L0330]: ordinary assembly is straight-line and defines no label
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:3:5
   |
 3 |     assembler.block("again: nop", in v: u64 at rax = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
-error[L0301]: assembly directives, comments and statement separators refuse
+error[L0330]: assembly directives, comments and statement separators refuse
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:4:5
   |
 4 |     assembler.block("nop # quiet", in v: u64 at rax = value)

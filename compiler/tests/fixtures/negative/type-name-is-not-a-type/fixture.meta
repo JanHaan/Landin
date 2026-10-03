@@ -2,5 +2,5 @@ class: negative
 summary: [1795] a type position names a scalar type or a `type` declaration, and naming a binding there is a type error
 constructs: 1795
 program: program.ldn
-codes: L0301
+codes: L0338
 targets: linux-x86-64, linux-arm64, macos-arm64

@@ -1,4 +1,4 @@
-error[L0301]: this call cannot deduce a function type whose error set is still inferred
+error[L0340]: this call cannot deduce a function type whose error set is still inferred
   --> ../tests/fixtures/negative/r490-generic-inferred-function-actual/program.ldn:5:5
   |
 5 |     observe(leaf)

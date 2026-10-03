@@ -1,4 +1,4 @@
-error[L0301]: this argument is not an instance of the same nominal source template as its pattern
+error[L0340]: this argument is not an instance of the same nominal source template as its pattern
   --> ../tests/fixtures/negative/generic-wrong-nominal-template/program.ldn:13:12
    |
 13 |     accept(wrong)

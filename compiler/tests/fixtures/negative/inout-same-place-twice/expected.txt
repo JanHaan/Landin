@@ -1,4 +1,4 @@
-error[L0301]: this place is already passed as an `inout` argument
+error[L0337]: this place is already passed as an `inout` argument
   --> ../tests/fixtures/negative/inout-same-place-twice/main.ldn:8:20
   |
 8 |     replace(value, value)

@@ -2,7 +2,7 @@ class: negative
 summary: a finite loop that can finish without a value is refused wherever a value belongs, a function or struct context included
 constructs: 1140, 1150, 1170, 1190
 program: program.ldn
-codes: L0301, L0301, L0301, L0301
+codes: L0332, L0332, L0332, L0332
 targets: linux-x86-64, linux-arm64, macos-arm64
 expect: expected.txt
 args: ../tests/fixtures/negative/loop-value-in-every-value-context/program.ldn

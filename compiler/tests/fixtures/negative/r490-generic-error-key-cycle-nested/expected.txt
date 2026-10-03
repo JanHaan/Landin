@@ -1,4 +1,4 @@
-error[L0301]: this generic key needs an error set in a circular deduction dependency
+error[L0340]: this generic key needs an error set in a circular deduction dependency
   --> ../tests/fixtures/negative/r490-generic-error-key-cycle-nested/program.ldn:8:13
   |
 8 |         try relay(alias)

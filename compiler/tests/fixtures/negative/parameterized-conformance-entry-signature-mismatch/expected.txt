@@ -1,4 +1,4 @@
-error[L0301]: this selected generic conformance function does not have the concept entry's signature
+error[L0341]: this selected generic conformance function does not have the concept entry's signature
   --> ../tests/fixtures/negative/parameterized-conformance-entry-signature-mismatch/main.ldn:13:1
    |
 13 | (t: type) box(t) is equatable (equal: wrong)

@@ -1,4 +1,4 @@
-error[L0301]: this argument deduces a different fixed value for repeated formal `count`
+error[L0340]: this argument deduces a different fixed value for repeated formal `count`
   --> ../tests/fixtures/negative/generic-structural-repeated-conflict/program.ldn:13:16
    |
 13 |     same(left, right)

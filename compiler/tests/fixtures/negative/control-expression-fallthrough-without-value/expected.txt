@@ -1,4 +1,4 @@
-error[L0301]: this control block can fall through without producing a value
+error[L0332]: this control block can fall through without producing a value
   --> ../tests/fixtures/negative/control-expression-fallthrough-without-value/program.ldn:3:9
   |
 3 |         _ = 42

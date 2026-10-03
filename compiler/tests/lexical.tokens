@@ -50717,6 +50717,23 @@ file negative/loop-value-type-mismatch/program.ldn tokens 23
   84 88 loop
   89 92 end
   93 97 main
+file negative/machine-entry-signature-is-machine-shaped/program.ldn tokens 16
+  132 138 extern
+  138 139 (
+  139 148 interrupt
+  148 149 )
+  150 154 tick
+  154 155 :
+  156 157 (
+  157 162 count
+  162 163 :
+  164 167 u32
+  167 168 )
+  169 171 ->
+  172 176 none
+  177 178 =
+  179 182 end
+  183 187 tick
 file negative/malformed-float-exponent/program.ldn refused a float exponent has no digit run
 file negative/malformed-hex-float-exponent/program.ldn refused a float exponent has no digit run
 file negative/malformed-integer-digit/main.ldn refused '0b102' is not an integer the rules spell

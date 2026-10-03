@@ -1,7 +1,7 @@
 class: negative
 summary: one provably identical place cannot fill two exclusive inout parameters
 program: main.ldn
-codes: L0301
+codes: L0337
 constructs: 0900, 0980, 1920
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

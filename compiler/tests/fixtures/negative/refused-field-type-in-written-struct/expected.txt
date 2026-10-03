@@ -4,7 +4,7 @@ error[L0201]: `handler` is not declared in any scope this reaches
 7 |     callback: handler
   |               ^^^^^^^
   = note: [1860]: a name that names nothing is refused
-error[L0301]: this unsigned width is a packed field representation
+error[L0336]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:12:13
    |
 12 |     row: [1]u3
@@ -16,13 +16,13 @@ error[L0201]: `mode` is not declared in any scope this reaches
 16 |     field: mode at 0..2
    |            ^^^^
   = note: [1860]: a name that names nothing is refused
-error[L0301]: this unsigned width is a packed field representation
+error[L0336]: this unsigned width is a packed field representation
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:21:13
    |
 21 |     column: u3
    |             ^^ this representation width
   = note: [0730]: ordinary values use u8, u16, u32 or u64
-error[L0301]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
   --> ../tests/fixtures/negative/refused-field-type-in-written-struct/program.ldn:40:16
    |
 40 | write_caller: (caller where: site) -> none =

@@ -1,4 +1,4 @@
-error[L0301]: an erased entry is called immediately; it is not a bound function value
+error[L0342]: an erased entry is called immediately; it is not a bound function value
   --> ../tests/fixtures/negative/any-entry-not-bound-value/main.ldn:22:15
    |
 22 |     stored := erased.code

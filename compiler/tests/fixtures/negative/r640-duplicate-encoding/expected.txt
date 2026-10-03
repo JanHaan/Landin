@@ -1,4 +1,4 @@
-error[L0301]: an encoded union requires distinct atoms and distinct fixed unsigned encodings
+error[L0336]: an encoded union requires distinct atoms and distinct fixed unsigned encodings
   --> ../tests/fixtures/negative/r640-duplicate-encoding/program.ldn:3:14
   |
 3 | mode: type = (a = 1 | b = 1)

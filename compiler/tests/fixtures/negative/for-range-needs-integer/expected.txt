@@ -1,4 +1,4 @@
-error[L0301]: a range traversal starts with an integer
+error[L0348]: a range traversal starts with an integer
   --> ../tests/fixtures/negative/for-range-needs-integer/program.ldn:3:17
   |
 3 |     for item in false..true do

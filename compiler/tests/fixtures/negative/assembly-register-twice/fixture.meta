@@ -3,7 +3,7 @@ summary: D248 gives each operand a register of its own, and general cannot suppl
 program: program.ldn
 expect: expected.txt
 args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-register-twice/program.ldn
-codes: L0301, L0301
+codes: L0330, L0330
 status: 1
 constructs: 1630, 1990
 targets: linux-x86-64

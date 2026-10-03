@@ -1,4 +1,4 @@
-error[L0301]: compiler-owned helper `_landin_host_errno` cannot be defined by source
+error[L0347]: compiler-owned helper `_landin_host_errno` cannot be defined by source
   --> ../tests/fixtures/negative/r440-checker-helper-definition/program.ldn:1:14
   |
 1 | link(symbol: "_landin_host_errno") bridge: () -> none =

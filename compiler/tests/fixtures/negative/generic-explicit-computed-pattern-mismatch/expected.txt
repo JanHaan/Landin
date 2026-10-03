@@ -1,4 +1,4 @@
-error[L0301]: this argument does not match the exact fixed value in its parameter pattern
+error[L0340]: this argument does not match the exact fixed value in its parameter pattern
   --> ../tests/fixtures/negative/generic-explicit-computed-pattern-mismatch/program.ldn:7:42
   |
 7 |     computed(count: 2, item: i32, value: wrong)

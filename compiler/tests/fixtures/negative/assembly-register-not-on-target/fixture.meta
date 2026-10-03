@@ -3,7 +3,7 @@ summary: D248: a register is a name the selected target's table answers for, and
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-register-not-on-target/program.ldn
-codes: L0301, L0301
+codes: L0330, L0330
 status: 1
 constructs: 1630, 1990
 targets: cortex-m

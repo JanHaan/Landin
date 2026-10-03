@@ -1,4 +1,4 @@
-error[L0301]: a comparison wants a pointer and this is a union of an atom and one
+error[L0335]: a comparison wants a pointer and this is a union of an atom and one
   --> ../tests/fixtures/negative/pointer-union-comparison/program.ldn:5:12
   |
 5 |     same = left == right

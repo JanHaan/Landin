@@ -1,4 +1,4 @@
-error[L0301]: this hands back nothing, so there is no result to discard
+error[L0331]: this hands back nothing, so there is no result to discard
   --> ../tests/fixtures/negative/discard-of-nothing/program.ldn:3:9
   |
 3 |     _ = quiet()

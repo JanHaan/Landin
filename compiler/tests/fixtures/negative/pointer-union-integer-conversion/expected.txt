@@ -1,4 +1,4 @@
-error[L0301]: an integer conversion wants a pointer and this is a union of an atom and one
+error[L0335]: an integer conversion wants a pointer and this is a union of an atom and one
   --> ../tests/fixtures/negative/pointer-union-integer-conversion/program.ldn:5:21
   |
 5 |     address = usize(m)

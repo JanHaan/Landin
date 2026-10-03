@@ -1,0 +1,9 @@
+class: negative
+summary: [1570] an interrupt entry has the machine shape, () -> none without errors on Cortex-M0
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/machine-entry-signature-is-machine-shaped/program.ldn
+codes: L0345
+status: 1
+constructs: 1570
+targets: linux-x86-64, macos-arm64, synthetic-32

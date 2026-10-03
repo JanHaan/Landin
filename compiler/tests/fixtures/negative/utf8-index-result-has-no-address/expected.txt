@@ -1,4 +1,4 @@
-error[L0301]: a utf8 index decodes a codepoint value, which has no address
+error[L0337]: a utf8 index decodes a codepoint value, which has no address
   --> ../tests/fixtures/negative/utf8-index-result-has-no-address/program.ldn:2:21
   |
 2 |     pointer := addr source[index]

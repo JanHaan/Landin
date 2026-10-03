@@ -1,7 +1,7 @@
 class: negative
 summary: sink cannot name a place through a pointer dereference
 program: program.ldn
-codes: L0301
+codes: L0337
 constructs: 0430, 0900, 0910, 1800, 1810
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

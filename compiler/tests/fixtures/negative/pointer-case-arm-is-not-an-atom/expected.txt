@@ -1,4 +1,4 @@
-error[L0301]: a `ptr` arm matches a pointer union, not an atom set
+error[L0333]: a `ptr` arm matches a pointer union, not an atom set
   --> ../tests/fixtures/negative/pointer-case-arm-is-not-an-atom/program.ldn:9:9
   |
 9 |         ptr: value = 2

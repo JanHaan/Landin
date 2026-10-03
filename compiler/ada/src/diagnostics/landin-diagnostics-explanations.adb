@@ -171,20 +171,16 @@ package body Landin.Diagnostics.Explanations is
                & "context gives it [1880], or the target cannot hold it. W"
                & "rite a smaller value or give the context a wider type.",
             when Catalogue.Type_Mismatch =>
-               "L0301 is a broad checker refusal, not a promise that two"
-               & " types disagree. The checker found an unmet requirement "
-               & "on a type, value, operation, or source form. Read the di"
-               & "agnostic's first sentence and rule note together: they i"
-               & "dentify the exact condition. L0301 covers type and shape"
-               & " identity [0710], admitted operands [1890], generic dedu"
-               & "ction [1300], valid aggregate and match forms [0720] [04"
-               & "80], reference permissions [0440], control-flow values ["
-               & "1190], conversions [0310], and interoperation contracts "
-               & "[1580]. Change the reported expression or declaration to"
-               & " meet the specific condition in its note. A second label"
-               & ", when present, identifies the source of the requirement"
-               & ". For a misspelt named argument [0980], the diagnostic m"
-               & "ay offer the intended parameter label as a likely fix.",
+               "A value's type is not the one its context or operation r"
+               & "equires [1890], and no conversion is implied [0310]. Thi"
+               & "s includes a literal that its context cannot type [1880]"
+               & " [0210] [0260], an operator given an operand class it do"
+               & "es not admit, a struct of another nominal type [0710], a"
+               & "n array of another length or element type, a function of"
+               & " another signature [1000], or a reference of another per"
+               & "mission [0440]. The second label shows where the require"
+               & "ment was stated. Change the value, or convert it explici"
+               & "tly where a conversion exists.",
             when Catalogue.Not_Definitely_Assigned =>
                "A name is read on a path that does not assign it first ["
                & "1910]. Assign it on every path before the read, or give "
@@ -283,30 +279,209 @@ package body Landin.Diagnostics.Explanations is
                & "(D251). A shared declaration is warned about only when n"
                & "one of its names is written, and a module binding never "
                & "is, since a linked routine or a debugger may write it.",
-            when Catalogue.Call_Argument_Count =>
-               "A call gives too many or too few runtime arguments, or o"
-               & "mits a named required parameter [1920]. Supply every run"
-               & "time parameter exactly once, using its name when earlier"
-               & " arguments are named. The second label points to the sig"
-               & "nature or missing parameter.",
+            when Catalogue.Call_Argument_Match =>
+               "A call's arguments do not match what the callee takes [1"
+               & "920]. A runtime argument is missing, extra or given twic"
+               & "e; a named argument names no parameter [0980]; a `caller"
+               & "` parameter is filled other than by forwarding another o"
+               & "ne (D186); a static argument is given where the callee h"
+               & "as no static formal [1300], or a static formal is used a"
+               & "s a runtime value [1290]; a generic call gives a differe"
+               & "nt number of arguments than its template (D138); or a co"
+               & "nversion is not given exactly one value [0700]. Supply e"
+               & "very parameter exactly once, in the callee's declared fo"
+               & "rm. The second label points to the signature or paramete"
+               & "r. When a named argument names no parameter, the diagnos"
+               & "tic offers the parameter label near it as a likely fix.",
             when Catalogue.Zero_Image_Unavailable =>
-               "`zeroed` or an implicit module initializer requires an a"
-               & "ll-bits-zero value for the complete type [0540]. A point"
-               & "er, function address, atom set without a zero identity, "
-               & "or aggregate containing one has no such value. Supply an"
-               & " explicit initializer that constructs a valid value, or "
-               & "use a type with a zero image.",
+               "`zeroed` or an implicit initializer has no complete zero"
+               & " image to supply [0540]. `zeroed`, an implicit module in"
+               & "itializer, and a module atom binding without an initiali"
+               & "zer [0630] each need the destination type's all-bits-zer"
+               & "o image. A pointer, function address, atom set without a"
+               & " zero identity, or aggregate containing one has no such "
+               & "image, and `zeroed` nested in an expression or used as a"
+               & "n operand has no destination to take its type from. Give"
+               & " an explicit initializer that constructs a valid value, "
+               & "use a type with a zero image, or write `zeroed` as the w"
+               & "hole value of a typed destination.",
             when Catalogue.Error_Contract_Violated =>
-               "A failing path must belong to the function's declared er"
-               & "ror set [0940], and a call to a failing function must ha"
-               & "ndle the outcome with `else` or propagate it with `try` "
-               & "[0960]/[1030]. Add the atom to the error set, handle it,"
-               & " or use `try` in a function allowed to propagate it.",
-            when Catalogue.Assembly_Operand_Outside_Block =>
-               "Only `assembler.block` accepts assembly operands [1630]."
-               & " A regular call takes ordinary arguments; move the opera"
-               & "nds to an assembly block or pass values in the callee's "
-               & "declared parameter form.",
+               "A failure does not follow the declared error contract [0"
+               & "940] [0960] [1030]. `fail` carries exactly one atom of t"
+               & "he function's declared error set. A call to a failing fu"
+               & "nction handles the outcome with `else` or propagates it "
+               & "with `try`, and neither form applies to a call that cann"
+               & "ot fail. A public or first-class signature writes a conc"
+               & "rete error set instead of `! ...`. Add the atom to the e"
+               & "rror set, handle or propagate the call, or remove the ha"
+               & "ndling from an infallible call.",
+            when Catalogue.Assembly_Block_Contract =>
+               "An assembly block, operand or template breaks [1630]'s b"
+               & "lock contract or [1990]'s register rules. Only `assemble"
+               & "r.block` accepts operands. Each operand is one integer r"
+               & "egister, named by its target-wide name or chosen with `g"
+               & "eneral`, and never a stack, frame, link or reserved regi"
+               & "ster. Every `{name}` in the template names one operand. "
+               & "A naked body is exactly one block. Change the operand, r"
+               & "egister or template as the note says, or move the operan"
+               & "ds into an assembly block.",
+            when Catalogue.Result_Use =>
+               "A call's result is used in a way its signature does not "
+               & "allow. A result that is handed back must be used or disc"
+               & "arded with `_ =` [1020], and a call that returns none ha"
+               & "s no value to use, infer from, or discard [1920] [1930]."
+               & " Destructuring binds the names of a multiple result, eac"
+               & "h at most once [0990]. Discard the result explicitly, us"
+               & "e a call that returns one, or bind the result names the "
+               & "signature declares.",
+            when Catalogue.Control_Value =>
+               "A control expression does not produce its value on every"
+               & " exit [1190] (D124). Every `break` out of a loop used as"
+               & " an expression carries `with`, and a finite loop leaves "
+               & "through `break with` when it completes. Every fallthroug"
+               & "h path of a value-producing `if` or block produces the v"
+               & "alue. A labelled bare block or a statement loop takes no"
+               & " value. Add the missing value, or use the construct as a"
+               & " statement.",
+            when Catalogue.Match_Arm_Form =>
+               "A `match` arm does not fit its subject [1210]. A subject"
+               & " is an atom set, a variant part or a pointer union. Each"
+               & " arm names a case or atom of that subject at most once ("
+               & "D77) [0640] [0480]. A `ptr` arm matches only a pointer u"
+               & "nion and binds one pointer. Atom arms bind no payload [0"
+               & "630]. A wildcard arm comes last and binds nothing. Varia"
+               & "nt payload names are positional and complete (D78). Rewr"
+               & "ite the arm in the form its subject admits, or compare n"
+               & "umbers with `if` and `elsif`.",
+            when Catalogue.Aggregate_Form =>
+               "A struct, variant or array value is built or used outsid"
+               & "e its admitted form [0700] [0720]. A construction applie"
+               & "s a struct type to labelled field values, and its fill s"
+               & "upplies one value for the omitted fields. A variant case"
+               & " is written where its part is the destination [0690] (D7"
+               & "6). A whole struct or array is copied, passed, returned "
+               & "or discarded whole [0670] [0520]. A repetition prefix le"
+               & "aves a suffix to fill (D36). Write the value in the form"
+               & " the note names, at a position that takes it.",
+            when Catalogue.Pointer_Union_Use =>
+               "A union of atoms and one pointer is used as a pointer be"
+               & "fore it is matched [0480]. Match it first: the `ptr` arm"
+               & " binds the pointer, and each atom arm names the empty ca"
+               & "se. A pointer case is constructed only from a pointer, a"
+               & "nd a known zero address is reserved for the union's empt"
+               & "y atom [0460]. Match the union, or construct it from an "
+               & "atom or a pointer.",
+            when Catalogue.Packed_Image =>
+               "A packed image or its layout is used outside [0730]'s ru"
+               & "les. Packed fields have explicit, disjoint bit positions"
+               & " within one unsigned image, and an encoded union has dis"
+               & "tinct atoms and encodings. A packed field has no address"
+               & " of its own, cannot be passed `inout`, and cannot be sli"
+               & "ced; the image is not a scalar operand (D228). Correct t"
+               & "he layout, or work through the containing image and its "
+               & "fields.",
+            when Catalogue.Place_Required =>
+               "An operation that needs a distinct addressable place was"
+               & " given something else. `addr` takes a storage place [043"
+               & "0], not a computed value such as a utf8 index result [06"
+               & "10]. Two `inout` arguments cannot be one place [0900], a"
+               & "nd a `sink` argument is a place rooted in a binding [091"
+               & "0]. Store the value in a binding first, or pass two diff"
+               & "erent places.",
+            when Catalogue.Type_Declaration_Form =>
+               "A type position or type declaration is not well formed. "
+               & "A type position names a scalar type or a `type` declarat"
+               & "ion, and a type name is not a runtime value [1795]. A ty"
+               & "pe alias is applied with its exact positional arguments "
+               & "[1350]. A union holds atoms and at most one pointer type"
+               & " [0640]; a range subtype restricts an integer type [0660"
+               & "]; a fixed-array bound is an integer count (D136); `any`"
+               & " names a concept with runtime entries [1370]. Correct th"
+               & "e declaration or name a type.",
+            when Catalogue.Signature_Form =>
+               "A written signature is not well formed. A function type "
+               & "gives each parameter a distinct label [0980] and each re"
+               & "sult a distinct name [0990]. A `from` clause names borro"
+               & "wed runtime parameters, once each, on a result that hold"
+               & "s a reference [0790]. A `caller` parameter has the exact"
+               & " source-position struct (D192). Rename or remove the dup"
+               & "licate, or correct the clause.",
+            when Catalogue.Generic_Deduction =>
+               "A generic call cannot deduce and instantiate one concret"
+               & "e routine (D138). Deduction matches each runtime argumen"
+               & "t against its written parameter pattern; it never uses t"
+               & "he return context, conversions or constraints, and repea"
+               & "ted deductions must agree. A generic template has no fun"
+               & "ction value until it is called. Recursion that keeps cha"
+               & "nging the actual tuple never ends, and a circular error-"
+               & "set dependency cannot be resolved (D215). Give the type "
+               & "argument explicitly, pass arguments that agree, or call "
+               & "a concrete routine.",
+            when Catalogue.Conformance_Form =>
+               "A concept or conformance declaration is not well formed "
+               & "[1230]-[1270]. A concept is parameterized by types and n"
+               & "ames each entry once. Composition is finite. Every entry"
+               & " fixes one concrete error set. A conformance names a dec"
+               & "lared concept, supplies each input and entry once by lab"
+               & "el, and provides each entry with a function of exactly t"
+               & "he required signature. A parameterized conformance appli"
+               & "es its complete binder. Correct the declaration against "
+               & "the concept it names.",
+            when Catalogue.Erased_Contract =>
+               "An `any` value or its dispatch is used outside the erase"
+               & "d contract [1370] [1380] [1390] (D145-D147). `any C` era"
+               & "ses a pointer, never a value; every entry takes the eras"
+               & "ed `self` pointer first; an entry is called directly and"
+               & " is not a bound value; a concrete pointer selects exactl"
+               & "y one conformance; and a module `any` binding has no imp"
+               & "licit null pair. Pass a pointer, write the `any C` conte"
+               & "xt, or adjust the concept's entries.",
+            when Catalogue.Noreturn_Contract =>
+               "A noreturn routine breaks its contract [0890]. A noretur"
+               & "n signature is ordinary and infallible, and every reacha"
+               & "ble path of its body diverges. Remove the error set, or "
+               & "end every path in a call that does not return.",
+            when Catalogue.Memory_Contract =>
+               "A memory intrinsic is used outside its explicit contract"
+               & " [1620] (D227). Each operation takes the operand types, "
+               & "permissions and memory orderings its contract lists, the"
+               & " target must support it, and an intrinsic cannot fail. U"
+               & "se an ordering and operand the operation admits on this "
+               & "target.",
+            when Catalogue.Machine_Entry_Contract =>
+               "An interrupt or naked routine is used outside its machin"
+               & "e-entry contract [1570]. The machine convention is Corte"
+               & "x-M0's and takes a nongeneric `() -> none` signature wit"
+               & "hout errors. A naked body is one assembly block. A machi"
+               & "ne entry is entered by its vector and is never called as"
+               & " a routine. Correct the signature or body, or call an or"
+               & "dinary routine instead.",
+            when Catalogue.Foreign_Boundary =>
+               "A C boundary declaration or call is something the C ABI "
+               & "cannot carry [1580]. A C signature is infallible and non"
+               & "generic, with scalars, pointers, fixed C callbacks or `l"
+               & "ayout(c)` structs, and at most one result. A `layout(c)`"
+               & " struct holds only C representations. A variadic call ta"
+               & "kes positional scalar, pointer or callback arguments. Pa"
+               & "ss a pointer to an aggregate, or change the type to one "
+               & "C represents.",
+            when Catalogue.Linkage_Contract =>
+               "A link symbol, helper import or firmware placement break"
+               & "s [1610]'s or [1640]'s contract. A link symbol denotes o"
+               & "ne compatible function and at most one definition. A com"
+               & "piler-owned helper import keeps its source types, permis"
+               & "sions and nullability. Only the entry module's hosted `m"
+               & "ain` takes the `main` symbol. Cortex data symbols and se"
+               & "ctions use the spellings, alignments and vectors [1640] "
+               & "lists. Rename the symbol or correct the declaration.",
+            when Catalogue.Traversal_Source =>
+               "A `for` source is not something the loop can traverse [1"
+               & "150]. A range traversal runs over integers, an array or "
+               & "slice is walked by element, and a struct or `any C` sour"
+               & "ce selects one exact iterable conformance with one `Cur`"
+               & " and `Item` pair (D180). An ordinary pointer is not a `c"
+               & "string` (D184). Traverse an integer range or a traversab"
+               & "le value, or declare one iterable conformance.",
             when Catalogue.No_Toolchain =>
                "No assembler and linker for the selected target were fou"
                & "nd on this host [1550]. The note names the program looke"
@@ -460,9 +635,9 @@ package body Landin.Diagnostics.Explanations is
                "over: u8 = 300"
                & LF,
             when Catalogue.Type_Mismatch =>
-               "v: i32 = 1"
+               "flag: bool = true"
                & LF
-               & "n: v = 2"
+               & "count: u8 = flag"
                & LF,
             when Catalogue.Not_Definitely_Assigned =>
                "make: () -> (result: [2]i32) ="
@@ -643,7 +818,7 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end count_up"
                & LF,
-            when Catalogue.Call_Argument_Count =>
+            when Catalogue.Call_Argument_Match =>
                "add: (a: i32, b: i32) -> (r: i32) = a + b end add"
                & LF
                & "f: () -> (r: i32) = add(a: 1) end f"
@@ -670,7 +845,7 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end f"
                & LF,
-            when Catalogue.Assembly_Operand_Outside_Block =>
+            when Catalogue.Assembly_Block_Contract =>
                "record: (first: u32, second: u32) -> none = end record"
                & LF
                & "f: (value: u32) -> none ="
@@ -678,6 +853,163 @@ package body Landin.Diagnostics.Explanations is
                & "    record(1, in x: u32 at r0 = value)"
                & LF
                & "end f"
+               & LF,
+            when Catalogue.Result_Use =>
+               "double: (x: i32) -> (r: i32) = r = x * 2 end double"
+               & LF
+               & "f: () -> none ="
+               & LF
+               & "    double(5)"
+               & LF
+               & "end f"
+               & LF,
+            when Catalogue.Control_Value =>
+               "public main: () -> (code: i32) ="
+               & LF
+               & "    code = loop do"
+               & LF
+               & "        break when true"
+               & LF
+               & "        break with 1"
+               & LF
+               & "    end loop"
+               & LF
+               & "end main"
+               & LF,
+            when Catalogue.Match_Arm_Form =>
+               "f: (n: u32) -> none ="
+               & LF
+               & "    match n"
+               & LF
+               & "        _: _ = 1"
+               & LF
+               & "    end match"
+               & LF
+               & "end f"
+               & LF,
+            when Catalogue.Aggregate_Form =>
+               "record: type = struct"
+               & LF
+               & "    first: bool"
+               & LF
+               & "end record"
+               & LF
+               & "f: () -> none = value: record = (first: true, of false) "
+               & "end f"
+               & LF,
+            when Catalogue.Pointer_Union_Use =>
+               "none_found: atom"
+               & LF
+               & "maybe_ptr: type = none_found | ptr mut u32"
+               & LF
+               & LF
+               & "bad: () -> (value: u32) ="
+               & LF
+               & "    mut cell: u32 = 1"
+               & LF
+               & "    m: maybe_ptr = addr cell"
+               & LF
+               & "    value = m.val"
+               & LF
+               & "end bad"
+               & LF,
+            when Catalogue.Packed_Image =>
+               "image: type = layout(packed) struct"
+               & LF
+               & "    value: u2 at 0..1"
+               & LF
+               & "end image"
+               & LF
+               & "f: () -> none ="
+               & LF
+               & "    mut x: image = zeroed"
+               & LF
+               & "    _ = addr x.value"
+               & LF
+               & "end f"
+               & LF,
+            when Catalogue.Place_Required =>
+               "replace: (inout left: u32, inout right: u32) -> none ="
+               & LF
+               & "    left = 1"
+               & LF
+               & "    right = 2"
+               & LF
+               & "end replace"
+               & LF
+               & LF
+               & "public main: () -> (code: i32) ="
+               & LF
+               & "    mut value: u32 = 0"
+               & LF
+               & "    replace(value, value)"
+               & LF
+               & "    code = 0"
+               & LF
+               & "end main"
+               & LF,
+            when Catalogue.Type_Declaration_Form =>
+               "bytes: type (t: type, fixed n: u32) = [n]t"
+               & LF
+               & "bad: type = bytes(u8)"
+               & LF,
+            when Catalogue.Signature_Form =>
+               "duplicated: type = (value: i32, value: bool) -> none"
+               & LF,
+            when Catalogue.Generic_Deduction =>
+               "phantom: (t: type, value: i32) -> (result: i32) = value "
+               & "end phantom"
+               & LF
+               & LF
+               & "public main: () -> (code: i32) = phantom(7) end main"
+               & LF,
+            when Catalogue.Conformance_Form =>
+               "left: type = concept (t: type) is right"
+               & LF
+               & "end left"
+               & LF
+               & LF
+               & "right: type = concept (t: type) is left"
+               & LF
+               & "end right"
+               & LF,
+            when Catalogue.Erased_Contract =>
+               "",
+            when Catalogue.Noreturn_Contract =>
+               "stop: () -> noreturn ="
+               & LF
+               & "end stop"
+               & LF,
+            when Catalogue.Memory_Contract =>
+               "",
+            when Catalogue.Machine_Entry_Contract =>
+               "extern(interrupt) tick: (count: u32) -> none = end tick"
+               & LF,
+            when Catalogue.Foreign_Boundary =>
+               "extern(c) collect: (count: i32, ...) -> none"
+               & LF
+               & "bad: () -> none ="
+               & LF
+               & "    collect(count: 1)"
+               & LF
+               & "end bad"
+               & LF,
+            when Catalogue.Linkage_Contract =>
+               "extern(c) link(symbol: ""foreign_entry+8"") bad: () -> non"
+               & "e"
+               & LF,
+            when Catalogue.Traversal_Source =>
+               "public main: () -> (code: i32) ="
+               & LF
+               & "    code = 1"
+               & LF
+               & "    for item in false..true do"
+               & LF
+               & "        _ = 0"
+               & LF
+               & "    end for"
+               & LF
+               & "end main"
                & LF,
             when Catalogue.No_Toolchain =>
                "",

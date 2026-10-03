@@ -1,4 +1,4 @@
-error[L0301]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+error[L0339]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
   --> ../tests/fixtures/negative/caller-parameter-needs-site/program.ldn:1:7
   |
 1 | bad: (caller where: u32) -> none =

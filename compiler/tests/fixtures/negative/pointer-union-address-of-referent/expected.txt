@@ -1,4 +1,4 @@
-error[L0301]: `.val` wants a pointer and this is a union of an atom and one
+error[L0335]: `.val` wants a pointer and this is a union of an atom and one
   --> ../tests/fixtures/negative/pointer-union-address-of-referent/program.ldn:5:27
   |
 5 |     p: ptr mut u32 = addr m.val

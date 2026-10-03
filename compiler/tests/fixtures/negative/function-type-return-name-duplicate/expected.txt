@@ -1,4 +1,4 @@
-error[L0301]: this function type gives two results the same field name
+error[L0339]: this function type gives two results the same field name
   --> ../tests/fixtures/negative/function-type-return-name-duplicate/program.ldn:1:39
   |
 1 | duplicated: type = () -> (value: i32, value: bool)

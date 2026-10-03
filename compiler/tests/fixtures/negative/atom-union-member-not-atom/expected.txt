@@ -1,4 +1,4 @@
-error[L0301]: this union member is not an atom type
+error[L0338]: this union member is not an atom type
   --> ../tests/fixtures/negative/atom-union-member-not-atom/program.ldn:3:21
   |
 3 | bad: type = north | number

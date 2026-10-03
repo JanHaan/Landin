@@ -3,7 +3,7 @@ summary: reference pattern deduction does not relax the outer permission
 program: program.ldn
 constructs: 0430, 0440, 0570, 0790, 1290, 1920
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301
+codes: L0340
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-reference-pattern-permission/program.ldn
 status: 1

@@ -87,10 +87,28 @@ package Landin.Diagnostics.Checking is
       Compiler_Conformance_Reserved,
       Size_Limit_Exceeded,
       Mutable_Never_Written,
-      Call_Argument_Count,
+      Call_Argument_Match,
       Zero_Image_Unavailable,
       Error_Contract_Violated,
-      Assembly_Operand_Outside_Block);
+      Assembly_Block_Contract,
+      Result_Use,
+      Control_Value,
+      Match_Arm_Form,
+      Aggregate_Form,
+      Pointer_Union_Use,
+      Packed_Image,
+      Place_Required,
+      Type_Declaration_Form,
+      Signature_Form,
+      Generic_Deduction,
+      Conformance_Form,
+      Erased_Contract,
+      Noreturn_Contract,
+      Memory_Contract,
+      Machine_Entry_Contract,
+      Foreign_Boundary,
+      Linkage_Contract,
+      Traversal_Source);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -141,14 +159,50 @@ package Landin.Diagnostics.Checking is
                Catalogue.Size_Limit_Exceeded,
             when Mutable_Never_Written =>
                Catalogue.Mutable_Never_Written,
-            when Call_Argument_Count =>
-               Catalogue.Call_Argument_Count,
+            when Call_Argument_Match =>
+               Catalogue.Call_Argument_Match,
             when Zero_Image_Unavailable =>
                Catalogue.Zero_Image_Unavailable,
             when Error_Contract_Violated =>
                Catalogue.Error_Contract_Violated,
-            when Assembly_Operand_Outside_Block =>
-               Catalogue.Assembly_Operand_Outside_Block);
+            when Assembly_Block_Contract =>
+               Catalogue.Assembly_Block_Contract,
+            when Result_Use =>
+               Catalogue.Result_Use,
+            when Control_Value =>
+               Catalogue.Control_Value,
+            when Match_Arm_Form =>
+               Catalogue.Match_Arm_Form,
+            when Aggregate_Form =>
+               Catalogue.Aggregate_Form,
+            when Pointer_Union_Use =>
+               Catalogue.Pointer_Union_Use,
+            when Packed_Image =>
+               Catalogue.Packed_Image,
+            when Place_Required =>
+               Catalogue.Place_Required,
+            when Type_Declaration_Form =>
+               Catalogue.Type_Declaration_Form,
+            when Signature_Form =>
+               Catalogue.Signature_Form,
+            when Generic_Deduction =>
+               Catalogue.Generic_Deduction,
+            when Conformance_Form =>
+               Catalogue.Conformance_Form,
+            when Erased_Contract =>
+               Catalogue.Erased_Contract,
+            when Noreturn_Contract =>
+               Catalogue.Noreturn_Contract,
+            when Memory_Contract =>
+               Catalogue.Memory_Contract,
+            when Machine_Entry_Contract =>
+               Catalogue.Machine_Entry_Contract,
+            when Foreign_Boundary =>
+               Catalogue.Foreign_Boundary,
+            when Linkage_Contract =>
+               Catalogue.Linkage_Contract,
+            when Traversal_Source =>
+               Catalogue.Traversal_Source);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

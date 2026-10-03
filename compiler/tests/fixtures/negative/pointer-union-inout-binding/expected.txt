@@ -1,4 +1,4 @@
-error[L0301]: a `ptr` arm binding is read-only
+error[L0333]: a `ptr` arm binding is read-only
   --> ../tests/fixtures/negative/pointer-union-inout-binding/program.ldn:7:20
   |
 7 |         ptr (inout p): value = p.val

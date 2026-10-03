@@ -14,8 +14,8 @@ CASES = {
     'ambiguous-error-clear': ('import rp2040/uart0\n', 'uart0.uartrsr_write(uart0.base, 0)', 'L0201'),
     'alias-write': ('import rp2040/dma\n', 'dma.ch0_al1_ctrl_write(dma.base, 0)', 'L0201'),
     'metadata-directive': ('compiler.vendor_svd("RP2040")\n', '', 'L0203'),
-    'eight-byte-mmio': ('', 'port: ptr u64 = ptr(0x40070000)\n    _ = compiler.volatile_load(port)', 'L0301'),
-    'atomic-rmw': ('', 'port: ptr mut u32 = ptr(0x20000000)\n    _ = compiler.atomic_add(port, 1, compiler.relaxed)', 'L0301'),
+    'eight-byte-mmio': ('', 'port: ptr u64 = ptr(0x40070000)\n    _ = compiler.volatile_load(port)', 'L0344'),
+    'atomic-rmw': ('', 'port: ptr mut u32 = ptr(0x20000000)\n    _ = compiler.atomic_add(port, 1, compiler.relaxed)', 'L0344'),
 }
 
 

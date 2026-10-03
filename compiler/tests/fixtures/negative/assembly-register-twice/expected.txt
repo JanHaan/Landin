@@ -1,4 +1,4 @@
-error[L0301]: `rax` is already this block's register for another operand
+error[L0330]: `rax` is already this block's register for another operand
   --> ../tests/fixtures/negative/assembly-register-twice/program.ldn:3:34
   |
 3 |                     in b: u64 at rax = value)
@@ -8,7 +8,7 @@ error[L0301]: `rax` is already this block's register for another operand
 2 |     assembler.block("addq {a}, {b}", in a: u64 at rax = value,
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: each operand has a register of its own; `inout` passes one value in and out
-error[L0301]: this block asks `general` for 10 registers, and linux-x86-64 has 9 left for it
+error[L0330]: this block asks `general` for 10 registers, and linux-x86-64 has 9 left for it
   --> ../tests/fixtures/negative/assembly-register-twice/program.ldn:4:5
   |
 4 |     assembler.block("nop {a}{b}{c}{d}{e}{g}{h}{i}{j}{k}",

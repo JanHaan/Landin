@@ -508,7 +508,7 @@ package body Landin.Stages.Checking is
          Because : String) is
       begin
          Bad.Report
-           (Item    => Bad.Type_Mismatch,
+           (Item    => Bad.Aggregate_Form,
             Source  => Syn.Source_Of (Of_Tree),
             Where   => Syn.Where (Of_Tree, Node),
             Message => "a variant case forms a variant part, not a whole"
@@ -655,7 +655,7 @@ package body Landin.Stages.Checking is
                    = Syn.No_Node
                then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Aggregate_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Argument),
                      Message => "a construction field or fill requires a"
@@ -981,7 +981,7 @@ package body Landin.Stages.Checking is
       procedure Reject_C_Signature (Site : Landin.Provenance.Origin) is
       begin
          Bad.Report
-           (Item => Bad.Type_Mismatch,
+           (Item => Bad.Foreign_Boundary,
             Source => Site.Source,
             Where => Site.Where,
             Message => "this signature is not representable by the"
@@ -1017,7 +1017,8 @@ package body Landin.Stages.Checking is
                /= Landin.Machine.Ordinary)
          then
             Bad.Report
-              (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+              (Item => Bad.Noreturn_Contract,
+               Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
                Message => "noreturn requires an infallible ordinary signature",
                Note => "[0890]: checked failure and machine returns have"
@@ -1055,7 +1056,7 @@ package body Landin.Stages.Checking is
                        Syn.Nth_Statement (Of_Tree, Body_Node, 1));
                   if not Supported then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Machine_Entry_Contract,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Body_Node),
                         Message => "a naked body is one assembler.block",
@@ -1070,7 +1071,7 @@ package body Landin.Stages.Checking is
             end if;
             if not Supported then
                Bad.Report
-                 (Item => Bad.Type_Mismatch,
+                 (Item => Bad.Machine_Entry_Contract,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Node),
                   Message => "machine convention requires Cortex-M0 and"
@@ -1107,7 +1108,7 @@ package body Landin.Stages.Checking is
       procedure Reject_C_Layout (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
       begin
          Bad.Report
-           (Item => Bad.Type_Mismatch,
+           (Item => Bad.Foreign_Boundary,
             Source => Syn.Source_Of (Of_Tree),
             Where => Syn.Where (Of_Tree, Node),
             Message => "this layout(c) struct has a non-C representation",
@@ -1827,7 +1828,7 @@ package body Landin.Stages.Checking is
               /= Ty.Ill_Typed
             then
                Bad.Report
-                 (Item => Bad.Type_Mismatch,
+                 (Item => Bad.Packed_Image,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Node),
                   Message =>
@@ -2427,7 +2428,7 @@ package body Landin.Stages.Checking is
            and then not Has_Site_Shape
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Signature_Form,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "a `caller` parameter needs a struct of exactly"
@@ -2594,7 +2595,7 @@ package body Landin.Stages.Checking is
            (At_Node : Syn.Node_Id; Message : String) is
          begin
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Type_Declaration_Form,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, At_Node),
                Message => Message,
@@ -2832,7 +2833,7 @@ package body Landin.Stages.Checking is
          procedure Reject (At_Node : Syn.Node_Id; Message : String) is
          begin
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Packed_Image,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, At_Node),
                Message => Message,
@@ -3887,7 +3888,7 @@ package body Landin.Stages.Checking is
                               Valid := False;
                            when others =>
                               Bad.Report
-                                (Item => Bad.Type_Mismatch,
+                                (Item => Bad.Type_Declaration_Form,
                                  Source => (if Applied
                                             then Application.Source
                                             else Syn.Source_Of (Of_Tree)),
@@ -3935,7 +3936,7 @@ package body Landin.Stages.Checking is
                            end if;
                         else
                            Bad.Report
-                             (Item => Bad.Type_Mismatch,
+                             (Item => Bad.Type_Declaration_Form,
                               Source => (if Applied
                                          then Application.Source
                                          else Syn.Source_Of (Of_Tree)),
@@ -4413,7 +4414,7 @@ package body Landin.Stages.Checking is
                   if Argument_Count /= Formal_Count
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Type_Declaration_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Written),
                         Message => "this alias application has "
@@ -5410,7 +5411,7 @@ package body Landin.Stages.Checking is
                  Tree_For (Res.Source_Of (Meanings.all, First));
             begin
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Pointer_Union_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message => What & " wants a pointer and this is a union of"
@@ -5441,7 +5442,7 @@ package body Landin.Stages.Checking is
               Tree_For (Res.Source_Of (Meanings.all, Empty));
          begin
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Pointer_Union_Use,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => What & " wants a pointer and this is a union of"
@@ -5586,7 +5587,7 @@ package body Landin.Stages.Checking is
          begin
             Faulted := True;
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Assembly_Block_Contract,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Where),
                Message => Message,
@@ -6302,7 +6303,7 @@ package body Landin.Stages.Checking is
                end if;
                if not Valid then
                   Bad.Report
-                    (Item => Bad.Type_Mismatch,
+                    (Item => Bad.Packed_Image,
                      Source => Syn.Source_Of (Of_Tree),
                      Where => Syn.Where (Of_Tree, Written),
                      Message => "an encoded union requires distinct atoms"
@@ -6417,7 +6418,7 @@ package body Landin.Stages.Checking is
                            end;
                         else
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Type_Declaration_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Member),
                               Message => "a union holds at most one pointer"
@@ -6460,7 +6461,7 @@ package body Landin.Stages.Checking is
                         end;
                      elsif Held /= Ty.Ill_Typed then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Type_Declaration_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Member),
                            Message => "this union member is not an atom"
@@ -6553,7 +6554,7 @@ package body Landin.Stages.Checking is
                if Held not in Ty.Integer_Name then
                   if Held /= Ty.Ill_Typed then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Type_Declaration_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Base),
                         Message => "a range subtype constrains an integer"
@@ -6660,7 +6661,7 @@ package body Landin.Stages.Checking is
                then
                   if Concept /= Landin.Checking.No_Concept then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Erased_Contract,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Written),
                         Message => "`any` requires a source concept with"
@@ -7701,7 +7702,7 @@ package body Landin.Stages.Checking is
                Landin.Checking.Note (Types.all, Of_Tree, Written,
                                      Ty.Ill_Typed);
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Type_Declaration_Form,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Written),
                   Message => "`"
@@ -8010,7 +8011,7 @@ package body Landin.Stages.Checking is
                then
                   if not Shared then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Signature_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where
                           (Of_Tree, Syn.Nth_Return_Source
@@ -8042,7 +8043,7 @@ package body Landin.Stages.Checking is
                      if Position = 0 then
                         if not Shared then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Signature_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Source),
                               Message => "this `from` source is not a"
@@ -8068,7 +8069,7 @@ package body Landin.Stages.Checking is
                         if First /= Syn.No_Node then
                            if not Shared then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Signature_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Source),
                                  Message => "this `from` source is named"
@@ -8123,7 +8124,7 @@ package body Landin.Stages.Checking is
                for Left in 1 .. Right - 1 loop
                   if Parts (Left).Name = Parts (Right).Name then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Signature_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Anchor
                           (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Right)),
@@ -8145,7 +8146,7 @@ package body Landin.Stages.Checking is
                for Left in 1 .. Right - 1 loop
                   if Results (Left).Name = Results (Right).Name then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Signature_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Anchor
                           (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Right)),
@@ -8182,7 +8183,7 @@ package body Landin.Stages.Checking is
                     or else Syn.Is_Public (Of_Tree, Node)
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Error_Contract_Violated,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Written),
                         Message => "`! ...` is private routine inference,"
@@ -8284,7 +8285,7 @@ package body Landin.Stages.Checking is
                 /= Res.Module_Type
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Aggregate_Form,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Nominal),
                Message => "this name is not a type, so it cannot construct"
@@ -8315,7 +8316,7 @@ package body Landin.Stages.Checking is
                Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
             else
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Aggregate_Form,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Nominal),
                   Message => "this is not an ordinary struct type",
@@ -9307,7 +9308,7 @@ package body Landin.Stages.Checking is
                  (Template_Tree.all, Function_Node, Position);
             begin
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Call_Argument_Match,
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => Message,
@@ -9360,7 +9361,7 @@ package body Landin.Stages.Checking is
             if Syn.Kind (Caller_Tree, Call) = Syn.Call then
                if Syn.Argument_Count (Caller_Tree, Call) /= Wanted then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Call_Argument_Match,
                      Source  => Syn.Source_Of (Caller_Tree),
                      Where   => Syn.Where (Caller_Tree, Call),
                      Message => "this generic call gives "
@@ -9496,7 +9497,7 @@ package body Landin.Stages.Checking is
                   then
                      if Seen (Position) then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Call_Argument_Match,
                            Source  => Syn.Source_Of (Caller_Tree),
                            Where   => Syn.Anchor (Caller_Tree, Argument),
                            Message => "this argument fills `"
@@ -9534,7 +9535,7 @@ package body Landin.Stages.Checking is
                                (Caller_Tree, Argument)))
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Call_Argument_Match,
                            Source  => Syn.Source_Of (Caller_Tree),
                            Where   => Syn.Where (Caller_Tree, Argument),
                            Message => "a caller site can only be forwarded"
@@ -9554,7 +9555,7 @@ package body Landin.Stages.Checking is
                      end if;
                   else
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Call_Argument_Match,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Argument),
                         Message => "this is not a matched call argument of"
@@ -9597,7 +9598,7 @@ package body Landin.Stages.Checking is
                        (Template_Tree.all, Function_Node, Position);
                   begin
                      Bad.Report
-                       (Item    => Bad.Call_Argument_Count,
+                       (Item    => Bad.Call_Argument_Match,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call does not fill parameter `"
@@ -9797,7 +9798,7 @@ package body Landin.Stages.Checking is
          begin
             if not Conflict_Reported (Position) then
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Generic_Deduction,
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => "this argument deduces a different " & What
@@ -9963,7 +9964,7 @@ package body Landin.Stages.Checking is
          begin
             if not Pattern_Failure_Reported (Position) then
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Generic_Deduction,
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => Message,
@@ -10972,7 +10973,7 @@ package body Landin.Stages.Checking is
                     and then Bound (Index).Value.Kind = Ty.Ill_Typed
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Generic_Deduction,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call cannot deduce type formal `"
@@ -10993,7 +10994,7 @@ package body Landin.Stages.Checking is
                     and then not Bound (Index).Fixed_Known
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Generic_Deduction,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call cannot deduce fixed formal `"
@@ -11030,7 +11031,7 @@ package body Landin.Stages.Checking is
                         = Landin.Checking.Inferred
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Generic_Deduction,
                         Source  => Syn.Source_Of (Caller_Tree),
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call cannot deduce a function type"
@@ -11061,7 +11062,7 @@ package body Landin.Stages.Checking is
                              Negated => False)
                         then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Generic_Deduction,
                               Source  => Syn.Source_Of (Caller_Tree),
                               Where   => Syn.Where (Caller_Tree, Call),
                               Message => "the deduced fixed value does not"
@@ -11214,7 +11215,7 @@ package body Landin.Stages.Checking is
                           or else Is_Discovery_Ancestor (Other, Caller))
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Generic_Deduction,
                            Source  => Syn.Source_Of (Caller_Tree),
                            Where   => Syn.Where (Caller_Tree, Call),
                            Message => "this recursive generic call expands"
@@ -11383,7 +11384,7 @@ package body Landin.Stages.Checking is
                                  Error_Form := Landin.Checking.Concrete;
                               else
                                  Bad.Report
-                                   (Item    => Bad.Type_Mismatch,
+                                   (Item    => Bad.Generic_Deduction,
                                     Source  => Syn.Source_Of
                                       (Template_Tree.all),
                                     Where   => Syn.Where
@@ -11428,7 +11429,7 @@ package body Landin.Stages.Checking is
                   elsif Landin.Diagnostics.Count (Found) = Reports_Before
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Generic_Deduction,
                         Source  => Syn.Source_Of (Template_Tree.all),
                         Where   => Syn.Where
                           (Template_Tree.all, Function_Node),
@@ -12445,7 +12446,7 @@ package body Landin.Stages.Checking is
          Because : String) is
       begin
          Bad.Report
-           (Item    => Bad.Type_Mismatch,
+           (Item    => Bad.Result_Use,
             Source  => Syn.Source_Of (Of_Tree),
             Where   => Syn.Where (Of_Tree, Node),
             Message => "this hands back nothing, and a value belongs here",
@@ -13037,7 +13038,7 @@ package body Landin.Stages.Checking is
                               in Res.Type_Argument | Res.Fixed_Argument
                         then
                            Bad.Report
-                             (Item => Bad.Type_Mismatch,
+                             (Item => Bad.Foreign_Boundary,
                               Source => Syn.Source_Of (Of_Tree),
                               Where => Syn.Where (Of_Tree, Argument),
                               Message => "a C variadic call takes only"
@@ -13071,7 +13072,7 @@ package body Landin.Stages.Checking is
             if Syn.Kind (Of_Tree, Node) = Syn.Call or else Variadic then
                if Written_Count /= Wanted then
                   Bad.Report
-                    (Item    => Bad.Call_Argument_Count,
+                    (Item    => Bad.Call_Argument_Match,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "this call gives "
@@ -13113,7 +13114,7 @@ package body Landin.Stages.Checking is
                        in Res.Type_Argument | Res.Fixed_Argument
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Call_Argument_Match,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Argument),
                         Message => "an explicit static argument is not"
@@ -13132,7 +13133,7 @@ package body Landin.Stages.Checking is
                           (Positive (Next_Positional));
                      else
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Call_Argument_Match,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Argument),
                            Message => "this positional argument has no"
@@ -13168,7 +13169,7 @@ package body Landin.Stages.Checking is
                                       (Types.all, Signature, Formal).Name));
                            end loop;
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Call_Argument_Match,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Argument),
                               Message => "`" & Spelled (Label)
@@ -13197,7 +13198,7 @@ package body Landin.Stages.Checking is
                      begin
                         if Seen (Position) then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Call_Argument_Match,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Argument),
                               Message => "this argument fills `"
@@ -13220,7 +13221,7 @@ package body Landin.Stages.Checking is
                              = Syn.No_Node
                         then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Call_Argument_Match,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Argument),
                               Message => "a type-valued static argument"
@@ -13245,7 +13246,7 @@ package body Landin.Stages.Checking is
                                   (Of_Tree, Argument)))
                         then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Call_Argument_Match,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Argument),
                               Message => "a caller site can only be"
@@ -13275,7 +13276,7 @@ package body Landin.Stages.Checking is
                          (Types.all, Signature, Position);
                   begin
                      Bad.Report
-                       (Item    => Bad.Call_Argument_Count,
+                       (Item    => Bad.Call_Argument_Match,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message => "this call does not fill parameter `"
@@ -13299,7 +13300,7 @@ package body Landin.Stages.Checking is
            /= Landin.Machine.Ordinary
          then
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Machine_Entry_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
                Message => "a machine entry cannot be called as a routine",
@@ -13394,7 +13395,7 @@ package body Landin.Stages.Checking is
                               (Types.all, Of_Tree, Argument))))
                   then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Foreign_Boundary,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Argument),
                         Message => "this C variadic tail argument is not"
@@ -13454,7 +13455,7 @@ package body Landin.Stages.Checking is
                           (Of_Tree, Argument, Stepping => False);
                         if Packed_Place (Of_Tree, Argument) then
                            Bad.Report
-                             (Item => Bad.Type_Mismatch,
+                             (Item => Bad.Packed_Image,
                               Source => Syn.Source_Of (Of_Tree),
                               Where => Syn.Where (Of_Tree, Argument),
                               Message => "a packed field has no independent"
@@ -13471,7 +13472,7 @@ package body Landin.Stages.Checking is
                              (Argument, Inout_Places (Previous))
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Place_Required,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Argument),
                                  Message => "this place is already passed"
@@ -13492,7 +13493,7 @@ package body Landin.Stages.Checking is
                   when Syn.Sink_Convention =>
                      if not Sink_Place_Is_Allowed (Of_Tree, Argument) then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Place_Required,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Argument),
                            Message => "a `sink` argument must be a place"
@@ -14002,7 +14003,7 @@ package body Landin.Stages.Checking is
                end;
                if Errors = Landin.Checking.No_Atom_Set then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Error_Contract_Violated,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Recovery),
                      Message => "this call cannot fail, so it has no error"
@@ -14642,7 +14643,7 @@ package body Landin.Stages.Checking is
          begin
             if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Concept then
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Conformance_Form,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Reference),
                   Message => "`" & Spelled (Named)
@@ -14813,7 +14814,7 @@ package body Landin.Stages.Checking is
                   Locate_Entry (Root);
                   if Ambiguous then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Conformance_Form,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Anchor (Of_Tree, Selection),
                         Message => "this static entry name is declared more"
@@ -15337,7 +15338,7 @@ package body Landin.Stages.Checking is
             end loop;
             if not Immediate then
                Bad.Report
-                 (Item => Bad.Type_Mismatch,
+                 (Item => Bad.Erased_Contract,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Selection),
                   Message => "an erased entry is called immediately; it is"
@@ -15369,7 +15370,7 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Signature;
          elsif Matches > 1 then
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Erased_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Anchor (Of_Tree, Selection),
                Message => "this runtime entry name is inherited more than"
@@ -15395,7 +15396,7 @@ package body Landin.Stages.Checking is
                   Positive (Unsafe_Entry));
             begin
                Bad.Report
-                 (Item => Bad.Type_Mismatch,
+                 (Item => Bad.Erased_Contract,
                   Source => Syn.Source_Of (Of_Tree),
                   Where => Syn.Where (Of_Tree, Selection),
                   Message => "this concept entry has no object-safe erased"
@@ -15429,7 +15430,7 @@ package body Landin.Stages.Checking is
          end loop;
          if Root_Evidence = Landin.Checking.No_Conformance then
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Erased_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Selection),
                Message => "this closed program has no concrete runtime"
@@ -15549,7 +15550,7 @@ package body Landin.Stages.Checking is
                   begin
                      if Syn.Kind (Of_Tree, Formal) /= Syn.Type_Formal then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Conformance_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Formal),
                            Message => "a concept parameter must be a type",
@@ -15574,7 +15575,7 @@ package body Landin.Stages.Checking is
                              = Syn.Name (Of_Tree, Later)
                         then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Conformance_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Later),
                               Message => "this concept entry name is used"
@@ -15601,7 +15602,7 @@ package body Landin.Stages.Checking is
                          (Of_Tree, Requirement_Node)
                      then
                         Bad.Report
-                          (Item => Bad.Type_Mismatch,
+                          (Item => Bad.Noreturn_Contract,
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Errors),
                            Message => "a noreturn entry is infallible",
@@ -15615,7 +15616,7 @@ package body Landin.Stages.Checking is
                                   = Syn.Inferred_Error_Set
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Conformance_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Errors),
                            Message => "a concept entry cannot infer its error"
@@ -15661,7 +15662,7 @@ package body Landin.Stages.Checking is
                      begin
                         if States (Positive (Parent_Id)) = Visiting then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Conformance_Form,
                               Source  => Syn.Source_Of (Of_Tree.all),
                               Where   => Syn.Where
                                 (Of_Tree.all, Required_Node),
@@ -15830,7 +15831,7 @@ package body Landin.Stages.Checking is
                          (Of_Tree, Target_Node) /= Binder_Count
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Conformance_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Target_Node),
                            Message => "a parameterized conformance target"
@@ -15877,7 +15878,7 @@ package body Landin.Stages.Checking is
                                   /= Syn.Struct_Body
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Conformance_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Target_Node),
                                  Message => "a parameterized conformance"
@@ -15920,7 +15921,7 @@ package body Landin.Stages.Checking is
                                            Position))
                                  then
                                     Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
+                                      (Item    => Bad.Conformance_Form,
                                        Source  => Syn.Source_Of (Of_Tree),
                                        Where   => Syn.Where
                                          (Of_Tree, Argument),
@@ -15971,7 +15972,7 @@ package body Landin.Stages.Checking is
                                 = Syn.Name (Of_Tree, Later)
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Conformance_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Anchor (Of_Tree, Later),
                                  Message => "this conformance label is"
@@ -16001,7 +16002,7 @@ package body Landin.Stages.Checking is
                         end loop;
                         if not Known then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Conformance_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Anchor (Of_Tree, Supplied),
                               Message => "this label is not an input or entry"
@@ -16039,7 +16040,7 @@ package body Landin.Stages.Checking is
                                           /= Res.Module_Function
                                     then
                                        Bad.Report
-                                         (Item    => Bad.Type_Mismatch,
+                                         (Item    => Bad.Conformance_Form,
                                           Source  => Syn.Source_Of (Of_Tree),
                                           Where   => Syn.Where
                                             (Of_Tree, RHS),
@@ -16082,7 +16083,7 @@ package body Landin.Stages.Checking is
                         end loop;
                         if not Seen then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Conformance_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Node),
                               Message => "this conformance does not supply `"
@@ -16415,7 +16416,7 @@ package body Landin.Stages.Checking is
                     (Concept_Tree.all, Concept_Node) /= 1
                then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Conformance_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Constraint),
                      Message => "a direct type constraint needs a concept"
@@ -17002,7 +17003,7 @@ package body Landin.Stages.Checking is
                                              (Bindings)
                                        then
                                           Bad.Report
-                                            (Item => Bad.Type_Mismatch,
+                                            (Item => Bad.Conformance_Form,
                                              Source => Syn.Source_Of
                                                (Candidate_Tree),
                                              Where => Syn.Where
@@ -17257,7 +17258,8 @@ package body Landin.Stages.Checking is
                                                   Signature)
                                              then
                                                 Bad.Report
-                                                  (Item => Bad.Type_Mismatch,
+                                                  (Item =>
+                                                     Bad.Conformance_Form,
                                                    Source => Syn.Source_Of
                                                      (Candidate_Tree),
                                                    Where => Syn.Where
@@ -17373,7 +17375,7 @@ package body Landin.Stages.Checking is
          procedure Report (Message : String; Note : String) is
          begin
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Traversal_Source,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Source),
                Message => Message,
@@ -18234,7 +18236,7 @@ package body Landin.Stages.Checking is
                                            Actual_Signature)
                                     then
                                        Bad.Report
-                                         (Item    => Bad.Type_Mismatch,
+                                         (Item    => Bad.Conformance_Form,
                                           Source  => Syn.Source_Of (Of_Tree),
                                           Where   => Syn.Where
                                             (Of_Tree, Node),
@@ -19146,7 +19148,7 @@ package body Landin.Stages.Checking is
                        Landin.Checking.Nominal_Of (Types.all, Means));
                begin
                   Bad.Report
-                    (Item => Bad.Type_Mismatch,
+                    (Item => Bad.Type_Declaration_Form,
                      Source => Syn.Source_Of (Of_Tree),
                      Where => Syn.Where (Of_Tree, Node),
                      Message => "a type name does not denote a runtime value",
@@ -19185,7 +19187,7 @@ package body Landin.Stages.Checking is
                  Res.Node_Of (Meanings.all, Means)) /= 0
             then
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Generic_Deduction,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message => "a generic routine template has no standalone"
@@ -19268,7 +19270,7 @@ package body Landin.Stages.Checking is
                          (Types.all, Means)) = Landin.Layouts.Packed
                   then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Packed_Image,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Node),
                         Message => "a packed image is not a scalar operand",
@@ -19284,7 +19286,7 @@ package body Landin.Stages.Checking is
                   --  field -- asks for it as a place.  Reaching here means
                   --  the position wanted something else.
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Aggregate_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
@@ -19319,7 +19321,7 @@ package body Landin.Stages.Checking is
                   return Kept (Ty.Ill_Typed);
                elsif Held = Ty.Fixed_Array then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Aggregate_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
@@ -19485,7 +19487,7 @@ package body Landin.Stages.Checking is
 
             when Syn.Zeroed_Literal =>
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Zero_Image_Unavailable,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message => "`zeroed` is not valid in this value context",
@@ -19595,7 +19597,7 @@ package body Landin.Stages.Checking is
                         else
                            if Got = Ty.No_Value then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Result_Use,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, First),
                                  Message => "this hands back nothing, so it"
@@ -19774,7 +19776,7 @@ package body Landin.Stages.Checking is
                begin
                   if Packed_Place (Of_Tree, From) then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Packed_Image,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, From),
                         Message => "packed elements have no slice stride",
@@ -20389,7 +20391,7 @@ package body Landin.Stages.Checking is
                           = Landin.Checking.Fixed_Array_Field
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Aggregate_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Node),
                            Message => "this selects a whole array field, and"
@@ -20434,7 +20436,7 @@ package body Landin.Stages.Checking is
                           = Landin.Checking.Aggregate_Field
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Aggregate_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Node),
                            Message => "this selects a whole struct field, and"
@@ -20465,7 +20467,7 @@ package body Landin.Stages.Checking is
                     or else Syn.Recovery_Of (Of_Tree, Operand) /= Syn.No_Node
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Error_Contract_Violated,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message => "`try` propagates one unrecovered call",
@@ -20485,7 +20487,7 @@ package body Landin.Stages.Checking is
                          Landin.Memory.No_Operation
                      then
                         Bad.Report
-                          (Item => Bad.Type_Mismatch,
+                          (Item => Bad.Memory_Contract,
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Node),
                            Message => "memory intrinsics cannot fail",
@@ -20505,7 +20507,7 @@ package body Landin.Stages.Checking is
                            = Landin.Checking.No_Atom_Set
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Error_Contract_Violated,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Node),
                            Message => "this call cannot fail, so `try` has"
@@ -20618,7 +20620,7 @@ package body Landin.Stages.Checking is
                         = Syn.Assembly_Operand
                      then
                         Bad.Report
-                          (Item    => Bad.Assembly_Operand_Outside_Block,
+                          (Item    => Bad.Assembly_Block_Contract,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where
                              (Of_Tree,
@@ -20736,7 +20738,7 @@ package body Landin.Stages.Checking is
                      end if;
                      if Ada.Strings.Unbounded.Length (Fault) /= 0 then
                         Bad.Report
-                          (Item => Bad.Type_Mismatch,
+                          (Item => Bad.Assembly_Block_Contract,
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Node),
                            Message => Ada.Strings.Unbounded.To_String (Fault),
@@ -20790,7 +20792,7 @@ package body Landin.Stages.Checking is
                   function Refuse (Message : String) return Ty.Type_Kind is
                   begin
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Memory_Contract,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Node),
                         Message => Message,
@@ -20969,7 +20971,7 @@ package body Landin.Stages.Checking is
                         /= Ty.Ill_Typed)
                then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Call_Argument_Match,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "a conversion requires exactly one value",
@@ -21589,7 +21591,7 @@ package body Landin.Stages.Checking is
                      --  Reaching here means this position wanted a value of
                      --  another type, or the callee names no struct at all.
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Aggregate_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message =>
@@ -21671,7 +21673,7 @@ package body Landin.Stages.Checking is
                begin
                   if not Addressable then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Place_Required,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Place),
                         Message => "`addr` requires an addressable storage"
@@ -21689,7 +21691,7 @@ package body Landin.Stages.Checking is
 
                   if Is_Utf8_Index (Of_Tree, Place) then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Place_Required,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Place),
                         Message => "a utf8 index decodes a codepoint value,"
@@ -21704,7 +21706,7 @@ package body Landin.Stages.Checking is
 
                   if Packed_Place (Of_Tree, Place) then
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Packed_Image,
                         Source => Syn.Source_Of (Of_Tree),
                         Where => Syn.Where (Of_Tree, Place),
                         Message => "a packed field has no independent address",
@@ -21839,7 +21841,7 @@ package body Landin.Stages.Checking is
                        (Landin.Checking.Type_Of (Types.all, Of_Tree, Node));
                   end if;
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Erased_Contract,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message =>
@@ -22933,7 +22935,7 @@ package body Landin.Stages.Checking is
 
          if Which = 0 then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Aggregate_Form,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Nominal),
                Message => "this case does not belong to the variant part"
@@ -22965,7 +22967,7 @@ package body Landin.Stages.Checking is
             if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
                if Count > 0 then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Aggregate_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Value),
                      Message => "this case has a payload, so its fields"
@@ -23283,7 +23285,7 @@ package body Landin.Stages.Checking is
                                     Candidate))
                               then
                                  Bad.Report
-                                   (Item    => Bad.Type_Mismatch,
+                                   (Item    => Bad.Aggregate_Form,
                                     Source  => Syn.Source_Of (Of_Tree),
                                     Where   => Syn.Where (Of_Tree, Fill),
                                     Message => "a trailing fill needs one"
@@ -23303,7 +23305,7 @@ package body Landin.Stages.Checking is
                         if not Failed then
                            if First_Missing = 0 then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Aggregate_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Fill),
                                  Message => "a value fill needs an omitted"
@@ -24139,7 +24141,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Wrote, Which))
                         then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Aggregate_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Fill),
                               Message => "a trailing fill needs one exact"
@@ -24159,7 +24161,7 @@ package body Landin.Stages.Checking is
                   if not Failed then
                      if First_Missing = 0 then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Aggregate_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Fill),
                            Message => "a value fill needs an omitted field"
@@ -24275,7 +24277,7 @@ package body Landin.Stages.Checking is
          --  least one destination position to remain for the repeated suffix.
          if Landin.Checking.Element_Count (Prefix) >= Expected then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Aggregate_Form,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Repetition),
                Message => "this mixed repetition leaves no array suffix to"
@@ -24649,7 +24651,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
                            if Syn.Match_Binding_Count (Of_Tree, Arm) > 1 then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "a `ptr` arm binds one pointer"
@@ -24674,7 +24676,7 @@ package body Landin.Stages.Checking is
                                     --  into a payload; the pointer case is
                                     --  a cell of the union, not a payload.
                                     Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
+                                      (Item    => Bad.Match_Arm_Form,
                                        Source  => Syn.Source_Of (Of_Tree),
                                        Where   => Syn.Where
                                          (Of_Tree, Binding),
@@ -24709,7 +24711,7 @@ package body Landin.Stages.Checking is
                      then
                         if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0 then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "a wildcard arm has nothing to"
@@ -24723,7 +24725,7 @@ package body Landin.Stages.Checking is
                         end if;
                         if Wildcard /= Syn.No_Node then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this match has two wildcard arms",
@@ -24738,7 +24740,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
                            if not Last then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "the wildcard arm is last",
@@ -24763,7 +24765,7 @@ package body Landin.Stages.Checking is
                            if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "an atom arm has no payload to"
@@ -24781,7 +24783,7 @@ package body Landin.Stages.Checking is
                                (Types.all, Atoms, Means)
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "this case does not belong to"
@@ -24917,7 +24919,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
                            if Syn.Match_Binding_Count (Of_Tree, Arm) > 1 then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "a `ptr` arm binds one pointer"
@@ -24944,7 +24946,7 @@ package body Landin.Stages.Checking is
                                     --  payload, so writing through the name
                                     --  would write the union.
                                     Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
+                                      (Item    => Bad.Match_Arm_Form,
                                        Source  => Syn.Source_Of (Of_Tree),
                                        Where   => Syn.Where
                                          (Of_Tree, Binding),
@@ -24979,7 +24981,7 @@ package body Landin.Stages.Checking is
                      then
                         if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0 then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "a wildcard arm has nothing to"
@@ -24993,7 +24995,7 @@ package body Landin.Stages.Checking is
                         end if;
                         if Wildcard /= Syn.No_Node then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this match has two wildcard arms",
@@ -25008,7 +25010,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
                            if not Last then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "the wildcard arm is last",
@@ -25033,7 +25035,7 @@ package body Landin.Stages.Checking is
                            if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "an atom arm has no payload to"
@@ -25048,7 +25050,7 @@ package body Landin.Stages.Checking is
 
                            if Means /= Empty then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "this case does not belong to"
@@ -25140,7 +25142,7 @@ package body Landin.Stages.Checking is
                      --  union and is not a case name anywhere else.
                      if Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Match_Arm_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Pattern),
                            Message => "a `ptr` arm matches a pointer union,"
@@ -25157,7 +25159,7 @@ package body Landin.Stages.Checking is
 
                      if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0 then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Match_Arm_Form,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Pattern),
                            Message => "an atom arm has no payload to bind",
@@ -25174,7 +25176,7 @@ package body Landin.Stages.Checking is
                      then
                         if Wildcard /= Syn.No_Node then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this match has two wildcard arms",
@@ -25191,7 +25193,7 @@ package body Landin.Stages.Checking is
                              (Of_Tree, Node)
                            then
                               Bad.Report
-                                (Item    => Bad.Type_Mismatch,
+                                (Item    => Bad.Match_Arm_Form,
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Pattern),
                                  Message => "the wildcard atom arm is last",
@@ -25221,7 +25223,7 @@ package body Landin.Stages.Checking is
                      then
                         if Means = Res.No_Declaration then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this atom is not a member of the"
@@ -25235,7 +25237,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Pattern);
                         elsif Seen (Positive (Means)) then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this atom is matched twice",
@@ -25304,7 +25306,7 @@ package body Landin.Stages.Checking is
             begin
                if Got /= Ty.Ill_Typed then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Match_Arm_Form,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Subject),
                      Message => "a match subject is an atom set, a variant"
@@ -25354,7 +25356,7 @@ package body Landin.Stages.Checking is
                   --  and is not a variant case name.
                   if Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Match_Arm_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Pattern),
                         Message => "a `ptr` arm matches a pointer union,"
@@ -25393,7 +25395,7 @@ package body Landin.Stages.Checking is
 
                   if Which = 0 then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Match_Arm_Form,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Pattern),
                         Message => "this case does not belong to the"
@@ -25436,7 +25438,7 @@ package body Landin.Stages.Checking is
                      begin
                         if Given /= 0 and then Given /= Expected then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Match_Arm_Form,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Pattern),
                               Message => "this arm binds"
@@ -25729,7 +25731,7 @@ package body Landin.Stages.Checking is
                   Writable := False;
                elsif Decidable (Held) then
                   Bad.Report
-                    (Item    => Bad.Type_Mismatch,
+                    (Item    => Bad.Traversal_Source,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Source),
                      Message => "this traverses a pointer, and only the exact"
@@ -25814,7 +25816,7 @@ package body Landin.Stages.Checking is
                end;
             elsif Decidable (Held) then
                Bad.Report
-                 (Item    => Bad.Type_Mismatch,
+                 (Item    => Bad.Traversal_Source,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Source),
                   Message => "this traverses " & Shown (Held)
@@ -25951,7 +25953,7 @@ package body Landin.Stages.Checking is
                     and then Range_Type not in Ty.Integer_Name
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Traversal_Source,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Lower),
                         Message => "a range traversal starts with an integer",
@@ -26134,7 +26136,7 @@ package body Landin.Stages.Checking is
                      begin
                         if Got = Ty.No_Value then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Result_Use,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this hands back nothing, so"
@@ -26543,7 +26545,7 @@ package body Landin.Stages.Checking is
                     or else Shape = Landin.Checking.No_Signature
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Result_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Value),
                         Message => "this does not produce multiple named"
@@ -26568,7 +26570,7 @@ package body Landin.Stages.Checking is
                            then
                               if Wildcard then
                                  Bad.Report
-                                   (Item    => Bad.Type_Mismatch,
+                                   (Item    => Bad.Result_Use,
                                     Source  => Syn.Source_Of (Of_Tree),
                                     Where   => Syn.Where (Of_Tree, Field),
                                     Message => "a result binding needs at"
@@ -26607,7 +26609,7 @@ package body Landin.Stages.Checking is
                                        Into    => Found);
                                  elsif Seen (Which) then
                                     Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
+                                      (Item    => Bad.Result_Use,
                                        Source  => Syn.Source_Of (Of_Tree),
                                        Where   => Syn.Anchor (Of_Tree, Field),
                                        Message => "this returned field is"
@@ -27279,7 +27281,7 @@ package body Landin.Stages.Checking is
                      Commit_To (Of_Tree, Value, Ty.Default_Float);
                   elsif Got = Ty.No_Value then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Result_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Value),
                         Message => "this hands back nothing, so there is"
@@ -27318,7 +27320,7 @@ package body Landin.Stages.Checking is
                       or else Got in Ty.Not_Typed | Ty.No_Value)
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Error_Contract_Violated,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Error),
                         Message => "`fail` carries one atom identity",
@@ -27371,7 +27373,7 @@ package body Landin.Stages.Checking is
                      end;
                      if Target.Is_Block then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Control_Value,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Value),
                            Message => "this break gives a value to a"
@@ -27384,7 +27386,7 @@ package body Landin.Stages.Checking is
                            Into    => Found);
                      else
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Control_Value,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Value),
                            Message => "this break gives a value to a"
@@ -27400,7 +27402,7 @@ package body Landin.Stages.Checking is
                     and then Target.Requires_Value
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Control_Value,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message => "this break leaves a value-producing loop"
@@ -27490,7 +27492,7 @@ package body Landin.Stages.Checking is
                begin
                   if Got in Ty.Settled then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Result_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where
                           (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
@@ -28151,7 +28153,7 @@ package body Landin.Stages.Checking is
             return;
          elsif Syn.Kind (Of_Tree, Node) = Syn.Pointer_Conversion then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Pointer_Union_Use,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "`ptr` converts an integer into a pointer, and"
@@ -28601,7 +28603,7 @@ package body Landin.Stages.Checking is
                      if Got /= Ty.Pointer_Value then
                         if Got /= Ty.Ill_Typed then
                            Bad.Report
-                             (Item => Bad.Type_Mismatch,
+                             (Item => Bad.Erased_Contract,
                               Source => Syn.Source_Of (Of_Tree),
                               Where => Syn.Where (Of_Tree, Value),
                               Message => "`any` erases a pointer to the"
@@ -28865,7 +28867,7 @@ package body Landin.Stages.Checking is
                         if not Valid then
                            if Satisfied then
                               Bad.Report
-                                (Item => Bad.Type_Mismatch,
+                                (Item => Bad.Erased_Contract,
                                  Source => Syn.Source_Of (Of_Tree),
                                  Where => Syn.Where (Of_Tree, Node),
                                  Message => "this conformance is not usable"
@@ -28932,7 +28934,7 @@ package body Landin.Stages.Checking is
                       (Types.all, Expected.Reference)
                   then
                      Bad.Report
-                       (Item    => Bad.Type_Mismatch,
+                       (Item    => Bad.Pointer_Union_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
                         Message => "`ptr` converts an integer into a"
@@ -28977,7 +28979,7 @@ package body Landin.Stages.Checking is
                      end if;
                      if Pointer_Is_Known_Zero (Of_Tree, Value) then
                         Bad.Report
-                          (Item => Bad.Type_Mismatch,
+                          (Item => Bad.Pointer_Union_Use,
                            Source => Syn.Source_Of (Of_Tree),
                            Where => Syn.Where (Of_Tree, Node),
                            Message => "a pointer cannot be constructed from"
@@ -29505,7 +29507,7 @@ package body Landin.Stages.Checking is
               or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal)
          then
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Erased_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
                Message => "a module `any` binding has no implicit null"
@@ -29532,7 +29534,7 @@ package body Landin.Stages.Checking is
               or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal)
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Zero_Image_Unavailable,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
                Message => "a module atom binding needs an atom initializer",
@@ -29761,7 +29763,7 @@ package body Landin.Stages.Checking is
                    (Ty.Storage_Size (Ty.Scalar_Name (Got), Facts)));
          elsif Got = Ty.No_Value then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Result_Use,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, First),
                Message => "this hands back nothing, so it cannot"
@@ -29986,7 +29988,7 @@ package body Landin.Stages.Checking is
                   else
                      if Got = Ty.No_Value then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Result_Use,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Repeated),
                            Message => "this hands back nothing, so it cannot"
@@ -34095,7 +34097,7 @@ package body Landin.Stages.Checking is
          procedure Reject (Message : String) is
          begin
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Linkage_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => (if Explicit = Landin.Source.Empty_Span
                          then Syn.Anchor (Of_Tree, Node) else Explicit),
@@ -34116,7 +34118,7 @@ package body Landin.Stages.Checking is
             Site : Landin.Provenance.Origin := Syn.Origin (Of_Tree, Node)) is
          begin
             Bad.Report
-              (Item => Bad.Type_Mismatch,
+              (Item => Bad.Linkage_Contract,
                Source => Syn.Source_Of (Of_Tree),
                Where => (if Explicit = Landin.Source.Empty_Span
                          then Syn.Anchor (Of_Tree, Node) else Explicit),
@@ -34517,7 +34519,7 @@ package body Landin.Stages.Checking is
                     Tree_For (Res.Source_Of (Meanings.all, Selected));
                begin
                   Bad.Report
-                    (Item => Bad.Type_Mismatch,
+                    (Item => Bad.Linkage_Contract,
                      Source => Syn.Source_Of (Of_Tree.all),
                      Where => (if Explicit = Landin.Source.Empty_Span
                                then Syn.Anchor (Of_Tree.all, Node)
@@ -34572,7 +34574,7 @@ package body Landin.Stages.Checking is
             end loop;
             if not Valid then
                Bad.Report
-                 (Item => Bad.Type_Mismatch,
+                 (Item => Bad.Linkage_Contract,
                   Source => Syn.Source_Of (Of_Tree), Where => Explicit,
                   Message => "invalid, reserved or duplicate datum symbol",
                   Note => "[1640]: Cortex data linkage requires one ASCII"
@@ -34668,7 +34670,7 @@ package body Landin.Stages.Checking is
          end if;
          if not Valid then
             Bad.Report
-              (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+              (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Where (Of_Tree, Node),
                Message => "invalid or conflicting Cortex-M0 placement",
                Note => "[1640]: sections use .text.*, .ramtext.*, .rodata.*,"
@@ -34720,7 +34722,7 @@ package body Landin.Stages.Checking is
                  and then Syn.Error_Set_Of (Of_Tree, Node) /= Syn.No_Node
                then
                   Bad.Report
-                    (Item => Bad.Type_Mismatch,
+                    (Item => Bad.Noreturn_Contract,
                      Source => Syn.Source_Of (Of_Tree),
                      Where => Syn.Where (Of_Tree, Node),
                      Message => "a noreturn generic is infallible",
@@ -35184,7 +35186,7 @@ package body Landin.Stages.Checking is
                        Res.Bound_To (Meanings.all, Of_Tree.all, Callee);
                   begin
                      Bad.Report
-                       (Item => Bad.Type_Mismatch,
+                       (Item => Bad.Generic_Deduction,
                         Source => Pending.Source,
                         Where => Syn.Where (Of_Tree.all, Pending.Node),
                         Message => "this generic key needs an error set"

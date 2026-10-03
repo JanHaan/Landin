@@ -1,0 +1,6 @@
+error[L0345]: machine convention requires Cortex-M0 and a nongeneric () -> none signature without errors
+  --> ../tests/fixtures/negative/machine-entry-signature-is-machine-shaped/program.ldn:3:1
+  |
+3 | extern(interrupt) tick: (count: u32) -> none = end tick
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this machine signature
+  = note: [1570]: interrupt and naked routines have distinct machine entry and return obligations

@@ -1,7 +1,7 @@
 class: negative
 summary: generic field arguments preserve exact array lengths
 program: main.ldn
-codes: L0301
+codes: L0340
 constructs: 0420, 0520, 0950, 1300, 1880, 1910
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

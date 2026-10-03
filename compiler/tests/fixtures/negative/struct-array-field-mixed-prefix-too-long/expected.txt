@@ -1,4 +1,4 @@
-error[L0301]: this mixed repetition leaves no array suffix to fill
+error[L0334]: this mixed repetition leaves no array suffix to fill
   --> ../tests/fixtures/negative/struct-array-field-mixed-prefix-too-long/program.ldn:8:17
   |
 8 |     state.row = [1, 2, of 3]

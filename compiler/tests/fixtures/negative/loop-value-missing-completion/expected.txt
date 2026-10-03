@@ -1,4 +1,4 @@
-error[L0301]: this value-producing loop can finish without a value
+error[L0332]: this value-producing loop can finish without a value
   --> ../tests/fixtures/negative/loop-value-missing-completion/program.ldn:2:12
   |
 2 |     code = while false do

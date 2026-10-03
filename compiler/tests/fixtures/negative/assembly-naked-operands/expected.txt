@@ -1,4 +1,4 @@
-error[L0301]: a naked body's assembly takes no operands
+error[L0330]: a naked body's assembly takes no operands
   --> ../tests/fixtures/negative/assembly-naked-operands/program.ldn:2:30
   |
 2 |     assembler.block("bx lr", out _ at r1)

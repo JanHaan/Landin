@@ -2444,7 +2444,7 @@ package body Landin.Tests.Driver_Suite is
                "helper source errors are reports, not backend defects");
             Landin.Testing.Check
               (Item, Occurrences (Report, "error[") = 1
-                 and then Contains (Report, "error[L0301]: " & Message)
+                 and then Contains (Report, "error[L0347]: " & Message)
                  and then not Contains (Report, "L0502")
                  and then not Contains (Report, "internal compiler defect"),
                "only the precise source helper contract owns the refusal");
@@ -2536,7 +2536,7 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check
               (Item, Occurrences (Report, "error[") = 1
                  and then Contains
-                   (Report, "error[L0301]: link symbol `main` collides with"
+                   (Report, "error[L0347]: link symbol `main` collides with"
                     & " the selected native hosted entry")
                  and then Contains (Report, "the selected hosted entry")
                  and then not Contains (Report, "L0502"),
@@ -2818,7 +2818,7 @@ package body Landin.Tests.Driver_Suite is
             & "1 end bad_i32 size_i32: (self: ptr i32) -> (n: i32) = 2 end "
             & "size_i32 i32 is widget (bad: bad_i32, size: size_i32) f: "
             & "(items: []any widget) -> (n: i32) = items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (value: ptr t) -> (n: "
             & "i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
@@ -2827,7 +2827,7 @@ package body Landin.Tests.Driver_Suite is
             & "bad_i32, size: size_i32) f: (items: []any widget) "
             & "-> (n: i32) = "
             & "items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (inout self: ptr t) -> "
             & "(n: i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
@@ -2835,7 +2835,7 @@ package body Landin.Tests.Driver_Suite is
             & "(self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget "
             & "(bad: bad_i32, size: size_i32) f: (items: []any widget) -> (n: "
             & "i32) = items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (self: ptr ptr t) -> (n: "
             & "i32) size: (self: ptr t) -> (n: i32) end widget "
@@ -2844,7 +2844,7 @@ package body Landin.Tests.Driver_Suite is
             & "i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, "
             & "size: size_i32) f: (items: []any widget) -> (n: i32) = "
             & "items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (self: ptr t, other: t) "
             & "-> (n: i32) size: (self: ptr t) -> (n: i32) end "
@@ -2853,7 +2853,7 @@ package body Landin.Tests.Driver_Suite is
             & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
             & "widget (bad: bad_i32, size: size_i32) f: (items: []any widget) "
             & "-> (n: i32) = items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (self: ptr t) -> (n: t) "
             & "size: (self: ptr t) -> (n: i32) end widget bad_i32: (self: ptr "
@@ -2861,7 +2861,7 @@ package body Landin.Tests.Driver_Suite is
             & "(n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, size: "
             & "size_i32) f: (items: []any widget) -> (n: i32) = "
             & "items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type)  draw: (l: t, r: t) -> (n: "
             & "bool)  size: (self: ptr t) -> (n: i32) end widget "
@@ -2871,7 +2871,7 @@ package body Landin.Tests.Driver_Suite is
             & "(n: i32) = n = "
             & "2 end ts thing is widget (draw: td, size: ts) use: (items: "
             & "[]any widget) -> (n: i32) = n = items[0].size() end use",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("parent: type = concept (t: type) bad: (value: t) -> (n: i32) "
             & "end parent widget: type = concept (t: type) is parent size: "
@@ -2880,7 +2880,7 @@ package body Landin.Tests.Driver_Suite is
             & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
             & "widget (size: size_i32) f: (items: []any widget) -> (n: i32) = "
             & "items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("parent: type = concept (t: type) bad: (value: t) -> (n: i32) "
             & "end parent widget: type = concept (t: type is parent) size: "
@@ -2889,7 +2889,7 @@ package body Landin.Tests.Driver_Suite is
             & "size_i32: (self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is "
             & "widget (size: size_i32) f: (items: []any widget) -> (n: i32) = "
             & "items[0].size() end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (left: t, right: t) -> "
             & "(n: i32) size: (self: ptr t) -> (n: i32) end widget bad_i32: "
@@ -2897,7 +2897,7 @@ package body Landin.Tests.Driver_Suite is
             & "(self: ptr i32) -> (n: i32) = 2 end size_i32 i32 is widget "
             & "(bad: bad_i32, size: size_i32) f: () -> none = item: i32 = 1 "
             & "erased: any widget = any(addr item) end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("widget: type = concept (t: type) bad: (self: ptr mut t) -> (n: "
             & "i32) size: (self: ptr t) -> (n: i32) end widget "
@@ -2906,7 +2906,7 @@ package body Landin.Tests.Driver_Suite is
             & "i32) -> (n: i32) = 2 end size_i32 i32 is widget (bad: bad_i32, "
             & "size: size_i32) f: () -> none = item: i32 = 1 erased: any "
             & "widget = any(addr item) end f",
-            "L0301", 1, Executable);
+            "L0342", 1, Executable);
          Check
            ("f: (flag: bool) -> none = while flag do mark: i32 = 1 "
             & "continue complete _ = mark end while end f" & ASCII.LF,
@@ -2924,25 +2924,25 @@ package body Landin.Tests.Driver_Suite is
          --  a struct belongs is a type error, not a refusal.
          Check
            ("t: type = i32 f: (x: t, t: i32) -> none = end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("t: type = i32 f: (t: i32, x: t) -> none = end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("t: type = i32 f: () -> (x: t, t: i32) = x = 1 t = 2 end f"
             & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("t: type = i32 f: (x: t) -> (t: i32) = t = 1 end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("t: type = i32 f: () -> none = callback := (x: t, t: i32) "
             & "-> none = end end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("t: type = i32 f: () -> none = callback := (t: i32, x: t) "
             & "-> none = end end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0338", 1, Executable);
          Check
            ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: 1) "
             & "end f" & ASCII.LF,
@@ -2967,7 +2967,7 @@ package body Landin.Tests.Driver_Suite is
             "L0201", 1, Executable);
          Check
            ("f: () -> (r: u8) = u8(value: 1) end f" & ASCII.LF,
-            "L0301", 1, Executable);
+            "L0334", 1, Executable);
          Check
            ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: "
             & "missing) end f" & ASCII.LF,
@@ -3207,11 +3207,11 @@ package body Landin.Tests.Driver_Suite is
             "L0328", 1, Executable);
          Check
            ("f: () -> none = for n in true ..< 2 do v := n end for end f",
-            "L0301", 1, Executable);
+            "L0348", 1, Executable);
          Check
            ("f: (value: i32) -> none = for n in value do v := n "
             & "end for end f",
-            "L0301", 1, Executable);
+            "L0348", 1, Executable);
          Check
            ("one: () -> (r: i32) = r = 1 end one "
             & "two: (v: i32) -> (r: i32) = r = v end two "
@@ -3219,16 +3219,16 @@ package body Landin.Tests.Driver_Suite is
             "L0301", 1, Executable);
          Check
            ("f: () -> (r: u8) = r = u8() end f",
-            "L0301", 1, Executable);
+            "L0327", 1, Executable);
          Check
            ("f: (v: i32) -> (r: u8) = r = u8(v, v) end f",
-            "L0301", 1, Executable);
+            "L0327", 1, Executable);
          Check
            ("f: () -> (r: utf8) = r = utf8() end f",
-            "L0301", 1, Executable);
+            "L0327", 1, Executable);
          Check
            ("f: (v: []u8) -> (r: utf8 from v) = r = utf8(v, v) end f",
-            "L0301", 1, Executable);
+            "L0327", 1, Executable);
          Check
            ("u8: (v: u8) -> (r: u8) = r = v end u8 "
             & "image: u8 = u8(1)",
@@ -3244,25 +3244,25 @@ package body Landin.Tests.Driver_Suite is
             & "(t: type) box(t) is equatable () "
             & "accept: (t: type is equatable, v: t) -> none = end accept "
             & "f: () -> none = v: box(i32) = zeroed accept(v) end f",
-            "L0301", 2, Executable);
+            "L0341", 2, Executable);
          Check
            ("loopy: type = concept (t: type is loopy) end loopy "
             & "i32 is loopy ()",
-            "L0301", 1, Executable);
+            "L0341", 1, Executable);
          Check
            ("ordered: type = concept (t: type) "
             & "less: (a: t, b: t) -> (r: bool) end ordered "
             & "less_i32: (a: i32, b: i32) -> (r: bool) = "
             & "r = a < b end less_i32 "
             & "i32 is ordered (less: less_i32, less: less_i32)",
-            "L0301", 1, Executable);
+            "L0341", 1, Executable);
          Check
            ("lookup: type = concept (t: type, index: type) "
             & "get: (v: t, i: index) -> (r: i32) end lookup "
             & "get_i32: (v: i32, i: i32) -> (r: i32) = "
             & "r = v + i end get_i32 "
             & "i32 is lookup (get: get_i32)",
-            "L0301", 1, Executable);
+            "L0341", 1, Executable);
          Check
            ("percent: type = u8 range 0..100 "
             & "cell: type (t: type) = struct value: t end cell "
@@ -3352,7 +3352,7 @@ package body Landin.Tests.Driver_Suite is
             "L0305", 1, Executable);
          Check
            ("box: type = struct value: i32 end box "
-            & "x := box(value: ptr u8)", "L0301", 1, Executable);
+            & "x := box(value: ptr u8)", "L0334", 1, Executable);
          Check
            ("box: type = struct first: i32 second: i32 end box "
             & "f: () -> none = x := box(first: 0, of ptr u8) end f",
@@ -3361,7 +3361,7 @@ package body Landin.Tests.Driver_Suite is
            ("choice: type = struct kind: variant pair: (value: i32)"
             & " | empty end kind end choice "
             & "x: choice = (kind: pair(value: ptr u8))",
-            "L0301", 1, Executable);
+            "L0334", 1, Executable);
          Check
            ("f: () -> none = loop do complete end loop end f",
             "L0110", 1, Executable);
@@ -3901,7 +3901,7 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Listed, "L0506  error"),
          "the index names every code with its standing");
       Landin.Testing.Check_Equal
-        (Item, Occurrences (Listed, "" & LF), 69,
+        (Item, Occurrences (Listed, "" & LF), 87,
          "one line per catalogue row");
       Landin.Testing.Check_Equal
         (Item, One.Status, Landin.Driver.Status_Success,

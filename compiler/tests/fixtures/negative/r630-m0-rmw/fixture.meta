@@ -3,6 +3,6 @@ summary: r630 m0 rmw
 program: program.ldn
 constructs: 0430, 0850, 1620
 targets: cortex-m
-codes: L0301
+codes: L0344
 args: --target=cortex-m0 ../tests/fixtures/negative/r630-m0-rmw/program.ldn
 expect: expected.txt

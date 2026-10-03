@@ -1,4 +1,4 @@
-error[L0301]: this value-producing `if` has a fallthrough path with no value
+error[L0332]: this value-producing `if` has a fallthrough path with no value
   --> ../tests/fixtures/negative/if-expression-missing-else/program.ldn:2:5
   |
 2 |     if condition then

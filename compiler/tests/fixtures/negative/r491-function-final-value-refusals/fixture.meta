@@ -1,7 +1,7 @@
 class: negative
 summary: final values preserve early-return assignment value typing and reference-origin refusals
 program: main.ldn
-codes: L0302, L0302, L0302, L0314, L0301, L0301, L0301
+codes: L0302, L0302, L0302, L0314, L0301, L0332, L0332
 constructs: 0790, 0880, 0930, 1080, 1800, 1910
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

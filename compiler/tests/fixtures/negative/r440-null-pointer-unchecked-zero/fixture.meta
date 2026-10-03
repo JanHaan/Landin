@@ -1,6 +1,6 @@
 class: negative
 summary: unchecked never permits construction of a known null pointer
 program: program.ldn
-codes: L0301
+codes: L0335
 constructs: 0460, 0480, 1690
 targets: linux-x86-64, linux-arm64, synthetic-32

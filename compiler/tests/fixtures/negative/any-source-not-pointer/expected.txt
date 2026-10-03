@@ -1,4 +1,4 @@
-error[L0301]: `any` erases a pointer to the represented value
+error[L0342]: `any` erases a pointer to the represented value
   --> ../tests/fixtures/negative/any-source-not-pointer/main.ldn:17:31
    |
 17 |     erased: any display = any(item)

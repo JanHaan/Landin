@@ -1,4 +1,4 @@
-error[L0301]: this alias application has 1 argument, but `bytes` needs 2 arguments
+error[L0338]: this alias application has 1 argument, but `bytes` needs 2 arguments
   --> ../tests/fixtures/negative/parameterized-alias-arity/program.ldn:2:13
   |
 2 | bad: type = bytes(u8)

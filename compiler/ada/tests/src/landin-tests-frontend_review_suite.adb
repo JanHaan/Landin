@@ -164,7 +164,7 @@ package body Landin.Tests.Frontend_Review_Suite is
                      Run_Source (Item, Work,
                        "f: (stop: bool) -> (r: i32) = r = 42 "
                        & Statement & " r = 1 end f",
-                       (if Falls_Through then "L0301" else ""));
+                       (if Falls_Through then "L0332" else ""));
                   end;
                end loop;
             end loop;
@@ -215,7 +215,7 @@ package body Landin.Tests.Frontend_Review_Suite is
                              & (if Contextual then ": " & Shape & " = "
                                 else " := ")
                              & Expression & " r = 1 end f",
-                             (if Falls_Through then "L0301" else ""));
+                             (if Falls_Through then "L0332" else ""));
                         end if;
                      end;
                   end loop;
@@ -330,7 +330,7 @@ package body Landin.Tests.Frontend_Review_Suite is
                         --  D17: an empty result is assigned vacuously.
                         when 3 => (if Shape_Mode in 3 | 5 then ""
                                    else "L0302"),
-                        when others => "L0301"));
+                        when others => "L0332"));
                end;
             end loop;
          end loop;
@@ -381,7 +381,7 @@ package body Landin.Tests.Frontend_Review_Suite is
                     & "consume: (a: " & Shape & ") -> none = end consume "
                     & "f: (stop: bool, a: " & Shape & ") -> (r: i32) ="
                     & " r = 42 " & Statement & " r = 1 end f",
-                    (if Flow = 3 then "L0301" else ""));
+                    (if Flow = 3 then "L0332" else ""));
                end;
             end loop;
          end loop;
@@ -424,11 +424,14 @@ package body Landin.Tests.Frontend_Review_Suite is
                   when others => "f: () -> (r: i32) = a: [0]i32 = zeroed"
                     & " b := a + -(begin return end) end f");
          begin
-            --  Modes 2 and 9 name an array type where a value belongs, which
-            --  D241 reports as the type error it is.
+            --  Modes 2 and 9 name an array type where a value belongs
+            --  (L0338), 3 to 5 lack an operand value (L0332), and the rest
+            --  give an operator operands it does not take (L0301).
             Run_Source (Item, Work, Text,
               (case Mode is
                   when 1 | 8 | 13 => "L0302",
+                  when 2 | 9 => "L0338",
+                  when 3 .. 5 => "L0332",
                   when others => "L0301"));
          end;
       end loop;

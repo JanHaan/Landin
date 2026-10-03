@@ -1,4 +1,4 @@
-error[L0301]: this packed field requires a boolean or fixed-width unsigned integer
+error[L0336]: this packed field requires a boolean or fixed-width unsigned integer
   --> ../tests/fixtures/negative/r640-signed/program.ldn:2:5
   |
 2 |     value: i8 at 0..7

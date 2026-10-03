@@ -3,7 +3,7 @@ summary: D248 leaves a naked body's single literal block without operands; the p
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-naked-operands/program.ldn
-codes: L0301
+codes: L0330
 status: 1
 constructs: 1570, 1630
 targets: cortex-m

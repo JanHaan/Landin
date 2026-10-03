@@ -1,4 +1,4 @@
-error[L0301]: this alias application has 1 argument, but `box` needs 2 arguments
+error[L0338]: this alias application has 1 argument, but `box` needs 2 arguments
   --> ../tests/fixtures/negative/parameterized-struct-arity/program.ldn:5:6
   |
 5 | bad: box(u8)

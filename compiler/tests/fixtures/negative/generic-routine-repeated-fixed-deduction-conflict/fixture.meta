@@ -3,7 +3,7 @@ summary: repeated exact array patterns must deduce the same fixed magnitude once
 constructs: 0520, 1290, 1920
 program: program.ldn
 targets: linux-x86-64, linux-arm64, macos-arm64
-codes: L0301
+codes: L0340
 expect: expected.txt
 args: ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn
 status: 1

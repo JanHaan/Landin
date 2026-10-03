@@ -1,4 +1,4 @@
-error[L0301]: this arm binds 1 payload fields, but the case has 2
+error[L0333]: this arm binds 1 payload fields, but the case has 2
   --> ../tests/fixtures/negative/variant-match-binding-count-disagrees/program.ldn:13:9
    |
 13 |         pair(first): _ = first

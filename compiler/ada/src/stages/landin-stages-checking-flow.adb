@@ -2266,7 +2266,7 @@ package body Landin.Stages.Checking.Flow is
                           or else Completion_Falls_Through)
                      then
                         Bad.Report
-                          (Item    => Bad.Type_Mismatch,
+                          (Item    => Bad.Control_Value,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where
                              (Of_Tree,
@@ -2379,7 +2379,7 @@ package body Landin.Stages.Checking.Flow is
                      else
                         if Needs_Value then
                            Bad.Report
-                             (Item    => Bad.Type_Mismatch,
+                             (Item    => Bad.Control_Value,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Node),
                               Message => "this value-producing `if` has a"
@@ -3604,7 +3604,7 @@ package body Landin.Stages.Checking.Flow is
                  = Ty.No_Value)
          then
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
+              (Item    => Bad.Control_Value,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Block),
                Message => "this control block can fall through without"
@@ -3661,7 +3661,7 @@ package body Landin.Stages.Checking.Flow is
         and then (Edges.Falls_Through or else Edges.Returns)
       then
          Bad.Report
-           (Item => Bad.Type_Mismatch, Source => Syn.Source_Of (Of_Tree),
+           (Item => Bad.Noreturn_Contract, Source => Syn.Source_Of (Of_Tree),
             Where => Syn.Anchor (Of_Tree, Function_Node),
             Message => "a noreturn body can return or fall through",
             Note => "[0890]: every reachable path must diverge",

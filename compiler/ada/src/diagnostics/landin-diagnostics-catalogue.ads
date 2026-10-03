@@ -49,12 +49,12 @@
 --  `landin.ads` forbids.  A later reader should not spend the band before
 --  reading that argument.
 
---  L0301 predates several checker rules and still covers distinct semantic
---  refusals. Its historical enum name does not define its public meaning:
---  every occurrence has a note naming the particular rule, and its
---  explanation tells readers to use that note with the primary message.
---  Rules with a stable shared meaning can move to a more precise code without
---  reusing L0301 or changing the meaning of its remaining reports.
+--  L0301 once covered every checker refusal that had no row of its own,
+--  so its explanation, which says two types disagree, described the wrong
+--  rule for most of its reports.  Each family of refusals with its own
+--  rule and repair now has a row (L0327 onward), and L0301 keeps only a
+--  value whose type is not the one its context or operation requires.  A
+--  new checker refusal that is not that gets a row rather than L0301.
 
 package Landin.Diagnostics.Catalogue is
 
@@ -160,10 +160,32 @@ package Landin.Diagnostics.Catalogue is
       --  needed, and a band records where a code was born, so no band of
       --  its own says that a number is a warning.
       Mutable_Never_Written,
-      Call_Argument_Count,
+      --  Rules once reported as L0301.  Each is a family whose reports
+      --  share one rule and one kind of repair, which is what an
+      --  explanation can state; the report's note still names the exact
+      --  paragraph.
+      Call_Argument_Match,
       Zero_Image_Unavailable,
       Error_Contract_Violated,
-      Assembly_Operand_Outside_Block,
+      Assembly_Block_Contract,
+      Result_Use,
+      Control_Value,
+      Match_Arm_Form,
+      Aggregate_Form,
+      Pointer_Union_Use,
+      Packed_Image,
+      Place_Required,
+      Type_Declaration_Form,
+      Signature_Form,
+      Generic_Deduction,
+      Conformance_Form,
+      Erased_Contract,
+      Noreturn_Contract,
+      Memory_Contract,
+      Machine_Entry_Contract,
+      Foreign_Boundary,
+      Linkage_Contract,
+      Traversal_Source,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -243,10 +265,28 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Raw_Literal          => "L0323",
             when Size_Limit_Exceeded            => "L0325",
             when Mutable_Never_Written          => "L0326",
-            when Call_Argument_Count          => "L0327",
+            when Call_Argument_Match          => "L0327",
             when Zero_Image_Unavailable         => "L0328",
             when Error_Contract_Violated        => "L0329",
-            when Assembly_Operand_Outside_Block => "L0330",
+            when Assembly_Block_Contract => "L0330",
+            when Result_Use => "L0331",
+            when Control_Value => "L0332",
+            when Match_Arm_Form => "L0333",
+            when Aggregate_Form => "L0334",
+            when Pointer_Union_Use => "L0335",
+            when Packed_Image => "L0336",
+            when Place_Required => "L0337",
+            when Type_Declaration_Form => "L0338",
+            when Signature_Form => "L0339",
+            when Generic_Deduction => "L0340",
+            when Conformance_Form => "L0341",
+            when Erased_Contract => "L0342",
+            when Noreturn_Contract => "L0343",
+            when Memory_Contract => "L0344",
+            when Machine_Entry_Contract => "L0345",
+            when Foreign_Boundary => "L0346",
+            when Linkage_Contract => "L0347",
+            when Traversal_Source => "L0348",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -278,7 +318,7 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Size_Limit_Exceeded => Error,
-            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+            when Call_Argument_Match .. Traversal_Source
                => Error,
             --  A warning never refuses a program; see Fixes below.
             when Mutable_Never_Written => Warning,
@@ -314,7 +354,7 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => Live,
-            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+            when Call_Argument_Match .. Traversal_Source
                => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
@@ -394,8 +434,8 @@ package Landin.Diagnostics.Catalogue is
                "a compile-time magnitude its context or target does not"
                & " hold",
             when Type_Mismatch         =>
-               "a checker requirement on type, value, operation or form"
-               & " is not met",
+               "[1890]: a value's type is not the one its context or"
+               & " operation requires",
             when Not_Definitely_Assigned =>
                "[1910]: a name read on a path that does not assign it",
             when Immutable_Target      =>
@@ -455,15 +495,72 @@ package Landin.Diagnostics.Catalogue is
                & " routine or fields a struct holds",
             when Mutable_Never_Written =>
                "D251: a local declared `mut` that nothing writes",
-            when Call_Argument_Count =>
-               "[1920]: runtime arguments fill the parameters exactly once",
+            when Call_Argument_Match =>
+               "[1920]/D138: call arguments match the parameters and the"
+               & " callee's static formals",
             when Zero_Image_Unavailable =>
-               "[0540]: a zeroed value requires a complete zero image",
+               "[0540]: zeroed or an implicit initializer has no complete"
+               & " zero image",
             when Error_Contract_Violated =>
                "[0940]/[0960]: failures obey the declared error set and"
                & " call handling",
-            when Assembly_Operand_Outside_Block =>
-               "[1630]: only assembler.block accepts assembly operands",
+            when Assembly_Block_Contract =>
+               "[1630]/[1990]: assembly operands, registers and template"
+               & " slots obey the block contract",
+            when Result_Use =>
+               "[1020]/[1930]/[0990]: a call's results are used,"
+               & " discarded or bound as the signature allows",
+            when Control_Value =>
+               "[1190]/D124: a control expression produces its value"
+               & " on every exit",
+            when Match_Arm_Form =>
+               "[1210]/[0480]/[0640]: each match arm names a case of"
+               & " its subject in an admitted form",
+            when Aggregate_Form =>
+               "[0700]/[0720]: struct, variant and array values are"
+               & " built and used in their admitted forms",
+            when Pointer_Union_Use =>
+               "[0480]: a pointer union is matched before its pointer"
+               & " is read",
+            when Packed_Image =>
+               "[0730]: a packed image is used through its fields and"
+               & " declared layout",
+            when Place_Required =>
+               "[0430]/[0900]/[0910]: an operation needing a distinct"
+               & " addressable place lacks one",
+            when Type_Declaration_Form =>
+               "[1795]/[1350]: a type position or declaration is not"
+               & " well formed",
+            when Signature_Form =>
+               "[0790]/[0980]/[0990]/D192: a written signature is not"
+               & " well formed",
+            when Generic_Deduction =>
+               "D138: a generic call deduces and instantiates one"
+               & " concrete routine",
+            when Conformance_Form =>
+               "[1230]-[1270]: a concept or conformance declaration is"
+               & " not well formed",
+            when Erased_Contract =>
+               "[1370]-[1390]/D145-D147: an `any` value or dispatch"
+               & " outside its erased contract",
+            when Noreturn_Contract =>
+               "[0890]: a noreturn routine is infallible and never"
+               & " returns",
+            when Memory_Contract =>
+               "[1620]/D227: a memory intrinsic outside its explicit"
+               & " contract",
+            when Machine_Entry_Contract =>
+               "[1570]: an interrupt or naked routine outside its"
+               & " machine-entry contract",
+            when Foreign_Boundary =>
+               "[1580]: a C boundary signature, layout or variadic"
+               & " call the C ABI cannot carry",
+            when Linkage_Contract =>
+               "[1610]/[1640]: a link symbol, helper import or"
+               & " placement outside its contract",
+            when Traversal_Source =>
+               "[1150]/D180: a for source is a range, a traversable"
+               & " value or one exact iterable conformance",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -517,7 +614,7 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
                .. Mutable_Never_Written => True,
-            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+            when Call_Argument_Match .. Traversal_Source
                => True,
             --  Backend reports need not have a source. Missing entry uses
             --  an entry-module anchor when available, but permits a point
@@ -557,7 +654,7 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range
                .. Mutable_Never_Written =>
                True,
-            when Call_Argument_Count .. Assembly_Operand_Outside_Block
+            when Call_Argument_Match .. Traversal_Source
                => True,
             when No_Toolchain .. Panic_Contract_Invalid => False);
 
@@ -598,9 +695,10 @@ package Landin.Diagnostics.Catalogue is
             --  annotation to point at. Maximum_Secondaries admits the
             --  template expression for a substitution-dependent fold.
             when Type_Mismatch         => 1,
-            when Call_Argument_Count | Zero_Image_Unavailable
+            when Call_Argument_Match | Zero_Image_Unavailable
                | Error_Contract_Violated
-               | Assembly_Operand_Outside_Block => 1,
+               | Assembly_Block_Contract
+               | Result_Use .. Traversal_Source => 1,
             when Immutable_Target      => 1,
             when Not_Definitely_Assigned => 1,
             when Field_Named_Twice     => 1,
@@ -655,9 +753,10 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => 1,
             when Literal_Out_Of_Range  => 1,
             when Type_Mismatch         => 1,
-            when Call_Argument_Count | Zero_Image_Unavailable
+            when Call_Argument_Match | Zero_Image_Unavailable
                | Error_Contract_Violated
-               | Assembly_Operand_Outside_Block => 1,
+               | Assembly_Block_Contract
+               | Result_Use .. Traversal_Source => 1,
             when Not_Definitely_Assigned => 1,
             when Immutable_Target      => 1,
             --  [1830]'s two facts, the same two L0010 carries: which
@@ -708,7 +807,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Field => May_Fix,
             --  [0980]'s argument label, offered the parameters it is near.
             --  The row admits a fix; only that one occurrence offers one.
-            when Type_Mismatch => May_Fix,
+            when Call_Argument_Match => May_Fix,
             --  A keyword that was required and a name near it written.
             when Token_Expected => May_Fix,
             --  [1800]'s closing name, which can only be the declared one.

@@ -1,4 +1,4 @@
-error[L0301]: a module `any` binding has no implicit null pair
+error[L0342]: a module `any` binding has no implicit null pair
   --> ../tests/fixtures/negative/any-module-null-pair/main.ldn:5:1
   |
 5 | saved: any display

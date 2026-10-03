@@ -1,4 +1,4 @@
-error[L0301]: this break gives a value to a labelled bare block
+error[L0332]: this break gives a value to a labelled bare block
   --> ../tests/fixtures/negative/r720-labelled-block-break-value/program.ldn:5:26
   |
 5 |         break outer with 1

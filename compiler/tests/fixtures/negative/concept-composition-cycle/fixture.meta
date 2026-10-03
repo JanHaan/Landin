@@ -1,7 +1,7 @@
 class: negative
 summary: concept composition is a finite named graph
 program: main.ldn
-codes: L0301
+codes: L0341
 constructs: 1230, 1340
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

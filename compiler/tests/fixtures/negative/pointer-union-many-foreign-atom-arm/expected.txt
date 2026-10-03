@@ -1,4 +1,4 @@
-error[L0301]: this case does not belong to the pointer union matched here
+error[L0333]: this case does not belong to the pointer union matched here
   --> ../tests/fixtures/negative/pointer-union-many-foreign-atom-arm/program.ldn:10:9
    |
 10 |         closed: value = 2

@@ -1,4 +1,4 @@
-error[L0301]: a union holds at most one pointer type
+error[L0338]: a union holds at most one pointer type
   --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:5:44
   |
 5 | two_ptrs: type (t: type) = first | ptr t | ptr u8
@@ -8,7 +8,7 @@ error[L0301]: a union holds at most one pointer type
 5 | two_ptrs: type (t: type) = first | ptr t | ptr u8
   |                                    ^^^^^ the pointer member already given
   = note: [0480]: `maybe a pointer` is an atom beside one pointer type
-error[L0301]: a union holds at most one pointer type
+error[L0338]: a union holds at most one pointer type
   --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:7:51
   |
 7 | nested_two: type (t: type) = first | pointer(t) | ptr u8

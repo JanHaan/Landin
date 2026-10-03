@@ -1,4 +1,4 @@
-error[L0301]: this conformance is not usable behind `any`: every entry needs a compatible first `self` pointer
+error[L0342]: this conformance is not usable behind `any`: every entry needs a compatible first `self` pointer
   --> ../tests/fixtures/negative/any-self-not-exact/main.ldn:17:24
    |
 17 |     erased: any view = any(addr item)

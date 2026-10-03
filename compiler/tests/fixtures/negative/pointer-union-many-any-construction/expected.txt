@@ -1,4 +1,4 @@
-error[L0301]: `any` construction wants a pointer and this is a union of atoms and one
+error[L0335]: `any` construction wants a pointer and this is a union of atoms and one
   --> ../tests/fixtures/negative/pointer-union-many-any-construction/program.ldn:20:31
    |
 20 |     erased: any display = any(m)

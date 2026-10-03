@@ -1,7 +1,7 @@
 class: negative
 summary: type-only field and payload arguments receive value diagnostics in module and local construction
 program: main.ldn
-codes: L0301, L0301, L0301, L0301, L0301, L0301, L0301
+codes: L0334, L0334, L0334, L0334, L0334, L0334, L0334
 constructs: 0710, 0720, 0900, 1280
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

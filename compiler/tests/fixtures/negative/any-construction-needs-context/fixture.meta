@@ -1,7 +1,7 @@
 class: negative
 summary: ambiguous explicit erasure requires a direct concept context
 program: main.ldn
-codes: L0301
+codes: L0342
 constructs: 0050, 1230, 1240, 1370, 1380
 targets: linux-x86-64, linux-arm64, macos-arm64, synthetic-32
 expect: expected.txt

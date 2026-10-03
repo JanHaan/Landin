@@ -1,4 +1,4 @@
-error[L0301]: this conformance function does not have the concept entry's signature
+error[L0341]: this conformance function does not have the concept entry's signature
   --> ../tests/fixtures/negative/conformance-entry-signature-mismatch/main.ldn:9:1
   |
 9 | i32 is ordered (less: wrong)

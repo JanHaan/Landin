@@ -1,4 +1,4 @@
-error[L0301]: this call cannot deduce type formal `t`
+error[L0340]: this call cannot deduce type formal `t`
   --> ../tests/fixtures/negative/generic-routine-undeduced-formal/program.ldn:3:34
   |
 3 | public main: () -> (code: i32) = phantom(7) end main

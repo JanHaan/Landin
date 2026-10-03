@@ -1,4 +1,4 @@
-error[L0301]: this does not produce multiple named returns to bind
+error[L0331]: this does not produce multiple named returns to bind
   --> ../tests/fixtures/negative/result-destructure-needs-multiple/program.ldn:3:16
   |
 3 |     (value) := one()

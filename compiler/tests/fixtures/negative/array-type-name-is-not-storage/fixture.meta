@@ -2,5 +2,5 @@ class: negative
 summary: D20, D21 and D69 copy a whole array from storage, and an array type name is not a runtime value
 constructs: 0050, 0410, 0520, 0670, 0710, 0750, 1810
 program: program.ldn
-codes: L0301, L0301, L0301, L0301
+codes: L0338, L0338, L0338, L0338
 targets: linux-x86-64, linux-arm64, macos-arm64

@@ -1,4 +1,4 @@
-error[L0301]: this mixed repetition leaves no array suffix to fill
+error[L0334]: this mixed repetition leaves no array suffix to fill
   --> ../tests/fixtures/negative/array-mixed-repetition-assignment-prefix-too-long/program.ldn:3:11
   |
 3 |     row = [1, 2, of 3]

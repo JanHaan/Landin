@@ -7523,7 +7523,7 @@ package body Landin.Tests.Checking_Suite is
                     else
                        Landin.Diagnostics.Count (Reports) = 1
                        and then Landin.Diagnostics.Code
-                         (Landin.Diagnostics.Get (Reports, 1)) = "L0301"
+                         (Landin.Diagnostics.Get (Reports, 1)) = "L0335"
                        and then Landin.Diagnostics.Message
                          (Landin.Diagnostics.Primary
                             (Landin.Diagnostics.Get (Reports, 1))) =
@@ -8365,7 +8365,7 @@ package body Landin.Tests.Checking_Suite is
          & "(value: part, other: rest) := pair()" & LF
          & "consume(part)" & LF
          & "end while end f" & LF,
-         Accepted => False, Code => "L0301");
+         Accepted => False, Code => "L0337");
       Check_Source
         ("fresh condition binding",
          "consume: (sink value: i32) -> none = end consume" & LF
@@ -8935,17 +8935,17 @@ package body Landin.Tests.Checking_Suite is
         ("slice sibling cannot excuse a refused sink", Prefix
          & "f: (s: []mut i32) -> (r: i32) =" & LF
          & "_ = consume(s[0]) r = s[1] end f" & LF,
-         Accepted => False, Code => "L0301");
+         Accepted => False, Code => "L0337");
       Check_Source
         ("slice element cannot be consumed", Prefix
          & "f: (s: []mut i32) -> (r: i32) =" & LF
          & "_ = consume(s[0]) r = s[0] end f" & LF,
-         Accepted => False, Code => "L0301 L0302");
+         Accepted => False, Code => "L0337 L0302");
       Check_Source
         ("slice length cannot excuse a refused sink", Prefix
          & "f: (s: []mut i32) -> (r: usize) =" & LF
          & "_ = consume(s[0]) r = lenof s end f" & LF,
-         Accepted => False, Code => "L0301");
+         Accepted => False, Code => "L0337");
       Check_Source
         ("fixed-array sibling stays live", Prefix
          & "f: (s: [2]i32) -> (r: i32) =" & LF
@@ -10224,7 +10224,7 @@ package body Landin.Tests.Checking_Suite is
                  and then Landin.Diagnostics.Count (Reports) = 1
                  and then Landin.Diagnostics.Code
                    (Landin.Diagnostics.Get (Reports, 1))
-                     = (if Duplicate then "L0301" else "L0308"),
+                     = (if Duplicate then "L0331" else "L0308"),
                "lazy and ordinary walks report an invalid result label once");
          end;
       end Check_Refusal;
@@ -10374,7 +10374,7 @@ package body Landin.Tests.Checking_Suite is
               (Item, Landin.Stages.Failed (Work)
                  and then Landin.Diagnostics.Count (Reports) = 1
                  and then Landin.Diagnostics.Code
-                   (Landin.Diagnostics.Get (Reports, 1)) = "L0301"
+                   (Landin.Diagnostics.Get (Reports, 1)) = "L0346"
                  and then Landin.Diagnostics.Message
                    (Landin.Diagnostics.Primary
                       (Landin.Diagnostics.Get (Reports, 1))) =
@@ -10771,6 +10771,27 @@ package body Landin.Tests.Checking_Suite is
       Code : String := "L0301")
    is
       package D renames Landin.Diagnostics;
+      --  [1610]'s symbol and helper contracts are L0347, [1580]'s C
+      --  representation L0346; the rest of these sources pin a type
+      --  disagreement at the boundary, which is L0301.
+      function Starts (Prefix : String) return Boolean
+        is (Expected'Length >= Prefix'Length
+            and then Expected
+              (Expected'First .. Expected'First + Prefix'Length - 1)
+              = Prefix);
+      Wanted : constant String :=
+        (if Code /= "L0301" then Code
+         elsif Starts ("compiler-owned helper")
+           or else Starts ("link symbol")
+           or else Starts ("this link symbol")
+           or else Starts ("this C link symbol")
+           or else Starts ("this symbol belongs")
+           or else Starts ("a linked or C declaration")
+         then "L0347"
+         elsif Starts ("this layout(c) struct")
+           or else Starts ("this signature is not representable")
+         then "L0346"
+         else Code);
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Order : Landin.Stages.Pipeline;
@@ -10798,7 +10819,7 @@ package body Landin.Tests.Checking_Suite is
                Report : constant D.Diagnostic := D.Get (Reports, 1);
             begin
                Landin.Testing.Check
-                 (Item, D.Code (Report) = Code
+                 (Item, D.Code (Report) = Wanted
                     and then D.Message (D.Primary (Report)) = Expected
                     and then D.Source_Of (D.Primary (Report)) = Src
                     and then D.Span_Of (D.Primary (Report))
@@ -11962,7 +11983,7 @@ package body Landin.Tests.Checking_Suite is
          & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
          & "less_i32" & LF
          & "i32 is ordered (less: less_i32, less: less_i32)" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("missing concrete entry",
          "ordered: type = concept (t: type)" & LF
@@ -11971,7 +11992,7 @@ package body Landin.Tests.Checking_Suite is
          & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
          & "less_i32" & LF
          & "i32 is ordered ()" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("unknown concrete label",
          "ordered: type = concept (t: type)" & LF
@@ -11980,7 +12001,7 @@ package body Landin.Tests.Checking_Suite is
          & "less_i32: (a: i32, b: i32) -> (r: bool) = r = a < b end "
          & "less_i32" & LF
          & "i32 is ordered (less: less_i32, other: less_i32)" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("nonfunction concrete entry",
          "ordered: type = concept (t: type)" & LF
@@ -11990,7 +12011,7 @@ package body Landin.Tests.Checking_Suite is
          & "less_i32" & LF
          & "value: i32 = 0" & LF
          & "i32 is ordered (less: value)" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("valid concrete entry",
          "ordered: type = concept (t: type)" & LF
@@ -12043,7 +12064,7 @@ package body Landin.Tests.Checking_Suite is
          & "public main: () -> (code: i32) =" & LF
          & "    code = 42" & LF
          & "end main" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("missing generic entry",
          "equatable: type = concept (t: type)" & LF
@@ -12085,7 +12106,7 @@ package body Landin.Tests.Checking_Suite is
          & "    item: box(i32) = (value: 1)" & LF
          & "    code = accept(item)" & LF
          & "end main" & LF,
-         "L0301 L0318");
+         "L0341 L0318");
       Check_Source
         ("valid generic entry",
          "equatable: type = concept (t: type)" & LF
@@ -12181,7 +12202,7 @@ package body Landin.Tests.Checking_Suite is
          & "two: () -> (a: i32, b: i32) = a = 1 b = 2 end two" & LF
          & "f: () -> none = for value in two() do _ = value end for "
          & "end f" & LF,
-         "L0301");
+         "L0348");
       Check_Source
         ("valid nominal traversal",
          "iterable: type = concept (t: type, cur: type, "
@@ -12239,25 +12260,25 @@ package body Landin.Tests.Checking_Suite is
         ("self constrained concept",
          "loopy: type = concept (t: type is loopy) end loopy" & LF
          & "i32 is loopy ()" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("mutual formal constraints",
          "left: type = concept (t: type is right) end left" & LF
          & "right: type = concept (t: type is left) end right" & LF
          & "i32 is left ()" & LF
          & "i32 is right ()" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("mixed parent and formal cycle",
          "left: type = concept (t: type) is right end left" & LF
          & "right: type = concept (t: type is left) end right" & LF
          & "i32 is left ()" & LF
          & "i32 is right ()" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("unused formal cycle",
          "loopy: type = concept (t: type is loopy) end loopy" & LF,
-         "L0301");
+         "L0341");
       Check_Source
         ("finite formal requirement",
          "base: type = concept (t: type) end base" & LF
@@ -12275,11 +12296,11 @@ package body Landin.Tests.Checking_Suite is
    is
       procedure Check_Source
         (Label, Text : String; Accepted : Boolean;
-         Code : String := "L0301");
+         Code : String := "L0327");
 
       procedure Check_Source
         (Label, Text : String; Accepted : Boolean;
-         Code : String := "L0301")
+         Code : String := "L0327")
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -12953,27 +12974,27 @@ package body Landin.Tests.Checking_Suite is
    begin
       Check
         ("statement loop",
-         "f: () -> none = loop do break with 1 end loop end f" & LF, "L0301");
+         "f: () -> none = loop do break with 1 end loop end f" & LF, "L0332");
       Check
         ("guarded statement loop",
          "f: (flag: bool) -> none = loop do break with 1 when flag "
-         & "break end loop end f" & LF, "L0301");
+         & "break end loop end f" & LF, "L0332");
       Check
         ("statement while",
          "f: (flag: bool) -> none = while flag do break with 1 end "
-         & "while end f" & LF, "L0301");
+         & "while end f" & LF, "L0332");
       Check
         ("statement completion",
          "f: (flag: bool) -> none = while flag do complete break with "
-         & "1 end while end f" & LF, "L0301");
+         & "1 end while end f" & LF, "L0332");
       Check
         ("statement range",
          "f: () -> none = for i in 0..<2 do break with i end for end f"
-         & LF, "L0301");
+         & LF, "L0332");
       Check
         ("labelled statement target",
          "f: () -> none = outer: loop do loop do break outer with 1 "
-         & "end loop end outer end f" & LF, "L0301");
+         & "end loop end outer end f" & LF, "L0332");
       Check
         ("plain loop",
          "f: () -> none = loop do break end loop end f" & LF);
@@ -12995,7 +13016,7 @@ package body Landin.Tests.Checking_Suite is
       Check
         ("nearest statement target",
          "f: () -> (r: i32) = r = loop do loop do break with 1 end "
-         & "loop break with 2 end loop end f" & LF, "L0301");
+         & "loop break with 2 end loop end f" & LF, "L0332");
       Check
         ("nested discarded value",
          "f: () -> none = loop do _ = loop do break with 1 end loop "
@@ -13352,7 +13373,7 @@ package body Landin.Tests.Checking_Suite is
                  (if Accepted then Landin.Diagnostics.Count (Reports) = 0
                   else Landin.Diagnostics.Count (Reports) = 1
                     and then Landin.Diagnostics.Code
-                      (Landin.Diagnostics.Get (Reports, 1)) = "L0301"),
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0337"),
                Label & ": " & Landin.Stages.Rendered_Report (Work));
          end;
       end Check_Source;
@@ -13453,7 +13474,7 @@ package body Landin.Tests.Checking_Suite is
                  (if Accepted then Landin.Diagnostics.Count (Reports) = 0
                   else Landin.Diagnostics.Count (Reports) = 1
                     and then Landin.Diagnostics.Code
-                      (Landin.Diagnostics.Get (Reports, 1)) = "L0301"),
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0341"),
                Label & ": " & Landin.Stages.Rendered_Report (Work));
          end;
       end Check_Source;

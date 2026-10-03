@@ -1,4 +1,4 @@
-error[L0301]: this argument deduces a different fixed value for repeated formal `n`
+error[L0340]: this argument deduces a different fixed value for repeated formal `n`
   --> ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn:6:24
   |
 6 |     code = first(left, right)

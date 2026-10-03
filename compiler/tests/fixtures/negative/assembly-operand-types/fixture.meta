@@ -3,7 +3,7 @@ summary: D248 keeps operands to exact integer scalars one register wide and writ
 program: program.ldn
 expect: expected.txt
 args: --target=cortex-m0 ../tests/fixtures/negative/assembly-operand-types/program.ldn
-codes: L0301, L0301, L0301, L0301, L0301, L0301
+codes: L0330, L0330, L0330, L0330, L0330, L0330
 status: 1
 constructs: 0660, 1290, 1630
 targets: cortex-m

@@ -1,4 +1,4 @@
-error[L0301]: this recursive generic call expands the same template at a different actual tuple
+error[L0340]: this recursive generic call expands the same template at a different actual tuple
   --> ../tests/fixtures/negative/r490-recovery-expanding-generic/program.ldn:6:9
   |
 6 |         expand(error)

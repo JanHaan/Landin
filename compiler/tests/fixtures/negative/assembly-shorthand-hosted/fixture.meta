@@ -3,7 +3,7 @@ summary: D230's positional u32 shorthand stands for an operand at Cortex-M0's r0
 program: program.ldn
 expect: expected.txt
 args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-shorthand-hosted/program.ldn
-codes: L0301
+codes: L0330
 status: 1
 constructs: 1630, 1990
 targets: linux-x86-64

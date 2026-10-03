@@ -1,4 +1,4 @@
-error[L0301]: a packed field has no independent address
+error[L0336]: a packed field has no independent address
   --> ../tests/fixtures/negative/r640-address/program.ldn:6:14
   |
 6 |     _ = addr x.value

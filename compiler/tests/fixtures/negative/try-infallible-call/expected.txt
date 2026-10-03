@@ -1,4 +1,4 @@
-error[L0301]: this call cannot fail, so `try` has no error to propagate
+error[L0329]: this call cannot fail, so `try` has no error to propagate
   --> ../tests/fixtures/negative/try-infallible-call/program.ldn:6:13
   |
 6 |     value = try leaf()

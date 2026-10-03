@@ -1,4 +1,4 @@
-error[L0301]: `any(pointer)` has more than one exact runtime concept
+error[L0342]: `any(pointer)` has more than one exact runtime concept
   --> ../tests/fixtures/negative/any-construction-needs-context/main.ldn:22:15
    |
 22 |     erased := any(addr item)

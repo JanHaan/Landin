@@ -1,4 +1,4 @@
-error[L0301]: `fail` carries one atom identity
+error[L0329]: `fail` carries one atom identity
   --> ../tests/fixtures/negative/fail-needs-one-atom/program.ldn:9:10
   |
 9 |     fail pair()

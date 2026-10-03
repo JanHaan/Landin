@@ -1,7 +1,7 @@
 class: negative
 summary: an ordinary Landin struct is refused at the native C boundary; layout(c) is required
 program: program.ldn
-codes: L0301
+codes: L0346
 constructs: 0670, 1570, 1580, 1740, 1800, 1975
 targets: linux-x86-64, linux-arm64
 expect: expected.txt
