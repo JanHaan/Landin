@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import plistlib
 import re
+import subprocess
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -54,6 +55,44 @@ def load_json(relative: str) -> object:
 
 def load_toml(relative: str) -> object:
     return tomllib.loads((ROOT / relative).read_text(encoding="utf-8"))
+
+
+def check_grammar_revision(helix: dict, zed: dict, emacs: str) -> None:
+    """Keep fetched grammar and local queries at the same checked-in revision."""
+    helix_source = helix["grammar"][0]["source"]
+    zed_source = zed["grammars"]["landin"]
+    assert helix_source["subpath"] == zed_source["path"] == "highlight/tree-sitter"
+    assert helix_source["git"] == zed_source["repository"]
+    match = re.search(r'\(defcustom landin-treesit-revision "([^"]+)"', emacs)
+    assert match, "Emacs grammar revision is missing"
+    revisions = (helix_source["rev"], zed_source["rev"], match.group(1))
+    assert len(set(revisions)) == 1, "editor grammar revisions differ"
+    revision = revisions[0]
+    assert re.fullmatch(r"[0-9a-f]{40}", revision), "editor grammar revision must be a full commit ID"
+
+    # Source archives have no history. In a checkout, also compare the files
+    # that determine parsing and the queries shipped beside each adapter.
+    checkout = ROOT.parent
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=checkout,
+                         capture_output=True, text=True, check=False)
+    if top.returncode != 0 or Path(top.stdout.strip()).resolve() != checkout:
+        return
+    paths = [
+        "highlight/tree-sitter/grammar.js",
+        "highlight/tree-sitter/src/parser.c",
+        "highlight/tree-sitter/src/scanner.c",
+        "highlight/tree-sitter/src/node-types.json",
+        "highlight/tree-sitter/queries",
+        "highlight/helix/runtime/queries/landin",
+        "highlight/zed/languages/landin",
+    ]
+    diff = subprocess.run(["git", "diff", "--quiet", revision, "--", *paths],
+                          cwd=checkout, capture_output=True, text=True,
+                          check=False)
+    assert diff.returncode == 0, (
+        "shipped grammar or queries differ from the pinned revision; "
+        "commit them and update all three editor revisions"
+        if diff.returncode == 1 else diff.stderr.strip())
 
 
 def textmate_pattern(grammar: dict[str, object], scope: str) -> str:
@@ -160,6 +199,7 @@ def main() -> int:
 
     emacs = (ROOT / "emacs/landin-mode.el").read_text(encoding="utf-8")
     assert balanced_lisp(emacs), "unbalanced Emacs Lisp"
+    check_grammar_revision(helix, zed, emacs)
     for word in KEYWORDS | TYPES | CONSTANTS:
         assert f'"{word}"' in emacs, f"Emacs vocabulary omits {word}"
     textmate = json.dumps(grammar)

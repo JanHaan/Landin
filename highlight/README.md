@@ -29,6 +29,12 @@ Clone or download the repository, then use the package for the editor in the
 table. Every package associates the `.ldn` suffix with Landin; the structural
 packages also provide editor features such as indentation, folds, text
 objects or an outline where their host supports them.
+Helix, Zed, and Emacs fetch the tree-sitter grammar at the fixed commit
+recorded in their packages, matching the queries and mode rules in this
+checkout. When changing the grammar or queries, commit those changes first,
+then update all three revisions to that commit before distributing the
+packages. `highlight/test_adapters.py` checks that the revision still contains
+the shipped grammar and queries when run from a Git checkout.
 
 | editor or tool | package | installation |
 |---|---|---|

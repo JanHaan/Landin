@@ -2,9 +2,10 @@
 
 Install this directory as a Zed dev extension. It associates `.ldn`, fetches
 the grammar from this repository's `highlight/tree-sitter` subdirectory, and
-provides highlighting, brackets, indentation, and outline items. The `main`
-revision is intentional while the package is unreleased; a registry release
-must replace it with the commit containing that release.
+provides highlighting, brackets, indentation, and outline items. The grammar
+revision is pinned to the commit containing this package's grammar and queries.
+After changing either, update `extension.toml` to a commit containing the
+changes before distributing the extension.
 
 The extension also starts `refine lsp`, the compiler's language server, for
 Landin buffers: diagnostics, go to definition, hover, formatting and quick

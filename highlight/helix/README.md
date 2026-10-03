@@ -2,9 +2,11 @@
 
 Merge `languages.toml` into the Helix language configuration, copy
 `runtime/queries/landin` into the matching runtime directory, then run
-`hx --grammar fetch` and `hx --grammar build`. For testing changes before they
-reach `main`, replace the grammar source with an absolute `path` to
-`../tree-sitter`. The query set supplies the required highlights plus
+`hx --grammar fetch` and `hx --grammar build`. The grammar source is pinned to
+the commit that contains this package's queries. After changing the grammar
+or queries, update the revision in `languages.toml` to a commit containing
+those changes. For testing uncommitted changes, replace the grammar source
+with an absolute `path` to `../tree-sitter`. The query set supplies highlights plus
 indentation, folds, and text objects.
 
 `languages.toml` also names `refine lsp`, the compiler's language server, as
