@@ -578,8 +578,8 @@ package Landin.Diagnostics.Catalogue is
                "[1150]/D180: a for source is a range, a traversable"
                & " value or one exact iterable conformance",
             when No_Toolchain          =>
-               "[1550]: no assembler and linker for the target on this"
-               & " host",
+               "[1550]: the requested output cannot be made with the"
+               & " target, settings or available toolchain",
             when Toolchain_Failed      =>
                "[1550]: the platform assembler or linker refused what"
                & " was emitted",

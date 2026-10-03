@@ -1078,8 +1078,13 @@ reports a value that its type or target cannot hold.
 
 ### L0500
 
-No assembler and linker for the selected target were found on this host
-[1550]. The note names the program looked for; `--toolchain=` names another.
+The requested output cannot be made with the selected target, settings or
+available toolchain [1550]. The diagnostic and its note identify the cause:
+the target has no backend, its source debug mode is unsupported, firmware
+forbids `linker.library`, no toolchain is selected, or the named tool is
+unavailable. Choose a target with a backend, change the debug or firmware
+configuration, or select or install a toolchain as the note directs.
+`--toolchain=` only helps when a toolchain is absent or unavailable.
 
 ### L0501
 

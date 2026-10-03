@@ -1201,9 +1201,16 @@ package body Landin.Driver is
                or else Lines_Debug /= Cortex)
             then
                Note_No_Toolchain
-                 ("unsupported source debugger mode for target "
-                  & Landin.Targets.Name (Facts),
-                  (if Cortex then "use --debug=lines or --debug=none"
+                 ((if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                         = Landin.Targets.Capabilities.No_Debug_Format
+                   then "target " & Landin.Targets.Name (Facts)
+                        & " has no source debug format"
+                   else "unsupported source debugger mode for target "
+                        & Landin.Targets.Name (Facts)),
+                  (if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
+                         = Landin.Targets.Capabilities.No_Debug_Format
+                   then "describe a target with a backend, or drop --emit"
+                   elsif Cortex then "use --debug=lines or --debug=none"
                    else "use --debug=full or --debug=none"));
                return;
             end if;
@@ -1256,7 +1263,8 @@ package body Landin.Driver is
                then
                   Note_No_Toolchain
                     ("firmware does not admit linker.library",
-                     "only the selected private Arm runtime is linked");
+                     "remove linker.library declarations; only the"
+                     & " selected private Arm runtime is linked");
                   return;
                end if;
             end if;

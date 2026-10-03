@@ -1119,7 +1119,7 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context) is
    begin
-      for Mode in 1 .. 12 loop
+      for Mode in 1 .. 13 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -1139,6 +1139,8 @@ package body Landin.Tests.Cortex_Suite is
                  when 5 => "bad: atom start: () -> none ! bad = "
                    & "fail bad end start",
                  when 10 => "link(keep) image: [8388609]u8 = [of 1] "
+                   & "start: () -> none = end start",
+                 when 13 => "linker.library(""third"") "
                    & "start: () -> none = end start",
                  when others => "mut result: u32 = 1 "
                    & "start: () -> none = result = 42 end start"));
@@ -1203,6 +1205,12 @@ package body Landin.Tests.Cortex_Suite is
                      Landin.Testing.Check
                        (Item, U.Index (Result.Report, "L0505") > 0,
                         "bounded image failure has a dedicated diagnostic");
+                  elsif Mode = 13 then
+                     Landin.Testing.Check
+                       (Item, U.Index (Result.Report, "L0500") > 0
+                        and then U.Index
+                          (Result.Report, "remove linker.library") > 0,
+                        "firmware library refusal names its remedy");
                   end if;
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,

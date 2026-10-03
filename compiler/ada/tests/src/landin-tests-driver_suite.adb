@@ -1958,6 +1958,20 @@ package body Landin.Tests.Driver_Suite is
            (Item, Contains (Unbounded.To_String (Result.Report), "L0500"),
             "and says which rule");
       end;
+
+      Args.Append ("--debug=full");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Report, "L0500")
+            and then Contains (Report, "has no source debug format")
+            and then Contains (Report, "describe a target with a backend"),
+            "a target without debug support recommends a capable target");
+      end;
    end A_Target_With_No_Backend_Emits_Nothing;
 
    --  A refused program is not emitted, for the same reason the lowering

@@ -573,9 +573,16 @@ package body Landin.Diagnostics.Explanations is
                & "ble_iterable` when both exist and may use ordinary `iter"
                & "able` when there is no fallible conformance.",
             when Catalogue.No_Toolchain =>
-               "No assembler and linker for the selected target were fou"
-               & "nd on this host [1550]. The note names the program looke"
-               & "d for; `--toolchain=` names another.",
+               "The requested output cannot be made with the selected ta"
+               & "rget, settings or available toolchain [1550]. The diagno"
+               & "stic and its note identify the cause: the target has no "
+               & "backend, its source debug mode is unsupported, firmware "
+               & "forbids `linker.library`, no toolchain is selected, or t"
+               & "he named tool is unavailable. Choose a target with a bac"
+               & "kend, change the debug or firmware configuration, or sel"
+               & "ect or install a toolchain as the note directs. `--toolc"
+               & "hain=` only helps when a toolchain is absent or unavaila"
+               & "ble.",
             when Catalogue.Toolchain_Failed =>
                "The platform assembler or linker refused what the compil"
                & "er emitted [1550]. The tool's own output follows the dia"
