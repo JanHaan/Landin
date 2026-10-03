@@ -1717,8 +1717,8 @@ package body Landin.Backend.Arm64 is
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
-         --  Transfer a classified chunk at x13. Byte replay avoids reading
-         --  beyond a short aggregate and preserves both ABI register banks.
+         --  Transfer a classified chunk at x13. Scalars use their storage
+         --  width; byte replay bounds aggregate chunks, including short tails.
          procedure C_Chunk
            (Place : AAPCS64_ABI.Location; Chunk : Positive; Store : Boolean);
          procedure C_Entry;
@@ -1739,6 +1739,25 @@ package body Landin.Backend.Arm64 is
             Reg : constant String :=
               Trimmed (Natural'Image (Place.Registers (Chunk) - 1));
          begin
+            if not Place.Shape.Aggregate then
+               if Place.Shape.Float_Bytes > 0 then
+                  Emit ((if Store then "str " else "ldr ")
+                        & (if Place.Shape.Float_Bytes = 4 then "s" else "d")
+                        & Reg & ", [x13]");
+               else
+                  Memory
+                    (Store,
+                     (case Place.Shape.Size is
+                        when 1 => Landin.Targets.Byte_1,
+                        when 2 => Landin.Targets.Byte_2,
+                        when 4 => Landin.Targets.Byte_4,
+                        when 8 => Landin.Targets.Byte_8,
+                        when others => raise Compiler_Defect with
+                          "unsupported Darwin C scalar width"),
+                     "x" & Reg, "x13");
+               end if;
+               return;
+            end if;
             if Store then
                Emit ((if Place.Shape.Float_Bytes > 0
                       then "fmov x14, d" else "mov x14, x") & Reg);
