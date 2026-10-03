@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from landin_highlight import (BUILTIN_MODULES, CONSTANTS, KEYWORDS, TYPES,
-                              Scanner, collect_symbols)
+                              Scanner, collect_symbols, source_lines)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -218,6 +218,16 @@ def pygments_smoke(source: str) -> None:
     assert any(token in Comment and "nested block comment" in text for token, text in tokens)
     assert any(token in Name.Builtin and text == "compiler" for token, text in tokens)
 
+    #  Unicode separators remain inside a Landin line comment. A false split
+    #  would also invent a type declaration and colour its later use.
+    source = "-- comment\u2028x: type\ny: x"
+    spans = list(LandinLexer().get_tokens_unprocessed(source))
+    assert "".join(piece for _, _, piece in spans) == source
+    assert any(token in Comment and piece == "-- comment\u2028x: type"
+               for _, token, piece in spans)
+    assert not any(token in Keyword.Type and piece == "x"
+                   for _, token, piece in spans)
+
 
 def main() -> int:
     grammar = load_json("textmate/syntaxes/landin.tmLanguage.json")
@@ -245,10 +255,15 @@ def main() -> int:
     assert notepad.getroot().find("UserLang").attrib["ext"] == "ldn"
 
     lexical = (ROOT / "tests/lexical.ldn").read_text(encoding="utf-8")
+    separators = "\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+    comment = "-- comment" + separators + "x: type"
+    assert list(source_lines(comment + "\r\ny: x\rz: x\n")) == [
+        "-- comment" + separators + "x: type\r\n", "y: x\r", "z: x\n"]
+    assert "x" not in collect_symbols([comment])[0]
+    assert list(Scanner(*collect_symbols([comment])).scan(comment)) == [
+        ("c", comment)]
     scanner_smoke(lexical)
     scanner_declaration_smoke()
-
-
     symbol_collection_smoke()
     pygments_smoke(lexical)
     samples = {

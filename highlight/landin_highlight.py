@@ -107,6 +107,16 @@ CLASSES = {
 }
 
 
+def source_lines(text: str):
+    """Split only at Landin line endings: LF, CR LF, and CR."""
+    start = 0
+    for ending in re.finditer(r"\r\n|[\r\n]", text):
+        yield text[start:ending.end()]
+        start = ending.end()
+    if start < len(text):
+        yield text[start:]
+
+
 class Scanner:
     """A line-at-a-time token scanner for Landin source.
 
