@@ -14,7 +14,8 @@ what they cost.
 | edit/test loop | `./scripts/dev-test.sh` with one exact `--suite`, `--case` or `--fixture` selector | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 --toolchain=DRIVER` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's |
-| before pushing | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers, and `python3 check.py` | the complete suite and every document invariant |
+| before pushing changes that can affect compiler behavior | `./scripts/test.sh` on Linux, with `LANDIN_TEST_JOBS` to split the corpus across workers; also `python3 check.py` for documentation changes | the complete suite and every document invariant when documents changed |
+| before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | run the Mac commands below, with LLDB from a terminal session | the change passes where the gate will run it |
 | every push and pull request | `.github/workflows/gate.yml` | every target: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; every QEMU lane on Cortex-M; the editor grammar, `scripts/tests`, determinism and the scaling benchmark |
@@ -37,12 +38,16 @@ parent directory.
 
 Choose the smallest test that can expose the changed behavior first, broaden
 only for another affected subsystem, and run the complete suite once before
-pushing. The gate is a safety net rather than a verdict: it runs every
+pushing changes that can affect compiler behavior, generated source or
+catalogues, fixtures or examples, language rules, or build inputs. The
+explanatory-only prose path does not cover generated Ada or catalogues,
+executable examples or fixtures, or grammar and semantic rules in `spec.md`.
+The gate is a safety net rather than a verdict: it runs every
 target on every push. On a failed Cortex-M job, it is configured to upload
 diagnostic output if present and retain it for 14 days. It retains no successful
 exact-revision acceptance record; green says the tree passed there, not that
 a revision is accepted. Documentation changes still receive the full
-`check.py`.
+`check.py`; its mechanical checks do not establish prose accuracy.
 
 ## Historical: choosing acceptance scope
 

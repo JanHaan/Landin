@@ -157,7 +157,13 @@ compiler-host feedback, and expect every selected case to pass. The unfiltered h
 execution and fails without its target toolchain, so do not run Linux
 containers, Linux workload emission or repeated complete suites on the Mac as
 routine feedback. Run changed-component tests while editing and the complete
-suite before pushing; `LANDIN_TEST_JOBS` splits the corpus fixtures across
+suite before pushing changes that can affect compiler behavior, generated
+source or catalogues, fixtures or examples, language rules, or build inputs.
+For a push confined to explanatory prose, run the full `python3 check.py` and
+review the prose against what it describes; the complete compiler suite is
+not required locally. This exception does not cover changes to generated Ada
+or catalogues, executable examples or fixtures, or the grammar and semantic
+rules in `spec.md`. `LANDIN_TEST_JOBS` splits the corpus fixtures across
 workers, which is most of what the suite costs. One worker is still the
 default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
 the same verdicts.
