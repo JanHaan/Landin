@@ -39,7 +39,12 @@ original bytes intact. The formatter follows symlinks, refuses hard-linked
 or read-only targets, and needs write permission in the target directory.
 Owner, group and all mode bits are preserved. Files carrying ACLs or extended
 attributes are refused without replacement; an inability to establish their
-absence is also a refusal. This conservative policy avoids dropping metadata.
+absence is also a refusal. Linux may hide privileged `trusted.*` attributes
+from an ordinary caller: when the formatter cannot establish visibility of
+that namespace, even a seemingly metadata-free file is refused. This can
+prevent native replacement under ordinary user privileges; editor formatting
+still returns edits without replacing files. The formatter does not request
+elevated privileges. This conservative policy avoids dropping metadata.
 Timestamps may change. The file is synced, but the directory is not, so
 power-loss durability of the renamed directory entry is not promised.
 Concurrent changes to source contents or filesystem metadata are unsupported.

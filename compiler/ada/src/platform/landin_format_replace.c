@@ -53,6 +53,24 @@ static int metadata_is_plain(int fd)
 #endif
 }
 
+/* Linux can hide trusted.* names from an unprivileged listxattr caller.
+ * On the new, disposable inode, prove this namespace is accessible (or
+ * unsupported) before treating an empty source list as complete. Refusal
+ * deliberately includes ordinary files when the proof is unavailable.
+ */
+static int metadata_visibility_known(int fd)
+{
+#ifdef __linux__
+    static const char name[] = "trusted.landin-format-visibility";
+    if (fsetxattr(fd, name, "", 0, XATTR_CREATE) != 0)
+        return errno == ENOTSUP;
+    return fremovexattr(fd, name) == 0;
+#else
+    (void)fd;
+    return 1;
+#endif
+}
+
 int landin_replace_existing_file(const char *path, const char *data, size_t size)
 {
     static const char suffix[] = ".fmt-XXXXXX";
@@ -85,6 +103,9 @@ int landin_replace_existing_file(const char *path, const char *data, size_t size
     memcpy(temporary + length, suffix, sizeof suffix);
     fd = mkstemp(temporary);
     if (fd < 0)
+        goto done;
+
+    if (!metadata_visibility_known(fd))
         goto done;
 
     /* If the host refuses the source's owner or group, leave it intact. */

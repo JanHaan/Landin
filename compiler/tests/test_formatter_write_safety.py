@@ -37,6 +37,17 @@ class FormatterWriteSafety(unittest.TestCase):
         self.source = self.root / "source.ldn"
         self.source.write_bytes(LOOSE)
 
+    def metadata_visibility_known(self):
+        if sys.platform != "linux":
+            return True
+        try:
+            os.setxattr(self.source, "trusted.landin-format-test", b"",
+                        os.XATTR_CREATE)
+        except OSError as error:
+            return error.errno == errno.ENOTSUP
+        os.removexattr(self.source, "trusted.landin-format-test")
+        return True
+
     def fmt(self, path=None, *, limited=False):
         return subprocess.run(
             [str(REFINE), "fmt", str(path or self.source)],
@@ -56,11 +67,15 @@ class FormatterWriteSafety(unittest.TestCase):
         self.source.chmod(0o640)
         link = self.root / "link.ldn"
         link.symlink_to(self.source.name)
+        visible = self.metadata_visibility_known()
         result = self.fmt(link)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 0 if visible else 1, result.stderr)
         self.assertEqual(os.readlink(link), self.source.name)
         self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o640)
-        self.assertNotEqual(self.source.read_bytes(), LOOSE)
+        if visible:
+            self.assertNotEqual(self.source.read_bytes(), LOOSE)
+        else:
+            self.assertEqual(self.source.read_bytes(), LOOSE)
 
     def test_replacement_preserves_all_mode_bits(self):
         for mode in (0o4755, 0o2755, 0o6755, 0o7777):
@@ -68,10 +83,15 @@ class FormatterWriteSafety(unittest.TestCase):
                 self.source.write_bytes(LOOSE)
                 self.source.chmod(mode)
                 self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), mode)
+                visible = self.metadata_visibility_known()
                 result = self.fmt()
-                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.returncode, 0 if visible else 1,
+                                 result.stderr)
                 self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), mode)
-                self.assertNotEqual(self.source.read_bytes(), LOOSE)
+                if visible:
+                    self.assertNotEqual(self.source.read_bytes(), LOOSE)
+                else:
+                    self.assertEqual(self.source.read_bytes(), LOOSE)
 
     def assert_metadata_refused(self):
         before = self.source.stat()
@@ -82,6 +102,13 @@ class FormatterWriteSafety(unittest.TestCase):
         self.assertEqual(self.source.stat().st_ino, before.st_ino)
         self.assertEqual(self.source.stat().st_mode, before.st_mode)
         self.assertEqual(list(self.root.iterdir()), [self.source])
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux hidden namespace")
+    def test_unknown_privileged_metadata_refuses_plain_source(self):
+        if self.metadata_visibility_known():
+            self.skipTest("host can establish privileged metadata visibility")
+        self.assertEqual(os.listxattr(self.source), [])
+        self.assert_metadata_refused()
 
     def test_extended_attribute_refuses_without_metadata_loss(self):
         name = "user.landin-format" if sys.platform == "linux" else "landin-format"
@@ -144,7 +171,15 @@ class FormatterWriteSafety(unittest.TestCase):
         harness = self.root / "metadata_failure.c"
         harness.write_text(
             '#define flistxattr fault_listxattr\n'
+            '#define fsetxattr trusted_visible\n'
+            '#define fremovexattr trusted_removed\n'
             '#include "' + str(adapter) + '"\n'
+            'int trusted_visible(int fd, const char *n, const void *v, size_t s, int f) {\n'
+            '  (void)fd; (void)n; (void)v; (void)s; (void)f; return 0;\n'
+            '}\n'
+            'int trusted_removed(int fd, const char *n) {\n'
+            '  (void)fd; (void)n; return 0;\n'
+            '}\n'
             'static int calls;\n'
             'static int fail_at;\n'
             'ssize_t fault_listxattr(int fd, char *list, size_t size) {\n'
@@ -155,13 +190,31 @@ class FormatterWriteSafety(unittest.TestCase):
             'int main(int argc, char **argv) {\n'
             '  if (argc != 3) return 2;\n'
             '  fail_at = atoi(argv[2]);\n'
-            '  return landin_replace_existing_file(argv[1], "changed", 7) == -1 ? 0 : 1;\n'
+            '  if (fail_at == 4) {\n'
+            '    char data[4096] = {0};\n'
+            '    return landin_replace_existing_file(argv[1], data, sizeof data) == -1 ? 0 : 1;\n'
+            '  }\n'
+            '  int result = landin_replace_existing_file(argv[1], "changed", 7);\n'
+            '  return result == (fail_at == 0 ? 0 : -1) ? 0 : 1;\n'
             '}\n')
         binary = self.root / "metadata_failure"
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
                         str(harness), "-o", str(binary)], check=True,
                        capture_output=True)
+        # With visibility proved, exercise replacement and post-write mode
+        # restoration on the real filesystem through the same adapter.
+        self.source.chmod(0o6755)
+        subprocess.run([str(binary), str(self.source), "0"], check=True,
+                       capture_output=True)
+        self.assertEqual(self.source.read_bytes(), b"changed")
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o6755)
+        self.source.write_bytes(LOOSE)
         before = self.source.stat()
+        subprocess.run([str(binary), str(self.source), "4"], check=True,
+                       capture_output=True, preexec_fn=limit_file_size)
+        self.assertEqual(self.source.read_bytes(), LOOSE)
+        self.assertEqual(self.source.stat().st_ino, before.st_ino)
+        self.assertEqual(list(self.root.glob("*.fmt-*")), [])
         for failure in (1, 2, 3):
             with self.subTest(query=failure):
                 subprocess.run([str(binary), str(self.source), str(failure)],

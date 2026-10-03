@@ -75,7 +75,8 @@ package Landin.Platform is
    --  needs write permission in the target's directory to create and rename
    --  the sibling file. On success it copies owner, group, and mode bits
    --  (including special bits). ACLs and xattrs cause safe refusal, as does
-   --  failure to establish their absence; timestamps may change. It syncs
+   --  failure to establish their absence. Linux may refuse ordinary users
+   --  who cannot inspect privileged attributes. Timestamps may change. It syncs
    --  the file, not the parent directory, so crash durability of the renamed
    --  directory entry is not guaranteed.
    procedure Replace_File
