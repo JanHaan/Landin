@@ -687,6 +687,38 @@ package body Landin.IR is
       Into.Code (Value_At (Into, Item, Value)).Pointee := Pointee;
    end Set_Pointee;
 
+   procedure Set_Slice_Element
+     (Into : in out Unit; Item : Item_Id; Element : Pointee_Id) is
+   begin
+      if not Holds (Into, Item) or else not Holds (Into, Element)
+        or else Kind_Of (Into, Item) /= Datum
+        or else Result_Of (Into, Item) /= Landin.Types.Fixed_Array
+      then
+         raise Landin.Compiler_Defect with "invalid slice datum annotation";
+      end if;
+      Into.Items (Positive (Item)).Slice_Element_Of := Element;
+   end Set_Slice_Element;
+
+   procedure Set_Slice_Element
+     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
+      Element : Pointee_Id) is
+   begin
+      if not Holds (Into, Item, Slot) or else not Holds (Into, Element)
+        or else not Is_Array (Into, Item, Slot)
+      then
+         raise Landin.Compiler_Defect with "invalid slice slot annotation";
+      end if;
+      Into.Slots (Slot_At (Into, Item, Slot)).Slice_Element := Element;
+   end Set_Slice_Element;
+
+   function Slice_Element_Of
+     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
+     is (Element (Of_Unit, Item).Slice_Element_Of);
+
+   function Slice_Element_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Slice_Element);
+
    function Atom_Set_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Atom_Sets.Length));
 

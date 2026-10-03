@@ -3896,6 +3896,27 @@ package Landin.IR is
       Pointee : Pointee_Id)
      with Pre => Holds (Into, Item, Value) and then Holds (Into, Pointee);
 
+   --  Source debugging's view of a slice, a `utf8` among them: the element
+   --  its two-word carrier reaches, kept for a declared slot or datum.  It
+   --  is a description for a debugger and nothing else; no verifier, pass
+   --  or emitter reads it, so a slice carries no pointee promise.
+   procedure Set_Slice_Element
+     (Into : in out Unit; Item : Item_Id; Element : Pointee_Id)
+     with Pre => Holds (Into, Item) and then Holds (Into, Element);
+
+   procedure Set_Slice_Element
+     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
+      Element : Pointee_Id)
+     with Pre => Holds (Into, Item, Slot) and then Holds (Into, Element);
+
+   function Slice_Element_Of
+     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
+     with Pre => Holds (Of_Unit, Item);
+
+   function Slice_Element_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
+     with Pre => Holds (Of_Unit, Item, Slot);
+
    --  What every Emit that defines a value promises: the value is the
    --  next one, it carries the opcode asked for, and it is the last
    --  instruction of the block that was open.
@@ -4032,6 +4053,7 @@ private
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Pointee     : Pointee_Id                 := No_Pointee;
+      Slice_Element : Pointee_Id               := No_Pointee;
    end record;
 
    type Block_Record is record
@@ -4096,6 +4118,7 @@ private
       --  is idempotent, so only zero-or-more matters.
       Unchecked_Depth : Natural                := 0;
       Pointee     : Pointee_Id                 := No_Pointee;
+      Slice_Element_Of : Pointee_Id            := No_Pointee;
    end record;
 
    package Item_Vectors is new Ada.Containers.Vectors

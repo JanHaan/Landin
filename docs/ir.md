@@ -320,7 +320,11 @@ blocks refer to lexical scopes. The IR refers back to established source and
 resolution tables rather than maintaining a second scope tree. Debug
 emission combines those identities with the backend's actual allocation and
 layout plans. DWARF records, machine locations and object sections belong to
-the emitter, not to the neutral representation.
+the emitter, not to the neutral representation. A declared slice slot or datum
+also keeps the element its two-word carrier reaches, so a debugger can present
+it as an element pointer and a length. Nothing that executes reads that
+element: it is not pointee evidence, and the verifier neither requires nor
+trusts it. Every named module datum is a variable at its own symbol.
 
 `Landin.IR.Dump` produces deterministic text for inspection and regression
 comparison. `compiler/tests/lowering.ir` records the positive fixture corpus

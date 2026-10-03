@@ -985,6 +985,54 @@ package body Landin.Tests.Debugging_Suite is
       end loop;
    end Opaque_Pointees_Are_Declarations;
 
+   procedure Module_Data_And_Slices_Are_Described
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Data_And_Slices_Are_Described
+     (Item : in out Landin.Testing.Context)
+   is
+      HT : constant Character := Character'Val (9);
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List := Request;
+   begin
+      --  The element type is reached by the module table and the slice
+      --  alone: no local or parameter of that type exists.
+      Host.Add_File
+        ("main.ldn",
+         "entry: type = struct key: u32 end entry "
+         & "mut table: [2]entry = [of (key: 0)] "
+         & "first: (view: []entry, text: utf8) -> (r: u32) = "
+         & "r = view[0].key + u32(lenof text) end first "
+         & "public main: () -> (code: i32) = "
+         & "code = i32(first(table[0..<lenof table], ""ab"")) end main");
+      Args.Append ("--debug=full");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Assembly : constant String := Host.Written ("out.s");
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = 0 and then Tools.Run_Count = 0,
+            "module data and slices emit debug text without host tools");
+         Landin.Testing.Check
+           (Item, Contains (Assembly, ".asciz ""table""" & LF)
+              and then Contains (Assembly, HT & ".byte 0x03" & LF
+                & HT & ".quad table"),
+            "a module datum is a variable at its own symbol");
+         Landin.Testing.Check
+           (Item, Contains (Assembly, ".asciz ""entry""" & LF)
+              and then Contains (Assembly, ".asciz ""key""" & LF),
+            "a type only module data and slices reach is described");
+         Landin.Testing.Check
+           (Item, Contains (Assembly, ".asciz ""[]entry""" & LF)
+              and then Contains (Assembly, ".asciz ""[]u8""" & LF)
+              and then Contains (Assembly, ".asciz ""ptr""" & LF)
+              and then Contains (Assembly, ".asciz ""len""" & LF),
+            "a slice is its element pointer and its length");
+      end;
+   end Module_Data_And_Slices_Are_Described;
+
    procedure Implicit_Return_Uses_Closing_Line
      (Item : in out Landin.Testing.Context);
 
@@ -1016,6 +1064,9 @@ package body Landin.Tests.Debugging_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "debugging", "module data and slices are described",
+         Module_Data_And_Slices_Are_Described'Access);
       Landin.Testing.Register
         (Into, "debugging", "implicit return uses closing line",
          Implicit_Return_Uses_Closing_Line'Access);

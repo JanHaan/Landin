@@ -30,7 +30,7 @@ def stops_for(workload):
             stop('nested', source, lines['nested'],
                  ['parse_sequence', 'parse_entry', 'parse_sequence'],
                  {'parser.depth': 1, 'parser.look.what': 6,
-                  'parser.look.begins.offset': 48, 'source.1': 92},
+                  'parser.look.begins.offset': 48, 'source.len': 92},
                  when={'parser.depth': 1}, complete_parser=True),
             stop('done', shared.PARSER_FIXTURE / 'main.ldn', lines['done'], ['main'],
                  {'valid': 1, 'source_length': 92, 'saw_out_of_memory': 1, 'saw_io_failure': 1})]

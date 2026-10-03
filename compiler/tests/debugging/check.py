@@ -412,6 +412,20 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
                                     ("block_saved", saved)))
     lines.append("up")
     emit_values(lines, "assembly", (("unwound_saved", saved),))
+    #  A module table and a slice over it: both named, the table's element
+    #  type reached through nothing but the table, the slice's length read.
+    lines.extend([f"tbreak {source_name}:{source_lines['slices-ready']}",
+                  "continue"])
+    emit_section(lines, "slices-ready-line", ["frame", "info line"])
+    emit_section(lines, "slices-types", ["ptype table_view", "ptype debug_table",
+                                         "ptype struct debug_entry"])
+    emit_values(lines, "slices", (
+        ("length", "table_view.len"),
+        ("key", "table_view.ptr[1].entry_key"),
+        ("weight", "table_view.ptr[2].entry_weight"),
+        ("table_key", "debug_table[1].entry_key"),
+        ("same_base", "table_view.ptr == &debug_table[0]"),
+    ))
     lines.append("delete breakpoints")
     emit_section(lines, "inferior-exit", ["continue"])
     return "\n".join(lines) + "\n"
@@ -616,7 +630,7 @@ def parser_gdb_script(start_commands: list[str],
             ("nested", "parser->depth == 1", (
                 ("depth", "parser->depth"), ("look", "parser->look.what"),
                 ("begins", "parser->look.begins.offset"),
-                ("source_length", "source[1]")))):
+                ("source_length", "source.len")))):
         line = source_lines[name]
         lines.extend([f"tbreak {source}:{line} if {condition}",
                       "commands", "silent"])
@@ -748,6 +762,20 @@ def check_transcript(transcript: str, source_lines: dict[str, int],
                 "debug_aliases")
     expect_line(transcript, "unions-ready-line", source_lines["unions-ready"],
                 "debug_unions")
+    expect_line(transcript, "slices-ready-line", source_lines["slices-ready"],
+                "debug_slices")
+    slice_types = marker_section(transcript, "slices-types")
+    require(re.search(r"struct \[\]debug_entry \{\s*struct debug_entry \*ptr;"
+                      r"\s*usize len;\s*\}", slice_types) is not None
+            and re.search(r"struct debug_entry \{\s*u32 entry_key;"
+                          r"\s*u16 entry_weight;\s*\} \[3\]", slice_types)
+            is not None,
+            f"module table or slice type is not presented: {slice_types!r}")
+    expect_value(transcript, "slices.length", 3)
+    expect_value(transcript, "slices.key", 7)
+    expect_value(transcript, "slices.weight", 9)
+    expect_value(transcript, "slices.table_key", 7)
+    expect_value(transcript, "slices.same_base", 1)
     expect_line(transcript, "assembly-block-line",
                 source_lines["assembly-block"], "debug_assembly")
     expect_line(transcript, "assembly-ready-line",
@@ -1201,6 +1229,7 @@ SOURCE_LINES = {
     "aliases-ready": source_line(MAIN_SOURCE, "aliases_ready: i32 ="),
     "loop-element": source_line(MAIN_SOURCE, "loop_sum += loop_element"),
     "unions-ready": source_line(MAIN_SOURCE, "union_ready: i32 = 1"),
+    "slices-ready": source_line(MAIN_SOURCE, "slice_ready: i32 = 1"),
     #  The x86-64 arm's; darwin.py takes the arm64 arm's, the second.
     "assembly-block": source_line(MAIN_SOURCE, "assembly_sum: u64 = assembler.block("),
     "assembly-ready": source_line(MAIN_SOURCE, "assembly_ready: i32 = 1"),

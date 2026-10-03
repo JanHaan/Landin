@@ -19,7 +19,10 @@ public main: () -> (code: i32) =
     aliases: i32 = debug_aliases()
     unions: i32 = debug_unions(pointer_value)
     assembly: i32 = debug_assembly(0x5a5a5a5a5a)
+    debug_table[1].entry_key = 7
+    debug_table[2].entry_weight = 9
+    slices: i32 = debug_slices(debug_table[0..<lenof debug_table])
     if code == 42 and first_generic and second_generic and aliases == 42
-      and unions == 42 and assembly == 42
+      and unions == 42 and assembly == 42 and slices == 42
     then code = 42 else code = 1 end if
 end main

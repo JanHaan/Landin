@@ -191,6 +191,23 @@ debug_unions: (union_param: ptr mut i32) -> (result: i32) =
     end match
 end debug_unions
 
+--  A module table whose element type nothing but the table reaches, read
+--  through a slice: a debugger names both, and the slice's length.
+debug_entry: type = struct
+    entry_key: u32
+    entry_weight: u16
+end debug_entry
+
+mut debug_table: [3]debug_entry = [of (entry_key: 0, entry_weight: 0)]
+
+debug_slices: (table_view: []debug_entry) -> (result: i32) =
+    slice_ready: i32 = 1
+    result = 1
+    if lenof table_view == 3 and table_view[1].entry_key == 7
+      and table_view[2].entry_weight == 9 and slice_ready == 1
+    then result = 42 end if
+end debug_slices
+
 --  [1630]: a block has a line of its own, its output is an ordinary local
 --  after it, and the callee-saved register it declares is saved with CFI,
 --  so the caller's frame shows it unchanged.
