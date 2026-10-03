@@ -140,7 +140,6 @@ package body Landin.Server.Sessions is
       Published : Text_Maps.Map;
       --  Candidate directories of imports missing at the last report.
       Missing   : Text_Maps.Map;
-      Cancelled : String_Sets.Set;
       Cached    : Analysis_Cache;
 
       procedure Send (Item : String);

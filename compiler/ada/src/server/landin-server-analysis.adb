@@ -307,19 +307,20 @@ package body Landin.Server.Analysis is
                   Context : Landin.Stages.Compilation renames
                     Stand_In_Owner.all;
                begin
-               for Position in Plans.Iterate loop
-                  Stand_In.Hold
-                    (Plan_Maps.Key (Position),
-                     Plan_Maps.Element (Position).Text);
-               end loop;
-               --  Moved trees keep their original Name_Id values.  Copy
-               --  the name table before the stand-in can intern new names.
-               Landin.Source.Names.Copy_Into
-                 (Landin.Stages.Identities (Original).all,
-                  Landin.Stages.Identities (Context).all);
-               Apply_Options (Context);
-               Load (Context, Stand_In, Original_Owner);
-               Finish (Context);
+                  for Position in Plans.Iterate loop
+                     Stand_In.Hold
+                       (Plan_Maps.Key (Position),
+                        Plan_Maps.Element (Position).Text);
+                  end loop;
+                  --  Moved trees keep their original Name_Id values.  Copy
+                  --  the name table before the stand-in can intern new names.
+                  Landin.Source.Names.Copy_Into
+                    (Landin.Stages.Identities (Original).all,
+                     Landin.Stages.Identities (Context).all);
+                  Apply_Options (Context);
+                  Load (Context, Stand_In, Original_Owner);
+                  Release (Original_Owner);
+                  Finish (Context);
                end;
             end;
          end if;
