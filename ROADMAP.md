@@ -648,7 +648,15 @@ models as a set rather than a rank.
 
 Exit evidence: the corpus and GDB sessions on RISC-V hardware in the gate,
 through the RISE project's runners, with QEMU user emulation as the fallback
-if that service goes away.
+if that service goes away. The same gate also selects `rv64gc` and at least
+one nondefault RV64 ISA string with a different extension set, executes a
+`fixed if compiler.feature.NAME` program at both levels to show the added
+extension's fact is false at `rv64gc` and true at the extended level, and
+checks that the same operation emits and executes an extension instruction
+at the extended level and its baseline sequence at `rv64gc`. An
+`assembler.block` using that instruction must assemble at the extended level
+and be refused at `rv64gc`. The selected execution lane must support the
+extension.
 
 ### R11.50 — Convert to a written type
 
@@ -677,6 +685,8 @@ derive or refuse as decided.
 - A conversion names its type as written, without an alias.
 - FreeBSD x86-64 and FreeBSD arm64 each pass scripted source-debugger
   sessions in the gate, with a separate verdict for each architecture.
+- RISC-V passes the baseline and nondefault extension-level evidence in
+  R11.40 on its selected execution lane.
 
 ## R12 — Microcontrollers
 
