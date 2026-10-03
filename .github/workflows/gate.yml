@@ -312,6 +312,7 @@ jobs:
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The shared hosted corpus executed natively, every source verdict with
@@ -407,6 +408,7 @@ jobs:
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  Linux arm64 with the release compiler: the corpus, the GDB sessions
@@ -434,6 +436,7 @@ jobs:
           set -eu
           refine="$PWD/compiler/ada/build/linux-arm64/release/bin/refine"
           python3 compiler/tests/test_default_target.py --refine "$refine"
+          python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       - name: GDB source debugging
