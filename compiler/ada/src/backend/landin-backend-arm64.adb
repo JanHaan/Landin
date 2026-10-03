@@ -502,17 +502,59 @@ package body Landin.Backend.Arm64 is
 
 
       procedure Immediate (Register : String; Value : Pattern) is
+         Zero_Chunks : Natural := 0;
+         Ones_Chunks : Natural := 0;
+         Use_Movn : Boolean;
+         Fill : Pattern;
+         Seeded : Boolean := False;
       begin
-         Emit ("movz " & Register & ", #"
-               & Trimmed (Pattern'Image (Value and 65535)));
-         for Index in 1 .. 3 loop
-            if (Value / 2 ** (Index * 16) and 65535) /= 0 then
-               Emit ("movk " & Register & ", #"
-                     & Trimmed (Pattern'Image
-                       (Value / 2 ** (Index * 16) and 65535))
-                     & ", lsl #" & Trimmed (Natural'Image (Index * 16)));
-            end if;
+         for Index in 0 .. 3 loop
+            declare
+               Chunk : constant Pattern :=
+                 Value / 2 ** (Index * 16) and 65535;
+            begin
+               if Chunk = 0 then
+                  Zero_Chunks := Zero_Chunks + 1;
+               elsif Chunk = 65535 then
+                  Ones_Chunks := Ones_Chunks + 1;
+               end if;
+            end;
          end loop;
+
+         --  A move-wide seed supplies every untouched chunk.  Use the
+         --  complement seed only when it leaves fewer chunks for MOVK.
+         Use_Movn := Ones_Chunks > Zero_Chunks;
+         Fill := (if Use_Movn then 65535 else 0);
+         for Index in 0 .. 3 loop
+            declare
+               Chunk : constant Pattern :=
+                 Value / 2 ** (Index * 16) and 65535;
+               Shift : constant String :=
+                 (if Index = 0 then "" else ", lsl #"
+                  & Trimmed (Natural'Image (Index * 16)));
+            begin
+               if Chunk /= Fill then
+                  if not Seeded then
+                     Emit ((if Use_Movn then "movn " else "movz ")
+                           & Register & ", #"
+                           & Trimmed (Pattern'Image
+                             (if Use_Movn then 65535 - Chunk else Chunk))
+                           & Shift);
+                     Seeded := True;
+                  else
+                     Emit ("movk " & Register & ", #"
+                           & Trimmed (Pattern'Image (Chunk)) & Shift);
+                  end if;
+               end if;
+            end;
+         end loop;
+         if not Seeded then
+            if Use_Movn then
+               Emit ("movn " & Register & ", #0");
+            else
+               Emit ("movz " & Register & ", #0");
+            end if;
+         end if;
       end Immediate;
 
       procedure Add_Offset

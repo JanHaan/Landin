@@ -6823,6 +6823,75 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Darwin_Wide_Parts_Keep_Target_Offsets;
 
+   procedure Arm64_Immediates_Use_The_Shorter_Move_Sequence
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arm64_Immediates_Use_The_Shorter_Move_Sequence
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Darwin_Arm64);
+      Ran : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower
+        (Work, "public values: () -> (negative: i64, narrow: i32," & LF
+         & " small: i8, all_ones: u64, zero: u64, shifted: u64," & LF
+         & " mixed: u64, sparse: u64) =" & LF
+         & "    negative = -41" & LF
+         & "    narrow = -41" & LF
+         & "    small = -7" & LF
+         & "    all_ones = 18446744073709551615" & LF
+         & "    zero = 0" & LF
+         & "    shifted = 0xffffffffffff1234" & LF
+         & "    mixed = 0xffff1234abcdffff" & LF
+         & "    sparse = 0x0001000000000000" & LF
+         & "end values" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "immediate source lowers");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "movn x9, #40" & LF), 1,
+            "64-bit -41 needs one complemented move");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #40" & LF
+             & HT & "movz x15, #"),
+            "64-bit -41 has no following patch move");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #65495" & LF
+             & HT & "movk x9, #65535, lsl #16" & LF),
+            "32-bit -41 keeps its zero upper half");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #249" & LF),
+            "8-bit negative keeps its zero upper bits");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #0" & LF)
+             and then Contains (Text, HT & "movz x9, #0" & LF),
+            "all ones and zero each use one move");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #60875" & LF),
+            "a low non-ones chunk uses a complemented seed");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movn x9, #21554, lsl #16" & LF
+             & HT & "movk x9, #4660, lsl #32" & LF),
+            "mixed chunks keep their positions and values");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movz x9, #1, lsl #48" & LF),
+            "a sparse positive value seeds at its nonzero chunk");
+      end;
+   end Arm64_Immediates_Use_The_Shorter_Move_Sequence;
+
    --  D255: at armv8.1-a an atomic read-modify-write is one LSE instruction
    --  at every width, inside the same fences, and the default emits the
    --  exclusive-monitor loop it always did; the Cortex-M profile at armv7-m
@@ -7263,6 +7332,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
+      Landin.Testing.Register
+        (Into, "backend", "arm64 immediates use shorter move sequences",
+         Arm64_Immediates_Use_The_Shorter_Move_Sequence'Access);
       Landin.Testing.Register
         (Into, "backend", "a level selects its instructions",
          A_Level_Selects_Its_Instructions'Access);
